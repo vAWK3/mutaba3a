@@ -49,7 +49,6 @@ export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfi
   };
 
   const turnOff = async (link: ShareLink) => {
-    const was = link.status === 'locked' ? 'locked' : 'active';
     setConfirming(null);
     try {
       await revoke.mutateAsync(link);
@@ -60,7 +59,8 @@ export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfi
         return;
       }
     }
-    void trackPortal('share_link_revoked', { was });
+    // MUT-575's contract: no properties
+    void trackPortal('share_link_revoked', {});
     showToast(t('hosted.sharing.links.turnedOff'), { tone: 'info' });
   };
 

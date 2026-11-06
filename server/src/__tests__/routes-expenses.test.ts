@@ -140,6 +140,8 @@ describe('POST /v1/expenses', () => {
       createdByUserId: p.userId,
       captureSource: null, // MUT-436 (ADR-201): none sent, none kept
       vat: null, // MUT-302: none sent, "No VAT recorded"
+      allocationNumber: null, // MUT-557
+      allocationNumberMissing: false,
       version: 1,
       createdAt: '2026-10-20T09:00:00.000Z',
       updatedAt: '2026-10-20T09:00:00.000Z',
@@ -288,7 +290,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-227: a row already older than the floor stays readable, editable without its date, and inside old-date filters', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2001-03-04', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2001-03-04', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: p.userId },
       h.clock.now,
     );
     const edited = await h.app.request(`/v1/expenses/${old.id}`, json({ notes: 'from the old ledger' }, { ...p.as(a.org.id), 'if-match': '1' }, 'PATCH'));
@@ -308,7 +310,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-388: a row still in a removed Gulf currency reads back with its real amount, in the list and on its own', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: p.userId },
       h.clock.now,
     );
     // A blank amount would fail every phone build's whole Recent page (MoneyCodec throws on ""), not just this row.
@@ -320,7 +322,7 @@ describe('PATCH /v1/expenses/{id}', () => {
   it('MUT-388: a row still in a removed Gulf currency refuses a new amount (422) instead of rescaling it, and moves to a supported one', async () => {
     const { h, a, p } = await setup();
     const old = await h.store.expenses.create(
-      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: p.userId },
+      { organizationId: a.org.id, occurredOn: '2026-10-20', amountMinor: 12_345n, currency: 'BHD', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: p.userId },
       h.clock.now,
     );
     const url = `/v1/expenses/${old.id}`;
@@ -496,7 +498,7 @@ describe('MUT-302: VAT on expenses (ADR-231)', () => {
   it('AC2: an expense saved before VAT existed reads "No VAT recorded" in the list, on its own, and in the feed', async () => {
     const { h, a, p } = await setup();
     // Inserted the way a pre-MUT-302 row reads after the migration: all four columns null.
-    const old = await h.store.expenses.create({ organizationId: a.org.id, occurredOn: '2026-10-01', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null }, h.clock.now);
+    const old = await h.store.expenses.create({ organizationId: a.org.id, occurredOn: '2026-10-01', amountMinor: 5000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null }, h.clock.now);
     expect((await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).vat).toBeNull();
     expect((await read(await h.app.request('/v1/expenses', { headers: p.as(a.org.id) }))).items[0].vat).toBeNull();
   });
@@ -555,6 +557,83 @@ describe('MUT-302: VAT on expenses (ADR-231)', () => {
     await create({ amount: '50.00' });
     const summary = await read(await h.app.request('/v1/summaries/expenses?from=2026-10-01&to=2026-10-31', { headers: p.as(a.org.id) }));
     expect(JSON.stringify(summary)).toContain('167.00');
+  });
+});
+
+describe('MUT-557: the Israeli allocation number (ADR-246)', () => {
+  const STD18 = { treatment: 'STANDARD_RATED', rateBasisPoints: 1800 };
+  const NUMBER = '304512876';
+  const patch = (h: Harness, as: Record<string, string>, id: string, version: number, body: Record<string, unknown>) =>
+    h.app.request(`/v1/expenses/${id}`, json(body, { ...as, 'if-match': String(version) }, 'PATCH'));
+  /** Profile A with firm features, the profiles whose forms record VAT and the number; B stays without. */
+  const firmSetup = async () => {
+    const s = await setup();
+    await s.h.store.organizations.setFirm(s.a.org.id, { enabled: true, ownerUserIds: [s.p.userId] }, s.h.clock.now, { actorId: null, requestId: null });
+    return s;
+  };
+
+  it('stores the number, spaces and dashes dropped, and reads it back', async () => {
+    const { create } = await firmSetup();
+    const res = await create({ amount: '7080.00', vat: STD18, allocationNumber: '304-512 876' });
+    expect(res.status).toBe(201);
+    expect(await read(res)).toMatchObject({ allocationNumber: NUMBER, allocationNumberMissing: false });
+  });
+
+  it.each(['30451287', '3045128761', '30451287a'])('refuses %j with ALLOCATION_NUMBER_INVALID', async (allocationNumber) => {
+    const { create } = await firmSetup();
+    const res = await create({ allocationNumber });
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'ALLOCATION_NUMBER_INVALID', field: 'allocationNumber' });
+  });
+
+  it('a Business profile without firm features is never flagged (its forms record no VAT)', async () => {
+    const { b, create } = await firmSetup();
+    expect((await read(await create({ amount: '9000.00', vat: STD18 }, b.org.id))).allocationNumberMissing).toBe(false);
+  });
+
+  it('flags a firm\'s ILS expense with VAT at or above ₪5,000 net and no number; adding one clears the flag', async () => {
+    const { h, a, p, create } = await firmSetup();
+    const e = await read(await create({ amount: '5900.00', vat: STD18 }));
+    expect(e).toMatchObject({ allocationNumber: null, allocationNumberMissing: true });
+    const fixed = await read(await patch(h, p.as(a.org.id), e.id, 1, { allocationNumber: NUMBER }));
+    expect(fixed).toMatchObject({ allocationNumber: NUMBER, allocationNumberMissing: false });
+    const cleared = await read(await patch(h, p.as(a.org.id), e.id, 2, { allocationNumber: null }));
+    expect(cleared).toMatchObject({ allocationNumber: null, allocationNumberMissing: true });
+    // Absent keeps it.
+    expect(await read(await patch(h, p.as(a.org.id), e.id, 3, { notes: 'x' }))).toMatchObject({ allocationNumber: null });
+  });
+
+  it.each([
+    ['under the threshold', { amount: '5899.99', vat: STD18 }],
+    ['no VAT recorded', { amount: '9000.00' }],
+    ['another currency', { amount: '9000.00', currency: 'USD', vat: STD18 }],
+  ])('no flag: %s', async (_label, body) => {
+    const { create } = await firmSetup();
+    expect((await read(await create(body))).allocationNumberMissing).toBe(false);
+  });
+
+  it('no flag before the first threshold (2024-05-05)', async () => {
+    const { h, a, p } = await firmSetup();
+    // Under MUT-227's floor for a new expense: written straight to the store, as an old row reads.
+    const old = await h.store.expenses.create({ organizationId: a.org.id, occurredOn: '2024-05-04', amountMinor: 9_000_000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: 'STANDARD_RATED', vatRateBasisPoints: 1800, netMinor: 7_627_119n, vatMinor: 1_372_881n, allocationNumber: null }, h.clock.now);
+    expect((await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).allocationNumberMissing).toBe(false);
+  });
+
+  it('never on a Personal profile', async () => {
+    const { p, create } = await firmSetup();
+    expect((await read(await create({ amount: '9000.00', vat: STD18 }, p.personalProfileId))).allocationNumberMissing).toBe(false);
+  });
+
+  it('the list, the expense and the entries feed carry the flag', async () => {
+    const { h, a, p, create } = await firmSetup();
+    const e = await read(await create({ amount: '9000.00', vat: STD18 }));
+    await create({ amount: '9000.00', vat: STD18 }, p.personalProfileId);
+    const list = await read(await h.app.request('/v1/expenses', { headers: p.as(a.org.id) }));
+    expect(list.items.find((x: { id: string }) => x.id === e.id).allocationNumberMissing).toBe(true);
+    expect((await read(await h.app.request(`/v1/expenses/${e.id}`, { headers: p.as(a.org.id) }))).allocationNumberMissing).toBe(true);
+    const feed = await read(await h.app.request('/v1/entries', { headers: p.as(a.org.id) }));
+    const flags = feed.items.filter((i: { kind: string }) => i.kind === 'expense').map((i: { profileId: string; expense: { allocationNumberMissing: boolean } }) => [i.profileId === a.org.id, i.expense.allocationNumberMissing]);
+    expect(flags).toEqual(expect.arrayContaining([[true, true], [false, false]]));
   });
 });
 

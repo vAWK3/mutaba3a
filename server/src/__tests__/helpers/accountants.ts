@@ -34,7 +34,8 @@ export const idem = () => ({ 'idempotency-key': randomUUID() });
 
 export function accountantHarness(overrides: Partial<AppDependencies> = {}) {
   let now = T0;
-  const store = new MemoryLedgerStore();
+  // A harness handed another's store (a second app over the same data) reports that store as its own.
+  const store = (overrides.store as MemoryLedgerStore | undefined) ?? new MemoryLedgerStore();
   const logger = pino({ level: 'silent' });
   const transport = new MemoryMailTransport(() => now);
   const mailer = createMailer({ transport, store, logger, now: () => now, fromAddress: 'no-reply@mail.example.test', replyTo: 'help@example.test', limits: { daily: 500, securityReserve: 50, perRecipient: 50 } });
@@ -65,10 +66,14 @@ export interface Person {
   on(profileId: string): Record<string, string>;
 }
 
-/** A provisioned person (`email` or a fresh one), signed in on the phone. */
-export async function person(h: AccountantHarness, options: { email?: string; displayName?: string; locale?: 'en' | 'ar' } = {}): Promise<Person> {
+/**
+ * A provisioned person (`email` or a fresh one), signed in on the phone. MUT-577: they hold the operator's
+ * `accountant_access` feature (an owner needs it to invite or make a link) unless `sharing: false`.
+ */
+export async function person(h: AccountantHarness, options: { email?: string; displayName?: string; locale?: 'en' | 'ar'; sharing?: boolean } = {}): Promise<Person> {
   const email = options.email ?? `person${++seq}@studio${seq}.ps`;
   const created = await provisionUser(h.app, { email, displayName: options.displayName ?? `Person ${seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', locale: options.locale ?? 'en' });
+  if (options.sharing !== false) await h.store.features.grant({ userId: created.user.id as string, feature: 'accountant_access', grantedBy: 'test', at: h.now(), audit: [] });
   return signedIn(h, email, created.password as string, created.user.id as string, created.personalProfile.id as string);
 }
 

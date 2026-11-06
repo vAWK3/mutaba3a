@@ -139,3 +139,16 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 function invalidFeedCursor(): ApiError {
   return new ApiError('VALIDATION_FAILED', 'cursor is not a cursor this API issued for this order', { field: 'cursor' });
 }
+
+// ── MUT-575: the API's entry kinds ↔ the feed's row kinds ──────────────────
+// The one map: `received` is a payment row, `owed` a receivable (an ADJUSTMENT Owed).
+
+export const API_ENTRY_KINDS = ['expense', 'received', 'owed', 'conversion'] as const;
+export type ApiEntryKind = (typeof API_ENTRY_KINDS)[number];
+
+const ROW_KIND_OF: Readonly<Record<ApiEntryKind, EntryRow['kind']>> = { expense: 'expense', received: 'payment', owed: 'receivable', conversion: 'conversion' };
+
+export function rowKindOf(kind: ApiEntryKind): EntryRow['kind'] {
+  return ROW_KIND_OF[kind];
+}
+

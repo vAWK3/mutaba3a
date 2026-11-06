@@ -349,7 +349,7 @@ describe('the Links column (slice B)', () => {
     expect(await screen.findByText('Link turned off')).toBeInTheDocument();
     expect(stub.count(`DELETE /v1/profiles/${ORG_B}/share-links/l-live`)).toBe(1);
     await waitFor(() => expect(screen.getByRole('table', { name: 'Links with a PIN' })).toHaveTextContent('Ended Nov 6'));
-    expect(track).toHaveBeenCalledWith('share_link_revoked', { was: 'active' });
+    expect(track).toHaveBeenCalledWith('share_link_revoked', {});
   });
 
   it('at the limit of live links Create link is inert and says why', async () => {

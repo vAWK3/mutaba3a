@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { AppEnv } from '../middleware.js';
-import { STORE_ACCESS, accountantStoreGuard, requestScopedStore, unguarded, type MethodAccess } from '../store-guard.js';
+import { PROFILE_FEED_READS, STORE_ACCESS, accountantStoreGuard, requestScopedStore, shareLinkStoreGuard, unguarded, type MethodAccess } from '../store-guard.js';
 import { accountantMayRead, accountantScopes } from '../writability.js';
 
 /**
@@ -33,11 +33,11 @@ describe('accountantScopes (MUT-559)', () => {
 });
 
 describe('accountantStoreGuard (MUT-559 D2)', () => {
-  it('passes every read and refuses every other classified method with READ_ONLY_PROFILE, ACCOUNTANT_READ_ONLY', () => {
+  it('passes every read and the named feed reads (MUT-575), and refuses every other classified method with READ_ONLY_PROFILE, ACCOUNTANT_READ_ONLY', () => {
     const guard = accountantStoreGuard();
     for (const [repo, methods] of Object.entries(STORE_ACCESS)) {
       for (const [method, access] of Object.entries(methods as Record<string, MethodAccess>)) {
-        if (isRead(access)) {
+        if (isRead(access) || PROFILE_FEED_READS.has(`${repo}.${method}`)) {
           expect(() => guard.assertCanCall(repo, method), `${repo}.${method}`).not.toThrow();
         } else {
           let thrown: unknown;
@@ -52,6 +52,21 @@ describe('accountantStoreGuard (MUT-559 D2)', () => {
         }
       }
     }
+  });
+
+  it('MUT-575 (E8): the profile feed reads pass under both read-only guards, from one named list, and a write still throws', () => {
+    expect([...PROFILE_FEED_READS].sort()).toEqual(['entries.list', 'entries.settledOwedIds']);
+    for (const guard of [accountantStoreGuard(), shareLinkStoreGuard()]) {
+      for (const name of PROFILE_FEED_READS) {
+        const [repo, method] = name.split('.') as [string, string];
+        expect(() => guard.assertCanCall(repo, method), name).not.toThrow();
+      }
+      expect(() => guard.assertCanCall('entries', 'loggedDays')).toThrow(ApiError);
+      expect(() => guard.assertCanCall('expenses', 'create')).toThrow(ApiError);
+    }
+    // The accountant's own client-book reads run on the base store, never under a profile guard.
+    for (const method of ['listForAccountant', 'dismiss']) expect(() => accountantStoreGuard().assertCanCall('accountantGrants', method)).toThrow(ApiError);
+    expect(() => accountantStoreGuard().assertCanCall('entries', 'clientActivity')).toThrow(ApiError);
   });
 
   it('throws on an unclassified method rather than guess', () => {

@@ -7,6 +7,7 @@ import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountantGrantRecord, ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
 import { grantAudit } from '../accountants/grants.js';
+import { ownerIsClosing } from '../access/owner-closing.js';
 import { viewTouch } from '../access/view-touch.js';
 import { isOAuthToken } from '../oauth/tokens.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
@@ -419,12 +420,17 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, opti
   return { auth, grant };
 }
 
-/** MUT-559: the named profile, when the person holds an ACTIVE accountant grant on it. One indexed read. */
+/**
+ * MUT-559: the named profile, when the person holds an ACTIVE accountant grant on it. One indexed read. MUT-575
+ * (ADR-249): and its owner isn't closing their account (one user read), the rule share links follow: a closing owner's
+ * profile is the same 404 as a revoked one, until they keep their account.
+ */
 async function namedClient(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; grant: AccountantGrantRecord } | null> {
   const requested = c.req.header('x-mutaba3a-profile');
   const grant = requested && UUID_RE.test(requested) ? await store.accountantGrants.findActive(identity.user.id, requested) : null;
   const organization = grant ? await store.organizations.getById(grant.organizationId) : null;
-  return organization && grant ? { organization, grant } : null;
+  if (!organization || !grant || (await ownerIsClosing(store, organization))) return null;
+  return { organization, grant };
 }
 
 async function namedMembership(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; membership: MembershipRecord } | null> {

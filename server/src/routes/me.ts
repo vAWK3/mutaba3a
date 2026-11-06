@@ -13,7 +13,7 @@ import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
 import { ownsProfile } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES, ownedProfileCap } from './profiles.js';
-import { clientsOf } from '../accountants/grants.js';
+import { clientBooksOf } from '../accountants/grants.js';
 
 /** MUT-370 (D9): `buildMe`'s `passkeysAt`: the request's clock where this server offers passkeys, else null. */
 export const passkeysClockOf = (c: Context<AppEnv>): Date | null => (c.get('passkeys') ? c.get('now')() : null);
@@ -83,8 +83,9 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
     store.features.activeFor(user.id),
-    // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`.
-    accountantAccess ? clientsOf(store, user.id) : null,
+    // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`. MUT-575: ended ones too,
+    // until removed, so the clients show the tab while any row is left. No stat queries here (GET /v1/clients has them).
+    accountantAccess ? clientBooksOf(store, user.id) : null,
   ]);
   return {
     user: {

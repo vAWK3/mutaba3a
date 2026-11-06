@@ -41,3 +41,15 @@ export function feedBoundsOf(range: ShareLinkRange): { occurredFrom?: IsoDate; o
 export function isInRange(day: IsoDate, range: ShareLinkRange): boolean {
   return (range.from === null || compareIsoDates(day, range.from) >= 0) && compareIsoDates(day, range.to) <= 0;
 }
+
+/**
+ * MUT-575 (S5): a visitor's own money-date filters, clamped inside the link's range: never before its `from`, never
+ * past its `to`. Absent filters are the range itself (`feedBoundsOf`). Narrows only; a from at or past before is an
+ * empty page.
+ */
+export function clampToRange(range: ShareLinkRange, from: IsoDate | undefined, before: IsoDate | undefined): { occurredFrom?: IsoDate; occurredBefore: IsoDate } {
+  const bounds = feedBoundsOf(range);
+  const occurredFrom = from === undefined ? bounds.occurredFrom : bounds.occurredFrom === undefined || compareIsoDates(from, bounds.occurredFrom) > 0 ? from : bounds.occurredFrom;
+  const occurredBefore = before !== undefined && compareIsoDates(before, bounds.occurredBefore) < 0 ? before : bounds.occurredBefore;
+  return { ...(occurredFrom !== undefined && { occurredFrom }), occurredBefore };
+}

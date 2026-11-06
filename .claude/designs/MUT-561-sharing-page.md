@@ -39,7 +39,7 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
 - Review fixes: concurrent revokes (mutationKey + isMutating, per-item undo); Invite again refetches on stale refusals
   and is inert at the limit; the new row takes focus; FSI/PDI isolates around emails, names and profile names in
   sentences (not in aria-labels or clipboard text); gender-neutral Arabic confirms; the limit falls back to the list's.
-- Events `share_link_created` (period, expires_in_days) and `share_link_revoked` (was) join contract 2.7.0, kept at
+- Events `share_link_created` (period, expires_in_days) and `share_link_revoked` (no properties, MUT-575's definitions) are in contract 2.7.0, kept at
   2.7.0 on this branch; MUT-575 defines the same entries, and whichever merges second reconciles the version pin.
 
 - **MUT-577 (Basel):** the gate also needs the person's `accountant_access` feature on `/v1/me` (operator switch, like

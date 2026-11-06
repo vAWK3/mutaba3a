@@ -2714,6 +2714,8 @@ export interface AccountantGrantRecord {
   acceptedAt: Date | null;
   /** When it ended: revoked by an owner (REVOKED) or left by the accountant (LEFT). */
   revokedAt: Date | null;
+  /** MUT-575 (ADR-249): when the accountant removed this ended (REVOKED) client from their list; null = still listed. */
+  dismissedAt: Date | null;
   lastViewedAt: Date | null;
   createdAt: Date;
 }
@@ -2762,8 +2764,13 @@ export interface AccountantGrantRepository {
   findByDigest(tokenDigest: string): Promise<AccountantGrantRecord | null>;
   /** The accountant's ACTIVE grant on the profile, if any. selectProfile's one read after a membership miss. */
   findActive(accountantUserId: string, organizationId: string): Promise<AccountantGrantRecord | null>;
-  /** Every ACTIVE grant the person holds as an accountant, oldest accept first (/v1/me `clients`). */
+  /** Every ACTIVE grant the person holds as an accountant, oldest accept first. */
   listActiveByAccountant(accountantUserId: string): Promise<AccountantGrantRecord[]>;
+  /**
+   * MUT-575 (ADR-249): the grants behind the person's client books: ACTIVE ones and REVOKED ones not yet dismissed,
+   * oldest accept first. LEFT is never returned (the accountant chose to stop). One indexed query.
+   */
+  listForAccountant(accountantUserId: string): Promise<AccountantGrantRecord[]>;
   /**
    * Conditional: only a PENDING grant with this digest, unexpired at `at`, becomes ACTIVE for `accountantUserId`
    * (token nulled), with `auditFor(grant)`. Null when it lost: unknown, used, ended, expired, a concurrent accept, or
@@ -2781,6 +2788,11 @@ export interface AccountantGrantRepository {
   revoke(input: { organizationId: string; grantId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
   /** The accountant ends their ACTIVE grant (LEFT). Null when they hold none on that profile. */
   leave(input: { organizationId: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
+  /**
+   * MUT-575: the accountant removes an ended client: every undismissed REVOKED grant they held on the profile gets
+   * `dismissedAt = at` (so an older one can't resurface). Conditional; answers how many it dismissed. No audit row.
+   */
+  dismiss(input: { organizationId: string; accountantUserId: string; at: Date }): Promise<number>;
   /** Stamps lastViewedAt and appends `audit` (the caller throttles); only on an ACTIVE grant, else nothing is written. */
   touchViewed(input: { grantId: string; at: Date; audit: AuditEventInput[] }): Promise<void>;
 }
@@ -3084,6 +3096,8 @@ export interface ExpenseRecord {
   vatRateBasisPoints: number | null;
   netMinor: bigint | null;
   vatMinor: bigint | null;
+  /** MUT-557 (ADR-246): the supplier invoice's Israeli allocation number, nine digits; null = none recorded. */
+  allocationNumber: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -3111,10 +3125,12 @@ export interface CreateExpenseInput {
   vatRateBasisPoints: number | null;
   netMinor: bigint | null;
   vatMinor: bigint | null;
+  /** MUT-557: required like the VAT, so every caller states it (null for none); normalized by `normalizeAllocationNumber`. */
+  allocationNumber: string | null;
 }
 
 /** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */
-export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes' | 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor'>>;
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes' | 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor' | 'allocationNumber'>>;
 
 // ---- MUT-254: vendors --------------------------------------------------------
 
@@ -3479,6 +3495,8 @@ export interface ReceiptSuggestion {
   registrationNo?: SuggestedField<string> | undefined;
   phone?: SuggestedField<string> | undefined;
   email?: SuggestedField<string> | undefined;
+  /** MUT-557: an Israeli tax invoice's allocation number (מספר הקצאה), nine digits, read only beside its label. */
+  allocationNumber?: SuggestedField<string> | undefined;
 }
 
 /** MUT-255: what approval wrote into the expense, kept on the receipt for the edit-rate figure. Money as minor units in a decimal string. */
@@ -3831,6 +3849,25 @@ export interface EntriesRepository {
    * made it. Other payments are absent. Same trust in `organizationIds` as `list`.
    */
   settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
+  /**
+   * MUT-575 (ADR-249): an accountant's client-list stats, two queries whatever the number of windows. Per window: the
+   * live expenses and received payments (the feed's own rules: not deleted, not a capture undo) whose money date is
+   * in [from, before), and the newest `createdAt` of any live expense or received payment. Owed entries and
+   * conversions never count. Every window's organization is in the answer (0 and null when nothing).
+   */
+  clientActivity(windows: readonly ClientActivityWindow[]): Promise<Map<string, ClientActivity>>;
+}
+
+/** MUT-575: one client's month, as money dates in the profile's own calendar. */
+export interface ClientActivityWindow {
+  organizationId: string;
+  from: IsoDate;
+  before: IsoDate;
+}
+
+export interface ClientActivity {
+  entriesThisMonth: number;
+  lastActivityAt: Date | null;
 }
 
 // ---- MUT-325: the records-file export ---------------------------------------

@@ -1,6 +1,6 @@
+import { ownerIsClosing } from '../access/owner-closing.js';
 import { viewTouch } from '../access/view-touch.js';
 import { sessionDigest } from '../auth/sessions.js';
-import { profileOwnerOf } from '../personal-profile.js';
 import type { LedgerStore, Organization, ShareLinkRecord, ShareLinkViewerRecord } from '../repositories/ports.js';
 import { isLiveLink, shareLinkUnavailable, shareViewExpired } from './links.js';
 import type { ShareLinkRange } from './period.js';
@@ -46,9 +46,7 @@ export async function openLinkProfile(store: Pick<LedgerStore, 'organizations' |
   if (!isLiveLink(link, now)) throw shareLinkUnavailable();
   const organization = await store.organizations.getById(link.organizationId);
   if (!organization) throw shareLinkUnavailable();
-  const ownerId = profileOwnerOf(organization);
-  const owner = ownerId ? await store.users.getById(ownerId) : null;
-  if (owner?.closure) throw shareLinkUnavailable();
+  if (await ownerIsClosing(store, organization)) throw shareLinkUnavailable();
   return organization;
 }
 

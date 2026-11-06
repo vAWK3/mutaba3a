@@ -203,6 +203,7 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
+import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 
 /**
@@ -222,8 +223,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 13 (MUT-443): `pays` gained `reversalReasonCode`.
  * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
  * 15 (MUT-303): `vendors` gained `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
+ * 16 (MUT-557): `exps` gained `allocationNumber`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 15;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 16;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -747,7 +749,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if ([...this.accountantGrantMap.values()].some((g) => g.tokenDigest === input.tokenDigest)) throw new UniqueViolation('accountant_grants.tokenDigest');
       const grant: AccountantGrantRecord = {
         id: randomUUID(), organizationId: input.organizationId, inviteEmail: input.inviteEmail, locale: input.locale, invitedByUserId: input.invitedByUserId,
-        accountantUserId: null, status: 'PENDING', tokenDigest: input.tokenDigest, inviteExpiresAt: input.expiresAt, acceptedAt: null, revokedAt: null, lastViewedAt: null, createdAt: input.at,
+        accountantUserId: null, status: 'PENDING', tokenDigest: input.tokenDigest, inviteExpiresAt: input.expiresAt, acceptedAt: null, revokedAt: null, dismissedAt: null, lastViewedAt: null, createdAt: input.at,
       };
       this.accountantGrantMap.set(grant.id, grant);
       this.pushEvents(input.auditFor({ ...grant }), input.at);
@@ -771,6 +773,16 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId)
         .sort((a, b) => a.acceptedAt!.getTime() - b.acceptedAt!.getTime() || a.id.localeCompare(b.id))
         .map((g) => ({ ...g })),
+    listForAccountant: async (accountantUserId) =>
+      [...this.accountantGrantMap.values()]
+        .filter((g) => g.accountantUserId === accountantUserId && (g.status === 'ACTIVE' || (g.status === 'REVOKED' && g.dismissedAt === null)))
+        .sort((a, b) => (a.acceptedAt?.getTime() ?? 0) - (b.acceptedAt?.getTime() ?? 0) || a.id.localeCompare(b.id))
+        .map((g) => ({ ...g })),
+    dismiss: async ({ organizationId, accountantUserId, at }) => {
+      const ended = [...this.accountantGrantMap.values()].filter((g) => g.organizationId === organizationId && g.accountantUserId === accountantUserId && g.status === 'REVOKED' && g.dismissedAt === null);
+      for (const g of ended) g.dismissedAt = at;
+      return ended.length;
+    },
     accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
       if (!this.people.has(accountantUserId)) throw new ForeignKeyViolation('accountant_grants.accountantUserId');
       const grant = this.claimableGrant(tokenDigest, at);
@@ -2578,8 +2590,9 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.categoryId !== null && !this.expCats.has(input.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
       // Like Postgres' foreign key: existence only. The routes resolve or check the vendor inside the profile.
       if (input.vendorId && !this.vendorMap.has(input.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
-      const record: ExpenseRecord = { id: randomUUID(), ...input, vendorId: input.vendorId ?? null, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
+      const record: ExpenseRecord = { id: randomUUID(), ...input, vendorId: input.vendorId ?? null, allocationNumber: input.allocationNumber ?? null, version: 1, createdAt: at, updatedAt: at, deletedAt: null };
       assertExpenseVatColumns(record);
+      assertAllocationNumberColumn(record.allocationNumber);
       this.exps.set(record.id, record);
       return { ...record };
     },
@@ -2603,6 +2616,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (patch.categoryId && !this.expCats.has(patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
       if (patch.vendorId && !this.vendorMap.has(patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
       assertExpenseVatColumns({ ...e, ...definedOnly(patch) });
+      if (patch.allocationNumber !== undefined) assertAllocationNumberColumn(patch.allocationNumber);
       Object.assign(e, definedOnly(patch));
       e.version += 1;
       e.updatedAt = at;
@@ -3698,6 +3712,19 @@ export class MemoryLedgerStore implements LedgerStore {
         if (only && this.recs.get(only.receivableId)?.origin === 'ADJUSTMENT') links.set(paymentId, only.receivableId);
       }
       return links;
+    },
+    clientActivity: async (windows) => {
+      const live = [
+        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e) => ({ org: e.organizationId, day: e.occurredOn, createdAt: e.createdAt })),
+        ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ org: p.organizationId, day: p.receivedOn, createdAt: p.createdAt })),
+      ];
+      return new Map(
+        windows.map((w) => {
+          const mine = live.filter((row) => row.org === w.organizationId);
+          const newest = mine.reduce<Date | null>((at, row) => (at && at.getTime() >= row.createdAt.getTime() ? at : row.createdAt), null);
+          return [w.organizationId, { entriesThisMonth: mine.filter((row) => row.day >= w.from && row.day < w.before).length, lastActivityAt: newest }];
+        }),
+      );
     },
   };
 

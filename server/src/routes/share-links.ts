@@ -8,8 +8,9 @@ import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { isSamePortalOrigin, requestClientIp, sessionDigest } from '../auth/sessions.js';
 import { shareLinkStoreGuard } from '../auth/store-guard.js';
 import type { PasswordHasher } from '../auth/users.js';
-import { decodeFeedCursor, encodeFeedCursor } from '../entries/merge.js';
+import { decodeFeedCursor, encodeFeedCursor, rowKindOf } from '../entries/merge.js';
 import { ApiError } from '../errors.js';
+import { hasFeature } from '../features.js';
 import { summarizeExpenses } from '../expenses/summary.js';
 import { formatMoney, type Currency } from '../money.js';
 import { ownedProfileOf, profileOwnerOf } from '../personal-profile.js';
@@ -51,7 +52,7 @@ import {
   receiptUrlTtlSeconds,
   viewerAccessExpiry,
 } from '../share-links/links.js';
-import { feedBoundsOf, isInRange, shareLinkRangeAt } from '../share-links/period.js';
+import { clampToRange, feedBoundsOf, isInRange, shareLinkRangeAt } from '../share-links/period.js';
 import { shareRowId, shareRowKey } from '../share-links/row-key.js';
 import { isVisitorRow, namedIds, visitorEntry, visitorExpenseSummary, type VisitorContext } from '../share-links/visitor.js';
 import { displayCategoryNames } from '../expenses/presets.js';
@@ -236,7 +237,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         201: { description: 'Made', content: { 'application/json': { schema: ShareLinkCreatedSchema } } },
         402: errorResponse('SUBSCRIPTION_LAPSED: the profile is locked'),
         403: errorResponse('READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own'),
-        404: errorResponse('No such profile for you, or share links are off on this server'),
+        404: errorResponse('No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577)'),
         409: errorResponse('CONFLICT, details.reason SHARE_LINK_LIMIT'),
         422: errorResponse('VALIDATION_FAILED: details.reason PIN_FORMAT (not 4–8 digits), or another field'),
         429: errorResponse('RATE_LIMITED: too many links this hour'),
@@ -244,6 +245,8 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     }),
     async (c) => {
       const { user } = c.get('identity');
+      // MUT-577: making a link needs the operator's accountant_access feature, else the switched-off 404.
+      if (!(await hasFeature(store, user.id, 'accountant_access'))) throw shareLinkUnavailable();
       const { profileId } = c.req.valid('param');
       const body = c.req.valid('json');
       const organization = await ownedProfileOf(store, user.id, profileId);
@@ -458,7 +461,9 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       const { organization, range } = access;
       const lang = visitorLanguage(c);
       const organizationIds = [organization.id];
-      const page = await store.entries.list(organizationIds, { limit: body.limit, order: 'occurredOn', kinds: SHARE_LINK_ENTRY_KINDS, cursor: body.cursor ? decodeFeedCursor(body.cursor, 'occurredOn') : null, ...feedBoundsOf(range) });
+      // MUT-575 (S5): the visitor's filters narrow within the link: kinds inside the link's, dates clamped to its range.
+      const kinds = body.kinds ? SHARE_LINK_ENTRY_KINDS.filter((kind) => body.kinds!.map(rowKindOf).includes(kind)) : SHARE_LINK_ENTRY_KINDS;
+      const page = await store.entries.list(organizationIds, { limit: body.limit, order: 'occurredOn', kinds, cursor: body.cursor ? decodeFeedCursor(body.cursor, 'occurredOn') : null, ...clampToRange(range, body.occurredFrom, body.occurredBefore) });
       const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
       const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
       const [receiptCounts, settledOwed] = await Promise.all([store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds), store.entries.settledOwedIds(organizationIds, settleCandidates)]);

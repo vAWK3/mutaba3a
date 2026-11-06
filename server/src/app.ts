@@ -76,6 +76,7 @@ import { FX_ORGANIZATION_INDEPENDENT_ROUTES, PUBLIC_FX_POLICY, publicFxRateRoute
 import { INBOX_ORGANIZATION_INDEPENDENT_ROUTES } from './inbox/routes-keys.js';
 import { inboxRoutes } from './routes/inbox.js';
 import { ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, entriesRoutes } from './routes/entries.js';
+import { profileEntriesRoutes } from './routes/profile-entries.js';
 import { SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/summaries.js';
 import { agreementRoutes } from './routes/agreements.js';
 import { contingencyRoutes } from './routes/contingency.js';
@@ -328,7 +329,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.102.0-mut560';
+export const API_VERSION = '1.106.0-mut557';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -504,6 +505,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', auditRoutes(store));
   app.route('/', inboxRoutes(store));
   app.route('/', entriesRoutes(store));
+  // MUT-575 (ADR-249): one profile's feed, profile-scoped (an accountant's client feed goes through selectProfile).
+  app.route('/', profileEntriesRoutes(store));
   const portalRouteDeps: PortalRouteDependencies = {
     store,
     attachments: { storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900 },

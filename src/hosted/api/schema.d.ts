@@ -1849,7 +1849,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description No such profile for you, or accountant access is off on this server */
+                /** @description No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577) */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -2188,6 +2188,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Your client books: the profiles shared with you as an accountant, with this month’s activity
+         * @description MUT-575 (ADR-249). The rows of /v1/me `clients` (active first, oldest accept first; then ended, newest end first), each with `entriesThisMonth` (live expenses and received payments dated in the current calendar month in the profile’s timezone) and `lastActivityAt` (when the newest was logged). Ended rows (the owner revoked access or is closing their account) carry null stats and stay until removed with DELETE /v1/clients/{profileId}. Empty for a person who reads no client.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The client books */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantClientList"];
+                    };
+                };
+                /** @description Accountant access is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/clients/{profileId}": {
         parameters: {
             query?: never;
@@ -2199,8 +2247,8 @@ export interface paths {
         put?: never;
         post?: never;
         /**
-         * Stop reading a profile shared with you as an accountant
-         * @description MUT-559 (ADR-245). The profile leaves /v1/me `clients`; its owner sees you gone.
+         * Stop reading a client, or remove an ended one from your list
+         * @description MUT-559 (ADR-245), MUT-575 (ADR-249). An active client (the owner closing their account or not): you stop reading it (its owner sees you gone) and it leaves your list. An ended client (access revoked): it is removed from your list for good; its owner sees nothing change. One call either way: the server decides.
          */
         delete: {
             parameters: {
@@ -2213,14 +2261,14 @@ export interface paths {
             };
             requestBody?: never;
             responses: {
-                /** @description Left */
+                /** @description Left, or removed */
                 204: {
                     headers: {
                         [name: string]: unknown;
                     };
                     content?: never;
                 };
-                /** @description NOT_FOUND: you don’t read that profile */
+                /** @description NOT_FOUND: no such client on your list */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -6428,6 +6476,101 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profile-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * One profile’s entries, newest money date first
+         * @description MUT-575. The expenses, received payments, Owed entries and conversions of the profile named in X-Mutaba3a-Profile, newest money date first, then newest logged: the same items and cursor as GET /v1/entries?profileId=…&order=occurredOn. An accountant reads a client shared with them this way (read-only). kinds narrows (all four when absent); occurredFrom and occurredBefore bound the money date. A profile you can’t open answers 404 PROFILE_NOT_FOUND, including one whose sharing ended between two pages.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page). */
+                    kinds?: ("expense" | "received" | "owed" | "conversion")[];
+                    /** @description Money date on or after this day. */
+                    occurredFrom?: string;
+                    /** @description Money date before this day. */
+                    occurredBefore?: string;
+                    /** @description Opaque `nextCursor` from the previous page. */
+                    cursor?: string;
+                    /** @description Page size, 1–100. */
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["EntryPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customers": {
         parameters: {
             query?: never;
@@ -10405,10 +10548,16 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** A short-lived signed download URL for a READY receipt */
+        /**
+         * A short-lived signed download URL for a READY receipt
+         * @description `disposition=inline` (MUT-575, as the library route since MUT-260) signs a URL that displays the file instead of saving it, for the desk's preview. The default `attachment` saves it.
+         */
         get: {
             parameters: {
-                query?: never;
+                query?: {
+                    /** @description How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260. */
+                    disposition?: "attachment" | "inline";
+                };
                 header?: never;
                 path: {
                     expenseId: string;
@@ -20588,7 +20737,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description No such profile for you, or share links are off on this server */
+                /** @description No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577) */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -21297,6 +21446,14 @@ export interface components {
             ownerName: string | null;
             /** Format: date-time */
             sharedSince: string;
+            /** @enum {string|null} */
+            profileType: "personal" | "business" | null;
+            /** @enum {string} */
+            status: "active" | "ended";
+            /** @enum {string|null} */
+            endedReason: "revoked" | "closed" | null;
+            /** Format: date-time */
+            endedAt: string | null;
         };
         ErrorEnvelope: {
             error: {
@@ -21589,6 +21746,7 @@ export interface components {
             expired: boolean;
             /** Format: date-time */
             expiresAt: string;
+            termsVersion: string;
         };
         AccountantInviteTokenRequest: {
             token: string;
@@ -21613,6 +21771,18 @@ export interface components {
             turnstileToken: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+        };
+        AccountantClientList: {
+            items: components["schemas"]["AccountantClientWithStats"][];
+        };
+        AccountantClientWithStats: components["schemas"]["AccountantClient"] & {
+            /** @description Live expenses and received payments dated in the current calendar month, in the profile’s timezone. Null when ended. */
+            entriesThisMonth: number | null;
+            /**
+             * Format: date-time
+             * @description When the newest live expense or received payment was logged. Null when ended or when there is none.
+             */
+            lastActivityAt: string | null;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];
@@ -22917,6 +23087,10 @@ export interface components {
             createdByUserId: string | null;
             captureSource: components["schemas"]["StoredCaptureSource"] & unknown;
             vat: components["schemas"]["ExpenseVat"];
+            /** @description MUT-557: the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557. */
+            allocationNumber: string | null;
+            /** @description MUT-557: worked out on every read, never stored. True on a firm profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.106.0-mut557. */
+            allocationNumberMissing: boolean;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -24151,6 +24325,12 @@ export interface components {
                 source: "qr" | "pdf-text" | "ocr" | "vendor";
                 confidence: number;
             };
+            allocationNumber?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
         } | null;
         /** @description What approval wrote into the expense, in minor units like the suggestion */
         ApprovedReceiptFields: {
@@ -24198,6 +24378,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date. */
@@ -24221,6 +24403,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
         };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
@@ -24817,6 +25001,8 @@ export interface components {
         };
         ReceiptDetail: components["schemas"]["ExpenseReceipt"] & {
             vendorDefaults: components["schemas"]["ReceiptVendorDefaults"];
+            /** @description MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.106.0-mut557. */
+            allocationNumberExpected: boolean;
         };
         ReceiptVendorDefaults: {
             /** Format: uuid */
@@ -24859,6 +25045,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         /** @description The expense with its READY receipts (the filed one among them), and the filed receipt */
@@ -25904,6 +26092,12 @@ export interface components {
             limit: number;
             /** @description Opaque `nextCursor` from the previous page. */
             cursor?: string;
+            /** @description MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows. */
+            kinds?: ("expense" | "received")[];
+            /** @description MUT-575: money date on or after this day, clamped inside the link’s period (never widened). */
+            occurredFrom?: string;
+            /** @description MUT-575: money date before this day, clamped inside the link’s period (never widened). */
+            occurredBefore?: string;
         };
         ShareLinkSummary: {
             /** @description First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE). */

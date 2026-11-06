@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.102.0-mut560
+  version: 1.106.0-mut557
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -571,11 +571,38 @@ components:
         sharedSince:
           type: string
           format: date-time
+        profileType:
+          type: string
+          nullable: true
+          enum:
+            - personal
+            - business
+            - null
+        status:
+          type: string
+          enum:
+            - active
+            - ended
+        endedReason:
+          type: string
+          nullable: true
+          enum:
+            - revoked
+            - closed
+            - null
+        endedAt:
+          type: string
+          nullable: true
+          format: date-time
       required:
         - profileId
         - name
         - ownerName
         - sharedSince
+        - profileType
+        - status
+        - endedReason
+        - endedAt
     ErrorEnvelope:
       type: object
       properties:
@@ -1357,12 +1384,15 @@ components:
         expiresAt:
           type: string
           format: date-time
+        termsVersion:
+          type: string
       required:
         - profileName
         - ownerName
         - maskedEmail
         - expired
         - expiresAt
+        - termsVersion
     AccountantInviteTokenRequest:
       type: object
       properties:
@@ -1422,6 +1452,33 @@ components:
         - token
         - password
         - turnstileToken
+    AccountantClientList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountantClientWithStats"
+      required:
+        - items
+    AccountantClientWithStats:
+      allOf:
+        - $ref: "#/components/schemas/AccountantClient"
+        - type: object
+          properties:
+            entriesThisMonth:
+              type: integer
+              nullable: true
+              minimum: 0
+              description: Live expenses and received payments dated in the current calendar month, in the profile’s timezone. Null when ended.
+            lastActivityAt:
+              type: string
+              nullable: true
+              format: date-time
+              description: When the newest live expense or received payment was logged. Null when ended or when there is none.
+          required:
+            - entriesThisMonth
+            - lastActivityAt
     IntegrationStatusResponse:
       type: object
       properties:
@@ -4885,6 +4942,14 @@ components:
             - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436.
         vat:
           $ref: "#/components/schemas/ExpenseVat"
+        allocationNumber:
+          type: string
+          nullable: true
+          pattern: ^\d{9}$
+          description: "MUT-557: the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557."
+        allocationNumberMissing:
+          type: boolean
+          description: "MUT-557: worked out on every read, never stored. True on a firm profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.106.0-mut557."
         version:
           type: integer
         createdAt:
@@ -4908,6 +4973,8 @@ components:
         - createdByUserId
         - captureSource
         - vat
+        - allocationNumber
+        - allocationNumberMissing
         - version
         - createdAt
         - updatedAt
@@ -8163,6 +8230,27 @@ components:
             - value
             - source
             - confidence
+        allocationNumber:
+          type: object
+          properties:
+            value:
+              type: string
+              pattern: ^\d{9}$
+            source:
+              type: string
+              enum:
+                - qr
+                - pdf-text
+                - ocr
+                - vendor
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+          required:
+            - value
+            - source
+            - confidence
       required:
         - readerVersion
     ApprovedReceiptFields:
@@ -8259,6 +8347,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557."
       required:
         - occurredOn
         - amount
@@ -8323,6 +8416,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row's own. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557."
       additionalProperties: false
     CreateReceiptUploadResponse:
       type: object
@@ -9917,8 +10015,12 @@ components:
           properties:
             vendorDefaults:
               $ref: "#/components/schemas/ReceiptVendorDefaults"
+            allocationNumberExpected:
+              type: boolean
+              description: "MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.106.0-mut557."
           required:
             - vendorDefaults
+            - allocationNumberExpected
     ReceiptVendorDefaults:
       type: object
       nullable: true
@@ -10004,6 +10106,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557."
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
@@ -12714,6 +12821,22 @@ components:
         cursor:
           type: string
           description: Opaque `nextCursor` from the previous page.
+        kinds:
+          type: array
+          items:
+            type: string
+            enum:
+              - expense
+              - received
+          description: "MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows."
+        occurredFrom:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "MUT-575: money date on or after this day, clamped inside the link’s period (never widened)."
+        occurredBefore:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: "MUT-575: money date before this day, clamped inside the link’s period (never widened)."
       required:
         - viewerToken
       additionalProperties: false
@@ -13881,7 +14004,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or accountant access is off on this server
+          description: No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:
@@ -14109,12 +14232,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/clients:
+    get:
+      tags:
+        - Sessions
+      summary: "Your client books: the profiles shared with you as an accountant, with this month’s activity"
+      description: MUT-575 (ADR-249). The rows of /v1/me `clients` (active first, oldest accept first; then ended, newest end first), each with `entriesThisMonth` (live expenses and received payments dated in the current calendar month in the profile’s timezone) and `lastActivityAt` (when the newest was logged). Ended rows (the owner revoked access or is closing their account) carry null stats and stay until removed with DELETE /v1/clients/{profileId}. Empty for a person who reads no client.
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The client books
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantClientList"
+        "404":
+          description: Accountant access is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/clients/{profileId}:
     delete:
       tags:
         - Sessions
-      summary: Stop reading a profile shared with you as an accountant
-      description: MUT-559 (ADR-245). The profile leaves /v1/me `clients`; its owner sees you gone.
+      summary: Stop reading a client, or remove an ended one from your list
+      description: "MUT-559 (ADR-245), MUT-575 (ADR-249). An active client (the owner closing their account or not): you stop reading it (its owner sees you gone) and it leaves your list. An ended client (access revoked): it is removed from your list for good; its owner sees nothing change. One call either way: the server decides."
       security:
         - session: []
         - deviceSession: []
@@ -14127,9 +14272,9 @@ paths:
           in: path
       responses:
         "204":
-          description: Left
+          description: Left, or removed
         "404":
-          description: "NOT_FOUND: you don’t read that profile"
+          description: "NOT_FOUND: no such client on your list"
           content:
             application/json:
               schema:
@@ -17018,6 +17163,102 @@ paths:
           required: false
           description: Logged at or after this instant (ISO 8601, Z or an offset), at most 31 days back. Default order only (422 otherwise).
           name: loggedSince
+          in: query
+      responses:
+        "200":
+          description: A page
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EntryPage"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profile-entries:
+    get:
+      tags:
+        - Entries
+      summary: One profile’s entries, newest money date first
+      description: "MUT-575. The expenses, received payments, Owed entries and conversions of the profile named in X-Mutaba3a-Profile, newest money date first, then newest logged: the same items and cursor as GET /v1/entries?profileId=…&order=occurredOn. An accountant reads a client shared with them this way (read-only). kinds narrows (all four when absent); occurredFrom and occurredBefore bound the money date. A profile you can’t open answers 404 PROFILE_NOT_FOUND, including one whose sharing ended between two pages."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: array
+            items:
+              type: string
+              enum:
+                - expense
+                - received
+                - owed
+                - conversion
+            description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
+          required: false
+          description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
+          style: form
+          explode: true
+          name: kinds
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Money date on or after this day.
+          required: false
+          description: Money date on or after this day.
+          name: occurredFrom
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: Money date before this day.
+          required: false
+          description: Money date before this day.
+          name: occurredBefore
+          in: query
+        - schema:
+            type: string
+            description: Opaque `nextCursor` from the previous page.
+          required: false
+          description: Opaque `nextCursor` from the previous page.
+          name: cursor
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+            description: Page size, 1–100.
+          required: false
+          description: Page size, 1–100.
+          name: limit
           in: query
       responses:
         "200":
@@ -20097,6 +20338,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+      description: "`disposition=inline` (MUT-575, as the library route since MUT-260) signs a URL that displays the file instead of saving it, for the desk's preview. The default `attachment` saves it."
       parameters:
         - schema:
             type: string
@@ -20110,6 +20352,17 @@ paths:
           required: true
           name: receiptId
           in: path
+        - schema:
+            type: string
+            enum:
+              - attachment
+              - inline
+            default: attachment
+            description: "How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260."
+          required: false
+          description: "How the signed URL serves the file: `attachment` (default) saves it; `inline` displays it (the portal's PDF preview). Since 1.71.0-mut260."
+          name: disposition
+          in: query
       responses:
         "200":
           description: Signed URL
@@ -26681,7 +26934,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or share links are off on this server
+          description: No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:

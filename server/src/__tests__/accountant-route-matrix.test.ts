@@ -32,6 +32,8 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
   'GET /v1/payments',
   'GET /v1/payments/{paymentId}',
+  // MUT-575: a client's feed, admitted by its scope tags alone (expenses, payments and conversions read).
+  'GET /v1/profile-entries',
   'GET /v1/projects',
   'GET /v1/projects/{projectId}',
   'GET /v1/receipts',

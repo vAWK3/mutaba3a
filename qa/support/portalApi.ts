@@ -271,11 +271,24 @@ export function expense(n: number, e: { amount: string; currency?: Currency; tit
     notes: e.notes ?? null,
     createdByUserId: '99999999-9999-4999-8999-999999999999',
     vat: null as StubExpenseVat | null,
+    allocationNumber: null as string | null,
+    allocationNumberMissing: false,
     version: 1,
     createdAt: STAMP,
     updatedAt: STAMP,
     receipts: [] as StubReceipt[],
   };
+}
+
+/**
+ * MUT-557: the server's flag (ADR-246) for the stub: an ILS expense with VAT whose net is at or above the threshold on
+ * its date (₪10,000 from 2026-01-01, ₪5,000 from 2026-06-01) and no number. The stub's profiles are firms.
+ */
+export function stampAllocationNumber(e: StubExpense): void {
+  if (typeof e.allocationNumber === 'string') e.allocationNumber = e.allocationNumber.replace(/[\s-]/g, '') || null;
+  const net = e.vat && Number(e.vat.vat) > 0 ? Number(e.vat.net) : 0;
+  const threshold = e.occurredOn >= '2026-06-01' ? 5000 : e.occurredOn >= '2026-01-01' ? 10000 : Infinity;
+  e.allocationNumberMissing = e.currency === 'ILS' && net >= threshold && !e.allocationNumber;
 }
 export type StubExpense = ReturnType<typeof expense>;
 
@@ -1050,6 +1063,7 @@ export class FakeApi {
       delete (made as { vendorDetails?: unknown }).vendorDetails;
       const vatIn = (b.vat as VendorVatStub | null | undefined) ?? null;
       made.vat = splitExpenseVat(made.amount, made.currency as Currency, vatIn);
+      stampAllocationNumber(made);
       made.vendorId = this.linkVendor(made.vendor, made.categoryId, { currency: made.currency, vat: vatIn });
       this.expenses.unshift(made);
       Object.assign(found, { filingStatus: 'FILED', expenseId: made.id, approvedAt: STAMP, version: found.version + 1, approved: { occurredOn: made.occurredOn, amountMinor: '0', currency: made.currency, vendor: made.vendor, categoryId: made.categoryId } });
@@ -1425,6 +1439,7 @@ export class FakeApi {
         delete (made as { vendorDetails?: unknown }).vendorDetails;
         const vatIn = (b.vat as VendorVatStub | null | undefined) ?? null;
         made.vat = splitExpenseVat(made.amount, made.currency as Currency, vatIn);
+        stampAllocationNumber(made);
         made.vendorId = this.linkVendor(made.vendor, made.categoryId, { currency: made.currency, vat: vatIn });
         this.expenses.unshift(made);
         return json(listed(made), 201);
@@ -1442,6 +1457,7 @@ export class FakeApi {
         const keptVat = found.vat ? { treatment: found.vat.treatment, rateBasisPoints: found.vat.rateBasisPoints } : null;
         Object.assign(found, e.body, { version: found.version + 1 });
         found.vat = splitExpenseVat(found.amount, found.currency as Currency, sentVat === undefined ? keptVat : sentVat);
+        stampAllocationNumber(found);
         const patch = e.body as { vendor?: string | null; categoryId?: string | null };
         if (patch.vendor !== undefined || patch.categoryId !== undefined) found.vendorId = this.linkVendor(found.vendor, found.categoryId);
         return json(listed(found));

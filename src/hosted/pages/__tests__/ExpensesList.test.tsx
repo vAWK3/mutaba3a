@@ -57,6 +57,16 @@ describe('ExpensesList', () => {
     expect(row).toHaveTextContent('₪45.50');
   });
 
+  it('MUT-557: an expense the server flags shows "No allocation number" beside its title; the rest do not', async () => {
+    portal(`/p/${ORG_A}/expenses`, {
+      'GET /v1/expenses': () => ok(page([expense({ allocationNumberMissing: true }), expense({ id: 'e2', title: 'Coffee', allocationNumberMissing: false })])),
+    });
+    const table = await screen.findByRole('table', { name: 'Expenses' });
+    const [, flagged, plain] = within(table).getAllByRole('row');
+    expect(within(flagged!).getByTestId('expense-allocation-missing')).toHaveTextContent('No allocation number');
+    expect(within(plain!).queryByTestId('expense-allocation-missing')).not.toBeInTheDocument();
+  });
+
   it('shows an empty state with a "Record expense" action when there are none', async () => {
     portal(`/p/${ORG_A}/expenses`);
     expect(await screen.findByText('No expenses recorded on this profile yet')).toBeInTheDocument();

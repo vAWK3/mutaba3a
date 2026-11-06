@@ -33,11 +33,17 @@ async function failure(promise: Promise<unknown>): Promise<OcrReadError> {
 describe('HttpOcrClient', () => {
   it('POSTs the bytes to /v1/read with the content type, the capture hint and the auth headers', async () => {
     const { ocr, seen } = client(respond(OK_BODY), { authHeaders: async () => ({ authorization: 'Bearer id-token' }) });
-    expect(await ocr.read({ ...input, hint: 'scanned' })).toEqual(OK_BODY);
+    expect(await ocr.read({ ...input, hint: 'scanned' })).toEqual({ ...OK_BODY, qr: [] });
     expect(seen[0]!.url).toBe('http://localhost:8790/v1/read');
     expect(seen[0]!.init).toMatchObject({ method: 'POST', headers: { 'content-type': 'image/png', 'x-capture-hint': 'scanned', authorization: 'Bearer id-token' } });
     expect(seen[0]!.init.signal).toBeInstanceOf(AbortSignal);
     expect(OCR_TIMEOUT_MS).toBe(35_000);
+  });
+
+  it('MUT-557 (A3): the QR payloads; none from an older sidecar, and a list this side cannot take is none, not a failed read', async () => {
+    expect((await client(respond({ ...OK_BODY, qr: ['IL:1'] })).ocr.read(input)).qr).toEqual(['IL:1']);
+    expect((await client(respond(OK_BODY)).ocr.read(input)).qr).toEqual([]);
+    expect((await client(respond({ ...OK_BODY, qr: ['x'.repeat(5_000)] })).ocr.read(input)).qr).toEqual([]);
   });
 
   it('an unknown script is just unknown', async () => {

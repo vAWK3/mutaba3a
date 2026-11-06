@@ -65,8 +65,8 @@ const featureAudit = async (h: Harness, organizationId: string) =>
   (await read(await h.app.request(`/admin/v1/organizations/${organizationId}/audit`, { headers: admin }))).events.filter((e: { action: string }) => e.action.startsWith('user.feature_'));
 
 describe('the feature list (D2)', () => {
-  it('names agent_access and receipt_reading (MUT-441) and nothing else; anything else is not a feature', () => {
-    expect(FEATURES).toEqual(['agent_access', 'receipt_reading']);
+  it('names agent_access, receipt_reading (MUT-441) and accountant_access (MUT-577) and nothing else; anything else is not a feature', () => {
+    expect(FEATURES).toEqual(['agent_access', 'receipt_reading', 'accountant_access']);
     expect(isFeature('agent_access')).toBe(true);
     expect(isFeature('receipt_reading')).toBe(true);
     expect(isFeature('AGENT_ACCESS')).toBe(false);

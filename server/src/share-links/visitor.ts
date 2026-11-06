@@ -32,7 +32,8 @@ export function visitorEntry(row: VisitorRow, ctx: VisitorContext) {
   const createdAt = row.record.createdAt.toISOString();
   switch (row.kind) {
     case 'expense': {
-      const e = serializeExpense(row.record);
+      // MUT-557: the allocation number and its flag are not among the fields a visitor sees, so no profile is needed.
+      const e = serializeExpense(row.record, { firm: false });
       return {
         kind: 'expense' as const,
         createdAt,
