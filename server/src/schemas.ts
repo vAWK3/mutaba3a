@@ -1140,6 +1140,18 @@ export const AccountClosureSchema = z
   })
   .openapi('AccountClosure');
 
+/** A profile shared with the signed-in person as an accountant: /v1/me `clients`, and what accepting answers. */
+export const AccountantClientSchema = z
+  .object({
+    profileId: z.string().uuid(),
+    name: z.string(),
+    /** The profile's owner (else whoever invited); null if neither has an account any more. */
+    ownerName: z.string().nullable(),
+    /** When the accountant accepted. */
+    sharedSince: z.string().datetime(),
+  })
+  .openapi('AccountantClient');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -1201,6 +1213,12 @@ export const MeSchema = z
      * Additive since 1.60.0-mut361.
      */
     billingStanding: z.enum(['open', 'read-only', 'locked']).nullable(),
+    /**
+     * MUT-559 (ADR-245): profiles other people shared with this person to read as their accountant, oldest first.
+     * Never in `profiles`: Capture, widgets and the profile switcher don't see them. Absent where the server has
+     * accountant access off. Additive since 1.100.0-mut559.
+     */
+    clients: z.array(AccountantClientSchema).optional(),
   })
   .openapi('Me');
 
@@ -1376,6 +1394,78 @@ export const SetupLinkRedeemRequestSchema = z
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
   })
   .openapi('SetupLinkRedeemRequest');
+
+// ---- MUT-559 (ADR-245): accountant grants ---------------------------------------
+
+/** What an owner sees of one accountant's access to their profile. */
+export const AccountantGrantSchema = z
+  .object({
+    id: z.string().uuid(),
+    /** The address invited. */
+    email: z.string(),
+    /** The accountant's name once they have accepted; null while pending. */
+    name: z.string().nullable(),
+    /** `expired`: pending past its 14 days; invite again (the old invite is replaced). */
+    status: z.enum(['pending', 'expired', 'active']),
+    invitedAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    acceptedAt: z.string().datetime().nullable(),
+    /** Stamped at most once an hour. */
+    lastViewedAt: z.string().datetime().nullable(),
+  })
+  .openapi('AccountantGrant');
+
+export const AccountantGrantListSchema = z
+  .object({ items: z.array(AccountantGrantSchema), limit: z.number().int().openapi({ description: 'The most pending and active accountants one profile may have (409 ACCOUNTANT_LIMIT past it)' }) })
+  .openapi('AccountantGrantList');
+
+export const InviteAccountantRequestSchema = z
+  .object({
+    email: z.string().trim().max(254).email(),
+    /** The invite mail's language (and the account's, if the accountant signs up from it). The inviter's when omitted. */
+    locale: UserLocaleSchema.optional(),
+  })
+  .openapi('InviteAccountantRequest');
+
+export const AccountantGrantParamSchema = ProfileIdParamSchema.extend({ grantId: z.string().uuid().openapi({ param: { name: 'grantId', in: 'path' } }) });
+
+/** D3: the invite token travels in the body, never a path; the portal reads it from the link's fragment. */
+export const AccountantInviteTokenRequestSchema = z.object({ token: SetupTokenSchema }).openapi('AccountantInviteTokenRequest');
+
+export const AccountantInviteCheckResponseSchema = z
+  .object({
+    profileName: z.string(),
+    ownerName: z.string().nullable(),
+    /** The invited address with most of its local part hidden, so the right person signs in. */
+    maskedEmail: z.string(),
+    /** Past its 14 days: the owner has to invite again. */
+    expired: z.boolean(),
+    expiresAt: z.string().datetime(),
+  })
+  .openapi('AccountantInviteCheck');
+
+export const AccountantInviteSignupRequestSchema = z
+  .object({
+    token: SetupTokenSchema,
+    password: NewPasswordSchema,
+    /** The address's local part when omitted. */
+    displayName: z.string().trim().min(1).max(200).optional(),
+    /** MUT-324: the terms version the person agreed to; 409 TERMS_VERSION_STALE otherwise. */
+    acceptedTermsVersion: TermsVersionSchema.optional(),
+    termsLocale: UserLocaleSchema.optional(),
+    clientRelease: ClientReleaseSchema.optional(),
+    /** Cloudflare Turnstile, action "signup", as on POST /v1/signups. */
+    turnstileToken: z.string().min(1).max(2048),
+    /** The accountant's own personal profile; the shared profile's currency and timezone when omitted. */
+    defaultCurrency: CurrencySchema.optional(),
+    timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
+  })
+  .openapi('AccountantInviteSignupRequest');
+
+/** No session: the portal then signs in through POST /v1/sessions with this email and password, as after /setup. */
+export const AccountantInviteSignupResponseSchema = z
+  .object({ email: z.string(), status: z.literal('ACTIVE'), client: AccountantClientSchema })
+  .openapi('AccountantInviteSignup');
 
 /** The portal signs in with this email and the password just set, through POST /v1/sessions. */
 export const SetupLinkRedeemResponseSchema = z
@@ -2055,6 +2145,12 @@ export const CONFLICT_REASONS = [
   // MUT-443 (D2, R12): correcting a payment that is already reversed (the same state as reverse's ALREADY_REVERSED; the
   // allocation preview answers it as a 422). details carry reversedAt and replacedByPaymentId.
   'PAYMENT_NOT_POSTED',
+  // MUT-559 (ADR-245): accountant grants. A second live invite to one address; the per-profile cap; accepting a
+  // profile one already owns, belongs to or reads; signing up from an invite to an address that has an account.
+  'ALREADY_INVITED',
+  'ACCOUNTANT_LIMIT',
+  'ALREADY_HAS_ACCESS',
+  'ACCOUNT_EXISTS',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -2171,6 +2267,8 @@ export const VALIDATION_REASONS = [
   'NOTHING_TO_CORRECT',
   // MUT-444: a correction that changes a billed line's trigger or drops a billed line (details: position, change).
   'POSTED_INSTALLMENT_CHANGED',
+  // MUT-559: an owner inviting their own address as an accountant.
+  'SELF_INVITE',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

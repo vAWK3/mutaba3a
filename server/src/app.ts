@@ -4,14 +4,14 @@ import { contextStorage } from 'hono/context-storage';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApiShell } from './app-shell.js';
 import type { ApiKeyEnvironment } from './auth/api-key.js';
-import { authenticate, buildRouteAccessIndex, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
+import { authenticate, buildRouteAccessIndex, endpointKey, type AppEnv, type RouteAccessIndex, type SessionSettings } from './auth/middleware.js';
 import { requireMinimumBuild, type MinimumBuildConfig } from './auth/minimum-build.js';
 import { requireNotInMaintenance } from './auth/maintenance.js';
 import { DEFAULT_DEVICE_ABSOLUTE_DAYS, DEFAULT_DEVICE_IDLE_DAYS, LEGACY_CARRY_OVER_PATH, SIGN_IN_POLICY, SignInThrottle, isViaFrontDoor } from './auth/sessions.js';
 import { SCOPES } from './auth/scopes.js';
 import { requestScopedStore } from './auth/store-guard.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher, type PasswordHasher } from './auth/users.js';
-import { ERROR_CODES } from './errors.js';
+import { ApiError, ERROR_CODES } from './errors.js';
 import { CURRENT_TERMS, type CurrentTerms } from './legal.js';
 import type { CachedFxRates } from './fx-rates.js';
 import type { Logger } from './logger.js';
@@ -61,6 +61,8 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
 import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
+import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
+import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
 import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
@@ -212,7 +214,22 @@ export interface AppDependencies {
   receiptReading?: { ocr: OcrClient; dispatcher: ReadDispatcher } | null;
   /** MUT-441 (R8): checks the read job's Google OIDC token. Null or absent = POST /jobs/v1/receipts/read answers 503. */
   receiptReadVerifier?: ReadJobVerifier | null;
+  /**
+   * MUT-559 (ACCOUNTANT_ACCESS, ADR-245): accountant grants. Absent or false = every accountant route answers 404,
+   * /v1/me has no `clients`, and selectProfile never reads a grant (the server deploys dark).
+   */
+  accountantAccess?: boolean;
+  /** MUT-559: ACCOUNTANTS_PER_PROFILE_MAX. Default ACCOUNTANTS_PER_PROFILE_DEFAULT (5). */
+  accountantsPerProfileMax?: number;
+  /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
+  accountantInviteLimiter?: RateLimiter;
 }
+
+/**
+ * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
+ * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
+ */
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -294,7 +311,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.99.0-mut534';
+export const API_VERSION = '1.100.0-mut559';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -305,7 +322,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const now = deps.now ?? (() => new Date());
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles });
+  const accountantAccess = deps.accountantAccess ?? false;
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -353,6 +371,15 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
+  // MUT-559 (ADR-245): while ACCOUNTANT_ACCESS is off, every accountant route answers 404 before anything else looks
+  // at the request (the routes stay registered, so the published contract doesn't depend on the switch).
+  app.use('/v1/*', async (c, next) => {
+    if (!accountantAccess) {
+      const endpoint = endpointKey(c);
+      if (endpoint && ACCOUNTANT_ENDPOINTS.has(endpoint)) throw new ApiError('NOT_FOUND', 'Not found');
+    }
+    await next();
+  });
   app.use(
     '/v1/*',
     authenticate({
@@ -361,7 +388,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       rateLimiter: deps.rateLimiter,
       sessions,
       routeAccess: resolveRouteAccess,
-      organizationIndependent: new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES]),
+      organizationIndependent: SESSION_ORGANIZATION_INDEPENDENT_ROUTES,
+      accountantAccess,
     }),
   );
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
@@ -424,7 +452,25 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
-  app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: deps.selfService ?? defaultSelfServiceOptions(), now }));
+  const selfService = deps.selfService ?? defaultSelfServiceOptions();
+  app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
+  // MUT-559 (ADR-245): an owner's accountants, and the invite an accountant accepts or signs up from. The public pair
+  // shares the sign-in IP limiter under its own key, and signup's Turnstile check.
+  app.route(
+    '/',
+    accountantRoutes({
+      store,
+      settings: sessions,
+      passwordHasher,
+      ipLimiter: signInIpLimiter,
+      inviteLimiter: deps.accountantInviteLimiter ?? new SlidingWindowRateLimiter(ACCOUNTANT_INVITE_POLICY.perUserPerHour, 3_600_000),
+      maxPerProfile: deps.accountantsPerProfileMax ?? ACCOUNTANTS_PER_PROFILE_DEFAULT,
+      terms,
+      mailer,
+      logger: deps.logger,
+      turnstile: selfService.turnstile,
+    }),
+  );
   app.route('/', integrationRoutes(store, deps.version));
   app.route('/', importRoutes(store));
   app.route('/', vatRoutes(store));

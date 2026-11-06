@@ -128,7 +128,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c)), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess')), 201);
     },
   );
 
@@ -171,7 +171,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c)), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess')), 201);
     },
   );
 

@@ -88,6 +88,13 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'GET /v1/operator/firm-requests/:organizationId': 'open',
   'POST /v1/operator/firm-requests/:organizationId/enable': 'open',
   'POST /v1/operator/firm-requests/:organizationId/decline': 'open',
+  // MUT-559 (ADR-245): who can read a profile is privacy, never a paid feature: an owner sees and revokes their
+  // accountants, and an accountant accepts or leaves, in any state. Inviting is a write on the profile in the path.
+  'GET /v1/profiles/:profileId/accountants': 'open',
+  'DELETE /v1/profiles/:profileId/accountants/:grantId': 'open',
+  'POST /v1/profiles/:profileId/accountants': 'pathProfile',
+  'POST /v1/accountant-invites/accept': 'open',
+  'DELETE /v1/clients/:profileId': 'open',
   // MUT-333: a locked or read-only person can always close their account, and keep it.
   'POST /v1/me/closure': 'open',
   'DELETE /v1/me/closure': 'open',

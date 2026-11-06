@@ -168,6 +168,14 @@ const envSchema = z.object({
   SWEEP_INVOKER_SA: z.string().email().optional(),
   /** MUT-441 (R8): the audience the read job's OIDC tokens must name. Unset = API_ORIGIN. */
   READ_OIDC_AUDIENCE: z.string().url().optional(),
+  /**
+   * MUT-559 (ADR-245): accountant access. Off, every accountant route answers 404, /v1/me has no `clients`, and a
+   * grant opens nothing, so the server can deploy before the portal and phone screens (MUT-561..564). Only "true"
+   * turns it on, as above.
+   */
+  ACCOUNTANT_ACCESS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
+  ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   // MUT-436 (review D3/D5): an agent may add to the inbox only once the phone decodes 'mcp' and its minimum build is raised.
   MCP_INBOX_WRITES: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**

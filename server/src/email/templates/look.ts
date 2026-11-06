@@ -88,6 +88,8 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'card-failed-reminder': { mood: 'trial', header: 'spot-lock', chip: 'lock' },
   // MUT-534: the existing art only: the way back up.
   'comeback-offer': { mood: 'hello', header: 'milestone-firm', chip: 'success' },
+  // MUT-559: an owner shares a profile with their accountant.
+  'accountant-invite': { mood: 'hello', header: 'spot-email', chip: 'email' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

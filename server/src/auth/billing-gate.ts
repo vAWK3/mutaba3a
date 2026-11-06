@@ -14,10 +14,15 @@ import type { AppEnv, SessionAuth, SessionIdentity } from './middleware.js';
 export type GateStore = Pick<LedgerStore, 'memberships' | 'organizations' | 'integrations' | 'billing'>;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-/** A profile-scoped request: the selected profile's own entitlement decides. */
+/**
+ * A profile-scoped request: the selected profile's own entitlement decides. MUT-559 (ADR-245): an accountant on a
+ * LOCKED profile is gated as READ_ONLY, so they keep reading what they were given (they only ever read).
+ */
 export async function gateSelectedProfile(c: Context<AppEnv>, auth: SessionAuth, endpoint: string, store: GateStore): Promise<void> {
   const entitlement = await entitlementOf(store, auth.organization, auth.writerOfRecord === 'MALAFAT', c.get('now')());
-  if (profileGateRefuses(standingOf(entitlement.state), c.req.method, endpoint)) throw lapsedError(auth.organization.id, entitlement);
+  const standing = standingOf(entitlement.state);
+  const effective = auth.access === 'accountant' && standing === 'locked' ? 'read-only' : standing;
+  if (profileGateRefuses(effective, c.req.method, endpoint)) throw lapsedError(auth.organization.id, entitlement);
 }
 
 /**

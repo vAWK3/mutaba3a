@@ -176,11 +176,11 @@ describe('AC3: stale previews and closed proposals', () => {
 });
 
 describe('AC4: the contract', () => {
-  it('publishes 1.99.0-mut534 with the approve preview, the draft and the agreement type', async () => {
+  it('publishes 1.100.0-mut559 with the approve preview, the draft and the agreement type', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(API_VERSION).toBe('1.99.0-mut534');
-    expect(doc.info.version).toBe('1.99.0-mut534');
+    expect(API_VERSION).toBe('1.100.0-mut559');
+    expect(doc.info.version).toBe('1.100.0-mut559');
     expect(doc.paths['/v1/fee-proposals/{proposalId}/approve/preview']).toBeDefined();
     expect(doc.components.schemas.AgreementDraft).toBeDefined();
     expect(doc.components.schemas.FeeProposal.properties).toHaveProperty('draft');

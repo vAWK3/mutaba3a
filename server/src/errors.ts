@@ -64,6 +64,12 @@ export const ERROR_CODES = {
    * source, until (a trial's lock date, else null) }. Never for an API key.
    */
   SUBSCRIPTION_LAPSED: 402,
+  /**
+   * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague
+   * on the same business domain (webmail, disposable and relay domains never match). `details.maskedEmail` names the
+   * invited address, mostly hidden, so the person can sign in with it.
+   */
+  INVITE_EMAIL_MISMATCH: 403,
   /** MUT-434 (AC6): the person doesn't hold the per-user feature this needs (MUT-433, e.g. `agent_access`); `details.feature`. */
   FEATURE_NOT_ENABLED: 403,
   NOT_FOUND: 404,

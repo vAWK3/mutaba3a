@@ -1760,6 +1760,482 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/profiles/{profileId}/accountants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The accountants invited to this profile: pending, expired and active
+         * @description MUT-559 (ADR-245). Revoked and left grants are not listed. Oldest first.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The accountants */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantGrantList"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE, details.reason NOT_OWNER */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such profile for you, or accountant access is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Invite an accountant to read this profile
+         * @description MUT-559 (ADR-245). Mails the address a link to accept within 14 days; the accountant then reads this profile's expenses, income, receipts and summaries, and changes nothing. At most 5 pending and active accountants per profile (409 CONFLICT, details.reason ACCOUNTANT_LIMIT); one invite per address (409 ALREADY_INVITED; an expired one is replaced); never your own address (422 VALIDATION_FAILED, details.reason SELF_INVITE). Any profile you own, your personal one included.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["InviteAccountantRequest"];
+                };
+            };
+            responses: {
+                /** @description Invited (pending) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantGrant"];
+                    };
+                };
+                /** @description READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such profile for you, or accountant access is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT: details.reason ALREADY_INVITED or ACCOUNTANT_LIMIT */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: not an address, or details.reason SELF_INVITE */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: too many invites this hour */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/profiles/{profileId}/accountants/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Revoke an accountant’s access, or withdraw their invite
+         * @description MUT-559 (ADR-245). Their next request to the profile answers 404, as if it had never been shared.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                    grantId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Revoked */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description READ_ONLY_PROFILE, details.reason NOT_OWNER */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such profile, or no pending or active grant with that id on it */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/accountant-invites/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What an accountant invite is for, before signing in or up
+         * @description MUT-559 (ADR-245, D3): the token from the link’s fragment, in the body. Unknown, used and revoked invites all answer the same 404; an expired one answers with `expired: true`.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountantInviteTokenRequest"];
+                };
+            };
+            responses: {
+                /** @description The invite */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantInviteCheck"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no such invite (or accountant access is off) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/accountant-invites/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Accept an accountant invite as the signed-in person
+         * @description MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountantInviteTokenRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted: the profile is now among /v1/me `clients` */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantClient"];
+                    };
+                };
+                /** @description INVITE_EMAIL_MISMATCH */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no such invite, used, revoked or expired */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason ALREADY_HAS_ACCESS */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/accountant-invites/signup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create an account from an accountant invite, and accept it
+         * @description MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and the 14-day trial. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AccountantInviteSignupRequest"];
+                };
+            };
+            responses: {
+                /** @description Created and accepted */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["AccountantInviteSignup"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST or CHECK_FAILED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no such invite, used, revoked or expired */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT (ACCOUNT_EXISTS), or TERMS_VERSION_STALE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (the password is 12 to 128 characters) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/clients/{profileId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop reading a profile shared with you as an accountant
+         * @description MUT-559 (ADR-245). The profile leaves /v1/me `clients`; its owner sees you gone.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    profileId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Left */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description NOT_FOUND: you don’t read that profile */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/integration": {
         parameters: {
             query?: never;
@@ -20077,6 +20553,7 @@ export interface components {
             } | null;
             /** @enum {string|null} */
             billingStanding: "open" | "read-only" | "locked" | null;
+            clients?: components["schemas"]["AccountantClient"][];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -20173,10 +20650,18 @@ export interface components {
             ownedProfiles: number;
             maxOwnedProfiles: number;
         };
+        AccountantClient: {
+            /** Format: uuid */
+            profileId: string;
+            name: string;
+            ownerName: string | null;
+            /** Format: date-time */
+            sharedSince: string;
+        };
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "INVITE_EMAIL_MISMATCH" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -20430,6 +20915,64 @@ export interface components {
             email: string;
             locale?: components["schemas"]["UserLocale"];
             turnstileToken: string;
+        };
+        AccountantGrant: {
+            /** Format: uuid */
+            id: string;
+            email: string;
+            name: string | null;
+            /** @enum {string} */
+            status: "pending" | "expired" | "active";
+            /** Format: date-time */
+            invitedAt: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            acceptedAt: string | null;
+            /** Format: date-time */
+            lastViewedAt: string | null;
+        };
+        InviteAccountantRequest: {
+            /** Format: email */
+            email: string;
+            locale?: components["schemas"]["UserLocale"];
+        };
+        AccountantGrantList: {
+            items: components["schemas"]["AccountantGrant"][];
+            /** @description The most pending and active accountants one profile may have (409 ACCOUNTANT_LIMIT past it) */
+            limit: number;
+        };
+        AccountantInviteCheck: {
+            profileName: string;
+            ownerName: string | null;
+            maskedEmail: string;
+            expired: boolean;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        AccountantInviteTokenRequest: {
+            token: string;
+        };
+        AccountantInviteSignup: {
+            email: string;
+            /** @enum {string} */
+            status: "ACTIVE";
+            client: components["schemas"]["AccountantClient"];
+        };
+        AccountantInviteSignupRequest: {
+            token: string;
+            password: components["schemas"]["NewPassword"];
+            displayName?: string;
+            acceptedTermsVersion?: components["schemas"]["TermsVersion"];
+            termsLocale?: components["schemas"]["UserLocale"];
+            /**
+             * @description The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+             * @example web-v0.1.16
+             */
+            clientRelease?: string;
+            turnstileToken: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            timezone?: string;
         };
         IntegrationStatusResponse: {
             organization: components["schemas"]["Organization"];

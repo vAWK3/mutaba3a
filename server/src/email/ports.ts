@@ -10,7 +10,8 @@ import type { UserLocale } from '../repositories/ports.js';
  * the day the account is deleted, a calendar day and never a money date. MUT-525 (ADR-237 override log): the trial
  * mails may name the launch offer's percent and last day, and `offer-renewing-soon` names the subscription's own
  * yearly price and renewal day, because a renewal notice must state them. MUT-534 (ADR-243 override log):
- * `comeback-offer` names the come-back prices. Money records still never appear.
+ * `comeback-offer` names the come-back prices. MUT-559 (ADR-245 override log): `accountant-invite` names the last day
+ * its link works, a calendar day and never a money date. Money records still never appear.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -31,6 +32,7 @@ export const TEMPLATE_IDS = [
   'card-failed',
   'card-failed-reminder',
   'comeback-offer',
+  'accountant-invite',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -126,6 +128,12 @@ export interface TemplateVars {
    * `subscribeLink` opens Billing's Subscribe step.
    */
   'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string };
+  /**
+   * MUT-559 (ADR-245): an owner invites an accountant to read one profile. `link` is `{portal}/accountant-invite#{token}`
+   * (the token in the fragment, D3); `expiresOn` is the last day it works (14 days, in the profile's zone). Not exempt
+   * from the per-recipient cap: anyone with a profile can send it to any address.
+   */
+  'accountant-invite': { ownerName: string; profileName: string; link: string; expiresOn: CalendarDay };
 }
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */

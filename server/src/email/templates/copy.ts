@@ -389,6 +389,43 @@ const accountClosing: Copy<'account-closing'> = {
   }),
 };
 
+/**
+ * MUT-559 (ADR-245): an owner invites their accountant to read one profile. Who invited, which profile, that it is
+ * read-only, and the last day the link works (ADR-245 override log: a calendar day, never a money date).
+ */
+const accountantInvite: Copy<'accountant-invite'> = {
+  ar: ({ ownerName, profileName, link, expiresOn }) => ({
+    subject: `${ownerName} يشاركك ملف «${profileName}» في متابعة`,
+    preheader: 'للاطلاع فقط: المصاريف والدخل والإيصالات.',
+    headline: `${ownerName} يشاركك ملفًا للاطلاع`,
+    intro: [
+      [`دعاك ${ownerName} لمراجعة ملف «${profileName}» في متابعة بصفتك محاسبًا.`],
+      ['ستطّلع على مصاريفه ودخله وإيصالاته وملخصاته، دون أن تستطيع تغيير أي شيء فيه.'],
+    ],
+    details: [
+      { label: 'الملف', value: profileName },
+      { label: 'آخر يوم للقبول', value: mailDay(expiresOn, 'ar') },
+    ],
+    action: { label: 'قبول الدعوة', href: link },
+    outro: [['يمكنك قبولها بحساب على هذا البريد، أو بحساب جديد تنشئه منها. إن لم تكن تتوقع هذه الدعوة فتجاهل هذه الرسالة.']],
+  }),
+  en: ({ ownerName, profileName, link, expiresOn }) => ({
+    subject: `${ownerName} shared “${profileName}” with you on MTB3A`,
+    preheader: 'Read only: expenses, income and receipts.',
+    headline: `${ownerName} shared a profile with you`,
+    intro: [
+      [`${ownerName} invited you to review “${profileName}” on MTB3A as their accountant.`],
+      ['You’ll see its expenses, income, receipts and summaries. You can’t change anything in it.'],
+    ],
+    details: [
+      { label: 'Profile', value: profileName },
+      { label: 'Accept by', value: mailDay(expiresOn, 'en') },
+    ],
+    action: { label: 'Accept the invite', href: link },
+    outro: [['Accept with an account on this address, or create one from the invite. If you weren’t expecting it, ignore this email.']],
+  }),
+};
+
 const passkeyAdded: Copy<'passkey-added'> = {
   en: ({ passkeyName, signInLink }) => ({
     subject: 'A passkey was added to your MTB3A account',
@@ -587,4 +624,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'card-failed': cardFailed,
   'card-failed-reminder': cardFailedReminder,
   'comeback-offer': comebackOffer,
+  'accountant-invite': accountantInvite,
 };

@@ -23,6 +23,7 @@ import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/operator.js'
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-plan.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
+import { ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/accountants.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -336,6 +337,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES,
       ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);

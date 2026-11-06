@@ -63,9 +63,10 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 200: { description: 'Categories', content: { 'application/json': { schema: ExpenseCategoryListSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user, writerOfRecord } = sessionAuth(c);
+      const { organization, user, writerOfRecord, access } = sessionAuth(c);
       const now = c.get('now')();
-      if ((await store.expenseCategories.list(organization.id, { includeArchived: true })).length === 0) {
+      // MUT-559: an accountant only reads; the preset is seeded on the owner's first read, in the owner's language.
+      if (access !== 'accountant' && (await store.expenseCategories.list(organization.id, { includeArchived: true })).length === 0) {
         // profileTypeOf: a MUT-120 profile the old revision wrote unstamped is still PERSONAL (qa-reconcile D1); it seeds once, so it must be right.
         const { preset, categories } = presetFor({ writerOfRecord, profileType: profileTypeOf(organization) }, user.locale);
         if (await store.expenseCategories.seed(organization.id, categories, now)) {

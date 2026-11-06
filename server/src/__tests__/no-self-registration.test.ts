@@ -15,8 +15,11 @@ const FORBIDDEN = /sign-?up|register|invite|forgot|reset/i;
  * MUT-366: the reviewed exceptions. (`/v1/account-recovery` doesn't match the pattern, but it is the other door.)
  * MUT-434: `/oauth/register` registers an OAuth *client app* (RFC 7591), never a person: it creates no account, signs
  * nobody in, and an agent can only act for a person who signs in and approves it on the consent page.
+ * MUT-559 (ADR-245): an owner's invite of their accountant to read one profile. Checking and accepting it create no
+ * account; signing up from it creates one only for the invited address, which the mailed link proves, and signs no one
+ * in (the person signs in afterwards, as after /setup). Behind ACCOUNTANT_ACCESS.
  */
-const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups', '/oauth/register']);
+const REVIEWED_SELF_SERVICE_PATHS: ReadonlySet<string> = new Set(['/v1/signups', '/oauth/register', '/v1/accountant-invites/check', '/v1/accountant-invites/accept', '/v1/accountant-invites/signup']);
 /**
  * The operator surface: /admin/ (the token) and, since MUT-459 (ADR-212), /v1/operator/ (a signed-in operator; 404 for
  * everyone else). Its signup-review routes decide on someone else's signup; they open no door to anyone.
@@ -84,6 +87,9 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/account-recovery',
       'POST /v1/account-setup',
       'POST /v1/account-setup/check',
+      // MUT-559 (ADR-245): the accountant invite's check, and signing up from it.
+      'POST /v1/accountant-invites/check',
+      'POST /v1/accountant-invites/signup',
       'POST /v1/billing/stripe/webhook',
       'POST /v1/device-sessions',
       'POST /v1/device-sessions/passkey',

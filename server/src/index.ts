@@ -192,6 +192,8 @@ const app = createApp({
   receiptReading,
   receiptReadVerifier,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
+  accountantAccess: config.ACCOUNTANT_ACCESS,
+  accountantsPerProfileMax: config.ACCOUNTANTS_PER_PROFILE_MAX,
   billingGate: config.BILLING_GATE,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.

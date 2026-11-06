@@ -94,6 +94,15 @@ const INBOX_OPERATIONS = [
 // MUT-373: a co-owner leaves, or the creator removes one, from their session.
 const PROFILE_OPERATIONS = ['POST /v1/profiles', 'PATCH /v1/profiles/{profileId}', 'GET /v1/profiles/{profileId}/type-change', 'POST /v1/profiles/{profileId}/firm-request', 'DELETE /v1/profiles/{profileId}/owners/{userId}'];
 
+/** MUT-559 (ADR-245): an owner's accountants, and an accountant accepting or leaving — session-only, no X-Mutaba3a-Profile. */
+const ACCOUNTANT_OPERATIONS = [
+  'POST /v1/profiles/{profileId}/accountants',
+  'GET /v1/profiles/{profileId}/accountants',
+  'DELETE /v1/profiles/{profileId}/accountants/{grantId}',
+  'POST /v1/accountant-invites/accept',
+  'DELETE /v1/clients/{profileId}',
+];
+
 /** MUT-228: reference exchange rates — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */
 const FX_OPERATIONS = ['GET /v1/fx-rates'];
 
@@ -168,6 +177,7 @@ const SESSION_OPERATIONS = [
   ...CONVERSION_OPERATIONS,
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
+  ...ACCOUNTANT_OPERATIONS,
   ...FX_OPERATIONS,
   ...ENTRIES_OPERATIONS,
   ...RECORDS_EXPORT_OPERATIONS,
@@ -226,7 +236,9 @@ const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DE
 /** Sign-in (MUT-38, MUT-64), the setup-link pair (MUT-235), the public FX snapshot (MUT-287), the Stripe webhook (MUT-360, signed by Stripe) and the Resend webhook (MUT-359, signed by Svix): no session or key. */
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup', 'GET /v1/public/fx-rates', 'POST /v1/billing/stripe/webhook', 'POST /v1/email/resend/webhook', 'POST /v1/signups', 'POST /v1/account-recovery', 'GET /v1/self-service',
   // MUT-115: passkey sign-in and its challenge, public like the password sign-in.
-  'POST /v1/passkey-challenges', 'POST /v1/sessions/passkey', 'POST /v1/device-sessions/passkey'];
+  'POST /v1/passkey-challenges', 'POST /v1/sessions/passkey', 'POST /v1/device-sessions/passkey',
+  // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
+  'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
 const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
@@ -265,6 +277,8 @@ beforeAll(async () => {
     version: 'test',
     // The whole session surface, the receipts library included (on wherever RECEIPTS_LIBRARY is set).
     receiptsLibrary: true,
+    // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
+    accountantAccess: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
   operations = Object.entries(doc.paths)
@@ -364,7 +378,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -374,7 +388,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

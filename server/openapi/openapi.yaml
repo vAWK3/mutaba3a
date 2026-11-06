@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.99.0-mut534
+  version: 1.100.0-mut559
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, INVITE_EMAIL_MISMATCH, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -17,9 +17,9 @@ info:
 
     Maintenance (MUT-551): while the server's maintenance switch is on, every request carrying `X-App-Platform` answers 503 MAINTENANCE, sign-in included, before the minimum-build check. The portal and API keys are untouched.
 
-    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED, PAYMENT_NOT_POSTED.
+    409 CONFLICT responses carry details.reason, one of: VERSION_MISMATCH, CURRENCY_LOCKED, CUSTOMER_MISMATCH, HAS_ACTIVE_PROJECTS, PREVIEW_STALE, INTEGRATION_NOT_CONNECTED, RATE_ALREADY_SET, AGREEMENT_HAS_POSTED_RECEIVABLES, AGREEMENT_CANCELLED, PROJECT_HAS_OUTSTANDING, ALREADY_REVERSED, PROPOSAL_OPEN, PROPOSAL_NOT_OPEN, CATEGORY_NAME_TAKEN, ALREADY_SETTLED, ALREADY_ALLOCATED, REVERSED_BY_MALAFAT, ENTRY_KIND_MISMATCH, RECEIPT_ALREADY_FILED, OUTCOME_ALREADY_RECORDED, OUTCOME_NOT_RECORDED, OUTCOME_HAS_PAYMENTS, ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP, PASSKEY_EXISTS, INSTALLMENT_VOIDED, PAYMENT_NOT_POSTED, ALREADY_INVITED, ACCOUNTANT_LIMIT, ALREADY_HAS_ACCESS, ACCOUNT_EXISTS.
 
-    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH, PAYMENT_NOT_CORRECTABLE, NOTHING_TO_CORRECT, POSTED_INSTALLMENT_CHANGED (schema failures carry the zod issues in details instead).
+    422 VALIDATION_FAILED responses raised by business rules carry details.reason, one of: AMOUNT_INVALID, VAT_RATE_MISSING, INSTALLMENTS_DO_NOT_SUM, PERCENTS_DO_NOT_SUM, MIXED_INSTALLMENT_BASIS, NO_INSTALLMENTS, TOO_MANY_INSTALLMENTS, NON_POSITIVE_INSTALLMENT, CURRENCY_MISMATCH, PROJECT_ARCHIVED, CUSTOMER_ARCHIVED, NOT_MANUAL, NOT_FIXED, NOT_RECURRING, SUPPLEMENT_EXCEEDS_UNPOSTED, NEW_INSTALLMENT_REQUIRED, NEGATIVE_NEW_INSTALLMENT, BILLING_DAY_INVALID, START_MONTH_INVALID, END_MONTH_INVALID, END_BEFORE_START, DATE_INVALID, TRIGGER_DATE_REQUIRED, ALLOCATION_EXCEEDS_PAYMENT, ALLOCATION_EXCEEDS_OUTSTANDING, ALLOCATION_DUPLICATE, RECEIVABLE_NOT_FOUND, RECEIVABLE_NOT_OPEN, RECEIVABLE_CUSTOMER_MISMATCH, PAYMENT_NOT_POSTED, NO_UNALLOCATED_FUNDS, CREDIT_EXCEEDS_OUTSTANDING, REPLACES_NOT_REVERSED, REPLACES_CUSTOMER_MISMATCH, NO_ELIGIBLE_RECEIVABLES, CUSTOMER_NOT_FOUND, CHANGE_EFFECTIVE_INVALID, CHANGE_NOTHING_CHANGED, FINAL_MONTH_INVALID, PREVIEW_TOKEN_REQUIRED, UPLOAD_INCOMPLETE, UPLOAD_MISMATCH, ATTACHMENT_TARGET_REQUIRED, ATTACHMENT_TARGET_AMBIGUOUS, MIME_TYPE_UNSUPPORTED, FILE_TOO_LARGE, FILENAME_INVALID, ATTACHMENT_NOT_READY, PROJECT_NOT_FOUND, PROFILE_REQUIRED, PROJECT_CUSTOMER_MISMATCH, CATEGORY_NOT_FOUND, CATEGORY_ARCHIVED, TOO_MANY_RECEIPTS, CUSTOMER_REQUIRED_FOR_OWED, CUSTOMER_REQUIRED, CUSTOMER_NOT_LINKED, REASON_RESERVED, EXTERNAL_REFERENCE_NOT_ALLOWED, PAYMENT_HAS_NO_CUSTOMER, COMMISSION_RATE_INVALID, NOT_CONTINGENCY, OUTCOME_DATE_INVALID, COMMISSION_LABEL_REQUIRED, SCHEDULE_REQUIRED, NAME_REQUIRED, GROUP_RANGE_TOO_LONG, GROUP_LIMIT, GROUP_ID_REQUIRED, AMOUNT_REQUIRED, SAME_CURRENCY, COUNTRY_NEEDS_BUSINESS, PASSKEY_NOT_VERIFIED, PERIOD_INVALID, RECEIPT_NUMBER_INVALID, RECEIPT_NUMBER_NOT_ALLOWED, REDUCTION_EXCEEDS_OPEN, USE_CANCEL, REASON_REQUIRED, DRAFT_CONFLICT, DRAFT_REQUIRED, AGREEMENT_TYPE_MISMATCH, PRICING_BASIS_MISMATCH, PAYMENT_NOT_CORRECTABLE, NOTHING_TO_CORRECT, POSTED_INSTALLMENT_CHANGED, SELF_INVITE (schema failures carry the zod issues in details instead).
     A DATE_INVALID on a range check also carries details.bound: past when the date is more than ten years (3660 days) before the organization's today (the floor on every money date, MUT-227), future when it is later than allowed.
 
     Amounts are canonical decimal strings in the project currency; dates are YYYY-MM-DD in the organization timezone. VAT rates are basis points (1800 = 18 %).
@@ -275,6 +275,10 @@ components:
             - read-only
             - locked
             - null
+        clients:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountantClient"
       required:
         - user
         - profiles
@@ -553,6 +557,25 @@ components:
       required:
         - ownedProfiles
         - maxOwnedProfiles
+    AccountantClient:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+        name:
+          type: string
+        ownerName:
+          type: string
+          nullable: true
+        sharedSince:
+          type: string
+          format: date-time
+      required:
+        - profileId
+        - name
+        - ownerName
+        - sharedSince
     ErrorEnvelope:
       type: object
       properties:
@@ -587,6 +610,7 @@ components:
                 - PASSKEY_NOT_ACCEPTED
                 - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
+                - INVITE_EMAIL_MISMATCH
                 - FEATURE_NOT_ENABLED
                 - NOT_FOUND
                 - ORGANIZATION_MISMATCH
@@ -1252,6 +1276,150 @@ components:
           maxLength: 2048
       required:
         - email
+        - turnstileToken
+    AccountantGrant:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        email:
+          type: string
+        name:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum:
+            - pending
+            - expired
+            - active
+        invitedAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        acceptedAt:
+          type: string
+          nullable: true
+          format: date-time
+        lastViewedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - id
+        - email
+        - name
+        - status
+        - invitedAt
+        - expiresAt
+        - acceptedAt
+        - lastViewedAt
+    InviteAccountantRequest:
+      type: object
+      properties:
+        email:
+          type: string
+          maxLength: 254
+          format: email
+        locale:
+          $ref: "#/components/schemas/UserLocale"
+      required:
+        - email
+    AccountantGrantList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/AccountantGrant"
+        limit:
+          type: integer
+          description: The most pending and active accountants one profile may have (409 ACCOUNTANT_LIMIT past it)
+      required:
+        - items
+        - limit
+    AccountantInviteCheck:
+      type: object
+      properties:
+        profileName:
+          type: string
+        ownerName:
+          type: string
+          nullable: true
+        maskedEmail:
+          type: string
+        expired:
+          type: boolean
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - profileName
+        - ownerName
+        - maskedEmail
+        - expired
+        - expiresAt
+    AccountantInviteTokenRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+      required:
+        - token
+    AccountantInviteSignup:
+      type: object
+      properties:
+        email:
+          type: string
+        status:
+          type: string
+          enum:
+            - ACTIVE
+        client:
+          $ref: "#/components/schemas/AccountantClient"
+      required:
+        - email
+        - status
+        - client
+    AccountantInviteSignupRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+        password:
+          $ref: "#/components/schemas/NewPassword"
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+        acceptedTermsVersion:
+          $ref: "#/components/schemas/TermsVersion"
+        termsLocale:
+          $ref: "#/components/schemas/UserLocale"
+        clientRelease:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: ^[\x21-\x7E]+$
+          description: The client release that showed the terms, e.g. the portal’s `web-v<x>` tag (MUT-354). Stored as sent.
+          example: web-v0.1.16
+        turnstileToken:
+          type: string
+          minLength: 1
+          maxLength: 2048
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          minLength: 1
+      required:
+        - token
+        - password
         - turnstileToken
     IntegrationStatusResponse:
       type: object
@@ -13109,6 +13277,295 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: "RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/accountants:
+    post:
+      tags:
+        - Profiles
+      summary: Invite an accountant to read this profile
+      description: MUT-559 (ADR-245). Mails the address a link to accept within 14 days; the accountant then reads this profile's expenses, income, receipts and summaries, and changes nothing. At most 5 pending and active accountants per profile (409 CONFLICT, details.reason ACCOUNTANT_LIMIT); one invite per address (409 ALREADY_INVITED; an expired one is replaced); never your own address (422 VALIDATION_FAILED, details.reason SELF_INVITE). Any profile you own, your personal one included.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InviteAccountantRequest"
+      responses:
+        "201":
+          description: Invited (pending)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantGrant"
+        "403":
+          description: "READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile for you, or accountant access is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT: details.reason ALREADY_INVITED or ACCOUNTANT_LIMIT"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: not an address, or details.reason SELF_INVITE"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many invites this hour"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Profiles
+      summary: "The accountants invited to this profile: pending, expired and active"
+      description: MUT-559 (ADR-245). Revoked and left grants are not listed. Oldest first.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      responses:
+        "200":
+          description: The accountants
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantGrantList"
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile for you, or accountant access is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/profiles/{profileId}/accountants/{grantId}:
+    delete:
+      tags:
+        - Profiles
+      summary: Revoke an accountant’s access, or withdraw their invite
+      description: MUT-559 (ADR-245). Their next request to the profile answers 404, as if it had never been shared.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: grantId
+          in: path
+      responses:
+        "204":
+          description: Revoked
+        "403":
+          description: READ_ONLY_PROFILE, details.reason NOT_OWNER
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such profile, or no pending or active grant with that id on it
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant-invites/check:
+    post:
+      tags:
+        - Sessions
+      summary: What an accountant invite is for, before signing in or up
+      description: "MUT-559 (ADR-245, D3): the token from the link’s fragment, in the body. Unknown, used and revoked invites all answer the same 404; an expired one answers with `expired: true`."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountantInviteTokenRequest"
+      responses:
+        "200":
+          description: The invite
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantInviteCheck"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: no such invite (or accountant access is off)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant-invites/accept:
+    post:
+      tags:
+        - Sessions
+      summary: Accept an accountant invite as the signed-in person
+      description: MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404.
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountantInviteTokenRequest"
+      responses:
+        "200":
+          description: "Accepted: the profile is now among /v1/me `clients`"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantClient"
+        "403":
+          description: INVITE_EMAIL_MISMATCH
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: no such invite, used, revoked or expired"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT, details.reason ALREADY_HAS_ACCESS
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/accountant-invites/signup:
+    post:
+      tags:
+        - Sessions
+      summary: Create an account from an accountant invite, and accept it
+      description: "MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and the 14-day trial. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED)."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AccountantInviteSignupRequest"
+      responses:
+        "201":
+          description: Created and accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AccountantInviteSignup"
+        "403":
+          description: CROSS_SITE_REQUEST or CHECK_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: no such invite, used, revoked or expired"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT (ACCOUNT_EXISTS), or TERMS_VERSION_STALE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed (the password is 12 to 128 characters)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/clients/{profileId}:
+    delete:
+      tags:
+        - Sessions
+      summary: Stop reading a profile shared with you as an accountant
+      description: MUT-559 (ADR-245). The profile leaves /v1/me `clients`; its owner sees you gone.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: profileId
+          in: path
+      responses:
+        "204":
+          description: Left
+        "404":
+          description: "NOT_FOUND: you don’t read that profile"
           content:
             application/json:
               schema:

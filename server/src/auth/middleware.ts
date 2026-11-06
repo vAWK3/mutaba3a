@@ -5,7 +5,8 @@ import type { PostingActor } from '../agreements/posting.js';
 import { ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
+import type { AccountantGrantRecord, ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
+import { accountantViewTouch, grantAudit } from '../accountants/grants.js';
 import { isOAuthToken } from '../oauth/tokens.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
@@ -13,8 +14,8 @@ import { CLOSING_OPEN_ENDPOINTS, closingRefusal, isAccountGone } from '../accoun
 import type { Entitlement } from '../billing/entitlement.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
-import { principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
-import { domainOfScope, matrixRow, profileWriterOf, sessionScopesFor, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
+import { accountantStoreGuard, principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
+import { accountantMayRead, accountantReadOnly, accountantScopes, domainOfScope, matrixRow, profileWriterOf, sessionScopesFor, writeRefusal, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * Two principals on /v1 (ADR-037 decisions 3–6):
@@ -39,8 +40,13 @@ export interface SessionAuth {
   scopes: readonly Scope[];
   /** The selected profile's writer of record, for READ_ONLY_PROFILE. */
   writerOfRecord: ProfileWriter;
-  /** MUT-373 (eng review A1): the caller's role on the selected profile, from the membership that admitted them — `ownsProfile` reads it. */
-  membershipRole: MembershipRole;
+  /**
+   * MUT-373 (eng review A1): the caller's role on the selected profile, from the membership that admitted them —
+   * `ownsProfile` reads it. MUT-559: null for an accountant, who holds no membership (so every owner gate refuses).
+   */
+  membershipRole: MembershipRole | null;
+  /** MUT-559 (ADR-245): how the person reaches the profile: a membership, or an accountant grant (read-only). */
+  access: 'member' | 'accountant';
 }
 
 /** What every organization-scoped route can read from the context. */
@@ -76,6 +82,8 @@ export type AppEnv = {
     passkeys: boolean;
     /** MUT-474: a dev server's owned-profile cap (app-shell.ts, from QA_MAX_OWNED_PROFILES); unset = the product limit. */
     maxOwnedProfiles: number | undefined;
+    /** MUT-559 (app-shell.ts, from ACCOUNTANT_ACCESS): whether /v1/me lists the person's `clients`. */
+    accountantAccess: boolean;
     /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
     personEntitlements: ReadonlyMap<string, Entitlement>;
     /** MUT-447: report an error a route handled itself (a partial answer), as the shell reports an unhandled one (ADR-091). */
@@ -163,6 +171,8 @@ export interface AuthenticateOptions {
   routeAccess: () => RouteAccessIndex;
   /** Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). */
   organizationIndependent: ReadonlySet<string>;
+  /** MUT-559 (ACCOUNTANT_ACCESS): whether a profile shared with the person as an accountant can be selected. Absent = off. */
+  accountantAccess?: boolean;
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -228,15 +238,43 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
   let profileWriter: ProfileWriter = null;
   // MUT-361 (ADR-181): the lapse gate, before any route work. An unmatched route (null endpoint) is never gated: its 404 answers.
   const gated = c.get('billingGate') === true;
+  let grant: AccountantGrantRecord | null = null;
   if (endpoint && !options.organizationIndependent.has(endpoint)) {
-    const auth = await selectProfile(c, identity, options.store);
+    const selected = await selectProfile(c, identity, options);
+    const { auth } = selected;
+    grant = selected.grant;
     c.set('auth', auth);
     profileWriter = auth.writerOfRecord;
+    // MUT-559: an accountant's request is refused before the lapse gate, so a write is always 403, never 402.
+    if (grant) assertAccountantMayCall(c.req.method, options.routeAccess().get(endpoint));
     if (gated) await gateSelectedProfile(c, auth, endpoint, options.store);
+    if (grant) await touchAccountantView(c, options.store, grant, identity.user.id);
   } else if (endpoint && gated) {
     await gatePersonLevel(c, identity, endpoint, options.store);
   }
-  c.set('storeGuard', principalStoreGuard('session', profileWriter));
+  c.set('storeGuard', grant ? accountantStoreGuard() : principalStoreGuard('session', profileWriter));
+}
+
+/**
+ * MUT-559 (ADR-245): the first two refusal layers for an accountant, before any route work. Layer 1, the method gate:
+ * only GET and HEAD, which also covers writes no scope guards (income, inbox filing, previews). Layer 2 (D1), the
+ * derived allowlist: a GET whose `requireScope` tags are all the accountant's, and at least one; an untagged GET (the
+ * records export) is refused. The third layer is the store guard (accountantStoreGuard).
+ */
+function assertAccountantMayCall(method: string, access: RouteAccess | undefined): void {
+  if (method !== 'GET' && method !== 'HEAD') throw accountantReadOnly();
+  if (!access || !accountantMayRead(access.scopes)) throw accountantReadOnly();
+}
+
+/**
+ * MUT-559: `lastViewedAt` at most once an hour per grant, and an `accountant.viewed` audit row the first time each UTC
+ * day, on the store beneath the guard (the base store authenticate() holds), like the session touch.
+ */
+async function touchAccountantView(c: Context<AppEnv>, store: LedgerStore, grant: AccountantGrantRecord, userId: string): Promise<void> {
+  const now = c.get('now')();
+  const { touch, firstOfDay } = accountantViewTouch(grant.lastViewedAt, now);
+  if (!touch) return;
+  await store.accountantGrants.touchViewed({ grantId: grant.id, at: now, audit: firstOfDay ? [grantAudit(grant, 'accountant.viewed', userId, c.get('requestId'))] : [] });
 }
 
 /**
@@ -352,18 +390,40 @@ async function verifiedSincePasswordChange(store: LedgerStore, session: SessionR
   throw sessionExpired();
 }
 
-/** ADR-025 §2 as amended by ADR-037: a session names one of its memberships; anything else is indistinguishable from absent. */
-async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<SessionAuth> {
+/**
+ * ADR-025 §2 as amended by ADR-037: a session names one of its memberships; anything else is indistinguishable from
+ * absent. MUT-559 (ADR-245): the one place accountant access is added. Only when the membership lookup misses, and
+ * only with ACCOUNTANT_ACCESS on, an ACTIVE grant on the named profile admits the person as its accountant: read-only
+ * scopes, no membership role. A revoked or left grant is the same 404 as a profile that was never theirs.
+ */
+async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, options: AuthenticateOptions): Promise<{ auth: SessionAuth; grant: AccountantGrantRecord | null }> {
+  const { store } = options;
   if (!c.req.header('x-mutaba3a-profile')) {
     throw new ApiError('VALIDATION_FAILED', 'Name the profile to act on in the X-Mutaba3a-Profile header', { reason: 'PROFILE_REQUIRED' });
   }
   const named = await namedMembership(c, identity, store);
+  if (named) {
+    const { organization, membership } = named;
+    const writerOfRecord = await profileWriterOf(store, organization.id);
+    const auth: SessionAuth = { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord, membershipRole: membership.role, access: 'member' };
+    return { auth, grant: null };
+  }
+  const client = options.accountantAccess ? await namedClient(c, identity, store) : null;
   // MUT-374 D6: the reason tells a client the named profile itself is gone for this person (left, removed, never
   // theirs), not a record under it, so the phone re-reads /v1/me and drops it.
-  if (!named) throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
-  const { organization, membership } = named;
+  if (!client) throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
+  const { organization, grant } = client;
   const writerOfRecord = await profileWriterOf(store, organization.id);
-  return { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord, membershipRole: membership.role };
+  const auth: SessionAuth = { kind: 'session', organization, user: identity.user, session: identity.session, scopes: accountantScopes(), writerOfRecord, membershipRole: null, access: 'accountant' };
+  return { auth, grant };
+}
+
+/** MUT-559: the named profile, when the person holds an ACTIVE accountant grant on it. One indexed read. */
+async function namedClient(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; grant: AccountantGrantRecord } | null> {
+  const requested = c.req.header('x-mutaba3a-profile');
+  const grant = requested && UUID_RE.test(requested) ? await store.accountantGrants.findActive(identity.user.id, requested) : null;
+  const organization = grant ? await store.organizations.getById(grant.organizationId) : null;
+  return organization && grant ? { organization, grant } : null;
 }
 
 async function namedMembership(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; membership: MembershipRecord } | null> {
