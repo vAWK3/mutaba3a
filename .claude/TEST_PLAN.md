@@ -4421,3 +4421,21 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
+## MUT-560 — share links (ADR-246)
+
+Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
+- `server/src/__tests__/routes-share-links.test.ts`: the period end to end (from − 1 / from / to / to + 1 / future,
+  backdated in and edited out, the profile's day at 00:30 on the 1st); create (every period × expiry, PIN format,
+  Arabic-Indic digits, the 10-link cap, rate limit, owner gate, co-owner, personal profile, LOCKED owner); token and PIN
+  at rest and no token in the contract's paths; unlock and the lockout (attemptsLeft, parallel wrong PINs, a lock ends
+  viewers already in); viewers (cap, returning viewer, parallel unlocks, 8 h, never past the link); one 404 on every
+  visitor route for unknown, expired, revoked, closing owner and the switch off; reads (profile isolation, projection,
+  paging, per-currency summary, receipts in and out of range, no bucket); non-POST methods; throttles and audit; rate
+  limits; purge; headers; a viewer token is no credential on `/v1`; same origin.
+- `server/src/share-links/__tests__/period.test.ts` (calendar months, year boundary, leap February, timezone edge) and
+  `access.test.ts` (the one door: a profile gone, an expired viewer, a lock).
+- `server/src/auth/__tests__/share-link-store-guard.test.ts`; `server/src/access/__tests__/view-touch.test.ts`.
+- Store contract `store-contract-share-links.ts` (memory; Prisma under `test:db`): cap, revoke, the failed-PIN count and
+  its race, the viewer cap and its race, returning viewers, unusable links, touches, purge both ways.
+- Updated: routes (1.101.0-mut560), route-security, billing-gate-routes, store-guard (operator list), purge catalog
+  (`share_link_viewers` outside profiles).
