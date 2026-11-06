@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.104.0-mut575
+  version: 1.105.0-mut565
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -279,6 +279,8 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/AccountantClient"
+        clientBooks:
+          $ref: "#/components/schemas/ClientBooksSummary"
       required:
         - user
         - profiles
@@ -594,6 +596,8 @@ components:
           type: string
           nullable: true
           format: date-time
+        needsPlan:
+          type: boolean
       required:
         - profileId
         - name
@@ -603,6 +607,61 @@ components:
         - status
         - endedReason
         - endedAt
+        - needsPlan
+    ClientBooksSummary:
+      type: object
+      properties:
+        count:
+          type: integer
+          minimum: 0
+        freeLimit:
+          type: integer
+          minimum: 0
+          exclusiveMinimum: true
+        cap:
+          type: integer
+          nullable: true
+          minimum: 0
+          exclusiveMinimum: true
+        readable:
+          type: integer
+          minimum: 0
+        plan:
+          $ref: "#/components/schemas/AccountantPlanState"
+      required:
+        - count
+        - freeLimit
+        - cap
+        - readable
+        - plan
+    AccountantPlanState:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - NONE
+            - ACTIVE
+            - GRACE
+            - LAPSED
+        source:
+          type: string
+          nullable: true
+          enum:
+            - OPERATOR
+            - STRIPE
+            - null
+        until:
+          type: string
+          nullable: true
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+      required:
+        - state
+        - source
+        - until
+        - cancelAtPeriodEnd
     ErrorEnvelope:
       type: object
       properties:
@@ -637,6 +696,7 @@ components:
                 - PASSKEY_NOT_ACCEPTED
                 - PASSKEY_LIMIT
                 - SUBSCRIPTION_LAPSED
+                - ACCOUNTANT_PLAN_REQUIRED
                 - INVITE_EMAIL_MISMATCH
                 - SHARE_LINK_REFUSED
                 - FEATURE_NOT_ENABLED
@@ -9378,6 +9438,10 @@ components:
           anyOf:
             - $ref: "#/components/schemas/BillingComeback"
             - nullable: true
+        accountantPlan:
+          anyOf:
+            - $ref: "#/components/schemas/BillingAccountantPlan"
+            - nullable: true
       required:
         - configured
         - subscription
@@ -9389,6 +9453,7 @@ components:
         - offer
         - yearlySwitch
         - comeback
+        - accountantPlan
     BillingOffer:
       type: object
       properties:
@@ -9505,6 +9570,69 @@ components:
         - listMonth
         - firstYear
         - listYear
+    BillingAccountantPlan:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - NONE
+            - ACTIVE
+            - GRACE
+            - LAPSED
+        source:
+          type: string
+          nullable: true
+          enum:
+            - OPERATOR
+            - STRIPE
+            - null
+        until:
+          type: string
+          nullable: true
+          format: date-time
+        cancelAtPeriodEnd:
+          type: boolean
+        interval:
+          type: string
+          nullable: true
+          enum:
+            - month
+            - year
+            - null
+        currency:
+          type: string
+          nullable: true
+        catalog:
+          type: object
+          properties:
+            ILS:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+              required:
+                - month
+            USD:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+              required:
+                - month
+          required:
+            - ILS
+            - USD
+      required:
+        - state
+        - source
+        - until
+        - cancelAtPeriodEnd
+        - interval
+        - currency
+        - catalog
     BillingRedirect:
       type: object
       properties:
@@ -9536,6 +9664,11 @@ components:
         expectedOffer:
           type: string
           pattern: ^[a-z0-9][a-z0-9-]{0,39}$
+        plan:
+          type: string
+          enum:
+            - freelancer
+            - accountant
       required:
         - interval
         - country
@@ -11149,6 +11282,7 @@ components:
       enum:
         - FREELANCER
         - FIRM
+        - ACCOUNTANT
     OperatorCreateBillingGrantRequest:
       type: object
       properties:
@@ -11371,6 +11505,7 @@ components:
                 enum:
                   - FREELANCER
                   - FIRM
+                  - ACCOUNTANT
               status:
                 type: string
               currentPeriodEnd:
@@ -14095,7 +14230,7 @@ paths:
       tags:
         - Sessions
       summary: Accept an accountant invite as the signed-in person
-      description: MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404.
+      description: "MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404. MUT-565 (ADR-251): with the Accountant plan switched on, an accountant without the plan holds at most `clientBooks.freeLimit` client books; the next accept answers 402 ACCOUNTANT_PLAN_REQUIRED `{freeLimit, active, inviteExpiresAt}`, writes nothing and leaves the invite open until it expires, so the same call works once the plan is paid. With the plan, past the server ceiling: 409 CONFLICT reason CLIENT_BOOKS_CEILING (contact us). Checked under a lock on the accountant: of two parallel accepts at the last free place, one wins. Pending invites and share links never count. Since 1.105.0-mut565."
       security:
         - session: []
         - deviceSession: []
@@ -14112,6 +14247,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/AccountantClient"
+        "402":
+          description: "ACCOUNTANT_PLAN_REQUIRED (MUT-565): the free client books are used; details {freeLimit, active, inviteExpiresAt}"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: INVITE_EMAIL_MISMATCH
           content:
@@ -14125,7 +14266,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: CONFLICT, details.reason ALREADY_HAS_ACCESS
+          description: "CONFLICT, details.reason ALREADY_HAS_ACCESS, or CLIENT_BOOKS_CEILING (MUT-565: the paid plan’s ceiling; contact us)"
           content:
             application/json:
               schema:

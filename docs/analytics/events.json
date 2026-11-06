@@ -1,5 +1,5 @@
 {
-  "version": "2.7.0",
+  "version": "2.8.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -139,7 +139,15 @@
       "properties": {
         "interval": { "type": "enum", "values": ["month", "year"], "description": "The plan chosen: monthly or yearly." },
         "currency": { "type": "currency", "description": "The Checkout's currency code, from the billing country. Never the amount." },
-        "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." }
+        "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." },
+        "plan": { "type": "enum", "values": ["freelancer", "accountant"], "description": "MUT-565: which plan the Checkout is for. Absent means freelancer (builds before 2.8.0)." }
+      }
+    },
+    "accountant_plan_offer_shown": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-565: the Accountant plan was offered: the 4th-client card on the invite, a locked client's prompt, or the plan's line in Billing. Once per view per place. Never amounts, ids or the address.",
+      "properties": {
+        "place": { "type": "enum", "values": ["invite", "client_books", "billing"], "description": "invite = the accept page's 4th-client card; client_books = a locked client's prompt on the client list; billing = the Accountant plan line in Billing. Named place because surface is a shared property." }
       }
     },
     "accountant_invited": {

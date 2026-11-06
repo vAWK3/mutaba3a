@@ -36,6 +36,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   // MUT-575: the accountant and share-link events (place for where, integers for counts); accountant_invited and
   // accountant_revoked exactly as MUT-561 defines them, so the two branches merge as a union (the second bumps to 2.8.0).
   '2.7.0': '0e17eb9dd8191519e1a168a7c7d1812a314b2e3e23b2f82a06493c6cfe779667',
+  // MUT-565: accountant_plan_offer_shown (place: invite | client_books | billing) and billing_checkout_started gains plan.
+  '2.8.0': '02646797f8cacab52b6000e1912bbaad2b4a4801b62fbe843bc76b61cab5c996',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -234,6 +236,7 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       share_link_revoked: ['portal', 'ios', 'android'],
       share_link_opened: ['portal'],
       period_downloaded: ['portal', 'ios', 'android'],
+      accountant_plan_offer_shown: ['portal', 'ios', 'android'],
     });
   });
 
@@ -249,6 +252,13 @@ describe('docs/analytics/events.json (ADR-090)', () => {
     expect(shape('share_link_revoked')).toEqual({});
     expect(shape('share_link_opened')).toEqual({ period: periods });
     expect(shape('period_downloaded')).toEqual({ place: ['owner', 'client_books', 'link_page'], file: ['report', 'receipts'], months: 'integer' });
+  });
+
+  it('MUT-565: the Accountant plan offer, and the plan on billing_checkout_started; never an amount', () => {
+    const shape = (event: string) =>
+      Object.fromEntries(Object.entries(contract.events?.[event]?.properties ?? {}).map(([name, p]) => [name, p.type === 'enum' ? p.values : p.type]));
+    expect(shape('accountant_plan_offer_shown')).toEqual({ place: ['invite', 'client_books', 'billing'] });
+    expect(shape('billing_checkout_started')).toEqual({ interval: ['month', 'year'], currency: 'currency', offer: ['launch_2026'], plan: ['freelancer', 'accountant'] });
   });
 
   it('is pinned under its version, so a content change needs a version bump (R2)', () => {
