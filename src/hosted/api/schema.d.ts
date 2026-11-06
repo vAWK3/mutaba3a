@@ -2041,7 +2041,7 @@ export interface paths {
         put?: never;
         /**
          * Accept an accountant invite as the signed-in person
-         * @description MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404.
+         * @description MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404. MUT-565 (ADR-251): with the Accountant plan switched on, an accountant without the plan holds at most `clientBooks.freeLimit` client books; the next accept answers 402 ACCOUNTANT_PLAN_REQUIRED `{freeLimit, active, inviteExpiresAt}`, writes nothing and leaves the invite open until it expires, so the same call works once the plan is paid. With the plan, past the server ceiling: 409 CONFLICT reason CLIENT_BOOKS_CEILING (contact us). Checked under a lock on the accountant: of two parallel accepts at the last free place, one wins. Pending invites and share links never count. Since 1.105.0-mut565.
          */
         post: {
             parameters: {
@@ -2065,6 +2065,15 @@ export interface paths {
                         "application/json": components["schemas"]["AccountantClient"];
                     };
                 };
+                /** @description ACCOUNTANT_PLAN_REQUIRED (MUT-565): the free client books are used; details {freeLimit, active, inviteExpiresAt} */
+                402: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description INVITE_EMAIL_MISMATCH */
                 403: {
                     headers: {
@@ -2083,7 +2092,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CONFLICT, details.reason ALREADY_HAS_ACCESS */
+                /** @description CONFLICT, details.reason ALREADY_HAS_ACCESS, or CLIENT_BOOKS_CEILING (MUT-565: the paid plan’s ceiling; contact us) */
                 409: {
                     headers: {
                         [name: string]: unknown;
@@ -21343,6 +21352,7 @@ export interface components {
             /** @enum {string|null} */
             billingStanding: "open" | "read-only" | "locked" | null;
             clients?: components["schemas"]["AccountantClient"][];
+            clientBooks?: components["schemas"]["ClientBooksSummary"];
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -21454,11 +21464,28 @@ export interface components {
             endedReason: "revoked" | "closed" | null;
             /** Format: date-time */
             endedAt: string | null;
+            needsPlan: boolean;
+        };
+        ClientBooksSummary: {
+            count: number;
+            freeLimit: number;
+            cap: number | null;
+            readable: number;
+            plan: components["schemas"]["AccountantPlanState"];
+        };
+        AccountantPlanState: {
+            /** @enum {string} */
+            state: "NONE" | "ACTIVE" | "GRACE" | "LAPSED";
+            /** @enum {string|null} */
+            source: "OPERATOR" | "STRIPE" | null;
+            /** Format: date-time */
+            until: string | null;
+            cancelAtPeriodEnd: boolean;
         };
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "INVITE_EMAIL_MISMATCH" | "SHARE_LINK_REFUSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "ACCOUNTANT_PLAN_REQUIRED" | "INVITE_EMAIL_MISMATCH" | "SHARE_LINK_REFUSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -24782,6 +24809,7 @@ export interface components {
             offer: components["schemas"]["BillingOffer"] | unknown;
             yearlySwitch: components["schemas"]["BillingYearlySwitch"] | unknown;
             comeback: components["schemas"]["BillingComeback"] | unknown;
+            accountantPlan: components["schemas"]["BillingAccountantPlan"] | unknown;
         };
         BillingOffer: {
             id: string;
@@ -24820,6 +24848,26 @@ export interface components {
                 USD: number | null;
             };
         };
+        BillingAccountantPlan: {
+            /** @enum {string} */
+            state: "NONE" | "ACTIVE" | "GRACE" | "LAPSED";
+            /** @enum {string|null} */
+            source: "OPERATOR" | "STRIPE" | null;
+            /** Format: date-time */
+            until: string | null;
+            cancelAtPeriodEnd: boolean;
+            /** @enum {string|null} */
+            interval: "month" | "year" | null;
+            currency: string | null;
+            catalog: {
+                ILS: {
+                    month: number;
+                } | null;
+                USD: {
+                    month: number;
+                } | null;
+            };
+        };
         BillingRedirect: {
             /** Format: uri */
             url: string;
@@ -24833,6 +24881,8 @@ export interface components {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
             returnPath: string;
             expectedOffer?: string;
+            /** @enum {string} */
+            plan?: "freelancer" | "accountant";
         };
         PortalSessionRequest: {
             /** @description Where Stripe sends the person back: `/` or a portal profile path (`/p/{profileId}/…`). Never an origin. */
@@ -25441,7 +25491,7 @@ export interface components {
             revokedAt: string | null;
         };
         /** @enum {string} */
-        BillingTier: "FREELANCER" | "FIRM";
+        BillingTier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
         OperatorCreateBillingGrantRequest: {
             tier: components["schemas"]["BillingTier"];
             reason: string;
@@ -25525,7 +25575,7 @@ export interface components {
             subscriptions: {
                 stripeSubscriptionId: string;
                 /** @enum {string} */
-                tier: "FREELANCER" | "FIRM";
+                tier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
                 status: string;
                 /** Format: date-time */
                 currentPeriodEnd: string;
