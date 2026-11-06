@@ -38,6 +38,9 @@ import type {
   AgreementFilter,
   AccountantGrantRecord,
   AccountantGrantRepository,
+  ShareLinkRecord,
+  ShareLinkRepository,
+  ShareLinkViewerRecord,
   AgreementRecord,
   AgreementRepository,
   CorrectOutcomeInput,
@@ -337,6 +340,9 @@ export class MemoryLedgerStore implements LedgerStore {
    * has one person and no one to share with.
    */
   private readonly accountantGrantMap = new Map<string, AccountantGrantRecord>();
+  /** MUT-560 (ADR-246): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
+  private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
+  private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -824,6 +830,88 @@ export class MemoryLedgerStore implements LedgerStore {
 
   private hasActiveGrant(accountantUserId: string, organizationId: string): boolean {
     return [...this.accountantGrantMap.values()].some((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
+  }
+
+  /**
+   * MUT-560 (ADR-246). Every method is synchronous inside, so each is one step under the store's single thread: the
+   * viewer cap and the failed-PIN count can't be raced past, as the row locks guarantee in Postgres.
+   */
+  readonly shareLinks: ShareLinkRepository = {
+    create: async (input) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('share_links.organizationId');
+      const live = [...this.shareLinkMap.values()].filter((l) => l.organizationId === input.organizationId && l.revokedAt === null && l.expiresAt > input.at).length;
+      if (live >= input.max) return { kind: 'limit', count: live };
+      if ([...this.shareLinkMap.values()].some((l) => l.tokenDigest === input.tokenDigest)) throw new UniqueViolation('share_links.tokenDigest');
+      const link: ShareLinkRecord = {
+        id: input.id, organizationId: input.organizationId, createdByUserId: input.createdByUserId, tokenDigest: input.tokenDigest, pinHash: input.pinHash,
+        period: input.period, periodFrom: input.periodFrom, periodTo: input.periodTo, expiresAt: input.expiresAt,
+        failedPinAttempts: 0, lockedAt: null, revokedAt: null, lastOpenedAt: null, createdAt: input.at,
+      };
+      this.shareLinkMap.set(link.id, link);
+      this.pushEvents(input.auditFor({ ...link }), input.at);
+      return { kind: 'created', link: { ...link } };
+    },
+    findByTokenDigest: async (tokenDigest) => {
+      const link = [...this.shareLinkMap.values()].find((l) => l.tokenDigest === tokenDigest);
+      return link ? { ...link, viewers: this.shareLinkViewerCount(link.id) } : null;
+    },
+    findViewerByDigest: async (tokenDigest) => {
+      const viewer = [...this.shareLinkViewerMap.values()].find((v) => v.tokenDigest === tokenDigest);
+      const link = viewer ? this.shareLinkMap.get(viewer.shareLinkId) : undefined;
+      return viewer && link ? { viewer: { ...viewer }, link: { ...link } } : null;
+    },
+    listLiveByOrganization: async (organizationId, at) =>
+      [...this.shareLinkMap.values()]
+        .filter((l) => l.organizationId === organizationId && l.revokedAt === null && l.expiresAt > at)
+        .sort(compareByCreatedAtThenId)
+        .map((l) => ({ ...l, viewers: this.shareLinkViewerCount(l.id) })),
+    recordFailedPin: async ({ linkId, at, maxAttempts, lockAudit }) => {
+      const link = this.shareLinkMap.get(linkId);
+      if (!link || link.lockedAt !== null) return null;
+      link.failedPinAttempts += 1;
+      const locked = link.failedPinAttempts >= maxAttempts;
+      if (locked) {
+        link.lockedAt = at;
+        this.pushEvents(lockAudit({ ...link }), at);
+      }
+      return { failedPinAttempts: link.failedPinAttempts, locked };
+    },
+    addOrRotateViewer: async (input) => {
+      const link = this.shareLinkMap.get(input.linkId);
+      if (!link || link.revokedAt !== null || link.lockedAt !== null || link.expiresAt <= input.at) return { kind: 'unusable' };
+      if ([...this.shareLinkViewerMap.values()].some((v) => v.tokenDigest === input.tokenDigest)) throw new UniqueViolation('share_link_viewers.tokenDigest');
+      const returning = input.previousTokenDigest === null ? undefined : [...this.shareLinkViewerMap.values()].find((v) => v.shareLinkId === link.id && v.tokenDigest === input.previousTokenDigest);
+      link.lastOpenedAt = input.at;
+      if (returning) {
+        Object.assign(returning, { tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt });
+        return { kind: 'rotated', viewer: { ...returning } };
+      }
+      const count = this.shareLinkViewerCount(link.id);
+      if (count >= input.max) return { kind: 'limit' };
+      const viewer: ShareLinkViewerRecord = { id: randomUUID(), shareLinkId: link.id, tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt, lastViewedAt: null, createdAt: input.at };
+      this.shareLinkViewerMap.set(viewer.id, viewer);
+      this.pushEvents(input.auditFor({ ...viewer }, count + 1), input.at);
+      return { kind: 'added', viewer: { ...viewer }, viewerNumber: count + 1 };
+    },
+    revoke: async ({ organizationId, linkId, at, auditFor }) => {
+      const link = this.shareLinkMap.get(linkId);
+      if (!link || link.organizationId !== organizationId || link.revokedAt !== null || link.expiresAt <= at) return null;
+      link.revokedAt = at;
+      this.pushEvents(auditFor({ ...link }), at);
+      return { ...link };
+    },
+    touchOpened: async ({ linkId, at }) => {
+      const link = this.shareLinkMap.get(linkId);
+      if (link) link.lastOpenedAt = at;
+    },
+    touchViewer: async ({ viewerId, at }) => {
+      const viewer = this.shareLinkViewerMap.get(viewerId);
+      if (viewer) viewer.lastViewedAt = at;
+    },
+  };
+
+  private shareLinkViewerCount(linkId: string): number {
+    return [...this.shareLinkViewerMap.values()].filter((v) => v.shareLinkId === linkId).length;
   }
 
   readonly features: FeaturesRepository = {
@@ -3174,6 +3262,9 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
     // MUT-559: ON DELETE CASCADE, as in Postgres.
     for (const [key, grant] of this.accountantGrantMap) if (deleted.has(grant.organizationId)) this.accountantGrantMap.delete(key);
+    // MUT-560: ON DELETE CASCADE, links and then their viewers.
+    for (const [key, link] of this.shareLinkMap) if (deleted.has(link.organizationId)) this.shareLinkMap.delete(key);
+    for (const [key, viewer] of this.shareLinkViewerMap) if (!this.shareLinkMap.has(viewer.shareLinkId)) this.shareLinkViewerMap.delete(key);
     // SET NULL, as in Postgres: a subscription is the payer's, and the payer's own are deleted with their account.
     for (const sub of this.billingSubs.values()) if (sub.organizationId !== null && deleted.has(sub.organizationId)) sub.organizationId = null;
     for (const key of this.counters.keys()) if (deleted.has(key.slice(0, key.indexOf(':')))) this.counters.delete(key);
@@ -3224,6 +3315,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (grant.accountantUserId === id || (grant.status === 'PENDING' && grant.inviteEmail === person.email)) this.accountantGrantMap.delete(key);
       else if (grant.invitedByUserId === id) grant.invitedByUserId = null;
     }
+    // MUT-560: links the person created on profiles that survive stay, revocable by the remaining owners (SET NULL).
+    for (const link of this.shareLinkMap.values()) if (link.createdByUserId === id) link.createdByUserId = null;
     // MUT-434: grants and decided requests cascade with the person; codes and tokens with their grant.
     for (const [key, g] of this.oauthGrants) {
       if (g.userId !== id) continue;

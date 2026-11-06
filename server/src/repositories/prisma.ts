@@ -62,6 +62,11 @@ import type {
   AccountantGrantRepository,
   InviteAccountantResult,
   SignupAccountantResult,
+  AddShareLinkViewerResult,
+  CreateShareLinkResult,
+  ShareLinkRecord,
+  ShareLinkRepository,
+  ShareLinkViewerRecord,
   AgreementRecord,
   AgreementRepository,
   AllocationInput,
@@ -721,6 +726,113 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
         if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
+    },
+  };
+
+  /** MUT-560 (ADR-246). The link's row lock serialises the viewer cap; the failed-PIN count is one conditional UPDATE. */
+  readonly shareLinks: ShareLinkRepository = {
+    create: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx): Promise<CreateShareLinkResult> => {
+          // The profile's row lock queues two creates, so the cap can't be raced past.
+          await lockOrganization(tx, input.organizationId);
+          const live = await tx.shareLink.count({ where: { organizationId: input.organizationId, revokedAt: null, expiresAt: { gt: input.at } } });
+          if (live >= input.max) return { kind: 'limit', count: live };
+          const link = toShareLink(
+            await tx.shareLink.create({
+              data: {
+                id: input.id,
+                organizationId: input.organizationId,
+                createdByUserId: input.createdByUserId,
+                tokenDigest: input.tokenDigest,
+                pinHash: input.pinHash,
+                period: input.period,
+                periodFrom: input.periodFrom,
+                periodTo: input.periodTo,
+                expiresAt: input.expiresAt,
+                createdAt: input.at,
+              },
+            }),
+          );
+          const audit = input.auditFor(link);
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+          return { kind: 'created', link };
+        }),
+      ),
+    findByTokenDigest: async (tokenDigest) => {
+      const row = await this.prisma.shareLink.findUnique({ where: { tokenDigest }, include: { _count: { select: { viewers: true } } } });
+      return row ? { ...toShareLink(row), viewers: row._count.viewers } : null;
+    },
+    findViewerByDigest: async (tokenDigest) => {
+      const row = await this.prisma.shareLinkViewer.findUnique({ where: { tokenDigest }, include: { shareLink: true } });
+      return row ? { viewer: toShareLinkViewer(row), link: toShareLink(row.shareLink) } : null;
+    },
+    listLiveByOrganization: async (organizationId, at) =>
+      (
+        await this.prisma.shareLink.findMany({
+          where: { organizationId, revokedAt: null, expiresAt: { gt: at } },
+          include: { _count: { select: { viewers: true } } },
+          orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+        })
+      ).map((row) => ({ ...toShareLink(row), viewers: row._count.viewers })),
+    recordFailedPin: ({ linkId, at, maxAttempts, lockAudit }) =>
+      this.prisma.$transaction(async (tx) => {
+        // One statement: parallel wrong PINs each add one, and none counts once the link is locked.
+        const rows = await tx.$queryRaw<Array<{ failedPinAttempts: number; lockedAt: Date | null }>>`
+          UPDATE share_links
+             SET "failedPinAttempts" = "failedPinAttempts" + 1,
+                 "lockedAt" = CASE WHEN "failedPinAttempts" + 1 >= ${maxAttempts} THEN ${at} ELSE NULL END
+           WHERE id = ${linkId}::uuid AND "lockedAt" IS NULL
+       RETURNING "failedPinAttempts", "lockedAt"`;
+        const row = rows[0];
+        if (!row) return null;
+        const locked = row.lockedAt !== null;
+        if (locked) {
+          const audit = lockAudit(toShareLink(await tx.shareLink.findUniqueOrThrow({ where: { id: linkId } })));
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        }
+        return { failedPinAttempts: Number(row.failedPinAttempts), locked };
+      }),
+    addOrRotateViewer: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx): Promise<AddShareLinkViewerResult> => {
+          // The link's row lock: two unlocks at 2 viewers queue here, so the count below can't be raced past the cap.
+          const locked = await tx.$queryRaw<Array<{ id: string }>>`
+            SELECT id FROM share_links
+             WHERE id = ${input.linkId}::uuid AND "revokedAt" IS NULL AND "lockedAt" IS NULL AND "expiresAt" > ${input.at}
+               FOR UPDATE`;
+          if (locked.length === 0) return { kind: 'unusable' };
+          await tx.shareLink.update({ where: { id: input.linkId }, data: { lastOpenedAt: input.at } });
+          const returning =
+            input.previousTokenDigest === null ? null : await tx.shareLinkViewer.findFirst({ where: { shareLinkId: input.linkId, tokenDigest: input.previousTokenDigest }, select: { id: true } });
+          if (returning) {
+            const viewer = await tx.shareLinkViewer.update({ where: { id: returning.id }, data: { tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt } });
+            return { kind: 'rotated', viewer: toShareLinkViewer(viewer) };
+          }
+          const count = await tx.shareLinkViewer.count({ where: { shareLinkId: input.linkId } });
+          if (count >= input.max) return { kind: 'limit' };
+          const viewer = toShareLinkViewer(
+            await tx.shareLinkViewer.create({ data: { shareLinkId: input.linkId, tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt, createdAt: input.at } }),
+          );
+          const audit = input.auditFor(viewer, count + 1);
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+          return { kind: 'added', viewer, viewerNumber: count + 1 };
+        }),
+      ),
+    revoke: ({ organizationId, linkId, at, auditFor }) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.shareLink.updateMany({ where: { id: linkId, organizationId, revokedAt: null, expiresAt: { gt: at } }, data: { revokedAt: at } });
+        if (count === 0) return null;
+        const link = toShareLink(await tx.shareLink.findUniqueOrThrow({ where: { id: linkId } }));
+        const audit = auditFor(link);
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return link;
+      }),
+    touchOpened: async ({ linkId, at }) => {
+      await this.prisma.shareLink.updateMany({ where: { id: linkId }, data: { lastOpenedAt: at } });
+    },
+    touchViewer: async ({ viewerId, at }) => {
+      await this.prisma.shareLinkViewer.updateMany({ where: { id: viewerId }, data: { lastViewedAt: at } });
     },
   };
 
@@ -3343,6 +3455,29 @@ async function claimAccountantGrant(tx: Tx, tokenDigest: string, accountantUserI
     data: { status: 'ACTIVE', accountantUserId, acceptedAt: at, tokenDigest: null },
   });
   return count === 0 ? null : toAccountantGrant(await tx.accountantGrant.findUniqueOrThrow({ where: { id: found.id } }));
+}
+
+function toShareLink(row: Prisma.ShareLinkGetPayload<object>): ShareLinkRecord {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    createdByUserId: row.createdByUserId,
+    tokenDigest: row.tokenDigest,
+    pinHash: row.pinHash,
+    period: row.period,
+    periodFrom: row.periodFrom,
+    periodTo: row.periodTo,
+    expiresAt: row.expiresAt,
+    failedPinAttempts: row.failedPinAttempts,
+    lockedAt: row.lockedAt,
+    revokedAt: row.revokedAt,
+    lastOpenedAt: row.lastOpenedAt,
+    createdAt: row.createdAt,
+  };
+}
+
+function toShareLinkViewer(row: Prisma.ShareLinkViewerGetPayload<object>): ShareLinkViewerRecord {
+  return { id: row.id, shareLinkId: row.shareLinkId, tokenDigest: row.tokenDigest, accessExpiresAt: row.accessExpiresAt, lastViewedAt: row.lastViewedAt, createdAt: row.createdAt };
 }
 
 function toAccountantGrant(row: Prisma.AccountantGrantGetPayload<object>): AccountantGrantRecord {
