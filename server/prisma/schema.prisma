@@ -231,6 +231,9 @@ model Organization {
   billingSubscriptions BillingSubscription[]
   entitlementGrants    EntitlementGrant[]
 
+  /// MUT-559 (ADR-245): accountants invited to read this profile.
+  accountantGrants AccountantGrant[]
+
   @@index([ownerUserId])
   @@map("organizations")
 }
@@ -372,6 +375,10 @@ model User {
   /// MUT-115 (ADR-190): this person's passkeys, and the creation challenges they asked for.
   passkeys            Passkey[]
   webauthnChallenges  WebauthnChallenge[]
+
+  /// MUT-559 (ADR-245): the profiles this person reads as an accountant, and the invites they sent as an owner.
+  accountantGrants      AccountantGrant[] @relation("AccountantGrants")
+  accountantInvitesSent AccountantGrant[] @relation("AccountantInvitesSent")
 
   @@map("users")
 }
@@ -1843,4 +1850,50 @@ model OAuthToken {
 
   @@index([grantId])
   @@map("oauth_tokens")
+}
+
+/// MUT-559 (ADR-245): where an accountant's invite to a profile stands. PENDING until accepted (or its 14 days pass:
+/// "expired" is computed from inviteExpiresAt, no job); ACTIVE while the accountant reads; REVOKED by an owner, LEFT by
+/// the accountant. Ended grants stay as the record of who could read the profile and when.
+enum AccountantGrantStatus {
+  PENDING
+  ACTIVE
+  REVOKED
+  LEFT
+}
+
+/// MUT-559 (ADR-245): an owner shares one profile, read-only, with an accountant. Not a Membership: nothing that reads
+/// memberships (the entries feed, the verdict, /v1/me profiles, owners, the purge's R18) ever sees an accountant. Read
+/// only by selectProfile (auth/middleware.ts) after a membership miss. Two partial unique indexes live in the migration
+/// (Prisma cannot declare them): one PENDING/ACTIVE invite per profile and address, one ACTIVE grant per profile and
+/// accountant.
+model AccountantGrant {
+  id               String                @id @default(uuid()) @db.Uuid
+  organizationId   String                @db.Uuid
+  organization     Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// Normalised (trim, NFKC, lower-case), like users.email.
+  inviteEmail      String
+  /// 'en' | 'ar': the invite mail's language, and the account's when the accountant signs up from it.
+  locale           String                @db.VarChar(5)
+  /// The owner (creator or co-owner) who invited; SET NULL when their account is deleted.
+  invitedByUserId  String?               @db.Uuid
+  invitedBy        User?                 @relation("AccountantInvitesSent", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+  /// Set on accept; the grant goes with the accountant's account.
+  accountantUserId String?               @db.Uuid
+  accountant       User?                 @relation("AccountantGrants", fields: [accountantUserId], references: [id], onDelete: Cascade)
+  status           AccountantGrantStatus @default(PENDING)
+  /// HMAC of the invite token with the session pepper (auth/sessions.ts sessionDigest); null once accepted or ended.
+  tokenDigest      String?               @unique @db.VarChar(64)
+  /// createdAt + 14 days.
+  inviteExpiresAt  DateTime
+  acceptedAt       DateTime?
+  /// When the grant ended: revoked by an owner, or left by the accountant.
+  revokedAt        DateTime?
+  /// Written at most once an hour per grant (auth/middleware.ts).
+  lastViewedAt     DateTime?
+  createdAt        DateTime
+
+  @@index([organizationId])
+  @@index([accountantUserId, status])
+  @@map("accountant_grants")
 }

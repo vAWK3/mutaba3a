@@ -2576,6 +2576,102 @@ export interface LedgerStore {
   features: FeaturesRepository;
   /** MUT-434: the OAuth authorization server's clients, requests, grants, codes and tokens. */
   oauth: OAuthRepository;
+  /** MUT-559 (ADR-245): read-only access an owner gives an accountant to one profile. Never a membership. */
+  accountantGrants: AccountantGrantRepository;
+}
+
+// ---- MUT-559 (ADR-245): accountant grants ------------------------------------
+
+export type AccountantGrantStatus = 'PENDING' | 'ACTIVE' | 'REVOKED' | 'LEFT';
+
+/** One accountant's read-only access to one profile (or the invite to it). */
+export interface AccountantGrantRecord {
+  id: string;
+  organizationId: string;
+  /** Normalised (normalizeEmail). */
+  inviteEmail: string;
+  locale: UserLocale;
+  /** The owner who invited; null once their account is deleted. */
+  invitedByUserId: string | null;
+  /** Set on accept. */
+  accountantUserId: string | null;
+  status: AccountantGrantStatus;
+  /** HMAC of the invite token; null once accepted or ended. */
+  tokenDigest: string | null;
+  inviteExpiresAt: Date;
+  acceptedAt: Date | null;
+  /** When it ended: revoked by an owner (REVOKED) or left by the accountant (LEFT). */
+  revokedAt: Date | null;
+  lastViewedAt: Date | null;
+  createdAt: Date;
+}
+
+export interface InviteAccountantInput {
+  organizationId: string;
+  inviteEmail: string;
+  locale: UserLocale;
+  invitedByUserId: string;
+  tokenDigest: string;
+  at: Date;
+  expiresAt: Date;
+  /** The most live grants (ACTIVE, or PENDING and unexpired) one profile may hold. */
+  max: number;
+  /** Written in the invite's transaction. */
+  auditFor(grant: AccountantGrantRecord): AuditEventInput[];
+}
+
+export type InviteAccountantResult = { kind: 'created'; grant: AccountantGrantRecord } | { kind: 'already_invited' } | { kind: 'limit'; count: number };
+
+export interface SignupAccountantInput {
+  tokenDigest: string;
+  at: Date;
+  passwordHash: string;
+  displayName: string;
+  /** The accountant's own personal profile (`personalProfileFor`), as every account has (MUT-120). */
+  personal: CreateUserInput['personal'];
+  /** The 14-day trial starts with the account, as a business signup's does (ADR-160). */
+  trialStartsAt: Date;
+  terms: TermsAcceptanceInput;
+  auditFor(created: { userId: string; personalOrganizationId: string; grant: AccountantGrantRecord }): AuditEventInput[];
+}
+
+export type SignupAccountantResult =
+  | { kind: 'created'; user: UserRecord; personalOrganization: Organization; grant: AccountantGrantRecord }
+  | { kind: 'account_exists' }
+  | { kind: 'unusable' };
+
+export interface AccountantGrantRepository {
+  /**
+   * One transaction under the profile's row lock: ends an expired PENDING invite to the same address, then refuses
+   * when a live one exists (`already_invited`) or the profile holds `max` live grants (`limit`), else creates a PENDING
+   * grant and writes `auditFor(grant)`.
+   */
+  invite(input: InviteAccountantInput): Promise<InviteAccountantResult>;
+  /** PENDING and ACTIVE grants on the profile (REVOKED and LEFT are history), oldest first. */
+  listByOrganization(organizationId: string): Promise<AccountantGrantRecord[]>;
+  findByDigest(tokenDigest: string): Promise<AccountantGrantRecord | null>;
+  /** The accountant's ACTIVE grant on the profile, if any. selectProfile's one read after a membership miss. */
+  findActive(accountantUserId: string, organizationId: string): Promise<AccountantGrantRecord | null>;
+  /** Every ACTIVE grant the person holds as an accountant, oldest accept first (/v1/me `clients`). */
+  listActiveByAccountant(accountantUserId: string): Promise<AccountantGrantRecord[]>;
+  /**
+   * Conditional: only a PENDING grant with this digest, unexpired at `at`, becomes ACTIVE for `accountantUserId`
+   * (token nulled), with `auditFor(grant)`. Null when it lost: unknown, used, ended, expired, a concurrent accept, or
+   * the person already holds an ACTIVE grant on that profile. Of two concurrent accepts, exactly one wins.
+   */
+  accept(input: { tokenDigest: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
+  /**
+   * One transaction, serialised per address: no account may hold the invite's address (`account_exists`); the grant is
+   * claimed as `accept` does (`unusable` when it can't be); then the user (ACTIVE, email verified, no signup review),
+   * their personal profile and membership, the trial, the terms, and the grant's accountant are written.
+   */
+  signupAndAccept(input: SignupAccountantInput): Promise<SignupAccountantResult>;
+  /** An owner ends a PENDING or ACTIVE grant on their profile (REVOKED). Null when there is none to end. */
+  revoke(input: { organizationId: string; grantId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
+  /** The accountant ends their ACTIVE grant (LEFT). Null when they hold none on that profile. */
+  leave(input: { organizationId: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
+  /** Stamps lastViewedAt and appends `audit` (the caller throttles). */
+  touchViewed(input: { grantId: string; at: Date; audit: AuditEventInput[] }): Promise<void>;
 }
 
 // ---- MUT-433: per-user feature flags (ADR-196) -----------------------------

@@ -58,6 +58,10 @@ import type {
   AppendVersionInput,
   RetainerVersionRecord,
   AgreementFilter,
+  AccountantGrantRecord,
+  AccountantGrantRepository,
+  InviteAccountantResult,
+  SignupAccountantResult,
   AgreementRecord,
   AgreementRepository,
   AllocationInput,
@@ -578,6 +582,138 @@ export class PrismaLedgerStore implements LedgerStore {
     markStepUp: async (id, at) => (await this.prisma.session.updateMany({ where: { id, revokedAt: null }, data: { stepUpAt: at } })).count === 1,
     // MUT-461: the operator's account view; uses @@index([userId]).
     countLiveForUser: (userId, at) => this.prisma.session.count({ where: { userId, revokedAt: null, idleExpiresAt: { gt: at }, absoluteExpiresAt: { gt: at } } }),
+  };
+
+  /** MUT-559 (ADR-245). The two partial unique indexes (migration) back the checks below against a race. */
+  readonly accountantGrants: AccountantGrantRepository = {
+    invite: async (input) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx): Promise<InviteAccountantResult> => {
+            // The profile's row lock queues two invites, so the cap below can't be raced past.
+            await lockOrganization(tx, input.organizationId);
+            await tx.accountantGrant.updateMany({
+              where: { organizationId: input.organizationId, inviteEmail: input.inviteEmail, status: 'PENDING', inviteExpiresAt: { lte: input.at } },
+              data: { status: 'REVOKED', revokedAt: input.at, tokenDigest: null },
+            });
+            const live = await tx.accountantGrant.findMany({
+              where: { organizationId: input.organizationId, OR: [{ status: 'ACTIVE' }, { status: 'PENDING', inviteExpiresAt: { gt: input.at } }] },
+              select: { inviteEmail: true },
+            });
+            if (live.some((g) => g.inviteEmail === input.inviteEmail)) return { kind: 'already_invited' };
+            if (live.length >= input.max) return { kind: 'limit', count: live.length };
+            const row = await tx.accountantGrant.create({
+              data: {
+                organizationId: input.organizationId,
+                inviteEmail: input.inviteEmail,
+                locale: input.locale,
+                invitedByUserId: input.invitedByUserId,
+                status: 'PENDING',
+                tokenDigest: input.tokenDigest,
+                inviteExpiresAt: input.expiresAt,
+                createdAt: input.at,
+              },
+            });
+            const grant = toAccountantGrant(row);
+            const audit = input.auditFor(grant);
+            if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+            return { kind: 'created', grant };
+          }),
+        );
+      } catch (err) {
+        // The address's live invite (an ACTIVE grant whose address differs only in case included) answers as one.
+        if (err instanceof UniqueViolation && !err.constraint.includes('tokenDigest')) return { kind: 'already_invited' };
+        throw err;
+      }
+    },
+    listByOrganization: async (organizationId) =>
+      (await this.prisma.accountantGrant.findMany({ where: { organizationId, status: { in: ['PENDING', 'ACTIVE'] } }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toAccountantGrant),
+    findByDigest: async (tokenDigest) => mapNullable(await this.prisma.accountantGrant.findUnique({ where: { tokenDigest } }), toAccountantGrant),
+    findActive: async (accountantUserId, organizationId) =>
+      mapNullable(await this.prisma.accountantGrant.findFirst({ where: { accountantUserId, organizationId, status: 'ACTIVE' } }), toAccountantGrant),
+    listActiveByAccountant: async (accountantUserId) =>
+      (await this.prisma.accountantGrant.findMany({ where: { accountantUserId, status: 'ACTIVE' }, orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }] })).map(toAccountantGrant),
+    accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx) => {
+            const grant = await claimAccountantGrant(tx, tokenDigest, accountantUserId, at);
+            if (!grant) return null;
+            const audit = auditFor(grant);
+            if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+            return grant;
+          }),
+        );
+      } catch (err) {
+        // The person already reads this profile through another of its invites (the one-ACTIVE index): this one lost.
+        if (err instanceof UniqueViolation) return null;
+        throw err;
+      }
+    },
+    signupAndAccept: async (input) => {
+      try {
+        return await translate(() =>
+          this.prisma.$transaction(async (tx): Promise<SignupAccountantResult> => {
+            const found = await tx.accountantGrant.findUnique({ where: { tokenDigest: input.tokenDigest } });
+            if (!found) return { kind: 'unusable' };
+            // Serialised with self-service signup for the same address (MUT-366 D12).
+            await lockSignupAddress(tx, found.inviteEmail);
+            if (await tx.user.findUnique({ where: { email: found.inviteEmail }, select: { id: true } })) return { kind: 'account_exists' };
+            const { count } = await tx.accountantGrant.updateMany({
+              where: { id: found.id, status: 'PENDING', tokenDigest: input.tokenDigest, inviteExpiresAt: { gt: input.at } },
+              data: { status: 'ACTIVE', acceptedAt: input.at, tokenDigest: null },
+            });
+            if (count === 0) return { kind: 'unusable' };
+            const { user, personalOrganization } = await insertPerson(tx, {
+              email: found.inviteEmail,
+              displayName: input.displayName,
+              passwordHash: input.passwordHash,
+              locale: found.locale as UserLocale,
+              personal: input.personal,
+              at: input.at,
+              status: 'ACTIVE',
+              emailVerifiedAt: input.at,
+              trialStartedAt: input.trialStartsAt,
+            });
+            await insertTermsAcceptance(tx, user.id, input.terms, input.at);
+            const grant = toAccountantGrant(await tx.accountantGrant.update({ where: { id: found.id }, data: { accountantUserId: user.id } }));
+            const audit = input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, grant });
+            if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, input.at) });
+            return { kind: 'created', user, personalOrganization, grant };
+          }),
+        );
+      } catch (err) {
+        // The operator or a signup created this address's account between our check and our insert.
+        if (err instanceof UniqueViolation && err.constraint.includes('email')) return { kind: 'account_exists' };
+        throw err;
+      }
+    },
+    revoke: ({ organizationId, grantId, at, auditFor }) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, organizationId, status: { in: ['PENDING', 'ACTIVE'] } }, data: { status: 'REVOKED', revokedAt: at, tokenDigest: null } });
+        if (count === 0) return null;
+        const grant = toAccountantGrant(await tx.accountantGrant.findUniqueOrThrow({ where: { id: grantId } }));
+        const audit = auditFor(grant);
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return grant;
+      }),
+    leave: ({ organizationId, accountantUserId, at, auditFor }) =>
+      this.prisma.$transaction(async (tx) => {
+        const active = await tx.accountantGrant.findFirst({ where: { organizationId, accountantUserId, status: 'ACTIVE' }, select: { id: true } });
+        if (!active) return null;
+        const { count } = await tx.accountantGrant.updateMany({ where: { id: active.id, status: 'ACTIVE' }, data: { status: 'LEFT', revokedAt: at } });
+        if (count === 0) return null;
+        const grant = toAccountantGrant(await tx.accountantGrant.findUniqueOrThrow({ where: { id: active.id } }));
+        const audit = auditFor(grant);
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return grant;
+      }),
+    touchViewed: async ({ grantId, at, audit }) => {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.accountantGrant.updateMany({ where: { id: grantId }, data: { lastViewedAt: at } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+      });
+    },
   };
 
   readonly features: FeaturesRepository = {
@@ -2893,6 +3029,9 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.billingSubscription.deleteMany({ where: { billingAccount: { userId } } });
         await tx.billingAccount.deleteMany({ where: { userId } });
         await tx.signupReview.deleteMany({ where: { userId } });
+        // MUT-559: the person's grants as an accountant, and any invite still naming their address (the owner's own
+        // profiles took theirs with them above; invites they sent on surviving profiles were anonymized).
+        await tx.accountantGrant.deleteMany({ where: { OR: [{ accountantUserId: userId }, { inviteEmail: locked.email }] } });
         await tx.user.delete({ where: { id: userId } });
         return { ...decision, auditRowsScrubbed };
       }, PURGE_TX_OPTIONS),
@@ -3183,6 +3322,36 @@ async function refusePresetTwin(tx: Prisma.TransactionClient, organizationId: st
   if (key === null || (renamed && presetKeyForName(renamed.name) === key)) return;
   const twin = await tx.expenseCategory.findFirst({ where: { organizationId, nameKey: { in: presetNameKeys(key) }, ...(renamed ? { id: { not: renamed.id } } : {}) }, select: { id: true } });
   if (twin) throw new UniqueViolation('expense_categories.name');
+}
+
+/** MUT-559: the conditional accept: a PENDING grant with this digest, unexpired at `at`, becomes ACTIVE for the person. */
+async function claimAccountantGrant(tx: Tx, tokenDigest: string, accountantUserId: string, at: Date): Promise<AccountantGrantRecord | null> {
+  const found = await tx.accountantGrant.findUnique({ where: { tokenDigest }, select: { id: true, organizationId: true } });
+  if (!found) return null;
+  if (await tx.accountantGrant.findFirst({ where: { organizationId: found.organizationId, accountantUserId, status: 'ACTIVE' }, select: { id: true } })) return null;
+  const { count } = await tx.accountantGrant.updateMany({
+    where: { id: found.id, status: 'PENDING', tokenDigest, inviteExpiresAt: { gt: at } },
+    data: { status: 'ACTIVE', accountantUserId, acceptedAt: at, tokenDigest: null },
+  });
+  return count === 0 ? null : toAccountantGrant(await tx.accountantGrant.findUniqueOrThrow({ where: { id: found.id } }));
+}
+
+function toAccountantGrant(row: Prisma.AccountantGrantGetPayload<object>): AccountantGrantRecord {
+  return {
+    id: row.id,
+    organizationId: row.organizationId,
+    inviteEmail: row.inviteEmail,
+    locale: row.locale as UserLocale,
+    invitedByUserId: row.invitedByUserId,
+    accountantUserId: row.accountantUserId,
+    status: row.status,
+    tokenDigest: row.tokenDigest,
+    inviteExpiresAt: row.inviteExpiresAt,
+    acceptedAt: row.acceptedAt,
+    revokedAt: row.revokedAt,
+    lastViewedAt: row.lastViewedAt,
+    createdAt: row.createdAt,
+  };
 }
 
 async function lockOrganization(tx: Tx, organizationId: string): Promise<void> {

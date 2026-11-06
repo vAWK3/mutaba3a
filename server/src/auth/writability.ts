@@ -135,6 +135,34 @@ export function writeRefusal(domain: Domain, profileWriter: ProfileWriter): ApiE
   return new ApiError('READ_ONLY_PROFILE', message, { domain, writerOfRecord: profileWriter });
 }
 
+/**
+ * MUT-559 (ADR-245): the domains an accountant reads on a profile shared with them. Customers and projects only so
+ * income rows carry their client's and matter's names; agreements, audit, integration and identity are never theirs.
+ */
+export const ACCOUNTANT_DOMAINS: ReadonlySet<Domain> = new Set(['expenses', 'payments', 'attachments', 'summaries', 'conversions', 'customers', 'projects']);
+
+/** The scopes an accountant's session holds on a shared profile: only the `:read` scopes of ACCOUNTANT_DOMAINS. */
+export function accountantScopes(): readonly Scope[] {
+  return WRITABILITY_MATRIX.filter((row) => ACCOUNTANT_DOMAINS.has(row.domain))
+    .flatMap((row) => row.scopes.filter((s) => s.endsWith(':read')))
+    .filter(isScope);
+}
+
+/**
+ * MUT-559 (D1): whether an accountant may call a GET whose `requireScope` tags are `routeScopes` (the route-access
+ * index). Derived, never listed: at least one tag, every one of them the accountant's. An untagged GET (the records
+ * export, the activity summary) is refused, so a route added later is closed until it declares what it reads.
+ */
+export function accountantMayRead(routeScopes: readonly Scope[]): boolean {
+  const held = new Set<Scope>(accountantScopes());
+  return routeScopes.length > 0 && routeScopes.every((s) => held.has(s));
+}
+
+/** MUT-559: every refusal an accountant meets (any write, a GET outside their scopes, a write below the routes). */
+export function accountantReadOnly(): ApiError {
+  return new ApiError('READ_ONLY_PROFILE', 'This profile was shared with you to read; only its owner can change it', { reason: 'ACCOUNTANT_READ_ONLY' });
+}
+
 /** hosted-portal.md §5 layer 1: MALAFAT when the organization has a CONNECTED Malafat integration. */
 export async function profileWriterOf(store: Pick<LedgerStore, 'integrations'>, organizationId: string): Promise<ProfileWriter> {
   const malafat = await store.integrations.findByOrganizationAndProvider(organizationId, 'MALAFAT');

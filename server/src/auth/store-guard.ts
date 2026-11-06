@@ -2,7 +2,7 @@ import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
-import { mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
+import { accountantReadOnly, mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
 /**
  * The third layer of the writability matrix (hosted-portal.md §5, ADR-037
@@ -398,6 +398,23 @@ export const STORE_ACCESS: StoreAccess = {
    * wipe the cap ledger).
    */
   email: { isSuppressed: 'operator', suppress: 'operator', claimDelivery: 'operator', finishDelivery: 'operator', pruneDeliveries: 'operator' },
+  /**
+   * MUT-559 (ADR-245): an owner invites, lists and revokes from their session (the route checks they own the profile);
+   * an accountant accepts, leaves and reads their clients from theirs. The public invite routes and selectProfile's
+   * lookup and "last viewed" stamp run on the store beneath the guard, so those methods are refused to every principal.
+   */
+  accountantGrants: {
+    invite: 'sessionOnly',
+    listByOrganization: 'sessionOnly',
+    findByDigest: 'sessionOnly',
+    findActive: 'sessionOnly',
+    listActiveByAccountant: 'sessionOnly',
+    accept: 'sessionOnly',
+    signupAndAccept: 'operator',
+    revoke: 'sessionOnly',
+    leave: 'sessionOnly',
+    touchViewed: 'operator',
+  },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
@@ -489,6 +506,23 @@ export function agentStoreGuard(): StoreGuard {
       const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess> | undefined>)[repo]?.[method];
       if (!access) throw new Error(`Unclassified store method ${repo}.${method}`);
       if (!AGENT_STORE_METHODS.has(`${repo}.${method}`)) throw principalNotAccepted();
+    },
+  };
+}
+
+/**
+ * MUT-559 (ADR-245, D2): the guard for an accountant's request on a profile shared with them, the third refusal layer
+ * after the method gate and the derived GET allowlist (auth/middleware.ts). Only reads pass, whatever their class
+ * says a session may otherwise do; every other method answers READ_ONLY_PROFILE (ACCOUNTANT_READ_ONLY). The last-viewed
+ * stamp and SYSTEM catch-up posting run on the store beneath the guard (`unguarded`), as for every session.
+ */
+export function accountantStoreGuard(): StoreGuard {
+  return {
+    assertCanCall(repo, method) {
+      const access = (STORE_ACCESS as Record<string, Record<string, MethodAccess> | undefined>)[repo]?.[method];
+      if (!access) throw new Error(`Unclassified store method ${repo}.${method}`);
+      if (access === 'read' || (typeof access === 'object' && 'read' in access)) return;
+      throw accountantReadOnly();
     },
   };
 }

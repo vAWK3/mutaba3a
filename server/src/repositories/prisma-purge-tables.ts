@@ -38,6 +38,8 @@ export const PURGE_PROFILE_TABLES = [
   'payment_counters',
   // MUT-478
   'receivable_counters',
+  // MUT-559: accountants' access to the deleted profile (also ON DELETE CASCADE).
+  'accountant_grants',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */
@@ -70,6 +72,9 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'oauth_authorization_requests.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
+  // MUT-559: the person's grants as an accountant go with them; invites they sent as an owner lose their name.
+  'accountant_grants.accountantUserId': 'delete',
+  'accountant_grants.invitedByUserId': 'anonymize',
   'conversions.createdByUserId': 'anonymize',
   'expense_groups.createdByUserId': 'anonymize',
   'expense_receipts.approvedByUserId': 'anonymize',

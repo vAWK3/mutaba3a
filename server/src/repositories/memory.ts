@@ -13,6 +13,7 @@ import { compareForOperatorList, isAfterOperatorCursor, matchesOperatorQuery } f
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
+import { isLiveGrant } from '../accountants/grants.js';
 import type {
   AccountClosureRecord,
   AccountPurgeRepository,
@@ -35,6 +36,8 @@ import type {
   AppendVersionInput,
   RetainerVersionRecord,
   AgreementFilter,
+  AccountantGrantRecord,
+  AccountantGrantRepository,
   AgreementRecord,
   AgreementRepository,
   CorrectOutcomeInput,
@@ -329,6 +332,11 @@ export class MemoryLedgerStore implements LedgerStore {
    * shipped local format.
    */
   private readonly featureGrants = new Map<string, UserFeatureRecord>();
+  /**
+   * MUT-559 (ADR-245): accountant grants by id. Deliberately not in snapshot()/restore(): the portal's signed-out mode
+   * has one person and no one to share with.
+   */
+  private readonly accountantGrantMap = new Map<string, AccountantGrantRecord>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -717,6 +725,106 @@ export class MemoryLedgerStore implements LedgerStore {
     countLiveForUser: async (userId, at) =>
       [...this.sessionsById.values()].filter((s) => s.userId === userId && !s.revokedAt && s.idleExpiresAt > at && s.absoluteExpiresAt > at).length,
   };
+
+  /** MUT-559 (ADR-245). Every method is synchronous inside, so each is one step, like a Prisma transaction. */
+  readonly accountantGrants: AccountantGrantRepository = {
+    invite: async (input) => {
+      if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('accountant_grants.organizationId');
+      const onProfile = [...this.accountantGrantMap.values()].filter((g) => g.organizationId === input.organizationId);
+      // An expired invite to the same address is ended, so a re-invite replaces it.
+      for (const g of onProfile) {
+        if (g.status === 'PENDING' && g.inviteEmail === input.inviteEmail && g.inviteExpiresAt <= input.at) Object.assign(g, { status: 'REVOKED', revokedAt: input.at, tokenDigest: null });
+      }
+      if (onProfile.some((g) => (g.status === 'PENDING' || g.status === 'ACTIVE') && g.inviteEmail === input.inviteEmail)) return { kind: 'already_invited' };
+      const live = onProfile.filter((g) => isLiveGrant(g, input.at)).length;
+      if (live >= input.max) return { kind: 'limit', count: live };
+      if ([...this.accountantGrantMap.values()].some((g) => g.tokenDigest === input.tokenDigest)) throw new UniqueViolation('accountant_grants.tokenDigest');
+      const grant: AccountantGrantRecord = {
+        id: randomUUID(), organizationId: input.organizationId, inviteEmail: input.inviteEmail, locale: input.locale, invitedByUserId: input.invitedByUserId,
+        accountantUserId: null, status: 'PENDING', tokenDigest: input.tokenDigest, inviteExpiresAt: input.expiresAt, acceptedAt: null, revokedAt: null, lastViewedAt: null, createdAt: input.at,
+      };
+      this.accountantGrantMap.set(grant.id, grant);
+      this.pushEvents(input.auditFor({ ...grant }), input.at);
+      return { kind: 'created', grant: { ...grant } };
+    },
+    listByOrganization: async (organizationId) =>
+      [...this.accountantGrantMap.values()]
+        .filter((g) => g.organizationId === organizationId && (g.status === 'PENDING' || g.status === 'ACTIVE'))
+        .sort(compareByCreatedAtThenId)
+        .map((g) => ({ ...g })),
+    findByDigest: async (tokenDigest) => {
+      const grant = [...this.accountantGrantMap.values()].find((g) => g.tokenDigest === tokenDigest);
+      return grant ? { ...grant } : null;
+    },
+    findActive: async (accountantUserId, organizationId) => {
+      const grant = [...this.accountantGrantMap.values()].find((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
+      return grant ? { ...grant } : null;
+    },
+    listActiveByAccountant: async (accountantUserId) =>
+      [...this.accountantGrantMap.values()]
+        .filter((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId)
+        .sort((a, b) => a.acceptedAt!.getTime() - b.acceptedAt!.getTime() || a.id.localeCompare(b.id))
+        .map((g) => ({ ...g })),
+    accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
+      if (!this.people.has(accountantUserId)) throw new ForeignKeyViolation('accountant_grants.accountantUserId');
+      const grant = this.claimableGrant(tokenDigest, at);
+      if (!grant || this.hasActiveGrant(accountantUserId, grant.organizationId)) return null;
+      Object.assign(grant, { status: 'ACTIVE', accountantUserId, acceptedAt: at, tokenDigest: null });
+      this.pushEvents(auditFor({ ...grant }), at);
+      return { ...grant };
+    },
+    signupAndAccept: async (input) => {
+      const grant = [...this.accountantGrantMap.values()].find((g) => g.tokenDigest === input.tokenDigest);
+      if (grant && [...this.people.values()].some((u) => u.email === grant.inviteEmail)) return { kind: 'account_exists' };
+      const claimable = this.claimableGrant(input.tokenDigest, input.at);
+      if (!claimable) return { kind: 'unusable' };
+      const { user, personalOrganization } = this.insertPerson({
+        email: claimable.inviteEmail,
+        displayName: input.displayName,
+        passwordHash: input.passwordHash,
+        locale: claimable.locale,
+        personal: input.personal,
+        at: input.at,
+        status: 'ACTIVE',
+        emailVerifiedAt: input.at,
+      });
+      this.trialStarts.set(user.id, input.trialStartsAt);
+      this.recordTermsAcceptance(user.id, input.terms, input.at);
+      Object.assign(claimable, { status: 'ACTIVE', accountantUserId: user.id, acceptedAt: input.at, tokenDigest: null });
+      this.pushEvents(input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, grant: { ...claimable } }), input.at);
+      return { kind: 'created', user, personalOrganization, grant: { ...claimable } };
+    },
+    revoke: async ({ organizationId, grantId, at, auditFor }) => {
+      const grant = this.accountantGrantMap.get(grantId);
+      if (!grant || grant.organizationId !== organizationId || (grant.status !== 'PENDING' && grant.status !== 'ACTIVE')) return null;
+      Object.assign(grant, { status: 'REVOKED', revokedAt: at, tokenDigest: null });
+      this.pushEvents(auditFor({ ...grant }), at);
+      return { ...grant };
+    },
+    leave: async ({ organizationId, accountantUserId, at, auditFor }) => {
+      const grant = [...this.accountantGrantMap.values()].find((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
+      if (!grant) return null;
+      Object.assign(grant, { status: 'LEFT', revokedAt: at });
+      this.pushEvents(auditFor({ ...grant }), at);
+      return { ...grant };
+    },
+    touchViewed: async ({ grantId, at, audit }) => {
+      const grant = this.accountantGrantMap.get(grantId);
+      if (!grant) return;
+      grant.lastViewedAt = at;
+      this.pushEvents(audit, at);
+    },
+  };
+
+  /** MUT-559: a PENDING grant with this digest, unexpired at `at`; what accept and signup may claim. */
+  private claimableGrant(tokenDigest: string, at: Date): AccountantGrantRecord | null {
+    const grant = [...this.accountantGrantMap.values()].find((g) => g.tokenDigest === tokenDigest);
+    return grant && grant.status === 'PENDING' && grant.inviteExpiresAt > at ? grant : null;
+  }
+
+  private hasActiveGrant(accountantUserId: string, organizationId: string): boolean {
+    return [...this.accountantGrantMap.values()].some((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
+  }
 
   readonly features: FeaturesRepository = {
     // Review D2: only names the code knows; a retired name is simply off.
@@ -3064,6 +3172,8 @@ export class MemoryLedgerStore implements LedgerStore {
     ];
     for (const map of maps) for (const [key, row] of map) if (inDeleted(row)) map.delete(key);
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
+    // MUT-559: ON DELETE CASCADE, as in Postgres.
+    for (const [key, grant] of this.accountantGrantMap) if (deleted.has(grant.organizationId)) this.accountantGrantMap.delete(key);
     // SET NULL, as in Postgres: a subscription is the payer's, and the payer's own are deleted with their account.
     for (const sub of this.billingSubs.values()) if (sub.organizationId !== null && deleted.has(sub.organizationId)) sub.organizationId = null;
     for (const key of this.counters.keys()) if (deleted.has(key.slice(0, key.indexOf(':')))) this.counters.delete(key);
@@ -3107,6 +3217,12 @@ export class MemoryLedgerStore implements LedgerStore {
     for (const [key, acceptance] of this.termsAcceptances) if (acceptance.userId === id) this.termsAcceptances.delete(key);
     for (const [key, grant] of this.grants) if (grant.userId === id) this.grants.delete(key);
     for (const [key, grant] of this.featureGrants) if (grant.userId === id) this.featureGrants.delete(key);
+    // MUT-559: the person's grants as an accountant (ON DELETE CASCADE), and invites to their address; those they sent
+    // as an owner, on profiles that survive, lose their name (SET NULL).
+    for (const [key, grant] of this.accountantGrantMap) {
+      if (grant.accountantUserId === id || grant.inviteEmail === person.email) this.accountantGrantMap.delete(key);
+      else if (grant.invitedByUserId === id) grant.invitedByUserId = null;
+    }
     // MUT-434: grants and decided requests cascade with the person; codes and tokens with their grant.
     for (const [key, g] of this.oauthGrants) {
       if (g.userId !== id) continue;
