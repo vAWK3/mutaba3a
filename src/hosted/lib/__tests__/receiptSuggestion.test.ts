@@ -91,3 +91,14 @@ describe('minor-unit helpers', () => {
     });
   });
 });
+
+describe('MUT-557: the allocation number', () => {
+  it('fills it on a firm profile, with its confidence', () => {
+    const out = prefill(read({ allocationNumber: field('304512876', 0.81) }), true);
+    expect(out.values.allocationNumber).toBe('304512876');
+    expect(out.prefilled.allocationNumber).toBe(0.81);
+  });
+  it('never on a personal profile', () => {
+    expect(prefill(read({ allocationNumber: field('304512876') })).values).not.toHaveProperty('allocationNumber');
+  });
+});

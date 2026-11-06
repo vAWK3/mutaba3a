@@ -19,7 +19,7 @@ import type { HostedExpenseFormValues } from '../components/expenseForm/useHoste
 export type ReceiptSuggestion = components['schemas']['ReceiptSuggestion'];
 
 /** The form fields a suggestion can fill, as the review page hints them. */
-export type SuggestedField = 'date' | 'amount' | 'currency' | 'vendor' | 'vat';
+export type SuggestedField = 'date' | 'amount' | 'currency' | 'vendor' | 'vat' | 'allocationNumber';
 
 /** Below this, the hint says the reader was unsure (display only). */
 export const LOW_CONFIDENCE = 0.5;
@@ -96,6 +96,11 @@ export function suggestionToFormValues(
       prefilled.vat = rate.confidence;
     } else if (suggested.vatMinor && offered) {
       vatRead = minorDigitsToDecimal(suggested.vatMinor.value, currencyExponent(offered));
+    }
+    // MUT-557: the allocation number shows beside VAT, on a firm profile only.
+    if (suggested.allocationNumber) {
+      values.allocationNumber = suggested.allocationNumber.value;
+      prefilled.allocationNumber = suggested.allocationNumber.confidence;
     }
   }
 

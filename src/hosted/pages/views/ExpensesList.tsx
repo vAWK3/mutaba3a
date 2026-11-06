@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import { useLanguage } from '../../../lib/i18n/core';
+import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import type { Currency, Customer, Expense } from '../../api/client';
 import { CategoryFilter, ClientFilter, DateFilter, FilterBar } from '../../components/FilterControls';
@@ -35,6 +36,8 @@ interface ExpenseRow {
   client: string;
   currency: Currency;
   amount: string;
+  /** MUT-557: the server's flag (a Business ILS invoice with VAT above the threshold and no allocation number). */
+  allocationNumberMissing: boolean;
 }
 
 function shape(
@@ -51,6 +54,7 @@ function shape(
     client: (e.customerId && customers.get(e.customerId)?.name) ?? '—',
     currency: e.currency,
     amount: e.amount,
+    allocationNumberMissing: e.allocationNumberMissing === true,
   }));
 }
 
@@ -97,7 +101,21 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const columns = useMemo<Column<ExpenseRow>[]>(
     () => [
       { key: 'date', header: t('hosted.expenses.columns.date'), cell: (r) => r.date },
-      { key: 'title', header: t('hosted.expenses.columns.title'), cell: (r) => r.title },
+      {
+        key: 'title',
+        header: t('hosted.expenses.columns.title'),
+        cell: (r) =>
+          r.allocationNumberMissing ? (
+            <>
+              {r.title}{' '}
+              <Badge variant="warning" size="sm" title={t('hosted.expenses.allocation.missing')} data-testid="expense-allocation-missing">
+                {t('hosted.expenses.allocation.badge')}
+              </Badge>
+            </>
+          ) : (
+            r.title
+          ),
+      },
       { key: 'category', header: t('hosted.expenses.columns.category'), cell: (r) => r.category },
       { key: 'client', header: t('hosted.expenses.columns.client'), cell: (r) => r.client },
       { key: 'amount', header: t('hosted.expenses.columns.amount'), numeric: true, cell: (r) => <DecimalAmount value={r.amount} currency={r.currency} /> },

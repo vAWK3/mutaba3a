@@ -375,6 +375,45 @@ describe('VAT read from the receipt (MUT-302)', () => {
   });
 });
 
+describe('the allocation number (MUT-557)', () => {
+  const big = { ...suggested, totalMinor: { value: '708000', source: 'ocr' as const, confidence: 0.9 }, vatRateBasisPoints: { value: 1800, source: 'ocr' as const, confidence: 0.9 }, vatMinor: { value: '108000', source: 'ocr' as const, confidence: 0.9 } };
+  const ONE = `GET /v1/receipts/${R1}`;
+
+  it('a read number fills the field on a firm, hinted, and approving sends it', async () => {
+    const seen: { body?: unknown } = {};
+    const read = { ...big, allocationNumber: { value: '304512876', source: 'ocr' as const, confidence: 0.9 } };
+    const { user } = portal(`${BASE}/${R1}`, {
+      receipts: [receipt(R1, { suggested: read })],
+      firm: true,
+      routes: {
+        [`POST /v1/receipts/${R1}/approve`]: ({ body }: { body: unknown }) => {
+          seen.body = body;
+          return ok({ expense: { id: E1, occurredOn: '2026-10-24', amount: '7080.00', currency: 'ILS', title: null, vendor: 'Shufersal', categoryId: GROCERIES, customerId: null, projectId: null, notes: null, createdByUserId: null, version: 1, createdAt: '', updatedAt: '', vat: null, allocationNumber: '304512876', allocationNumberMissing: false }, receipt: plain(receipt(R1, { filingStatus: 'FILED', expenseId: E1 })) }, 201);
+        },
+      },
+    });
+    expect(await screen.findByDisplayValue('304512876')).toBeInTheDocument();
+    expect(document.querySelector('[data-hint-for="allocationNumber"]')).toHaveTextContent('From the receipt');
+    await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
+    await user.click(screen.getByRole('button', { name: 'Approve and file' }));
+    await waitFor(() => expect(seen.body).toBeDefined());
+    expect(seen.body).toMatchObject({ allocationNumber: '304512876' });
+  });
+
+  it('marks the field as needed when the server expects one and none was read', async () => {
+    portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: big })], firm: true, routes: { [ONE]: () => ok({ ...plain(receipt(R1, { suggested: big })), vendorDefaults: null, allocationNumberExpected: true }) } });
+    const field = await screen.findByTestId('expense-allocation-number');
+    await waitFor(() => expect(field).toHaveAttribute('data-needed', 'true'));
+    expect(field).toHaveTextContent('This invoice needs an allocation number');
+  });
+
+  it('never on a personal profile', async () => {
+    portal(`${BASE}/${R1}`, { receipts: [receipt(R1, { suggested: big })], routes: { [ONE]: () => ok({ ...plain(receipt(R1, { suggested: big })), vendorDefaults: null, allocationNumberExpected: true }) } });
+    await screen.findByLabelText(/Amount/);
+    expect(screen.queryByTestId('expense-allocation-number')).toBeNull();
+  });
+});
+
 describe('the server reading the receipt (MUT-441 AC8, R10 #9)', () => {
   const READING = 'Reading the receipt…';
   const ONE = `GET /v1/receipts/${R1}`;
