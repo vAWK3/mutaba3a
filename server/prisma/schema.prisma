@@ -1893,6 +1893,9 @@ model AccountantGrant {
   acceptedAt       DateTime?
   /// When the grant ended: revoked by an owner, or left by the accountant.
   revokedAt        DateTime?
+  /// MUT-575 (ADR-249): when the accountant removed this ended (REVOKED) client from their list. Ended is computed
+  /// (REVOKED, or the owner's account closing), never stored; REVOKED vs LEFT stays the record of who ended access.
+  dismissedAt      DateTime?
   /// Written at most once an hour per grant (auth/middleware.ts).
   lastViewedAt     DateTime?
   createdAt        DateTime

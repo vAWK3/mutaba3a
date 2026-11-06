@@ -224,5 +224,38 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       await purge(store, o.userId, 7);
       expect(await store.accountantGrants.listByOrganization(o.profileId)).toEqual([]);
     });
+    it('MUT-575: listForAccountant — ACTIVE and undismissed REVOKED grants; dismiss hides every REVOKED one on the profile', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const o2 = await owner(store);
+      const a = (await store.users.create(userInput('acc'))).user;
+      const accepted = async (on: { userId: string; profileId: string }, minute: number) => {
+        const created = await invite(store, on, a.email, minute);
+        if (created.kind !== 'created') throw new Error('invite failed');
+        const grant = await store.accountantGrants.accept({ tokenDigest: created.grant.tokenDigest!, accountantUserId: a.id, at: at(minute + 1), auditFor: audit(on.profileId, 'accountant.accepted') });
+        return grant!;
+      };
+      const first = await accepted(o, 1);
+      // A new grant reads dismissedAt null.
+      expect(first.dismissedAt).toBeNull();
+      await store.accountantGrants.revoke({ organizationId: o.profileId, grantId: first.id, at: at(3), auditFor: audit(o.profileId, 'accountant.revoked') });
+      const second = await accepted(o, 4);
+      await store.accountantGrants.revoke({ organizationId: o.profileId, grantId: second.id, at: at(6), auditFor: audit(o.profileId, 'accountant.revoked') });
+      const other = await accepted(o2, 7);
+      expect((await store.accountantGrants.listForAccountant(a.id)).map((g) => `${g.organizationId}:${g.status}`).sort()).toEqual(
+        [`${o.profileId}:REVOKED`, `${o.profileId}:REVOKED`, `${o2.profileId}:ACTIVE`].sort(),
+      );
+
+      // Nothing to dismiss on an ACTIVE grant; both REVOKED ones go at once, and a second dismiss finds none.
+      expect(await store.accountantGrants.dismiss({ organizationId: o2.profileId, accountantUserId: a.id, at: at(9) })).toBe(0);
+      expect(await store.accountantGrants.dismiss({ organizationId: o.profileId, accountantUserId: a.id, at: at(9) })).toBe(2);
+      expect(await store.accountantGrants.dismiss({ organizationId: o.profileId, accountantUserId: a.id, at: at(10) })).toBe(0);
+      expect((await store.accountantGrants.listForAccountant(a.id)).map((g) => g.id)).toEqual([other.id]);
+
+      // LEFT is never listed; dismissal leaves REVOKED in place as history (who ended access).
+      await store.accountantGrants.leave({ organizationId: o2.profileId, accountantUserId: a.id, at: at(11), auditFor: audit(o2.profileId, 'accountant.left') });
+      expect(await store.accountantGrants.listForAccountant(a.id)).toEqual([]);
+      expect(await store.accountantGrants.dismiss({ organizationId: o2.profileId, accountantUserId: a.id, at: at(12) })).toBe(0);
+    });
   });
 }
