@@ -1502,6 +1502,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
   width: 44px;
   height: 52px;
   text-align: center;
+  font-family: var(--font-mono);
   font-size: var(--text-title);
   font-variant-numeric: tabular-nums;
   border: 1px solid var(--border-strong);
