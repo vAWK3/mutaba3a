@@ -29,7 +29,7 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       vatTreatment: null,
       vatRateBasisPoints: null,
       netMinor: null,
-      vatMinor: null,
+      vatMinor: null, allocationNumber: null,
       createdByUserId: user.id,
       ...over,
     });
@@ -138,6 +138,18 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       expect(stale).toEqual({ kind: 'stale', record: updated.record });
       expect((await store.expenses.getById(w.a.id, e.id))!.amountMinor).toBe(500n);
       expect(await store.expenses.update(w.b.id, e.id, 2, { amountMinor: 1n }, at(2))).toEqual({ kind: 'not_found' });
+    });
+
+    it('MUT-557: keeps the allocation number; null clears it, absent keeps it; nine digits only (the CHECK)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const e = await store.expenses.create(w.expense({ allocationNumber: '304512876' }), at(0));
+      expect((await store.expenses.getById(w.a.id, e.id))!.allocationNumber).toBe('304512876');
+      const kept = await store.expenses.update(w.a.id, e.id, 1, { notes: 'x' }, at(1));
+      expect(kept.kind === 'updated' && kept.record.allocationNumber).toBe('304512876');
+      const cleared = await store.expenses.update(w.a.id, e.id, 2, { allocationNumber: null }, at(2));
+      expect(cleared.kind === 'updated' && cleared.record.allocationNumber).toBeNull();
+      await expect(store.expenses.create(w.expense({ allocationNumber: '30451287x' }), at(3))).rejects.toThrow(/expenses_allocation_number_digits/);
     });
 
     it('MUT-272: moves an expense to another currency together with its amount', async () => {
@@ -293,11 +305,11 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       const withVat = await store.expenses.create(w.expense(VAT17), at(1));
       expect(await store.expenses.getById(w.a.id, withVat.id)).toMatchObject(VAT17);
       const none = await store.expenses.create(w.expense(), at(2));
-      expect(await store.expenses.getById(w.a.id, none.id)).toMatchObject({ vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null });
+      expect(await store.expenses.getById(w.a.id, none.id)).toMatchObject({ vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null });
     });
 
     it.each([
-      ['all or none', { ...VAT17, vatMinor: null }],
+      ['all or none', { ...VAT17, vatMinor: null, allocationNumber: null }],
       ['adds up', { ...VAT17, vatMinor: 1_800n }],
       ['zero unless standard', { ...VAT17, vatTreatment: 'EXEMPT' as const }],
       ['standard rate in range', { ...VAT17, vatRateBasisPoints: 0, netMinor: 11_700n, vatMinor: 0n }],
@@ -314,7 +326,7 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
       await expect(store.expenses.update(w.a.id, e.id, 1, { amountMinor: 23_400n }, at(2))).rejects.toThrow();
       const ok = await store.expenses.update(w.a.id, e.id, 1, { amountMinor: 23_400n, netMinor: 20_000n, vatMinor: 3_400n }, at(3));
       expect(ok).toMatchObject({ kind: 'updated', record: { amountMinor: 23_400n, netMinor: 20_000n, vatMinor: 3_400n } });
-      const cleared = await store.expenses.update(w.a.id, e.id, 2, { vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null }, at(4));
+      const cleared = await store.expenses.update(w.a.id, e.id, 2, { vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null }, at(4));
       expect(cleared).toMatchObject({ kind: 'updated', record: { vatTreatment: null, netMinor: null } });
     });
   });

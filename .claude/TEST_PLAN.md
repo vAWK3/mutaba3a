@@ -4458,7 +4458,23 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   `store-prisma-client-activity.test.ts` (2 queries for 10 clients); `migration-mut575.test.ts`.
 - Updated: accountant route matrix (`GET /v1/profile-entries` allowlisted by tags), both read-only guard tests
   (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
-  `well-known-routes.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
+  `well-known-routes.test.ts`, `route-security.test.ts` (both new routes session-only), `writability-routes.test.ts`
+  (40 session reads), `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
+
+## MUT-577 — accountant access per account (ADR-249 addendum)
+- `server/src/__tests__/routes-accountant-access-feature.test.ts`: off by default → invite and create-link 404 (the
+  switched-off answers), list OK, `/v1/me` without it; on → both work and `/v1/me.user.features` names it; turned off →
+  no new invite or link, the existing grant and link keep working, and the owner still revokes both; an accountant
+  needs no feature; the env switch still wins. `user-features.test.ts` and `routes-operator-billing-firms.test.ts`
+  list the feature.
+
+### MUT-557 — the Israeli allocation number (ADR-246)
+- `israel/__tests__/allocation-number.test.ts`: the dated thresholds and their boundaries (₪4,999.99 / ₪5,000 on 2026-06-01, ₪9,000 the day before, 2024-05-04), USD, no VAT, unknown net, Personal, the A4 guard, normalizing.
+- `receipts/extract/__tests__/allocation.test.ts` (labels he/en/ar, row under, right to left, ח.פ beside it, bare number, bill-to, PDF, unsure row; D3 completeness; fillAbsent) and `qr.test.ts` (the registry).
+- `ocr-client.test.ts`: `qr` passed through, absent = [], an unusable list = [] (A3). Sidecar: `server/ocr/tests/test_qr.py`, `test_privacy.py`.
+- Routes: `routes-expenses.test.ts` (store, 422, flag, clear, Personal, list/detail/feed), `routes-receipts.test.ts` (approve, `allocationNumberExpected`).
+- Store contract: the column and its CHECK (`store-contract-expenses.ts`), the A2 backlog pick (`store-contract-receipt-reading.ts`); Prisma under `test:db`.
+- Portal: local migration 15 → 16, `receiptSuggestion.test.ts`, `ExpenseDrawer.test.tsx` (field, dashes, untouched, invalid, clear).
 
 ## MUT-562 — Client books desk, accept-invite and share-link pages (ADR-250)
 

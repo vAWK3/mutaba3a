@@ -19,7 +19,7 @@ import { HOSTED_CURRENCIES } from '../format/currencies';
 import { BrandLoader } from '../../components/brand/BrandLoader';
 import { trackPortal } from '../analytics/portalAnalytics';
 import { InGroupsLine } from './groups/InGroupsLine';
-import { createExpenseBody, updateExpenseVat, useHostedExpenseForm, vatValuesOf, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
+import { createExpenseBody, updateExpenseAllocationNumber, updateExpenseVat, useHostedExpenseForm, vatValuesOf, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
 import { HostedExpenseFields } from './expenseForm/HostedExpenseFields';
 
 export type { HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
@@ -149,6 +149,8 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
           notes: values.notes || null,
           // MUT-302 (D4): only when the VAT changed; left out, the server keeps it and re-splits a new amount.
           ...updateExpenseVat(existingExpense, values, { firm }),
+          // MUT-557: likewise only when it changed.
+          ...updateExpenseAllocationNumber(existingExpense, values, { firm }),
         };
         await updateMutation.mutateAsync({ expenseId: existingExpense.id, body, version: String(existingExpense.version) });
         markSaved(existingExpense.id);
@@ -291,6 +293,7 @@ function valuesOf(expense: Expense): HostedExpenseFormValues {
     categoryId: expense.categoryId ?? '',
     notes: expense.notes ?? '',
     ...vatValuesOf(expense),
+    allocationNumber: expense.allocationNumber ?? '',
   };
 }
 

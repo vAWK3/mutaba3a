@@ -2,7 +2,7 @@
 
 Epic MUT-558. Repo: mini-crm (`server/` + `docs/analytics/`). Built on MUT-559 (local main 69436d7d, In Review), on top of MUT-560 (`feat/mut-560-share-links`, merges first) and MUT-314 (Planned).
 Blocks MUT-562 (portal desk) and MUT-564 (phone Client books). **This ticket is the one home of the client-books server slice**: MUT-562's planned slice S (S1–S4) and MUT-564's S1–S3 move here and are reconciled into one contract below.
-Claims (renumbered at build; re-check at merge): **ADR-249**, **API 1.104.0-mut575** (after 1.102.0-mut560 and 1.103.0-mut314; MUT-314 holds ADR-248), migration **`20261107130000_mut575_client_books`** (after MUT-560's `20261107120000`).
+Claims (renumbered at build; re-check at merge): **ADR-249**, **API 1.104.0-mut575** (after 1.102.0-mut560 and 1.103.0-mut314; MUT-314 holds ADR-248), migration **`20261107140000_mut575_client_books`** (after MUT-557's `20261107130000`).
 Numbering collisions found: `feat/mut-557-allocation-number` also claims ADR-246 and `1.101.0-mut557`; MUT-562's plan claimed ADR-248. Whoever merges later renumbers; MUT-562 moves to ADR-250+.
 Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → Planned (transition 2) by /eng-ticket; /eng-build → In Progress; finished → In Review.
 
@@ -23,7 +23,7 @@ Invite email link          ──► https://<portal>/accountant-invite#t   (AAS
 
 ## S1 — Ended clients
 
-### Data (migration `20261107130000_mut575_client_books`, additive)
+### Data (migration `20261107140000_mut575_client_books`, additive)
 ```
 model AccountantGrant { … + dismissedAt DateTime?   // the accountant removed this ended client from their list }
 ```

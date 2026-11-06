@@ -56,6 +56,17 @@ def test_ac4_building_the_engines_and_reading_every_kind_of_file_makes_no_networ
     assert no_network == []
 
 
+def test_ac4_mut_557_reading_qr_codes_makes_no_network_call(no_network):
+    from qr_fixtures import image_pdf, jpeg, page, text_pdf_with_qr
+
+    reader = Reader(SETTINGS)
+    reader.warm_up()
+    url = "https://invoice.example.test/v/1"
+    for body, content_type in ((jpeg(page([(url, 450, 450)])), "image/jpeg"), (image_pdf(page([(url, 450, 450)])), "application/pdf"), (text_pdf_with_qr(url), "application/pdf")):
+        assert reader.read(body, content_type, "photo")["qr"] == [url]
+    assert no_network == []
+
+
 def test_ac4_the_guard_itself_works(no_network):
     with pytest.raises(NetworkCall):
         socket.create_connection(("example.com", 443))

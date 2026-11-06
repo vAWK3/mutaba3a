@@ -46,7 +46,9 @@ describe('12. link feed filters (MUT-575 S5)', () => {
     expect(daysOf(await read(await entriesOf(h, viewer, { kinds: ['received'] })))).toEqual(['received:2026-10-20', 'received:2026-10-10']);
     expect(daysOf(await read(await entriesOf(h, viewer, { kinds: ['expense'] })))).toEqual(['expense:2026-10-31', 'expense:2026-10-15', 'expense:2026-10-01']);
     expect((await entriesOf(h, viewer, { kinds: ['owed'] })).status).toBe(422);
-    expect((await entriesOf(h, viewer, { kinds: [] })).status).toBe(422);
+    // No kind, or a from after the before: an empty page, never an error.
+    expect(await read(await entriesOf(h, viewer, { kinds: [] }))).toEqual({ items: [], nextCursor: null });
+    expect(await read(await entriesOf(h, viewer, { occurredFrom: '2026-10-20', occurredBefore: '2026-10-10' }))).toEqual({ items: [], nextCursor: null });
   });
 
   it('a from before the range is clamped to it, a before after it too; inside, they narrow', async () => {

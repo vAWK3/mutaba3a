@@ -289,6 +289,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
             idPrefix="hosted-receipt"
             hints={hints}
             firm={profile.firm}
+            allocationNumberNeeded={receipt.allocationNumberExpected === true}
             prefillDefaults
             readFields={readFields}
             vendorFilled={vendorFilled}
@@ -313,11 +314,11 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
 }
 
 /** The suggestion's fields as the form names them. */
-const FORM_FIELD_OF = { date: 'occurredAt', amount: 'amount', currency: 'currency', vendor: 'vendor', vat: 'vatTreatment' } as const satisfies Record<SuggestedField, keyof HostedExpenseFormValues>;
-const SUGGESTED_FORM_FIELDS = ['occurredAt', 'amount', 'currency', 'vendor', 'vatTreatment'] as const;
+const FORM_FIELD_OF = { date: 'occurredAt', amount: 'amount', currency: 'currency', vendor: 'vendor', vat: 'vatTreatment', allocationNumber: 'allocationNumber' } as const satisfies Record<SuggestedField, keyof HostedExpenseFormValues>;
+const SUGGESTED_FORM_FIELDS = ['occurredAt', 'amount', 'currency', 'vendor', 'vatTreatment', 'allocationNumber'] as const;
 type SuggestedFormField = (typeof SUGGESTED_FORM_FIELDS)[number];
 /** Fields that start empty: filled only while still empty. The date and currency always hold a value: filled while it is still the default. */
-const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor'];
+const STARTS_EMPTY: readonly SuggestedFormField[] = ['amount', 'vendor', 'allocationNumber'];
 
 /**
  * MUT-303 (review #1): vendor defaults that arrive after the page opened (the server finished reading and the read
@@ -399,7 +400,7 @@ function useLateSuggestion(form: HostedExpenseForm['form'], suggested: ExpenseRe
       return !changed.current.has(name) && !state.isDirty && !state.isTouched;
     };
     const fillable = (name: SuggestedFormField) => untouched(name) && (!STARTS_EMPTY.includes(name) || !form.getValues(name));
-    for (const name of ['occurredAt', 'currency', 'vendor'] as const) {
+    for (const name of ['occurredAt', 'currency', 'vendor', 'allocationNumber'] as const) {
       const value = late.values[name];
       if (value !== undefined && fillable(name)) form.setValue(name, value);
     }

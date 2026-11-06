@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
+import { CURRENT_TERMS } from '../legal.js';
 import {
   DAY,
   JOB,
+  SAME_ORIGIN,
   T0,
   acceptInvite,
   accountantHarness,
@@ -76,6 +78,22 @@ describe('2. /v1/me clients (MUT-575)', () => {
     const h = accountantHarness({ accountantAccess: false });
     const p = await person(h);
     expect('clients' in (await me(h, p))).toBe(false);
+  });
+});
+
+describe('invite check carries the terms version (MUT-575, for MUT-562)', () => {
+  it('answers the current terms version, which signup from the invite accepts first time', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    expect((await inviteAccountant(h, owner, profileId, 'new.accountant@books.ps')).status).toBe(201);
+    const token = inviteTokenFor(h, 'new.accountant@books.ps');
+    const check = await read(await h.app.request('/v1/accountant-invites/check', json({ token }, SAME_ORIGIN)));
+    expect(check.termsVersion).toBe(CURRENT_TERMS.version);
+    const signup = await h.app.request(
+      '/v1/accountant-invites/signup',
+      json({ token, password: 'a-long-enough-password', displayName: 'New Accountant', acceptedTermsVersion: check.termsVersion, turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' }, SAME_ORIGIN),
+    );
+    expect(signup.status).toBe(201);
   });
 });
 
@@ -272,6 +290,32 @@ describe('7. /v1/profile-entries as an accountant (MUT-575)', () => {
     expect(await kinds('?kinds=conversion')).toEqual([ids.c1]);
     expect(await kinds('?kinds=expense&kinds=received')).toEqual([ids.r2, ids.e2, ids.r1, ids.e1]);
     expect((await feedOf(h, acc, profileId, '?kinds=invoice')).status).toBe(422);
+    // No kind, or a from after the before: an empty page, never an error.
+    const empty = { items: [], nextCursor: null };
+    expect(await read(await feedOf(h, acc, profileId, '?kinds='))).toEqual(empty);
+    expect(await read(await feedOf(h, acc, profileId, '?occurredFrom=2026-10-20&occurredBefore=2026-10-10'))).toEqual(empty);
+  });
+
+  it.each(['revoked', 'closing', 'dismissed', 'left'] as const)('a %s grant answers 404, including the next page of a feed read before the change', async (change) => {
+    const { h, owner, acc, profileId } = await client();
+    const first = await read(await feedOf(h, acc, profileId, '?limit=2'));
+    expect(first.nextCursor).not.toBeNull();
+    if (change === 'revoked' || change === 'dismissed') await revokeAll(h, owner, profileId);
+    if (change === 'dismissed') expect((await remove(h, acc, profileId)).status).toBe(204);
+    if (change === 'closing') await closeAccount(h, owner);
+    if (change === 'left') expect((await remove(h, acc, profileId)).status).toBe(204);
+    for (const query of ['', `?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`]) {
+      const res = await feedOf(h, acc, profileId, query);
+      expect(res.status, `${change} ${query}`).toBe(404);
+      expect((await read(res)).error.details).toEqual({ reason: 'PROFILE_NOT_FOUND' });
+    }
+  });
+
+  it('asking /v1/entries for the client by profileId answers 404 (the client feed is only /v1/profile-entries)', async () => {
+    const { h, acc, profileId } = await client();
+    const res = await h.app.request(`/v1/entries?profileId=${profileId}`, { headers: acc.auth });
+    expect(res.status).toBe(404);
+    expect((await h.app.request(`/v1/entries?profileId=${profileId}&order=occurredOn`, { headers: acc.auth })).status).toBe(404);
   });
 
   it('bounds by occurredFrom and occurredBefore, pages with a stable cursor, and caps the limit at 100', async () => {

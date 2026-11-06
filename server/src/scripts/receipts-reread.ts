@@ -1,5 +1,5 @@
 import { hasFeature } from '../features.js';
-import { SUGGESTION_FIELDS, type SuggestionField } from '../receipts/extract/merge.js';
+import { READ_FIELDS, type SuggestionField } from '../receipts/extract/merge.js';
 import { SERVER_READER_GENERATION, serverReaderGeneration } from '../receipts/reading/reader.js';
 import type { LedgerStore, ReceiptSuggestion, SuggestionSource } from '../repositories/ports.js';
 
@@ -43,7 +43,7 @@ export interface RereadResult {
 }
 
 function fieldsOf(suggestion: ReceiptSuggestion): RereadPlanItem['fields'] {
-  return SUGGESTION_FIELDS.flatMap((field) => {
+  return READ_FIELDS.flatMap((field) => {
     const value = suggestion[field];
     return value ? [{ field, source: value.source }] : [];
   });
@@ -57,7 +57,7 @@ function fieldsOf(suggestion: ReceiptSuggestion): RereadPlanItem['fields'] {
 export function withoutServerFields(suggestion: ReceiptSuggestion): ReceiptSuggestion | null {
   const serverRead = (source: SuggestionSource) => SERVER_SOURCES.includes(source);
   const dropsRegistration = suggestion.registrationNo !== undefined && serverRead(suggestion.registrationNo.source);
-  const kept = Object.fromEntries(SUGGESTION_FIELDS.flatMap((field) => {
+  const kept = Object.fromEntries(READ_FIELDS.flatMap((field) => {
     const value = suggestion[field];
     return value && !serverRead(value.source) && !(dropsRegistration && value.source === 'vendor') ? [[field, value]] : [];
   }));

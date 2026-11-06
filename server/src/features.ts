@@ -6,8 +6,10 @@ import type { LedgerStore } from './repositories/ports.js';
  *
  * `agent_access`: the person may connect their own AI agent over MCP (epic MUT-432).
  * `receipt_reading`: the server reads the receipts this person uploads (MUT-441, D3), while SERVER_OCR is on.
+ * `accountant_access`: as an owner, the person may invite an accountant and make share links (MUT-577), while
+ *   ACCOUNTANT_ACCESS / SHARE_LINKS are on. Listing and revoking need no feature; accountants and link visitors neither.
  */
-export const FEATURES = ['agent_access', 'receipt_reading'] as const;
+export const FEATURES = ['agent_access', 'receipt_reading', 'accountant_access'] as const;
 export type Feature = (typeof FEATURES)[number];
 
 export function isFeature(name: string): name is Feature {

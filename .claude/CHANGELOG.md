@@ -34,6 +34,17 @@
 **Why:** epic MUT-558, the accountant's half; MUT-575's routes.
 **Files:** `src/hosted/pages/{client-books,accountant-invite,share-link}/**`, `src/hosted/components/{PinBoxes,TwoPanelLayout,EntriesTable}.tsx`, `src/hosted/data/clientBooksQueries.ts`, `src/hosted/api/client.ts`, `src/hosted/router.tsx`, `src/hosted/shell/HostedShell.tsx`, `src/hosted/session/{SessionBridge,useSignOut}.ts*`, `src/hosted/analytics/portalAnalytics.ts`, `src/hosted/i18n/{ar,en}.json`, `src/hosted/hosted.css`, `qa/**`. Downloads wait for MUT-314; the 4th-client card for MUT-565; scenes for MUT-561.
 
+## [Unreleased] - 2026-11-06 — Accountant access per account: the operator's `accountant_access` feature (MUT-577, ADR-249 addendum)
+
+**Why:** Basel enables sharing for some accounts, not all, as with receipt reading.
+- `accountant_access` joins `FEATURES`; the operator console lists it (en/ar labels). Inviting an accountant and making
+  a share link need it (else the switched-off 404); listing and revoking don't; accountants and link visitors never do.
+  Turning it off stops new invites and links; existing ones keep working until revoked. `.env.example` documents the
+  production plan (switches on, `ACCOUNTANT_PLAN` off). Test harness people hold the feature unless `sharing: false`.
+- Files: `server/src/{features.ts, routes/accountants.ts, routes/share-links.ts}`, `server/.env.example`,
+  `src/hosted/i18n/{en,ar}.json`, tests `routes-accountant-access-feature.test.ts`, `user-features.test.ts`,
+  `routes-operator-billing-firms.test.ts`, `helpers/accountants.ts`.
+
 ## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
 
 **Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).
@@ -44,9 +55,10 @@
   occurredFrom/Before, cursor, limit ≤ 100), the `/v1/entries` shape.
 - `/v1/me.clients` and the accept response carry `profileType`, `status`, `endedReason`, `endedAt`; ended clients
   (revoked, or the owner closing) stay until removed. `DELETE /v1/clients/{id}` leaves an active client or removes an
-  ended one (`accountant_grants.dismissedAt`, migration `20261107130000_mut575_client_books`).
+  ended one (`accountant_grants.dismissedAt`, migration `20261107140000_mut575_client_books`).
 - `disposition=inline` on the expense receipt download; `kinds` and clamped dates on `POST /v1/share-links/entries`;
   the AASA claims `/accountant-invite*`; events contract 2.7.0 (8 accountant and share-link events).
+- `POST /v1/accountant-invites/check` answers `termsVersion`, so signup from the invite sends the current version first time.
 
 ### Changed
 - A closing owner ends accountant access at once (404), the share-link rule (`access/owner-closing.ts`); MUT-559's
@@ -79,6 +91,24 @@ MUT-561..563).
   to `access/view-touch.ts`; the owner gate is `ownedProfileOf` (personal-profile.ts), shared with MUT-559's routes.
 - The purge deletes a profile's links (`PURGE_PROFILE_TABLES`) and anonymizes a purged creator (`PURGE_USER_COLUMNS`).
 - Contract 1.102.0-mut560; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `SHARE_LINKS=true`.
+## [Unreleased] - 2026-11-06 — The Israeli allocation number on received invoices (MUT-557, ADR-246)
+
+**Why:** since 2026-06-01 a supplier's tax invoice of ₪5,000 or more before VAT needs an allocation number for its VAT
+to be claimed back. Mutaba3a now reads it, keeps it on the expense, and flags one that is missing.
+
+### Added
+- Migration `20261107130000_mut557_expense_allocation_number` (`expenses.allocationNumber`, nine-digit CHECK).
+- `server/src/israel/allocation-number.ts` (dated thresholds, the flag rule, normalizing); `ALLOCATION` keywords and
+  `readAllocationNumber`; `receipts/extract/qr.ts` (QR parser registry, empty until real samples).
+- API: `allocationNumber` on Expense, create, update and approve; `allocationNumberMissing` on Expense;
+  `allocationNumberExpected` on ReceiptDetail; `ReceiptSuggestion.allocationNumber`; reason ALLOCATION_NUMBER_INVALID.
+- OCR sidecar: QR decoding (zxing-cpp 3.1.1), `qr` in `/v1/read`, a QR line in the bench report.
+- Portal: the allocation number field under VAT on a firm ILS expense (drawer and Receipt Review, prefilled from a
+  reading, marked when needed), and a "No allocation number" badge in the expenses list.
+
+### Changed
+- `serializeExpense` takes the profile (`ExpenseContext`, firm features); `isCompleteSuggestion` also wants the number on a big ILS
+  invoice; snapshot format 16; contract 1.106.0-mut557; `src/hosted/api/schema.d.ts` regenerated.
 
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
 

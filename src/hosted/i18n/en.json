@@ -582,6 +582,14 @@
       },
       "hints": {
         "fromVendor": "From this vendor’s last expense"
+      },
+      "allocation": {
+        "label": "Allocation number",
+        "placeholder": "9 digits",
+        "invalid": "An allocation number is 9 digits.",
+        "needed": "This invoice needs an allocation number. You may not be able to claim back the VAT without it.",
+        "missing": "No allocation number. You may not be able to claim back the VAT without it.",
+        "badge": "No allocation number"
       }
     },
     "conversions": {
@@ -2114,6 +2122,11 @@
           "label": "Receipt reading",
           "sub": "Reads new receipts on our servers and fills in the date, total and vendor.",
           "confirmOff": "{email} loses receipt reading; receipts they add from now on aren't read."
+        },
+        "accountant_access": {
+          "label": "Accountant access",
+          "sub": "As an owner, they can invite an accountant to read a profile and make share links.",
+          "confirmOff": "{email} can't invite accountants or make new links; the ones they already shared keep working until they revoke them."
         }
       },
       "firms": {

@@ -62,6 +62,8 @@ export async function prepareInboxExpenseFiling(
       ...(entry.captureSource ? { captureSource: entry.captureSource } : {}),
       // MUT-302: filing records no VAT (an inbox entry has none to carry).
       ...NO_EXPENSE_VAT,
+      // MUT-557: nor an allocation number.
+      allocationNumber: null,
     },
   };
 }

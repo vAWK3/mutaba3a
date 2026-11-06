@@ -75,7 +75,7 @@ export type ExpenseReceipt = Schemas['ExpenseReceipt'];
  * MUT-303: one receipt as GET returns it, with its vendor's defaults (D6). Optional here: the receipt query also
  * serves a cached list item, which carries none.
  */
-export type ReceiptDetail = ExpenseReceipt & Partial<Pick<Schemas['ReceiptDetail'], 'vendorDefaults'>>;
+export type ReceiptDetail = ExpenseReceipt & Partial<Pick<Schemas['ReceiptDetail'], 'vendorDefaults' | 'allocationNumberExpected'>>;
 export type ExpenseSummary = Schemas['ExpenseSummary'];
 export type CreateExpenseRequest = Schemas['CreateExpenseRequest'];
 export type UpdateExpenseRequest = Schemas['UpdateExpenseRequest'];

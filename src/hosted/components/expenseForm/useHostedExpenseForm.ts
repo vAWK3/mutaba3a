@@ -35,8 +35,13 @@ export const hostedExpenseSchema = expenseFormFieldsSchema
     // MUT-302 (ADR-231): '' = no VAT recorded. The rate is a typed percent, required for Standard only.
     vatTreatment: z.union([z.literal(''), z.enum(VAT_TREATMENTS)]),
     vatRate: z.string(),
+    // MUT-557 (ADR-246): '' = none. Spaces and dashes are allowed, as invoices print it; nine digits otherwise.
+    allocationNumber: z.string(),
   })
   .superRefine((data, ctx) => {
+    if (data.allocationNumber.trim() && allocationDigits(data.allocationNumber) === null) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: ALLOCATION_NUMBER_INVALID, path: ['allocationNumber'] });
+    }
     if (data.vatTreatment === 'STANDARD_RATED' && percentToBasisPoints(data.vatRate) === null) {
       ctx.addIssue({ code: z.ZodIssueCode.custom, message: data.vatRate.trim() ? VAT_RATE_INVALID : VAT_RATE_REQUIRED, path: ['vatRate'] });
     }
@@ -53,6 +58,17 @@ export type HostedExpenseFormValues = z.infer<typeof hostedExpenseSchema>;
 /** The VAT rate's schema messages: codes the VAT row turns into its own words. */
 export const VAT_RATE_REQUIRED = 'vatRateRequired';
 export const VAT_RATE_INVALID = 'vatRateInvalid';
+/** MUT-557: the allocation number's schema message, worded by its row. */
+export const ALLOCATION_NUMBER_INVALID = 'allocationNumberInvalid';
+
+/** MUT-557 (D1): spaces, dashes and a pasted PDF's direction marks out (the server's `readAllocationDigits`). */
+const ALLOCATION_SEPARATORS = /[\s\-\u2010-\u2015\u2212\uFE63\uFF0D\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+/** MUT-557 (D1): separators out, then exactly nine digits (the server's `normalizeAllocationNumber`); else null. */
+export function allocationDigits(text: string): string | null {
+  const digits = text.replace(ALLOCATION_SEPARATORS, '');
+  return /^[0-9]{9}$/.test(digits) ? digits : null;
+}
 
 type ExpenseVatInput = NonNullable<CreateExpenseRequest['vat']>;
 
@@ -70,6 +86,7 @@ export function emptyExpenseValues(timezone?: string): HostedExpenseFormValues {
     notes: '',
     vatTreatment: '',
     vatRate: '',
+    allocationNumber: '',
   };
 }
 
@@ -100,11 +117,22 @@ export function updateExpenseVat(existing: Pick<Expense, 'vat'>, values: HostedE
 }
 
 /**
+ * MUT-557: an edit's `allocationNumber`, as `vat`: left out when unchanged, null when emptied. Firm profiles only (the
+ * row shows beside VAT).
+ */
+export function updateExpenseAllocationNumber(existing: Pick<Expense, 'allocationNumber'>, values: HostedExpenseFormValues, options: { firm: boolean }): { allocationNumber?: string | null } {
+  if (!options.firm) return {};
+  const next = allocationDigits(values.allocationNumber);
+  return next === (existing.allocationNumber ?? null) ? {} : { allocationNumber: next };
+}
+
+/**
  * A new expense's body from the form: an empty optional field is left out (the drawer's create, the receipt's approve).
  * MUT-302 (OV1): `vat` only on a firm profile, so a suggestion's rate never saves hidden VAT on a personal one.
  */
 export function createExpenseBody(values: HostedExpenseFormValues, options: { firm: boolean }): CreateExpenseRequest {
   const vat = options.firm ? vatInputOf(values) : null;
+  const allocationNumber = options.firm ? allocationDigits(values.allocationNumber) : null;
   return {
     occurredOn: values.occurredAt,
     amount: values.amount,
@@ -116,6 +144,7 @@ export function createExpenseBody(values: HostedExpenseFormValues, options: { fi
     projectId: values.projectId || undefined,
     notes: values.notes || undefined,
     ...(vat ? { vat } : {}),
+    ...(allocationNumber ? { allocationNumber } : {}),
   };
 }
 

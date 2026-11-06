@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-306: The same allocation number on two expenses is not flagged
+**Status**: Accepted (MUT-557, 2026-11-06; ADR-246, Basel's R2)
+- **What:** an allocation number belongs to one invoice, so the same number on two expenses is a duplicate or a typo. Nothing warns about it yet.
+- **Why it's acceptable:** the invoice inbox (MUT-506) brings a duplicate guard for received invoices; the warning belongs there rather than in a second check now.
+- **Fix:** in MUT-506, match on the allocation number first (with the vendor's registration no.), then amount and date.
+
 ### TD-303: A split payment whose other half OCR lost can fill the card slip as the total
 **Status**: Accepted (MUT-540, 2026-11-03; ADR-244 decision 4, Basel's D6/D8)
 - **What:** a card slip printed once is the total when nothing on the receipt shows a split (another slip, cash, change, another tender or a balance with another amount, a deposit, a refund). The receipts that need the rule are the ones whose own total lines OCR garbled, so a split payment whose other tender line OCR also lost reads its card part as the whole, at about 0.76.
