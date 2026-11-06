@@ -287,6 +287,8 @@ export const STORE_ACCESS: StoreAccess = {
     softDelete: { write: 'expenses' },
     // MUT-270: counts for the entries feed, across the person's own profiles (the route resolves them from memberships).
     countReadyByExpenseIds: { read: 'expenses' },
+    // MUT-314: a period's receipts, for the report's file names and the receipts zip.
+    listReadyByExpenseIds: { read: 'expenses' },
     // MUT-255: the receipts library.
     list: { read: 'expenses' },
     countByFilingStatus: { read: 'expenses' },
@@ -431,6 +433,11 @@ export const STORE_ACCESS: StoreAccess = {
     touchOpened: 'operator',
     touchViewer: 'operator',
   },
+  /**
+   * MUT-314 (ADR-248): a period download's estimate and name lookups. Expense data (vendors, receipts), so an API key
+   * never reaches them; every read-only guard (accountant, share link, the download stream) lets them through.
+   */
+  periodPack: { estimate: { read: 'expenses' }, names: { read: 'expenses' } },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
@@ -550,6 +557,17 @@ export const SHARE_LINK_SESSION_READS: ReadonlySet<string> = new Set(['entries.l
  */
 export function shareLinkStoreGuard(): StoreGuard {
   return readOnlyStoreGuard(SHARE_LINK_SESSION_READS, shareLinkReadOnly);
+}
+
+/**
+ * MUT-314 (ADR-248): the guard a period download's stream runs under, whoever asked, so nothing it reaches can write.
+ * A share link's stream keeps the link's own guard; an owner's or an accountant's reads like an accountant's, plus the
+ * entries feed (sessionOnly: it reads across a person's profiles; the download reads it for its one profile).
+ */
+export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list']);
+
+export function periodDownloadStoreGuard(kind: 'member' | 'accountant' | 'link'): StoreGuard {
+  return kind === 'link' ? shareLinkStoreGuard() : readOnlyStoreGuard(PERIOD_DOWNLOAD_SESSION_READS, accountantReadOnly);
 }
 
 function readOnlyStoreGuard(alsoReads: ReadonlySet<string>, refusal: () => ApiError): StoreGuard {

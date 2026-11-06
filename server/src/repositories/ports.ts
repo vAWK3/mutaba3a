@@ -2581,7 +2581,49 @@ export interface LedgerStore {
   accountantGrants: AccountantGrantRepository;
   /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
   shareLinks: ShareLinkRepository;
+  /** MUT-314 (ADR-248): a period download's size estimate and its batched name lookups. Reads only. */
+  periodPack: PeriodPackRepository;
 }
+
+// ---- MUT-314 (ADR-248): period downloads ---------------------------------------
+
+/** A money-date range of one profile, as the entries feed bounds it: on or after `occurredFrom`, before `occurredBefore`. */
+export interface PeriodBounds {
+  occurredFrom?: IsoDate;
+  occurredBefore: IsoDate;
+}
+
+/**
+ * What a period's two downloads would hold, counted by the feed's own row rules: live expenses, and POSTED payments
+ * (no undo, no reversal), whose money date is in `bounds`, logged at or before `asOf`; and the READY, live receipts on
+ * those expenses, uploaded at or before `asOf`, with their bytes summed.
+ */
+export interface PeriodEstimate {
+  expenses: number;
+  income: number;
+  receipts: number;
+  receiptBytes: number;
+}
+
+/** Names by id, for one batch of lookups. Ids that aren't the profile's (or don't exist) are absent. */
+export interface PeriodNames {
+  customers: Map<string, string>;
+  projects: Map<string, string>;
+  /** A vendor's canonical name. */
+  vendors: Map<string, string>;
+  /** A person's display name (not profile-scoped: who logged a row). */
+  users: Map<string, string>;
+}
+
+export interface PeriodPackRepository {
+  /** One to three indexed aggregates; never reads a row's content. */
+  estimate(organizationId: string, bounds: PeriodBounds, asOf: Date): Promise<PeriodEstimate>;
+  /** One query per kind asked for (an empty set reads nothing). */
+  names(organizationId: string, ids: { customers: ReadonlySet<string>; projects: ReadonlySet<string>; vendors: ReadonlySet<string>; users: ReadonlySet<string> }): Promise<PeriodNames>;
+}
+
+/** MUT-314: what a period download needs of a receipt: no file name (the zip names files by Ref, D19), no reading state. */
+export type PeriodReceiptRecord = Pick<ExpenseReceiptRecord, 'id' | 'expenseId' | 'mimeType' | 'sizeBytes' | 'storageKey' | 'createdAt'> & { expenseId: string };
 
 // ---- MUT-560 (ADR-247): share links ------------------------------------------
 
@@ -3719,6 +3761,11 @@ export interface ExpenseReceiptRepository {
    * the map. The caller passes organizations the person belongs to; the expense ids come from those organizations.
    */
   countReadyByExpenseIds(organizationIds: readonly string[], expenseIds: readonly string[]): Promise<Map<string, number>>;
+  /**
+   * MUT-314: READY, live receipts on these expenses of one profile (the same rule as `listByExpense`), in one query,
+   * oldest upload first (createdAt, then id). Metadata only: the bytes are the storage's.
+   */
+  listReadyByExpenseIds(organizationId: string, expenseIds: readonly string[]): Promise<PeriodReceiptRecord[]>;
   /** MUT-255: READY, live receipts of the profile's library, newest upload first. */
   list(organizationId: string, filter: ReceiptLibraryFilter, page: { limit: number; cursor: ReceiptCursor | null }): Promise<ReceiptPage>;
   /** MUT-255: READY, live receipts per filing status (one grouped count). */
