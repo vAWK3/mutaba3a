@@ -57,7 +57,7 @@ async function setup(opts: { bucket?: boolean; uploadsPerMinute?: number; receip
   const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const as = (profile: string = org.id, extra: Record<string, string> = {}) => ({ cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': profile, ...SAME_ORIGIN, ...extra });
-  return { h, org: org as { id: string }, other: other as { id: string }, as, apiKey: { authorization: `Bearer ${key.secret}` }, userId: created.user.id as string };
+  return { h, org: org as { id: string }, other: other as { id: string }, as, apiKey: { authorization: `Bearer ${key.secret}` }, userId: created.user.id as string, personalProfileId: created.personalProfile.id as string };
 }
 
 const FILE = { filename: 'cafe.jpg', mimeType: 'image/jpeg', sizeBytes: 2048 };
@@ -201,6 +201,17 @@ describe('POST /v1/receipts/{id}/approve (AC2, AC3)', () => {
     expect(body.receipt.approved).not.toHaveProperty('vat');
   });
 
+  it('MUT-557: approving with an allocation number stores it on the expense; a bad one is refused before filing', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: SUGGESTION });
+    const bad = await h.app.request(`/v1/receipts/${receipt.id}/approve`, json({ ...approveBody, allocationNumber: '1234' }, { ...as(), ...idem() }));
+    expect(bad.status).toBe(422);
+    expect((await read(bad)).error.details).toMatchObject({ reason: 'ALLOCATION_NUMBER_INVALID' });
+    const res = await h.app.request(`/v1/receipts/${receipt.id}/approve`, json({ ...approveBody, allocationNumber: '304 512 876' }, { ...as(), ...idem() }));
+    expect(res.status).toBe(201);
+    expect((await read(res)).expense).toMatchObject({ allocationNumber: '304512876', allocationNumberMissing: false });
+  });
+
   it('refuses where POST /v1/expenses refuses, before anything is filed', async () => {
     const { h, as } = await setup();
     const receipt = await upload(h, as());
@@ -323,6 +334,36 @@ describe('POST /v1/receipts/{id}/file (MUT-389): onto an expense that already ex
     const viaExpense = (await read(await h.app.request(`/v1/expenses/${expense.id}/receipts`, json(FILE, as())))).error;
     expect(viaLibrary).toMatchObject({ code: viaExpense.code, message: viaExpense.message, details: { reason: 'TOO_MANY_RECEIPTS' } });
     expect(viaExpense.details.reason).toBe('TOO_MANY_RECEIPTS');
+  });
+});
+
+describe('MUT-557: GET /v1/receipts/{id} says when the review needs an allocation number (D4)', () => {
+  const field = <T>(value: T) => ({ value, source: 'ocr', confidence: 0.9 });
+  /** ₪6,000 + ₪1,080 VAT on 2026-10-22: above the ₪5,000 threshold. */
+  const big = { readerVersion: 'phone-1.0', date: field('2026-10-22'), totalMinor: field('708000'), currency: field('ILS'), vatMinor: field('108000') };
+  const detail = async (h: Harness, headers: Record<string, string>, id: string) => read(await h.app.request(`/v1/receipts/${id}`, { headers }));
+
+  it('a big ILS invoice with VAT and no number read: expected', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: big });
+    expect((await detail(h, as(), receipt.id)).allocationNumberExpected).toBe(true);
+  });
+
+  it.each([
+    ['the number was read', { ...big, allocationNumber: field('304512876') }],
+    ['under the threshold', { ...big, totalMinor: field('59000'), vatMinor: field('9000') }],
+    ['no VAT read', { ...big, vatMinor: undefined }],
+    ['nothing read', undefined],
+  ])('not expected: %s', async (_label, suggested) => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), suggested ? { ...FILE, suggested } : FILE);
+    expect((await detail(h, as(), receipt.id)).allocationNumberExpected).toBe(false);
+  });
+
+  it('never on a Personal profile', async () => {
+    const { h, as, personalProfileId } = await setup();
+    const receipt = await upload(h, as(personalProfileId), { ...FILE, suggested: big });
+    expect((await detail(h, as(personalProfileId), receipt.id)).allocationNumberExpected).toBe(false);
   });
 });
 

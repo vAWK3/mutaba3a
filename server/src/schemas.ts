@@ -3667,6 +3667,10 @@ export const ExpenseSchema = z
     createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
     captureSource: StoredCaptureSourceSchema.nullable().openapi({ description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436." }),
     vat: ExpenseVatSchema.nullable().openapi({ description: 'MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302.' }),
+    allocationNumber: z.string().regex(/^\d{9}$/).nullable().openapi({ description: 'MUT-557: the supplier invoice\'s Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.101.0-mut557.' }),
+    allocationNumberMissing: z.boolean().openapi({
+      description: 'MUT-557: worked out on every read, never stored. True on a Business profile\'s ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557.',
+    }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
     updatedAt: z.string().datetime(),
@@ -3699,6 +3703,8 @@ export const ReceiptSuggestionSchema = z
     registrationNo: suggestedField(z.string().min(1).max(64)).optional(),
     phone: suggestedField(z.string().min(1).max(40)).optional(),
     email: suggestedField(z.string().min(1).max(254)).optional(),
+    /** MUT-557: nine digits, read only beside its label. Since 1.101.0-mut557. */
+    allocationNumber: suggestedField(z.string().regex(/^\d{9}$/)).optional(),
   })
   .openapi('ReceiptSuggestion');
 
@@ -3781,7 +3787,12 @@ export const VendorSuggestionSchema = z
 export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSuggestionSchema) }).openapi('VendorSuggestionList');
 
 /** MUT-303: one receipt as GET /v1/receipts/{id} returns it: the receipt and its vendor's defaults (D6). */
-export const ReceiptDetailSchema = ExpenseReceiptSchema.extend({ vendorDefaults: ReceiptVendorDefaultsSchema.nullable() }).openapi('ReceiptDetail');
+export const ReceiptDetailSchema = ExpenseReceiptSchema.extend({
+  vendorDefaults: ReceiptVendorDefaultsSchema.nullable(),
+  allocationNumberExpected: z.boolean().openapi({
+    description: 'MUT-557: on a Business profile, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557.',
+  }),
+}).openapi('ReceiptDetail');
 
 export const CreateExpenseRequestSchema = z
   .object({
@@ -3800,6 +3811,7 @@ export const CreateExpenseRequestSchema = z
     /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
     capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
     vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302.' }),
+    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.101.0-mut557.' }),
   })
   .strict()
   .openapi('CreateExpenseRequest');
@@ -3831,6 +3843,7 @@ export const UpdateExpenseRequestSchema = z
     projectId: uuid.nullable().optional(),
     notes: expenseNotes.nullable().optional(),
     vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row\'s own. Since 1.92.0-mut302.' }),
+    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.101.0-mut557.' }),
   })
   .strict()
   .openapi('UpdateExpenseRequest');

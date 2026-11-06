@@ -83,7 +83,7 @@ describe('operations', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.version).toBe(API_VERSION);
     // MUT-559: accountant grants (ADR-245).
-    expect(API_VERSION).toBe('1.100.0-mut559');
+    expect(API_VERSION).toBe('1.101.0-mut557');
     for (const s of SCOPES) expect(doc.info.description).toContain(s);
     expect(doc.info.description).toContain('IDEMPOTENCY_KEY_REUSED');
     expect(Object.keys(doc.paths)).toEqual(

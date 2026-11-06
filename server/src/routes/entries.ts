@@ -5,7 +5,7 @@ import { lapsedError } from '../billing/gate.js';
 import { decodeFeedCursor, encodeFeedCursor } from '../entries/merge.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { EntryPageSchema, ListEntriesQuerySchema } from '../schemas.js';
-import { serializeEntry } from '../serializers.js';
+import { expenseContextOf, serializeEntry } from '../serializers.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 
 /** MUT-390 review: how far back `loggedSince` may reach. The phone asks for 7 days; 31 leaves room without a whole-history walk. */
@@ -83,11 +83,15 @@ export function entriesRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
       // Only a capture with money applied can be a settle; most pages ask nothing.
       const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
-      const [receiptCounts, settledOwed] = await Promise.all([
+      // MUT-557 (A1): the profiles of this page's expenses, for their flags (most pages hold one or two).
+      const expenseProfileIds = [...new Set(page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.organizationId] : [])))];
+      const [receiptCounts, settledOwed, expenseProfiles] = await Promise.all([
         store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds),
         store.entries.settledOwedIds(organizationIds, settleCandidates),
+        Promise.all(expenseProfileIds.map((id) => store.organizations.getById(id))),
       ]);
-      return c.json({ items: page.items.map((row) => serializeEntry(row, { receiptCounts, settledOwed })), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
+      const expenseContexts = new Map(expenseProfiles.flatMap((org) => (org ? [[org.id, expenseContextOf(org)] as const] : [])));
+      return c.json({ items: page.items.map((row) => serializeEntry(row, { receiptCounts, settledOwed, expenseContexts })), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
     },
   );
 

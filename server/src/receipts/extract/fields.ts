@@ -1,5 +1,5 @@
 import { type Buyer, PHONE_NUMBER, REGISTRATION_NUMBER } from './buyer.js';
-import { COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
+import { ALLOCATION, COMPANY, DATE_LABEL, hasKeyword, type KeywordSet, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
 import { countMatches } from './normalize.js';
 import type { Row } from './types.js';
 
@@ -45,6 +45,49 @@ export function readRegistration(rows: readonly Row[], buyer: Buyer): Reading<st
         return buyer.has(digits) ? null : { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
       }
     }
+  }
+  return null;
+}
+
+const ALLOCATION_DIGITS = /(?<!\d)\d{9}(?!\d)/g;
+const RULE_ALLOCATION = 0.9;
+
+/** Where each label of `set` ends in a folded row. */
+function labelEnds(folded: string, set: KeywordSet): number[] {
+  return set.flatMap((pattern) => [...folded.matchAll(new RegExp(pattern.source, 'gu'))].map((m) => m.index + m[0].length));
+}
+
+/**
+ * The nine digits a row gives an allocation label (on the label's row, or the row under it): one the allocation label
+ * precedes more closely than a registration label does; on a row with no registration label, any (a right-to-left row
+ * may print the number's box first). Null when the row has none.
+ */
+function allocationDigitsIn(row: Row): string | null {
+  const allocationEnds = labelEnds(row.folded, ALLOCATION);
+  const registrationEnds = labelEnds(row.folded, REGISTRATION);
+  for (const match of row.folded.matchAll(ALLOCATION_DIGITS)) {
+    const before = (ends: number[]) => Math.max(-1, ...ends.filter((end) => end <= match.index));
+    const allocationAt = before(allocationEnds);
+    if (allocationAt >= 0 && allocationAt > before(registrationEnds)) return match[0];
+    if (registrationEnds.length === 0) return match[0];
+  }
+  return null;
+}
+
+/**
+ * MUT-557 (D2): an Israeli tax invoice's allocation number: nine digits on its label's row or the row under it (when
+ * that one is not a registration row). Never a bare nine-digit number, never a bill-to row (MUT-514).
+ */
+export function readAllocationNumber(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]!;
+    if (!hasKeyword(row.folded, ALLOCATION) || buyer.rows.has(row)) continue;
+    const own = allocationDigitsIn(row);
+    if (own) return { value: own, rule: RULE_ALLOCATION, conf: row.conf };
+    const next = rows[i + 1];
+    if (!next || buyer.rows.has(next) || hasKeyword(next.folded, REGISTRATION) || hasKeyword(next.folded, ALLOCATION)) continue;
+    const under = allocationDigitsIn(next);
+    if (under) return { value: under, rule: RULE_ALLOCATION, conf: next.conf };
   }
   return null;
 }

@@ -10,6 +10,8 @@ export interface OcrLine {
 export interface ExtractInput {
   lines?: readonly OcrLine[] | undefined;
   pdfText?: string | null | undefined;
+  /** MUT-557 (D6): the QR payloads the OCR service decoded; never logged. */
+  qr?: readonly string[] | undefined;
 }
 
 /** One box of a row, normalised, with the reader's confidence in it (MUT-504). */

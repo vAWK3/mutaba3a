@@ -3,7 +3,8 @@ import { buyerOf, normalizeIdentifier } from './buyer.js';
 import { isConfident, round2 } from './confidence.js';
 import { exponentOf, inferFromDecimals, readCurrency } from './currency.js';
 import { dateWindow, readDate } from './dates.js';
-import { readEmail, readPhone, readRegistration, readVendor } from './fields.js';
+import { readAllocationNumber, readEmail, readPhone, readRegistration, readVendor } from './fields.js';
+import { readQrFields } from './qr.js';
 import { orderedRows, pdfRows } from './rows.js';
 import { knownVatRates, readMoney } from './total.js';
 import type { ExtractInput } from './types.js';
@@ -32,7 +33,7 @@ export interface ReceiptReading {
 
 /**
  * MUT-441: what a receipt says, from its PDF text layer when it has one, else its OCR lines: date, total, currency,
- * VAT and its rate, the vendor's name, registration no., phone and email. Pure: no I/O, and nothing it reads is logged.
+ * VAT and its rate, the vendor's name, registration no., phone and email, and an Israeli allocation number (MUT-557). Pure: no I/O, and nothing it reads is logged.
  * Money is minor units of the currency read (two decimals assumed when none is). Fields under the threshold are absent.
  */
 export function extractReceipt(input: ExtractInput, options: ExtractOptions): ReceiptSuggestion {
@@ -61,6 +62,7 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
   const registration = readRegistration(rows, buyer);
   const phone = readPhone(rows, buyer);
   const email = readEmail(rows);
+  const allocationNumber = readAllocationNumber(rows, buyer);
 
   const suggestion: ReceiptSuggestion = {
     readerVersion: options.readerVersion,
@@ -73,8 +75,11 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
     registrationNo: registration ? field(registration.value, registration.rule, registration.conf) : undefined,
     phone: phone ? field(phone.value, phone.rule, phone.conf) : undefined,
     email: email ? field(email.value, email.rule, email.conf) : undefined,
+    allocationNumber: allocationNumber ? field(allocationNumber.value, allocationNumber.rule, allocationNumber.conf) : undefined,
   };
-  const filled = Object.fromEntries(Object.entries(suggestion).filter(([, v]) => v !== undefined)) as unknown as ReceiptSuggestion;
+  // MUT-557 (D6): a QR's exact fields fill what the text did not give.
+  const qr = readQrFields(input.qr ?? []);
+  const filled = Object.fromEntries(Object.entries({ ...qr, ...suggestion }).filter(([, v]) => v !== undefined)) as unknown as ReceiptSuggestion;
   return { suggestion: filled, buyerIdentifiers: buyer.ownIdentifiers, vendorIdentifiers: vendorIdentifiersOf(rows) };
 }
 

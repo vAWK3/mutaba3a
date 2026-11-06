@@ -25,7 +25,7 @@ import {
   ListInboxQuerySchema,
   UpdateInboxEntryRequestSchema,
 } from '../schemas.js';
-import { serializeExpense, serializeIncomeEntry, serializeInboxEntry } from '../serializers.js';
+import { expenseContextOf, serializeExpense, serializeIncomeEntry, serializeInboxEntry } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 // MUT-64: a device session is the same 'session' principal, so it reaches every route a cookie session does.
@@ -208,7 +208,7 @@ export function inboxRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // Every destination-side rule is checked before the transaction opens, so a refusal can never consume the entry.
       const prepared = await prepareInboxExpenseFiling(store, { organization, userId: user.id, entry, body, now });
       const expense = await commitInboxExpenseFiling(store, prepared, { now, requestId: c.get('requestId') });
-      return c.json(serializeExpense(expense), 201);
+      return c.json(serializeExpense(expense, expenseContextOf(organization)), 201);
     },
   );
 

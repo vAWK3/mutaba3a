@@ -1,6 +1,7 @@
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
 import type { ApiError } from '../errors.js';
+import { normalizeAllocationNumber } from '../israel/allocation-number.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch, VendorLearning, VendorVat } from '../repositories/ports.js';
@@ -120,6 +121,8 @@ export interface ExpenseCreateBody {
   captureSource?: string | undefined;
   /** MUT-302 (ADR-231): the VAT inside the amount; absent or null records none. */
   vat?: ExpenseVatInput | null | undefined;
+  /** MUT-557 (ADR-246): the invoice's allocation number; spaces and dashes allowed, else nine digits. Absent or null records none. */
+  allocationNumber?: string | null | undefined;
 }
 
 /**
@@ -132,8 +135,9 @@ export async function prepareExpenseCreate(store: LedgerStore, organizationId: s
   const amountMinor = parseExpenseAmount(body.amount, body.currency);
   const links = await resolveLinks(store, organizationId, { customerId: body.customerId ?? null, projectId: body.projectId ?? null });
   const vat = expenseVat(amountMinor, body.vat);
+  const allocationNumber = body.allocationNumber == null ? null : normalizeAllocationNumber(body.allocationNumber);
   if (body.categoryId) await assertCategoryChoosable(store, organizationId, body.categoryId);
-  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId, ...(body.captureSource ? { captureSource: body.captureSource } : {}), ...vat };
+  return { organizationId, occurredOn, amountMinor, currency: body.currency, title: body.title ?? null, vendor: body.vendor ?? null, categoryId: body.categoryId ?? null, ...links, notes: body.notes ?? null, createdByUserId, ...(body.captureSource ? { captureSource: body.captureSource } : {}), ...vat, allocationNumber };
 }
 
 /**
@@ -153,8 +157,10 @@ export async function prepareExpenseCreate(store: LedgerStore, organizationId: s
  *   vat absent ─▶ keeps the treatment and rate; a new amount is re-split in the same write (the CHECK never sees a stale split)
  *   vat null ───▶ clears all four columns
  *   vat object ─▶ split from the amount sent (in its currency's digits), else from the row's own
+ *
+ * MUT-557: `allocationNumber` absent keeps it, null clears it, a string is normalized (422 ALLOCATION_NUMBER_INVALID).
  */
-export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; currency?: Currency | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined; vat?: ExpenseVatInput | null | undefined }): UpdateExpensePatch {
+export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { occurredOn?: string | undefined; amount?: string | undefined; currency?: Currency | undefined; title?: string | null | undefined; vendor?: string | null | undefined; categoryId?: string | null | undefined; notes?: string | null | undefined; vat?: ExpenseVatInput | null | undefined; allocationNumber?: string | null | undefined }): UpdateExpensePatch {
   if (body.currency !== undefined && body.amount === undefined) {
     throw validationError('AMOUNT_REQUIRED', 'currency can only change together with amount', { field: 'amount' });
   }
@@ -167,6 +173,7 @@ export function expensePatch(existing: ExpenseRecord, today: IsoDate, body: { oc
   if (body.vendor !== undefined) patch.vendor = body.vendor;
   if (body.categoryId !== undefined) patch.categoryId = body.categoryId;
   if (body.notes !== undefined) patch.notes = body.notes;
+  if (body.allocationNumber !== undefined) patch.allocationNumber = body.allocationNumber === null ? null : normalizeAllocationNumber(body.allocationNumber);
   const vat = body.vat !== undefined ? body.vat : patch.amountMinor !== undefined ? (storedExpenseVat(existing) ?? undefined) : undefined;
   if (vat !== undefined) Object.assign(patch, expenseVat(patch.amountMinor ?? existing.amountMinor, vat));
   return patch;

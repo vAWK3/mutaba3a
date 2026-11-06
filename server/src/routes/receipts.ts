@@ -34,7 +34,8 @@ import {
   ReceiptSuggestionSchema,
   SignedUploadSchema,
 } from '../schemas.js';
-import { serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
+import { expectsAllocationNumber } from '../receipts/extract/merge.js';
+import { expenseContextOf, serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
 import { receiptVendorDefaults } from '../vendors/receipt-defaults.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
@@ -225,7 +226,9 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       storage();
       const { organization } = sessionAuth(c);
       const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
-      return c.json({ ...serializeExpenseReceipt(receipt), vendorDefaults: await receiptVendorDefaults(store, organization, receipt) }, 200);
+      // MUT-557 (D4): the review marks the allocation number as needed, on a Business profile only.
+      const allocationNumberExpected = expenseContextOf(organization).profileType === 'BUSINESS' && receipt.suggested !== null && !receipt.suggested.allocationNumber && expectsAllocationNumber(receipt.suggested);
+      return c.json({ ...serializeExpenseReceipt(receipt), vendorDefaults: await receiptVendorDefaults(store, organization, receipt), allocationNumberExpected }, 200);
     },
   );
 
@@ -310,7 +313,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       // The same row POST /v1/expenses writes, same keys, so anything counting expense.created counts these; receiptId marks where it came from.
       await audit(c, 'expense.created', 'expense', result.expense.id, { currency: result.expense.currency, occurredOn: result.expense.occurredOn, receiptId: result.receipt.id, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'new' });
-      return c.json({ expense: serializeExpense(result.expense), receipt: serializeExpenseReceipt(result.receipt) }, 201);
+      return c.json({ expense: serializeExpense(result.expense, expenseContextOf(organization)), receipt: serializeExpenseReceipt(result.receipt) }, 201);
     },
   );
 
@@ -342,7 +345,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       if (result.kind === 'too_many_receipts') throw tooManyReceipts();
       await audit(c, 'expense_receipt.filed', 'expense_receipt', result.receipt.id, { expenseId: result.expense.id, mode: 'existing' });
       const receipts = await store.expenseReceipts.listByExpense(organization.id, result.expense.id);
-      return c.json({ expense: { ...serializeExpense(result.expense), receipts: receipts.map(serializeExpenseReceipt) }, receipt: serializeExpenseReceipt(result.receipt) }, 200);
+      return c.json({ expense: { ...serializeExpense(result.expense, expenseContextOf(organization)), receipts: receipts.map(serializeExpenseReceipt) }, receipt: serializeExpenseReceipt(result.receipt) }, 200);
     },
   );
 

@@ -10,6 +10,7 @@ import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
+import { allocationNumberRequired } from './israel/allocation-number.js';
 import type { CreditReasonCode } from './payments/credit.js';
 import type {
   BillingAccountRecord,
@@ -39,6 +40,7 @@ import type {
   IntegrationRecord,
   MembershipRecord,
   Organization,
+  ProfileType,
   ProfileOwnerEntry,
   ProjectRecord,
   ReceiptLibraryItem,
@@ -570,8 +572,18 @@ export function vendorDefaults(v: VendorRecord, withVat: boolean) {
   return { lastCurrency, lastVat };
 }
 
+/** MUT-557 (A1): what an expense's flags need of its profile. Required, so a caller that forgets it fails to compile. */
+export interface ExpenseContext {
+  profileType: ProfileType;
+}
+
+/** An operator firm has no profile type: it is a business. */
+export function expenseContextOf(organization: Pick<Organization, 'profileType' | 'personalOwnerUserId'>): ExpenseContext {
+  return { profileType: profileTypeOf(organization) === 'PERSONAL' ? 'PERSONAL' : 'BUSINESS' };
+}
+
 /** MUT-42: the original amount, formatted in its own currency — never converted. */
-export function serializeExpense(e: ExpenseRecord) {
+export function serializeExpense(e: ExpenseRecord, context: ExpenseContext) {
   return {
     id: e.id,
     occurredOn: e.occurredOn,
@@ -587,6 +599,8 @@ export function serializeExpense(e: ExpenseRecord) {
     createdByUserId: e.createdByUserId,
     captureSource: (e.captureSource ?? null) as StoredCaptureSource | null,
     vat: serializeExpenseVat(e),
+    allocationNumber: e.allocationNumber ?? null,
+    allocationNumberMissing: allocationNumberRequired({ ...e, profileType: context.profileType }) && !e.allocationNumber,
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),
@@ -710,13 +724,18 @@ export interface EntryContext {
   receiptCounts: ReadonlyMap<string, number>;
   /** The Owed a settle payment paid, per payment id (`entries.settledOwedIds`). */
   settledOwed: ReadonlyMap<string, string>;
+  /** MUT-557 (A1): each expense row's profile, for its flags; the feed mixes profiles. */
+  expenseContexts: ReadonlyMap<string, ExpenseContext>;
 }
+
+/** A profile the feed did not resolve flags nothing (it never happens: the route resolves every expense's profile). */
+const PERSONAL_CONTEXT: ExpenseContext = { profileType: 'PERSONAL' };
 
 export function serializeEntry(row: EntryRow, context: EntryContext) {
   const envelope = { profileId: row.record.organizationId, createdAt: row.record.createdAt.toISOString() };
   switch (row.kind) {
     case 'expense':
-      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record), receiptCount: context.receiptCounts.get(row.record.id) ?? 0 } };
+      return { kind: 'expense' as const, ...envelope, createdByUserId: row.record.createdByUserId, expense: { ...serializeExpense(row.record, context.expenseContexts.get(row.record.organizationId) ?? PERSONAL_CONTEXT), receiptCount: context.receiptCounts.get(row.record.id) ?? 0 } };
     case 'payment':
       return {
         kind: 'received' as const,

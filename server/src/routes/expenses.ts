@@ -35,7 +35,7 @@ import {
   StreakResponseSchema,
   UpdateExpenseRequestSchema,
 } from '../schemas.js';
-import { serializeExpense, serializeExpenseReceipt } from '../serializers.js';
+import { expenseContextOf, serializeExpense, serializeExpenseReceipt } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 
 /** MUT-339: how far back a streak is read; past a year it is shown as a year and more. */
@@ -124,7 +124,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       }
       const cursor = await ledgerPageStart(q, decodeExpenseCursor, (id) => store.expenses.getById(organization.id, id), 'No such expense');
       const page = await store.expenses.list(organization.id, filter, { limit: q.limit, cursor });
-      return c.json({ items: page.items.map(serializeExpense), nextCursor: page.nextCursor ? encodeExpenseCursor(page.nextCursor) : null }, 200);
+      return c.json({ items: page.items.map((e) => serializeExpense(e, expenseContextOf(organization))), nextCursor: page.nextCursor ? encodeExpenseCursor(page.nextCursor) : null }, 200);
     },
   );
 
@@ -169,7 +169,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { organization } = sessionAuth(c);
       const expense = await mustGet(organization.id, c.req.valid('param').expenseId);
       const receipts = await store.expenseReceipts.listByExpense(organization.id, expense.id);
-      return c.json({ ...serializeExpense(expense), receipts: receipts.map(serializeExpenseReceipt) }, 200);
+      return c.json({ ...serializeExpense(expense, expenseContextOf(organization)), receipts: receipts.map(serializeExpenseReceipt) }, 200);
     },
   );
 
@@ -195,7 +195,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));
       await touchExpenseVendor(store, expense, now, learnedFromNew(expense));
       await audit(c, 'expense.created', 'expense', expense.id, { currency: expense.currency, occurredOn: input.occurredOn, ...(body.captureSource ? { captureSource: body.captureSource } : {}) });
-      return c.json(serializeExpense(expense), 201);
+      return c.json(serializeExpense(expense, expenseContextOf(organization)), 201);
     },
   );
 
@@ -239,7 +239,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const learning = learnedFromPatch(existing, result.record, body);
       if (body.vendor !== undefined || body.categoryId !== undefined || learning.currency || learning.vat) await touchExpenseVendor(store, result.record, now, learning);
       await audit(c, 'expense.updated', 'expense', result.record.id, { fields: Object.keys(body), version: result.record.version, ...currencyMove });
-      return c.json(serializeExpense(result.record), 200);
+      return c.json(serializeExpense(result.record, expenseContextOf(organization)), 200);
     },
   );
 
