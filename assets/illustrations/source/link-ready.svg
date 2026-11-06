@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<path id="link-a" d="M44 42H84A18 18 0 0 1 84 78H44A18 18 0 0 1 44 42ZM44 52A8 8 0 0 0 44 68H84A8 8 0 0 0 84 52Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+<path id="link-b" d="M105 54H116A18 18 0 0 1 116 90H76A18 18 0 0 1 76 54H87V64H76A8 8 0 0 0 76 80H116A8 8 0 0 0 116 64H105Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path>
+<g id="pin-tag"><rect x="52" y="106" width="56" height="26" rx="8" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></rect><circle cx="64" cy="119" r="3.5" fill="#795DBA"></circle><circle cx="74" cy="119" r="3.5" fill="#795DBA"></circle><circle cx="84" cy="119" r="3.5" fill="#795DBA"></circle></g>
+<circle id="nuqta" cx="96" cy="119" r="5" fill="#E89960"></circle>
+</svg>
