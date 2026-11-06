@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
-import { SHARE_LINK_SESSION_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAccess } from '../store-guard.js';
+import { PROFILE_FEED_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAccess } from '../store-guard.js';
 
 /**
  * MUT-560 (ADR-247) test group 9, at the guard: every share-link view request runs under shareLinkStoreGuard, so a
@@ -13,7 +13,7 @@ describe('shareLinkStoreGuard (MUT-560)', () => {
     const guard = shareLinkStoreGuard();
     for (const [repo, methods] of Object.entries(STORE_ACCESS)) {
       for (const [method, access] of Object.entries(methods as Record<string, MethodAccess>)) {
-        if (isRead(access) || SHARE_LINK_SESSION_READS.has(`${repo}.${method}`)) {
+        if (isRead(access) || PROFILE_FEED_READS.has(`${repo}.${method}`)) {
           expect(() => guard.assertCanCall(repo, method), `${repo}.${method}`).not.toThrow();
           continue;
         }
@@ -31,11 +31,11 @@ describe('shareLinkStoreGuard (MUT-560)', () => {
   });
 
   it('the named reads are real, never-writing session reads', () => {
-    for (const name of SHARE_LINK_SESSION_READS) {
+    for (const name of PROFILE_FEED_READS) {
       const [repo, method] = name.split('.') as [string, string];
       expect((STORE_ACCESS as Record<string, Record<string, MethodAccess>>)[repo]?.[method], name).toBe('sessionOnly');
     }
-    expect([...SHARE_LINK_SESSION_READS].sort()).toEqual(['entries.list', 'entries.settledOwedIds']);
+    expect([...PROFILE_FEED_READS].sort()).toEqual(['entries.list', 'entries.settledOwedIds']);
   });
 
   it('the link’s own lookups and stamps are refused under the guard (they run on the base store)', () => {

@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import {
   ACCOUNTANT_INVITE_TTL_MS,
   accountantInviteUrl,
+  clientBooksOf,
   clientOf,
   grantAudit,
   grantStatusView,
@@ -22,12 +23,14 @@ import { DOMAIN_LIST_NAMES, isListedDomain, loadDomainList } from '../email/doma
 import { domainOf } from '../email/domains/screen.js';
 import type { CalendarDay, Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
+import { hasFeature } from '../features.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Logger } from '../logger.js';
 import { ownedProfileOf, personalProfileFor } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountantGrantRecord, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import {
+  AccountantClientListSchema,
   AccountantClientSchema,
   AccountantGrantListSchema,
   AccountantGrantParamSchema,
@@ -53,7 +56,8 @@ import { staleTerms, termsAcceptanceOf } from '../terms-acceptance.js';
  *     POST   /v1/accountant-invites/check    public: what an invite is for (one 404 for unknown, used and revoked)
  *     POST   /v1/accountant-invites/accept   session: the invited address, or a colleague on its business domain (D4)
  *     POST   /v1/accountant-invites/signup   public: a new account from the invite, accepted at once
- *     DELETE /v1/clients/{profileId}         session: leave
+ *     GET    /v1/clients                     session: the client books with this month's stats (MUT-575)
+ *     DELETE /v1/clients/{profileId}         session: leave an active client, or remove an ended one (MUT-575)
  *
  * The token travels in a body, never a path (D3). The routes never call ownedProfileConflict: a personal profile can
  * be shared with an accountant (amends MUT-120 decision 3). Reading the shared profile goes through the ordinary
@@ -66,6 +70,7 @@ export const ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = n
   'GET /v1/profiles/:profileId/accountants',
   'DELETE /v1/profiles/:profileId/accountants/:grantId',
   'POST /v1/accountant-invites/accept',
+  'GET /v1/clients',
   'DELETE /v1/clients/:profileId',
 ]);
 
@@ -201,7 +206,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       responses: {
         201: { description: 'Invited (pending)', content: { 'application/json': { schema: AccountantGrantSchema } } },
         403: errorResponse('READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own'),
-        404: errorResponse('No such profile for you, or accountant access is off on this server'),
+        404: errorResponse('No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577)'),
         409: errorResponse('CONFLICT: details.reason ALREADY_INVITED or ACCOUNTANT_LIMIT'),
         422: errorResponse('VALIDATION_FAILED: not an address, or details.reason SELF_INVITE, or INVITE_ADDRESS_REFUSED (a disposable or relay address)'),
         429: errorResponse('RATE_LIMITED: too many invites this hour'),
@@ -209,6 +214,8 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
     }),
     async (c) => {
       const { user } = c.get('identity');
+      // MUT-577: inviting needs the operator's accountant_access feature, else the switched-off 404 (before any profile).
+      if (!(await hasFeature(store, user.id, 'accountant_access'))) throw new ApiError('NOT_FOUND', 'Not found');
       const { profileId } = c.req.valid('param');
       const body = c.req.valid('json');
       const organization = await ownedBy(user, profileId);
@@ -425,25 +432,46 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
 
   app.openapi(
     createRoute({
+      method: 'get',
+      path: '/v1/clients',
+      tags: ['Sessions'],
+      summary: 'Your client books: the profiles shared with you as an accountant, with this month’s activity',
+      description:
+        'MUT-575 (ADR-249). The rows of /v1/me `clients` (active first, oldest accept first; then ended, newest end first), each with `entriesThisMonth` (live expenses and received payments dated in the current calendar month in the profile’s timezone) and `lastActivityAt` (when the newest was logged). Ended rows (the owner revoked access or is closing their account) carry null stats and stay until removed with DELETE /v1/clients/{profileId}. Empty for a person who reads no client.',
+      security: SESSION_ONLY,
+      responses: {
+        200: { description: 'The client books', content: { 'application/json': { schema: AccountantClientListSchema } } },
+        404: errorResponse('Accountant access is off on this server'),
+      },
+    }),
+    async (c) => c.json({ items: await clientBooksOf(store, c.get('identity').user.id, c.get('now')()) }, 200),
+  );
+
+  app.openapi(
+    createRoute({
       method: 'delete',
       path: '/v1/clients/{profileId}',
       tags: ['Sessions'],
-      summary: 'Stop reading a profile shared with you as an accountant',
-      description: 'MUT-559 (ADR-245). The profile leaves /v1/me `clients`; its owner sees you gone.',
+      summary: 'Stop reading a client, or remove an ended one from your list',
+      description:
+        'MUT-559 (ADR-245), MUT-575 (ADR-249). An active client (the owner closing their account or not): you stop reading it (its owner sees you gone) and it leaves your list. An ended client (access revoked): it is removed from your list for good; its owner sees nothing change. One call either way: the server decides.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema },
       responses: {
-        204: { description: 'Left' },
-        404: errorResponse('NOT_FOUND: you don’t read that profile'),
+        204: { description: 'Left, or removed' },
+        404: errorResponse('NOT_FOUND: no such client on your list'),
       },
     }),
     async (c) => {
       const { user } = c.get('identity');
       const { profileId } = c.req.valid('param');
       const requestId = c.get('requestId');
-      const left = await store.accountantGrants.leave({ organizationId: profileId, accountantUserId: user.id, at: c.get('now')(), auditFor: (grant) => [grantAudit(grant, 'accountant.left', user.id, requestId)] });
-      if (!left) throw new ApiError('NOT_FOUND', 'Profile not found');
-      return c.body(null, 204);
+      const at = c.get('now')();
+      const left = await store.accountantGrants.leave({ organizationId: profileId, accountantUserId: user.id, at, auditFor: (grant) => [grantAudit(grant, 'accountant.left', user.id, requestId)] });
+      if (left) return c.body(null, 204);
+      // MUT-575 (E4): not active, so an ended client to remove; every ended grant on it goes, so none resurfaces.
+      if ((await store.accountantGrants.dismiss({ organizationId: profileId, accountantUserId: user.id, at })) > 0) return c.body(null, 204);
+      throw new ApiError('NOT_FOUND', 'Profile not found');
     },
   );
 

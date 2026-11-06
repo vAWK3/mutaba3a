@@ -165,6 +165,7 @@ import type {
   AgentWriteLock,
   InboxEntryRepository,
   EntriesRepository,
+  ClientActivity,
   EntryRow,
   FeedPageRequest,
   MoneyDateCursor,
@@ -646,6 +647,16 @@ export class PrismaLedgerStore implements LedgerStore {
       mapNullable(await this.prisma.accountantGrant.findFirst({ where: { accountantUserId, organizationId, status: 'ACTIVE' } }), toAccountantGrant),
     listActiveByAccountant: async (accountantUserId) =>
       (await this.prisma.accountantGrant.findMany({ where: { accountantUserId, status: 'ACTIVE' }, orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }] })).map(toAccountantGrant),
+    // MUT-575: on the (accountantUserId, status) index; dismissal is a filter on the few rows it finds.
+    listForAccountant: async (accountantUserId) =>
+      (
+        await this.prisma.accountantGrant.findMany({
+          where: { accountantUserId, OR: [{ status: 'ACTIVE' }, { status: 'REVOKED', dismissedAt: null }] },
+          orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }],
+        })
+      ).map(toAccountantGrant),
+    dismiss: async ({ organizationId, accountantUserId, at }) =>
+      (await this.prisma.accountantGrant.updateMany({ where: { organizationId, accountantUserId, status: 'REVOKED', dismissedAt: null }, data: { dismissedAt: at } })).count,
     accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
       try {
         return await translate(() =>
@@ -3405,6 +3416,34 @@ export class PrismaLedgerStore implements LedgerStore {
       for (const a of allocations) count.set(a.paymentId, (count.get(a.paymentId) ?? 0) + 1);
       return new Map(allocations.filter((a) => count.get(a.paymentId) === 1 && a.receivable.origin === 'ADJUSTMENT').map((a) => [a.paymentId, a.receivableId]));
     },
+    // MUT-575: two queries whatever the number of clients. The counts read each kind's money-date index
+    // ((organizationId, occurredOn | receivedOn, …)), bounded by the month; the newest logged reads the createdAt
+    // indexes, one row per kind per client. GREATEST ignores a NULL (a kind with no live row).
+    clientActivity: async (windows) => {
+      if (windows.length === 0) return new Map();
+      const ids = windows.map((w) => w.organizationId);
+      const [counts, latest] = await Promise.all([
+        this.prisma.$queryRaw<Array<{ organizationId: string; count: bigint }>>`
+          SELECT w.org::text AS "organizationId",
+            (SELECT count(*) FROM "expenses" e
+               WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL AND e."occurredOn" >= w.f AND e."occurredOn" < w.b)
+            + (SELECT count(*) FROM "payments" p
+               WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
+                 AND p."receivedOn" >= w.f AND p."receivedOn" < w.b) AS count
+          FROM unnest(${ids}::uuid[], ${windows.map((w) => w.from)}::text[], ${windows.map((w) => w.before)}::text[]) AS w(org, f, b)`,
+        this.prisma.$queryRaw<Array<{ organizationId: string; last: Date | null }>>`
+          SELECT w.org::text AS "organizationId", GREATEST(
+            (SELECT e."createdAt" FROM "expenses" e WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL ORDER BY e."createdAt" DESC LIMIT 1),
+            (SELECT p."createdAt" FROM "payments" p WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
+               ORDER BY p."createdAt" DESC LIMIT 1)
+          ) AS last
+          FROM unnest(${ids}::uuid[]) AS w(org)`,
+      ]);
+      const lastOf = new Map(latest.map((row) => [row.organizationId, row.last]));
+      const activity = new Map<string, ClientActivity>(windows.map((w) => [w.organizationId, { entriesThisMonth: 0, lastActivityAt: lastOf.get(w.organizationId) ?? null }]));
+      for (const row of counts) activity.set(row.organizationId, { entriesThisMonth: Number(row.count), lastActivityAt: lastOf.get(row.organizationId) ?? null });
+      return activity;
+    },
   };
 
   // ---- MUT-66: the unsorted inbox ------------------------------------------
@@ -3552,6 +3591,7 @@ function toAccountantGrant(row: Prisma.AccountantGrantGetPayload<object>): Accou
     inviteExpiresAt: row.inviteExpiresAt,
     acceptedAt: row.acceptedAt,
     revokedAt: row.revokedAt,
+    dismissedAt: row.dismissedAt,
     lastViewedAt: row.lastViewedAt,
     createdAt: row.createdAt,
   };

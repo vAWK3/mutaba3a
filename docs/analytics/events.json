@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -140,6 +140,56 @@
         "interval": { "type": "enum", "values": ["month", "year"], "description": "The plan chosen: monthly or yearly." },
         "currency": { "type": "currency", "description": "The Checkout's currency code, from the billing country. Never the amount." },
         "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." }
+      }
+    },
+    "accountant_invited": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner invited an accountant to read one of their profiles, or invited an expired one again (the server answered 201). Never the address, the name or the profile. The phone adds itself in MUT-563."
+    },
+    "accountant_revoked": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner stopped an accountant's access or cancelled a pending invite (the server answered 204, or the grant was already gone). Never the address, the name or the profile. The phone adds itself in MUT-563.",
+      "properties": {
+        "was": { "type": "enum", "values": ["pending", "active"], "description": "pending = an invite not yet accepted was cancelled; active = an accountant's access was stopped." }
+      }
+    },
+    "accountant_accepted": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-575: an accountant accepted an invite; sent by the accountant's client after the accept or the signup from the invite answers.",
+      "properties": {
+        "via": { "type": "enum", "values": ["signed_in", "signup"], "description": "signed_in = accepted while signed in to an existing account; signup = a new account made from the invite." }
+      }
+    },
+    "accountant_left": {
+      "emitters": ["ios", "android"],
+      "description": "MUT-575: an accountant chose Stop reading on a client; sent after DELETE /v1/clients answers 204 for an active client (not for removing an ended one)."
+    },
+    "share_link_created": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-575: an owner made a share link to a period of a profile; sent after the create answers 201. Never the link, its PIN or the profile.",
+      "properties": {
+        "period": { "type": "enum", "values": ["last_1_month", "last_2_months", "last_3_months", "whole_profile"], "description": "The period the link shows, as the API names it in lower case." },
+        "expires_in_days": { "type": "integer", "description": "How long the link lives: 1, 7 or 30 (the create request's expiresInDays)." }
+      }
+    },
+    "share_link_revoked": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-575: an owner revoked a share link; sent after the revoke answers 204."
+    },
+    "share_link_opened": {
+      "emitters": ["portal"],
+      "description": "MUT-575: a visitor unlocked a share link with its PIN on the link page; sent after a successful unlock. Whether the link page may send without consent is decided with MUT-562.",
+      "properties": {
+        "period": { "type": "enum", "values": ["last_1_month", "last_2_months", "last_3_months", "whole_profile"], "description": "The period the link shows, as share_link_created names it." }
+      }
+    },
+    "period_downloaded": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-575: a period's report or receipts were downloaded; sent after the MUT-314 download answers 200. Never the profile or a date.",
+      "properties": {
+        "place": { "type": "enum", "values": ["owner", "client_books", "link_page"], "description": "owner = the owner's own profile; client_books = an accountant's client; link_page = a share link's visitor. Named place because surface is a shared property." },
+        "file": { "type": "enum", "values": ["report", "receipts"], "description": "report = the period's report; receipts = its receipts archive." },
+        "months": { "type": "integer", "description": "How many calendar months the period spans, 1 to 24." }
       }
     }
   }

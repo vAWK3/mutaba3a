@@ -1,0 +1,21 @@
+import type { FeedPageRequest, LedgerStore } from '../repositories/ports.js';
+import { serializeEntry } from '../serializers.js';
+import { encodeFeedCursor } from './merge.js';
+
+/**
+ * MUT-575 (ADR-249, E7): the one way an entries page is built, for `/v1/entries` (a person's memberships) and
+ * `/v1/profile-entries` (the one selected profile): read the page, then the READY receipt counts of its expenses and
+ * the Owed each settle paid toward, and serialize. Trusts `organizationIds`: each route resolved them its own way.
+ * Never lazy-posts (MUT-270 D2).
+ */
+export async function feedPage(store: LedgerStore, organizationIds: readonly string[], request: FeedPageRequest) {
+  const page = await store.entries.list(organizationIds, request);
+  const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
+  // Only a capture with money applied can be a settle; most pages ask nothing.
+  const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
+  const [receiptCounts, settledOwed] = await Promise.all([
+    store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds),
+    store.entries.settledOwedIds(organizationIds, settleCandidates),
+  ]);
+  return { items: page.items.map((row) => serializeEntry(row, { receiptCounts, settledOwed })), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null };
+}

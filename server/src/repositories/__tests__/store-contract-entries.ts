@@ -319,5 +319,37 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       }
       expect(rest).toEqual([middle.id, moved.id, oldest.id]);
     });
+    it('MUT-575: clientActivity — live expenses and received payments in each window, and the newest logged; Owed and conversions never count', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const exp = (organizationId: string, occurredOn: string, s: number) =>
+        store.expenses.create({ organizationId, occurredOn, amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id }, at(s));
+      const cap = (organizationId: string, receivedOn: string, s: number) =>
+        store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
+
+      await exp(w.a.id, '2026-10-01', 1);
+      await exp(w.a.id, '2026-10-31', 2);
+      await exp(w.a.id, '2026-11-01', 3); // the next month
+      await exp(w.a.id, '2026-09-30', 4); // the month before
+      await cap(w.a.id, '2026-10-15', 5);
+      const deleted = await exp(w.a.id, '2026-10-10', 6);
+      await store.expenses.softDelete(w.a.id, deleted.id, at(7), 'unlink');
+      const undone = await cap(w.a.id, '2026-10-11', 8);
+      await store.payments.undoCapture(w.a.id, undone.id, w.user.id, at(9));
+      await w.conversion(w.a.id, 10);
+      await w.owed(11);
+      await w.expense(w.other.id, 12);
+
+      const activity = await store.entries.clientActivity([
+        { organizationId: w.a.id, from: '2026-10-01', before: '2026-11-01' },
+        { organizationId: w.b.id, from: '2026-10-01', before: '2026-11-01' },
+      ]);
+      // a: 10-01, 10-31 and the 10-15 payment. The newest live row logged is the capture (s=5): later ones were deleted, undone or are a conversion.
+      expect(activity.get(w.a.id)).toEqual({ entriesThisMonth: 3, lastActivityAt: at(5) });
+      // b holds only an Owed: nothing counts and nothing was logged that counts.
+      expect(activity.get(w.b.id)).toEqual({ entriesThisMonth: 0, lastActivityAt: null });
+      expect(activity.has(w.other.id)).toBe(false);
+      expect((await store.entries.clientActivity([])).size).toBe(0);
+    });
   });
 }

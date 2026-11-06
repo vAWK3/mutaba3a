@@ -357,7 +357,8 @@ export const STORE_ACCESS: StoreAccess = {
    * `sessionOnly`, as the inbox. The route resolves the organizations from the person's memberships; an API key has
    * no person behind it and so no feed.
    */
-  entries: { list: 'sessionOnly', loggedDays: 'sessionOnly', settledOwedIds: 'sessionOnly' },
+  // MUT-575: clientActivity is an accountant's client-list stats (GET /v1/clients), read from their own session.
+  entries: { list: 'sessionOnly', loggedDays: 'sessionOnly', settledOwedIds: 'sessionOnly', clientActivity: 'sessionOnly' },
   /**
    * MUT-358: a signed-in person's /v1/me reads the billing facts of their own profiles (`sessionOnly`: an API key has no
    * person behind it, and MUT-361's gate runs on sessions only). Grants, links and Stripe's mirror are written by the
@@ -411,6 +412,9 @@ export const STORE_ACCESS: StoreAccess = {
     findByDigest: 'sessionOnly',
     findActive: 'sessionOnly',
     listActiveByAccountant: 'sessionOnly',
+    // MUT-575: the accountant's client books and Remove, from their own session (like `leave`).
+    listForAccountant: 'sessionOnly',
+    dismiss: 'sessionOnly',
     accept: 'sessionOnly',
     signupAndAccept: 'operator',
     revoke: 'sessionOnly',
@@ -534,29 +538,31 @@ export function agentStoreGuard(): StoreGuard {
 }
 
 /**
+ * MUT-560 (ADR-247), renamed by MUT-575 (ADR-249): the `sessionOnly` methods a read-only viewer of one profile may
+ * call, for that profile's entries feed. The feed is classed `sessionOnly` (it reads across a person's memberships); a
+ * share link's view routes and an accountant's `/v1/profile-entries` read it for their one profile, and it never
+ * writes (MUT-270 D2). One named list for both guards, never derived: a method joins only by being listed here.
+ */
+export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 'entries.settledOwedIds']);
+
+/**
  * MUT-559 (ADR-245, D2): the guard for an accountant's request on a profile shared with them, the third refusal layer
- * after the method gate and the derived GET allowlist (auth/middleware.ts). Only reads pass, whatever their class
- * says a session may otherwise do; every other method answers READ_ONLY_PROFILE (ACCOUNTANT_READ_ONLY). The last-viewed
- * stamp and SYSTEM catch-up posting run on the store beneath the guard (`unguarded`), as for every session.
+ * after the method gate and the derived GET allowlist (auth/middleware.ts). Only reads pass (and PROFILE_FEED_READS,
+ * MUT-575), whatever their class says a session may otherwise do; every other method answers READ_ONLY_PROFILE
+ * (ACCOUNTANT_READ_ONLY). The last-viewed stamp and SYSTEM catch-up posting run on the store beneath the guard
+ * (`unguarded`), as for every session.
  */
 export function accountantStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(new Set(), accountantReadOnly);
+  return readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly);
 }
 
 /**
- * MUT-560 (ADR-247): the `sessionOnly` methods a share link's view routes read. The entries feed is classed
- * `sessionOnly` (it reads across a person's memberships); a link reads it for its one profile, and it never writes
- * (MUT-270 D2). Named, never derived: a method joins only by being listed here.
- */
-export const SHARE_LINK_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'entries.settledOwedIds']);
-
-/**
  * MUT-560 (ADR-247): the guard every share-link view request runs under, so even a mistaken write in a view handler
- * throws 403 READ_ONLY_PROFILE (SHARE_LINK_READ_ONLY). Reads pass, and SHARE_LINK_SESSION_READS; nothing else. The
+ * throws 403 READ_ONLY_PROFILE (SHARE_LINK_READ_ONLY). Reads pass, and PROFILE_FEED_READS; nothing else. The
  * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
  */
 export function shareLinkStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(SHARE_LINK_SESSION_READS, shareLinkReadOnly);
+  return readOnlyStoreGuard(PROFILE_FEED_READS, shareLinkReadOnly);
 }
 
 /**

@@ -52,7 +52,42 @@ production until MUT-561..564). Also fixes MUT-501 (a cancelled records export l
 - `http/pull-stream.ts` replaces the records export's `streamOf`: a cancel is quiet (MUT-501).
 - The mint joins `LOCKED_OPEN_ENDPOINTS`; the flag table gains `PERIOD_DOWNLOADS`.
 - Terraform: the API's Cloud Run request timeout is 900 s (on the next apply).
-- Contract 1.103.0-mut314; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
+- Contract 1.103.0-mut314, carried as 1.104.0-mut575 once merged after MUT-575 (the higher version wins); `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
+
+## [Unreleased] - 2026-11-06 — Accountant access per account: the operator's `accountant_access` feature (MUT-577, ADR-249 addendum)
+
+**Why:** Basel enables sharing for some accounts, not all, as with receipt reading.
+- `accountant_access` joins `FEATURES`; the operator console lists it (en/ar labels). Inviting an accountant and making
+  a share link need it (else the switched-off 404); listing and revoking don't; accountants and link visitors never do.
+  Turning it off stops new invites and links; existing ones keep working until revoked. `.env.example` documents the
+  production plan (switches on, `ACCOUNTANT_PLAN` off). Test harness people hold the feature unless `sharing: false`.
+- Files: `server/src/{features.ts, routes/accountants.ts, routes/share-links.ts}`, `server/.env.example`,
+  `src/hosted/i18n/{en,ar}.json`, tests `routes-accountant-access-feature.test.ts`, `user-features.test.ts`,
+  `routes-operator-billing-firms.test.ts`, `helpers/accountants.ts`.
+
+## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
+
+**Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).
+
+### Added
+- `GET /v1/clients`: the accountant's clients with this month's entries (profile's timezone) and last activity; two
+  stat queries in all. `GET /v1/profile-entries`: one profile's money-date feed through `selectProfile` (kinds,
+  occurredFrom/Before, cursor, limit ≤ 100), the `/v1/entries` shape.
+- `/v1/me.clients` and the accept response carry `profileType`, `status`, `endedReason`, `endedAt`; ended clients
+  (revoked, or the owner closing) stay until removed. `DELETE /v1/clients/{id}` leaves an active client or removes an
+  ended one (`accountant_grants.dismissedAt`, migration `20261107130000_mut575_client_books`).
+- `disposition=inline` on the expense receipt download; `kinds` and clamped dates on `POST /v1/share-links/entries`;
+  the AASA claims `/accountant-invite*`; events contract 2.7.0 (8 accountant and share-link events).
+
+### Changed
+- A closing owner ends accountant access at once (404), the share-link rule (`access/owner-closing.ts`); MUT-559's
+  revoke test now expects the ended row. `PROFILE_FEED_READS` replaces `SHARE_LINK_SESSION_READS`. `/v1/entries` and
+  `/v1/profile-entries` build pages with one `feedPage`. API 1.104.0-mut575.
+
+**Files:** `server/src/{accountants/grants.ts, access/owner-closing.ts, entries/feed-page.ts, entries/merge.ts,
+routes/{profile-entries,accountants,me,entries,expenses,share-links,well-known}.ts, auth/{middleware,store-guard}.ts,
+share-links/{access,period}.ts, billing/gate.ts, schemas.ts, app.ts, repositories/*}`, `prisma/schema.prisma`,
+`docs/analytics/events.json`.
 
 ## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-247)
 

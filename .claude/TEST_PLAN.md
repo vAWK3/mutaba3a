@@ -4461,6 +4461,28 @@ Full map: `.claude/designs/MUT-314-period-download-tests.md` (the plan's 15 grou
 - Store contract `store-contract-period-pack.ts` (memory; Prisma under `test:db`) and
   `period-downloads-prisma.test.ts` (both downloads on Postgres; 1,000 rows and 600 receipts in < 3 s and ≤ 20 queries).
 - `routes-records-export.test.ts`: a cancelled export logs no error (MUT-501).
-- Updated: API version assertions (1.103.0-mut314), route-security, writability-routes (40 session reads),
+- Updated: API version assertions (1.103.0-mut314, then 1.104.0-mut575 at the MUT-575 merge), route-security, writability-routes (41 session reads with MUT-575),
   accountant-route-matrix (the mint is allowlisted), routes-share-links (link paths).
+
+## MUT-575 — client books server (ADR-249)
+
+Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 tests).
+- `server/src/accountants/__tests__/client-rows.test.ts`: the pure rows rule.
+- `server/src/__tests__/routes-client-books.test.ts`: `/v1/me.clients`, `GET /v1/clients` (timezone month boundary,
+  deleted/undone, ended nulls, one stats call), DELETE leave vs dismiss, closing owner, `/v1/profile-entries` as an
+  accountant and as an owner (parity with `/v1/entries`, LOCKED 402, no lazy posting), never mixing, inline receipts.
+- `server/src/__tests__/routes-share-links-filters.test.ts`: link feed kinds and clamped dates.
+- Store contracts (memory; Prisma under `test:db`): `listForAccountant`, `dismiss`, `clientActivity`;
+  `store-prisma-client-activity.test.ts` (2 queries for 10 clients); `migration-mut575.test.ts`.
+- Updated: accountant route matrix (`GET /v1/profile-entries` allowlisted by tags), both read-only guard tests
+  (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
+  `well-known-routes.test.ts`, `route-security.test.ts` (both new routes session-only), `writability-routes.test.ts`
+  (40 session reads), `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
+
+## MUT-577 — accountant access per account (ADR-249 addendum)
+- `server/src/__tests__/routes-accountant-access-feature.test.ts`: off by default → invite and create-link 404 (the
+  switched-off answers), list OK, `/v1/me` without it; on → both work and `/v1/me.user.features` names it; turned off →
+  no new invite or link, the existing grant and link keep working, and the owner still revokes both; an accountant
+  needs no feature; the env switch still wins. `user-features.test.ts` and `routes-operator-billing-firms.test.ts`
+  list the feature.
 

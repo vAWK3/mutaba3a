@@ -26,6 +26,7 @@ import {
   ExpenseIdParamSchema,
   ExpensePageSchema,
   ExpenseReceiptParamSchema,
+  ReceiptDownloadQuerySchema,
   ExpenseReceiptSchema,
   ExpenseSchema,
   ExpenseSummaryQuerySchema,
@@ -314,8 +315,9 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'A short-lived signed download URL for a READY receipt',
       security: SESSION_ONLY,
+      description: '`disposition=inline` (MUT-575, as the library route since MUT-260) signs a URL that displays the file instead of saving it, for the desk\'s preview. The default `attachment` saves it.',
       middleware: [requireScope('expenses:read')] as const,
-      request: { params: ExpenseReceiptParamSchema },
+      request: { params: ExpenseReceiptParamSchema, query: ReceiptDownloadQuerySchema },
       responses: { 200: { description: 'Signed URL', content: { 'application/json': { schema: AttachmentDownloadSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
     }),
     async (c) => {
@@ -324,7 +326,8 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       const { expenseId, receiptId } = c.req.valid('param');
       const receipt = await mustGetReceipt(organization.id, expenseId, receiptId);
       if (receipt.status !== 'READY') throw validationError('ATTACHMENT_NOT_READY', 'The upload has not been completed');
-      const signed = await s.signDownload(receipt.storageKey, { filename: receipt.filename, mimeType: receipt.mimeType, ttlSeconds: options.urlTtlSeconds, now: c.get('now')() });
+      const { disposition } = c.req.valid('query');
+      const signed = await s.signDownload(receipt.storageKey, { filename: receipt.filename, mimeType: receipt.mimeType, ttlSeconds: options.urlTtlSeconds, now: c.get('now')(), disposition });
       return c.json({ url: signed.url, expiresAt: signed.expiresAt.toISOString(), filename: receipt.filename, mimeType: receipt.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png' }, 200);
     },
   );

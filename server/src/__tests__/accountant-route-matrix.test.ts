@@ -34,6 +34,8 @@ const ALLOWED_GETS = [
   // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
   'GET /v1/period-downloads/ticket',
   'GET /v1/payments/{paymentId}',
+  // MUT-575: a client's feed, admitted by its scope tags alone (expenses, payments and conversions read).
+  'GET /v1/profile-entries',
   'GET /v1/projects',
   'GET /v1/projects/{projectId}',
   'GET /v1/receipts',
