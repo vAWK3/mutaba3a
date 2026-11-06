@@ -75,7 +75,9 @@ export class ClientBooksApi {
   clients: StubClient[];
   revoked: boolean;
   attemptsLeft = 4;
+  /** expireView: every view read after the first unlock answers 401 (the 8 hours ended) until the PIN is entered again. */
   private viewExpired: boolean;
+  private unlocks = 0;
 
   constructor(private readonly options: ClientBooksOptions = {}) {
     this.signedIn = options.signedIn ?? true;
@@ -193,12 +195,11 @@ export class ClientBooksApi {
       if (answer === 'limit') return error(403, 'SHARE_LINK_REFUSED', { reason: 'VIEWER_LIMIT' });
       if (answer === 'gone') return error(404, 'NOT_FOUND', { reason: 'SHARE_LINK_UNAVAILABLE' });
       if (body?.pin !== PIN || answer === 'wrong') return error(403, 'SHARE_LINK_REFUSED', { reason: 'PIN_WRONG', attemptsLeft: this.attemptsLeft-- });
+      this.unlocks += 1;
       return json({ viewerToken: 'v'.repeat(43), viewerExpiresAt: new Date(Date.now() + 8 * 3_600_000).toISOString(), linkExpiresAt: new Date(Date.now() + 6 * DAY).toISOString(), profileName: 'Studio', ownerName: 'Rana Haddad', period: 'LAST_3_MONTHS', from: '2026-08-01', to: '2026-10-31' });
     }
-    if (this.viewExpired) {
-      this.viewExpired = false;
-      return error(401, 'UNAUTHENTICATED', { reason: 'SHARE_VIEW_EXPIRED' });
-    }
+    // Every read answers 401 (a dev build's first fetch can be aborted and sent again) until the second unlock
+    if (this.viewExpired && this.unlocks === 1) return error(401, 'UNAUTHENTICATED', { reason: 'SHARE_VIEW_EXPIRED' });
     if (key === 'POST /v1/share-links/summary') return json({ from: '2026-08-01', to: '2026-10-31', expenses: [{ currency: 'ILS', total: '4812.40', count: 9, byCategory: [], byClient: [] }], received: [{ currency: 'ILS', total: '9600.00', count: 3 }] });
     if (key === 'POST /v1/share-links/entries') {
       const kinds = (body?.kinds as string[] | undefined) ?? ['expense', 'received'];
