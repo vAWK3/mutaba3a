@@ -183,6 +183,18 @@ const envSchema = z.object({
   SHARE_LINKS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /** MUT-560: the most live share links one profile may have (stops link spam). */
   SHARE_LINKS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(10),
+  /**
+   * MUT-314 (ADR-248): period downloads (an Excel report and a receipts zip) for owners, accountants and share links.
+   * Off, every download route answers 404, so the server can deploy before the buttons (MUT-561..564). Only "true" turns
+   * it on; a link's download also needs SHARE_LINKS.
+   */
+  PERIOD_DOWNLOADS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-314: expense and income rows one Excel report may hold. */
+  PERIOD_PACK_MAX_ROWS: z.coerce.number().int().min(1).max(200_000).default(20_000),
+  /** MUT-314: bytes of receipts one receipts zip may hold (500 MiB; no ZIP64, so well below 4 GiB). */
+  PERIOD_PACK_MAX_RECEIPT_BYTES: z.coerce.number().int().min(1).max(2 * 1024 * 1024 * 1024).default(500 * 1024 * 1024),
+  /** MUT-314: download streams one instance serves at once; the next answers 429. */
+  PERIOD_PACK_CONCURRENCY: z.coerce.number().int().min(1).max(20).default(3),
   // MUT-436 (review D3/D5): an agent may add to the inbox only once the phone decodes 'mcp' and its minimum build is raised.
   MCP_INBOX_WRITES: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**

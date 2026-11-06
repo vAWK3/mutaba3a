@@ -52,12 +52,13 @@ describe('profileGateRefuses', () => {
     expect(profileGateRefuses('read-only', 'PATCH', 'PATCH /v1/expenses/:expenseId')).toBe(true);
     expect(profileGateRefuses('read-only', 'DELETE', 'DELETE /v1/expenses/:expenseId')).toBe(true);
   });
-  it('lets a locked profile reach only the records export', () => {
+  it('lets a locked profile reach only the records export and the period download (MUT-314)', () => {
     expect(profileGateRefuses('locked', 'GET', 'GET /v1/expenses')).toBe(true);
     expect(profileGateRefuses('locked', 'GET', 'GET /v1/records-export')).toBe(false);
     expect(profileGateRefuses('locked', 'GET', 'GET /v1/records-export/receipts/:receiptId')).toBe(false);
     expect(profileGateRefuses('locked', 'POST', 'POST /v1/expenses')).toBe(true);
-    expect([...LOCKED_OPEN_ENDPOINTS].every((e) => e.startsWith('GET /v1/records-export'))).toBe(true);
+    expect(profileGateRefuses('locked', 'GET', 'GET /v1/period-downloads/ticket')).toBe(false);
+    expect([...LOCKED_OPEN_ENDPOINTS].every((e) => e.startsWith('GET /v1/records-export') || e === 'GET /v1/period-downloads/ticket')).toBe(true);
   });
 });
 

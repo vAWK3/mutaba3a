@@ -170,6 +170,8 @@ describe('STORE_ACCESS', () => {
       'passkeys.recordUse',
       // MUT-461: the operator's account view counts a person's live sessions.
       'sessions.countLiveForUser',
+      // MUT-314: the period download's stream checks, on the base store, that the minting session still works.
+      'sessions.getById',
       'sessions.revokeAllForUser',
       // MUT-560: the public share-link routes and shareLinkAccess read, count and stamp on the base store.
       'shareLinks.addOrRotateViewer',

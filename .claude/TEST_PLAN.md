@@ -4461,6 +4461,24 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   off, limit, column error, empty with both ways, review fixes b/c/h); QA `portal.sharing.{create-link,link-rows}`.
 
 
+## MUT-314 — period download (ADR-248)
+
+Full map: `.claude/designs/MUT-314-period-download-tests.md` (the plan's 15 groups).
+- `server/src/__tests__/routes-period-downloads.test.ts`: boundaries end to end, Ref stability across the two downloads
+  with a shared `asOf`, money per currency exponent, the report in Arabic and English (RTL, Hebrew, emoji, `=1+1`
+  text, both sheets), receipts ↔ report incl. a missing object, `index.csv`, the access matrix (owner, co-owner,
+  member, accountant via the derived allowlist, revoked, stranger, no lazy posting), the ticket (tamper, expiry,
+  revoke between steps, form post, nothing in URLs), the link (its period only, other viewer, revoke, both flags),
+  caps and estimates, slots and the mint budget, cancels (MUT-501) and a storage failure, read-only and audit, the
+  1,000-row performance check, headers.
+- `server/src/period-pack/__tests__/` (range, csv, xlsx read back with exceljs, ticket) and
+  `server/src/http/__tests__/pull-stream.test.ts`.
+- Store contract `store-contract-period-pack.ts` (memory; Prisma under `test:db`) and
+  `period-downloads-prisma.test.ts` (both downloads on Postgres; 1,000 rows and 600 receipts in < 3 s and ≤ 20 queries).
+- `routes-records-export.test.ts`: a cancelled export logs no error (MUT-501).
+- Updated: API version assertions (1.107.0-mut314), route-security, writability-routes (41 session reads with MUT-575),
+  accountant-route-matrix (the mint is allowlisted), routes-share-links (link paths).
+
 ## MUT-575 — client books server (ADR-249)
 
 Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 tests).

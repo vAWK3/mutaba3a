@@ -95,11 +95,14 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/device-sessions/passkey',
       'POST /v1/email/resend/webhook',
       'POST /v1/passkey-challenges',
+      // MUT-314 (ADR-248): a period download's stream; its credential is the ticket in the body. Creates no account.
+      'POST /v1/period-downloads/stream',
       'POST /v1/sessions',
       'POST /v1/sessions/passkey',
       // MUT-560 (ADR-247): a share link's visitor. No account is created and no one is signed in: a viewer token opens
       // only the link's period, through these routes.
       'POST /v1/share-links/check',
+      'POST /v1/share-links/download-ticket',
       'POST /v1/share-links/entries',
       'POST /v1/share-links/expense-receipts',
       'POST /v1/share-links/summary',

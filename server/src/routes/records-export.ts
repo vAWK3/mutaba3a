@@ -5,6 +5,7 @@ import { todayFor } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { ApiError } from '../errors.js';
+import { pullStream } from '../http/pull-stream.js';
 import type { Logger } from '../logger.js';
 import { HOSTED_EXPORT_ORIGIN, recordsFileChunks } from '../records-file/codec.js';
 import { profileExportPages } from '../records-file/export.js';
@@ -27,7 +28,7 @@ const RecordsFileSchema = z
 export interface RecordsExportOptions {
   /** Null in deployments without a bucket: the receipt route answers 503, like every receipt route. */
   storage: AttachmentStorage | null;
-  logger: Pick<Logger, 'error'>;
+  logger: Pick<Logger, 'error' | 'info'>;
 }
 
 /**
@@ -62,7 +63,12 @@ export function recordsExportRoutes(store: LedgerStore, options: RecordsExportOp
       await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'records.exported', entityType: 'organization', entityId: organization.id, metadata: { formatVersion: CURRENT_STORE_SNAPSHOT_VERSION }, requestId: c.get('requestId') });
 
       const chunks = recordsFileChunks({ formatVersion: CURRENT_STORE_SNAPSHOT_VERSION, savedAt: now, origin: HOSTED_EXPORT_ORIGIN }, profileExportPages(store, { person: user, organization, membership }));
-      const body = streamOf(chunks, (error) => options.logger.error({ err: error, requestId: c.get('requestId') }, 'records export failed mid-stream'));
+      const requestId = c.get('requestId');
+      // MUT-501: a cancelled download is quiet (info); only a real failure before any cancel logs an error.
+      const body = pullStream(encoded(chunks), {
+        onError: (error) => options.logger.error({ err: error, requestId }, 'records export failed mid-stream'),
+        onCancel: () => options.logger.info({ requestId }, 'records export cancelled'),
+      });
       return respond(c, body, { 'Content-Type': 'application/json; charset=utf-8' });
     },
   );
@@ -91,28 +97,19 @@ export function recordsExportRoutes(store: LedgerStore, options: RecordsExportOp
   return app;
 }
 
-/**
- * A pulled stream over the file's chunks: the next page is read only when the reader wants more. A failure partway
- * errors the stream, so the response is cut off rather than ended as if whole (the request was logged 200 already;
- * this logs the failure), and the portal refuses the truncated file.
- */
-function streamOf(chunks: AsyncGenerator<string>, onError: (error: unknown) => void): ReadableStream<Uint8Array> {
+/** The file's text chunks as bytes, one page at a time; `return()` stops the pages behind it. */
+function encoded(chunks: AsyncGenerator<string>): AsyncIterator<Uint8Array> {
   const encoder = new TextEncoder();
-  return new ReadableStream<Uint8Array>({
-    async pull(controller) {
-      try {
-        const next = await chunks.next();
-        if (next.done) controller.close();
-        else controller.enqueue(encoder.encode(next.value));
-      } catch (error) {
-        onError(error);
-        controller.error(error);
-      }
+  return {
+    async next() {
+      const next = await chunks.next();
+      return next.done ? { done: true, value: undefined } : { done: false, value: encoder.encode(next.value) };
     },
-    async cancel() {
+    async return() {
       await chunks.return(undefined);
+      return { done: true, value: undefined };
     },
-  });
+  };
 }
 
 /** Gzipped when the browser accepts it (a records file is repetitive JSON); receipts are already compressed. */

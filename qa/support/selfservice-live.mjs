@@ -171,6 +171,8 @@ async function main() {
       ACCOUNTANT_ACCESS: 'true',
       // MUT-560: share links (the portal's link page and owner screens, MUT-561..563).
       SHARE_LINKS: 'true',
+      // MUT-314: period downloads (the Excel report and receipts zip buttons, MUT-561..564).
+      PERIOD_DOWNLOADS: 'true',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });
