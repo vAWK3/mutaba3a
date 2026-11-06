@@ -28,6 +28,32 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — Download a period: an Excel report and a receipts zip (MUT-314, ADR-248)
+
+**Why:** epic MUT-558. An owner, their accountant or a share-link visitor gets a period's books as one Excel file, with
+the receipts as a separate zip that matches it row by row. Server side only, behind `PERIOD_DOWNLOADS` (off in
+production until MUT-561..564). Also fixes MUT-501 (a cancelled records export logged an error).
+
+### Added
+- `server/src/period-pack/` (`index.ts` the only door): months and `asOf` (`range.ts`), the stateless ticket
+  (`ticket.ts`), the access re-check (`access.ts`), rows, Refs and receipt names (`rows.ts`), the column words in
+  English and Arabic (`columns.ts`), a minimal XLSX writer (`xlsx.ts`), the report (`report.ts`), the streamed receipts
+  zip (`receipts-zip.ts`) and `index.csv` (`csv.ts`).
+- Routes: `GET /v1/period-downloads/ticket`, `POST /v1/period-downloads/stream` (`routes/period-downloads.ts`),
+  `POST /v1/share-links/download-ticket`.
+- Store: `periodPack.estimate`, `periodPack.names`, `expenseReceipts.listReadyByExpenseIds` (memory + Prisma, store
+  contract); `periodDownloadStoreGuard()`.
+- Config: `PERIOD_DOWNLOADS`, `PERIOD_PACK_MAX_ROWS`, `PERIOD_PACK_MAX_RECEIPT_BYTES`, `PERIOD_PACK_CONCURRENCY`.
+  Reasons `PERIOD_RANGE`, `AS_OF`, `PERIOD_TOO_LARGE` (422) and `DOWNLOAD_UNAVAILABLE` (404); audit `period.downloaded`.
+- Dependencies: `fflate` 0.8.3; `exceljs` (devDependency, the tests' XLSX reader).
+
+### Changed
+- `resolveProfileAccess` extracted from `selectProfile` (auth/middleware.ts), shared with the stream's re-check.
+- `http/pull-stream.ts` replaces the records export's `streamOf`: a cancel is quiet (MUT-501).
+- The mint joins `LOCKED_OPEN_ENDPOINTS`; the flag table gains `PERIOD_DOWNLOADS`.
+- Terraform: the API's Cloud Run request timeout is 900 s (on the next apply).
+- Contract 1.103.0-mut314; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
+
 ## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-247)
 
 **Why:** epic MUT-558. An owner shares a closed period (the last 1–3 complete months, or everything to date) with an

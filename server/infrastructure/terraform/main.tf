@@ -501,6 +501,10 @@ resource "google_cloud_run_v2_service" "api" {
       max_instance_count = var.max_instances
     }
 
+    # MUT-314 (ADR-248, D13): a period's receipts zip (at most 500 MiB) streams in one request; 900 s fits it at about
+    # 0.6 MB/s. Cloud Run's default is 300 s. Every other route answers in well under a second, so nothing else changes.
+    timeout = "900s"
+
     # The API, unless this is the old project's forwarder (forwarder.tf).
     dynamic "containers" {
       for_each = var.legacy_forwarder ? [] : [local.api_image]
