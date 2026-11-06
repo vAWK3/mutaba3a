@@ -232,6 +232,15 @@ function addVendorDefaults(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-557, 15 → 16: expenses gain `allocationNumber` (ADR-246). Nothing on a device recorded one (as the SQL column,
+ * every existing expense reads "none recorded"): null.
+ */
+function addAllocationNumber(snapshot: StoredSnapshot): StoredSnapshot {
+  const exps = snapshot.maps.exps as Map<string, Omit<ExpenseRecord, 'allocationNumber'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, exps: new Map([...exps].map(([id, e]) => [id, { ...e, allocationNumber: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -252,6 +261,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 12, to: 13, migrate: addReversalReasonCode },
   { from: 13, to: 14, migrate: addExpenseVat },
   { from: 14, to: 15, migrate: addVendorDefaults },
+  { from: 15, to: 16, migrate: addAllocationNumber },
 ];
 
 /**

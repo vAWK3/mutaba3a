@@ -3140,6 +3140,8 @@ export interface ExpenseRecord {
   vatRateBasisPoints: number | null;
   netMinor: bigint | null;
   vatMinor: bigint | null;
+  /** MUT-557 (ADR-246): the supplier invoice's Israeli allocation number, nine digits; null = none recorded. */
+  allocationNumber: string | null;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -3167,10 +3169,12 @@ export interface CreateExpenseInput {
   vatRateBasisPoints: number | null;
   netMinor: bigint | null;
   vatMinor: bigint | null;
+  /** MUT-557: required like the VAT, so every caller states it (null for none); normalized by `normalizeAllocationNumber`. */
+  allocationNumber: string | null;
 }
 
 /** Absent key = unchanged; null = cleared. MUT-272: `currency` only ever arrives with `amountMinor` (`expensePatch`'s pair rule, ADR-096). */
-export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes' | 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor'>>;
+export type UpdateExpensePatch = Partial<Pick<CreateExpenseInput, 'occurredOn' | 'amountMinor' | 'currency' | 'title' | 'vendor' | 'vendorId' | 'categoryId' | 'customerId' | 'projectId' | 'notes' | 'vatTreatment' | 'vatRateBasisPoints' | 'netMinor' | 'vatMinor' | 'allocationNumber'>>;
 
 // ---- MUT-254: vendors --------------------------------------------------------
 
@@ -3535,6 +3539,8 @@ export interface ReceiptSuggestion {
   registrationNo?: SuggestedField<string> | undefined;
   phone?: SuggestedField<string> | undefined;
   email?: SuggestedField<string> | undefined;
+  /** MUT-557: an Israeli tax invoice's allocation number (מספר הקצאה), nine digits, read only beside its label. */
+  allocationNumber?: SuggestedField<string> | undefined;
 }
 
 /** MUT-255: what approval wrote into the expense, kept on the receipt for the edit-rate figure. Money as minor units in a decimal string. */

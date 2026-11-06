@@ -8,6 +8,7 @@ import { ClientPicker } from '../ClientPicker';
 import { ProjectPicker } from '../ProjectPicker';
 import { VendorPicker } from '../VendorPicker';
 import { vendorDefaultFills } from '../../lib/vendorDefaults';
+import { ExpenseAllocationNumberRow } from './ExpenseAllocationNumberRow';
 import { ExpenseVatRow } from './ExpenseVatRow';
 import type { HostedExpenseForm } from './useHostedExpenseForm';
 
@@ -17,7 +18,7 @@ import type { HostedExpenseForm } from './useHostedExpenseForm';
  * owns the `<form>`, so the drawer and the receipt review page each keep their own submit and footer. `idPrefix`
  * names the pickers' ids (the drawer's stay `hosted-expense-*`).
  */
-export type HostedExpenseHintField = ExpenseFormHintField | 'vendor' | 'vat';
+export type HostedExpenseHintField = ExpenseFormHintField | 'vendor' | 'vat' | 'allocationNumber';
 
 export interface HostedExpenseFieldsProps {
   expenseForm: HostedExpenseForm;
@@ -33,6 +34,8 @@ export interface HostedExpenseFieldsProps {
   hints?: Partial<Record<HostedExpenseHintField, ReactNode>>;
   /** MUT-302 (AC3): the VAT row shows on a firm profile only (`profile.firm`, never the profile type). */
   firm?: boolean;
+  /** MUT-557: the receipt reads as an invoice that needs an allocation number and none was read. */
+  allocationNumberNeeded?: boolean;
   /**
    * MUT-303 (R4): a picked vendor also fills its last currency and VAT. On for a new expense and a receipt review; off
    * in the edit drawer, where a pick must never change saved money. `readFields` are what the receipt read, never
@@ -51,17 +54,17 @@ export interface HostedExpenseFieldsProps {
 /** MUT-303: the values a vendor's defaults put in the form, so they can be said and later replaced. */
 export type VendorFilled = { currency?: string; vatTreatment?: string };
 
-export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddClient = false, readOnly = false, currencyDisabled = false, idPrefix = 'hosted-expense', hints, firm = false, prefillDefaults = false, readFields, vendorFilled: keptFilled, onVendorFill }: HostedExpenseFieldsProps) {
+export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddClient = false, readOnly = false, currencyDisabled = false, idPrefix = 'hosted-expense', hints, firm = false, allocationNumberNeeded = false, prefillDefaults = false, readFields, vendorFilled: keptFilled, onVendorFill }: HostedExpenseFieldsProps) {
   const { t } = useLanguage();
   const { form, categories, labels, clientFlash, picks } = expenseForm;
   const { control, formState, getValues, setValue, getFieldState } = form;
-  const [selectedClientId, selectedCurrency, selectedVat] = useWatch({ control, name: ['clientId', 'currency', 'vatTreatment'] });
+  const [selectedClientId, selectedCurrency, selectedVat, allocationNumber] = useWatch({ control, name: ['clientId', 'currency', 'vatTreatment', 'allocationNumber'] });
   // MUT-303: what a picked vendor filled, for the "from this vendor" line while the field still holds it.
   const [ownFilled, setOwnFilled] = useState<VendorFilled>({});
   const vendorFilled = keptFilled ?? ownFilled;
   const recordFill = (fills: VendorFilled) => (onVendorFill ? onVendorFill(fills) : setOwnFilled((prev) => ({ ...prev, ...fills })));
   const fromVendor = t('hosted.expenses.hints.fromVendor');
-  const { vendor: vendorHint, vat: vatHint = vendorFilled.vatTreatment && vendorFilled.vatTreatment === selectedVat ? fromVendor : undefined, ...fieldHints } = hints ?? {};
+  const { vendor: vendorHint, allocationNumber: allocationHint, vat: vatHint = vendorFilled.vatTreatment && vendorFilled.vatTreatment === selectedVat ? fromVendor : undefined, ...fieldHints } = hints ?? {};
   if (!fieldHints.currency && vendorFilled.currency && vendorFilled.currency === selectedCurrency) fieldHints.currency = fromVendor;
   const changed = (name: 'currency' | 'vatTreatment' | 'vatRate') => {
     const state = getFieldState(name);
@@ -183,6 +186,10 @@ export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddCl
         }
       />
       {firm && <ExpenseVatRow form={form} idPrefix={idPrefix} readOnly={readOnly} hint={vatHint} />}
+      {/* MUT-557: Israeli invoices carry it, so it shows on ILS (and whenever one is already there). */}
+      {firm && (selectedCurrency === 'ILS' || Boolean(allocationNumber)) && (
+        <ExpenseAllocationNumberRow form={form} idPrefix={idPrefix} readOnly={readOnly} hint={allocationHint} needed={allocationNumberNeeded && !allocationNumber} />
+      )}
     </>
   );
 }

@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
+import { CURRENT_TERMS } from '../legal.js';
 import {
   DAY,
   JOB,
+  SAME_ORIGIN,
   T0,
   acceptInvite,
   accountantHarness,
@@ -76,6 +78,22 @@ describe('2. /v1/me clients (MUT-575)', () => {
     const h = accountantHarness({ accountantAccess: false });
     const p = await person(h);
     expect('clients' in (await me(h, p))).toBe(false);
+  });
+});
+
+describe('invite check carries the terms version (MUT-575, for MUT-562)', () => {
+  it('answers the current terms version, which signup from the invite accepts first time', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    expect((await inviteAccountant(h, owner, profileId, 'new.accountant@books.ps')).status).toBe(201);
+    const token = inviteTokenFor(h, 'new.accountant@books.ps');
+    const check = await read(await h.app.request('/v1/accountant-invites/check', json({ token }, SAME_ORIGIN)));
+    expect(check.termsVersion).toBe(CURRENT_TERMS.version);
+    const signup = await h.app.request(
+      '/v1/accountant-invites/signup',
+      json({ token, password: 'a-long-enough-password', displayName: 'New Accountant', acceptedTermsVersion: check.termsVersion, turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' }, SAME_ORIGIN),
+    );
+    expect(signup.status).toBe(201);
   });
 });
 

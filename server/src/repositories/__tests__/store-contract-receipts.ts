@@ -43,7 +43,7 @@ export function describeLedgerStoreReceiptsContract(name: string, makeStore: () 
       vatTreatment: null,
       vatRateBasisPoints: null,
       netMinor: null,
-      vatMinor: null,
+      vatMinor: null, allocationNumber: null,
       createdByUserId: user.id,
       ...over,
     });

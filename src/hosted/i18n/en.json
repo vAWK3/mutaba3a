@@ -582,6 +582,14 @@
       },
       "hints": {
         "fromVendor": "From this vendor’s last expense"
+      },
+      "allocation": {
+        "label": "Allocation number",
+        "placeholder": "9 digits",
+        "invalid": "An allocation number is 9 digits.",
+        "needed": "This invoice needs an allocation number. You may not be able to claim back the VAT without it.",
+        "missing": "No allocation number. You may not be able to claim back the VAT without it.",
+        "badge": "No allocation number"
       }
     },
     "conversions": {

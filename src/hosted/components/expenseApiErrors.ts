@@ -1,6 +1,6 @@
 import type { UseFormSetError } from 'react-hook-form';
 import { ApiError, apiErrorBound, apiErrorReason } from '../api/client';
-import { VAT_RATE_INVALID, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
+import { ALLOCATION_NUMBER_INVALID, VAT_RATE_INVALID, type HostedExpenseFormValues } from './expenseForm/useHostedExpenseForm';
 
 /**
  * Maps the MUT-42 error vocabulary onto the drawer (MUT-44 design brief §6a
@@ -65,6 +65,9 @@ export function applyExpenseApiError(
       case 'VAT_RATE_INVALID':
         // MUT-302: the VAT row words its own rate errors from the code (it opens to show it).
         setError('vatRate', { type: 'manual', message: VAT_RATE_INVALID });
+        return;
+      case 'ALLOCATION_NUMBER_INVALID':
+        setError('allocationNumber', { type: 'manual', message: ALLOCATION_NUMBER_INVALID });
         return;
       case 'DATE_INVALID':
         setError('occurredAt', { type: 'manual', message: dateMessage(apiErrorBound(error), labels) });

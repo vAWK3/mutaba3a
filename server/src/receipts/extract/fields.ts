@@ -1,5 +1,5 @@
 import { type Buyer, PHONE_NUMBER, REGISTRATION_NUMBER } from './buyer.js';
-import { COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
+import { ALLOCATION, COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
 import { countMatches } from './normalize.js';
 import type { Row } from './types.js';
 
@@ -45,6 +45,49 @@ export function readRegistration(rows: readonly Row[], buyer: Buyer): Reading<st
         return buyer.has(digits) ? null : { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
       }
     }
+  }
+  return null;
+}
+
+/** Nine digits, also printed in threes with a space or a dash between (`304 512 876`). */
+const ALLOCATION_NUMBER = String.raw`\d{3}[ -]?\d{3}[ -]?\d{3}`;
+/** What may sit between the label and its number: spaces and punctuation, never a word or another number. */
+const ALLOCATION_GAP = String.raw`[\s:#.|\-–—]*`;
+const AFTER_LABEL = new RegExp(`^${ALLOCATION_GAP}(${ALLOCATION_NUMBER})(?![\\d])`, 'u');
+const ONLY_NUMBER = new RegExp(`^${ALLOCATION_GAP}(${ALLOCATION_NUMBER})${ALLOCATION_GAP}$`, 'u');
+const RULE_ALLOCATION = 0.9;
+
+/**
+ * The number a label row gives: right after an allocation label (only spaces and punctuation between), or, on a
+ * right-to-left row whose number box OCR put first, the number alone before it. Never a number further along the row:
+ * an invoice that prints the label blank must not lend it its invoice, reference or registration number.
+ */
+function besideLabel(row: Row): string | null {
+  for (const pattern of ALLOCATION) {
+    for (const m of row.folded.matchAll(new RegExp(pattern.source, 'gu'))) {
+      const after = AFTER_LABEL.exec(row.folded.slice(m.index + m[0].length));
+      if (after) return after[1]!;
+      const before = ONLY_NUMBER.exec(row.folded.slice(0, m.index));
+      if (before) return before[1]!;
+    }
+  }
+  return null;
+}
+
+/**
+ * MUT-557 (D2): an Israeli tax invoice's allocation number: nine digits beside its label, or alone on the row under a
+ * label that has none. Never a bare nine-digit number (a ח.פ or ע.מ looks the same), never one that shares its row with
+ * other words or numbers below a blank label, never a bill-to row (MUT-514).
+ */
+export function readAllocationNumber(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
+  for (let i = 0; i < rows.length; i += 1) {
+    const row = rows[i]!;
+    if (!hasKeyword(row.folded, ALLOCATION) || buyer.rows.has(row)) continue;
+    const own = besideLabel(row);
+    if (own) return { value: own.replace(/\D/g, ''), rule: RULE_ALLOCATION, conf: row.conf };
+    const next = rows[i + 1];
+    const under = next && !buyer.rows.has(next) ? ONLY_NUMBER.exec(next.folded) : null;
+    if (under) return { value: under[1]!.replace(/\D/g, ''), rule: RULE_ALLOCATION, conf: next!.conf };
   }
   return null;
 }

@@ -19,6 +19,9 @@ PDF_PAGES_READ = 2
 MAX_PDF_PAGES = 20
 #: PDF pages are rasterised at this resolution, lowered when the raster would pass MAX_PIXELS.
 PDF_DPI = 300
+#: MUT-557 (D6): a PDF read from its text layer is still rasterised, at this lower resolution, for its QR codes only
+#: (a 2 cm code is then about 150 px across: plenty for zxing-cpp, and well under half the 300 dpi raster's pixels).
+QR_PDF_DPI = 200
 #: A PDF whose text layer (on the pages read) has at least this many non-space characters is not OCR'd.
 MIN_PDF_TEXT_CHARS = 20
 #: The API caps uploads at 10 MB (rules.ts); a little headroom, then 413.

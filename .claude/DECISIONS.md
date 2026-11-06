@@ -6407,6 +6407,24 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Alternatives considered:** `MembershipRole.ACCOUNTANT` (about eight membership readers would each have to skip it: a leak waiting for the one that forgets); a hand-kept list of accountant routes (drifts; D1 derives it); the token in a path (logs and Referer, D3); accepting from any address with the link (forwarded mail would share books; D4).
 
+## ADR-246: The Israeli Allocation Number on a Received Invoice: Read Beside Its Label, Kept on the Expense, Flagged When Missing (MUT-557, Epic MUT-298)
+
+**Status:** Accepted (2026-11-06; plan `.claude/designs/mut-557-allocation-number.md`, Basel's D1–D4 and D6 in MUT-557 comment 13228, eng review A1–A4, R1–R2 in 13229). Built 2026-11-06. Received side only: requesting numbers is issuing (v2, epic MUT-566).
+
+**Context:** since 2026-06-01 an Israeli buyer can claim back the VAT on a supplier's tax invoice of ₪5,000 or more before VAT only if it carries an allocation number (מספר הקצאה). Today the reader drops it and nobody sees a missing one until the period closes.
+
+**Decision:**
+1. **A column on the expense (D1).** `expenses.allocationNumber VARCHAR(9) NULL`, CHECK nine ASCII digits (`expenses_allocation_number_digits`, mirrored by the memory store). Writes drop spaces and dashes, then require nine digits: else 422 VALIDATION_FAILED, `details.reason` ALLOCATION_NUMBER_INVALID, `field` allocationNumber. No check digit (none is published). POST, PATCH (absent keeps, null clears) and receipt approve take it; inbox filing and MCP record none.
+2. **Read only beside its label (D2).** `ALLOCATION` keywords (Hebrew, English, Arabic); nine digits (also in threes with spaces or dashes) right after the label with only spaces and punctuation between, or alone on the row under a blank label; never a number further along the row or sharing the next row with other text (a blank label must not lend it an invoice, reference or phone number), never a bare nine-digit number (a ח.פ/ע.מ looks the same), never a bill-to row. Rule confidence 0.9. A suggestion field `allocationNumber`, outside `SUGGESTION_FIELDS` (`READ_FIELDS` = those + it, for merging and re-reads).
+3. **Completeness (D3, A2).** `isCompleteSuggestion` is false while a suggestion reads as an ILS invoice with VAT whose net is at or above the threshold and holds no number, so the server reads it once for the number. The same rule picks never-read To-review receipts in `markBacklogPending` (one read each; a read receipt is never picked again). `SERVER_READER_GENERATION` is unchanged.
+4. **The flag is computed, never stored (D4, A1, A4).** `israel/allocation-number.ts` holds the dated thresholds (₪25,000 from 2024-05-05, ₪20,000 2025-01-01, ₪10,000 2026-01-01, ₪5,000 2026-06-01; before VAT, by the invoice's date; at the threshold counts, R1) and the rules. `Expense.allocationNumberMissing`: a profile with firm features (`/v1/me` `firm`; any kind of business: an accounting office, a shop, a law office), ILS, VAT treatment, net and VAT all recorded, VAT above 0, net at or above the threshold, no number. `serializeExpense(e, context)` takes the profile as a required argument; the entries feed resolves each expense's profile. `ReceiptDetail.allocationNumberExpected` (GET /v1/receipts/{id} only) is the same rule on what was read, on a profile with firm features. Firm features, not "Business", because only their forms record VAT and show the number (review 2026-11-06): a Business profile without them could be flagged with no field to fix it.
+5. **QR (D6, A3).** The OCR sidecar decodes QR codes (zxing-cpp 3.1.1, Apache-2.0; the image or the first two PDF pages, a text-layer PDF rasterised for the QR alone) and answers `qr: string[]` (at most 8, each at most 4,096 chars; payloads never logged). The API takes a missing or unusable list as none, so either deploys first. `receipts/extract/qr.ts` is a parser registry whose fields fill only what the text did not give (source `qr`, confidence 1); it has no parser yet: the Israeli one waits for real invoices showing the number in a QR.
+6. **Copy (D5).** "No allocation number. You may not be able to claim back the VAT without it." (en, ar). No compliance words.
+
+**Consequences:** one extra read per big never-read ILS receipt; one `organizations.getById` per distinct profile on a feed page; snapshot format 16 (portal local migration fills null). The duplicate-number warning is deferred to MUT-506's duplicate guard (R2).
+
+**Alternatives considered:** adding the number to `SUGGESTION_FIELDS` (every receipt would read as incomplete); reading any nine-digit number (registration numbers collide); storing the flag (a threshold change would need a backfill).
+
 ## ADR-247: A Share Link Opens One Period of One Profile Through One Door, With a PIN and No Account (MUT-560, Epic MUT-558)
 
 **Status:** Accepted (2026-11-06; plan and eng review CLEARED, auto-decided A1–A19: `.claude/designs/MUT-560-share-links.md`), amended the same day by Basel's decisions B1–B5, which override the plan. Built 2026-11-06.
@@ -6469,7 +6487,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 8. **The invite opens in the app (E11).** The AASA claims `/accountant-invite*` (existing paths unchanged); never `/share*` or `/client-books*`. Apple's CDN can take about a day to pick up the change.
 9. **Events contract 2.7.0 (E12).** Clients send (the API never does): `accountant_invited`, `accountant_revoked {was}` (both exactly as MUT-561 defines them), `accountant_accepted {via}`, `accountant_left`, `share_link_created {period, expires_in_days}`, `share_link_revoked`, `share_link_opened {period}`, `period_downloaded {place, file, months}`. `surface` is shared, so a location inside a surface is `place`; counts are integers. MUT-561 also bumps to 2.7.0: whichever merges second bumps to 2.8.0.
 
-Contract 1.104.0-mut575; migration `20261107130000_mut575_client_books`.
+Contract 1.104.0-mut575, merged with MUT-557 under the higher literal 1.106.0-mut557; migration `20261107140000_mut575_client_books` (after MUT-557's 20261107130000).
 
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 

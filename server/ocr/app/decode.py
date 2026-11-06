@@ -4,6 +4,8 @@ Images: the size is read from the header (Pillow opens lazily) and checked again
 decoded. PDFs: refused past MAX_PDF_PAGES, at most PDF_PAGES_READ pages read, each rasterised at PDF_DPI or lower so the
 raster stays under MAX_PIXELS. A text layer is used instead of OCR only when its text is drawn visibly: an invisible
 layer is a scanner's own OCR (MUT-504). Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
+MUT-557: the QR reader looks at the same pages; a text-layer PDF's are rasterised for it alone, at QR_PDF_DPI, and a
+failure there only leaves them out.
 """
 
 from __future__ import annotations
@@ -32,6 +34,12 @@ class Decoded:
     page_count: int = 0
     #: True for rasterised PDF pages: flat already, so no perspective step.
     flat: bool = False
+    #: MUT-557: the pages for the QR reader when they aren't `pages` (a text-layer PDF's, rasterised for it alone).
+    qr_pages: list[np.ndarray] | None = None
+
+    @property
+    def pages_for_qr(self) -> list[np.ndarray]:
+        return self.pages if self.qr_pages is None else self.qr_pages
 
 
 def decode(body: bytes, content_type: str) -> Decoded:
@@ -86,7 +94,7 @@ def _decode_pdf(body: bytes) -> Decoded:
         count = min(total, config.PDF_PAGES_READ)
         text = _text_layer(pdf, count)
         if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS and not _invisible_text(pdf, count):
-            return Decoded(pdf_text=text, page_count=count, flat=True)
+            return Decoded(pdf_text=text, page_count=count, flat=True, qr_pages=_qr_rasters(pdf, count))
         return Decoded(pages=[_rasterise(pdf[i]) for i in range(count)], page_count=count, flat=True)
     except Refusal:
         raise
@@ -139,11 +147,19 @@ def _invisible_text(pdf, count: int) -> bool:
         return True
 
 
-def _rasterise(page) -> np.ndarray:
+def _qr_rasters(pdf, count: int) -> list[np.ndarray]:
+    """MUT-557: a text-layer PDF's pages for the QR reader alone. Never a refusal: the text is read either way."""
+    try:
+        return [_rasterise(pdf[i], config.QR_PDF_DPI) for i in range(count)]
+    except Exception:
+        return []
+
+
+def _rasterise(page, dpi: int = config.PDF_DPI) -> np.ndarray:
     width_pt, height_pt = page.get_size()
     if width_pt <= 0 or height_pt <= 0:
         raise Refusal("unreadable")
-    scale = config.PDF_DPI / 72
+    scale = dpi / 72
     pixels = width_pt * height_pt * scale * scale
     if pixels > config.MAX_PIXELS:
         scale *= (config.MAX_PIXELS / pixels) ** 0.5
