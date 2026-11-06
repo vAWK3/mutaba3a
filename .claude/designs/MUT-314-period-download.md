@@ -14,7 +14,7 @@ Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → Plann
 ## Build notes (2026-11-06, `feat/mut-314-period-download`)
 
 Built to rev 2. Where the code asked for a choice, the one closest to the plan's intent:
-1. **Numbering:** ADR-248 and contract 1.103.0-mut314 (the plan's 247/1.102.0 went to MUT-560); merged after MUT-575, the contract carries 1.104.0-mut575 (the higher version wins).
+1. **Numbering:** ADR-248 and contract 1.103.0-mut314 (the plan's 247/1.102.0 went to MUT-560); merged after MUT-575 and MUT-557, the contract carries 1.106.0-mut557 (the higher version wins).
 2. **The stream's guard** is `periodDownloadStoreGuard(kind)` (`auth/store-guard.ts`), not `accountantStoreGuard`: the
    rows come from `entries.list`, classed `sessionOnly`, which the accountant guard refuses. It is the same
    `readOnlyStoreGuard` with `entries.list` named (as MUT-560 names it for links); a link's stream keeps
