@@ -25,7 +25,7 @@ export function describeLedgerStorePeriodPackContract(name: string, makeStore: (
     const org = personalOrganization.id;
     const expense = (occurredOn: string, minute = 1, organizationId = org) =>
       store.expenses.create(
-        { organizationId, occurredOn, amountMinor: 1000n, currency: 'ILS', title: occurredOn, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null },
+        { organizationId, occurredOn, amountMinor: 1000n, currency: 'ILS', title: occurredOn, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null },
         at(minute),
       );
     const receipt = async (expenseId: string | null, sizeBytes: number, minute = 1, ready = true, organizationId = org) => {

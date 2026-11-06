@@ -53,7 +53,7 @@ if (!url) {
       const day = (i: number) => `2026-10-${String((i % 28) + 1).padStart(2, '0')}`;
       for (let i = 0; i < 600; i++) {
         const e = await store.expenses.create(
-          { organizationId: org.id, occurredOn: day(i), amountMinor: BigInt(1000 + i), currency: 'ILS', title: `E${i}`, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null },
+          { organizationId: org.id, occurredOn: day(i), amountMinor: BigInt(1000 + i), currency: 'ILS', title: `E${i}`, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: user.id, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null },
           at,
         );
         const r = await store.expenseReceipts.create({ organizationId: org.id, expenseId: e.id, filename: 'r.png', mimeType: 'image/png', sizeBytes: 50 * 1024, receivedOn: '2026-10-31', uploadedByUserId: user.id, requestId: null }, at);

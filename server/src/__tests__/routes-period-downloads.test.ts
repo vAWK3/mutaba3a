@@ -573,7 +573,7 @@ describe('14. performance (MUT-314, AC4)', () => {
     const expenseIds: string[] = [];
     for (let i = 0; i < 600; i++) {
       const e = await h.store.expenses.create(
-        { organizationId: profileId, occurredOn: `2026-10-${String((i % 28) + 1).padStart(2, '0')}`, amountMinor: BigInt(1000 + i), currency: 'ILS', title: `Expense ${i}`, vendor: `Vendor ${i % 40}`, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null },
+        { organizationId: profileId, occurredOn: `2026-10-${String((i % 28) + 1).padStart(2, '0')}`, amountMinor: BigInt(1000 + i), currency: 'ILS', title: `Expense ${i}`, vendor: `Vendor ${i % 40}`, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null },
         at,
       );
       expenseIds.push(e.id);
