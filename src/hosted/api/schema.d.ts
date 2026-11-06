@@ -6490,7 +6490,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent. */
+                    /** @description Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page). */
                     kinds?: ("expense" | "received" | "owed" | "conversion")[];
                     /** @description Money date on or after this day. */
                     occurredFrom?: string;
@@ -26073,7 +26073,7 @@ export interface components {
             limit: number;
             /** @description Opaque `nextCursor` from the previous page. */
             cursor?: string;
-            /** @description MUT-575: only these kinds (expense, received); both when absent. Never more than the link shows. */
+            /** @description MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows. */
             kinds?: ("expense" | "received")[];
             /** @description MUT-575: money date on or after this day, clamped inside the link’s period (never widened). */
             occurredFrom?: string;
