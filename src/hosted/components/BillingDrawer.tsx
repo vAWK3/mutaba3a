@@ -54,7 +54,7 @@ import { useAnswerTrialPrompt } from '../data/trialPromptQueries';
 import { ME_KEY, useMe } from '../session/me';
 import { takeTrialWelcomeOffer } from '../session/trialWelcomeOffer';
 import { SUPPORT_EMAIL } from '../terms';
-import { Amount, Banner } from './billingParts';
+import { Amount, Banner, BuyerChoice } from './billingParts';
 import { formatMinor, sentence } from './billingText';
 import { SwitchBody, SwitchFooter } from './BillingSwitchBody';
 import { useSwitchStep } from './useSwitchStep';
@@ -63,7 +63,6 @@ import { useCancelFlow, type CancelOutcome } from './useCancelFlow';
 import { Drawer } from './Drawer';
 import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { OfferTopLine } from './OfferTopLine';
-import { RadioCards } from './RadioCards';
 
 /**
  * Settings › Billing (MUT-362, plan §2.7–§2.8): the account menu's drawer, Arabic first. The status view reads in one
@@ -988,29 +987,7 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
         ))}
       </Select>
 
-      <div className="hp-billing-field">
-        <span id={`${ids}-buyer`} className="input-label">
-          {t('hosted.billing.subscribe.buyer')}
-        </span>
-        <RadioCards
-          name={`${ids}-buyer`}
-          labelledBy={`${ids}-buyer`}
-          value={buyer}
-          onChange={form.setBuyer}
-          options={[
-            {
-              value: 'person',
-              label: t('hosted.billing.subscribe.person'),
-              note: t(billing.countries.consumerEverywhere ? 'hosted.billing.subscribe.personNoteEverywhere' : 'hosted.billing.subscribe.personNote'),
-            },
-            {
-              value: 'business',
-              label: t('hosted.billing.subscribe.business'),
-              note: t('hosted.billing.subscribe.businessNote'),
-            },
-          ]}
-        />
-      </div>
+      <BuyerChoice idPrefix={ids} value={buyer} onChange={form.setBuyer} consumerEverywhere={billing.countries.consumerEverywhere === true} />
 
       <div className="hp-billing-field">
         <span id={`${ids}-interval`} className="input-label">

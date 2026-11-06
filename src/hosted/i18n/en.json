@@ -2449,7 +2449,9 @@
       "country": "Country",
       "pickCountry": "Choose your country",
       "subscribe": "Subscribe",
-      "failed": "Couldn't open the payment page. Try again."
+      "failed": "Couldn't open the payment page. Try again.",
+      "priceFailed": "Couldn't load the price.",
+      "retry": "Try again"
     },
     "accessScope": {
       "label": "What whoever you share with can do",

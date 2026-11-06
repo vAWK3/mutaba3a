@@ -916,8 +916,8 @@ export const api = {
   shareLinkDownloadTicket: (body: { viewerToken: string; type: PeriodDownloadType; lang?: 'ar' | 'en'; asOf?: string }) =>
     request<PeriodDownloadTicket>('POST', '/v1/share-links/download-ticket', { body }),
   // MUT-562 (MUT-565, ADR-251): the Accountant plan's Checkout; `plan` is MUT-565's additive field (not generated here yet).
-  startAccountantCheckout: (body: { country: string; returnPath: string }) =>
-    request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body: { interval: 'month', buyer: 'person', plan: 'accountant', ...body } }),
+  startAccountantCheckout: (body: { country: string; buyer: 'person' | 'business'; returnPath: string }) =>
+    request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body: { interval: 'month', plan: 'accountant', ...body } }),
 
   // MUT-562 (MUT-560, ADR-247): a share link's visitor. Tokens travel in bodies only; nothing here names a profile.
   checkShareLink: (token: string, signal?: AbortSignal) => request<Schemas['ShareLinkCheck']>('POST', '/v1/share-links/check', { body: { token }, signal }),

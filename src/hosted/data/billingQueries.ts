@@ -161,5 +161,5 @@ export const useTakeStayOffer = () => usePlanChange((body: { reason: Cancellatio
 /** MUT-562 (MUT-565's Checkout, `plan: 'accountant'`): the Accountant plan, monthly; back to `returnPath`. */
 export function useStartAccountantCheckout() {
   const onError = useRefreshOnRefusal();
-  return useMutation({ mutationFn: (body: { country: string; returnPath: string }) => checked(api.startAccountantCheckout(body)), onSuccess: leaveFor, onError });
+  return useMutation({ mutationFn: (body: { country: string; buyer: 'person' | 'business'; returnPath: string }) => checked(api.startAccountantCheckout(body)), onSuccess: leaveFor, onError });
 }
