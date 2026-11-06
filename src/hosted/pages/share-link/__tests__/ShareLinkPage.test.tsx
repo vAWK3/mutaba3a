@@ -206,7 +206,8 @@ describe('the open link', () => {
     await user.click(screen.getByRole('button', { name: 'Receipts (zip)' }));
     expect(sent).toEqual([{ ticket: 'receipts-t', viewerToken: VIEWER }]);
     const mints = api.calls.filter((c) => c.url.pathname === '/v1/share-links/download-ticket').map((c) => c.body as { viewerToken: string; asOf: string });
-    expect(mints).toHaveLength(2);
+    // Both files on opening, and a fresh ticket for the press (never an old one posted); one asOf throughout
+    expect(mints).toHaveLength(3);
     expect(mints.every((m) => m.viewerToken === VIEWER && m.asOf === mints[0]!.asOf)).toBe(true);
     vi.restoreAllMocks();
   });

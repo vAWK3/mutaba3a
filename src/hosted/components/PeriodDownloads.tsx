@@ -3,15 +3,27 @@ import { useLanguage } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import { Button } from '../../components/ui/Button';
 import type { PeriodDownloadTicket, PeriodDownloadType } from '../api/client';
-import { TICKET_FRESH_MS, aboutSize, downloadProblem, submitDownload, type DownloadProblem, type Mint } from '../data/periodDownload';
+import { AS_OF_REFRESH_MS, aboutSize, downloadProblem, submitDownload, type DownloadProblem, type Mint } from '../data/periodDownload';
 
 /**
  * MUT-562 (AW3, SL3; Basel 13244: the download follows the period only, both sheets whatever the type filter): the
  * period's two downloads, "Excel report" and "Receipts (zip)". Opening the panel mints both tickets with one `asOf`,
- * so their Refs agree and each shows what it holds (entries; receipts and about how big); pressing one posts its
- * ticket to the stream (minted again with the same `asOf` once it's old). Over a cap the button is off with a hint.
+ * so their Refs agree and each shows what it holds (entries; receipts and about how big); pressing one mints that file
+ * again (same `asOf`) and posts the fresh ticket, so an expired or spent one is never posted (review fix 5). A panel
+ * open past 20 hours takes a new `asOf` (the server takes at most 24 hours back), and a 422 AS_OF mints once more with
+ * a new one. Over a cap the button is off with a hint.
  * Used by the client book (a profile mint) and a share link's page (the link's mint).
  */
+
+/** A new `asOf` and when the panel took it (event handlers only, never during render). */
+function freshWindow(): { asOf: string; openedAt: number } {
+  const now = Date.now();
+  return { asOf: new Date(now).toISOString(), openedAt: now };
+}
+
+function isStale(window: { openedAt: number }): boolean {
+  return Date.now() - window.openedAt > AS_OF_REFRESH_MS;
+}
 
 type Slot = { kind: 'loading' } | { kind: 'ready'; ticket: PeriodDownloadTicket; mintedAt: number; spent: boolean } | { kind: 'problem'; problem: DownloadProblem };
 const TYPES: readonly PeriodDownloadType[] = ['report', 'receipts'];
@@ -25,31 +37,44 @@ interface PeriodDownloadsProps {
 
 export function PeriodDownloads({ mint, viewerToken, onDownloaded }: PeriodDownloadsProps) {
   const { t } = useLanguage();
-  const [open, setOpen] = useState<{ asOf: string } | null>(null);
+  const [open, setOpen] = useState<{ asOf: string; openedAt: number } | null>(null);
   const [slots, setSlots] = useState<Record<PeriodDownloadType, Slot>>({ report: { kind: 'loading' }, receipts: { kind: 'loading' } });
 
-  async function mintInto(type: PeriodDownloadType, asOf: string): Promise<PeriodDownloadTicket | null> {
+  /** Mints one file into its slot; a stale `asOf` (422 AS_OF) is taken again once. Returns the ticket, or null. */
+  async function mintInto(type: PeriodDownloadType, asOf: string, retried = false): Promise<PeriodDownloadTicket | null> {
     try {
       const ticket = await mint(type, asOf);
       setSlots((current) => ({ ...current, [type]: { kind: 'ready', ticket, mintedAt: Date.now(), spent: false } }));
       return ticket;
     } catch (error) {
-      setSlots((current) => ({ ...current, [type]: { kind: 'problem', problem: downloadProblem(error) } }));
+      const problem = downloadProblem(error);
+      if (problem.kind === 'asOf' && !retried) {
+        const window = freshWindow();
+        setOpen(window);
+        return mintInto(type, window.asOf, true);
+      }
+      setSlots((current) => ({ ...current, [type]: { kind: 'problem', problem } }));
       return null;
     }
   }
 
   function openPanel() {
-    const asOf = new Date().toISOString();
-    setOpen({ asOf });
+    const window = freshWindow();
+    setOpen(window);
     setSlots({ report: { kind: 'loading' }, receipts: { kind: 'loading' } });
-    for (const type of TYPES) void mintInto(type, asOf);
+    for (const type of TYPES) void mintInto(type, window.asOf);
   }
 
   async function download(type: PeriodDownloadType) {
     if (!open) return;
-    const slot = slots[type];
-    const fresh = slot.kind === 'ready' && !slot.spent && Date.now() - slot.mintedAt < TICKET_FRESH_MS ? slot.ticket : await mintInto(type, open.asOf);
+    // Open past 20 hours: a new asOf for this and later downloads (the estimates are minted again with it)
+    let asOf = open.asOf;
+    if (isStale(open)) {
+      const window = freshWindow();
+      setOpen(window);
+      asOf = window.asOf;
+    }
+    const fresh = await mintInto(type, asOf);
     if (!fresh) return;
     submitDownload(fresh.ticket, viewerToken);
     setSlots((current) => ({ ...current, [type]: { kind: 'ready', ticket: fresh, mintedAt: Date.now(), spent: true } }));

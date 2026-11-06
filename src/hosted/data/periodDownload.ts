@@ -4,32 +4,28 @@ import { profileKey } from '../session/me';
 
 /**
  * MUT-562 (D7, over MUT-314's routes): a period download. A ticket is minted per file (it says what the period holds,
- * with the receipts zip's size), then posted to the stream by a hidden form, so the browser's own downloader saves the
- * file: nothing in a URL, no Blob in memory. The form targets a hidden frame, so a refused ticket (a JSON 404) never
- * replaces the page. A ticket lives 120 seconds and is spent by its download. One module for every period download:
- * the owner's (MUT-561's Sharing page), an accountant's client book and a share link's page (MUT-562).
+ * with the receipts zip's size), then posted to the stream by a form, so the browser's own downloader saves the file:
+ * nothing in a URL, no Blob in memory. One module for every period download: the owner's (MUT-561's Sharing page), an
+ * accountant's client book and a share link's page (MUT-562).
+ *
+ * Review fix 6: the form is top level (`target="_self"`), not a hidden frame. The API sends the portal's CSP, with
+ * `frame-ancestors 'none'`, on every response, the stream included (server/src/app.ts PORTAL_CSP), so a framed download
+ * can be blocked. An attachment answer leaves the page where it is. Review fix 5: a press always mints a fresh ticket
+ * just before posting it (`PeriodDownloads`), so an expired or spent ticket is never posted; what's left (access
+ * revoked in that second) answers the stream's JSON 404. Server note: answering a refused *form* post with a redirect
+ * back to the page would close that last gap.
  */
 
 export const STREAM_PATH = '/v1/period-downloads/stream';
-const FRAME_NAME = 'mtb3a-period-download';
-/** Mint again past this age, well inside the ticket's 120 seconds. */
-export const TICKET_FRESH_MS = 90_000;
+/** Past this, the panel's `asOf` (at most 24 hours back on the server) is taken again. */
+export const AS_OF_REFRESH_MS = 20 * 60 * 60 * 1000;
 
 /** Posts the ticket (and a share link's viewer token) to the stream; the file arrives as an attachment. */
 export function submitDownload(ticket: string, viewerToken?: string, doc: Document = document): void {
-  let frame = doc.querySelector<HTMLIFrameElement>(`iframe[name="${FRAME_NAME}"]`);
-  if (!frame) {
-    frame = doc.createElement('iframe');
-    frame.name = FRAME_NAME;
-    frame.title = FRAME_NAME;
-    frame.hidden = true;
-    frame.setAttribute('aria-hidden', 'true');
-    doc.body.appendChild(frame);
-  }
   const form = doc.createElement('form');
   form.method = 'post';
   form.action = STREAM_PATH;
-  form.target = FRAME_NAME;
+  form.target = '_self';
   form.hidden = true;
   const fields: [string, string][] = [['ticket', ticket], ...(viewerToken ? ([['viewerToken', viewerToken]] as [string, string][]) : [])];
   for (const [name, value] of fields) {
@@ -40,16 +36,21 @@ export function submitDownload(ticket: string, viewerToken?: string, doc: Docume
     form.appendChild(input);
   }
   doc.body.appendChild(form);
-  form.submit();
-  form.remove();
+  try {
+    form.submit();
+  } finally {
+    form.remove();
+  }
 }
 
-export type DownloadProblem = { kind: 'tooLarge' } | { kind: 'rateLimited'; minutes: number } | { kind: 'unavailable' } | { kind: 'unreachable' };
+export type DownloadProblem = { kind: 'asOf' } | { kind: 'tooLarge' } | { kind: 'rateLimited'; minutes: number } | { kind: 'unavailable' } | { kind: 'unreachable' };
 
 /** What a refused mint means, in words the person can act on. */
 export function downloadProblem(error: unknown): DownloadProblem {
   if (!(error instanceof ApiError)) return { kind: 'unreachable' };
   if (error.status === 422 && apiErrorReason(error) === 'PERIOD_TOO_LARGE') return { kind: 'tooLarge' };
+  // The panel's asOf is too old for the server (more than 24 hours back): mint again with a new one
+  if (error.status === 422 && apiErrorReason(error) === 'AS_OF') return { kind: 'asOf' };
   if (error.status === 429) return { kind: 'rateLimited', minutes: retryMinutes(error) };
   if (error.status === 404) return { kind: 'unavailable' };
   return { kind: 'unreachable' };

@@ -258,7 +258,7 @@ describe('the Accountant plan on the desk (MUT-565, gated on its fields)', () =>
       'GET /v1/me': () => ok({ ...me([profile({ owned: true })]), clients: [client(), locked].map(meRow), clientBooks: withPlan() }),
       ...emptyProfileRoutes(),
       'GET /v1/clients': () => ok({ items: [{ ...client(), needsPlan: false }, locked] }),
-      'GET /v1/billing': () => ok({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } }),
+      'GET /v1/billing': () => ok({ configured: true, countries: { consumer: ['IL'], consumerEverywhere: false, customTaxId: [] }, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } }),
       'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/x' }),
     });
     const { user } = renderPortal('/client-books');
@@ -280,6 +280,92 @@ describe('the Accountant plan on the desk (MUT-565, gated on its fields)', () =>
     await screen.findByRole('table', { name: 'Client books' });
     expect(screen.queryByText(/free client books/)).toBeNull();
     expect(screen.queryByRole('button', { name: /Subscribe/ })).toBeNull();
+  });
+});
+
+describe('the Accountant plan offer (review fixes 2 and 4)', () => {
+  const locked = () => client({ profileId: '12121212-1212-4121-8121-121212121212', name: 'Sweets', ownerName: 'Omar Nassar', needsPlan: true } as never);
+  const COUNTRIES = { consumer: ['IL'], consumerEverywhere: false, customTaxId: [] };
+  const PLAN = { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } };
+  function open(billing: Handler, checkout: Handler = () => ok({ url: 'https://checkout.stripe.com/c/pay/x' })) {
+    const api = stubApi({
+      'GET /v1/me': () => ok({ ...me([profile({ owned: true })]), clients: [client(), locked()].map(meRow), clientBooks: { count: 4, freeLimit: 3, cap: 3, readable: 3, plan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false } } }),
+      ...emptyProfileRoutes(),
+      'GET /v1/clients': () => ok({ items: [client(), locked()] }),
+      'GET /v1/billing': billing,
+      'POST /v1/billing/checkout-session': checkout,
+    });
+    return { api, ...renderPortal('/client-books') };
+  }
+  async function toOffer(user: ReturnType<typeof renderPortal>['user']) {
+    await user.click(await screen.findByRole('button', { name: 'Subscribe to the Accountant plan to read Sweets' }));
+  }
+  const subscribe = () => screen.getByRole('button', { name: 'Subscribe' });
+
+  it('Subscribe stays off until a price shows; a failed price read offers Try again', async () => {
+    let fail500 = true;
+    const { user } = open(() => (fail500 ? fail(500, 'INTERNAL') : ok({ configured: true, countries: COUNTRIES, accountantPlan: PLAN })));
+    await toOffer(user);
+    expect(await screen.findByText("Couldn't load the price.")).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Country'), 'IL');
+    expect(subscribe()).toBeDisabled();
+    fail500 = false;
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(await screen.findByText(/₪99\.00 a month/)).toBeInTheDocument();
+    expect(subscribe()).toBeEnabled();
+  });
+
+  it('asks who is buying as the Subscribe step does, and sends the business', async () => {
+    vi.spyOn(stripeNavigation, 'assign').mockImplementation(() => {});
+    const { user, api } = open(() => ok({ configured: true, countries: COUNTRIES, accountantPlan: PLAN }));
+    await toOffer(user);
+    await screen.findByText(/a month/);
+    await user.selectOptions(screen.getByLabelText('Country'), 'DE');
+    // A person in a country we can't sell to individuals: the Subscribe step's own words, and no Subscribe
+    expect(screen.getByText(/We can't sell to individuals in/)).toBeInTheDocument();
+    expect(subscribe()).toBeDisabled();
+    await user.click(screen.getByRole('radio', { name: /For a business/ }));
+    await user.click(subscribe());
+    await waitFor(() => expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toMatchObject({ buyer: 'business', country: 'DE', plan: 'accountant' }));
+  });
+
+  it('a COUNTRY_NEEDS_BUSINESS refusal says the same as the Subscribe step', async () => {
+    const { user } = open(
+      () => ok({ configured: true, countries: { ...COUNTRIES, consumer: ['IL', 'DE'] }, accountantPlan: PLAN }),
+      () => fail(422, 'VALIDATION_FAILED', { reason: 'COUNTRY_NEEDS_BUSINESS' }),
+    );
+    await toOffer(user);
+    await screen.findByText(/a month/);
+    await user.selectOptions(screen.getByLabelText('Country'), 'DE');
+    await user.click(subscribe());
+    expect(await screen.findByText(/We can't sell to individuals in/)).toBeInTheDocument();
+  });
+});
+
+describe('downloads keep their asOf honest (review fix 5)', () => {
+  it('a 422 AS_OF mints once more with a new asOf; a panel open past 20 hours takes a new one on the press', async () => {
+    let asOfRefused = true;
+    const { user, api } = portal(`/client-books/${STUDIO}`, {
+      'GET /v1/period-downloads/ticket': (request) => {
+        if (asOfRefused && request.url.searchParams.get('type') === 'receipts') {
+          asOfRefused = false;
+          return fail(422, 'VALIDATION_FAILED', { reason: 'AS_OF' });
+        }
+        return ok(ticket(request.url.searchParams.get('type') as 'report' | 'receipts'));
+      },
+    });
+    captureForms();
+    await screen.findByRole('table', { name: 'Entries' });
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+    expect(await screen.findByText('11 receipts · about 4 MB')).toBeInTheDocument();
+    const asOfs = () => api.calls.filter((c) => c.url.pathname === '/v1/period-downloads/ticket').map((c) => c.url.searchParams.get('asOf'));
+    expect(asOfs()).toHaveLength(3);
+    expect(asOfs()[2]).not.toBeNull();
+    const later = Date.now() + 21 * 60 * 60 * 1000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
+    await user.click(screen.getByRole('button', { name: 'Excel report' }));
+    await waitFor(() => expect(asOfs()).toHaveLength(4));
+    expect(asOfs()[3]).not.toBe(asOfs()[0]);
   });
 });
 

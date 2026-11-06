@@ -20,16 +20,16 @@ function captureSubmits() {
 }
 
 describe('submitDownload', () => {
-  it('posts the ticket in the body, never in the URL, into a hidden frame', () => {
+  it('posts the ticket in the body, never in the URL, from a top-level form (the API’s CSP forbids framing)', () => {
     const sent = captureSubmits();
     submitDownload('ticket-123');
-    expect(sent).toEqual([{ action: STREAM_PATH, method: 'post', target: 'mtb3a-period-download', fields: { ticket: 'ticket-123' } }]);
+    expect(sent).toEqual([{ action: STREAM_PATH, method: 'post', target: '_self', fields: { ticket: 'ticket-123' } }]);
     expect(sent[0]!.action).not.toContain('ticket-123');
-    expect(document.querySelector('iframe[name="mtb3a-period-download"]')).toHaveAttribute('hidden');
+    expect(document.querySelector('iframe')).toBeNull();
     expect(document.querySelector('form')).toBeNull();
   });
 
-  it('a share link’s download carries its viewer token too, and reuses the frame', () => {
+  it('a share link’s download carries its viewer token too', () => {
     const sent = captureSubmits();
     submitDownload('t1', 'viewer-1');
     submitDownload('t2', 'viewer-1');
@@ -37,13 +37,13 @@ describe('submitDownload', () => {
       { ticket: 't1', viewerToken: 'viewer-1' },
       { ticket: 't2', viewerToken: 'viewer-1' },
     ]);
-    expect(document.querySelectorAll('iframe')).toHaveLength(1);
   });
 });
 
 describe('downloadProblem', () => {
   it('maps the caps and refusals to what the person can do', () => {
     expect(downloadProblem(new ApiError(422, 'VALIDATION_FAILED', 'x', { reason: 'PERIOD_TOO_LARGE' }))).toEqual({ kind: 'tooLarge' });
+    expect(downloadProblem(new ApiError(422, 'VALIDATION_FAILED', 'x', { reason: 'AS_OF' }))).toEqual({ kind: 'asOf' });
     expect(downloadProblem(new ApiError(429, 'RATE_LIMITED', 'x', null, null, 120))).toEqual({ kind: 'rateLimited', minutes: 2 });
     expect(downloadProblem(new ApiError(404, 'NOT_FOUND', 'x'))).toEqual({ kind: 'unavailable' });
     expect(downloadProblem(new Error('x'))).toEqual({ kind: 'unreachable' });
