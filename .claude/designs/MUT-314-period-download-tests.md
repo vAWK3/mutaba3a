@@ -28,5 +28,10 @@ Also updated: `routes.test.ts` and the other API version assertions (1.103.0-mut
 mint session-only; the stream and the link mint public), `writability-routes.test.ts` (40 session reads),
 `accountant-route-matrix.test.ts` (the mint in the derived allowlist), `routes-share-links.test.ts` (the link paths).
 
+Review fixes (`routes-period-downloads.test.ts` "review fixes"): an accountant's ticket dies when the owner starts
+closing; a link's report and index carry no "Logged by", ids or row ids (an owner's keep them); the row cap on the
+zip counts expenses; the zip reads only expenses and vendor names; a reused ticket and one from a signed-out session
+are the uniform 404. Store contract: `sessions.getById`.
+
 [→E2E] Opening the report in Excel (Windows, Arabic) and Numbers, and the zip in iOS Files, belong to MUT-561..564's
 recorded flows.

@@ -38,6 +38,8 @@ Built to rev 2. Where the code asked for a choice, the one closest to the plan's
 14. The ticket's HMAC is domain-separated (`period-download:<payload>`) from every other use of the session pepper.
 15. **Operator step (not applied):** `server/infrastructure/terraform/main.tf` sets the API's `timeout = "900s"`; it
     takes effect on the next `terraform apply`.
+16. **Review fixes:** see ADR-248 decision 11 (closing owner in `clientAccess`, a link's files without ids or
+    "Logged by", the row cap on the zip, tickets bound to their session and single use).
 
 ## Status and blockers
 - The ticket is in Backlog. Basel answered the plan questions (13235). Where the buttons go is settled by the wireframes (13236): this ticket is server-only.
