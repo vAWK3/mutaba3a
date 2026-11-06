@@ -29,6 +29,12 @@ export type ProfileOwner = Schemas['ProfileOwner'];
 export type AccountantGrant = Schemas['AccountantGrant'];
 export type AccountantGrantList = Schemas['AccountantGrantList'];
 export type InviteAccountantRequest = Schemas['InviteAccountantRequest'];
+/** MUT-561 (MUT-560's routes): the owner's share links on one profile. */
+export type ShareLink = Schemas['ShareLink'];
+export type ShareLinkList = Schemas['ShareLinkList'];
+export type ShareLinkCreated = Schemas['ShareLinkCreated'];
+export type ShareLinkPeriod = Schemas['ShareLinkPeriod'];
+export type CreateShareLinkRequest = Schemas['CreateShareLinkRequest'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -789,6 +795,13 @@ export const api = {
     request<AccountantGrant>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/accountants`, { body }),
   revokeAccountant: (profileId: string, grantId: string) =>
     request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/accountants/${encodeURIComponent(grantId)}`),
+  // MUT-561 (MUT-560, ADR-247): the owner's share links. A 404 on the list is SHARE_LINKS off (or no such profile).
+  listShareLinks: (profileId: string, signal?: AbortSignal) =>
+    request<ShareLinkList>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/share-links`, { signal }),
+  createShareLink: (profileId: string, body: CreateShareLinkRequest) =>
+    request<ShareLinkCreated>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/share-links`, { body }),
+  revokeShareLink: (profileId: string, linkId: string) =>
+    request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/share-links/${encodeURIComponent(linkId)}`),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>

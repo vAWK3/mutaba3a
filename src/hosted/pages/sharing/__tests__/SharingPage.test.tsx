@@ -1,7 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import type { AccountantGrant, AccountantGrantList, Me } from '../../../api/client';
+import type { AccountantGrant, AccountantGrantList, Me, ShareLink } from '../../../api/client';
 import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+
+/** Review fix (d): a person's text inside a sentence is isolated (FSI … PDI). */
+const iso = (text: string) => `\u2068${text}\u2069`;
 
 const track = vi.hoisted(() => vi.fn(async () => {}));
 vi.mock('../../../analytics/portalAnalytics', async (importOriginal) => ({
@@ -61,7 +64,7 @@ afterEach(() => {
 describe('who gets the Sharing page (D8)', () => {
   it('an owner, signed in, with accountant access: the title, the scope note, the Accountants column', async () => {
     portal(`/p/${ORG_B}/you/sharing`);
-    expect(await screen.findByRole('heading', { level: 1, name: 'Sharing Studio' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { level: 1, name: `Sharing ${iso('Studio')}` })).toBeInTheDocument();
     expect(screen.getByText("Whoever you share with reads expenses, income and receipts only. They can't add or change anything.")).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Accountants' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Profiles/ })).toHaveAttribute('href', `/p/${ORG_B}/you`);
@@ -76,12 +79,19 @@ describe('who gets the Sharing page (D8)', () => {
     expect(screen.queryByRole('heading', { name: /Sharing/ })).not.toBeInTheDocument();
   });
 
-  it('runs as SHARE_LINKS off: Accountants alone, full width, and no Links column (TODO MUT-560)', async () => {
+  it('share links off (the list answers 404): Accountants alone, full width, and no Links column', async () => {
     const { stub } = portal(`/p/${ORG_B}/you/sharing`);
     await screen.findByText('Sami Khoury');
+    await waitFor(() => expect(stub.count(`GET /v1/profiles/${ORG_B}/share-links`)).toBe(1));
+    await waitFor(() => expect(document.querySelector('.hp-sharing-columns--one')).not.toBeNull());
     expect(screen.queryByRole('heading', { name: /Links/ })).not.toBeInTheDocument();
-    expect(document.querySelector('.hp-sharing-columns--one')).not.toBeNull();
-    expect(stub.calls.some((call) => call.url.pathname.includes('share-links'))).toBe(false);
+  });
+
+  it('(h) a member of a hosted business profile (not an owner) goes back to You › Profiles', async () => {
+    const member = profile({ id: ORG_B, name: 'Partner Studio', owned: false, type: 'BUSINESS', isPersonalDefault: false, writerOfRecord: null });
+    const { router, stub } = portal(`/p/${ORG_B}/you/sharing`, {}, on([personal, member]));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/you`));
+    expect(stub.count(`GET /v1/profiles/${ORG_B}/accountants`)).toBe(0);
   });
 });
 
@@ -144,12 +154,12 @@ describe('the Accountants column (B1)', () => {
       },
     });
     await user.click(await screen.findByRole('button', { name: "Stop Sami Khoury's access" }));
-    const confirm = screen.getByRole('group', { name: /Stop Sami Khoury's access to Studio\?/ });
+    const confirm = screen.getByRole('group', { name: new RegExp(`Stop ${iso('Sami Khoury')}'s access to ${iso('Studio')}\\?`) });
     expect(within(confirm).getByRole('button', { name: 'Cancel' })).toHaveFocus();
     await user.click(within(confirm).getByRole('button', { name: 'Stop access' }));
     await waitFor(() => expect(screen.queryByText('Sami Khoury')).not.toBeInTheDocument());
     expect(stub.count(`DELETE /v1/profiles/${ORG_B}/accountants/g-sami`)).toBe(1);
-    expect(await screen.findByText('Sami Khoury can no longer open Studio')).toBeInTheDocument();
+    expect(await screen.findByText(`${iso('Sami Khoury')} can no longer open ${iso('Studio')}`)).toBeInTheDocument();
     expect(track).toHaveBeenCalledWith('accountant_revoked', { was: 'active' });
   });
 
@@ -165,7 +175,7 @@ describe('the Accountants column (B1)', () => {
     const { user } = portal(`/p/${ORG_B}/you/sharing`, { [`DELETE /v1/profiles/${ORG_B}/accountants/g-maya`]: () => new Response(null, { status: 204 }) });
     await user.click(await screen.findByRole('button', { name: 'Cancel the invite to maya@ledger.co' }));
     await user.click(screen.getByRole('button', { name: 'Cancel invite' }));
-    expect(await screen.findByText('Invite to maya@ledger.co cancelled')).toBeInTheDocument();
+    expect(await screen.findByText(`Invite to ${iso('maya@ledger.co')} cancelled`)).toBeInTheDocument();
     expect(track).toHaveBeenCalledWith('accountant_revoked', { was: 'pending' });
   });
 
@@ -186,7 +196,7 @@ describe('the Accountants column (B1)', () => {
     const fresh: AccountantGrant = { ...HALA, id: 'g-hala-2', status: 'pending', invitedAt: NOW.toISOString(), expiresAt: '2026-11-20T10:00:00.000Z' };
     const { user, stub } = portal(`/p/${ORG_B}/you/sharing`, { [`POST /v1/profiles/${ORG_B}/accountants`]: () => ok(fresh, 201) });
     await user.click(await screen.findByRole('button', { name: 'Invite h.audit@firm.com again' }));
-    expect(await screen.findByText('Invite sent to h.audit@firm.com')).toBeInTheDocument();
+    expect(await screen.findByText(`Invite sent to ${iso('h.audit@firm.com')}`)).toBeInTheDocument();
     expect(stub.calls.find((call) => call.method === 'POST')?.body).toEqual({ email: 'h.audit@firm.com', locale: 'en' });
     expect(track).toHaveBeenCalledWith('accountant_invited', {});
   });
@@ -230,15 +240,134 @@ describe('empty, loading and errors', () => {
   it('loading shows the column skeleton under its heading', async () => {
     portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: never });
     await screen.findByRole('heading', { name: 'Accountants' });
-    expect(screen.getByLabelText('Loading')).toHaveAttribute('aria-busy', 'true');
+    expect(screen.getAllByLabelText('Loading')[0]).toHaveAttribute('aria-busy', 'true');
   });
 
   it('a failed list keeps the page and its heading, with Retry in the column', async () => {
     let tries = 0;
     const { user } = portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: () => (tries++ === 0 ? fail(500, 'INTERNAL') : ok(ALL)) });
     const retry = await screen.findByRole('button', { name: 'Try again' });
-    expect(screen.getByRole('heading', { level: 1, name: 'Sharing Studio' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: `Sharing ${iso('Studio')}` })).toBeInTheDocument();
     await user.click(retry);
     expect(await screen.findByText('Sami Khoury')).toBeInTheDocument();
   });
 });
+
+describe('review fixes (b, c)', () => {
+  it('Invite again refused at the limit reads the list and /v1/me again', async () => {
+    const { user, stub } = portal(`/p/${ORG_B}/you/sharing`, { [`POST /v1/profiles/${ORG_B}/accountants`]: () => fail(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT' }) });
+    await user.click(await screen.findByRole('button', { name: 'Invite h.audit@firm.com again' }));
+    expect(await screen.findByText('This profile already has 5 accountants or invites, the most it can. Stop one first.')).toBeInTheDocument();
+    await waitFor(() => expect(stub.count(`GET /v1/profiles/${ORG_B}/accountants`)).toBe(2));
+    expect(stub.count('GET /v1/me')).toBeGreaterThanOrEqual(2);
+  });
+
+  it('at the limit Invite again is inert and says why', async () => {
+    const full = { items: [SAMI, MAYA, HALA], limit: 2 };
+    const { user, stub } = portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: () => ok(full) });
+    const again = await screen.findByRole('button', { name: 'Invite h.audit@firm.com again' });
+    expect(again).toHaveAttribute('aria-disabled', 'true');
+    expect(again).toHaveAccessibleDescription('This profile has 2, the most it can. Stop one to invite someone else.');
+    await user.click(again);
+    expect(stub.count(`POST /v1/profiles/${ORG_B}/accountants`)).toBe(0);
+  });
+
+  it('inviting from the empty page moves focus to the new row', async () => {
+    const items: AccountantGrant[] = [];
+    const { user } = portal(`/p/${ORG_B}/you/sharing`, {
+      [`GET /v1/profiles/${ORG_B}/accountants`]: () => ok({ items, limit: 5 }),
+      [`POST /v1/profiles/${ORG_B}/accountants`]: () => {
+        items.push(MAYA);
+        return ok(MAYA, 201);
+      },
+    });
+    await screen.findByRole('heading', { name: "You haven't shared this profile yet" });
+    await user.click(screen.getByRole('button', { name: 'Invite by email' }));
+    await user.type(await screen.findByLabelText('Email'), 'maya@ledger.co');
+    await user.click(screen.getByRole('button', { name: 'Send invite' }));
+    await waitFor(() => expect(document.activeElement).toBe(row(/maya@ledger\.co/)));
+  });
+});
+
+const LINK: ShareLink = {
+  id: 'l-live',
+  period: 'LAST_3_MONTHS',
+  from: '2026-08-01',
+  to: '2026-10-31',
+  createdAt: '2026-11-05T09:00:00.000Z',
+  expiresAt: '2026-11-13T09:00:00.000Z',
+  lastOpenedAt: '2026-11-05T12:00:00.000Z',
+  status: 'active',
+  endedAt: null,
+  viewers: 2,
+  maxViewers: 3,
+  createdByName: 'Nour Haddad',
+};
+const LOCKED: ShareLink = { ...LINK, id: 'l-locked', period: 'WHOLE_PROFILE', from: null, to: '2026-11-04', status: 'locked', endedAt: '2026-11-06T08:00:00.000Z', lastOpenedAt: null, viewers: 0 };
+const ENDED: ShareLink = { ...LINK, id: 'l-ended', period: 'LAST_1_MONTH', from: '2026-09-01', to: '2026-09-30', status: 'expired', endedAt: '2026-11-06T07:00:00.000Z', viewers: 3 };
+
+describe('the Links column (slice B)', () => {
+  const links = (items: ShareLink[]) => ({ [`GET /v1/profiles/${ORG_B}/share-links`]: () => ok({ items, limit: 3 }) });
+
+  it('two columns; each link with its months, ends, last opened, viewers; locked and ended marked; ended has no action', async () => {
+    portal(`/p/${ORG_B}/you/sharing`, links([LINK, LOCKED, ENDED]));
+    const table = await screen.findByRole('table', { name: 'Links with a PIN' });
+    expect(document.querySelector('.hp-sharing-columns--one')).toBeNull();
+    const rows = within(table).getAllByRole('row').slice(1);
+    expect(rows[0]).toHaveTextContent('Aug – Oct 2026');
+    expect(rows[0]).toHaveTextContent('Nov 13');
+    expect(rows[0]).toHaveTextContent('yesterday');
+    expect(rows[0]).toHaveTextContent('2 / 3');
+    expect(within(rows[0]).getByRole('button', { name: 'Turn off the link for Aug – Oct 2026' })).toBeInTheDocument();
+    expect(rows[1]).toHaveTextContent('Whole profile');
+    expect(rows[1]).toHaveTextContent('Locked');
+    expect(rows[1]).toHaveTextContent('—');
+    expect(within(rows[1]).getByRole('button', { name: /Turn off/ })).toBeInTheDocument();
+    expect(rows[2]).toHaveTextContent('Sep 2026');
+    expect(rows[2]).toHaveTextContent('Ended Nov 6');
+    expect(within(rows[2]).queryByRole('button')).not.toBeInTheDocument();
+    expect(screen.getByText(/A link is never shown twice/)).toBeInTheDocument();
+  });
+
+  it('Turn off confirms in place; confirming sends DELETE, the row reads Ended, and it is counted', async () => {
+    let off = false;
+    const { user, stub } = portal(`/p/${ORG_B}/you/sharing`, {
+      [`GET /v1/profiles/${ORG_B}/share-links`]: () => ok({ items: [off ? { ...LINK, status: 'revoked', endedAt: NOW.toISOString() } : LINK], limit: 3 }),
+      [`DELETE /v1/profiles/${ORG_B}/share-links/l-live`]: () => {
+        off = true;
+        return new Response(null, { status: 204 });
+      },
+    });
+    await user.click(await screen.findByRole('button', { name: 'Turn off the link for Aug – Oct 2026' }));
+    const confirm = screen.getByRole('group', { name: /Turn off the link for Aug – Oct 2026\?/ });
+    expect(within(confirm).getByRole('button', { name: 'Cancel' })).toHaveFocus();
+    await user.click(within(confirm).getByRole('button', { name: 'Turn off link' }));
+    expect(await screen.findByText('Link turned off')).toBeInTheDocument();
+    expect(stub.count(`DELETE /v1/profiles/${ORG_B}/share-links/l-live`)).toBe(1);
+    await waitFor(() => expect(screen.getByRole('table', { name: 'Links with a PIN' })).toHaveTextContent('Ended Nov 6'));
+    expect(track).toHaveBeenCalledWith('share_link_revoked', { was: 'active' });
+  });
+
+  it('at the limit of live links Create link is inert and says why', async () => {
+    portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/share-links`]: () => ok({ items: [LINK, LOCKED], limit: 2 }) });
+    await screen.findByRole('table', { name: 'Links with a PIN' });
+    expect(screen.getByRole('button', { name: 'Create link' })).toHaveAttribute('aria-disabled', 'true');
+    expect(screen.getByRole('button', { name: 'Create link' })).toHaveAccessibleDescription('This profile has 2 live links, the most it can. Turn one off to make another.');
+  });
+
+  it('a failing links list keeps the Accountants column, with Retry in its own', async () => {
+    portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/share-links`]: () => fail(500, 'INTERNAL') });
+    expect(await screen.findByText('Sami Khoury')).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Links with a PIN' })).toBeInTheDocument();
+  });
+
+  it('nothing shared, links on: the empty page offers both ways, and Create opens the drawer by URL', async () => {
+    const { user, router } = portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: () => ok({ items: [], limit: 5 }), ...links([]) });
+    await screen.findByRole('heading', { name: "You haven't shared this profile yet" });
+    await user.click(await screen.findByRole('button', { name: 'Create a link with a PIN' }));
+    expect(await screen.findByRole('dialog', { name: 'New link' })).toBeInTheDocument();
+    expect(locationOf(router)).toContain('newLink=true');
+  });
+});
+

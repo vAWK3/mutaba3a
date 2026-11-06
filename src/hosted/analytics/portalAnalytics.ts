@@ -23,8 +23,11 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
 type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent;
-/** MUT-561: an owner invited an accountant (`accountant_invited`), or stopped one or cancelled an invite (`accountant_revoked`, `was`). */
-export type AccountantEvent = 'accountant_invited' | 'accountant_revoked';
+/**
+ * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
+ * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`, `was`).
+ */
+export type AccountantEvent = 'accountant_invited' | 'accountant_revoked' | 'share_link_created' | 'share_link_revoked';
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
 /** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */

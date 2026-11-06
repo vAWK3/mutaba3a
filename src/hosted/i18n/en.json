@@ -2227,11 +2227,11 @@
         },
         "stop": "Stop",
         "stopAria": "Stop {name}'s access",
-        "stopConfirm": "Stop {name}'s access to {profile}? They won't be able to open it any more. You can invite them again later.",
+        "stopConfirm": "Stop {name}'s access to {profile}? {name} won't be able to open it any more. You can send a new invite later.",
         "stopAction": "Stop access",
         "cancel": "Cancel",
         "cancelAria": "Cancel the invite to {name}",
-        "cancelConfirm": "Cancel the invite to {name}? The link in their email stops working.",
+        "cancelConfirm": "Cancel the invite to {name}? The link in the invite email stops working.",
         "cancelAction": "Cancel invite",
         "keep": "Keep invite",
         "inviteAgain": "Invite again",
@@ -2259,7 +2259,74 @@
         }
       },
       "empty": {
-        "title": "You haven't shared this profile yet"
+        "title": "You haven't shared this profile yet",
+        "createLink": "Create a link with a PIN"
+      },
+      "links": {
+        "heading": "Links with a PIN",
+        "create": "Create link",
+        "cols": {
+          "period": "Period",
+          "ends": "Ends",
+          "lastOpened": "Last opened",
+          "viewers": "Viewers",
+          "actions": "Actions"
+        },
+        "months": "{months}",
+        "wholeProfile": "Whole profile",
+        "ended": "Ended {date}",
+        "chip": {
+          "active": "Live",
+          "locked": "Locked",
+          "ended": "Ended"
+        },
+        "turnOff": "Turn off",
+        "turnOffAria": "Turn off the link for {period}",
+        "turnOffConfirm": "Turn off the link for {period}? Anyone using it is cut off at once.",
+        "turnOffAction": "Turn off link",
+        "turnedOff": "Link turned off",
+        "footnote": "“Locked”: a wrong PIN was entered 5 times, and even people already in are cut off. A link is never shown twice; if it's lost or locked, turn it off and make a new one. No emails about link activity.",
+        "limit": "Up to {limit} live links per profile.",
+        "atLimit": "This profile has {limit} live links, the most it can. Turn one off to make another.",
+        "none": "No links yet."
+      },
+      "newLink": {
+        "title": "New link",
+        "period": "Period",
+        "last1": "Last month",
+        "last2": "Last 2 months",
+        "last3": "Last 3 months",
+        "whole": "Whole profile",
+        "worksFor": "Works for",
+        "days1": "1 day",
+        "days7": "7 days",
+        "days30": "30 days",
+        "pin": "PIN (4–8 digits)",
+        "pinHint": "Send it separately from the link.",
+        "summary": "{period} · shows expenses, income and receipts only; nothing can be changed. Up to {viewers} viewers.",
+        "create": "Create link",
+        "errors": {
+          "pin": "The PIN is 4 to 8 digits.",
+          "limit": "This profile already has {limit} live links, the most it can. Turn one off first.",
+          "rate": "Too many links in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
+      },
+      "done": {
+        "title": "Your link is ready",
+        "summary": "{period} · works until {until} · up to {viewers} viewers",
+        "link": "Link",
+        "copyLink": "Copy link",
+        "copyMessage": "Copy message",
+        "copiedLink": "Link copied",
+        "copiedMessage": "Message copied, without the PIN",
+        "copyFailed": "Couldn't copy. Select the link and copy it by hand.",
+        "pinWarning": "Send the PIN separately — we won't show the link or the PIN again.",
+        "done": "Done"
+      },
+      "message": {
+        "text": "Hi, I've shared the books of “{profile}” for {period} with you on Mutaba3a: {url} — the link works until {until}. I'll send you the PIN separately.",
+        "wholeProfile": "the whole profile"
       }
     }
   }

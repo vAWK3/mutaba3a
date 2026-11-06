@@ -152,6 +152,21 @@
       "properties": {
         "was": { "type": "enum", "values": ["pending", "active"], "description": "pending = an invite not yet accepted was cancelled; active = an accountant's access was stopped." }
       }
+    },
+    "share_link_created": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner made a share link with a PIN (the server answered 201). Never the link, the PIN or the profile. The phone adds itself in MUT-563.",
+      "properties": {
+        "period": { "type": "enum", "values": ["last_1_month", "last_2_months", "last_3_months", "whole_profile"], "description": "Which whole months the link shows, or the whole profile." },
+        "expires_in_days": { "type": "integer", "description": "How many days the link works: 1, 7 or 30." }
+      }
+    },
+    "share_link_revoked": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner turned a share link off (the server answered 204, or it had already ended). Never the link or the profile. The phone adds itself in MUT-563.",
+      "properties": {
+        "was": { "type": "enum", "values": ["active", "locked"], "description": "active = it still opened; locked = too many wrong PINs had locked it." }
+      }
     }
   }
 }

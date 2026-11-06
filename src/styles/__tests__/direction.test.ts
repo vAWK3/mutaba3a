@@ -43,6 +43,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)
   'src/hosted/pages/sharing/InviteAccountantDrawer.tsx': { ltr: 1 }, // MUT-561: the accountant's email field
+  'src/hosted/pages/sharing/NewShareLinkDrawer.tsx': { ltr: 2 }, // MUT-561: the PIN field and the link's URL
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
   'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
