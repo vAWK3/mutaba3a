@@ -101,6 +101,9 @@ const ACCOUNTANT_OPERATIONS = [
   'DELETE /v1/profiles/{profileId}/accountants/{grantId}',
   'POST /v1/accountant-invites/accept',
   'DELETE /v1/clients/{profileId}',
+  // MUT-575: the client books with stats, and a client's profile-scoped feed.
+  'GET /v1/clients',
+  'GET /v1/profile-entries',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */

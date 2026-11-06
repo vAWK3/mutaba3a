@@ -97,6 +97,8 @@ describe('STORE_ACCESS', () => {
       'accountSetup.redeem',
       'accountSetup.redeemSignup',
       // MUT-559: the public invite signup, and selectProfile's last-viewed stamp, both on the unguarded store.
+      // MUT-565: selectProfile's rank read, on the store beneath the guard.
+      'accountantGrants.countActiveBefore',
       'accountantGrants.signupAndAccept',
       'accountantGrants.touchViewed',
       'apiKeys.create',
