@@ -16,7 +16,7 @@ vi.mock('../../../analytics/portalAnalytics', async (importOriginal) => ({
  */
 
 const NOW = new Date('2026-11-06T10:00:00.000Z');
-const URL_ONCE = 'https://app.mtb3a.com/share#k7Qp29fXhb3Lk7Qp29fXhb3Lk7Qp29fXhb3L';
+const URL_ONCE = 'https://portal.test/share#k7Qp29fXhb3Lk7Qp29fXhb3Lk7Qp29fXhb3L';
 const personal = profile({ id: ORG_A, name: 'Personal', owned: true, type: 'PERSONAL', isPersonalDefault: true, writerOfRecord: null, owners: [] });
 const studio = profile({ id: ORG_B, name: 'Studio', owned: true, type: 'BUSINESS', isPersonalDefault: false, writerOfRecord: null, owners: [] });
 const account = (overrides: Partial<Me> = {}): Me => { const base = me([personal, studio]); return { ...base, user: { ...base.user, features: ['accountant_access'] }, clients: [], ...overrides }; };
@@ -159,7 +159,7 @@ describe('the done pane (B4)', () => {
     await user.click(screen.getByRole('button', { name: 'إنشاء الرابط' }));
     await user.click(await within(dialog).findByRole('button', { name: 'نسخ الرسالة' }));
     const message = await navigator.clipboard.readText();
-    expect(message).toMatch(/^مرحباً، شاركتُ معك دفاتر «Studio» لفترة أغسطس – أكتوبر 2026 على متابعة: https:\/\/app\.mtb3a\.com\/share#\S+ — يعمل الرابط حتى 13 نوفمبر\. سأرسل لك الرمز بشكل منفصل\.$/);
+    expect(message).toMatch(/^مرحباً، شاركتُ معك دفاتر «Studio» لفترة أغسطس – أكتوبر 2026 على متابعة: https:\/\/portal\.test\/share#\S+ — يعمل الرابط حتى 13 نوفمبر\. سأرسل لك الرمز بشكل منفصل\.$/);
   });
 
   it('Done closes it: the URL leaves the page, the address and the cache, and the list shows the link 0 / 3', async () => {

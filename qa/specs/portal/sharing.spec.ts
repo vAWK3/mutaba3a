@@ -272,7 +272,7 @@ test('make a link with a PIN: whole months by name, the link once, Copy message 
     await drawer.getByRole('button', { name: 'Create link' }).click();
     await expect(drawer.getByRole('heading', { name: 'Your link is ready' })).toBeVisible();
     await expect(drawer.locator('[data-scene-art="link-ready"]:not([data-placeholder]) svg')).toBeVisible();
-    await expect(drawer.getByLabel('Link')).toHaveValue(/\/share#qaShareToken/);
+    await expect(drawer.getByLabel('Link', { exact: true })).toHaveValue(/\/share#qaShareToken/);
     await expect(drawer.getByText("Send the PIN separately — we won't show the link or the PIN again.")).toBeVisible();
     expect(api.last('POST', /\/share-links$/)?.body).toEqual({ period: 'LAST_3_MONTHS', expiresInDays: 7, pin: '4821' });
     await expect.poll(() => analytics.events().some((e) => e.event === 'share_link_created'), { timeout: 15_000 }).toBe(true);
