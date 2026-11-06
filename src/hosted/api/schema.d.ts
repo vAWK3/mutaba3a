@@ -21746,6 +21746,7 @@ export interface components {
             expired: boolean;
             /** Format: date-time */
             expiresAt: string;
+            termsVersion: string;
         };
         AccountantInviteTokenRequest: {
             token: string;

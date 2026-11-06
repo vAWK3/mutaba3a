@@ -1458,6 +1458,8 @@ export const AccountantInviteCheckResponseSchema = z
     /** Past its 14 days: the owner has to invite again. */
     expired: z.boolean(),
     expiresAt: z.string().datetime(),
+    /** MUT-575: the current terms version, which signing up from the invite sends as `acceptedTermsVersion`. Since 1.104.0-mut575. */
+    termsVersion: z.string(),
   })
   .openapi('AccountantInviteCheck');
 

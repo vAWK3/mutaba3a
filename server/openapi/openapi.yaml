@@ -1384,12 +1384,15 @@ components:
         expiresAt:
           type: string
           format: date-time
+        termsVersion:
+          type: string
       required:
         - profileName
         - ownerName
         - maskedEmail
         - expired
         - expiresAt
+        - termsVersion
     AccountantInviteTokenRequest:
       type: object
       properties:

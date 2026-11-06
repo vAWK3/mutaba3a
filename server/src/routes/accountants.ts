@@ -330,6 +330,8 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
           maskedEmail: maskEmail(grant.inviteEmail),
           expired: grant.inviteExpiresAt <= now,
           expiresAt: grant.inviteExpiresAt.toISOString(),
+          // MUT-575: so signup from the invite sends the right version the first time.
+          termsVersion: terms.version,
         },
         200,
       );

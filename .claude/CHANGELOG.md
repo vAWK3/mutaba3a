@@ -52,6 +52,7 @@
   ended one (`accountant_grants.dismissedAt`, migration `20261107130000_mut575_client_books`).
 - `disposition=inline` on the expense receipt download; `kinds` and clamped dates on `POST /v1/share-links/entries`;
   the AASA claims `/accountant-invite*`; events contract 2.7.0 (8 accountant and share-link events).
+- `POST /v1/accountant-invites/check` answers `termsVersion`, so signup from the invite sends the current version first time.
 
 ### Changed
 - A closing owner ends accountant access at once (404), the share-link rule (`access/owner-closing.ts`); MUT-559's
