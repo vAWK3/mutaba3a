@@ -254,3 +254,14 @@ MUT-575 on main (and MUT-314 for the Excel step).
   AccessScopeList on the invite.
 - QA: 14 flows pass on the stubbed portal (download, share-link.download and accountant-invite.plan added).
 
+### Round 4 (review fixes)
+
+- Downloads post from a **top-level form** (`target="_self"`), not a hidden frame: the API sends `PORTAL_CSP` with
+  `frame-ancestors 'none'` on every response, the stream included. Each press mints a fresh ticket just before posting
+  (never an expired or spent one); a panel open past 20 h takes a new `asOf`; a 422 AS_OF mints once more. Server note:
+  answering a refused form post with a redirect back to the page would close the last gap (a revoke in that second).
+- The Accountant plan's offer asks who is buying with the Subscribe step's own `BuyerChoice` (extracted to
+  billingParts) and `checkoutRouteOf`; COUNTRY_NEEDS_BUSINESS shows that step's contact-us copy; Subscribe waits for a
+  catalog price; a failed price read offers Try again.
+- Back from Checkout, a 30 s timer ends the wait ("still being confirmed") and re-enables Accept.
+

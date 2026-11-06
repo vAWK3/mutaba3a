@@ -138,7 +138,7 @@ test('With the free client books used, the Accountant plan takes Accept’s plac
     await page.getByLabel('Country').selectOption('IL');
     await page.getByRole('button', { name: 'Subscribe' }).click();
     await expect(page).toHaveURL(/checkout\.stripe\.com/);
-    expect(api.calls('POST', '/v1/billing/checkout-session')[0]!.body).toMatchObject({ plan: 'accountant', interval: 'month', country: 'IL', returnPath: '/accountant-invite' });
+    expect(api.calls('POST', '/v1/billing/checkout-session')[0]!.body).toMatchObject({ plan: 'accountant', interval: 'month', country: 'IL', buyer: 'person', returnPath: '/accountant-invite' });
   });
 
   await step('Come back from Checkout', async () => {

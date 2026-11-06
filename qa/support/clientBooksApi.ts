@@ -144,7 +144,7 @@ export class ClientBooksApi {
     if (key === 'GET /v1/me') return this.signedIn ? json(this.me(language)) : error(401, 'UNAUTHENTICATED');
     if (key === 'GET /v1/billing') {
       if (!this.options.freeBooksUsed) return json({ configured: false });
-      return json({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } });
+      return json({ configured: true, countries: { consumer: ['IL'], consumerEverywhere: false, customTaxId: [] }, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } });
     }
     if (key === 'POST /v1/billing/checkout-session') {
       // Stripe's side is not driven here: the spec opens the success return itself
