@@ -1,0 +1,70 @@
+app: portal
+area: client-books
+title: The accountant's Client books desk (دفاتر العملاء)
+tier: secondary
+# MUT-562 (epic MUT-558, layout C): /client-books lists the profiles shared with an accountant, /client-books/:id reads
+# one read-only. MUT-575's routes, in an in-memory API (qa/support/clientBooksApi.ts). Downloads (MUT-314) and the
+# free-books counter (MUT-565) are not built yet.
+paths:
+  - src/hosted/pages/client-books/**
+  - src/hosted/data/clientBooksQueries.ts
+  - src/hosted/components/EntriesTable.tsx
+  - src/hosted/shell/HostedShell.tsx
+features:
+  - id: list
+    title: Client books lists every client book, and an ended one fades until removed (AC1, AC6)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open Client books from the corner
+      - See an ended client, Remove it and confirm
+      - Open it in Arabic at 375 px
+    expect:
+      - Each row shows the owner, the profile, entries this month and last activity; the desk pill reads Client books | My books
+      - The ended row is faded with "No longer shared"; Remove asks in place, then DELETE /v1/clients/<id> and the row is gone
+      - The Arabic desk is right to left with no horizontal overflow at 375 px
+  - id: empty
+    title: With no client books, the desk says how a client invites you (AC1)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open Client books with no clients
+    expect:
+      - '"No client books yet" and how a client invites you from MTB3A › their profile › Sharing'
+  - id: client
+    title: A client book reads one client, read-only, by whole months and type (AC2, AC3)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open Rana Haddad · Studio
+      - Pick this quarter
+      - Show income only
+      - Only with a receipt
+      - Look for write controls, and try a drawer key in the address
+    expect:
+      - The read-only line, totals per currency and the entries; the feed is asked with the client's profile header, kinds expense and received
+      - The URL keeps preset=quarter and the feed starts on a month's first day
+      - kind=income shows the received payment only; only-with-a-receipt shows the expense with one
+      - No add, edit or delete control; ?newExpense=1 opens nothing; no write is ever sent
+  - id: receipt
+    title: A row's receipt opens in a pane, previewed inline (AC2)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open a row's receipt
+      - Download the receipt
+      - The pane is a sheet at 375 px
+    expect:
+      - The image previews from a URL asked with disposition=inline
+      - Download receipt asks for the attachment URL
+      - At 375 px the pane is a sheet with no horizontal overflow
+  - id: revoked
+    title: When the owner stops sharing, the book says so and the list shows the faded row (AC2)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Read after the owner stops
+      - Back to Client books
+    expect:
+      - '"No longer shared" with "{owner} stopped sharing {profile} with you"'
+      - The list shows the client faded with "No longer shared"

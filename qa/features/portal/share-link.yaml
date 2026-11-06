@@ -1,0 +1,41 @@
+app: portal
+area: share-link
+title: A share link's page (PIN, then a read-only period)
+tier: secondary
+# MUT-562 (layout B): /share#<token> over MUT-560's visitor routes, in an in-memory API. Downloads wait for MUT-314.
+paths:
+  - src/hosted/pages/share-link/**
+  - src/hosted/components/PinBoxes.tsx
+  - src/hosted/components/TwoPanelLayout.tsx
+  - src/hosted/components/EntriesTable.tsx
+features:
+  - id: pin
+    title: The PIN step names nothing, and every refusal says what happened (AC5, AC6)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open the link
+      - Enter a wrong PIN
+      - Open a locked link
+      - Open a link that ended
+      - Open a link on a fourth device
+      - Come back after 8 hours
+      - Type the PIN in Arabic-Indic digits, in Arabic at 375 px
+    expect:
+      - No name or number before the PIN; the token is gone from the address; noindex and no-referrer
+      - '"That PIN isn''t right. 4 tries left, then the link locks."'
+      - Locked, no longer available and viewer-limit pages
+      - '"Enter the PIN again", shown only once the 8 hours have ended'
+      - ٤٨٢١ is sent as 4821 and opens the link; no horizontal overflow at 375 px
+  - id: view
+    title: The right PIN shows the owner, the period's totals and the entries with receipts (AC5)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Enter the right PIN
+      - Show expenses only
+      - View a receipt
+    expect:
+      - '"Rana Haddad · Studio", the band "Aug – Oct 2026 · read-only" with Spent and Received per currency, and the entries'
+      - The feed is asked with kinds expense only
+      - The receipt's image and its download link

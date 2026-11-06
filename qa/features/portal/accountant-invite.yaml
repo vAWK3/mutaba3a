@@ -1,0 +1,55 @@
+app: portal
+area: accountant-invite
+title: Accepting an accountant invite (the page the email opens)
+tier: secondary
+# MUT-562 (layout B): /accountant-invite#<token> over MUT-559's routes, in an in-memory API. The 4th-client card is
+# MUT-565's.
+paths:
+  - src/hosted/pages/accountant-invite/**
+  - src/hosted/components/TwoPanelLayout.tsx
+  - src/hosted/session/useSignOut.ts
+features:
+  - id: signed-out
+    title: Signed out, the invite says who invited you to read what (AC4, AC6)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Open the invite link
+      - Open it in Arabic at 375 px
+    expect:
+      - The owner, the profile, the masked address and when it ends; the token is gone from the address and was sent in the body
+      - Arabic, right to left, no horizontal overflow at 375 px
+  - id: signup
+    title: Create an account from the invite, then sign-in and the client book (AC4)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Create an account
+      - Fill in a name and password, agree and submit
+    expect:
+      - The address is the invite's and can't be changed; "Reading up to 3 client books is always free"
+      - Signup, then POST /v1/sessions, then the client's book
+  - id: accept
+    title: Sign in to accept comes back to the invite; Accept opens the client (AC4)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Sign in to accept
+      - Accept
+    expect:
+      - Sign-in returns to the invite, which asks "Accept {owner}'s invite?"
+      - Accept lands on /client-books/<id>
+  - id: refusals
+    title: An invite refuses another address, an existing account, one already read, and one that is gone (AC4)
+    tier: secondary
+    tickets: [MUT-562]
+    steps:
+      - Accept while signed in as another address
+      - Create an account for an address that already has one
+      - Accept an invite to a profile you already read
+      - Accept an invite that was used, withdrawn or ended
+    expect:
+      - The masked address it was sent to, the same-domain hint and Sign out and use another account
+      - '"You already have an account" with Sign in to accept'
+      - '"You can already read this profile" with Open'
+      - '"This invite is no longer available"'
