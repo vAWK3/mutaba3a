@@ -25,6 +25,14 @@ export const MOMENTS = [
   { name: 'destructive-confirmation', pair: false, tier: 'minimal' },
   { name: 'onboarding', pair: false, tier: 'grand' },
   { name: 'milestone', pair: true, tier: 'grand' },
+  // MUT-558 (Accountant access): two empty states that drop in, and four
+  // static scenes. A scene with no animation is classed minimal.
+  { name: 'accountant-empty', pair: false, tier: 'minimal' },
+  { name: 'link-ready', pair: false, tier: 'minimal' },
+  { name: 'shared-books', pair: false, tier: 'minimal' },
+  { name: 'link-closed', pair: false, tier: 'minimal' },
+  { name: 'client-books-empty', pair: false, tier: 'minimal' },
+  { name: 'share-ended', pair: false, tier: 'minimal' },
 ];
 
 // Mirrors the `color` block in this repo's src/styles/brand/mutaba3a.tokens.json.
