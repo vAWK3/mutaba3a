@@ -886,6 +886,7 @@ export class MemoryLedgerStore implements LedgerStore {
         Object.assign(returning, { tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt });
         return { kind: 'rotated', viewer: { ...returning } };
       }
+      if (input.previousTokenDigest !== null) return { kind: 'stale' };
       const count = this.shareLinkViewerCount(link.id);
       if (count >= input.max) return { kind: 'limit' };
       const viewer: ShareLinkViewerRecord = { id: randomUUID(), shareLinkId: link.id, tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt, lastViewedAt: null, createdAt: input.at };

@@ -2656,6 +2656,8 @@ export interface AddShareLinkViewerInput {
 export type AddShareLinkViewerResult =
   | { kind: 'added'; viewer: ShareLinkViewerRecord; viewerNumber: number }
   | { kind: 'rotated'; viewer: ShareLinkViewerRecord }
+  /** `previousTokenDigest` was given but no viewer of this link holds it (a parallel re-unlock rotated it first). */
+  | { kind: 'stale' }
   | { kind: 'limit' }
   | { kind: 'unusable' };
 
@@ -2674,8 +2676,9 @@ export interface ShareLinkRepository {
   recordFailedPin(input: { linkId: string; at: Date; maxAttempts: number; lockAudit(link: ShareLinkRecord): AuditEventInput[] }): Promise<{ failedPinAttempts: number; locked: boolean } | null>;
   /**
    * One transaction under the link's row lock: `unusable` unless the link is unrevoked, unlocked and unexpired at `at`;
-   * a viewer of this link holding `previousTokenDigest` is reused with the new token (`rotated`); else a new viewer
-   * only below `max` (`limit` at it). Stamps the link's lastOpenedAt.
+   * a viewer of this link holding `previousTokenDigest` is reused with the new token (`rotated`); a previous digest no
+   * viewer holds is `stale` and adds nothing; with no previous digest, a new viewer only below `max` (`limit` at it).
+   * Stamps the link's lastOpenedAt.
    */
   addOrRotateViewer(input: AddShareLinkViewerInput): Promise<AddShareLinkViewerResult>;
   /** An owner ends a live link on their profile. Null when there is none to end (unknown, revoked or expired). */

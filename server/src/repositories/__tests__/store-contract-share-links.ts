@@ -158,11 +158,49 @@ export function describeLedgerStoreShareLinksContract(name: string, makeStore: (
       expect(await store.shareLinks.findViewerByDigest(first)).toBeNull();
       expect(await store.shareLinks.findViewerByDigest(rotatedDigest)).toMatchObject({ link: { id: link.id }, viewer: { tokenDigest: rotatedDigest } });
       expect((await store.shareLinks.findByTokenDigest(link.tokenDigest))?.viewers).toBe(3);
-      // A viewer token of another link is not a returning viewer here.
+      // A viewer token of another link is no viewer of this one: stale, never a slot here.
       const other = await created(store, o);
       const elsewhere = `viewer-${unique()}${unique()}`;
       await addViewer(store, other.id, { digest: elsewhere });
-      expect(await addViewer(store, link.id, { previous: elsewhere })).toEqual({ kind: 'limit' });
+      expect(await addViewer(store, link.id, { previous: elsewhere })).toEqual({ kind: 'stale' });
+    });
+
+    it('a previous token that matches no viewer of the link is stale: nothing is added, even below the cap', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const link = await created(store, o);
+      expect(await addViewer(store, link.id, { previous: `gone-${unique()}` })).toEqual({ kind: 'stale' });
+      expect((await store.shareLinks.findByTokenDigest(link.tokenDigest))?.viewers).toBe(0);
+    });
+
+    it('two parallel re-unlocks with the same old token: one rotates, the other is stale; at 3 viewers neither hits the cap', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const link = await created(store, o);
+      const old = `viewer-${unique()}${unique()}`;
+      await addViewer(store, link.id, { digest: old });
+      await addViewer(store, link.id);
+      await addViewer(store, link.id);
+      const results = await Promise.all([addViewer(store, link.id, { previous: old, minute: 9 }), addViewer(store, link.id, { previous: old, minute: 9 })]);
+      expect(results.map((r) => r.kind).sort()).toEqual(['rotated', 'stale']);
+      expect((await store.shareLinks.findByTokenDigest(link.tokenDigest))?.viewers).toBe(3);
+    });
+
+    it('the right PIN racing the 5th wrong one: the link ends locked, and a viewer is added only if it got in first', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const link = await created(store, o);
+      for (let i = 0; i < 4; i++) await store.shareLinks.recordFailedPin({ linkId: link.id, at: at(5), maxAttempts: 5, lockAudit: () => [] });
+      const [wrong, right] = await Promise.all([
+        store.shareLinks.recordFailedPin({ linkId: link.id, at: at(6), maxAttempts: 5, lockAudit: () => [] }),
+        addViewer(store, link.id, { minute: 6 }),
+      ]);
+      expect(wrong).toEqual({ failedPinAttempts: 5, locked: true });
+      expect(['added', 'unusable']).toContain(right.kind);
+      const after = await store.shareLinks.findByTokenDigest(link.tokenDigest);
+      expect(after).toMatchObject({ failedPinAttempts: 5 });
+      expect(after!.lockedAt).not.toBeNull();
+      expect(after!.viewers).toBe(right.kind === 'added' ? 1 : 0);
     });
 
     it('parallel unlocks at 2 viewers never make a 4th', async () => {

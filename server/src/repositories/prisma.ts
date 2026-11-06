@@ -809,6 +809,8 @@ export class PrismaLedgerStore implements LedgerStore {
             const viewer = await tx.shareLinkViewer.update({ where: { id: returning.id }, data: { tokenDigest: input.tokenDigest, accessExpiresAt: input.accessExpiresAt } });
             return { kind: 'rotated', viewer: toShareLinkViewer(viewer) };
           }
+          // A returning viewer whose token a parallel re-unlock already rotated: never a new slot.
+          if (input.previousTokenDigest !== null) return { kind: 'stale' };
           const count = await tx.shareLinkViewer.count({ where: { shareLinkId: input.linkId } });
           if (count >= input.max) return { kind: 'limit' };
           const viewer = toShareLinkViewer(
