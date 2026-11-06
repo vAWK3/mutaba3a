@@ -23,6 +23,8 @@ import {
   ShareLinkCheckRequestSchema,
   ShareLinkCheckResponseSchema,
   ShareLinkCreatedSchema,
+  ShareLinkDownloadTicketRequestSchema,
+  PeriodDownloadTicketSchema,
   ShareLinkEntriesRequestSchema,
   ShareLinkEntryPageSchema,
   ShareLinkListSchema,
@@ -57,6 +59,8 @@ import { shareRowId, shareRowKey } from '../share-links/row-key.js';
 import { isVisitorRow, namedIds, visitorEntry, visitorExpenseSummary, type VisitorContext } from '../share-links/visitor.js';
 import { displayCategoryNames } from '../expenses/presets.js';
 import { preferredLanguage } from './shared.js';
+import { mintDownload, resolveAsOf } from '../period-pack/index.js';
+import { checkMintBudget, type PeriodDownloadServices } from './period-downloads.js';
 
 /**
  * MUT-560 (ADR-247): one-time share links to a period of one profile, opened with a PIN and no account.
@@ -71,6 +75,7 @@ import { preferredLanguage } from './shared.js';
  *     POST   /v1/share-links/entries            the period's entries, by money date
  *     POST   /v1/share-links/summary            the period's totals per currency
  *     POST   /v1/share-links/expense-receipts   an in-period expense's receipts, as short-lived signed URLs
+ *     POST   /v1/share-links/download-ticket    MUT-314: a ticket for the period's Excel report or receipts zip
  *
  * The view routes reach data only through shareLinkAccess (share-links/access.ts), which resolves the link and its
  * frozen range, and run under shareLinkStoreGuard, so nothing below them can write. No route of the main API is
@@ -91,6 +96,8 @@ export const SHARE_LINK_PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   'POST /v1/share-links/entries',
   'POST /v1/share-links/summary',
   'POST /v1/share-links/expense-receipts',
+  // MUT-314 (ADR-248): also behind PERIOD_DOWNLOADS (routes/period-downloads.ts).
+  'POST /v1/share-links/download-ticket',
 ]);
 
 /** Every endpoint this file adds: the dark-launch switch (SHARE_LINKS off) answers the uniform 404 for each. */
@@ -117,6 +124,8 @@ export interface ShareLinkRouteOptions {
   maxPerProfile: number;
   storage: AttachmentStorage | null;
   urlTtlSeconds: number;
+  /** MUT-314: the period download's limits, mint budget and stream slots, shared with routes/period-downloads.ts. */
+  downloads: PeriodDownloadServices;
 }
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -549,6 +558,40 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         }),
       );
       return c.json({ items }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/share-links/download-ticket',
+      tags: ['Share links'],
+      summary: 'Start a download of the shared period: its size, and a ticket for the stream',
+      description:
+        'MUT-314 (ADR-248). The link’s own period, never another: `type=report` is the Excel report, `type=receipts` the receipt files with index.csv. POST the answer’s ticket with this viewer token to /v1/period-downloads/stream within 120 seconds. Headers follow `lang`, else Accept-Language (Arabic by default). 422 PERIOD_TOO_LARGE over a cap. Also needs period downloads switched on.',
+      security: [],
+      request: { body: jsonBody(ShareLinkDownloadTicketRequestSchema) },
+      responses: { 200: { description: 'The ticket', content: { 'application/json': { schema: PeriodDownloadTicketSchema } } }, ...viewRefusals },
+    }),
+    async (c) => {
+      const body = c.req.valid('json');
+      const access = await viewAccess(c, body.viewerToken);
+      const now = c.get('now')();
+      await checkMintBudget(c, options.downloads.mintLimiter, `viewer:${access.viewer.id}`);
+      const minted = await mintDownload(store, {
+        pepper: settings.pepper,
+        type: body.type,
+        kind: 'link',
+        organization: access.organization,
+        sub: access.viewer.id,
+        sid: null,
+        range: access.range,
+        asOf: resolveAsOf(body.asOf, now),
+        lang: body.lang ?? visitorLanguage(c),
+        now,
+        limits: options.downloads.limits,
+      });
+      return c.json(minted, 200);
     },
   );
 

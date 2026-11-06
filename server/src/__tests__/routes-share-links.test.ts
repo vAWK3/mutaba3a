@@ -237,7 +237,7 @@ describe('4. the token and PIN at rest (MUT-560)', () => {
     const h = shareLinkHarness();
     const doc = await read(await h.app.request('/openapi.json'));
     const linkPaths = Object.entries(doc.paths as Record<string, Record<string, Loose>>).filter(([path]) => path.startsWith('/v1/share-links'));
-    expect(linkPaths.map(([path]) => path).sort()).toEqual(['/v1/share-links/check', '/v1/share-links/entries', '/v1/share-links/expense-receipts', '/v1/share-links/summary', '/v1/share-links/unlock']);
+    expect(linkPaths.map(([path]) => path).sort()).toEqual(['/v1/share-links/check', '/v1/share-links/download-ticket', '/v1/share-links/entries', '/v1/share-links/expense-receipts', '/v1/share-links/summary', '/v1/share-links/unlock']);
     for (const [path, ops] of linkPaths) {
       expect(Object.keys(ops), path).toEqual(['post']);
       expect(ops.post.security, path).toEqual([]);

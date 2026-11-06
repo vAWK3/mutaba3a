@@ -189,6 +189,8 @@ import type {
   RecordsExportRepository,
   SignupReviewRecord,
   SignupReviewRepository,
+  PeriodPackRepository,
+  PeriodReceiptRecord,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
@@ -713,6 +715,7 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...record };
     },
     findByDigest: async (tokenDigest) => clone([...this.sessionsById.values()].find((s) => s.tokenDigest === tokenDigest)),
+    getById: async (id) => clone(this.sessionsById.get(id)),
     touch: async (id, at, idleExpiresAt) => {
       const s = this.sessionsById.get(id);
       if (s) Object.assign(s, { lastSeenAt: at, idleExpiresAt });
@@ -843,6 +846,28 @@ export class MemoryLedgerStore implements LedgerStore {
   private hasActiveGrant(accountantUserId: string, organizationId: string): boolean {
     return [...this.accountantGrantMap.values()].some((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
   }
+
+  /** MUT-314 (ADR-248): the same rules as the entries feed and `listReadyByExpenseIds`, counted. */
+  readonly periodPack: PeriodPackRepository = {
+    estimate: async (organizationId, bounds, asOf) => {
+      const inBounds = (day: string) => (bounds.occurredFrom === undefined || day >= bounds.occurredFrom) && day < bounds.occurredBefore;
+      const logged = (at: Date) => at.getTime() <= asOf.getTime();
+      const expenses = new Set([...this.exps.values()].filter((e) => e.organizationId === organizationId && !e.deletedAt && inBounds(e.occurredOn) && logged(e.createdAt)).map((e) => e.id));
+      const income = [...this.pays.values()].filter((p) => p.organizationId === organizationId && p.status === 'POSTED' && inBounds(p.receivedOn) && logged(p.createdAt)).length;
+      const receipts = [...this.expReceipts.values()].filter((r) => r.expenseId !== null && expenses.has(r.expenseId) && r.status === 'READY' && !r.deletedAt && logged(r.createdAt));
+      return { expenses: expenses.size, income, receipts: receipts.length, receiptBytes: receipts.reduce((sum, r) => sum + r.sizeBytes, 0) };
+    },
+    names: async (organizationId, ids) => {
+      const pick = <T extends { id: string }>(rows: Iterable<T>, wanted: ReadonlySet<string>, name: (row: T) => string, mine: (row: T) => boolean) =>
+        new Map([...rows].filter((row) => wanted.has(row.id) && mine(row)).map((row) => [row.id, name(row)] as const));
+      return {
+        customers: pick(this.custs.values(), ids.customers, (c) => c.name, (c) => c.organizationId === organizationId),
+        projects: pick(this.projs.values(), ids.projects, (p) => p.name, (p) => p.organizationId === organizationId),
+        vendors: pick(this.vendorMap.values(), ids.vendors, (v) => v.canonicalName, (v) => v.organizationId === organizationId),
+        users: pick(this.people.values(), ids.users, (u) => u.displayName, () => true),
+      };
+    },
+  };
 
   /**
    * MUT-560 (ADR-247). Every method is synchronous inside, so each is one step under the store's single thread: the
@@ -3024,6 +3049,13 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!r || r.organizationId !== organizationId) return null;
       if (!r.deletedAt) r.deletedAt = at;
       return { ...r };
+    },
+    listReadyByExpenseIds: async (organizationId, expenseIds) => {
+      const wanted = new Set(expenseIds);
+      return [...this.expReceipts.values()]
+        .filter((r): r is ExpenseReceiptRecord & { expenseId: string } => r.expenseId !== null && wanted.has(r.expenseId) && r.organizationId === organizationId && r.status === 'READY' && !r.deletedAt)
+        .sort(compareByCreatedAtThenId)
+        .map((r): PeriodReceiptRecord => ({ id: r.id, expenseId: r.expenseId, mimeType: r.mimeType, sizeBytes: r.sizeBytes, storageKey: r.storageKey, createdAt: r.createdAt }));
     },
     countReadyByExpenseIds: async (organizationIds, expenseIds) => {
       const counts = new Map<string, number>();

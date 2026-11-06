@@ -13210,6 +13210,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/period-downloads/ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start a period download: its size, and a ticket for the stream
+         * @description MUT-314 (ADR-248). Whole calendar months (`from`…`to`, YYYY-MM, at most 24, never past the profile's current month) of the profile named by X-Mutaba3a-Profile. `type=report` is the Excel report (Expenses, Income and a per-currency Summary, always both sheets); `type=receipts` the receipt files, named by Ref, with index.csv. Over 30 starts an hour: 429. Over the report's row cap or the zip's byte cap: 422 VALIDATION_FAILED, details.reason PERIOD_TOO_LARGE with { type, limit, estimate }: pick a shorter period. Owners, members and accountants alike; a lapsed profile still downloads.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description `report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv. */
+                    type: "report" | "receipts";
+                    /** @description First month, YYYY-MM (inclusive). */
+                    from: string;
+                    /** @description Last month, YYYY-MM (inclusive): at most 24 months on, never past the current month. */
+                    to: string;
+                    /** @description Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent. */
+                    lang?: "ar" | "en";
+                    /** @description Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree. */
+                    asOf?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The ticket */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PeriodDownloadTicket"];
+                    };
+                };
+                /** @description No such profile for you, or period downloads are off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: details.reason PERIOD_RANGE, AS_OF or PERIOD_TOO_LARGE */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/period-downloads/stream": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Download a period: the file a ticket names
+         * @description MUT-314 (ADR-248). The ticket from GET /v1/period-downloads/ticket or POST /v1/share-links/download-ticket, in the body (a form post works: the browser's own downloader saves the file), within 120 seconds; a share link's also carries its viewer token. Access is checked again here, so a revoke after the ticket wins. The report: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet with Content-Length. The receipts: application/zip, streamed; a receipt the bucket can't give is listed `missing` in index.csv. 404 (one answer for every cause) for a bad, expired or no longer authorised ticket; 429 with Retry-After when this server is busy. Audited as period.downloaded.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: {
+                content: {
+                    "application/json": components["schemas"]["PeriodDownloadStreamRequest"];
+                    "application/x-www-form-urlencoded": components["schemas"]["PeriodDownloadStreamRequest"];
+                };
+            };
+            responses: {
+                /** @description The file, as an attachment */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": string;
+                        "application/zip": string;
+                    };
+                };
+                /** @description NOT_FOUND, details.reason DOWNLOAD_UNAVAILABLE */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: this server is serving its most downloads; retry shortly */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ATTACHMENTS_NOT_CONFIGURED (receipts only) */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/billing": {
         parameters: {
             query?: never;
@@ -21279,6 +21437,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/share-links/download-ticket": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a download of the shared period: its size, and a ticket for the stream
+         * @description MUT-314 (ADR-248). The link’s own period, never another: `type=report` is the Excel report, `type=receipts` the receipt files with index.csv. POST the answer’s ticket with this viewer token to /v1/period-downloads/stream within 120 seconds. Headers follow `lang`, else Accept-Language (Arabic by default). 422 PERIOD_TOO_LARGE over a cap. Also needs period downloads switched on.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ShareLinkDownloadTicketRequest"];
+                };
+            };
+            responses: {
+                /** @description The ticket */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PeriodDownloadTicket"];
+                    };
+                };
+                /** @description UNAUTHENTICATED, details.reason SHARE_VIEW_EXPIRED: this viewer’s 8 hours have passed; unlock again with the PIN (and this viewer token, to keep its place) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause. */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: too many requests from this viewer */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -24739,6 +24985,32 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        PeriodDownloadTicket: {
+            /**
+             * @description `report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv.
+             * @enum {string}
+             */
+            type: "report" | "receipts";
+            /** @description POST it (with a share link’s viewer token) to /v1/period-downloads/stream within 120 seconds. Never put it in a URL. */
+            ticket: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @example mutaba3a-Sader-Studio-2026-10.xlsx */
+            filename: string;
+            /** @description What the period holds, as of `asOf`. */
+            estimate: {
+                expenses: number;
+                income: number;
+                receipts: number;
+                /** @description The receipts zip is about this size. */
+                receiptBytes: number;
+            };
+        };
+        PeriodDownloadStreamRequest: {
+            ticket: string;
+            /** @description A share link’s download: the viewer token its ticket was minted with. */
+            viewerToken?: string;
+        };
         BillingOverview: {
             configured: boolean;
             subscription: {
@@ -26155,6 +26427,25 @@ export interface components {
             viewerToken: string;
             /** @description An expense’s `key` from POST /v1/share-links/entries. */
             entryKey: string;
+        };
+        ShareLinkDownloadTicketRequest: {
+            /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */
+            viewerToken: string;
+            /**
+             * @description `report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv.
+             * @enum {string}
+             */
+            type: "report" | "receipts";
+            /**
+             * @description Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent.
+             * @enum {string}
+             */
+            lang?: "ar" | "en";
+            /**
+             * Format: date-time
+             * @description Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree.
+             */
+            asOf?: string;
         };
     };
     responses: never;

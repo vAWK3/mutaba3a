@@ -170,6 +170,7 @@ import type {
   FeedPageRequest,
   MoneyDateCursor,
   PageCursor,
+  PeriodPackRepository,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
@@ -575,6 +576,7 @@ export class PrismaLedgerStore implements LedgerStore {
       );
     },
     findByDigest: async (tokenDigest) => mapNullable(await this.prisma.session.findUnique({ where: { tokenDigest } }), toSession),
+    getById: async (id) => mapNullable(await this.prisma.session.findUnique({ where: { id } }), toSession),
     touch: async (id, at, idleExpiresAt) => {
       await this.prisma.session.updateMany({ where: { id }, data: { lastSeenAt: at, idleExpiresAt } });
     },
@@ -737,6 +739,43 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
         if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
+    },
+  };
+
+  /**
+   * MUT-314 (ADR-248): three aggregates in parallel, each on the kind's (organizationId, money date) index; the
+   * receipts' is joined to the same expense filter. The same row rules as the entries feed and listReadyByExpenseIds.
+   */
+  readonly periodPack: PeriodPackRepository = {
+    estimate: async (organizationId, bounds, asOf) => {
+      const days = { ...(bounds.occurredFrom !== undefined && { gte: bounds.occurredFrom }), lt: bounds.occurredBefore };
+      const expenseWhere = { organizationId, deletedAt: null, occurredOn: days, createdAt: { lte: asOf } };
+      const [expenses, income, receipts] = await Promise.all([
+        this.prisma.expense.count({ where: expenseWhere }),
+        this.prisma.payment.count({ where: { organizationId, status: 'POSTED', receivedOn: days, createdAt: { lte: asOf } } }),
+        this.prisma.expenseReceipt.aggregate({
+          where: { organizationId, status: 'READY', deletedAt: null, createdAt: { lte: asOf }, expense: expenseWhere },
+          _count: { _all: true },
+          _sum: { sizeBytes: true },
+        }),
+      ]);
+      return { expenses, income, receipts: receipts._count._all, receiptBytes: receipts._sum.sizeBytes ?? 0 };
+    },
+    names: async (organizationId, ids) => {
+      const byId = <T extends { id: string }>(rows: T[], name: (row: T) => string) => new Map(rows.map((row) => [row.id, name(row)] as const));
+      const none = Promise.resolve([]);
+      const [customers, projects, vendors, users] = await Promise.all([
+        ids.customers.size ? this.prisma.customer.findMany({ where: { organizationId, id: { in: [...ids.customers] } }, select: { id: true, name: true } }) : none,
+        ids.projects.size ? this.prisma.project.findMany({ where: { organizationId, id: { in: [...ids.projects] } }, select: { id: true, name: true } }) : none,
+        ids.vendors.size ? this.prisma.vendor.findMany({ where: { organizationId, id: { in: [...ids.vendors] } }, select: { id: true, canonicalName: true } }) : none,
+        ids.users.size ? this.prisma.user.findMany({ where: { id: { in: [...ids.users] } }, select: { id: true, displayName: true } }) : none,
+      ]);
+      return {
+        customers: byId(customers as Array<{ id: string; name: string }>, (c) => c.name),
+        projects: byId(projects as Array<{ id: string; name: string }>, (p) => p.name),
+        vendors: byId(vendors as Array<{ id: string; canonicalName: string }>, (v) => v.canonicalName),
+        users: byId(users as Array<{ id: string; displayName: string }>, (u) => u.displayName),
+      };
     },
   };
 
@@ -2684,6 +2723,15 @@ export class PrismaLedgerStore implements LedgerStore {
     softDelete: async (organizationId, id, at) => {
       await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null }, data: { deletedAt: at } });
       return toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId } }));
+    },
+    listReadyByExpenseIds: async (organizationId, expenseIds) => {
+      if (expenseIds.length === 0) return [];
+      const rows = await this.prisma.expenseReceipt.findMany({
+        where: { organizationId, expenseId: { in: [...expenseIds] }, status: 'READY', deletedAt: null },
+        select: { id: true, expenseId: true, mimeType: true, sizeBytes: true, storageKey: true, createdAt: true },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.flatMap((r) => (r.expenseId ? [{ ...r, expenseId: r.expenseId }] : []));
     },
     countReadyByExpenseIds: async (organizationIds, expenseIds) => {
       if (expenseIds.length === 0) return new Map();

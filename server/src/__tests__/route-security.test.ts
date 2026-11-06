@@ -115,8 +115,8 @@ const FX_OPERATIONS = ['GET /v1/fx-rates'];
 // MUT-575: one profile's feed (profile-scoped, X-Mutaba3a-Profile), session-only like /v1/entries.
 const ENTRIES_OPERATIONS = ['GET /v1/entries', 'GET /v1/profile-entries'];
 
-/** MUT-325: Download my records, signed in — session-only, on the profile named by X-Mutaba3a-Profile. */
-const RECORDS_EXPORT_OPERATIONS = ['GET /v1/records-export', 'GET /v1/records-export/receipts/{receiptId}'];
+/** MUT-325: Download my records, signed in — session-only, on the profile named by X-Mutaba3a-Profile. MUT-314: a period download's mint, likewise. */
+const RECORDS_EXPORT_OPERATIONS = ['GET /v1/records-export', 'GET /v1/records-export/receipts/{receiptId}', 'GET /v1/period-downloads/ticket'];
 
 /** MUT-175: portal Reports' activity summary — it reads a profile's expenses too, so it is session-only like /v1/summaries/expenses. */
 // MUT-447: the verdict reads across a person's profiles (session-only, person-level, like GET /v1/entries).
@@ -247,7 +247,9 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
   'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
   // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
-  'POST /v1/share-links/check', 'POST /v1/share-links/unlock', 'POST /v1/share-links/entries', 'POST /v1/share-links/summary', 'POST /v1/share-links/expense-receipts'];
+  'POST /v1/share-links/check', 'POST /v1/share-links/unlock', 'POST /v1/share-links/entries', 'POST /v1/share-links/summary', 'POST /v1/share-links/expense-receipts',
+  // MUT-314: the period download's stream (the ticket is its credential) and a share link's mint.
+  'POST /v1/period-downloads/stream', 'POST /v1/share-links/download-ticket'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
 const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
@@ -290,6 +292,8 @@ beforeAll(async () => {
     accountantAccess: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
+    // MUT-314: and period downloads (PERIOD_DOWNLOADS).
+    periodDownloads: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
   operations = Object.entries(doc.paths)

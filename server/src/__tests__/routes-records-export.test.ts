@@ -25,9 +25,10 @@ const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3, 4, 5]);
 
 function harness(storage: MemoryAttachmentStorage | null = new MemoryAttachmentStorage()) {
   const store = new MemoryLedgerStore();
+  const logger = pino({ level: 'silent' });
   const app = createApp({
     store,
-    logger: pino({ level: 'silent' }),
+    logger,
     rateLimiter: new SlidingWindowRateLimiter(1_000_000),
     adminToken: ADMIN_TOKEN,
     keyEnvironment: 'test',
@@ -37,7 +38,7 @@ function harness(storage: MemoryAttachmentStorage | null = new MemoryAttachmentS
     attachmentUrlTtlSeconds: 900,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
-  return { app, store, storage };
+  return { app, store, storage, logger };
 }
 type Harness = ReturnType<typeof harness>;
 
@@ -114,6 +115,25 @@ describe('GET /v1/records-export', () => {
     expect((await h.app.request('/v1/records-export', { headers: p.as(b.id) })).status).toBe(404);
     expect((await h.app.request('/v1/records-export', { headers: p.as(null) })).status).toBe(422);
     expect((await h.app.request('/v1/records-export', { headers: a.key })).status).toBe(403);
+  });
+
+  it('a download cancelled partway logs no error, and the rest of the file is never read (MUT-501)', async () => {
+    const { h, a, p } = await setup();
+    for (let i = 0; i < 30; i++) await h.app.request('/v1/customers', json({ name: `Client ${i}` }, { ...p.as(a.id), ...idem() }));
+    const errors = vi.spyOn(h.logger, 'error');
+    const info = vi.spyOn(h.logger, 'info');
+
+    const res = await h.app.request('/v1/records-export', { headers: p.as(a.id) });
+    const reader = res.body!.getReader();
+    await reader.read();
+    // A pull in flight when the client goes away: its chunk must never be enqueued after the cancel.
+    const inFlight = reader.read();
+    await reader.cancel('client went away');
+    await inFlight.catch(() => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(errors).not.toHaveBeenCalled();
+    expect(info.mock.calls.some((call) => call[1] === 'records export cancelled')).toBe(true);
   });
 
   it('posts due items first, so the file holds what any read would show (ADR-037 decision 8)', async () => {
