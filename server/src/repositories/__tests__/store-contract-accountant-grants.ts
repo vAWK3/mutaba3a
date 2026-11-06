@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { closureDeadline } from '../../accounts/closure.js';
-import type { AccountantGrantRecord, AuditEventInput, CreateUserInput, LedgerStore, TermsAcceptanceInput } from '../ports.js';
+import type { AcceptAccountantResult, AccountantGrantRecord, AuditEventInput, CreateUserInput, LedgerStore, TermsAcceptanceInput } from '../ports.js';
 
 /**
  * MUT-559 storage contract (ADR-245): accountant grants. One live invite per profile and address, a cap on live grants,
@@ -9,6 +9,8 @@ import type { AccountantGrantRecord, AuditEventInput, CreateUserInput, LedgerSto
  */
 export function describeLedgerStoreAccountantGrantsContract(name: string, makeStore: () => Promise<LedgerStore>): void {
   const unique = () => Math.random().toString(36).slice(2, 10);
+  /** MUT-565: `accept` answers `{ kind: 'accepted', grant }`; the grant, or null for a lost or refused accept. */
+  const grantOf = (result: AcceptAccountantResult | null): AccountantGrantRecord | null => (result?.kind === 'accepted' ? result.grant : null);
   const at = (minute: number) => new Date(Date.UTC(2026, 10, 6, 9, minute, 0));
   const DAY = 86_400_000;
   const userInput = (prefix = 'owner'): CreateUserInput => ({
@@ -94,7 +96,7 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       const created = await invite(store, o, a.email);
       if (created.kind !== 'created') throw new Error('invite failed');
       const digest = created.grant.tokenDigest!;
-      const accept = (userId: string, minute: number) => store.accountantGrants.accept({ tokenDigest: digest, accountantUserId: userId, at: at(minute), auditFor: audit(o.profileId, 'accountant.accepted') });
+      const accept = async (userId: string, minute: number) => grantOf(await store.accountantGrants.accept({ tokenDigest: digest, accountantUserId: userId, at: at(minute), auditFor: audit(o.profileId, 'accountant.accepted') }));
       const results = await Promise.all([accept(a.id, 2), accept(b.id, 2)]);
       expect(results.filter((r) => r !== null)).toHaveLength(1);
       const winner = results.find((r) => r !== null)!;
@@ -142,7 +144,7 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       // A re-invite after leaving can be accepted again by the same person.
       const again = await invite(store, o, a.email, 8);
       if (again.kind !== 'created') throw new Error('invite failed');
-      expect(await store.accountantGrants.accept({ tokenDigest: again.grant.tokenDigest!, accountantUserId: a.id, at: at(9), auditFor: audit(o.profileId, 'accountant.accepted') })).toMatchObject({ status: 'ACTIVE' });
+      expect(await store.accountantGrants.accept({ tokenDigest: again.grant.tokenDigest!, accountantUserId: a.id, at: at(9), auditFor: audit(o.profileId, 'accountant.accepted') })).toMatchObject({ kind: 'accepted', grant: { status: 'ACTIVE' } });
     });
 
     it('stamps lastViewedAt with its audit row on an ACTIVE grant only', async () => {
@@ -232,7 +234,7 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       const accepted = async (on: { userId: string; profileId: string }, minute: number) => {
         const created = await invite(store, on, a.email, minute);
         if (created.kind !== 'created') throw new Error('invite failed');
-        const grant = await store.accountantGrants.accept({ tokenDigest: created.grant.tokenDigest!, accountantUserId: a.id, at: at(minute + 1), auditFor: audit(on.profileId, 'accountant.accepted') });
+        const grant = grantOf(await store.accountantGrants.accept({ tokenDigest: created.grant.tokenDigest!, accountantUserId: a.id, at: at(minute + 1), auditFor: audit(on.profileId, 'accountant.accepted') }));
         return grant!;
       };
       const first = await accepted(o, 1);
@@ -256,6 +258,80 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       await store.accountantGrants.leave({ organizationId: o2.profileId, accountantUserId: a.id, at: at(11), auditFor: audit(o2.profileId, 'accountant.left') });
       expect(await store.accountantGrants.listForAccountant(a.id)).toEqual([]);
       expect(await store.accountantGrants.dismiss({ organizationId: o2.profileId, accountantUserId: a.id, at: at(12) })).toBe(0);
+    });
+
+    // ---- MUT-565 (ADR-251): the cap at accept, and a grant's rank ------------------------------------------------
+    /** An ACTIVE grant for `a` on a fresh owner's profile, accepted at `minute`. */
+    async function activeFor(store: LedgerStore, a: { id: string }, minute: number) {
+      const o = await owner(store);
+      const created = await invite(store, o, `cap-${unique()}@books.ps`, minute);
+      if (created.kind !== 'created') throw new Error('invite failed');
+      const result = await store.accountantGrants.accept({ tokenDigest: created.grant.tokenDigest!, accountantUserId: a.id, at: at(minute), auditFor: () => [] });
+      if (result?.kind !== 'accepted') throw new Error('accept failed');
+      return result.grant;
+    }
+
+    it('MUT-565: at maxActive nothing is written: the invite stays PENDING with its token, and accepts once there is room', async () => {
+      const store = await makeStore();
+      const a = (await store.users.create(userInput('acc'))).user;
+      const held = [await activeFor(store, a, 1), await activeFor(store, a, 2), await activeFor(store, a, 3)];
+      const o = await owner(store);
+      const fourth = await invite(store, o, `fourth-${unique()}@books.ps`, 4);
+      if (fourth.kind !== 'created') throw new Error('invite failed');
+      const digest = fourth.grant.tokenDigest!;
+      const accept = (maxActive: number | null, minute: number) => store.accountantGrants.accept({ tokenDigest: digest, accountantUserId: a.id, at: at(minute), maxActive, auditFor: audit(o.profileId, 'accountant.accepted') });
+
+      expect(await accept(3, 5)).toEqual({ kind: 'cap_reached', active: 3 });
+      expect(await store.accountantGrants.findByDigest(digest)).toMatchObject({ status: 'PENDING', tokenDigest: digest, accountantUserId: null });
+      expect((await store.audit.listByOrganization(o.profileId, 50)).filter((e) => e.action === 'accountant.accepted')).toHaveLength(0);
+      // A pending invite elsewhere never counts; an unusable token is still null, not cap_reached.
+      expect(await store.accountantGrants.accept({ tokenDigest: 'no-such-digest', accountantUserId: a.id, at: at(5), maxActive: 3, auditFor: () => [] })).toBeNull();
+
+      // The plan lifts the cap: the same token now accepts.
+      expect(await accept(100, 6)).toMatchObject({ kind: 'accepted', grant: { status: 'ACTIVE', accountantUserId: a.id } });
+
+      // A leave frees a place under the free cap too.
+      const store2 = await makeStore();
+      const b = (await store2.users.create(userInput('acc'))).user;
+      const bHeld = [await activeFor(store2, b, 1), await activeFor(store2, b, 2), await activeFor(store2, b, 3)];
+      await store2.accountantGrants.leave({ organizationId: bHeld[1]!.organizationId, accountantUserId: b.id, at: at(4), auditFor: () => [] });
+      const o2 = await owner(store2);
+      const next = await invite(store2, o2, `next-${unique()}@books.ps`, 5);
+      if (next.kind !== 'created') throw new Error('invite failed');
+      expect(await store2.accountantGrants.accept({ tokenDigest: next.grant.tokenDigest!, accountantUserId: b.id, at: at(6), maxActive: 3, auditFor: () => [] })).toMatchObject({ kind: 'accepted' });
+      expect(held).toHaveLength(3);
+    });
+
+    it('MUT-565: two parallel accepts at 2 of 3: one is accepted, the other refused at the cap', async () => {
+      const store = await makeStore();
+      const a = (await store.users.create(userInput('acc'))).user;
+      await activeFor(store, a, 1);
+      await activeFor(store, a, 2);
+      const [x, y] = [await owner(store), await owner(store)];
+      const ix = await invite(store, x, `x-${unique()}@books.ps`, 3);
+      const iy = await invite(store, y, `y-${unique()}@books.ps`, 3);
+      if (ix.kind !== 'created' || iy.kind !== 'created') throw new Error('invite failed');
+      const results = await Promise.all(
+        [ix, iy].map((i) => store.accountantGrants.accept({ tokenDigest: i.grant.tokenDigest!, accountantUserId: a.id, at: at(4), maxActive: 3, auditFor: () => [] })),
+      );
+      expect(results.map((r) => r?.kind).sort()).toEqual(['accepted', 'cap_reached']);
+      expect(await store.accountantGrants.listActiveByAccountant(a.id)).toHaveLength(3);
+    });
+
+    it('MUT-565: countActiveBefore ranks a grant among the ACTIVE ones by accept time, then id', async () => {
+      const store = await makeStore();
+      const a = (await store.users.create(userInput('acc'))).user;
+      const g1 = await activeFor(store, a, 1);
+      const g2 = await activeFor(store, a, 2);
+      const g3 = await activeFor(store, a, 3);
+      const g4 = await activeFor(store, a, 4);
+      expect(await Promise.all([g1, g2, g3, g4].map((g) => store.accountantGrants.countActiveBefore(a.id, g)))).toEqual([0, 1, 2, 3]);
+      await store.accountantGrants.leave({ organizationId: g2.organizationId, accountantUserId: a.id, at: at(5), auditFor: () => [] });
+      expect(await store.accountantGrants.countActiveBefore(a.id, g4)).toBe(2);
+      // Another accountant's grants never count.
+      const b = (await store.users.create(userInput('acc'))).user;
+      await activeFor(store, b, 0);
+      expect(await store.accountantGrants.countActiveBefore(a.id, g1)).toBe(0);
     });
   });
 }

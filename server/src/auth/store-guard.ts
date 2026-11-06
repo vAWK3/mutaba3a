@@ -414,6 +414,8 @@ export const STORE_ACCESS: StoreAccess = {
     listForAccountant: 'sessionOnly',
     dismiss: 'sessionOnly',
     accept: 'sessionOnly',
+    // MUT-565: selectProfile's rank read runs on the store beneath the guard (like the view stamp).
+    countActiveBefore: 'operator',
     signupAndAccept: 'operator',
     revoke: 'sessionOnly',
     leave: 'sessionOnly',

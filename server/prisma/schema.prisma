@@ -1542,6 +1542,9 @@ model ExpenseGroupOverride {
 enum BillingTier {
   FREELANCER
   FIRM
+  /// MUT-565 (ADR-251): the Accountant plan, a person's (client books), never a profile's. A grant with it names a
+  /// person only (CHECK in 20261108120100); a subscription with it has no organization (mirror.ts).
+  ACCOUNTANT
 }
 
 /// MUT-358: one Stripe customer. userId is NULL while the customer is unlinked (MUT-360 stores those; the
@@ -1630,7 +1633,7 @@ model BillingRetentionEvent {
 }
 
 /// MUT-358: an operator grant. Exactly one of userId (the person's own profiles) and organizationId (that profile)
-/// is set (CHECK in the migration). Never deleted: revoking sets revokedAt, so "who was covered when" stays answerable.
+/// is set (CHECK in the migration). MUT-565: an ACCOUNTANT grant always names the person (CHECK, 20261108120100). Never deleted: revoking sets revokedAt, so "who was covered when" stays answerable.
 model EntitlementGrant {
   id             String        @id @default(uuid()) @db.Uuid
   userId         String?       @db.Uuid

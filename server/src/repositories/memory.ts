@@ -781,13 +781,22 @@ export class MemoryLedgerStore implements LedgerStore {
       for (const g of ended) g.dismissedAt = at;
       return ended.length;
     },
-    accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
+    accept: async ({ tokenDigest, accountantUserId, at, maxActive, auditFor }) => {
       if (!this.people.has(accountantUserId)) throw new ForeignKeyViolation('accountant_grants.accountantUserId');
       const grant = this.claimableGrant(tokenDigest, at);
       if (!grant || this.hasActiveGrant(accountantUserId, grant.organizationId)) return null;
+      // MUT-565: one synchronous block, so the count and the claim can't interleave with another accept.
+      const active = [...this.accountantGrantMap.values()].filter((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId).length;
+      if (maxActive !== undefined && maxActive !== null && active >= maxActive) return { kind: 'cap_reached', active };
       Object.assign(grant, { status: 'ACTIVE', accountantUserId, acceptedAt: at, tokenDigest: null });
       this.pushEvents(auditFor({ ...grant }), at);
-      return { ...grant };
+      return { kind: 'accepted', grant: { ...grant } };
+    },
+    countActiveBefore: async (accountantUserId, { id, acceptedAt }) => {
+      const at = acceptedAt?.getTime() ?? 0;
+      return [...this.accountantGrantMap.values()].filter(
+        (g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && ((g.acceptedAt?.getTime() ?? 0) < at || ((g.acceptedAt?.getTime() ?? 0) === at && g.id < id)),
+      ).length;
     },
     signupAndAccept: async (input) => {
       const grant = [...this.accountantGrantMap.values()].find((g) => g.tokenDigest === input.tokenDigest);

@@ -2121,7 +2121,8 @@ export interface SignupReviewRepository {
 
 // ---- MUT-358 (ADR-160): billing core ---------------------------------------
 
-export type BillingTierRecord = 'FREELANCER' | 'FIRM';
+/** MUT-565 (ADR-251): ACCOUNTANT is a person's plan (client books), never a profile's; see billing/accountant-plan.ts. */
+export type BillingTierRecord = 'FREELANCER' | 'FIRM' | 'ACCOUNTANT';
 
 /** One Stripe customer; `userId` is null until the operator (or MUT-360's checkout) links it to a person. */
 export interface BillingAccountRecord {
@@ -2752,6 +2753,18 @@ export type SignupAccountantResult =
   | { kind: 'account_exists' }
   | { kind: 'unusable' };
 
+export interface AcceptAccountantInput {
+  tokenDigest: string;
+  accountantUserId: string;
+  at: Date;
+  /** MUT-565: the most ACTIVE grants the accountant may hold after this accept would make one more; absent = no cap. */
+  maxActive?: number | null;
+  auditFor(grant: AccountantGrantRecord): AuditEventInput[];
+}
+
+/** MUT-565: accepted, or refused at the cap (`active`: the ACTIVE grants counted under the lock). */
+export type AcceptAccountantResult = { kind: 'accepted'; grant: AccountantGrantRecord } | { kind: 'cap_reached'; active: number };
+
 export interface AccountantGrantRepository {
   /**
    * One transaction under the profile's row lock: ends an expired PENDING invite to the same address, then refuses
@@ -2775,8 +2788,15 @@ export interface AccountantGrantRepository {
    * Conditional: only a PENDING grant with this digest, unexpired at `at`, becomes ACTIVE for `accountantUserId`
    * (token nulled), with `auditFor(grant)`. Null when it lost: unknown, used, ended, expired, a concurrent accept, or
    * the person already holds an ACTIVE grant on that profile. Of two concurrent accepts, exactly one wins.
+   * MUT-565 (ADR-251): with `maxActive`, the accountant's row is locked first (their accepts run one at a time) and
+   * their ACTIVE grants counted; at `maxActive` nothing is written (`cap_reached`): the invite stays PENDING with its token.
    */
-  accept(input: { tokenDigest: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
+  accept(input: AcceptAccountantInput): Promise<AcceptAccountantResult | null>;
+  /**
+   * MUT-565: how many ACTIVE grants the accountant accepted before this one (acceptedAt, then id): its rank among their
+   * client books. selectProfile's one extra read; on the (accountantUserId, status) index.
+   */
+  countActiveBefore(accountantUserId: string, grant: Pick<AccountantGrantRecord, 'id' | 'acceptedAt'>): Promise<number>;
   /**
    * One transaction, serialised per address: no account may hold the invite's address (`account_exists`); the grant is
    * claimed as `accept` does (`unusable` when it can't be); then the user (ACTIVE, email verified, no signup review, no

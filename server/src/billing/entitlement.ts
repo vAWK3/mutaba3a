@@ -17,14 +17,20 @@
  * MUT-361 enforces it at the door (billing/gate.ts, ADR-181).
  */
 
-export type BillingTier = 'FREELANCER' | 'FIRM';
+/**
+ * MUT-565 (ADR-251): ACCOUNTANT is a person's plan for client books, never a profile's. It lives in the same tables
+ * (one mirror, one grant path) and is kept out of every profile reading by `profileFacts` / `profilePlanSubscriptions`.
+ */
+export type BillingTier = 'FREELANCER' | 'FIRM' | 'ACCOUNTANT';
+/** The tiers a profile can be entitled by. */
+export type ProfileBillingTier = Exclude<BillingTier, 'ACCOUNTANT'>;
 export type EntitlementState = 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED';
 export type EntitlementSource = 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE';
 
 export interface Entitlement {
   state: EntitlementState;
   source: EntitlementSource;
-  tier: BillingTier | null;
+  tier: ProfileBillingTier | null;
   /** When this state ends, if it is known to: a grant's expiry, a period end, the trial's end or its lock date. */
   until: Date | null;
   /** MUT-532: READ_ONLY because the person paused their plan, until it restarts on `until`. Absent is false. */
@@ -96,7 +102,7 @@ export interface BillingFacts {
   trialStarts: ReadonlyMap<string, Date | null>;
 }
 
-const COVERING_STATUSES: ReadonlyMap<string, 'ACTIVE' | 'GRACE'> = new Map([
+export const COVERING_STATUSES: ReadonlyMap<string, 'ACTIVE' | 'GRACE'> = new Map([
   ['active', 'ACTIVE'],
   ['trialing', 'ACTIVE'],
   ['past_due', 'GRACE'],
@@ -104,9 +110,29 @@ const COVERING_STATUSES: ReadonlyMap<string, 'ACTIVE' | 'GRACE'> = new Map([
 /** A subscription that was paid for and then stopped. `incomplete_expired` is an abandoned checkout, never paid. */
 const LAPSED_STATUSES: ReadonlySet<string> = new Set(['unpaid', 'canceled', 'paused']);
 /** Statuses that never meant money changed hands: they neither cover nor count as having paid. */
-const NEVER_PAID_STATUSES: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expired']);
+export const NEVER_PAID_STATUSES: ReadonlySet<string> = new Set(['incomplete', 'incomplete_expired']);
 
-export function resolveEntitlement(profile: ProfileFacts, facts: BillingFacts, now: Date): Entitlement {
+/**
+ * MUT-565 (ADR-251): the person's subscriptions as a profile plan sees them: without ACCOUNTANT ones. Every reader of
+ * "the person's subscription" (Billing's shown plan, the yearly switch, pause and cancel, the offers, the Freelancer
+ * Checkout's refusals, the come-back rule) goes through this, so the Accountant plan never stands in for it.
+ */
+export function profilePlanSubscriptions<T extends { tier?: BillingTier | null }>(subscriptions: readonly T[]): Array<T & { tier: Exclude<T['tier'], 'ACCOUNTANT'> }> {
+  return subscriptions.filter((s): s is T & { tier: Exclude<T['tier'], 'ACCOUNTANT'> } => s.tier !== 'ACCOUNTANT');
+}
+
+/** MUT-565: the facts with every ACCOUNTANT subscription and grant left out (resolveEntitlement's first line). */
+export function profileFacts<F extends BillingFacts>(facts: F): F {
+  return { ...facts, subscriptions: profilePlanSubscriptions(facts.subscriptions), grants: facts.grants.filter((g) => g.tier !== 'ACCOUNTANT') };
+}
+
+type ProfileSubscriptionFact = SubscriptionFact & { tier: ProfileBillingTier };
+type ProfileGrantFact = GrantFact & { tier: ProfileBillingTier };
+
+export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts, now: Date): Entitlement {
+  // MUT-565: the Accountant plan is the person's, for client books: it never entitles their own profiles.
+  const filtered = profileFacts(allFacts);
+  const facts = { ...filtered, subscriptions: filtered.subscriptions as readonly ProfileSubscriptionFact[], grants: filtered.grants as readonly ProfileGrantFact[] };
   if (profile.malafatConnected) return { state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null };
 
   const grant = bestGrant(facts.grants.filter((g) => grantCovers(g, profile) && grantIsLive(g, now)));
@@ -142,13 +168,13 @@ function grantCovers(grant: GrantFact, profile: ProfileFacts): boolean {
   return grant.userId !== null && grant.userId === profile.ownerUserId;
 }
 
-function grantIsLive(grant: GrantFact, now: Date): boolean {
+export function grantIsLive(grant: Pick<GrantFact, 'revokedAt' | 'expiresAt'>, now: Date): boolean {
   return grant.revokedAt === null && (grant.expiresAt === null || grant.expiresAt > now);
 }
 
 /** The Firm tier, then the one that lasts longest (no expiry beats any expiry). */
-function bestGrant(grants: readonly GrantFact[]): GrantFact | undefined {
-  const lasts = (g: GrantFact) => g.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY;
+function bestGrant<G extends GrantFact>(grants: readonly G[]): G | undefined {
+  const lasts = (g: G) => g.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY;
   return [...grants].sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || lasts(b) - lasts(a))[0];
 }
 
@@ -164,8 +190,8 @@ function subscriptionCovers(subscription: SubscriptionFact, profile: ProfileFact
 }
 
 /** ACTIVE before GRACE, then the Firm tier, then the later period end. */
-function bestSubscription(subscriptions: readonly SubscriptionFact[]): SubscriptionFact | undefined {
-  const stateRank = (s: SubscriptionFact) => (coveringState(s) === 'ACTIVE' ? 1 : 0);
+export function bestSubscription<S extends SubscriptionFact>(subscriptions: readonly S[]): S | undefined {
+  const stateRank = (s: S) => (coveringState(s) === 'ACTIVE' ? 1 : 0);
   return [...subscriptions].sort(
     (a, b) => stateRank(b) - stateRank(a) || tierRank(b.tier) - tierRank(a.tier) || b.currentPeriodEnd.getTime() - a.currentPeriodEnd.getTime(),
   )[0];
@@ -184,7 +210,7 @@ export function pausedNow(subscription: Pick<SubscriptionFact, 'pausedFrom' | 'p
   return until === null || now < until;
 }
 
-function coveringState(subscription: SubscriptionFact): 'ACTIVE' | 'GRACE' | undefined {
+export function coveringState(subscription: Pick<SubscriptionFact, 'status'>): 'ACTIVE' | 'GRACE' | undefined {
   return COVERING_STATUSES.get(subscription.status);
 }
 

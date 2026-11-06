@@ -170,6 +170,7 @@ import type {
   FeedPageRequest,
   MoneyDateCursor,
   PageCursor,
+  AcceptAccountantResult,
 } from './ports.js';
 import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
@@ -654,17 +655,31 @@ export class PrismaLedgerStore implements LedgerStore {
           orderBy: [{ acceptedAt: 'asc' }, { id: 'asc' }],
         })
       ).map(toAccountantGrant),
+    // MUT-565: the grant's rank among the accountant's client books, on the (accountantUserId, status) index.
+    countActiveBefore: async (accountantUserId, { id, acceptedAt }) =>
+      this.prisma.accountantGrant.count({
+        where: { accountantUserId, status: 'ACTIVE', OR: [{ acceptedAt: { lt: acceptedAt ?? new Date(0) } }, { acceptedAt: acceptedAt ?? new Date(0), id: { lt: id } }] },
+      }),
     dismiss: async ({ organizationId, accountantUserId, at }) =>
       (await this.prisma.accountantGrant.updateMany({ where: { organizationId, accountantUserId, status: 'REVOKED', dismissedAt: null }, data: { dismissedAt: at } })).count,
-    accept: async ({ tokenDigest, accountantUserId, at, auditFor }) => {
+    accept: async ({ tokenDigest, accountantUserId, at, maxActive, auditFor }) => {
       try {
         return await translate(() =>
-          this.prisma.$transaction(async (tx) => {
+          this.prisma.$transaction(async (tx): Promise<AcceptAccountantResult | null> => {
+            if (maxActive !== undefined && maxActive !== null) {
+              // MUT-565 (ADR-251): one accountant's accepts run one at a time (the lockOrganization pattern, on the
+              // person), so two parallel accepts at 2 of 3 can't both pass the count. A refusal writes nothing.
+              await tx.$queryRaw`SELECT id FROM users WHERE id = ${accountantUserId}::uuid FOR NO KEY UPDATE`;
+              const claimable = await tx.accountantGrant.findFirst({ where: { tokenDigest, status: 'PENDING', inviteExpiresAt: { gt: at } }, select: { id: true } });
+              if (!claimable) return null;
+              const active = await tx.accountantGrant.count({ where: { accountantUserId, status: 'ACTIVE' } });
+              if (active >= maxActive) return { kind: 'cap_reached', active };
+            }
             const grant = await claimAccountantGrant(tx, tokenDigest, accountantUserId, at);
             if (!grant) return null;
             const audit = auditFor(grant);
             if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
-            return grant;
+            return { kind: 'accepted', grant };
           }),
         );
       } catch (err) {
