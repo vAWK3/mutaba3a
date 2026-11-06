@@ -2,6 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
 import { CANCELLATION_COMMENT_MAX, CANCELLATION_REASONS } from './billing/retention.js';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
+import { SHARE_LINK_PERIODS } from './share-links/period.js';
 import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
@@ -3667,9 +3668,9 @@ export const ExpenseSchema = z
     createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
     captureSource: StoredCaptureSourceSchema.nullable().openapi({ description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436." }),
     vat: ExpenseVatSchema.nullable().openapi({ description: 'MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302.' }),
-    allocationNumber: z.string().regex(/^\d{9}$/).nullable().openapi({ description: 'MUT-557: the supplier invoice\'s Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.101.0-mut557.' }),
+    allocationNumber: z.string().regex(/^\d{9}$/).nullable().openapi({ description: 'MUT-557: the supplier invoice\'s Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557.' }),
     allocationNumberMissing: z.boolean().openapi({
-      description: 'MUT-557: worked out on every read, never stored. True on a firm profile\'s ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557.',
+      description: 'MUT-557: worked out on every read, never stored. True on a firm profile\'s ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.106.0-mut557.',
     }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
@@ -3703,7 +3704,7 @@ export const ReceiptSuggestionSchema = z
     registrationNo: suggestedField(z.string().min(1).max(64)).optional(),
     phone: suggestedField(z.string().min(1).max(40)).optional(),
     email: suggestedField(z.string().min(1).max(254)).optional(),
-    /** MUT-557: nine digits, read only beside its label (every reader sends the bare digits). Since 1.101.0-mut557. */
+    /** MUT-557: nine digits, read only beside its label (every reader sends the bare digits). Since 1.106.0-mut557. */
     allocationNumber: suggestedField(z.string().regex(/^\d{9}$/)).optional(),
   })
   .openapi('ReceiptSuggestion');
@@ -3790,7 +3791,7 @@ export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSugges
 export const ReceiptDetailSchema = ExpenseReceiptSchema.extend({
   vendorDefaults: ReceiptVendorDefaultsSchema.nullable(),
   allocationNumberExpected: z.boolean().openapi({
-    description: 'MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557.',
+    description: 'MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.106.0-mut557.',
   }),
 }).openapi('ReceiptDetail');
 
@@ -3811,7 +3812,7 @@ export const CreateExpenseRequestSchema = z
     /** MUT-339 (S4): when the phone saved it; the server keeps it as when it was logged, clamped to the last 48 hours. */
     capturedAt: z.string().datetime({ offset: true }).optional().openapi({ description: 'When the phone saved it (ISO 8601). Kept as when it was logged, clamped to [now − 48 h, now]; absent means now.' }),
     vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302.' }),
-    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.101.0-mut557.' }),
+    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557.' }),
   })
   .strict()
   .openapi('CreateExpenseRequest');
@@ -3843,7 +3844,7 @@ export const UpdateExpenseRequestSchema = z
     projectId: uuid.nullable().optional(),
     notes: expenseNotes.nullable().optional(),
     vat: ExpenseVatInputSchema.nullable().optional().openapi({ description: 'MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row\'s own. Since 1.92.0-mut302.' }),
-    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.101.0-mut557.' }),
+    allocationNumber: z.string().max(40).nullable().optional().openapi({ description: 'MUT-557: the invoice\'s allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557.' }),
   })
   .strict()
   .openapi('UpdateExpenseRequest');
@@ -4442,6 +4443,177 @@ export const EntrySchema = z
   .openapi('Entry');
 
 export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');
+
+// ---- MUT-560 (ADR-247): share links (one-time, a period, a PIN, no account) ----
+
+export const ShareLinkPeriodSchema = z.enum(SHARE_LINK_PERIODS).openapi('ShareLinkPeriod', {
+  description:
+    'LAST_1_MONTH, LAST_2_MONTHS, LAST_3_MONTHS: the last 1–3 complete calendar months before the day the link is made, in the profile’s timezone (made 2026-11-06, LAST_3_MONTHS = 2026-08-01 … 2026-10-31). WHOLE_PROFILE: everything up to and including that day. Frozen when the link is made.',
+});
+
+const shareRange = {
+  from: IsoDateSchema.nullable().openapi({ description: 'First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).' }),
+  to: IsoDateSchema.openapi({ description: 'Last money date shown, inclusive.' }),
+};
+
+export const CreateShareLinkRequestSchema = z
+  .object({
+    period: ShareLinkPeriodSchema,
+    expiresInDays: z.union([z.literal(1), z.literal(7), z.literal(30)]).openapi({ description: 'The link stops working this many days after it is made: 1, 7 or 30.' }),
+    pin: z.string().max(32).openapi({ description: '4 to 8 digits; Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. Anything else answers 422 VALIDATION_FAILED, details.reason PIN_FORMAT.' }),
+  })
+  .strict()
+  .openapi('CreateShareLinkRequest');
+
+export const ShareLinkCreatedSchema = z
+  .object({
+    id: uuid,
+    url: z.string().url().openapi({ description: 'The link, its token in the fragment. Shown only in this answer: only its hash is kept, so it can never be shown again.' }),
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+    expiresAt: z.string().datetime(),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('ShareLinkCreated');
+
+export const ShareLinkSchema = z
+  .object({
+    id: uuid,
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+    createdAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    lastOpenedAt: z.string().datetime().nullable().openapi({ description: 'The last unlock, or a view (written at most hourly).' }),
+    status: z.enum(['active', 'locked', 'expired', 'revoked']).openapi({
+      description: 'locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one. Locked, expired and revoked links stay in the list for 24 hours after `endedAt`, then drop out.',
+    }),
+    endedAt: z.string().datetime().nullable().openapi({ description: 'When it was revoked, locked or expired; null while active.' }),
+    viewers: z.number().int().openapi({ description: 'Devices that have opened it.' }),
+    maxViewers: z.number().int(),
+    createdByName: z.string().nullable().openapi({ description: 'The owner who made it; null once their account is deleted.' }),
+  })
+  .openapi('ShareLink');
+
+export const ShareLinkListSchema = z
+  .object({ items: z.array(ShareLinkSchema), limit: z.number().int().openapi({ description: 'The most live links one profile may have (409 SHARE_LINK_LIMIT past it).' }) })
+  .openapi('ShareLinkList');
+
+export const ShareLinkParamSchema = ProfileIdParamSchema.extend({ linkId: z.string().uuid().openapi({ param: { name: 'linkId', in: 'path' } }) });
+
+const shareToken = z.string().regex(SETUP_TOKEN_PATTERN, 'must be a share-link token');
+const viewerToken = z.string().regex(SETUP_TOKEN_PATTERN, 'must be a viewer token').openapi({ description: 'From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.' });
+
+export const ShareLinkCheckRequestSchema = z.object({ token: shareToken.openapi({ description: 'The token from the link’s fragment.' }) }).strict().openapi('ShareLinkCheckRequest');
+
+export const ShareLinkCheckResponseSchema = z
+  .object({ state: z.literal('pin').openapi({ description: 'The link can be opened with its PIN. Nothing about the profile or its owner is said before it.' }) })
+  .openapi('ShareLinkCheck');
+
+export const ShareLinkUnlockRequestSchema = z
+  .object({
+    token: shareToken,
+    pin: z.string().max(32).openapi({ description: 'Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. A PIN that is not 4–8 digits counts as a wrong one.' }),
+    viewerToken: viewerToken.optional().openapi({ description: 'The viewer token this browser held for this link before, even if its access has ended: it keeps its place among the 3 devices.' }),
+  })
+  .strict()
+  .openapi('ShareLinkUnlockRequest');
+
+export const ShareLinkUnlockResponseSchema = z
+  .object({
+    viewerToken: viewerToken,
+    viewerExpiresAt: z.string().datetime().openapi({ description: '8 hours from now, or the link’s expiry if sooner; then the PIN again.' }),
+    linkExpiresAt: z.string().datetime(),
+    profileName: z.string(),
+    ownerName: z.string().nullable(),
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+  })
+  .openapi('ShareLinkUnlock');
+
+export const ShareLinkViewRequestSchema = z.object({ viewerToken }).strict().openapi('ShareLinkViewRequest');
+
+export const ShareLinkEntriesRequestSchema = z
+  .object({
+    viewerToken,
+    limit: z.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
+    cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  })
+  .strict()
+  .openapi('ShareLinkEntriesRequest');
+
+const visitorKey = z.string().regex(/^[A-Za-z0-9_-]{22}$/).openapi({ description: 'An opaque key for this entry on this link only (not an id). The receipts route takes it.' });
+const visitorName = (what: string) => z.string().nullable().openapi({ description: `The ${what}’s name; null when none.` });
+
+export const ShareLinkExpenseSchema = z
+  .object({
+    key: visitorKey,
+    occurredOn: IsoDateSchema,
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    title: z.string().nullable(),
+    vendor: z.string().nullable(),
+    category: visitorName('category').openapi({ description: 'The category’s name, a preset one in the request’s language (Accept-Language; Arabic by default); null when none.' }),
+    client: visitorName('client'),
+    project: visitorName('project'),
+    notes: z.string().nullable(),
+    vat: ExpenseVatSchema.nullable(),
+    receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }),
+  })
+  .openapi('ShareLinkExpense');
+
+export const ShareLinkIncomeSchema = IncomeResponseSchema.omit({ id: true, customerId: true, projectId: true, version: true })
+  .extend({ key: visitorKey, client: visitorName('client'), project: visitorName('project') })
+  .openapi('ShareLinkIncome');
+
+/** The feed's items as a stranger sees them: expenses and received payments only (the report's rows), names, never ids. */
+export const ShareLinkEntrySchema = z
+  .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('expense'), createdAt: z.string().datetime(), expense: ShareLinkExpenseSchema }),
+    z.object({
+      kind: z.literal('received'),
+      createdAt: z.string().datetime(),
+      origin: z.enum(['capture', 'integration']),
+      settlesOwed: z.boolean().openapi({ description: 'It paid toward one Owed entry (a settle).' }),
+      replacesPayment: z.boolean().openapi({ description: 'It replaced a payment Malafat reversed.' }),
+      income: ShareLinkIncomeSchema,
+    }),
+  ])
+  .openapi('ShareLinkEntry');
+
+export const ShareLinkEntryPageSchema = z.object({ items: z.array(ShareLinkEntrySchema), nextCursor: z.string().nullable() }).openapi('ShareLinkEntryPage');
+
+const visitorBucket = { total: AmountSchema, count: z.number().int() };
+export const ShareLinkSummarySchema = z
+  .object({
+    ...shareRange,
+    expenses: z
+      .array(
+        z.object({
+          currency: CurrencySchema,
+          ...visitorBucket,
+          byCategory: z.array(z.object({ category: visitorName('category'), ...visitorBucket })),
+          byClient: z.array(z.object({ client: visitorName('client'), ...visitorBucket })),
+        }),
+      )
+      .openapi({ description: 'Per currency, never summed across currencies; breakdowns by name.' }),
+    received: z.array(z.object({ currency: CurrencySchema, ...visitorBucket })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+  })
+  .openapi('ShareLinkSummary');
+
+export const ShareLinkReceiptsRequestSchema = z.object({ viewerToken, entryKey: z.string().max(64).openapi({ description: 'An expense’s `key` from POST /v1/share-links/entries.' }) }).strict().openapi('ShareLinkReceiptsRequest');
+
+export const ShareLinkReceiptListSchema = z
+  .object({
+    items: z.array(
+      z.object({
+        filename: z.string(),
+        mimeType: AttachmentMimeTypeSchema,
+        url: z.string().url(),
+        expiresAt: z.string().datetime().openapi({ description: 'At most 60 seconds away, and never past this viewer’s access or the link’s expiry.' }),
+      }),
+    ),
+  })
+  .openapi('ShareLinkReceiptList');
 
 // ---- MUT-434: connecting an agent (OAuth for MCP clients) -------------------------
 

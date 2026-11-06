@@ -63,6 +63,8 @@ import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
+import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, shareLinkRoutes } from './routes/share-links.js';
+import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_SUMMARY_POLICY, SHARE_LINK_VIEW_IP_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
 import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
@@ -223,13 +225,28 @@ export interface AppDependencies {
   accountantsPerProfileMax?: number;
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
   accountantInviteLimiter?: RateLimiter;
+  /**
+   * MUT-560 (SHARE_LINKS, ADR-247): one-time share links. Absent or false = every share-link route answers the uniform
+   * 404 before authentication (the server deploys dark).
+   */
+  shareLinks?: boolean;
+  /** MUT-560: SHARE_LINKS_PER_PROFILE_MAX. Default SHARE_LINKS_PER_PROFILE_DEFAULT (10). */
+  shareLinksPerProfileMax?: number;
+  /** MUT-560: creates per owner per hour. Defaults to SHARE_LINK_CREATE_POLICY. */
+  shareLinkCreateLimiter?: RateLimiter;
+  /** MUT-560: requests per viewer per minute on the view routes. Defaults to SHARE_LINK_VIEW_POLICY. */
+  shareLinkViewLimiter?: RateLimiter;
+  /** MUT-560 review: view requests per client address per minute. Defaults to SHARE_LINK_VIEW_IP_POLICY. */
+  shareLinkViewIpLimiter?: RateLimiter;
+  /** MUT-560 review: summaries per viewer per minute. Defaults to SHARE_LINK_SUMMARY_POLICY. */
+  shareLinkSummaryLimiter?: RateLimiter;
 }
 
 /**
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -311,7 +328,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.101.0-mut557';
+export const API_VERSION = '1.106.0-mut557';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -371,13 +388,17 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
-  // MUT-559 (ADR-245): while ACCOUNTANT_ACCESS is off, every accountant route answers 404 before anything else looks
-  // at the request (the routes stay registered, so the published contract doesn't depend on the switch).
+  // MUT-559 (ADR-245), MUT-560 (ADR-247): a feature that is switched off answers 404 on every route it adds, before
+  // anything else looks at the request (the routes stay registered, so the published contract doesn't depend on the
+  // switch). One table, one mechanism: each row is a route file's exported endpoint set, its switch and its 404.
+  const darkLaunches: ReadonlyArray<{ endpoints: ReadonlySet<string>; on: boolean; refusal: () => ApiError }> = [
+    { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
+  ];
   app.use('/v1/*', async (c, next) => {
-    if (!accountantAccess) {
-      const endpoint = endpointKey(c);
-      if (endpoint && ACCOUNTANT_ENDPOINTS.has(endpoint)) throw new ApiError('NOT_FOUND', 'Not found');
-    }
+    const endpoint = endpointKey(c);
+    const off = endpoint ? darkLaunches.find((d) => !d.on && d.endpoints.has(endpoint)) : undefined;
+    if (off) throw off.refusal();
     await next();
   });
   app.use(
@@ -667,6 +688,25 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
     tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter, reading: receiptReader } }));
 
+  // MUT-560 (ADR-247): share links, registered last so the published components keep their order. The visitor's routes share the sign-in IP limiter under their own key; the link's
+  // own bookkeeping runs on the base store (as authenticate() reads sessions), the profile's records through the guard.
+  app.route(
+    '/',
+    shareLinkRoutes({
+      store,
+      linkStore: deps.store,
+      settings: sessions,
+      passwordHasher,
+      ipLimiter: signInIpLimiter,
+      createLimiter: deps.shareLinkCreateLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_CREATE_POLICY.perUserPerHour, 3_600_000),
+      viewLimiter: deps.shareLinkViewLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_VIEW_POLICY.perViewerPerMinute),
+      viewIpLimiter: deps.shareLinkViewIpLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_VIEW_IP_POLICY.perIpPerMinute),
+      summaryLimiter: deps.shareLinkSummaryLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_SUMMARY_POLICY.perViewerPerMinute),
+      maxPerProfile: deps.shareLinksPerProfileMax ?? SHARE_LINKS_PER_PROFILE_DEFAULT,
+      storage: deps.attachments ?? null,
+      urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
+    }),
+  );
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {
     type: 'http',
     scheme: 'bearer',

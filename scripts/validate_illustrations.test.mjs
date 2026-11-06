@@ -103,9 +103,9 @@ test('milestone requires both personal and firm variants', () => {
   assert.ok(result.ok.includes('milestone-personal.svg'));
 });
 
-test('the real MOMENTS manifest matches the brief: 5 target files total', () => {
+test('the real MOMENTS manifest matches the briefs: 5 MUT-345 + 6 MUT-558 files', () => {
   const totalFiles = MOMENTS.flatMap(expectedFilenames).length;
-  assert.equal(totalFiles, 5);
+  assert.equal(totalFiles, 11);
 });
 
 test('MUT-350: every moment is classified grand or minimal', () => {

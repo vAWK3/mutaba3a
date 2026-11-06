@@ -40,6 +40,8 @@ export const PURGE_PROFILE_TABLES = [
   'receivable_counters',
   // MUT-559: accountants' access to the deleted profile (also ON DELETE CASCADE).
   'accountant_grants',
+  // MUT-560: share links to the deleted profile (their viewers cascade; also ON DELETE CASCADE).
+  'share_links',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */
@@ -75,6 +77,8 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   // MUT-559: the person's grants as an accountant go with them; invites they sent as an owner lose their name.
   'accountant_grants.accountantUserId': 'delete',
   'accountant_grants.invitedByUserId': 'anonymize',
+  // MUT-560: links the person created on profiles that survive stay, revocable by the remaining owners.
+  'share_links.createdByUserId': 'anonymize',
   'conversions.createdByUserId': 'anonymize',
   'expense_groups.createdByUserId': 'anonymize',
   'expense_receipts.approvedByUserId': 'anonymize',

@@ -176,6 +176,13 @@ const envSchema = z.object({
   ACCOUNTANT_ACCESS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
+  /**
+   * MUT-560 (ADR-247): one-time share links to a period of a profile, opened with a PIN. Off, every share-link route
+   * answers 404, so the server can deploy before the portal and phone screens (MUT-561..563). Only "true" turns it on.
+   */
+  SHARE_LINKS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-560: the most live share links one profile may have (stops link spam). */
+  SHARE_LINKS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(10),
   // MUT-436 (review D3/D5): an agent may add to the inbox only once the phone decodes 'mcp' and its minimum build is raised.
   MCP_INBOX_WRITES: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**

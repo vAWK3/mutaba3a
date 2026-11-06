@@ -171,6 +171,13 @@ describe('STORE_ACCESS', () => {
       // MUT-461: the operator's account view counts a person's live sessions.
       'sessions.countLiveForUser',
       'sessions.revokeAllForUser',
+      // MUT-560: the public share-link routes and shareLinkAccess read, count and stamp on the base store.
+      'shareLinks.addOrRotateViewer',
+      'shareLinks.findByTokenDigest',
+      'shareLinks.findViewerByDigest',
+      'shareLinks.recordFailedPin',
+      'shareLinks.touchOpened',
+      'shareLinks.touchViewer',
       // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
       'signupReviews.approve',
       'signupReviews.decline',

@@ -30,7 +30,9 @@ if (!url) {
     // grant; clients are anonymous registrations naming no one.
     'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
-    'billing_retention_events']);
+    'billing_retention_events',
+    // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).
+    'share_link_viewers']);
 
   describe('Prisma account purge catalog (MUT-333)', () => {
     it('knows every table with an organizationId column', async () => {

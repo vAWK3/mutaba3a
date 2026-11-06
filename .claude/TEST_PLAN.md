@@ -4421,6 +4421,30 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
+## MUT-560 — share links (ADR-247)
+
+Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
+- `server/src/__tests__/routes-share-links.test.ts`: the period end to end (from − 1 / from / to / to + 1 / future,
+  backdated in and edited out, the profile's day at 00:30 on the 1st); create (every period × expiry, PIN format,
+  Arabic-Indic digits, the 10-link cap, rate limit, owner gate, co-owner, personal profile, LOCKED owner); token and PIN
+  at rest and no token in the contract's paths; unlock and the lockout (attemptsLeft, parallel wrong PINs, a lock ends
+  viewers already in); viewers (cap, returning viewer, parallel unlocks, 8 h, never past the link); one 404 on every
+  visitor route for unknown, expired, revoked, closing owner and the switch off; reads (profile isolation, projection,
+  paging, per-currency summary, receipts in and out of range, no bucket); non-POST methods; throttles and audit; rate
+  limits; purge; headers; a viewer token is no credential on `/v1`; same origin.
+- `server/src/share-links/__tests__/period.test.ts` (calendar months, year boundary, leap February, timezone edge) and
+  `access.test.ts` (the one door: a profile gone, an expired viewer, a lock).
+- `server/src/auth/__tests__/share-link-store-guard.test.ts`; `server/src/access/__tests__/view-touch.test.ts`.
+- Store contract `store-contract-share-links.ts` (memory; Prisma under `test:db`): cap, revoke, the failed-PIN count and
+  its race, the viewer cap and its race, returning viewers, unusable links, touches, purge both ways.
+- Updated: routes (1.102.0-mut560), route-security, billing-gate-routes, store-guard (operator list), purge catalog
+  (`share_link_viewers` outside profiles).
+- Review follow-up: `routes-share-links-review.test.ts` (stale re-unlock at 3 viewers, receipt URL clamps and the 5 s
+  floor, names not ids with a no-UUID scan, the view per-IP budget, the summary budget, a co-owner closing, a foreign
+  cursor); store contract gains the stale case, the parallel re-unlock and the right-PIN-vs-5th-wrong race;
+  `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.
+- OW5 and report rows: the owner's list over a moving clock (active → revoked/locked/expired for 24 h → gone) and the
+  visitor's feed and totals without Owed entries or conversions (memory and Postgres).
 ### MUT-557 — the Israeli allocation number (ADR-246)
 - `israel/__tests__/allocation-number.test.ts`: the dated thresholds and their boundaries (₪4,999.99 / ₪5,000 on 2026-06-01, ₪9,000 the day before, 2024-05-04), USD, no VAT, unknown net, Personal, the A4 guard, normalizing.
 - `receipts/extract/__tests__/allocation.test.ts` (labels he/en/ar, row under, right to left, ח.פ beside it, bare number, bill-to, PDF, unsure row; D3 completeness; fillAbsent) and `qr.test.ts` (the registry).
