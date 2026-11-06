@@ -10,3 +10,5 @@ pypdfium2==5.14.0
 rapidocr==3.10.0
 onnxruntime==1.31.1
 pytesseract==0.3.13
+# MUT-557 (D6): QR codes on the same pages (Apache-2.0; manylinux and macOS wheels, no system library).
+zxing-cpp==3.1.1

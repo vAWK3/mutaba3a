@@ -2,7 +2,8 @@
 
     POST /v1/read   body = the receipt's bytes; Content-Type image/jpeg | image/png | application/pdf;
                     X-Capture-Hint: scanned | photo (default photo)
-        200 {engine, lines: [{text, conf, box, script?}], pdfText?, pages}
+        200 {engine, lines: [{text, conf, box, script?}], pdfText?, pages, qr: [string]}
+                    qr (MUT-557): the pages' QR payloads, in reading order, at most 8 of at most 4,096 chars; [] for none
         422 {error: 'unreadable'}   413 {error: 'too_large'}   504 {error: 'timeout'}
         500 {error: 'internal'}     (the API retries it)
     GET /healthz    200 once the models are loaded, 503 before

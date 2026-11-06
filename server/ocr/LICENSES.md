@@ -66,12 +66,16 @@ image does. They are separate programs we don't modify or link our code into, so
 | typing-inspection | 0.4.4 | MIT |
 | urllib3 | 2.8.0 | MIT |
 | uvicorn | 0.54.0 | BSD-3-Clause |
+| zxing-cpp | 3.1.1 | Apache-2.0 |
 
 `colorama` (BSD-3-Clause) is pinned for Windows only and isn't installed in the image.
 
 Notes:
 - **certifi** and **tqdm** are MPL-2.0 (in part): file-level copyleft that covers changes to their own files only.
   We use them unmodified, as dependencies of `requests` and `rapidocr`.
+- **zxing-cpp** (MUT-557, QR codes): the zxing-cpp C++ library (Apache-2.0) and its Python binding in one wheel,
+  with no system library needed. Compiled into it: nanobind (BSD-3-Clause), the binding layer, and the core's small
+  bundled helpers (libzueci, BSD-3-Clause); nothing copyleft. It has no network code path and decodes in memory.
 - **pypdfium2** bundles PDFium (BSD-3-Clause and Apache-2.0) and PDFium's own dependencies (FreeType under its FTL
   option, libjpeg-turbo, zlib, lcms2, OpenJPEG, ICU: all permissive).
 - **Bundled native libraries under LGPL-2.1, accepted by Basel on 2026-10-28.** Two wheels carry an LGPL-2.1

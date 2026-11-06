@@ -25,6 +25,9 @@ real, that was right there and is not now, and exits 1 if there is one. `--resco
 the earlier run's synthetic reads and the real folder's `reads.json` (no OCR), and `--server <dir>` picks whose
 extractor runs: a main checkout's `server/` gives the baseline to compare against.
 
+MUT-557 (D6): the report counts the receipts whose read carried any QR payload (synthetic and real); the payloads
+themselves stay in reads.json, never in the summary.
+
 Outputs go to --out (default server/ocr/bench/out, git-ignored): reads.json and suggestions.json hold synthetic
 receipt text and are never committed; summary.md and summary.json hold aggregates only.
 """
@@ -347,6 +350,11 @@ def real_report(real_dir: Path, real: list[dict], suggestions: dict[str, dict], 
     return rows, aggregate(rows)
 
 
+def qr_hits(reads: list[dict]) -> dict:
+    """MUT-557: how many 200 reads carried at least one QR payload. Counts only: a payload can hold the receipt's data."""
+    return {"withQr": sum(1 for t in reads if t["payload"].get("qr")), "n": len(reads)}
+
+
 def gate(md: list[str], args: argparse.Namespace, synthetic: list[dict], real: list[dict]) -> int:
     """`--compare`: append the lost fields to the report; 1 when any."""
     if not args.compare:
@@ -497,6 +505,7 @@ def main() -> int:
         "timing": timing,
         "real": real_summary,
         "failedRequests": failures,
+        "qr": {"synthetic": qr_hits(syn_ok), "real": qr_hits(real_ok)},
         "perFixture": [{k: r[k] for k in ("id", "lang", "kind", "ms", "load1", "scores")} for r in rows],
         "realPerReceipt": real_rows,
     }
@@ -517,6 +526,8 @@ def main() -> int:
     ]
     if real_summary.get("aggregate"):
         md += ["", table(real_summary["aggregate"]["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+    qr = summary["qr"]
+    md += ["", f"QR (MUT-557): {qr['synthetic']['withQr']}/{qr['synthetic']['n']} synthetic and {qr['real']['withQr']}/{qr['real']['n']} real receipts carried a QR payload."]
     if failures:
         md.append(f"Failed requests: {failures}")
     status = gate(md, args, rows, real_rows)
