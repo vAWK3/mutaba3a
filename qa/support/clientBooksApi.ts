@@ -1,5 +1,5 @@
 import type { Page, Request, Route } from '@playwright/test';
-import { OFFICE_A, meBody, office, openSignedInPortal, type StubProfile } from './portal';
+import { OFFICE_A, QA_TERMS_VERSION, meBody, office, openSignedInPortal, type StubProfile } from './portal';
 import { STORAGE } from './portalApi';
 
 /**
@@ -129,7 +129,7 @@ export class ClientBooksApi {
     if (key === 'GET /v1/me') return this.signedIn ? json(this.me(language)) : error(401, 'UNAUTHENTICATED');
     if (key === 'GET /v1/billing') return json({ configured: false });
     // The accountant invite
-    if (key === 'POST /v1/accountant-invites/check') return json({ profileName: 'Studio', ownerName: 'Rana Haddad', maskedEmail: 's***@khoury-cpa.com', expired: false, expiresAt: new Date(Date.now() + 11 * DAY).toISOString() });
+    if (key === 'POST /v1/accountant-invites/check') return json({ profileName: 'Studio', ownerName: 'Rana Haddad', maskedEmail: 's***@khoury-cpa.com', expired: false, expiresAt: new Date(Date.now() + 11 * DAY).toISOString(), termsVersion: QA_TERMS_VERSION });
     if (key === 'POST /v1/accountant-invites/accept') return this.accept();
     if (key === 'POST /v1/accountant-invites/signup') {
       if (this.options.accountExists) return error(409, 'CONFLICT', { reason: 'ACCOUNT_EXISTS' });

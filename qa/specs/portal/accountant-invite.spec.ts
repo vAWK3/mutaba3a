@@ -2,6 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { stubTurnstile } from '../../support/turnstile';
+import { QA_TERMS_VERSION } from '../../support/portal';
 import { ClientBooksApi, INVITE_TOKEN, STUDIO } from '../../support/clientBooksApi';
 
 /**
@@ -58,7 +59,7 @@ test('Create an account from the invite: the address is fixed, then sign-in and 
     await page.getByRole('button', { name: 'Create account and accept' }).click();
     await expect(page).toHaveURL(new RegExp(`/client-books/${STUDIO}`));
     await expect(page.getByRole('heading', { level: 1, name: 'Rana Haddad · Studio' })).toBeVisible();
-    expect(api.calls('POST', '/v1/accountant-invites/signup')[0]!.body).toMatchObject({ token: INVITE_TOKEN, displayName: 'Sami Khoury', password: PASSWORD });
+    expect(api.calls('POST', '/v1/accountant-invites/signup')[0]!.body).toMatchObject({ token: INVITE_TOKEN, displayName: 'Sami Khoury', password: PASSWORD, acceptedTermsVersion: QA_TERMS_VERSION });
     expect(api.calls('POST', '/v1/sessions')[0]!.body).toEqual({ email: 'sami@khoury-cpa.com', password: PASSWORD });
   });
 });

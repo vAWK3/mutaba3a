@@ -303,9 +303,9 @@ const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLI
 
 /**
  * Create an account from the invite: the address is the invite's (shown masked; the server uses it), a name, a
- * password, the terms, the bot check. The check answers no terms version, so the first try names none; a 409
- * TERMS_VERSION_STALE answers the current one, and the form sends again once with it (the tick was for the current
- * terms, the unversioned link). Then POST /v1/sessions and the client book.
+ * password, the terms the check named (`termsVersion`, MUT-575), the bot check. Terms that change while the form is
+ * open answer 409 TERMS_VERSION_STALE: the tick is cleared and the person reads the new version and ticks again (as
+ * /setup). Then POST /v1/sessions and the client book.
  */
 function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invite: AccountantInviteCheck; onBack: () => void; onOutcome: (outcome: InviteOutcome) => void }) {
   const { t, language } = useLanguage();
@@ -320,10 +320,8 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
   const [problem, setProblem] = useState<'password' | 'terms' | null>(null);
   const [banner, setBanner] = useState<Banner | null>(null);
   const [phase, setPhase] = useState<Phase>('idle');
-  const termsVersion = useRef<string | undefined>(undefined);
-  // What the form shows: the versioned terms link once the server named one, and why the box was cleared
-  const [shownTerms, setShownTerms] = useState<{ version?: string; changed: boolean }>({ changed: false });
-  const retriedTerms = useRef(false);
+  // The version the person reads and ticks: the check's, replaced by the current one if a 409 names a newer one
+  const [terms, setTerms] = useState<{ version: string; changed: boolean }>({ version: invite.termsVersion, changed: false });
   const waiting = useRef(false);
   const passwordRef = useRef<HTMLInputElement>(null);
 
@@ -364,7 +362,7 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
         termsLocale: language === 'ar' ? 'ar' : 'en',
         clientRelease: TERMS_CLIENT_RELEASE,
         timezone: browserTimezone(),
-        ...(termsVersion.current ? { acceptedTermsVersion: termsVersion.current } : {}),
+        acceptedTermsVersion: terms.version,
         ...(displayName ? { displayName } : {}),
       });
       await signIn(created.email, created.client.profileId);
@@ -372,20 +370,11 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
     } catch (error) {
       const failure = signupFailure(error);
       reset();
-      if (failure.kind === 'termsStale' && failure.current && !retriedTerms.current) {
-        // Once: the person ticked the current terms; send again naming them, with the next check's token
-        retriedTerms.current = true;
-        termsVersion.current = failure.current;
-        setShownTerms({ version: failure.current, changed: false });
-        waiting.current = true;
-        setPhase('waiting');
-        return;
-      }
       setPhase('idle');
       if (failure.kind === 'outcome') return onOutcome(failure.outcome);
       if (failure.kind === 'termsStale') {
-        termsVersion.current = failure.current ?? undefined;
-        setShownTerms({ version: failure.current ?? undefined, changed: true });
+        // The terms changed while the form was open: read the new version and tick again (a 409 without it keeps ours)
+        setTerms((current) => ({ version: failure.current ?? current.version, changed: true }));
         setAgreed(false);
         setProblem('terms');
         return;
@@ -417,7 +406,7 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
   }
 
   const busy = phase !== 'idle' && !(phase === 'waiting' && status === 'failed');
-  const termsLink = termsHref(language, shownTerms.version);
+  const termsLink = termsHref(language, terms.version);
   return (
     <form className="hp-two-panel-form" noValidate onSubmit={onSubmit}>
       <p className="hp-two-panel-eyebrow">
@@ -479,7 +468,7 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
             )}
           </span>
         </label>
-        {problem === 'terms' && <p className="hp-field-error">{t(shownTerms.changed ? 'hosted.accountantInvite.signup.termsChanged' : 'hosted.setup.terms.required')}</p>}
+        {problem === 'terms' && <p className="hp-field-error">{t(terms.changed ? 'hosted.accountantInvite.signup.termsChanged' : 'hosted.setup.terms.required')}</p>}
       </div>
       <TurnstileWidget containerRef={containerRef} status={status} onRetry={retry} id={`${ids}-check`} />
       <p className="hp-two-panel-note">{t('hosted.accountantInvite.signup.freeNote')}</p>

@@ -207,7 +207,7 @@ The server slice S moved to MUT-575 (MUT-562 comment 13246); this branch consume
 2. **Receipt pane = the portal Drawer at every width** (a side sheet on desktop, a sheet at 375), not a grid column.
    `ReceiptPreviewFrame` was not extracted: the library's `ReceiptPreview` reads library URLs; the pane reuses its
    classes and asks the expense's own (inline) URL. One fewer shared component, same look.
-3. **Terms version on signup:** the invite check answers none, so the first signup names none; the 409
+3. **Terms version on signup (superseded):** MUT-575 now returns `termsVersion` on the check and the signup sends it; a 409 TERMS_VERSION_STALE clears the tick and names the new version (as /setup). Originally: the invite check answered none, so the first signup names none; the 409
    TERMS_VERSION_STALE answers `current`, and the form sends again once (a fresh Turnstile token) naming it. Suggest
    MUT-575/559 add `termsVersion` to the check (as /setup's check has) to drop the retry.
 4. **"Already reading" → Open** goes to `/client-books` (or Home with no client): the check names no profile id.

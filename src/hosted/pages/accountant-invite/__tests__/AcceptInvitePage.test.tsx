@@ -13,7 +13,7 @@ const ACCEPT = 'POST /v1/accountant-invites/accept';
 const SIGNUP = 'POST /v1/accountant-invites/signup';
 const PASSWORD = 'a long enough passphrase';
 
-const invite = { profileName: 'Studio', ownerName: 'Rana Haddad', maskedEmail: 's***@khoury-cpa.com', expired: false, expiresAt: '2026-11-17T10:00:00.000Z' };
+const invite = { profileName: 'Studio', ownerName: 'Rana Haddad', maskedEmail: 's***@khoury-cpa.com', expired: false, expiresAt: '2026-11-17T10:00:00.000Z', termsVersion: '2026-10-19' };
 const clientRow = { profileId: STUDIO, name: 'Studio', ownerName: 'Rana Haddad', sharedSince: '2026-11-06T10:00:00.000Z', profileType: 'business', status: 'active', endedReason: null, endedAt: null };
 const signedInMe = () => ({ ...me([profile({ owned: true, isPersonalDefault: true })]), clients: [clientRow] });
 
@@ -86,12 +86,12 @@ describe('signed out', () => {
     expect(sessionStorage.getItem('mtb3a-accountant-invite')).toBeNull();
   });
 
-  it('a stale terms answer sends again once, naming the current version', async () => {
+  it('names the check’s terms version; terms changed meanwhile clear the tick and name the new version, sent again only by the person', async () => {
     fakeTurnstile('pass');
     let tries = 0;
     const api = stubApi(
       routes(false, {
-        [SIGNUP]: () => (++tries === 1 ? fail(409, 'TERMS_VERSION_STALE', { current: '2026-10-19' }) : ok({ email: 'sami@khoury-cpa.com', status: 'ACTIVE', client: clientRow }, 201)),
+        [SIGNUP]: () => (++tries === 1 ? fail(409, 'TERMS_VERSION_STALE', { current: '2026-11-01' }) : ok({ email: 'sami@khoury-cpa.com', status: 'ACTIVE', client: clientRow }, 201)),
         'POST /v1/sessions': () => ok(signedInMe()),
       }),
     );
@@ -100,9 +100,14 @@ describe('signed out', () => {
     await user.type(screen.getByLabelText('Password'), PASSWORD);
     await user.click(screen.getByRole('checkbox'));
     await user.click(screen.getByRole('button', { name: 'Create account and accept' }));
+    expect(await screen.findByText('The terms were just updated. Read them and tick the box again.')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox')).not.toBeChecked();
+    expect(api.count(`POST /v1/accountant-invites/signup`)).toBe(1);
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Create account and accept' }));
     await waitFor(() => expect(locationOf(router)).toBe(`/client-books/${STUDIO}`));
     const bodies = api.calls.filter((c) => `${c.method} ${c.url.pathname}` === SIGNUP).map((c) => c.body as { acceptedTermsVersion?: string });
-    expect(bodies.map((b) => b.acceptedTermsVersion)).toEqual([undefined, '2026-10-19']);
+    expect(bodies.map((b) => b.acceptedTermsVersion)).toEqual(['2026-10-19', '2026-11-01']);
   });
 
   it('an address that already has an account: sign in to accept', async () => {
