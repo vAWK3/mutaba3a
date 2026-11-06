@@ -28,6 +28,30 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
+
+**Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).
+
+### Added
+- `GET /v1/clients`: the accountant's clients with this month's entries (profile's timezone) and last activity; two
+  stat queries in all. `GET /v1/profile-entries`: one profile's money-date feed through `selectProfile` (kinds,
+  occurredFrom/Before, cursor, limit ≤ 100), the `/v1/entries` shape.
+- `/v1/me.clients` and the accept response carry `profileType`, `status`, `endedReason`, `endedAt`; ended clients
+  (revoked, or the owner closing) stay until removed. `DELETE /v1/clients/{id}` leaves an active client or removes an
+  ended one (`accountant_grants.dismissedAt`, migration `20261107130000_mut575_client_books`).
+- `disposition=inline` on the expense receipt download; `kinds` and clamped dates on `POST /v1/share-links/entries`;
+  the AASA claims `/accountant-invite*`; events contract 2.7.0 (8 accountant and share-link events).
+
+### Changed
+- A closing owner ends accountant access at once (404), the share-link rule (`access/owner-closing.ts`); MUT-559's
+  revoke test now expects the ended row. `PROFILE_FEED_READS` replaces `SHARE_LINK_SESSION_READS`. `/v1/entries` and
+  `/v1/profile-entries` build pages with one `feedPage`. API 1.104.0-mut575.
+
+**Files:** `server/src/{accountants/grants.ts, access/owner-closing.ts, entries/feed-page.ts, entries/merge.ts,
+routes/{profile-entries,accountants,me,entries,expenses,share-links,well-known}.ts, auth/{middleware,store-guard}.ts,
+share-links/{access,period}.ts, billing/gate.ts, schemas.ts, app.ts, repositories/*}`, `prisma/schema.prisma`,
+`docs/analytics/events.json`.
+
 ## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-247)
 
 **Why:** epic MUT-558. An owner shares a closed period (the last 1–3 complete months, or everything to date) with an

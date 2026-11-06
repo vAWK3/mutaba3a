@@ -4445,3 +4445,18 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.
 - OW5 and report rows: the owner's list over a moving clock (active → revoked/locked/expired for 24 h → gone) and the
   visitor's feed and totals without Owed entries or conversions (memory and Postgres).
+
+## MUT-575 — client books server (ADR-249)
+
+Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 tests).
+- `server/src/accountants/__tests__/client-rows.test.ts`: the pure rows rule.
+- `server/src/__tests__/routes-client-books.test.ts`: `/v1/me.clients`, `GET /v1/clients` (timezone month boundary,
+  deleted/undone, ended nulls, one stats call), DELETE leave vs dismiss, closing owner, `/v1/profile-entries` as an
+  accountant and as an owner (parity with `/v1/entries`, LOCKED 402, no lazy posting), never mixing, inline receipts.
+- `server/src/__tests__/routes-share-links-filters.test.ts`: link feed kinds and clamped dates.
+- Store contracts (memory; Prisma under `test:db`): `listForAccountant`, `dismiss`, `clientActivity`;
+  `store-prisma-client-activity.test.ts` (2 queries for 10 clients); `migration-mut575.test.ts`.
+- Updated: accountant route matrix (`GET /v1/profile-entries` allowlisted by tags), both read-only guard tests
+  (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
+  `well-known-routes.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
+
