@@ -20,12 +20,14 @@ features:
       - Open a link that ended
       - Open a link on a fourth device
       - Come back after 8 hours
+      - Paste a PIN in Arabic-Indic digits
       - Type the PIN in Arabic-Indic digits, in Arabic at 375 px
     expect:
       - No name or number before the PIN; the token is gone from the address; noindex and no-referrer
       - '"That PIN isn''t right. 4 tries left, then the link locks."'
       - Locked, no longer available and viewer-limit pages
       - '"Enter the PIN again", shown only once the 8 hours have ended'
+      - A pasted ٤٨٢١ fills the boxes and is sent as 4821
       - ٤٨٢١ is sent as 4821 and opens the link; no horizontal overflow at 375 px
   - id: view
     title: The right PIN shows the owner, the period's totals and the entries with receipts (AC5)

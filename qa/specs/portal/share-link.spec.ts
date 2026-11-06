@@ -69,6 +69,22 @@ test('The PIN step names nothing, and every refusal says what happened', { tag: 
     await expect(page.getByText('For safety, the PIN is asked for every 8 hours.')).toBeVisible();
   });
 
+  await step('Paste a PIN in Arabic-Indic digits', async () => {
+    const pasted = visitor();
+    await openLink(page, pasted);
+    const first = page.getByRole('group', { name: 'Enter the PIN you were given' }).getByRole('textbox').first();
+    await first.focus();
+    await first.evaluate((box) => {
+      const data = new DataTransfer();
+      data.setData('text', '٤٨٢١');
+      box.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+    });
+    await expect(page.getByRole('group', { name: 'Enter the PIN you were given' }).getByRole('textbox')).toHaveCount(5);
+    await page.getByRole('button', { name: 'Open' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Rana Haddad · Studio' })).toBeVisible();
+    expect(pasted.calls('POST', '/v1/share-links/unlock')[0]!.body).toMatchObject({ pin: PIN });
+  });
+
   await step('Type the PIN in Arabic-Indic digits, in Arabic at 375 px', async () => {
     await page.setViewportSize(PHONE);
     const arabic = visitor();
