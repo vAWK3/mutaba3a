@@ -1484,6 +1484,8 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-sharing-done h3 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-headline); }
 .hp-sharing-done .form-group, .hp-sharing-done .hp-banner { text-align: start; }
 .hp-sharing-copy { margin-block-end: var(--space-2); }
+/* Review 2: the PIN is a text field (no password manager) masked by style; Show removes the class */
+.hp-pin-masked { -webkit-text-security: disc; }
 /* 375px: actions wrap under the meta (DESIGN.md › Rows with their own actions) */
 @media (max-width: 760px) {
   .hp-sharing-columns { grid-template-columns: minmax(0, 1fr); }

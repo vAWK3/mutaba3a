@@ -1,4 +1,4 @@
-import { useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
 import { LinkIcon } from '../../../components/icons/generated';
@@ -28,6 +28,18 @@ interface Shaped {
   row: LinkRow;
 }
 
+const TICK_MS = 60_000;
+
+/** Review 3: the clock the rows read, a minute at a time, so a link that expires while the page is open turns Ended. */
+function useNow(): Date {
+  const [now, setNow] = useState(() => new Date());
+  useEffect(() => {
+    const timer = setInterval(() => setNow(new Date()), TICK_MS);
+    return () => clearInterval(timer);
+  }, []);
+  return now;
+}
+
 export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfile; query: UseQueryResult<ShareLinksState>; onCreate: () => void }) {
   const { t, language } = useLanguage();
   const ids = useId();
@@ -35,9 +47,9 @@ export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfi
   const revoke = useRevokeShareLink(profile.id);
   const [confirming, setConfirming] = useState<string | null>(null);
   const triggers = useRef(new Map<string, HTMLButtonElement | null>());
-  const [now] = useState(() => new Date());
+  const now = useNow();
   const list = query.data?.off === false ? query.data : undefined;
-  const atLimit = list ? liveLinks(list.items) >= list.limit : false;
+  const atLimit = list ? liveLinks(list.items, now) >= list.limit : false;
 
   const shaped = useMemo<Shaped[]>(() => (list?.items ?? []).map((link) => ({ link, row: linkRow(link, now, language, profile.timezone) })), [list, now, language, profile.timezone]);
 

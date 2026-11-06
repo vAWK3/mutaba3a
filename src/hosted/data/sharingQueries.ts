@@ -4,7 +4,6 @@ import {
   ApiError,
   type AccountantGrant,
   type AccountantGrantList,
-  type CreateShareLinkRequest,
   type ShareLink,
   type ShareLinkList,
 } from '../api/client';
@@ -135,14 +134,7 @@ export function useShareLinks(profileId: string) {
   });
 }
 
-/** Make a link. The answer (with its URL) goes to the done pane only; the list is read again, which never has it. */
-export function useCreateShareLink(profileId: string) {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (body: CreateShareLinkRequest) => api.createShareLink(profileId, body),
-    onSuccess: () => void queryClient.invalidateQueries({ queryKey: shareLinksKey(profileId) }),
-  });
-}
+/** Making a link is not a query mutation (review 1): `NewShareLinkDrawer` calls the API directly, so the PIN and URL stay out of the cache. */
 
 /** Turn off: the row reads Ended at once (the server keeps it listed for a day, OW5) and goes back if refused. */
 export function useRevokeShareLink(profileId: string) {

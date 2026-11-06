@@ -8,7 +8,8 @@ import { trackPortal } from '../../analytics/portalAnalytics';
 import { Drawer, ReadOnlyFields } from '../../components/Drawer';
 import { AlertIcon } from '../../components/Icons';
 import { Scene } from '../../components/Scene';
-import { refetchAfterRefusal, shareLinksKey, useCreateShareLink } from '../../data/sharingQueries';
+import { api } from '../../api/client';
+import { refetchAfterRefusal, shareLinksKey } from '../../data/sharingQueries';
 import { useWritableFor } from '../../session/me';
 import { SHARE_DAYS, SHARE_PERIODS, dayIn, linkErrorOf, monthsLabel, periodEvent, periodRange, pinOf, rangeLine, shortDay, type Line, type ShareDays } from './sharingRules';
 
@@ -16,7 +17,9 @@ import { SHARE_DAYS, SHARE_PERIODS, dayIn, linkErrorOf, monthsLabel, periodEvent
  * MUT-561 slice B (B3, B4; Basel 13244: the side drawer): make a share link. The form pane picks whole months (OW3, each
  * chip with its month names), how long it works and a PIN; the done pane swaps in (DESIGN.md › panes inside a drawer)
  * with the link shown once, Copy link, Copy message (OW4: never the PIN) and the warning to send the PIN separately.
- * The URL and the PIN live in this component's state only (D3): closing, Escape or a reload drops them.
+ * The URL and the PIN live in this component's state only (D3): closing, Escape or a reload drops them. Review 1: the
+ * create is called directly, not through a React Query mutation, so neither the PIN (its variables) nor the URL (its
+ * data) is ever kept in the mutation cache.
  */
 
 const FORM_ID = 'hosted-new-share-link-form';
@@ -33,7 +36,7 @@ const DAYS_KEY: Record<ShareDays, string> = { 1: 'hosted.sharing.newLink.days1',
 export function NewShareLinkDrawer({ profile, listLimit, onClose }: { profile: HostedProfile; listLimit?: number; onClose: () => void }) {
   const { t } = useLanguage();
   const writable = useWritableFor(profile);
-  const create = useCreateShareLink(profile.id);
+  const [pending, setPending] = useState(false);
   const [created, setCreated] = useState<ShareLinkCreated | null>(null);
 
   return (
@@ -54,32 +57,34 @@ export function NewShareLinkDrawer({ profile, listLimit, onClose }: { profile: H
             <Button type="button" variant="secondary" onClick={onClose}>
               {t('common.cancel')}
             </Button>
-            <Button type="submit" form={FORM_ID} isLoading={create.isPending} keepLabelWhileLoading aria-busy={create.isPending || undefined}>
+            <Button type="submit" form={FORM_ID} isLoading={pending} keepLabelWhileLoading aria-busy={pending || undefined}>
               {t('hosted.sharing.newLink.create')}
             </Button>
           </div>
         )
       }
     >
-      {created ? <DonePane profile={profile} created={created} /> : <LinkForm profile={profile} create={create} listLimit={listLimit} readOnly={!writable} onCreated={setCreated} />}
+      {created ? <DonePane profile={profile} created={created} /> : <LinkForm profile={profile} pending={pending} setPending={setPending} listLimit={listLimit} readOnly={!writable} onCreated={setCreated} />}
     </Drawer>
   );
 }
 
 interface LinkFormProps {
   profile: HostedProfile;
-  create: ReturnType<typeof useCreateShareLink>;
+  pending: boolean;
+  setPending: (pending: boolean) => void;
   listLimit?: number;
   readOnly: boolean;
   onCreated: (link: ShareLinkCreated) => void;
 }
 
-function LinkForm({ profile, create, listLimit, readOnly, onCreated }: LinkFormProps) {
+function LinkForm({ profile, pending, setPending, listLimit, readOnly, onCreated }: LinkFormProps) {
   const { t, language } = useLanguage();
   const ids = useId();
   const queryClient = useQueryClient();
   const pinRef = useRef<HTMLInputElement>(null);
-  const [today] = useState(() => dayIn(new Date(), profile.timezone));
+  // Review 4: read on every render, so a drawer left open past midnight names the new month's periods
+  const today = dayIn(new Date(), profile.timezone);
   const [period, setPeriod] = useState<ShareLinkPeriod>('LAST_3_MONTHS');
   const [days, setDays] = useState<ShareDays>(7);
   const [pin, setPin] = useState('');
@@ -95,7 +100,7 @@ function LinkForm({ profile, create, listLimit, readOnly, onCreated }: LinkFormP
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    if (create.isPending || readOnly) return;
+    if (pending || readOnly) return;
     setBanner(null);
     const folded = pinOf(pin);
     if (!folded) {
@@ -104,9 +109,12 @@ function LinkForm({ profile, create, listLimit, readOnly, onCreated }: LinkFormP
       return;
     }
     setPinError(null);
+    setPending(true);
     try {
-      const link = await create.mutateAsync({ period, expiresInDays: days, pin: folded });
+      const link = await api.createShareLink(profile.id, { period, expiresInDays: days, pin: folded });
+      void queryClient.invalidateQueries({ queryKey: shareLinksKey(profile.id) });
       void trackPortal('share_link_created', { period: periodEvent(period), expires_in_days: days });
+      setPin('');
       onCreated(link);
     } catch (error) {
       const mapped = linkErrorOf(error, listLimit);
@@ -114,6 +122,8 @@ function LinkForm({ profile, create, listLimit, readOnly, onCreated }: LinkFormP
       setPinError(mapped.field ?? null);
       setBanner(mapped.banner ?? null);
       if (mapped.field) pinRef.current?.focus();
+    } finally {
+      setPending(false);
     }
   }
 
@@ -153,13 +163,14 @@ function LinkForm({ profile, create, listLimit, readOnly, onCreated }: LinkFormP
               <input
                 ref={pinRef}
                 id={`${ids}-pin`}
-                className={`input ${pinError ? 'input-error' : ''}`}
-                type={showPin ? 'text' : 'password'}
+                className={`input${pinError ? ' input-error' : ''}${showPin ? '' : ' hp-pin-masked'}`}
+                // Review 2: never type=password, so no password manager offers to save it; masked by style instead
+                type="text"
                 inputMode="numeric"
-                autoComplete="off"
+                autoComplete="one-time-code"
                 dir="ltr"
                 maxLength={8}
-                readOnly={create.isPending}
+                readOnly={pending}
                 value={pin}
                 aria-invalid={Boolean(pinError)}
                 aria-describedby={pinError ? `${ids}-pin-error` : `${ids}-pin-hint`}

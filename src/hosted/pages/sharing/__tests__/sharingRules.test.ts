@@ -236,3 +236,12 @@ describe('linkErrorOf', () => {
     expect(linkErrorOf(error, 3)).toEqual(expected);
   });
 });
+
+describe('review 3: a link past its expiry while the page is open', () => {
+  it('reads Ended on its expiry day, with no Turn off, though the list still says active', () => {
+    const later = new Date('2026-11-13T09:00:01.000Z');
+    expect(linkRow(link(), later, 'en', TZ)).toMatchObject({ chip: 'ended', canTurnOff: false, ended: { key: 'hosted.sharing.links.ended', vars: { date: 'Nov 13' } } });
+    expect(liveLinks([link()], later)).toBe(0);
+  });
+});
+

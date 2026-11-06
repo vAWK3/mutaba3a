@@ -241,12 +241,15 @@ export interface LinkRow {
   canTurnOff: boolean;
 }
 
+/** Review 3: a link that expired while the page was open is ended, whatever the list said when it was read. */
+const lapsed = (link: ShareLink, now: Date) => (link.status === 'active' || link.status === 'locked') && Date.parse(link.expiresAt) <= now.getTime();
+
 export function linkRow(link: ShareLink, now: Date, language: Language, timeZone: string): LinkRow {
-  const chip: LinkChip = link.status === 'active' ? 'active' : link.status === 'locked' ? 'locked' : 'ended';
+  const chip: LinkChip = lapsed(link, now) ? 'ended' : link.status === 'active' ? 'active' : link.status === 'locked' ? 'locked' : 'ended';
   return {
     period: rangeLine(link, language),
     ends: shortDay(link.expiresAt, language, timeZone),
-    ended: chip === 'ended' ? { key: 'hosted.sharing.links.ended', vars: { date: shortDay(link.endedAt ?? link.expiresAt, language, timeZone) } } : null,
+    ended: chip === 'ended' ? { key: 'hosted.sharing.links.ended', vars: { date: shortDay(lapsed(link, now) ? link.expiresAt : (link.endedAt ?? link.expiresAt), language, timeZone) } } : null,
     lastOpened: link.lastOpenedAt ? relativeDay(link.lastOpenedAt, now, language, timeZone) : null,
     viewers: `${link.viewers} / ${link.maxViewers}`,
     chip,
@@ -254,8 +257,8 @@ export function linkRow(link: ShareLink, now: Date, language: Language, timeZone
   };
 }
 
-/** Links that hold a place toward the profile's limit: everything not ended. */
-export const liveLinks = (links: ShareLink[]) => links.filter((link) => link.status === 'active' || link.status === 'locked').length;
+/** Links that hold a place toward the profile's limit: everything not ended (by `now`, review 3). */
+export const liveLinks = (links: ShareLink[], now: Date = new Date()) => links.filter((link) => (link.status === 'active' || link.status === 'locked') && !lapsed(link, now)).length;
 
 /** Where a create refusal shows (plan › New link drawer). */
 export function linkErrorOf(error: unknown, listLimit?: number): InviteError {

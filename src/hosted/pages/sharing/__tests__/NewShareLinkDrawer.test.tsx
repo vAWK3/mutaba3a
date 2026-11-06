@@ -82,8 +82,32 @@ describe('the New link form (B3)', () => {
     expect(within(within(dialog).getByRole('group', { name: 'Works for' })).getByRole('radio', { name: '7 days' })).toBeChecked();
     const pin = within(dialog).getByLabelText('PIN (4–8 digits)');
     expect(pin).toHaveAttribute('inputmode', 'numeric');
-    expect(pin).toHaveAttribute('type', 'password');
     expect(pin).toHaveAttribute('dir', 'ltr');
+  });
+
+  it('review 2: the PIN field never looks like a password to a password manager, and masks by style; Show/Hide toggles it', async () => {
+    const { user } = portal(make);
+    const dialog = await screen.findByRole('dialog', { name: 'New link' });
+    const pin = within(dialog).getByLabelText('PIN (4–8 digits)');
+    expect(pin).toHaveAttribute('type', 'text');
+    expect(pin).toHaveAttribute('autocomplete', 'one-time-code');
+    expect(pin).toHaveClass('hp-pin-masked');
+    await user.click(within(dialog).getByRole('button', { name: 'Show' }));
+    expect(pin).not.toHaveClass('hp-pin-masked');
+    expect(pin).toHaveAttribute('type', 'text');
+    await user.click(within(dialog).getByRole('button', { name: 'Hide' }));
+    expect(pin).toHaveClass('hp-pin-masked');
+  });
+
+  it('review 4: the months follow the clock: past midnight into a new month, the chips name the new months', async () => {
+    vi.setSystemTime(new Date('2026-10-31T21:30:00.000Z')); // 23:30 on 31 Oct in Jerusalem
+    const { user } = portal(make);
+    const dialog = await screen.findByRole('dialog', { name: 'New link' });
+    const label = (name: RegExp) => within(dialog).getByRole('radio', { name }).closest('label')?.textContent;
+    expect(label(/^Last month/)).toBe('Last month · Sep 2026');
+    vi.setSystemTime(new Date('2026-10-31T22:30:00.000Z')); // 00:30 on 1 Nov
+    await user.click(within(dialog).getByRole('radio', { name: /^Last month/ }));
+    expect(label(/^Last month/)).toBe('Last month · Oct 2026');
   });
 
   it.each(['123', '12a4'])('refuses the PIN %j under the field, sending nothing', async (pin) => {
@@ -160,6 +184,18 @@ describe('the done pane (B4)', () => {
     await user.click(await within(dialog).findByRole('button', { name: 'نسخ الرسالة' }));
     const message = await navigator.clipboard.readText();
     expect(message).toMatch(/^مرحباً، شاركتُ معك دفاتر «Studio» لفترة أغسطس – أكتوبر 2026 على متابعة: https:\/\/portal\.test\/share#\S+ — يعمل الرابط حتى 13 نوفمبر\. سأرسل لك الرمز بشكل منفصل\.$/);
+  });
+
+  it('review 1: neither the PIN nor the URL ever enters the mutation cache', async () => {
+    const { user, queryClient } = portal(make);
+    const dialog = await fillAndCreate(user, '4821');
+    await within(dialog).findByRole('heading', { name: 'Your link is ready' });
+    const mutations = () => JSON.stringify(queryClient.getMutationCache().getAll().map((m) => [m.state.variables, m.state.data]));
+    expect(mutations()).not.toMatch(/4821|k7Qp29fX/);
+    await user.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mutations()).not.toMatch(/4821|k7Qp29fX/);
+    expect(document.body.innerHTML).not.toMatch(/4821|k7Qp29fX/);
   });
 
   it('Done closes it: the URL leaves the page, the address and the cache, and the list shows the link 0 / 3', async () => {

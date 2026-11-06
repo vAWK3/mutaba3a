@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
+import { act, screen, waitFor, within } from '@testing-library/react';
 import type { AccountantGrant, AccountantGrantList, Me, ShareLink } from '../../../api/client';
 import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 
@@ -380,6 +380,22 @@ describe('MUT-577: the accountant_access feature', () => {
     portal(`/p/${ORG_A}/you?manageProfiles=true&editProfile=${ORG_B}`, {}, { ...me([personal, studio]), clients: [] });
     const dialog = await screen.findByRole('dialog', { name: 'Studio' });
     expect(within(dialog).queryByRole('link', { name: /^Sharing/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('review 3: the clock runs while the page is open', () => {
+  it('a live link whose expiry passes turns Ended, with no Turn off', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date('2026-11-13T08:59:00.000Z'));
+    portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/share-links`]: () => ok({ items: [LINK], limit: 3 }) });
+    const table = await screen.findByRole('table', { name: 'Links with a PIN' });
+    expect(within(table).getByRole('button', { name: /Turn off/ })).toBeInTheDocument();
+    await act(async () => {
+      vi.setSystemTime(new Date('2026-11-13T09:01:00.000Z'));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(table).toHaveTextContent('Ended Nov 13');
+    expect(within(table).queryByRole('button', { name: /Turn off/ })).not.toBeInTheDocument();
   });
 });
 

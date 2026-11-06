@@ -108,3 +108,39 @@ describe('share links', () => {
     expect(status()).toBe('active');
   });
 });
+
+describe('review 5: two Turn offs at once', () => {
+  it('B fails while A succeeds: A stays turned off, B is live again, and the list is read once, at the end', async () => {
+    let answerA!: () => void;
+    let answerB!: () => void;
+    stubApi({
+      [`DELETE /v1/profiles/${ORG_B}/share-links/la`]: () => new Promise((resolve) => (answerA = () => resolve(new Response(null, { status: 204 })))),
+      [`DELETE /v1/profiles/${ORG_B}/share-links/lb`]: () => new Promise((resolve) => (answerB = () => resolve(fail(500, 'INTERNAL')))),
+    });
+    const { queryClient, wrapper } = setup();
+    queryClient.setQueryData(shareLinksKey(ORG_B), { off: false, items: [link('la'), link('lb'), link('lc')], limit: 3 });
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const reads = () => invalidate.mock.calls.filter(([filters]) => JSON.stringify(filters?.queryKey) === JSON.stringify(shareLinksKey(ORG_B))).length;
+    const statuses = () => (queryClient.getQueryData(shareLinksKey(ORG_B)) as { items: ShareLink[] }).items.map((l) => `${l.id}:${l.status}`);
+    const { result } = renderHook(() => ({ one: useRevokeShareLink(ORG_B), two: useRevokeShareLink(ORG_B) }), { wrapper });
+
+    act(() => {
+      result.current.one.mutate(link('la'));
+      result.current.two.mutate(link('lb'));
+    });
+    await waitFor(() => expect(statuses()).toEqual(['la:revoked', 'lb:revoked', 'lc:active']));
+    await waitFor(() => expect(answerA).toBeTypeOf('function'));
+    await waitFor(() => expect(answerB).toBeTypeOf('function'));
+
+    await act(async () => answerB());
+    await waitFor(() => expect(result.current.two.isError).toBe(true));
+    expect(statuses()).toEqual(['la:revoked', 'lb:active', 'lc:active']);
+    expect(reads()).toBe(0);
+
+    await act(async () => answerA());
+    await waitFor(() => expect(result.current.one.isSuccess).toBe(true));
+    expect(reads()).toBe(1);
+    expect(statuses()).toEqual(['la:revoked', 'lb:active', 'lc:active']);
+  });
+});
+
