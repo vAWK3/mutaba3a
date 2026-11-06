@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from '../features.js';
-import { ADMIN, acceptInvite, accountantHarness, inviteAccountant, inviteTokenFor, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
+import { ADMIN, acceptInvite, businessOf, accountantHarness, inviteAccountant, inviteTokenFor, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
 import { createLink, entriesOf, linkOn, listLinks, revokeLink, shareLinkHarness, viewerOf } from './helpers/share-links.js';
 
 /**
@@ -60,6 +60,27 @@ describe('accountant_access per account (MUT-577)', () => {
     expect((await h.app.request(`/v1/profiles/${owner.personalId}/accountants/${g.id}`, { method: 'DELETE', headers: owner.auth })).status).toBe(204);
     expect((await revokeLink(h, owner, owner.personalId, link.id)).status).toBe(204);
     expect((await h.app.request('/v1/expenses', { headers: acc.on(owner.personalId) })).status).toBe(404);
+  });
+
+  it('is checked on the account that shares: a co-owner with it invites on a profile whose creator lacks it, and not the other way round', async () => {
+    const h = shareLinkHarness();
+    const creator = await person(h, { displayName: 'Basel Sader', sharing: false });
+    const coOwner = await person(h, { displayName: 'Lina Haddad' });
+    const profileId = await businessOf(h, creator, 'Sader & Haddad');
+    const added = await h.app.request(`/admin/v1/users/${coOwner.userId}/memberships`, json({ organizationId: profileId, role: 'OWNER' }, ADMIN));
+    expect(added.status, await added.clone().text()).toBe(201);
+    // The co-owner holds the feature: they share, though the creator doesn't.
+    expect((await inviteAccountant(h, coOwner, profileId, 'hadi@books.ps')).status).toBe(201);
+    expect((await createLink(h, coOwner, profileId)).status).toBe(201);
+    // The creator lacks it: refused on the same profile.
+    expect((await inviteAccountant(h, creator, profileId, 'rana@books.ps')).status).toBe(404);
+    expect((await createLink(h, creator, profileId)).status).toBe(404);
+    // Vice versa: the creator gains it and the co-owner loses it.
+    expect((await grant(h, creator)).status).toBe(200);
+    expect((await revoke(h, coOwner)).status).toBe(200);
+    expect((await inviteAccountant(h, creator, profileId, 'rana@books.ps')).status).toBe(201);
+    expect((await inviteAccountant(h, coOwner, profileId, 'sami@books.ps')).status).toBe(404);
+    expect((await createLink(h, coOwner, profileId)).status).toBe(404);
   });
 
   it('an accountant needs no feature: accept, client books and the client feed work without it', async () => {

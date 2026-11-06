@@ -4403,7 +4403,10 @@ export const ListEntriesQuerySchema = z.object({
 
 /** MUT-575 (ADR-249): one profile's feed, named by X-Mutaba3a-Profile; always by money date. */
 export const ProfileEntriesQuerySchema = z.object({
-  kinds: repeatable(z.enum(['expense', 'received', 'owed', 'conversion'])).openapi({ description: 'Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent.', param: { style: 'form', explode: true } }),
+  // An empty `kinds=` asks for no kind: an empty page, never an error.
+  kinds: z
+    .preprocess((v) => (v === undefined ? v : (Array.isArray(v) ? v : [v]).filter((k) => k !== '')), z.array(z.enum(['expense', 'received', 'owed', 'conversion'])).optional())
+    .openapi({ description: 'Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page).', param: { style: 'form', explode: true } }),
   occurredFrom: IsoDateSchema.optional().openapi({ description: 'Money date on or after this day.' }),
   occurredBefore: IsoDateSchema.optional().openapi({ description: 'Money date before this day.' }),
   cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
@@ -4549,7 +4552,7 @@ export const ShareLinkEntriesRequestSchema = z
     viewerToken,
     limit: z.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
     cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
-    kinds: z.array(z.enum(['expense', 'received'])).min(1).optional().openapi({ description: 'MUT-575: only these kinds (expense, received); both when absent. Never more than the link shows.' }),
+    kinds: z.array(z.enum(['expense', 'received'])).optional().openapi({ description: 'MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows.' }),
     occurredFrom: IsoDateSchema.optional().openapi({ description: 'MUT-575: money date on or after this day, clamped inside the link’s period (never widened).' }),
     occurredBefore: IsoDateSchema.optional().openapi({ description: 'MUT-575: money date before this day, clamped inside the link’s period (never widened).' }),
   })

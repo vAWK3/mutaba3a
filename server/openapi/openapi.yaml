@@ -12775,8 +12775,7 @@ components:
             enum:
               - expense
               - received
-          minItems: 1
-          description: "MUT-575: only these kinds (expense, received); both when absent. Never more than the link shows."
+          description: "MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows."
         occurredFrom:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -17168,9 +17167,9 @@ paths:
                 - received
                 - owed
                 - conversion
-            description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent."
+            description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
           required: false
-          description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent."
+          description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
           style: form
           explode: true
           name: kinds

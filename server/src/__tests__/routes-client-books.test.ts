@@ -272,6 +272,32 @@ describe('7. /v1/profile-entries as an accountant (MUT-575)', () => {
     expect(await kinds('?kinds=conversion')).toEqual([ids.c1]);
     expect(await kinds('?kinds=expense&kinds=received')).toEqual([ids.r2, ids.e2, ids.r1, ids.e1]);
     expect((await feedOf(h, acc, profileId, '?kinds=invoice')).status).toBe(422);
+    // No kind, or a from after the before: an empty page, never an error.
+    const empty = { items: [], nextCursor: null };
+    expect(await read(await feedOf(h, acc, profileId, '?kinds='))).toEqual(empty);
+    expect(await read(await feedOf(h, acc, profileId, '?occurredFrom=2026-10-20&occurredBefore=2026-10-10'))).toEqual(empty);
+  });
+
+  it.each(['revoked', 'closing', 'dismissed', 'left'] as const)('a %s grant answers 404, including the next page of a feed read before the change', async (change) => {
+    const { h, owner, acc, profileId } = await client();
+    const first = await read(await feedOf(h, acc, profileId, '?limit=2'));
+    expect(first.nextCursor).not.toBeNull();
+    if (change === 'revoked' || change === 'dismissed') await revokeAll(h, owner, profileId);
+    if (change === 'dismissed') expect((await remove(h, acc, profileId)).status).toBe(204);
+    if (change === 'closing') await closeAccount(h, owner);
+    if (change === 'left') expect((await remove(h, acc, profileId)).status).toBe(204);
+    for (const query of ['', `?limit=2&cursor=${encodeURIComponent(first.nextCursor)}`]) {
+      const res = await feedOf(h, acc, profileId, query);
+      expect(res.status, `${change} ${query}`).toBe(404);
+      expect((await read(res)).error.details).toEqual({ reason: 'PROFILE_NOT_FOUND' });
+    }
+  });
+
+  it('asking /v1/entries for the client by profileId answers 404 (the client feed is only /v1/profile-entries)', async () => {
+    const { h, acc, profileId } = await client();
+    const res = await h.app.request(`/v1/entries?profileId=${profileId}`, { headers: acc.auth });
+    expect(res.status).toBe(404);
+    expect((await h.app.request(`/v1/entries?profileId=${profileId}&order=occurredOn`, { headers: acc.auth })).status).toBe(404);
   });
 
   it('bounds by occurredFrom and occurredBefore, pages with a stable cursor, and caps the limit at 100', async () => {
