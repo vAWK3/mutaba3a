@@ -6447,7 +6447,7 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 8. **The invite opens in the app (E11).** The AASA claims `/accountant-invite*` (existing paths unchanged); never `/share*` or `/client-books*`. Apple's CDN can take about a day to pick up the change.
 9. **Events contract 2.7.0 (E12).** Clients send (the API never does): `accountant_invited`, `accountant_revoked {was}` (both exactly as MUT-561 defines them), `accountant_accepted {via}`, `accountant_left`, `share_link_created {period, expires_in_days}`, `share_link_revoked`, `share_link_opened {period}`, `period_downloaded {place, file, months}`. `surface` is shared, so a location inside a surface is `place`; counts are integers. MUT-561 also bumps to 2.7.0: whichever merges second bumps to 2.8.0.
 
-Contract 1.104.0-mut575; migration `20261107130000_mut575_client_books`.
+Contract 1.104.0-mut575; migration `20261107140000_mut575_client_books`.
 
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 

@@ -49,7 +49,7 @@
   occurredFrom/Before, cursor, limit ≤ 100), the `/v1/entries` shape.
 - `/v1/me.clients` and the accept response carry `profileType`, `status`, `endedReason`, `endedAt`; ended clients
   (revoked, or the owner closing) stay until removed. `DELETE /v1/clients/{id}` leaves an active client or removes an
-  ended one (`accountant_grants.dismissedAt`, migration `20261107130000_mut575_client_books`).
+  ended one (`accountant_grants.dismissedAt`, migration `20261107140000_mut575_client_books`).
 - `disposition=inline` on the expense receipt download; `kinds` and clamped dates on `POST /v1/share-links/entries`;
   the AASA claims `/accountant-invite*`; events contract 2.7.0 (8 accountant and share-link events).
 - `POST /v1/accountant-invites/check` answers `termsVersion`, so signup from the invite sends the current version first time.
