@@ -12556,22 +12556,20 @@ components:
               enum:
                 - capture
                 - integration
-            settlesOwedId:
-              type: string
-              nullable: true
-              format: uuid
-            replacesPaymentId:
-              type: string
-              nullable: true
-              format: uuid
+            settlesOwed:
+              type: boolean
+              description: It paid toward one Owed entry (a settle).
+            replacesPayment:
+              type: boolean
+              description: It replaced a payment Malafat reversed.
             income:
-              $ref: "#/components/schemas/IncomeResponse"
+              $ref: "#/components/schemas/ShareLinkIncome"
           required:
             - kind
             - createdAt
             - origin
-            - settlesOwedId
-            - replacesPaymentId
+            - settlesOwed
+            - replacesPayment
             - income
         - type: object
           properties:
@@ -12583,7 +12581,7 @@ components:
               type: string
               format: date-time
             income:
-              $ref: "#/components/schemas/IncomeResponse"
+              $ref: "#/components/schemas/ShareLinkIncome"
           required:
             - kind
             - createdAt
@@ -12606,9 +12604,10 @@ components:
     ShareLinkExpense:
       type: object
       properties:
-        id:
+        key:
           type: string
-          format: uuid
+          pattern: ^[A-Za-z0-9_-]{22}$
+          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -12625,67 +12624,109 @@ components:
         vendor:
           type: string
           nullable: true
-        vendorId:
+        category:
           type: string
           nullable: true
-          format: uuid
-        categoryId:
+          description: The category’s name, a preset one in the request’s language (Accept-Language; Arabic by default); null when none.
+        client:
           type: string
           nullable: true
-          format: uuid
-        customerId:
+          description: The client’s name; null when none.
+        project:
           type: string
           nullable: true
-          format: uuid
-        projectId:
-          type: string
-          nullable: true
-          format: uuid
+          description: The project’s name; null when none.
         notes:
           type: string
           nullable: true
-        captureSource:
-          allOf:
-            - $ref: "#/components/schemas/StoredCaptureSource"
-            - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436.
         vat:
           $ref: "#/components/schemas/ExpenseVat"
-        version:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
         receiptCount:
           type: integer
           minimum: 0
           description: READY receipts attached
       required:
-        - id
+        - key
         - occurredOn
         - amount
         - currency
         - title
         - vendor
-        - vendorId
-        - categoryId
-        - customerId
-        - projectId
+        - category
+        - client
+        - project
         - notes
-        - captureSource
         - vat
-        - version
-        - createdAt
-        - updatedAt
         - receiptCount
+    ShareLinkIncome:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/IncomeKind"
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        occurredOn:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        title:
+          type: string
+          nullable: true
+        notes:
+          type: string
+          nullable: true
+        dueDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        status:
+          $ref: "#/components/schemas/IncomeStatus"
+        reversalReason:
+          type: string
+          nullable: true
+        reversalReasonCode:
+          $ref: "#/components/schemas/CreditReasonCode"
+        credited:
+          type: string
+          nullable: true
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        key:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{22}$
+          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
+        client:
+          type: string
+          nullable: true
+          description: The client’s name; null when none.
+        project:
+          type: string
+          nullable: true
+          description: The project’s name; null when none.
+      required:
+        - kind
+        - amount
+        - currency
+        - occurredOn
+        - title
+        - notes
+        - dueDate
+        - status
+        - key
+        - client
+        - project
     ShareLinkConversion:
       type: object
       properties:
-        id:
+        key:
           type: string
-          format: uuid
+          pattern: ^[A-Za-z0-9_-]{22}$
+          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
         occurredOn:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -12705,25 +12746,14 @@ components:
         notes:
           type: string
           nullable: true
-        version:
-          type: integer
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
       required:
-        - id
+        - key
         - occurredOn
         - amount
         - currency
         - toAmount
         - toCurrency
         - notes
-        - version
-        - createdAt
-        - updatedAt
     ShareLinkEntriesRequest:
       type: object
       properties:
@@ -12773,10 +12803,10 @@ components:
                 items:
                   type: object
                   properties:
-                    categoryId:
+                    category:
                       type: string
                       nullable: true
-                      format: uuid
+                      description: The category’s name; null when none.
                     total:
                       type: string
                       pattern: ^-?\d+(\.\d+)?$
@@ -12784,18 +12814,18 @@ components:
                     count:
                       type: integer
                   required:
-                    - categoryId
+                    - category
                     - total
                     - count
-              byCustomer:
+              byClient:
                 type: array
                 items:
                   type: object
                   properties:
-                    customerId:
+                    client:
                       type: string
                       nullable: true
-                      format: uuid
+                      description: The client’s name; null when none.
                     total:
                       type: string
                       pattern: ^-?\d+(\.\d+)?$
@@ -12803,7 +12833,7 @@ components:
                     count:
                       type: integer
                   required:
-                    - customerId
+                    - client
                     - total
                     - count
             required:
@@ -12811,8 +12841,8 @@ components:
               - total
               - count
               - byCategory
-              - byCustomer
-          description: Per currency, never summed across currencies.
+              - byClient
+          description: Per currency, never summed across currencies; breakdowns by name.
         received:
           type: array
           items:
@@ -12854,9 +12884,6 @@ components:
           items:
             type: object
             properties:
-              id:
-                type: string
-                format: uuid
               filename:
                 type: string
               mimeType:
@@ -12867,8 +12894,8 @@ components:
               expiresAt:
                 type: string
                 format: date-time
+                description: At most 60 seconds away, and never past this viewer’s access or the link’s expiry.
             required:
-              - id
               - filename
               - mimeType
               - url
@@ -12882,12 +12909,13 @@ components:
           type: string
           pattern: ^[A-Za-z0-9_-]{43}$
           description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
-        expenseId:
+        entryKey:
           type: string
-          format: uuid
+          maxLength: 64
+          description: An expense’s `key` from POST /v1/share-links/entries.
       required:
         - viewerToken
-        - expenseId
+        - entryKey
       additionalProperties: false
   parameters: {}
 paths:
@@ -26879,6 +26907,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT, details.reason SHARE_LINK_STALE_VIEWER: a parallel unlock from this device renewed its viewer token first; keep the token that answer holds (unlocking again with the old one counts as a new device)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
           content:
@@ -26896,7 +26930,7 @@ paths:
       tags:
         - Share links
       summary: The shared period’s entries, newest money date first
-      description: "MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, without profile or person ids. Read live: an entry edited into the period shows, one edited out of it disappears."
+      description: "MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
       security: []
       requestBody:
         required: true
@@ -26946,7 +26980,7 @@ paths:
       tags:
         - Share links
       summary: The shared period’s totals, per currency
-      description: MUT-560 (ADR-246). Expenses (by category and client, as /v1/summaries/expenses) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
+      description: MUT-560 (ADR-246). At most 6 a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
       security: []
       requestBody:
         required: true
@@ -26996,7 +27030,7 @@ paths:
       tags:
         - Share links
       summary: An expense’s receipts in the shared period, as short-lived download URLs
-      description: MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, each with a signed URL that expires soon. Any other expense (outside the period, deleted, another profile’s) answers 404.
+      description: "MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404."
       security: []
       requestBody:
         required: true

@@ -16,6 +16,31 @@ export const SHARE_LINK_CREATE_POLICY = { perUserPerHour: 20 } as const;
 /** Requests one viewer may make per minute on the view routes (A7). */
 export const SHARE_LINK_VIEW_POLICY = { perViewerPerMinute: 60 } as const;
 
+/**
+ * Review (MUT-560): summaries one viewer may ask for per minute. A whole-profile summary walks every row in the range,
+ * so it has a budget of its own, tighter than the views'. SQL aggregation was not taken: the feed's own row rules
+ * (which payments, which entries) would have to be restated in a second query per store.
+ */
+export const SHARE_LINK_SUMMARY_POLICY = { perViewerPerMinute: 6 } as const;
+
+/** Review (MUT-560): view requests one client address may make per minute, counted before the viewer token is read. */
+export const SHARE_LINK_VIEW_IP_POLICY = { perIpPerMinute: 120 } as const;
+
+/** Review (MUT-560): a receipt's signed URL lives at most this long, so a revoke or a lock cuts receipts within a minute. */
+export const SHARE_RECEIPT_URL_MAX_SECONDS = 60;
+/** Below this much access left, a receipt URL is not worth signing: the receipts answer the uniform 404. */
+export const SHARE_RECEIPT_URL_MIN_SECONDS = 5;
+
+/**
+ * A receipt URL's lifetime: the configured one, but at most a minute and never past the viewer's access or the link's
+ * expiry. Null when less than SHARE_RECEIPT_URL_MIN_SECONDS remain.
+ */
+export function receiptUrlTtlSeconds(configured: number, accessEnds: readonly Date[], now: Date): number | null {
+  const left = Math.floor(Math.min(...accessEnds.map((end) => end.getTime() - now.getTime())) / 1000);
+  if (left < SHARE_RECEIPT_URL_MIN_SECONDS) return null;
+  return Math.min(configured, SHARE_RECEIPT_URL_MAX_SECONDS, left);
+}
+
 /** Browsers that may open one link (comment 13226). */
 export const SHARE_LINK_MAX_VIEWERS = 3;
 

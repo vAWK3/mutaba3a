@@ -49,7 +49,7 @@ export async function viewerOf(h: AccountantHarness, token: string, pin = '2468'
 
 export const entriesOf = (h: AccountantHarness, viewerToken: string, extra: Record<string, unknown> = {}) => publicPost(h, 'entries', { viewerToken, ...extra });
 export const summaryOf = (h: AccountantHarness, viewerToken: string) => publicPost(h, 'summary', { viewerToken });
-export const receiptsOf = (h: AccountantHarness, viewerToken: string, expenseId: string) => publicPost(h, 'expense-receipts', { viewerToken, expenseId });
+export const receiptsOf = (h: AccountantHarness, viewerToken: string, entryKey: string) => publicPost(h, 'expense-receipts', { viewerToken, entryKey });
 
 export const listLinks = async (h: AccountantHarness, owner: Person, profileId: string) => read(await h.app.request(`/v1/profiles/${profileId}/share-links`, { headers: owner.auth }));
 export const revokeLink = (h: AccountantHarness, owner: Person, profileId: string, linkId: string) => h.app.request(`/v1/profiles/${profileId}/share-links/${linkId}`, { method: 'DELETE', headers: owner.auth });

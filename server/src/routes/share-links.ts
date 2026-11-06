@@ -14,7 +14,7 @@ import { summarizeExpenses } from '../expenses/summary.js';
 import { formatMoney, type Currency } from '../money.js';
 import { ownedProfileOf, profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ShareLinkWithViewers } from '../repositories/ports.js';
+import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ShareLinkWithViewers, UserLocale } from '../repositories/ports.js';
 import {
   CreateShareLinkRequestSchema,
   ErrorEnvelopeSchema,
@@ -33,20 +33,25 @@ import {
   ShareLinkUnlockResponseSchema,
   ShareLinkViewRequestSchema,
 } from '../schemas.js';
-import { serializeEntry } from '../serializers.js';
 import { openLinkProfile, shareLinkAccess, type ShareLinkAccess } from '../share-links/access.js';
 import {
   SHARE_LINK_MAX_VIEWERS,
   SHARE_LINK_PIN_ATTEMPTS,
+  SHARE_LINK_SUMMARY_POLICY,
   normalizePin,
   pinHashInput,
   shareLinkAudit,
   shareLinkRefused,
   shareLinkUnavailable,
   shareLinkUrl,
+  receiptUrlTtlSeconds,
   viewerAccessExpiry,
 } from '../share-links/links.js';
 import { feedBoundsOf, isInRange, shareLinkRangeAt } from '../share-links/period.js';
+import { shareRowId, shareRowKey } from '../share-links/row-key.js';
+import { namedIds, visitorEntry, visitorExpenseSummary, type VisitorContext } from '../share-links/visitor.js';
+import { displayCategoryNames } from '../expenses/presets.js';
+import { preferredLanguage } from './shared.js';
 
 /**
  * MUT-560 (ADR-246): one-time share links to a period of one profile, opened with a PIN and no account.
@@ -99,6 +104,10 @@ export interface ShareLinkRouteOptions {
   createLimiter: RateLimiter;
   /** Requests per viewer on the view routes (SHARE_LINK_VIEW_POLICY). */
   viewLimiter: RateLimiter;
+  /** Requests per client address on the view routes, counted before the viewer token is read (SHARE_LINK_VIEW_IP_POLICY). */
+  viewIpLimiter: RateLimiter;
+  /** Summaries per viewer (SHARE_LINK_SUMMARY_POLICY): a whole-profile summary walks every row in the range. */
+  summaryLimiter: RateLimiter;
   /** SHARE_LINKS_PER_PROFILE_MAX. */
   maxPerProfile: number;
   storage: AttachmentStorage | null;
@@ -120,25 +129,8 @@ const viewRefusals = {
   429: errorResponse('RATE_LIMITED: too many requests from this viewer'),
 };
 
-type DistributiveOmit<T, K extends PropertyKey> = T extends unknown ? Omit<T, K> : never;
-
-/** A copy of `value` without `keys`. */
-function omitting<T extends object, K extends keyof T>(value: T, keys: readonly K[]): DistributiveOmit<T, K> {
-  const copy: Partial<T> = { ...value };
-  for (const key of keys) delete copy[key];
-  return copy as DistributiveOmit<T, K>;
-}
-
-/** A feed item for a stranger: no profile id and no person's id (the envelope's, the expense's and the conversion's). */
-function forVisitor(item: ReturnType<typeof serializeEntry>) {
-  const rest = omitting(item, ['profileId', 'createdByUserId']);
-  if (rest.kind === 'expense') return { ...rest, expense: omitting(rest.expense, ['createdByUserId']) };
-  if (rest.kind === 'conversion') return { ...rest, conversion: omitting(rest.conversion, ['createdByUserId']) };
-  return rest;
-}
-
 export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, linkStore, settings, passwordHasher, ipLimiter, createLimiter, viewLimiter, maxPerProfile } = options;
+  const { store, linkStore, settings, passwordHasher, ipLimiter, createLimiter, viewLimiter, viewIpLimiter, summaryLimiter, maxPerProfile } = options;
   const app = new OpenAPIHono<AppEnv>();
   const digest = (token: string) => sessionDigest(settings.pepper, token);
 
@@ -156,11 +148,16 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     return now;
   }
 
-  /** The view routes: same origin, the read-only guard set before anything reads, the one door, then the viewer's budget. */
+  /**
+   * The view routes: same origin, the client address's budget (before any lookup, so guessing viewer tokens costs a
+   * budget too), the read-only guard set before anything reads, the one door, then the viewer's budget.
+   */
   async function viewAccess(c: Context<AppEnv>, viewerToken: string): Promise<ShareLinkAccess> {
     if (!isSamePortalOrigin(c.req, settings)) throw new ApiError('CROSS_SITE_REQUEST', 'Open the link from the MTB3A portal itself');
-    c.set('storeGuard', shareLinkStoreGuard());
     const now = c.get('now')();
+    const ip = await viewIpLimiter.check(`share-view-ip:${requestClientIp((name) => c.req.header(name), settings)}`, now);
+    if (!ip.allowed) throw rateLimited(c, ip.retryAfterSeconds, 'Too many requests; wait a moment');
+    c.set('storeGuard', shareLinkStoreGuard());
     const access = await shareLinkAccess(linkStore, settings.pepper, viewerToken, now);
     const budget = await viewLimiter.check(`share-view:${access.viewer.id}`, now);
     if (!budget.allowed) throw rateLimited(c, budget.retryAfterSeconds, 'Too many requests; wait a moment');
@@ -172,6 +169,34 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     const link = await linkStore.shareLinks.findByTokenDigest(digest(token));
     if (!link) throw shareLinkUnavailable();
     return { link, organization: await openLinkProfile(linkStore, link, now) };
+  }
+
+  /** The visitor's language: Accept-Language, else Arabic (ADR-077). */
+  function visitorLanguage(c: Context<AppEnv>): UserLocale {
+    c.header('Vary', 'Accept-Language', { append: true });
+    const lang = preferredLanguage(c.req.header('accept-language')) ?? 'ar';
+    c.header('Content-Language', lang);
+    return lang;
+  }
+
+  /** One batch of name lookups for the rows' categories, clients and projects, and the link's row keys. */
+  async function visitorContext(
+    access: ShareLinkAccess,
+    rows: readonly EntryRow[],
+    lang: UserLocale,
+    extra: Pick<VisitorContext, 'receiptCounts' | 'settledOwed'> = { receiptCounts: new Map(), settledOwed: new Map() },
+  ): Promise<VisitorContext> {
+    const organizationId = access.organization.id;
+    const ids = namedIds(rows);
+    const categories = new Map<string, string>();
+    if (ids.categories.size > 0) {
+      for (const c of displayCategoryNames(await store.expenseCategories.list(organizationId, { includeArchived: true }), lang)) categories.set(c.id, c.name);
+    }
+    const names = async (set: Set<string>, get: (id: string) => Promise<{ id: string; name: string } | null>) =>
+      new Map((await Promise.all([...set].map(get))).flatMap((r) => (r ? [[r.id, r.name] as const] : [])));
+    const [clients, projects] = await Promise.all([names(ids.customers, (id) => store.customers.getById(organizationId, id)), names(ids.projects, (id) => store.projects.getById(organizationId, id))]);
+    const lookup = (map: ReadonlyMap<string, string>) => (id: string | null) => (id ? (map.get(id) ?? null) : null);
+    return { key: (id) => shareRowKey(settings.pepper, access.link.id, id), category: lookup(categories), client: lookup(clients), project: lookup(projects), ...extra };
   }
 
   async function linkView(link: ShareLinkWithViewers) {
@@ -346,6 +371,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         200: { description: 'Opened', content: { 'application/json': { schema: ShareLinkUnlockResponseSchema } } },
         403: errorResponse('SHARE_LINK_REFUSED, details.reason PIN_WRONG (attemptsLeft), LOCKED or VIEWER_LIMIT; or CROSS_SITE_REQUEST'),
         404: unavailable,
+        409: errorResponse('CONFLICT, details.reason SHARE_LINK_STALE_VIEWER: a parallel unlock from this device renewed its viewer token first; keep the token that answer holds (unlocking again with the old one counts as a new device)'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address'),
       },
@@ -384,6 +410,8 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         auditFor: (_viewer, viewerNumber) => [shareLinkAudit(link, 'share_link.unlocked', null, requestId, { viewerNumber })],
       });
       if (added.kind === 'limit') throw shareLinkRefused('VIEWER_LIMIT');
+      // A parallel unlock from this browser renewed this viewer first: its answer holds the viewer token to keep.
+      if (added.kind === 'stale') throw new ApiError('CONFLICT', 'This device was just let in by another request; use the viewer token that request answered, or unlock again', { reason: 'SHARE_LINK_STALE_VIEWER' });
       if (added.kind === 'unusable') {
         // Locked, revoked or expired between the read above and the viewer's insert.
         if ((await linkStore.shareLinks.findByTokenDigest(link.tokenDigest))?.lockedAt) throw shareLinkRefused('LOCKED');
@@ -412,20 +440,23 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Share links'],
       summary: 'The shared period’s entries, newest money date first',
       description:
-        'MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, without profile or person ids. Read live: an entry edited into the period shows, one edited out of it disappears.',
+        'MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.',
       security: [],
       request: { body: jsonBody(ShareLinkEntriesRequestSchema) },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ShareLinkEntryPageSchema } } }, ...viewRefusals },
     }),
     async (c) => {
       const body = c.req.valid('json');
-      const { organization, range } = await viewAccess(c, body.viewerToken);
+      const access = await viewAccess(c, body.viewerToken);
+      const { organization, range } = access;
+      const lang = visitorLanguage(c);
       const organizationIds = [organization.id];
       const page = await store.entries.list(organizationIds, { limit: body.limit, order: 'occurredOn', cursor: body.cursor ? decodeFeedCursor(body.cursor, 'occurredOn') : null, ...feedBoundsOf(range) });
       const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
       const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
       const [receiptCounts, settledOwed] = await Promise.all([store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds), store.entries.settledOwedIds(organizationIds, settleCandidates)]);
-      return c.json({ items: page.items.map((row) => forVisitor(serializeEntry(row, { receiptCounts, settledOwed }))), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
+      const ctx = await visitorContext(access, page.items, lang, { receiptCounts, settledOwed });
+      return c.json({ items: page.items.map((row) => visitorEntry(row, ctx)), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
     },
   );
 
@@ -435,20 +466,26 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/summary',
       tags: ['Share links'],
       summary: 'The shared period’s totals, per currency',
-      description: 'MUT-560 (ADR-246). Expenses (by category and client, as /v1/summaries/expenses) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.',
+      description: `MUT-560 (ADR-246). At most ${SHARE_LINK_SUMMARY_POLICY.perViewerPerMinute} a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.`,
       security: [],
       request: { body: jsonBody(ShareLinkViewRequestSchema) },
       responses: { 200: { description: 'The totals', content: { 'application/json': { schema: ShareLinkSummarySchema } } }, ...viewRefusals },
     }),
     async (c) => {
-      const { organization, range } = await viewAccess(c, c.req.valid('json').viewerToken);
+      const access = await viewAccess(c, c.req.valid('json').viewerToken);
+      const { organization, range } = access;
+      const budget = await summaryLimiter.check(`share-summary:${access.viewer.id}`, c.get('now')());
+      if (!budget.allowed) throw rateLimited(c, budget.retryAfterSeconds, 'Too many summaries; wait a moment');
+      const lang = visitorLanguage(c);
+      const rows = await walkRange(organization.id, range);
       const expenses: ExpenseRecord[] = [];
       const received: PaymentRecord[] = [];
-      for (const row of await walkRange(organization.id, range)) {
+      for (const row of rows) {
         if (row.kind === 'expense') expenses.push(row.record);
         if (row.kind === 'payment' && row.record.status !== 'REVERSED') received.push(row.record);
       }
-      return c.json({ from: range.from, to: range.to, expenses: summarizeExpenses(expenses), received: receivedByCurrency(received) }, 200);
+      const ctx = await visitorContext(access, rows.filter((row) => row.kind === 'expense'), lang);
+      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received) }, 200);
     },
   );
 
@@ -470,7 +507,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/expense-receipts',
       tags: ['Share links'],
       summary: 'An expense’s receipts in the shared period, as short-lived download URLs',
-      description: 'MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, each with a signed URL that expires soon. Any other expense (outside the period, deleted, another profile’s) answers 404.',
+      description: 'MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404.',
       security: [],
       request: { body: jsonBody(ShareLinkReceiptsRequestSchema) },
       responses: {
@@ -482,17 +519,21 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     }),
     async (c) => {
       const body = c.req.valid('json');
-      const { organization, range } = await viewAccess(c, body.viewerToken);
+      const { organization, range, link, viewer } = await viewAccess(c, body.viewerToken);
       const storage = options.storage;
       if (!storage) throw new ApiError('ATTACHMENTS_NOT_CONFIGURED', 'Attachments are not configured on this deployment (ATTACHMENTS_BUCKET)');
-      const expense = await store.expenses.getById(organization.id, body.expenseId);
-      if (!expense || !isInRange(expense.occurredOn, range)) throw new ApiError('NOT_FOUND', 'Expense not found');
       const now = c.get('now')();
+      // At most a minute, never past this viewer's access or the link's end: a revoke or a lock cuts receipts within 60 s.
+      const ttlSeconds = receiptUrlTtlSeconds(options.urlTtlSeconds, [viewer.accessExpiresAt, link.expiresAt], now);
+      if (ttlSeconds === null) throw shareLinkUnavailable();
+      const expenseId = shareRowId(settings.pepper, link.id, body.entryKey);
+      const expense = expenseId ? await store.expenses.getById(organization.id, expenseId) : null;
+      if (!expense || !isInRange(expense.occurredOn, range)) throw new ApiError('NOT_FOUND', 'Expense not found');
       const ready = (await store.expenseReceipts.listByExpense(organization.id, expense.id)).filter((r) => r.status === 'READY' && r.deletedAt === null);
       const items = await Promise.all(
         ready.map(async (r) => {
-          const signed = await storage.signDownload(r.storageKey, { filename: r.filename, mimeType: r.mimeType, ttlSeconds: options.urlTtlSeconds, now });
-          return { id: r.id, filename: r.filename, mimeType: r.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png', url: signed.url, expiresAt: signed.expiresAt.toISOString() };
+          const signed = await storage.signDownload(r.storageKey, { filename: r.filename, mimeType: r.mimeType, ttlSeconds, now });
+          return { filename: r.filename, mimeType: r.mimeType as 'application/pdf' | 'image/jpeg' | 'image/png', url: signed.url, expiresAt: signed.expiresAt.toISOString() };
         }),
       );
       return c.json({ items }, 200);

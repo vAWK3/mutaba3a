@@ -3,6 +3,7 @@ import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { sessionDigest } from '../auth/sessions.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { SHARE_LINK_MAX_VIEWERS, SHARE_LINK_PIN_ATTEMPTS, SHARE_LINKS_PER_PROFILE_DEFAULT } from '../share-links/links.js';
+import { shareRowKey } from '../share-links/row-key.js';
 import { ADMIN, DAY, JOB, T0, businessOf, idem, json, person, read, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 import {
   check,
@@ -392,7 +393,7 @@ describe('6. viewers (MUT-560)', () => {
 
 describe('7. one 404 for every unusable link (MUT-560)', () => {
   async function everyRoute(h: AccountantHarness, token: string, viewer: string) {
-    return [await check(h, token), await unlock(h, token, '2468', viewer), await entriesOf(h, viewer), await summaryOf(h, viewer), await receiptsOf(h, viewer, '00000000-0000-4000-8000-000000000000')];
+    return [await check(h, token), await unlock(h, token, '2468', viewer), await entriesOf(h, viewer), await summaryOf(h, viewer), await receiptsOf(h, viewer, 'A'.repeat(22))];
   }
   async function expectUniform(responses: Response[]) {
     for (const res of responses) {
@@ -520,30 +521,36 @@ describe('8. reads (MUT-560)', () => {
     const elsewhere = await withReceipt(other, '2026-10-10', 'elsewhere');
     const deleted = await withReceipt(profileId, '2026-10-11', 'deleted');
     expect((await h.app.request(`/v1/expenses/${deleted.id}`, { method: 'DELETE', headers: owner.on(profileId) })).status).toBe(204);
-    const viewer = await viewerOf(h, (await linkOn(h, owner, profileId)).token);
+    const link = await linkOn(h, owner, profileId);
+    const viewer = await viewerOf(h, link.token);
+    const keyFor = (id: string) => shareRowKey(PEPPER, link.id, id);
+    const entries = await read(await entriesOf(h, viewer));
+    const listed = entries.items.find((e: Loose) => e.kind === 'expense' && e.expense.title === 'in range').expense;
+    expect(listed.receiptCount).toBe(1);
+    expect(listed.key).toBe(keyFor(inRange.id));
 
-    const res = await receiptsOf(h, viewer, inRange.id);
+    const res = await receiptsOf(h, viewer, listed.key);
     expect(res.status).toBe(200);
     const { items } = await read(res);
     expect(items).toHaveLength(1);
-    expect(items[0]).toMatchObject({ filename: 'cafe.jpg', mimeType: 'image/jpeg' });
-    expect(items[0].url).toContain(`/download/org/${profileId}/expense-receipts/`);
-    expect(new Date(items[0].expiresAt).getTime()).toBe(T0.getTime() + 900_000);
+    expect(items[0]).toEqual({ filename: 'cafe.jpg', mimeType: 'image/jpeg', url: expect.stringContaining('/download/org/'), expiresAt: expect.any(String) });
+    // Review (MUT-560): a signed URL lives at most 60 seconds, so a revoke or lock cuts receipts within a minute.
+    expect(new Date(items[0].expiresAt).getTime()).toBe(T0.getTime() + 60_000);
     for (const e of [outOfRange, elsewhere, deleted]) {
-      const refused = await receiptsOf(h, viewer, e.id);
+      const refused = await receiptsOf(h, viewer, keyFor(e.id));
       expect(refused.status, e.title).toBe(404);
       expect((await read(refused)).error.code).toBe('NOT_FOUND');
     }
-    const entries = await read(await entriesOf(h, viewer));
-    expect(entries.items.find((e: Loose) => e.kind === 'expense' && e.expense.id === inRange.id).expense.receiptCount).toBe(1);
+    expect((await receiptsOf(h, viewer, 'not-a-key')).status).toBe(404);
   });
 
   it('receipts without a bucket: 503 ATTACHMENTS_NOT_CONFIGURED; entries still work', async () => {
     const h = shareLinkHarness({ attachments: null });
     const { owner, profileId } = await ownerWithProfile(h);
     const e = await expenseAt(h, owner, profileId, '2026-10-10', 'x');
-    const viewer = await viewerOf(h, (await linkOn(h, owner, profileId)).token);
-    const res = await receiptsOf(h, viewer, e.id);
+    const link = await linkOn(h, owner, profileId);
+    const viewer = await viewerOf(h, link.token);
+    const res = await receiptsOf(h, viewer, shareRowKey(PEPPER, link.id, e.id));
     expect(res.status).toBe(503);
     expect((await read(res)).error.code).toBe('ATTACHMENTS_NOT_CONFIGURED');
     expect((await entriesOf(h, viewer)).status).toBe(200);

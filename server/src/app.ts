@@ -64,7 +64,7 @@ import { accountSetupRoutes } from './routes/account-setup.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
 import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, shareLinkRoutes } from './routes/share-links.js';
-import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
+import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_SUMMARY_POLICY, SHARE_LINK_VIEW_IP_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
 import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
@@ -236,6 +236,10 @@ export interface AppDependencies {
   shareLinkCreateLimiter?: RateLimiter;
   /** MUT-560: requests per viewer per minute on the view routes. Defaults to SHARE_LINK_VIEW_POLICY. */
   shareLinkViewLimiter?: RateLimiter;
+  /** MUT-560 review: view requests per client address per minute. Defaults to SHARE_LINK_VIEW_IP_POLICY. */
+  shareLinkViewIpLimiter?: RateLimiter;
+  /** MUT-560 review: summaries per viewer per minute. Defaults to SHARE_LINK_SUMMARY_POLICY. */
+  shareLinkSummaryLimiter?: RateLimiter;
 }
 
 /**
@@ -696,6 +700,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
       createLimiter: deps.shareLinkCreateLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_CREATE_POLICY.perUserPerHour, 3_600_000),
       viewLimiter: deps.shareLinkViewLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_VIEW_POLICY.perViewerPerMinute),
+      viewIpLimiter: deps.shareLinkViewIpLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_VIEW_IP_POLICY.perIpPerMinute),
+      summaryLimiter: deps.shareLinkSummaryLimiter ?? new SlidingWindowRateLimiter(SHARE_LINK_SUMMARY_POLICY.perViewerPerMinute),
       maxPerProfile: deps.shareLinksPerProfileMax ?? SHARE_LINKS_PER_PROFILE_DEFAULT,
       storage: deps.attachments ?? null,
       urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,

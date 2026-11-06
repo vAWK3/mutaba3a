@@ -4525,34 +4525,84 @@ export const ShareLinkEntriesRequestSchema = z
   .strict()
   .openapi('ShareLinkEntriesRequest');
 
-/** The feed's items as a stranger sees them: no profile id, and no person's id anywhere. */
+const visitorKey = z.string().regex(/^[A-Za-z0-9_-]{22}$/).openapi({ description: 'An opaque key for this entry on this link only (not an id). The receipts route takes it.' });
+const visitorName = (what: string) => z.string().nullable().openapi({ description: `The ${what}’s name; null when none.` });
+
+export const ShareLinkExpenseSchema = z
+  .object({
+    key: visitorKey,
+    occurredOn: IsoDateSchema,
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    title: z.string().nullable(),
+    vendor: z.string().nullable(),
+    category: visitorName('category').openapi({ description: 'The category’s name, a preset one in the request’s language (Accept-Language; Arabic by default); null when none.' }),
+    client: visitorName('client'),
+    project: visitorName('project'),
+    notes: z.string().nullable(),
+    vat: ExpenseVatSchema.nullable(),
+    receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }),
+  })
+  .openapi('ShareLinkExpense');
+
+export const ShareLinkIncomeSchema = IncomeResponseSchema.omit({ id: true, customerId: true, projectId: true, version: true })
+  .extend({ key: visitorKey, client: visitorName('client'), project: visitorName('project') })
+  .openapi('ShareLinkIncome');
+
+export const ShareLinkConversionSchema = z
+  .object({ key: visitorKey, occurredOn: IsoDateSchema, amount: AmountSchema, currency: CurrencySchema, toAmount: AmountSchema, toCurrency: CurrencySchema, notes: z.string().nullable() })
+  .openapi('ShareLinkConversion');
+
+/** The feed's items as a stranger sees them: names, never ids (review, MUT-560). */
 export const ShareLinkEntrySchema = z
   .discriminatedUnion('kind', [
+    z.object({ kind: z.literal('expense'), createdAt: z.string().datetime(), expense: ShareLinkExpenseSchema }),
     z.object({
-      kind: z.literal('expense'),
+      kind: z.literal('received'),
       createdAt: z.string().datetime(),
-      expense: ExpenseSchema.omit({ createdByUserId: true }).extend({ receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }) }).openapi('ShareLinkExpense'),
+      origin: z.enum(['capture', 'integration']),
+      settlesOwed: z.boolean().openapi({ description: 'It paid toward one Owed entry (a settle).' }),
+      replacesPayment: z.boolean().openapi({ description: 'It replaced a payment Malafat reversed.' }),
+      income: ShareLinkIncomeSchema,
     }),
-    z.object({ kind: z.literal('received'), createdAt: z.string().datetime(), origin: z.enum(['capture', 'integration']), settlesOwedId: uuid.nullable(), replacesPaymentId: uuid.nullable(), income: IncomeResponseSchema }),
-    z.object({ kind: z.literal('owed'), createdAt: z.string().datetime(), income: IncomeResponseSchema }),
-    z.object({ kind: z.literal('conversion'), createdAt: z.string().datetime(), conversion: ConversionSchema.omit({ createdByUserId: true }).openapi('ShareLinkConversion') }),
+    z.object({ kind: z.literal('owed'), createdAt: z.string().datetime(), income: ShareLinkIncomeSchema }),
+    z.object({ kind: z.literal('conversion'), createdAt: z.string().datetime(), conversion: ShareLinkConversionSchema }),
   ])
   .openapi('ShareLinkEntry');
 
 export const ShareLinkEntryPageSchema = z.object({ items: z.array(ShareLinkEntrySchema), nextCursor: z.string().nullable() }).openapi('ShareLinkEntryPage');
 
+const visitorBucket = { total: AmountSchema, count: z.number().int() };
 export const ShareLinkSummarySchema = z
   .object({
     ...shareRange,
-    expenses: ExpenseSummarySchema.shape.currencies.openapi({ description: 'Per currency, never summed across currencies.' }),
-    received: z.array(z.object({ currency: CurrencySchema, total: AmountSchema, count: z.number().int() })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+    expenses: z
+      .array(
+        z.object({
+          currency: CurrencySchema,
+          ...visitorBucket,
+          byCategory: z.array(z.object({ category: visitorName('category'), ...visitorBucket })),
+          byClient: z.array(z.object({ client: visitorName('client'), ...visitorBucket })),
+        }),
+      )
+      .openapi({ description: 'Per currency, never summed across currencies; breakdowns by name.' }),
+    received: z.array(z.object({ currency: CurrencySchema, ...visitorBucket })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
   })
   .openapi('ShareLinkSummary');
 
-export const ShareLinkReceiptsRequestSchema = z.object({ viewerToken, expenseId: z.string().uuid() }).strict().openapi('ShareLinkReceiptsRequest');
+export const ShareLinkReceiptsRequestSchema = z.object({ viewerToken, entryKey: z.string().max(64).openapi({ description: 'An expense’s `key` from POST /v1/share-links/entries.' }) }).strict().openapi('ShareLinkReceiptsRequest');
 
 export const ShareLinkReceiptListSchema = z
-  .object({ items: z.array(z.object({ id: uuid, filename: z.string(), mimeType: AttachmentMimeTypeSchema, url: z.string().url(), expiresAt: z.string().datetime() })) })
+  .object({
+    items: z.array(
+      z.object({
+        filename: z.string(),
+        mimeType: AttachmentMimeTypeSchema,
+        url: z.string().url(),
+        expiresAt: z.string().datetime().openapi({ description: 'At most 60 seconds away, and never past this viewer’s access or the link’s expiry.' }),
+      }),
+    ),
+  })
   .openapi('ShareLinkReceiptList');
 
 // ---- MUT-434: connecting an agent (OAuth for MCP clients) -------------------------
