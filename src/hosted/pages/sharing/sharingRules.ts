@@ -1,6 +1,6 @@
 import { getLocale } from '../../../lib/i18n/core';
 import type { Language } from '../../../lib/i18n/types';
-import { ApiError, apiErrorReason, type AccountantGrant, type Me } from '../../api/client';
+import { ApiError, apiErrorReason, type AccountantGrant, type Me, type ShareLink, type ShareLinkPeriod } from '../../api/client';
 import { initialsOf } from '../../shell/initials';
 
 /**
@@ -14,13 +14,28 @@ export function sharingOpen(me: Pick<Me, 'clients'>, profile: { owned?: boolean 
   return !local && me.clients !== undefined && profile.owned === true;
 }
 
-/** The page's own search: `?invite=true` opens the invite drawer (the shell's drawer-key style, DESIGN.md). */
+/** The page's own search: `?invite=true` and `?newLink=true` open its drawers (the shell's drawer-key style, DESIGN.md). */
 export interface SharingSearch {
   invite?: true;
+  newLink?: true;
 }
 
+const flag = (value: unknown) => value === true || value === 'true' || value === 1 || value === '1';
+
 export function parseSharingSearch(raw: Record<string, unknown>): SharingSearch {
-  return raw.invite === true || raw.invite === 'true' || raw.invite === 1 || raw.invite === '1' ? { invite: true } : {};
+  return { ...(flag(raw.invite) ? { invite: true } : {}), ...(flag(raw.newLink) ? { newLink: true } : {}) };
+}
+
+/** The page's drawer keys, so opening one closes the other and nothing else in the URL is touched. */
+export const SHARING_DRAWER_KEYS = ['invite', 'newLink'] as const;
+
+/**
+ * Review fix (d): a person's text inside a sentence (an email, a name, a profile name) is isolated (U+2068 FSI …
+ * U+2069 PDI), so an Arabic name in an English sentence, or an address in an Arabic one, never reorders the words
+ * around it. JSX uses `<bdi>`; translated strings use this.
+ */
+export function isolate(text: string): string {
+  return `\u2068${text}\u2069`;
 }
 
 // ---- Dates ---------------------------------------------------------------------------------------------------------
@@ -118,18 +133,20 @@ const FIELD_REASONS: Record<string, string> = {
 
 const UNREACHABLE: InviteError = { banner: { key: 'hosted.sharing.invite.errors.unreachable' } };
 
-function limitOf(error: ApiError): string {
+/** The limit the refusal names, else the one the list said (an older server sends none in `details`). */
+function limitOf(error: ApiError, listLimit: number | undefined): string {
   const limit = (error.details as { limit?: unknown } | null)?.limit;
-  return typeof limit === 'number' ? String(limit) : '';
+  if (typeof limit === 'number') return String(limit);
+  return listLimit === undefined ? '' : String(listLimit);
 }
 
-/** Where an invite refusal shows (plan › Invite drawer). `email` is the address that was sent. */
-export function inviteErrorOf(error: unknown, email: string): InviteError {
+/** Where an invite refusal shows (plan › Invite drawer). `email` is the address that was sent; `listLimit` the list's. */
+export function inviteErrorOf(error: unknown, email: string, listLimit?: number): InviteError {
   if (!(error instanceof ApiError)) return UNREACHABLE;
   const reason = apiErrorReason(error);
   if (error.status === 422) return { field: (reason && FIELD_REASONS[reason]) || 'hosted.sharing.invite.errors.invalid' };
-  if (error.status === 409 && reason === 'ACCOUNTANT_LIMIT') return { banner: { key: 'hosted.sharing.invite.errors.limit', vars: { limit: limitOf(error) } }, refetch: true };
-  if (error.status === 409) return { banner: { key: 'hosted.sharing.invite.errors.already', vars: { email } } };
+  if (error.status === 409 && reason === 'ACCOUNTANT_LIMIT') return { banner: { key: 'hosted.sharing.invite.errors.limit', vars: { limit: limitOf(error, listLimit) } }, refetch: true };
+  if (error.status === 409) return { banner: { key: 'hosted.sharing.invite.errors.already', vars: { email: isolate(email) } } };
   if (error.status === 403) return { banner: { key: 'hosted.sharing.invite.errors.notOwner' }, refetch: true };
   if (error.status === 404) return { banner: { key: 'hosted.sharing.invite.errors.gone' }, refetch: true };
   // The portal's query client re-reads /v1/me on a lapse refusal, so the drawer turns read-only on its own.
@@ -144,3 +161,109 @@ export function revokeErrorOf(error: unknown): { done: true } | { done: false; t
   if (error instanceof ApiError && error.status === 403) return { done: false, toast: 'hosted.sharing.invite.errors.notOwner' };
   return { done: false, toast: 'hosted.sharing.accountants.revokeFailed' };
 }
+
+// ---- Share links (slice B, MUT-560) ---------------------------------------------------------------------------------
+
+export const SHARE_PERIODS = ['LAST_1_MONTH', 'LAST_2_MONTHS', 'LAST_3_MONTHS', 'WHOLE_PROFILE'] as const satisfies readonly ShareLinkPeriod[];
+export const SHARE_DAYS = [1, 7, 30] as const;
+export type ShareDays = (typeof SHARE_DAYS)[number];
+const PERIOD_MONTHS: Record<Exclude<ShareLinkPeriod, 'WHOLE_PROFILE'>, number> = { LAST_1_MONTH: 1, LAST_2_MONTHS: 2, LAST_3_MONTHS: 3 };
+
+/** The calendar day `at` falls on in `timeZone`, as `YYYY-MM-DD`. */
+export function dayIn(at: Date, timeZone: string): string {
+  return new Intl.DateTimeFormat('en-CA', { year: 'numeric', month: '2-digit', day: '2-digit', timeZone }).format(at);
+}
+
+/**
+ * D9: the range a period means for a link made on `today` (the profile's day), for the form's preview only. The rule's
+ * one owner is the server (`server/src/share-links/period.ts`): the last N complete calendar months before today;
+ * whole profile = everything up to today. Rows show the range the server froze, never this.
+ */
+export function periodRange(period: ShareLinkPeriod, today: string): { from: string | null; to: string } {
+  if (period === 'WHOLE_PROFILE') return { from: null, to: today };
+  const day = new Date(`${today}T00:00:00Z`);
+  const first = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() - PERIOD_MONTHS[period], 1));
+  const last = new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth(), 0));
+  return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
+}
+
+const monthYear = (iso: string, language: Language) => new Intl.DateTimeFormat(latn(language), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+const monthOnly = (iso: string, language: Language) => new Intl.DateTimeFormat(latn(language), { month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+
+/**
+ * "Oct 2026", "Aug – Oct 2026", "Dec 2025 – Jan 2026" (OW3: whole months by name); null when `from` is null (the whole
+ * profile, which the caller words).
+ */
+export function monthsLabel(from: string | null, to: string, language: Language): string | null {
+  if (from === null) return null;
+  if (from.slice(0, 7) === to.slice(0, 7)) return monthYear(to, language);
+  const start = from.slice(0, 4) === to.slice(0, 4) ? monthOnly(from, language) : monthYear(from, language);
+  return `${start} – ${monthYear(to, language)}`;
+}
+
+/** The period as the reader sees it: its months, or the whole-profile words. */
+export function rangeLine(range: { from: string | null; to: string }, language: Language): Line {
+  const months = monthsLabel(range.from, range.to, language);
+  return months ? { key: 'hosted.sharing.links.months', vars: { months } } : { key: 'hosted.sharing.links.wholeProfile' };
+}
+
+const ARABIC_DIGITS = /[\u0660-\u0669\u06F0-\u06F9]/g;
+
+/** Arabic-Indic and Eastern Arabic-Indic digits as 0–9, as the server reads them. */
+export function foldDigits(text: string): string {
+  return text.replace(ARABIC_DIGITS, (digit) => String((digit.codePointAt(0) ?? 0) % 16));
+}
+
+/** The PIN to send (folded), or null when it isn't 4 to 8 digits. */
+export function pinOf(text: string): string | null {
+  const folded = foldDigits(text.trim());
+  return /^\d{4,8}$/.test(folded) ? folded : null;
+}
+
+export type LinkChip = 'active' | 'locked' | 'ended';
+export interface LinkRow {
+  period: Line;
+  ends: string;
+  /** "Ended Nov 1" in place of Ends, for a link that has. */
+  ended: Line | null;
+  lastOpened: string | null;
+  viewers: string;
+  chip: LinkChip;
+  /** Turn off: an active or a locked link (a locked one still counts toward the limit until it is turned off). */
+  canTurnOff: boolean;
+}
+
+export function linkRow(link: ShareLink, now: Date, language: Language, timeZone: string): LinkRow {
+  const chip: LinkChip = link.status === 'active' ? 'active' : link.status === 'locked' ? 'locked' : 'ended';
+  return {
+    period: rangeLine(link, language),
+    ends: shortDay(link.expiresAt, language, timeZone),
+    ended: chip === 'ended' ? { key: 'hosted.sharing.links.ended', vars: { date: shortDay(link.endedAt ?? link.expiresAt, language, timeZone) } } : null,
+    lastOpened: link.lastOpenedAt ? relativeDay(link.lastOpenedAt, now, language, timeZone) : null,
+    viewers: `${link.viewers} / ${link.maxViewers}`,
+    chip,
+    canTurnOff: chip !== 'ended',
+  };
+}
+
+/** Links that hold a place toward the profile's limit: everything not ended. */
+export const liveLinks = (links: ShareLink[]) => links.filter((link) => link.status === 'active' || link.status === 'locked').length;
+
+/** Where a create refusal shows (plan › New link drawer). */
+export function linkErrorOf(error: unknown, listLimit?: number): InviteError {
+  if (!(error instanceof ApiError)) return UNREACHABLE_LINK;
+  const reason = apiErrorReason(error);
+  if (error.status === 422 && reason === 'PIN_FORMAT') return { field: 'hosted.sharing.newLink.errors.pin' };
+  if (error.status === 422) return { banner: { key: 'hosted.sharing.newLink.errors.unreachable' } };
+  if (error.status === 409) return { banner: { key: 'hosted.sharing.newLink.errors.limit', vars: { limit: limitOf(error, listLimit) } }, refetch: true };
+  if (error.status === 403) return { banner: { key: 'hosted.sharing.invite.errors.notOwner' }, refetch: true };
+  if (error.status === 404) return { banner: { key: 'hosted.sharing.invite.errors.gone' }, refetch: true };
+  if (error.status === 402) return { banner: { key: 'hosted.billing.gate.drawerNote' } };
+  if (error.status === 429) return { banner: { key: 'hosted.sharing.newLink.errors.rate' } };
+  return UNREACHABLE_LINK;
+}
+
+const UNREACHABLE_LINK: InviteError = { banner: { key: 'hosted.sharing.newLink.errors.unreachable' } };
+
+/** The contract's names for the period (lower case) in `share_link_created`. */
+export const periodEvent = (period: ShareLinkPeriod) => period.toLowerCase();

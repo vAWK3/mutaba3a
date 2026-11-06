@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type RefObject } from 'react';
+import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -8,7 +8,7 @@ import { InPlaceConfirm } from '../../components/InPlaceConfirm';
 import { QueryView, type QueryState } from '../../components/QueryView';
 import { useToast } from '../../components/Toast';
 import { useRevokeAccountant } from '../../data/sharingQueries';
-import { grantRow, revokeErrorOf, type GrantRow } from './sharingRules';
+import { grantRow, isolate, revokeErrorOf, type GrantRow } from './sharingRules';
 
 /**
  * MUT-561 (B1): the Accountants column. Each invite or reader with one action on its row (DESIGN.md › Rows with their
@@ -58,6 +58,8 @@ export function AccountantsColumn({ profile, query, flashId, writable, onInvite,
                   flash={grant.id === flashId}
                   writable={writable}
                   reinviting={reinviting === grant.id}
+                  atLimit={atLimit}
+                  limitId={`${ids}-limit`}
                   onInviteAgain={() => onInviteAgain(grant)}
                 />
               ))}
@@ -78,15 +80,23 @@ interface AccountantItemProps {
   flash: boolean;
   writable: boolean;
   reinviting: boolean;
+  /** At the limit an expired invite can't be sent again until one is stopped (review b); the foot says why. */
+  atLimit: boolean;
+  limitId: string;
   onInviteAgain: () => void;
 }
 
-function AccountantItem({ grant, profile, flash, writable, reinviting, onInviteAgain }: AccountantItemProps) {
+function AccountantItem({ grant, profile, flash, writable, reinviting, atLimit, limitId, onInviteAgain }: AccountantItemProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const revoke = useRevokeAccountant(profile.id);
   const [confirming, setConfirming] = useState(false);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  const itemRef = useRef<HTMLLIElement>(null);
+  // Review (c): the row just invited takes focus, so the drawer closing (or the empty page leaving) never drops it
+  useEffect(() => {
+    if (flash) itemRef.current?.focus();
+  }, [flash]);
   // "viewed 2 days ago" against the clock when the row appeared; a refetch on focus brings a fresh row
   const [now] = useState(() => new Date());
   const row = grantRow(grant, now, language, profile.timezone);
@@ -110,11 +120,12 @@ function AccountantItem({ grant, profile, flash, writable, reinviting, onInviteA
       }
     }
     void trackPortal('accountant_revoked', { was });
-    showToast(was === 'active' ? t('hosted.sharing.accountants.stopped', { name, profile: profile.name }) : t('hosted.sharing.accountants.cancelled', { name }), { tone: 'info' });
+    const vars = { name: isolate(name), profile: isolate(profile.name) };
+    showToast(was === 'active' ? t('hosted.sharing.accountants.stopped', vars) : t('hosted.sharing.accountants.cancelled', vars), { tone: 'info' });
   };
 
   return (
-    <li className={`hp-sharing-item${flash ? ' hp-sharing-item--new' : ''}`} data-status={grant.status}>
+    <li ref={itemRef} tabIndex={flash ? -1 : undefined} className={`hp-sharing-item${flash ? ' hp-sharing-item--new' : ''}`} data-status={grant.status}>
       <div className="hp-profile-row hp-sharing-row">
         <span className="hp-avatar" aria-hidden="true">
           {row.initial}
@@ -143,12 +154,12 @@ function AccountantItem({ grant, profile, flash, writable, reinviting, onInviteA
           <span className="hp-option-sub">{row.meta.map((line) => t(line.key, line.vars)).join(' · ')}</span>
         </span>
         {/* Under the lapse gate taking access back still works; only a new invite waits (plan › failure modes) */}
-        {(writable || row.action !== 'inviteAgain') && !confirming && <RowAction row={row} name={name} triggerRef={triggerRef} busy={reinviting} onAsk={() => setConfirming(true)} onInviteAgain={onInviteAgain} />}
+        {(writable || row.action !== 'inviteAgain') && !confirming && <RowAction row={row} name={name} triggerRef={triggerRef} busy={reinviting} blockedBy={atLimit ? limitId : null} onAsk={() => setConfirming(true)} onInviteAgain={onInviteAgain} />}
       </div>
       {confirming && (
         <InPlaceConfirm
           appearance="row"
-          message={row.action === 'stop' ? t('hosted.sharing.accountants.stopConfirm', { name, profile: profile.name }) : t('hosted.sharing.accountants.cancelConfirm', { name })}
+          message={row.action === 'stop' ? t('hosted.sharing.accountants.stopConfirm', { name: isolate(name), profile: isolate(profile.name) }) : t('hosted.sharing.accountants.cancelConfirm', { name: isolate(name) })}
           cancelLabel={row.action === 'stop' ? t('common.cancel') : t('hosted.sharing.accountants.keep')}
           confirmLabel={row.action === 'stop' ? t('hosted.sharing.accountants.stopAction') : t('hosted.sharing.accountants.cancelAction')}
           onCancel={cancelConfirm}
@@ -164,15 +175,25 @@ interface RowActionProps {
   name: string;
   triggerRef: RefObject<HTMLButtonElement | null>;
   busy: boolean;
+  /** The id of what says why Invite again does nothing (the limit foot), or null when it can. */
+  blockedBy: string | null;
   onAsk: () => void;
   onInviteAgain: () => void;
 }
 
-function RowAction({ row, name, triggerRef, busy, onAsk, onInviteAgain }: RowActionProps) {
+function RowAction({ row, name, triggerRef, busy, blockedBy, onAsk, onInviteAgain }: RowActionProps) {
   const { t } = useLanguage();
   if (row.action === 'inviteAgain') {
     return (
-      <button type="button" className="hp-link-button press hp-sharing-action" aria-label={t('hosted.sharing.accountants.inviteAgainAria', { name })} aria-busy={busy || undefined} onClick={() => !busy && onInviteAgain()}>
+      <button
+        type="button"
+        className="hp-link-button press hp-sharing-action"
+        aria-label={t('hosted.sharing.accountants.inviteAgainAria', { name })}
+        aria-busy={busy || undefined}
+        aria-disabled={blockedBy ? true : undefined}
+        aria-describedby={blockedBy ?? undefined}
+        onClick={() => !busy && !blockedBy && onInviteAgain()}
+      >
         {t('hosted.sharing.accountants.inviteAgain')}
       </button>
     );

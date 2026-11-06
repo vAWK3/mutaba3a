@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type AccountantGrant } from '../../../api/client';
-import { grantRow, inviteErrorOf, relativeDay, revokeErrorOf, sharingOpen, shortDay } from '../sharingRules';
+import type { ShareLink } from '../../../api/client';
+import { foldDigits, grantRow, inviteErrorOf, isolate, linkErrorOf, linkRow, liveLinks, monthsLabel, periodRange, pinOf, relativeDay, revokeErrorOf, sharingOpen, shortDay } from '../sharingRules';
 
 /**
  * MUT-561: the Sharing page's pure rules. Each accountant row's chip, meta and one action at a fixed clock; who gets
@@ -96,7 +97,7 @@ describe('inviteErrorOf: every refusal in its slot', () => {
     ['SELF_INVITE', err(422, 'VALIDATION_FAILED', { reason: 'SELF_INVITE' }), { field: 'hosted.sharing.invite.errors.self' }],
     ['INVITE_ADDRESS_REFUSED', err(422, 'VALIDATION_FAILED', { reason: 'INVITE_ADDRESS_REFUSED' }), { field: 'hosted.sharing.invite.errors.refused' }],
     ['not an address', err(422, 'VALIDATION_FAILED', [{ path: ['email'] }]), { field: 'hosted.sharing.invite.errors.invalid' }],
-    ['ALREADY_INVITED', err(409, 'CONFLICT', { reason: 'ALREADY_INVITED' }), { banner: { key: 'hosted.sharing.invite.errors.already', vars: { email: 'sami@khoury-cpa.com' } } }],
+    ['ALREADY_INVITED', err(409, 'CONFLICT', { reason: 'ALREADY_INVITED' }), { banner: { key: 'hosted.sharing.invite.errors.already', vars: { email: isolate('sami@khoury-cpa.com') } } }],
     ['ACCOUNTANT_LIMIT', err(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT', limit: 5 }), { banner: { key: 'hosted.sharing.invite.errors.limit', vars: { limit: '5' } }, refetch: true }],
     ['NOT_OWNER', err(403, 'READ_ONLY_PROFILE', { reason: 'NOT_OWNER' }), { banner: { key: 'hosted.sharing.invite.errors.notOwner' }, refetch: true }],
     ['a gone profile or access off', err(404, 'NOT_FOUND'), { banner: { key: 'hosted.sharing.invite.errors.gone' }, refetch: true }],
@@ -117,5 +118,119 @@ describe('revokeErrorOf', () => {
   it('anything else puts the row back and says so', () => {
     expect(revokeErrorOf(err(0, 'NETWORK'))).toEqual({ done: false, toast: 'hosted.sharing.accountants.revokeFailed' });
     expect(revokeErrorOf(err(403, 'READ_ONLY_PROFILE', { reason: 'NOT_OWNER' }))).toEqual({ done: false, toast: 'hosted.sharing.invite.errors.notOwner' });
+  });
+});
+
+describe('review fixes', () => {
+  it('(f) the limit falls back to the list when the refusal names none', () => {
+    expect(inviteErrorOf(err(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT' }), 'x@y.co', 5).banner).toEqual({ key: 'hosted.sharing.invite.errors.limit', vars: { limit: '5' } });
+    expect(inviteErrorOf(err(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT', limit: 4 }), 'x@y.co', 5).banner?.vars).toEqual({ limit: '4' });
+  });
+
+  it('(d) isolates a person\'s text with FSI … PDI', () => {
+    expect(isolate('سامي')).toBe('\u2068سامي\u2069');
+  });
+});
+
+describe('periodRange (D9, pinned to the server\'s documented examples)', () => {
+  it.each([
+    ['LAST_1_MONTH', '2026-11-06', { from: '2026-10-01', to: '2026-10-31' }],
+    ['LAST_2_MONTHS', '2026-11-06', { from: '2026-09-01', to: '2026-10-31' }],
+    ['LAST_3_MONTHS', '2026-11-06', { from: '2026-08-01', to: '2026-10-31' }],
+    ['WHOLE_PROFILE', '2026-11-06', { from: null, to: '2026-11-06' }],
+    ['LAST_2_MONTHS', '2027-01-01', { from: '2026-11-01', to: '2026-12-31' }],
+    ['LAST_1_MONTH', '2026-03-15', { from: '2026-02-01', to: '2026-02-28' }],
+  ] as const)('%s on %s', (period, today, range) => {
+    expect(periodRange(period, today)).toEqual(range);
+  });
+});
+
+describe('monthsLabel (OW3)', () => {
+  it('names whole months, one year once, across a year both', () => {
+    expect(monthsLabel('2026-10-01', '2026-10-31', 'en')).toBe('Oct 2026');
+    expect(monthsLabel('2026-09-01', '2026-10-31', 'en')).toBe('Sep – Oct 2026');
+    expect(monthsLabel('2026-08-01', '2026-10-31', 'en')).toBe('Aug – Oct 2026');
+    expect(monthsLabel('2025-12-01', '2026-01-31', 'en')).toBe('Dec 2025 – Jan 2026');
+    expect(monthsLabel(null, '2026-11-06', 'en')).toBeNull();
+  });
+
+  it('in Arabic, month names in Arabic with Western digits', () => {
+    expect(monthsLabel('2026-08-01', '2026-10-31', 'ar')).toMatch(/^أغسطس – أكتوبر 2026$/);
+  });
+});
+
+describe('the PIN', () => {
+  it.each([
+    ['4821', '4821'],
+    ['12345678', '12345678'],
+    ['٤٨٢١', '4821'],
+    ['۴۸۲۱', '4821'],
+    [' 4821 ', '4821'],
+  ])('accepts %j as %j', (input, pin) => {
+    expect(pinOf(input)).toBe(pin);
+  });
+
+  it.each(['123', '123456789', '12a4', '', '12 34'])('refuses %j', (input) => {
+    expect(pinOf(input)).toBeNull();
+  });
+
+  it('folds both Arabic digit sets', () => {
+    expect(foldDigits('٠١٢٣٤٥٦٧٨٩ ۰۱۲۳۴۵۶۷۸۹')).toBe('0123456789 0123456789');
+  });
+});
+
+const link = (overrides: Partial<ShareLink> = {}): ShareLink => ({
+  id: 'l1',
+  period: 'LAST_3_MONTHS',
+  from: '2026-08-01',
+  to: '2026-10-31',
+  createdAt: '2026-11-05T09:00:00.000Z',
+  expiresAt: '2026-11-13T09:00:00.000Z',
+  lastOpenedAt: '2026-11-05T12:00:00.000Z',
+  status: 'active',
+  endedAt: null,
+  viewers: 2,
+  maxViewers: 3,
+  createdByName: 'Nour Haddad',
+  ...overrides,
+});
+
+describe('linkRow', () => {
+  it('active: months, ends, last opened, viewers, Turn off', () => {
+    expect(linkRow(link(), NOW, 'en', TZ)).toEqual({
+      period: { key: 'hosted.sharing.links.months', vars: { months: 'Aug – Oct 2026' } },
+      ends: 'Nov 13',
+      ended: null,
+      lastOpened: 'yesterday',
+      viewers: '2 / 3',
+      chip: 'active',
+      canTurnOff: true,
+    });
+  });
+
+  it('locked: chip Locked, still Turn off; never opened reads null', () => {
+    expect(linkRow(link({ status: 'locked', endedAt: '2026-11-06T08:00:00.000Z', lastOpenedAt: null }), NOW, 'en', TZ)).toMatchObject({ chip: 'locked', canTurnOff: true, lastOpened: null });
+  });
+
+  it.each(['expired', 'revoked'] as const)('%s: Ended on its day, no action; whole profile worded', (status) => {
+    const row = linkRow(link({ status, endedAt: '2026-11-01T10:00:00.000Z', period: 'WHOLE_PROFILE', from: null, to: '2026-10-25' }), NOW, 'en', TZ);
+    expect(row).toMatchObject({ chip: 'ended', canTurnOff: false, ended: { key: 'hosted.sharing.links.ended', vars: { date: 'Nov 1' } }, period: { key: 'hosted.sharing.links.wholeProfile' } });
+  });
+
+  it('live links are the active and locked ones', () => {
+    expect(liveLinks([link(), link({ status: 'locked' }), link({ status: 'revoked' }), link({ status: 'expired' })])).toBe(2);
+  });
+});
+
+describe('linkErrorOf', () => {
+  it.each([
+    ['PIN_FORMAT', err(422, 'VALIDATION_FAILED', { reason: 'PIN_FORMAT', field: 'pin' }), { field: 'hosted.sharing.newLink.errors.pin' }],
+    ['SHARE_LINK_LIMIT', err(409, 'CONFLICT', { reason: 'SHARE_LINK_LIMIT', limit: 3 }), { banner: { key: 'hosted.sharing.newLink.errors.limit', vars: { limit: '3' } }, refetch: true }],
+    ['RATE_LIMITED', err(429, 'RATE_LIMITED'), { banner: { key: 'hosted.sharing.newLink.errors.rate' } }],
+    ['the lapse gate', err(402, 'SUBSCRIPTION_LAPSED'), { banner: { key: 'hosted.billing.gate.drawerNote' } }],
+    ['NOT_OWNER', err(403, 'READ_ONLY_PROFILE', { reason: 'NOT_OWNER' }), { banner: { key: 'hosted.sharing.invite.errors.notOwner' }, refetch: true }],
+    ['the network', err(0, 'NETWORK'), { banner: { key: 'hosted.sharing.newLink.errors.unreachable' } }],
+  ])('%s', (_label, error, expected) => {
+    expect(linkErrorOf(error, 3)).toEqual(expected);
   });
 });

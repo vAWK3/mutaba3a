@@ -7,8 +7,8 @@ import { trackPortal } from '../../analytics/portalAnalytics';
 import { AccessScopeList } from '../../components/AccessScopeList';
 import { Drawer, ReadOnlyFields } from '../../components/Drawer';
 import { AlertIcon } from '../../components/Icons';
-import { accountantsKey, useInviteAccountant } from '../../data/sharingQueries';
-import { ME_KEY, useWritableFor } from '../../session/me';
+import { accountantsKey, refetchAfterRefusal, useInviteAccountant } from '../../data/sharingQueries';
+import { useWritableFor } from '../../session/me';
 import { inviteErrorOf, type Line } from './sharingRules';
 
 /**
@@ -22,7 +22,15 @@ const FORM_ID = 'hosted-invite-accountant-form';
 /** Enough to catch a slip before sending; the server decides what an address is. */
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-export function InviteAccountantDrawer({ profile, onClose, onInvited }: { profile: HostedProfile; onClose: () => void; onInvited: (grant: AccountantGrant) => void }) {
+export interface InviteAccountantDrawerProps {
+  profile: HostedProfile;
+  /** The list's limit, for a limit refusal that names none (review f). */
+  listLimit?: number;
+  onClose: () => void;
+  onInvited: (grant: AccountantGrant) => void;
+}
+
+export function InviteAccountantDrawer({ profile, listLimit, onClose, onInvited }: InviteAccountantDrawerProps) {
   const { t, language } = useLanguage();
   const ids = useId();
   const queryClient = useQueryClient();
@@ -49,11 +57,8 @@ export function InviteAccountantDrawer({ profile, onClose, onInvited }: { profil
       void trackPortal('accountant_invited', {});
       onInvited(grant);
     } catch (error) {
-      const mapped = inviteErrorOf(error, address);
-      if (mapped.refetch) {
-        void queryClient.invalidateQueries({ queryKey: accountantsKey(profile.id) });
-        void queryClient.invalidateQueries({ queryKey: ME_KEY });
-      }
+      const mapped = inviteErrorOf(error, address, listLimit);
+      if (mapped.refetch) refetchAfterRefusal(queryClient, accountantsKey(profile.id));
       setFieldError(mapped.field ?? null);
       setBanner(mapped.banner ?? null);
       if (mapped.field) fieldRef.current?.focus();

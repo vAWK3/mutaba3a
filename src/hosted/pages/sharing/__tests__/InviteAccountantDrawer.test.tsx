@@ -3,6 +3,9 @@ import { screen, waitFor, within } from '@testing-library/react';
 import type { AccountantGrant, BillingEntitlement, Me } from '../../../api/client';
 import { ORG_B, emptyProfileRoutes, fail, locationOf, me, never, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 
+/** Review fix (d): a person's text inside a sentence is isolated (FSI … PDI). */
+const iso = (text: string) => `\u2068${text}\u2069`;
+
 /**
  * MUT-561: the invite drawer (B2, Basel 13244: the side drawer). It sends `{ email, locale }` in the portal's language
  * (OW2, no picker), shows every refusal in its slot, stays busy while sending, and turns read-only under the lapse gate.
@@ -65,7 +68,7 @@ describe('InviteAccountantDrawer (MUT-561)', () => {
     const post = stub.calls.find((call) => call.method === 'POST');
     expect(post?.body).toEqual({ email: 'maya@ledger.co', locale: 'en' });
     expect(locationOf(router)).not.toContain('invite');
-    expect(await screen.findByText('Invite sent to maya@ledger.co')).toBeInTheDocument();
+    expect(await screen.findByText(`Invite sent to ${iso('maya@ledger.co')}`)).toBeInTheDocument();
     expect(screen.getByRole('main')).toHaveTextContent('maya@ledger.co');
   });
 
@@ -90,7 +93,7 @@ describe('InviteAccountantDrawer (MUT-561)', () => {
   });
 
   it.each([
-    ['ALREADY_INVITED', () => fail(409, 'CONFLICT', { reason: 'ALREADY_INVITED' }), 'sami@khoury-cpa.com already has an invite or access to this profile.'],
+    ['ALREADY_INVITED', () => fail(409, 'CONFLICT', { reason: 'ALREADY_INVITED' }), `${iso('sami@khoury-cpa.com')} already has an invite or access to this profile.`],
     ['ACCOUNTANT_LIMIT', () => fail(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT', limit: 5 }), 'This profile already has 5 accountants or invites, the most it can. Stop one first.'],
     ['RATE_LIMITED', () => fail(429, 'RATE_LIMITED'), 'Too many invites in an hour. Try again later.'],
     ['the network', () => Promise.reject(new TypeError('offline')), "Couldn't reach MTB3A. Check your connection and send again."],
