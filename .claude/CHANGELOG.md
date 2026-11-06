@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — Client books for accountants on the portal, the accept-invite page and a share link's page (MUT-562, ADR-250)
+
+**What:** `/client-books` (the accountant's desk: owner, profile, entries this month, last activity; ended clients faded with Remove; the empty state explains), `/client-books/$profileId` (one client read-only: whole-month periods, type filter, per-currency totals, entries 100 at a time, receipts in a pane, "no longer shared" on a 404), `/accountant-invite` (signed out: sign in or create an account; signed in: accept; mismatch, already, exists, gone) and `/share` (PIN boxes; wrong, locked, gone, viewer limit, PIN again; then owner · profile, the band per currency, a filter and the entries with receipts). Shell: the Client books corner and a pill slot. Cookieless public counts.
+**Why:** epic MUT-558, the accountant's half; MUT-575's routes.
+**Files:** `src/hosted/pages/{client-books,accountant-invite,share-link}/**`, `src/hosted/components/{PinBoxes,TwoPanelLayout,EntriesTable}.tsx`, `src/hosted/data/clientBooksQueries.ts`, `src/hosted/api/client.ts`, `src/hosted/router.tsx`, `src/hosted/shell/HostedShell.tsx`, `src/hosted/session/{SessionBridge,useSignOut}.ts*`, `src/hosted/analytics/portalAnalytics.ts`, `src/hosted/i18n/{ar,en}.json`, `src/hosted/hosted.css`, `qa/**`. Downloads wait for MUT-314; the 4th-client card for MUT-565; scenes for MUT-561.
+
 ## [Unreleased] - 2026-11-06 — Client books for accountants: ended clients, a client's feed, inline receipts, invite app link (MUT-575, ADR-249)
 
 **Why:** epic MUT-558. One server contract for the phone's Client books (MUT-564) and the portal desk (MUT-562).

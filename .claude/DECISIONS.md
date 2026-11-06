@@ -6451,3 +6451,20 @@ Contract 1.104.0-mut575; migration `20261107130000_mut575_client_books`.
 
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 
+
+## ADR-250: The Accountant's Portal Pages: a Desk Outside Any Profile, Two Public Pages, Cookieless Public Counts (MUT-562, Epic MUT-558)
+
+**Status:** Accepted (2026-11-06; plan CLEARED in Jira MUT-562 comments 13243/13246, Basel's answers MUT-558 13236 + 13244, MUT-575 13247). Built 2026-11-06. Numbered 250 at build (MUT-314 248, MUT-575 249); re-check at merge.
+
+**Context:** an accountant reads clients' books on the web, and anyone holding a share link opens it without an account. "Clients" on the portal already means an owner's customers.
+
+**Decision:**
+- The area is **Client books / دفاتر العملاء** at `/client-books` and `/client-books/$profileId`, outside any profile (`HostedShell profile={null}` with a desk pill "Client books | My books"); a corner link beside Reports shows while `/v1/me.clients` lists anyone (active, or ended and not removed). Each client read goes with `X-Mutaba3a-Profile` = the client, through MUT-575's profile-scoped routes; the desk has no write control and honours no drawer key.
+- A client book's period is **whole months** (month / quarter / year presets or a custom range, at most 12 months, never a future month), in the URL, so MUT-314's download can follow it exactly. Totals come per currency from `/v1/summaries/activity`, never summed.
+- `/accountant-invite` and `/share` are **public pages** (layout B, two panels). Tokens are read from the fragment and stripped with `replace`; kept in `sessionStorage` for the tab. A share link's viewer token is kept in `localStorage` under the SHA-256 of the link token (never the token itself). The share page switches the portal's referrer policy to `no-referrer` while open. Both join SessionBridge's signed-out pages; their routes always go to the server (`ALWAYS_REMOTE`); a visitor route's 401 never ends a signed-in session.
+- Signup from an invite issues no session, so the page signs in with POST /v1/sessions and lands on the client.
+- **Public pages count cookieless** (`countPublicPage`: the welcome's own PostHog instance, no cookie, no person id, release builds only, ADR-230's precedent): `share_link_opened {period}`, `accountant_accepted {via}`, and (after MUT-314) `period_downloaded {place: link_page}`. Signed-in desk downloads go through the opt-in `trackPortal`. This supersedes ADR-230's "the welcome is the only portal event sent without consent"; the contract's descriptions say so at its next version bump.
+
+**Alternatives rejected:** a part of You or the island menu for the desk (layouts A/B, Basel chose C); a consent prompt on public pages (a stranger has no account to hold a choice); storing the link token for a returning browser.
+
+**Consequences:** downloads (MUT-314), the 4th-client card and free counter (MUT-565), and the scenes / scope bullets (MUT-561) are hooks marked in code until those land.

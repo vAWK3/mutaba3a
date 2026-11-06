@@ -31,9 +31,9 @@ MTB3A (Arabic **متابعة**; English is always "MTB3A", ADR-173) tracks who o
 - **Telemetry is release-only** (ADR-236): Sentry and PostHog send only from a production build on the production host (web) or a production API. Every Sentry or PostHog start goes through `src/lib/telemetry/telemetryGate.ts` (web) or `server/src/observability/telemetry-gate.ts` (API). `SENTRY_ENABLED` / `POSTHOG_ENABLED`: `false` forces off (dev, QA, e2e, local release builds), `true` forces on only to check the integration.
 
 ### Portal routes (`src/hosted/router.tsx`)
-- Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`, `/welcome` (MUT-513; a first visit to `/` shows the same welcome).
+- Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`, `/welcome` (MUT-513; a first visit to `/` shows the same welcome), `/accountant-invite` and `/share` (MUT-562, public; they work signed in too).
 - Under a profile, `/p/$profileId`: `/` (overview), `/receivables`, `/payments`, `/clients`, `/clients/$customerId`, `/expenses` (with `/groups` and `/receipts`), `/conversions`, `/documents`, `/reports`.
-- Also `/reports` (the Glance across profiles, ADR-204), `/capture`, `/connect/approve`.
+- Also `/reports` (the Glance across profiles, ADR-204), `/capture`, `/connect/approve`, `/client-books` and `/client-books/$profileId` (an accountant's desk, outside any profile, MUT-562).
 
 ---
 

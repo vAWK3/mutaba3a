@@ -2457,6 +2457,15 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `billingRetentionQuery`, `usePausePlan`, `useEndPause`, `useCancelPlan`, `useKeepPlan`, `useTakeStayOffer` — `src/hosted/data/billingQueries.ts`.
 - Server: `cycleBoundaryAfter` / `pauseOptionsOf` / `stayOfferOf` / `pauseCounts` / `CANCELLATION_REASONS` (`server/src/billing/retention.ts`); `pauseOf` (`server/src/billing/stripe/mirror.ts`); `pausedNow` (`server/src/billing/entitlement.ts`); `PlanGateway.schedulePause/endPause/cancelAtPeriodEnd/keepPlan/applyCoupon` (fake: `FakePlanGateway.failNextWrite/failNextAfterApplying`); `stayEntryOf` (`offer.ts`); store `billing.retentionEventsOf/claimRetentionEvent/releaseRetentionEvent/endRetentionEventEarly`.
 
+### Client books and the public sharing pages — MUT-562 (ADR-250)
+- `PinBoxes` — `src/hosted/components/PinBoxes.tsx`: a 4–8 digit PIN, one box per digit (4 growing to 8), paste, Arabic-Indic digits (`pinDigits`), one `role="group"` label, LTR in both languages. Props `value`, `onChange`, `label`, `onSubmit`, `invalid`, `disabled`, `describedBy`, `autoFocus`.
+- `TwoPanelLayout` — `src/hosted/components/TwoPanelLayout.tsx`: layout B for public pages: wordmark + language switch, a lavender context panel and the action panel; stacked on a phone. Used by `/accountant-invite` and `/share`.
+- `EntriesTable` + `deskRow` / `linkRow` — `src/hosted/components/EntriesTable.tsx`: one read-only table (Date, What, Category, Receipt, Amount signed) for a client's feed and a share link's; a row with receipts opens them.
+- `clientBooksRules` — `src/hosted/pages/client-books/clientBooksRules.ts`: whole-month periods (presets, ≤12 months), the desk's search, feed bounds/kinds, totals per currency, `showsClientBooks` (the corner rule).
+- `clientBooksQueries` — `src/hosted/data/clientBooksQueries.ts`: `useClientBooks`, `useRemoveClientBook`, `useClientEntries`, `useClientTotals`, `useClientCategories`, `useClientExpense`, `useClientReceiptUrl`, `isClientGone`, `useForgetClient`.
+- `shareLinkState` / `viewerTokens` (share-link page only) and `inviteState` (accept-invite page only): pure reducers and tab/viewer storage.
+- `HostedShell` `pill` slot (a page outside a profile brings its own pill: `DeskPill`), the Client books corner; `countPublicPage` (cookieless counts) in `portalAnalytics.ts`; `useSignOut({ next })`.
+
 ### Expense VAT — MUT-302 (ADR-231)
 - `ExpenseVatRow` — `src/hosted/components/expenseForm/ExpenseVatRow.tsx`: the firm-only collapsed VAT row (`.form-disclosure`) on the shared expense fields: "No VAT recorded" or the VAT inside the amount; open, treatment `Select`, Standard rate, net and VAT preview (`<bdi>`). Props `form`, `idPrefix`, `readOnly`, `hint`. Rendered by `HostedExpenseFields` when `firm`.
 - `vatPreview` / `percentToBasisPoints` / `basisPointsToPercent` / `VAT_TREATMENTS` — `src/hosted/lib/expenseVat.ts`: display-only port of the server split, held by the shared case table.

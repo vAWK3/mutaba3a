@@ -4460,3 +4460,11 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   (`PROFILE_FEED_READS`), `routes-accountants.test.ts` (extended shape; a revoke leaves an ended row),
   `well-known-routes.test.ts`, `scripts/__tests__/analytics-taxonomy.test.ts` (2.7.0 pin), API 1.104.0-mut575 literals.
 
+## MUT-562 — Client books desk, accept-invite and share-link pages (ADR-250)
+
+Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
+- Unit: `clientBooksRules`, `shareLinkState` + `viewerTokens`, `inviteState`, `PinBoxes`.
+- Page: `ClientBooks.test.tsx`, `AcceptInvitePage.test.tsx`, `ShareLinkPage.test.tsx` (real router, stubbed fetch).
+- Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
+- Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
+
