@@ -2472,3 +2472,16 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `vatInputOf` / `vatValuesOf` / `updateExpenseVat` — `useHostedExpenseForm.ts`: the form's VAT to and from the API; `createExpenseBody(values, { firm })`.
 - Server: `expenseVat` / `storedExpenseVat` / `assertExpenseVatColumns` / `NO_EXPENSE_VAT` (`server/src/expenses/vat.ts`).
 
+### Sharing page — MUT-561 (slice A)
+- `SharingPage` — `src/hosted/pages/sharing/SharingPage.tsx`: `/p/$profileId/you/sharing`; `profile`, `search` (`SharingSearch`, `?invite=true`). Owner + signed in + `/v1/me.clients` (`sharingOpen`) or it navigates to You › Profiles. `LINKS_ON` is false until MUT-560 (slice B adds `LinksColumn`). The bottom is reserved for MUT-314's "Download a period".
+- `AccountantsColumn` — `src/hosted/pages/sharing/AccountantsColumn.tsx`: rows on the `.hp-profile-row` recipe with one action each (Stop / Cancel → `InPlaceConfirm appearance="row"`, Invite again), its own `QueryView`, the limit foot.
+- `InviteAccountantDrawer` — `src/hosted/pages/sharing/InviteAccountantDrawer.tsx`: `profile`, `onClose`, `onInvited(grant)`. Read-only under the lapse gate.
+- `sharingRules.ts`: `sharingOpen`, `parseSharingSearch`, `grantRow`, `shortDay`, `relativeDay`, `inviteErrorOf`, `revokeErrorOf`. `data/sharingQueries.ts`: `useAccountants`, `useInviteAccountant`, `useRevokeAccountant`, `withGrant`, `accountantsKey`.
+- `SharingEntryRow` — `src/hosted/components/SharingEntryRow.tsx`: `profile`, `place: 'you' | 'manage'`; renders only where the page would open.
+- `AccessScopeList` — `src/hosted/components/AccessScopeList.tsx`: the four "sees / can download / can't change / doesn't see" points (`hosted.accessScope.*`). Reuse it for any accountant-facing promise (MUT-562).
+- `Scene` — `src/hosted/components/Scene.tsx`: `name` (`SceneName`: drawn or on order), `size`, `motion: 'drop-in' | 'none'`. A scene not drawn yet shows `empty-state` (`data-placeholder`). Art from `npm run illustrations:generate` (`scripts/illustration-set.ts`, `scripts/generate-illustrations.ts` → `src/components/illustrations/generated/`, `SCENE_ART`); never hand-edit the generated folder.
+- `LinksColumn` — `src/hosted/pages/sharing/LinksColumn.tsx`: `profile`, `query` (`useShareLinks`), `onCreate`. `HostedTable` with a sticky action; Turn off confirms in the row's detail row.
+- `NewShareLinkDrawer` — `src/hosted/pages/sharing/NewShareLinkDrawer.tsx`: `profile`, `listLimit`, `onClose`. Form pane, then the done pane (URL once, Copy link, Copy message). The URL and PIN never leave its state.
+- `sharingRules.ts` (slice B): `isolate`, `periodRange`, `monthsLabel`, `rangeLine`, `foldDigits`, `pinOf`, `linkRow`, `liveLinks`, `linkErrorOf`, `periodEvent`. `sharingQueries.ts`: `useShareLinks` (404 → `{ off: true }`), `useCreateShareLink`, `useRevokeShareLink`, `refetchAfterRefusal`; revokes share `useOptimisticItem` (per-item undo, one read after the last).
+- `DownloadPeriodRow` — `src/hosted/pages/sharing/DownloadPeriodRow.tsx`: `profile`. The owner's Download a period (MUT-314). `data/periodDownload.ts`: `postDownload(ticket)` (hidden form POST to the stream), `periodDownloadsOn`, `usePeriodDownloadsOn`; rules `monthOptions`, `monthSpan`, `monthName`, `downloadErrorOf`. MUT-562's desk download can reuse `postDownload`.
+

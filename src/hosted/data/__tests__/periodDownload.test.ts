@@ -1,11 +1,13 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import { STREAM_PATH, aboutSize, downloadProblem, submitDownload } from '../periodDownload';
+import { ORG_B, fail, ok, stubApi } from '../../__tests__/harness';
+import { PERIOD_DOWNLOAD_STREAM, STREAM_PATH, aboutSize, downloadProblem, periodDownloadsOn, postDownload, submitDownload } from '../periodDownload';
 
 /** MUT-562 (D7): a period download is a hidden form POST of the ticket to the stream, into a hidden frame. */
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   document.body.innerHTML = '';
 });
 
@@ -51,5 +53,28 @@ describe('downloadProblem', () => {
     expect(aboutSize(4.2 * 1024 * 1024, 'en')).toBe('4 MB');
     expect(aboutSize(300 * 1024, 'en')).toBe('300 KB');
     expect(aboutSize(10, 'en')).toBe('1 KB');
+
+/** MUT-561 + MUT-314: the owner download's form post, and the probe that tells whether the server has downloads on. */
+describe('postDownload', () => {
+  it('posts the ticket in a form body (never a URL) to the stream, then removes the form', () => {
+    const seen: { method: string; action: string; ticket: string | null }[] = [];
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (this: HTMLFormElement) {
+      seen.push({ method: this.method, action: new URL(this.action).pathname, ticket: (this.elements.namedItem('ticket') as HTMLInputElement | null)?.value ?? null });
+    });
+    postDownload('t-123');
+    expect(seen).toEqual([{ method: 'post', action: PERIOD_DOWNLOAD_STREAM, ticket: 't-123' }]);
+    expect(document.querySelector('form')).toBeNull();
+  });
+});
+
+describe('periodDownloadsOn', () => {
+  it('404 (switched off) is off; a validation refusal (on, nothing minted) is on', async () => {
+    stubApi({ 'GET /v1/period-downloads/ticket': () => fail(404, 'NOT_FOUND') });
+    expect(await periodDownloadsOn(ORG_B)).toBe(false);
+    const stub = stubApi({ 'GET /v1/period-downloads/ticket': () => fail(422, 'VALIDATION_FAILED', [{ path: ['type'] }]) });
+    expect(await periodDownloadsOn(ORG_B)).toBe(true);
+    expect(stub.calls[0].url.searchParams.get('type')).toBe('none');
+    stubApi({ 'GET /v1/period-downloads/ticket': () => ok({}) });
+    expect(await periodDownloadsOn(ORG_B)).toBe(true);
   });
 });

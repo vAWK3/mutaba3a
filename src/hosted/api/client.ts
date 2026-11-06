@@ -70,6 +70,16 @@ export interface AccountantPlanBilling extends AccountantPlanState {
 export type MeWithClientBooks = Me & { clientBooks?: ClientBooksSummary };
 /** A client row as MUT-565 extends it. */
 export type ClientRowWithPlan = { needsPlan?: boolean };
+/** MUT-561 (MUT-559's routes): an accountant invited to, or reading, one of the owner's profiles. */
+export type AccountantGrant = Schemas['AccountantGrant'];
+export type AccountantGrantList = Schemas['AccountantGrantList'];
+export type InviteAccountantRequest = Schemas['InviteAccountantRequest'];
+/** MUT-561 (MUT-560's routes): the owner's share links on one profile. */
+export type ShareLink = Schemas['ShareLink'];
+export type ShareLinkList = Schemas['ShareLinkList'];
+export type ShareLinkCreated = Schemas['ShareLinkCreated'];
+export type ShareLinkPeriod = Schemas['ShareLinkPeriod'];
+export type CreateShareLinkRequest = Schemas['CreateShareLinkRequest'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -831,6 +841,21 @@ export const api = {
   // MUT-373: yourself to leave a profile you co-own, a co-owner to remove them (the creator only); attempt-scoped key.
   removeProfileOwner: (profileId: string, userId: string, idempotencyKey: string) =>
     request<RemoveProfileOwnerResponse>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/owners/${encodeURIComponent(userId)}`, { idempotencyKey }),
+  // MUT-561 (MUT-559, ADR-245): the owner's accountants on one profile; session routes, no profile header. A 404 is a
+  // profile that isn't theirs or a server with accountant access off; 403 NOT_OWNER a profile they belong to only.
+  listAccountants: (profileId: string, signal?: AbortSignal) =>
+    request<AccountantGrantList>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/accountants`, { signal }),
+  inviteAccountant: (profileId: string, body: InviteAccountantRequest) =>
+    request<AccountantGrant>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/accountants`, { body }),
+  revokeAccountant: (profileId: string, grantId: string) =>
+    request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/accountants/${encodeURIComponent(grantId)}`),
+  // MUT-561 (MUT-560, ADR-247): the owner's share links. A 404 on the list is SHARE_LINKS off (or no such profile).
+  listShareLinks: (profileId: string, signal?: AbortSignal) =>
+    request<ShareLinkList>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/share-links`, { signal }),
+  createShareLink: (profileId: string, body: CreateShareLinkRequest) =>
+    request<ShareLinkCreated>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/share-links`, { body }),
+  revokeShareLink: (profileId: string, linkId: string) =>
+    request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/share-links/${encodeURIComponent(linkId)}`),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>
@@ -884,7 +909,8 @@ export const api = {
       `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId, query: disposition === 'inline' ? { disposition } : {} },
     ),
-  // MUT-562 (MUT-314, ADR-248): a period download's ticket; the form POST to the stream is periodDownload.ts's.
+  // MUT-314 (ADR-248): a period download's ticket for a profile (the owner's, MUT-561; a client's, MUT-562); the form
+  // POST to the stream is data/periodDownload.ts's.
   periodDownloadTicket: (profileId: string, query: { type: PeriodDownloadType; from: string; to: string; lang?: 'ar' | 'en'; asOf?: string }) =>
     request<PeriodDownloadTicket>('GET', '/v1/period-downloads/ticket', { profileId, query }),
   shareLinkDownloadTicket: (body: { viewerToken: string; type: PeriodDownloadType; lang?: 'ar' | 'en'; asOf?: string }) =>

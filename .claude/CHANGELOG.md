@@ -34,6 +34,54 @@
 **Why:** epic MUT-558, the accountant's half; MUT-575's routes.
 **Files:** `src/hosted/pages/{client-books,accountant-invite,share-link}/**`, `src/hosted/components/{PinBoxes,TwoPanelLayout,EntriesTable}.tsx`, `src/hosted/data/clientBooksQueries.ts`, `src/hosted/api/client.ts`, `src/hosted/router.tsx`, `src/hosted/shell/HostedShell.tsx`, `src/hosted/session/{SessionBridge,useSignOut}.ts*`, `src/hosted/analytics/portalAnalytics.ts`, `src/hosted/i18n/{ar,en}.json`, `src/hosted/hosted.css`, `qa/**`. Downloads wait for MUT-314; the 4th-client card for MUT-565; scenes for MUT-561.
 
+## [Unreleased] - 2026-11-07 — The owner's "Download a period" on the Sharing page (MUT-561, MUT-314)
+
+### Added
+- `DownloadPeriodRow` at the bottom of the Sharing page: whole months (this month and the 23 before it), Excel report
+  or Receipts (zip); a ticket from GET /v1/period-downloads/ticket shows the size first, Download form-posts it to the
+  stream (`data/periodDownload.ts`, `postDownload`); one asOf for both files; an expired ticket is re-minted with it;
+  cap and rate refusals in plain words; hidden while the server answers 404 (probe with an invalid type: no ticket is
+  minted). `period_downloaded` {place: owner, file, months} (the contract's `owner`, not `owner_sharing`).
+  QA `portal.sharing.download-period`; FakeApi ticket and stream.
+
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice B: links with a PIN, and review fixes (MUT-561)
+
+### Added
+- `LinksColumn` (hidden on a 404), `NewShareLinkDrawer` (form + done pane, `?newLink=true`), Turn off; the empty page's
+  Create a link with a PIN; `api.listShareLinks/createShareLink/revokeShareLink`; `useShareLinks`, `useCreateShareLink`,
+  `useRevokeShareLink`; rules `periodRange`, `monthsLabel`, `pinOf`, `linkRow`, `linkErrorOf`; events
+  `share_link_created`, `share_link_revoked`; QA `portal.sharing.{create-link,link-rows}`; FakeApi share-link routes.
+
+### Changed
+- Claude Design's art (b2a02e37): `illustrations:generate` now yields 11 scenes; the empty page shows
+  `accountant-empty` and the done pane `link-ready` (no placeholders left); `AccountantIcon` / `LinkIcon` head the
+  columns. `Scene`'s on-order list is empty.
+- MUT-577: the Sharing page and its entry rows also need the person's `accountant_access` feature on `/v1/me` (the
+  operator's per-account switch); absent on a server that doesn't name it yet, so hidden.
+
+### Fixed
+- Concurrent revokes no longer restore each other's rows; Invite again refetches on stale refusals and waits at the
+  limit; focus lands on the new row; bidi isolates in sentences; gender-neutral Arabic confirms.
+
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice A: accountants (MUT-561)
+
+**Why:** epic MUT-558, the owner half on the web (layout B, Basel 13236/13244). Slice A needs only MUT-559; the Links
+column waits for MUT-560 (slice B). Brief: `.claude/designs/MUT-561-sharing-page.md`.
+
+### Added
+- `/p/$profileId/you/sharing` (`pages/sharing/SharingPage.tsx`): Accountants column (`AccountantsColumn.tsx`) with
+  Stop / Cancel (in-place confirm, optimistic with rollback) and Invite again; the invite side drawer
+  (`InviteAccountantDrawer.tsx`, `?invite=true`, sends the portal language); the empty page with the `accountant-empty`
+  scene (placeholder art). Entry rows in You › Profiles and the Manage profiles edit pane (`SharingEntryRow`).
+- `sharingRules.ts`, `data/sharingQueries.ts`, `api.listAccountants/inviteAccountant/revokeAccountant`.
+- `AccessScopeList` (shared with MUT-562), `Scene` and `npm run illustrations:generate`
+  (`scripts/illustration-set.ts` → `src/components/illustrations/generated/`): the portal's first scene renderer.
+- Events `accountant_invited`, `accountant_revoked` (`was`); contract 2.7.0. i18n `hosted.sharing.*`, `hosted.accessScope.*`.
+- QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}`; FakeApi accountants routes.
+
+### Changed
+- `scripts/icon-set.ts`: `parseSvg` takes the allowed attributes (scenes add dashes and rotations); `renderNode` exported.
+
 ## [Unreleased] - 2026-11-06 — Download a period: an Excel report and a receipts zip (MUT-314, ADR-248)
 
 **Why:** epic MUT-558. An owner, their accountant or a share-link visitor gets a period's books as one Excel file, with

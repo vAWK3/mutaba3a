@@ -4421,6 +4421,16 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
+## MUT-561 — the owner's Sharing page, slice A
+
+Detail in `.claude/designs/MUT-561-sharing-page-tests.md`.
+- `scripts/__tests__/illustration-set.test.ts` (palette mapping, dialect, drift of the generated scenes),
+  `components/__tests__/Scene.test.tsx` (placeholder, reduced motion).
+- `pages/sharing/__tests__/sharingRules.test.ts`, `InviteAccountantDrawer.test.tsx`, `SharingPage.test.tsx` (gate, entry
+  rows, row states, stop/cancel/invite again, rollback, telemetry, empty, loading, error).
+- Contract 2.7.0 pinned (`analytics-taxonomy.test.ts`); new `dir` sites (`direction.test.ts`).
+- Release-QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}` (stubbed API).
+
 ## MUT-560 — share links (ADR-247)
 
 Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
@@ -4445,6 +4455,11 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.
 - OW5 and report rows: the owner's list over a moving clock (active → revoked/locked/expired for 24 h → gone) and the
   visitor's feed and totals without Owed entries or conversions (memory and Postgres).
+- Slice B: `data/__tests__/sharingQueries.test.tsx` (two revokes at once, 404 = done, links off, Turn off undo);
+  `NewShareLinkDrawer.test.tsx` (months per chip, PIN rules incl. Arabic-Indic, errors, busy, lapse, done pane, Copy
+  link, Copy message EN/AR without the PIN, nothing left after Done); `SharingPage.test.tsx` (Links column states, Turn
+  off, limit, column error, empty with both ways, review fixes b/c/h); QA `portal.sharing.{create-link,link-rows}`.
+
 
 ## MUT-314 — period download (ADR-248)
 

@@ -1536,3 +1536,73 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-plan-offer { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border-radius: var(--radius-lg); background: var(--accent-2-subtle, var(--accent-subtle)); }
 .hp-plan-offer-price { margin: 0; font-weight: var(--weight-semibold); }
 .hp-share-band .hp-downloads { flex-direction: row; flex-wrap: wrap; align-items: center; margin-inline-start: auto; }
+
+/* ---------- Scenes (MUT-561): brand art on a page, painted with tokens; the empty states' drop-in ---------- */
+.hp-scene { display: inline-flex; justify-content: center; color: var(--text); }
+.hp-scene svg { display: block; max-width: 100%; height: auto; }
+.hp-scene--drop-in [data-part="nuqta"] { animation: hp-scene-drop 900ms var(--ease-overshoot) both; }
+@keyframes hp-scene-drop { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .hp-scene--drop-in [data-part="nuqta"] { animation: none; }
+}
+
+/* ---------- Sharing (MUT-561, layout B): two columns, one at 760px and below; rows on the .hp-profile-row recipe ---------- */
+.hp-sharing { max-width: 1040px; margin-inline: auto; }
+.hp-sharing-back { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 44px; font-size: var(--text-label); }
+[dir="rtl"] .hp-sharing-back-arrow { display: inline-block; transform: scaleX(-1); }
+.hp-sharing-title { margin: 0 0 var(--space-1); font-size: var(--text-title); overflow-wrap: anywhere; }
+.hp-sharing-note { margin: 0 0 var(--space-6); color: var(--muted); }
+.hp-sharing-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-6); align-items: start; }
+.hp-sharing-columns--one { grid-template-columns: minmax(0, 1fr); }
+.hp-sharing-column { min-width: 0; }
+.hp-sharing-column-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; margin-block-end: var(--space-3); }
+.hp-sharing-column-head h2 { margin: 0; font-size: var(--text-headline); }
+.hp-sharing-heading { display: inline-flex; align-items: center; gap: var(--space-2); }
+.hp-sharing-icon { display: inline-flex; color: var(--accent-text); }
+.hp-sharing-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.hp-sharing-item + .hp-sharing-item { border-block-start: 1px solid var(--divider); }
+.hp-sharing-item { transition: background-color var(--duration-toggle) ease; }
+.hp-sharing-item--new { background: var(--accent-subtle); }
+.hp-sharing-row { flex-wrap: wrap; }
+.hp-sharing-row .hp-avatar { align-self: flex-start; }
+.hp-sharing-action { display: inline-flex; align-items: center; min-height: 44px; }
+.hp-sharing-item .hp-passkey-confirm { padding: 0 var(--space-4) var(--space-3); }
+.hp-sharing-foot { margin: var(--space-2) 0 0; font-size: var(--text-label); color: var(--muted); }
+.hp-sharing-intro { margin: 0 0 var(--space-4); color: var(--muted); }
+.hp-sharing-empty { max-width: 480px; margin: var(--space-8) auto 0; text-align: center; }
+.hp-sharing-empty h2 { margin: var(--space-3) 0; font-size: var(--text-headline); }
+.hp-sharing-empty .hp-access-scope { text-align: start; margin-block-end: var(--space-6); }
+.hp-access-scope { margin: var(--space-4) 0 0; padding: 0; list-style: none; display: grid; gap: var(--space-2); font-size: var(--text-label); color: var(--text); }
+.hp-access-scope li { display: flex; gap: var(--space-2); align-items: baseline; }
+.hp-access-scope li::before { content: "✕"; flex: none; width: 1em; color: var(--muted); }
+.hp-access-scope li[data-can]::before { content: "✓"; color: var(--success); }
+.hp-sharing-item:focus-visible { outline: 2px solid var(--focus-ring); outline-offset: -2px; }
+.hp-sharing-link-period { display: inline-flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.hp-sharing-ended td { color: var(--muted); }
+.hp-sharing-none { margin: 0; padding: var(--space-4); color: var(--muted); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.hp-sharing-choices { border: 0; margin: 0 0 var(--space-4); padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.hp-sharing-choices--row { flex-direction: row; flex-wrap: wrap; }
+.hp-sharing-choice { display: inline-flex; align-items: center; gap: var(--space-2); min-height: 44px; padding-inline: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); cursor: pointer; }
+.hp-sharing-choice:has(input:checked) { border-color: var(--accent-solid); background: var(--accent-subtle); color: var(--on-accent-subtle); }
+.hp-sharing-choice input { accent-color: var(--accent-solid); }
+.hp-sharing-done { text-align: center; }
+.hp-sharing-done h3 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-headline); }
+.hp-sharing-done .form-group, .hp-sharing-done .hp-banner { text-align: start; }
+.hp-sharing-copy { margin-block-end: var(--space-2); }
+.hp-sharing-download { margin-block-start: var(--space-8); padding-block-start: var(--space-6); border-block-start: 1px solid var(--divider); }
+.hp-sharing-download h2 { margin: 0 0 var(--space-1); font-size: var(--text-headline); }
+.hp-sharing-download-range { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.hp-sharing-download-range .form-group { min-width: 10rem; }
+.hp-sharing-download-actions { justify-content: flex-start; }
+.hp-sharing-download-ready { margin-block-start: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.hp-sharing-download-ready p { margin: 0 0 var(--space-2); }
+.hp-sharing-download-ready .hp-empty-actions { justify-content: flex-start; }
+/* Review 2: the PIN is a text field (no password manager) masked by style; Show removes the class */
+.hp-pin-masked { -webkit-text-security: disc; }
+/* 375px: actions wrap under the meta (DESIGN.md › Rows with their own actions) */
+@media (max-width: 760px) {
+  .hp-sharing-columns { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .hp-sharing-row .hp-sharing-action { margin-inline-start: var(--space-10); }
+}

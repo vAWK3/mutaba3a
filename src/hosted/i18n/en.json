@@ -2450,6 +2450,161 @@
       "pickCountry": "Choose your country",
       "subscribe": "Subscribe",
       "failed": "Couldn't open the payment page. Try again."
+    },
+    "accessScope": {
+      "label": "What whoever you share with can do",
+      "sees": "Sees this profile’s expenses, income and receipts",
+      "download": "Can download them for a period",
+      "cannotChange": "Can’t add, change or delete anything",
+      "cannotSeeOther": "Doesn’t see your other profiles or your account"
+    },
+    "sharing": {
+      "title": "Sharing {profile}",
+      "back": "Profiles",
+      "scopeNote": "Whoever you share with reads expenses, income and receipts only. They can't add or change anything.",
+      "entryRow": "Share with your accountant",
+      "manageRow": "Sharing",
+      "manageSub": "Who reads this profile",
+      "accountants": {
+        "heading": "Accountants",
+        "invite": "Invite by email",
+        "limit": "Up to {limit} accountants per profile.",
+        "atLimit": "This profile has {limit}, the most it can. Stop one to invite someone else.",
+        "since": "Since {date}",
+        "viewed": "viewed {when}",
+        "notViewed": "not viewed yet",
+        "sent": "Sent {date}",
+        "ends": "ends {date}",
+        "expiredMeta": "Not accepted within 14 days",
+        "chip": {
+          "active": "Active",
+          "pending": "Pending",
+          "expired": "Expired"
+        },
+        "stop": "Stop",
+        "stopAria": "Stop {name}'s access",
+        "stopConfirm": "Stop {name}'s access to {profile}? {name} won't be able to open it any more. You can send a new invite later.",
+        "stopAction": "Stop access",
+        "cancel": "Cancel",
+        "cancelAria": "Cancel the invite to {name}",
+        "cancelConfirm": "Cancel the invite to {name}? The link in the invite email stops working.",
+        "cancelAction": "Cancel invite",
+        "keep": "Keep invite",
+        "inviteAgain": "Invite again",
+        "inviteAgainAria": "Invite {name} again",
+        "stopped": "{name} can no longer open {profile}",
+        "cancelled": "Invite to {name} cancelled",
+        "revokeFailed": "That didn't go through. Check your connection and try again."
+      },
+      "invite": {
+        "title": "Invite an accountant",
+        "intro": "They'll get an email to accept. It ends after 14 days.",
+        "email": "Email",
+        "send": "Send invite",
+        "sent": "Invite sent to {email}",
+        "errors": {
+          "self": "That's your own email. Use your accountant's.",
+          "refused": "We can't send invites to this address. Use your accountant's own email.",
+          "invalid": "Enter an email address, like name@firm.ps.",
+          "already": "{email} already has an invite or access to this profile.",
+          "limit": "This profile already has {limit} accountants or invites, the most it can. Stop one first.",
+          "notOwner": "Only the profile's owners can share it.",
+          "gone": "This profile isn't available to share any more.",
+          "rate": "Too many invites in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and send again."
+        }
+      },
+      "empty": {
+        "title": "You haven't shared this profile yet",
+        "createLink": "Create a link with a PIN"
+      },
+      "links": {
+        "heading": "Links with a PIN",
+        "create": "Create link",
+        "cols": {
+          "period": "Period",
+          "ends": "Ends",
+          "lastOpened": "Last opened",
+          "viewers": "Viewers",
+          "actions": "Actions"
+        },
+        "months": "{months}",
+        "wholeProfile": "Whole profile",
+        "ended": "Ended {date}",
+        "chip": {
+          "active": "Live",
+          "locked": "Locked",
+          "ended": "Ended"
+        },
+        "turnOff": "Turn off",
+        "turnOffAria": "Turn off the link for {period}",
+        "turnOffConfirm": "Turn off the link for {period}? Anyone using it is cut off at once.",
+        "turnOffAction": "Turn off link",
+        "turnedOff": "Link turned off",
+        "footnote": "“Locked”: a wrong PIN was entered 5 times, and even people already in are cut off. A link is never shown twice; if it's lost or locked, turn it off and make a new one. No emails about link activity.",
+        "limit": "Up to {limit} live links per profile.",
+        "atLimit": "This profile has {limit} live links, the most it can. Turn one off to make another.",
+        "none": "No links yet."
+      },
+      "newLink": {
+        "title": "New link",
+        "period": "Period",
+        "last1": "Last month",
+        "last2": "Last 2 months",
+        "last3": "Last 3 months",
+        "whole": "Whole profile",
+        "worksFor": "Works for",
+        "days1": "1 day",
+        "days7": "7 days",
+        "days30": "30 days",
+        "pin": "PIN (4–8 digits)",
+        "pinHint": "Send it separately from the link.",
+        "summary": "{period} · shows expenses, income and receipts only; nothing can be changed. Up to {viewers} viewers.",
+        "create": "Create link",
+        "errors": {
+          "pin": "The PIN is 4 to 8 digits.",
+          "limit": "This profile already has {limit} live links, the most it can. Turn one off first.",
+          "rate": "Too many links in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
+      },
+      "done": {
+        "title": "Your link is ready",
+        "summary": "{period} · works until {until} · up to {viewers} viewers",
+        "link": "Link",
+        "copyLink": "Copy link",
+        "copyMessage": "Copy message",
+        "copiedLink": "Link copied",
+        "copiedMessage": "Message copied, without the PIN",
+        "copyFailed": "Couldn't copy. Select the link and copy it by hand.",
+        "pinWarning": "Send the PIN separately — we won't show the link or the PIN again.",
+        "done": "Done"
+      },
+      "message": {
+        "text": "Hi, I've shared the books of “{profile}” for {period} with you on MTB3A: {url} — the link works until {until}. I'll send you the PIN separately.",
+        "wholeProfile": "the whole profile"
+      },
+      "download": {
+        "title": "Download a period",
+        "note": "For your own records: whole months, up to 24. The report is an Excel file with Expenses, Income and a Summary; the receipts come as a zip.",
+        "from": "From",
+        "to": "To",
+        "report": "Excel report",
+        "receipts": "Receipts (zip)",
+        "reportEstimate": "Excel report for {months}: {expenses} expenses · {income} income",
+        "receiptsEstimate": "Receipts for {months}: {count} · about {size}",
+        "download": "Download",
+        "cancel": "Cancel",
+        "started": "Your download has started.",
+        "preparing": "Preparing…",
+        "errors": {
+          "tooLarge": "This period is too large to download at once. Pick fewer months.",
+          "range": "Pick whole months, up to 24, none in the future.",
+          "rate": "Too many downloads in an hour. Try again later.",
+          "gone": "This download isn't available any more.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
+      }
     }
   }
 }
