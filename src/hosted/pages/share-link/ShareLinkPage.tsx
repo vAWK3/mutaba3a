@@ -1,11 +1,13 @@
 import { useEffect, useId, useReducer, useState, type FormEvent } from 'react';
 import { useLocation, useNavigate } from '@tanstack/react-router';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
-import { api, type ShareLinkUnlock } from '../../api/client';
+import { api, type Me, type ShareLinkUnlock } from '../../api/client';
+import { setReporterUser } from '../../observability/errorReporting';
+import { ME_KEY } from '../../session/me';
 import { countPublicPage } from '../../analytics/portalAnalytics';
 import { AlertIcon } from '../../components/Icons';
 import { PIN_MIN, PinBoxes } from '../../components/PinBoxes';
@@ -13,7 +15,7 @@ import { TwoPanelLayout } from '../../components/TwoPanelLayout';
 import { tokenFromHash } from '../auth/setupLink';
 import { INITIAL_SHARE_LINK_STATE, forgetsViewer, shareLinkReducer, type PinProblem, type ShareLinkState } from './shareLinkState';
 import { ShareLinkView } from './ShareLinkView';
-import { forgetViewerToken, linkDigest, linkForTab, readViewerToken, rememberLinkForTab, saveViewerToken } from './viewerTokens';
+import { forgetLinkForTab, forgetViewerToken, linkDigest, linkForTab, readViewerToken, rememberLinkForTab, saveViewerToken } from './viewerTokens';
 
 /**
  * `/share#<token>` (MUT-562 over MUT-560's visitor routes, layout B): a share link's page, public, no account. The
@@ -34,6 +36,7 @@ export function ShareLinkPage() {
   }, [location.hash, incoming, navigate]);
 
   usePrivatePageMeta();
+  useNoReporterUser();
 
   if (!token) return <Ended state={{ kind: 'gone' }} />;
   return <ShareLink key={token} token={token} />;
@@ -48,6 +51,18 @@ function usePrivatePageMeta() {
     const restore = [setMeta('robots', 'noindex, nofollow', false), setMeta('referrer', 'no-referrer', true)];
     return () => restore.forEach((undo) => undo());
   }, []);
+}
+
+/**
+ * Review fix 4: a crash on a stranger's page is never tied to whoever is signed in on this browser. The reporter's
+ * user is cleared while the page is open and put back (the signed-in person, if any) on leaving.
+ */
+function useNoReporterUser() {
+  const queryClient = useQueryClient();
+  useEffect(() => {
+    setReporterUser(null);
+    return () => setReporterUser(queryClient.getQueryData<Me>(ME_KEY)?.user.id ?? null);
+  }, [queryClient]);
 }
 
 /** Sets a `<meta name>`: an existing one is changed when `override`, kept otherwise; returns how to undo it. */
@@ -89,7 +104,9 @@ function ShareLink({ token }: { token: string }) {
     else if (check.isError) dispatch({ type: 'checkFailed', error: check.error });
   }, [state.kind, check.isSuccess, check.isError, check.error]);
 
+  // Review fixes 3: a link that ended for good leaves nothing behind, neither its viewer record nor the tab's link
   useEffect(() => {
+    if (state.kind === 'gone' || state.kind === 'locked' || state.kind === 'limit') forgetLinkForTab();
     if (digest.data && forgetsViewer(state)) forgetViewerToken(digest.data);
   }, [digest.data, state]);
 
@@ -147,7 +164,7 @@ function PinStep({
     try {
       const previous = readViewerToken(digest);
       const unlock = await api.unlockShareLink({ token, pin, ...(previous ? { viewerToken: previous } : {}) });
-      saveViewerToken(digest, unlock.viewerToken);
+      saveViewerToken(digest, { viewerToken: unlock.viewerToken, viewerExpiresAt: unlock.viewerExpiresAt, linkExpiresAt: unlock.linkExpiresAt });
       countPublicPage({ event: 'share_link_opened', properties: { period: unlock.period.toLowerCase() as never } });
       onUnlocked(unlock);
     } catch (error) {

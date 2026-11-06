@@ -1,8 +1,21 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { fail, locationOf, ok, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+import { fail, locationOf, me, ok, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
+import { ME_KEY } from '../../../session/me';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 import { resetViewerTokensForTests } from '../viewerTokens';
+
+const reporter = vi.hoisted(() => ({ users: [] as (string | null)[] }));
+vi.mock('../../../observability/errorReporting', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../observability/errorReporting')>();
+  return {
+    ...actual,
+    setReporterUser: (id: string | null) => {
+      reporter.users.push(id);
+      actual.setReporterUser(id);
+    },
+  };
+});
 
 /** MUT-562: a share link's page (layout B): the PIN step, every refusal, and the view once open (AC5, AC6). */
 
@@ -41,6 +54,7 @@ beforeEach(() => {
   localStorage.clear();
   sessionStorage.clear();
   resetViewerTokensForTests();
+  reporter.users.length = 0;
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
 });
@@ -79,6 +93,19 @@ describe('the PIN step', () => {
     expect(await screen.findByRole('heading', { name: heading })).toBeInTheDocument();
   });
 
+  it.each([
+    ['gone', () => fail(404, 'NOT_FOUND', { reason: 'SHARE_LINK_UNAVAILABLE' })],
+    ['locked', () => fail(403, 'SHARE_LINK_REFUSED', { reason: 'LOCKED' })],
+    ['limit', () => fail(403, 'SHARE_LINK_REFUSED', { reason: 'VIEWER_LIMIT' })],
+  ])('%s: the tab forgets the link token', async (_name, answer) => {
+    stubApi(routes({ 'POST /v1/share-links/unlock': answer }));
+    const { user } = renderPortal(`/share#${TOKEN}`);
+    await typePin(user, '4821');
+    expect(sessionStorage.getItem('mtb3a-share-link')).toBe(TOKEN);
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    await waitFor(() => expect(sessionStorage.getItem('mtb3a-share-link')).toBeNull());
+  });
+
   it('a locked link says so before any PIN', async () => {
     stubApi(routes({ 'POST /v1/share-links/check': () => fail(403, 'SHARE_LINK_REFUSED', { reason: 'LOCKED' }) }));
     renderPortal(`/share#${TOKEN}`);
@@ -109,7 +136,8 @@ describe('the open link', () => {
     expect(within(table).getByText('Office rent')).toBeInTheDocument();
     expect(within(table).getByText('Rent')).toBeInTheDocument();
     expect(api.calls.find((c) => c.url.pathname === '/v1/share-links/entries')?.body).toMatchObject({ viewerToken: VIEWER });
-    expect(Object.values({ ...localStorage })).toContain(VIEWER);
+    const stored = Object.values({ ...localStorage }).map((value) => (value.startsWith('{') ? (JSON.parse(value) as { viewerToken?: string }) : {}));
+    expect(stored).toContainEqual({ viewerToken: VIEWER, viewerExpiresAt: unlock.viewerExpiresAt, linkExpiresAt: unlock.linkExpiresAt });
     expect(JSON.stringify({ ...localStorage })).not.toContain(TOKEN);
   });
 
@@ -140,5 +168,20 @@ describe('the open link', () => {
     await user.click(screen.getByRole('button', { name: 'Open' }));
     expect(await screen.findByRole('heading', { name: 'Enter the PIN again' })).toBeInTheDocument();
     expect(screen.getByText('For safety, the PIN is asked for every 8 hours.')).toBeInTheDocument();
+  });
+
+  it('a signed-in owner opening a link and getting a 401 stays signed in, and the crash reporter forgets them meanwhile', async () => {
+    const signedIn = me();
+    stubApi(routes({ 'GET /v1/me': () => ok(signedIn), 'POST /v1/share-links/entries': () => fail(401, 'UNAUTHENTICATED', { reason: 'SHARE_VIEW_EXPIRED' }) }));
+    const { user, router, queryClient } = renderPortal(`/share#${TOKEN}`);
+    queryClient.setQueryData(ME_KEY, signedIn);
+    await typePin(user, '4821');
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    expect(await screen.findByRole('heading', { name: 'Enter the PIN again' })).toBeInTheDocument();
+    expect(locationOf(router)).toBe('/share');
+    expect(queryClient.getQueryData(ME_KEY)).toBe(signedIn);
+    expect(reporter.users[0]).toBeNull();
+    await router.navigate({ to: '/sign-in' });
+    await waitFor(() => expect(reporter.users.at(-1)).toBe(signedIn.user.id));
   });
 });
