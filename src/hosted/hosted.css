@@ -1452,6 +1452,8 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-sharing-column { min-width: 0; }
 .hp-sharing-column-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; margin-block-end: var(--space-3); }
 .hp-sharing-column-head h2 { margin: 0; font-size: var(--text-headline); }
+.hp-sharing-heading { display: inline-flex; align-items: center; gap: var(--space-2); }
+.hp-sharing-icon { display: inline-flex; color: var(--accent-text); }
 .hp-sharing-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
 .hp-sharing-item + .hp-sharing-item { border-block-start: 1px solid var(--divider); }
 .hp-sharing-item { transition: background-color var(--duration-toggle) ease; }

@@ -37,6 +37,9 @@
   `share_link_created`, `share_link_revoked`; QA `portal.sharing.{create-link,link-rows}`; FakeApi share-link routes.
 
 ### Changed
+- Claude Design's art (b2a02e37): `illustrations:generate` now yields 11 scenes; the empty page shows
+  `accountant-empty` and the done pane `link-ready` (no placeholders left); `AccountantIcon` / `LinkIcon` head the
+  columns. `Scene`'s on-order list is empty.
 - MUT-577: the Sharing page and its entry rows also need the person's `accountant_access` feature on `/v1/me` (the
   operator's per-account switch); absent on a server that doesn't name it yet, so hidden.
 

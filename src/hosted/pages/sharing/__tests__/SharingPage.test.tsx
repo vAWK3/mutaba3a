@@ -228,7 +228,8 @@ describe('empty, loading and errors', () => {
   it('nothing shared yet: the scene, the title, the four points and Invite only (links off)', async () => {
     portal(`/p/${ORG_B}/you/sharing`, { [`GET /v1/profiles/${ORG_B}/accountants`]: () => ok({ items: [], limit: 5 }) });
     expect(await screen.findByRole('heading', { name: "You haven't shared this profile yet" })).toBeInTheDocument();
-    expect(document.querySelector('[data-scene="accountant-empty"]')).not.toBeNull();
+    // Claude Design's accountant-empty (b2a02e37), no longer the placeholder
+    expect(document.querySelector('[data-scene="accountant-empty"][data-scene-art="accountant-empty"]:not([data-placeholder]) svg')).not.toBeNull();
     const points = screen.getByRole('list', { name: 'What whoever you share with can do' });
     expect(within(points).getAllByRole('listitem').map((li) => li.textContent)).toEqual([
       'Sees this profile’s expenses, income and receipts',

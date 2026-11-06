@@ -11,8 +11,11 @@ import { SCENE_ART, type SceneArtName } from '../../components/illustrations/gen
  * drawn with no reading direction.
  */
 
-/** The MUT-558 scenes on order from Claude Design (`claude-design-brief.md`); each is a placeholder until drawn. */
-type PlannedScene = 'accountant-empty' | 'link-ready' | 'shared-books' | 'link-closed' | 'client-books-empty' | 'share-ended';
+/**
+ * Scenes a plan has ordered from Claude Design but not received yet; each renders the placeholder until drawn. Empty
+ * today: MUT-558's six scenes landed (b2a02e37). Add a name here when a plan orders one.
+ */
+type PlannedScene = never;
 export type SceneName = SceneArtName | PlannedScene;
 
 export const PLACEHOLDER_SCENE: SceneArtName = 'empty-state';

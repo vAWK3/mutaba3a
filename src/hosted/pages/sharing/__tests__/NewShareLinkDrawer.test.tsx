@@ -136,6 +136,7 @@ describe('the done pane (B4)', () => {
     const { user } = portal(make);
     const dialog = await fillAndCreate(user, '4821');
     expect(await within(dialog).findByRole('heading', { name: 'Your link is ready' })).toBeInTheDocument();
+    expect(dialog.querySelector('[data-scene-art="link-ready"]:not([data-placeholder]) svg')).not.toBeNull();
     expect(within(dialog).getByText('Aug – Oct 2026 · works until Nov 13 · up to 3 viewers')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Link')).toHaveValue(URL_ONCE);
     expect(within(dialog).getByText("Send the PIN separately — we won't show the link or the PIN again.")).toBeInTheDocument();

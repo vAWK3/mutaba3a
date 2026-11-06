@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
-import { PLACEHOLDER_SCENE, Scene, sceneArtFor } from '../Scene';
+import { PLACEHOLDER_SCENE, Scene, sceneArtFor, type SceneName } from '../Scene';
 
 /**
  * MUT-561 (D10): the portal's scene renderer. A scene not drawn yet shows the empty-state art until Claude Design
@@ -23,14 +23,25 @@ describe('Scene', () => {
 
   it('falls back to the placeholder for a scene still being drawn, and says so for the swap', () => {
     expect(PLACEHOLDER_SCENE).toBe('empty-state');
-    const { container } = render(<Scene name="accountant-empty" />);
+    // A name a plan has ordered but Claude Design hasn't delivered (none today: cast to stand in for one)
+    const onOrder = 'not-drawn-yet' as SceneName;
+    const { container } = render(<Scene name={onOrder} />);
     const wrap = container.firstElementChild as HTMLElement;
-    expect(wrap).toHaveAttribute('data-scene', 'accountant-empty');
+    expect(wrap).toHaveAttribute('data-scene', 'not-drawn-yet');
     expect(wrap).toHaveAttribute('data-scene-art', 'empty-state');
     expect(wrap).toHaveAttribute('data-placeholder', 'true');
-    expect(sceneArtFor('accountant-empty').name).toBe('empty-state');
-    expect(sceneArtFor('onboarding').name).toBe('onboarding');
+    expect(sceneArtFor(onOrder).name).toBe('empty-state');
   });
+
+  it.each(['accountant-empty', 'link-ready', 'shared-books', 'link-closed', 'client-books-empty', 'share-ended'] as const)(
+    "MUT-558's %s is drawn (Claude Design, b2a02e37): its own art, no placeholder",
+    (name) => {
+      const { container } = render(<Scene name={name} />);
+      expect(container.firstElementChild).toHaveAttribute('data-scene-art', name);
+      expect(container.firstElementChild).not.toHaveAttribute('data-placeholder');
+      expect(sceneArtFor(name)).toEqual({ name, placeholder: false });
+    },
+  );
 
   it('sizes the art and takes the drop-in motion as a class', () => {
     const { container } = render(<Scene name="empty-state" size={120} motion="drop-in" />);

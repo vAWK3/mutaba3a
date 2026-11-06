@@ -200,7 +200,7 @@ test('a profile shared with nobody explains sharing and offers the way to start'
   await step('Open Sharing on a profile shared with nobody', async () => {
     await openSharing(page, seeded([]));
     await expect(page.getByRole('heading', { name: "You haven't shared this profile yet" })).toBeVisible();
-    await expect(page.locator('[data-scene="accountant-empty"] svg')).toBeVisible();
+    await expect(page.locator('[data-scene-art="accountant-empty"]:not([data-placeholder]) svg')).toBeVisible();
     await expect(page.getByRole('list', { name: 'What whoever you share with can do' }).getByRole('listitem')).toHaveText([
       'Sees this profile’s expenses, income and receipts',
       'Can download them for a period',
@@ -271,6 +271,7 @@ test('make a link with a PIN: whole months by name, the link once, Copy message 
     await drawer.getByRole('radio', { name: '7 days' }).check();
     await drawer.getByRole('button', { name: 'Create link' }).click();
     await expect(drawer.getByRole('heading', { name: 'Your link is ready' })).toBeVisible();
+    await expect(drawer.locator('[data-scene-art="link-ready"]:not([data-placeholder]) svg')).toBeVisible();
     await expect(drawer.getByLabel('Link')).toHaveValue(/\/share#qaShareToken/);
     await expect(drawer.getByText("Send the PIN separately — we won't show the link or the PIN again.")).toBeVisible();
     expect(api.last('POST', /\/share-links$/)?.body).toEqual({ period: 'LAST_3_MONTHS', expiresInDays: 7, pin: '4821' });

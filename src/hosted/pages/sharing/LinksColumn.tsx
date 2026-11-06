@@ -1,6 +1,7 @@
 import { useId, useMemo, useRef, useState } from 'react';
 import type { UseQueryResult } from '@tanstack/react-query';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
+import { LinkIcon } from '../../../components/icons/generated';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { HostedProfile, ShareLink } from '../../api/client';
@@ -103,7 +104,12 @@ export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfi
   return (
     <section className="hp-sharing-column" aria-labelledby={`${ids}-heading`}>
       <div className="hp-sharing-column-head">
-        <h2 id={`${ids}-heading`}>{t('hosted.sharing.links.heading')}</h2>
+        <h2 id={`${ids}-heading`} className="hp-sharing-heading">
+          <span className="hp-sharing-icon" aria-hidden="true">
+            <LinkIcon size={20} />
+          </span>
+          {t('hosted.sharing.links.heading')}
+        </h2>
         <Button variant="secondary" size="sm" aria-disabled={atLimit || undefined} aria-describedby={atLimit ? `${ids}-limit` : undefined} onClick={() => !atLimit && onCreate()}>
           {t('hosted.sharing.links.create')}
         </Button>

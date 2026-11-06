@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type RefObject } from 'react';
 import { Badge, type BadgeVariant } from '../../../components/ui/Badge';
+import { AccountantIcon } from '../../../components/icons/generated';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import type { AccountantGrant, AccountantGrantList, HostedProfile } from '../../api/client';
@@ -41,7 +42,12 @@ export function AccountantsColumn({ profile, query, flashId, writable, onInvite,
   return (
     <section className="hp-sharing-column" aria-labelledby={`${ids}-heading`}>
       <div className="hp-sharing-column-head">
-        <h2 id={`${ids}-heading`}>{t('hosted.sharing.accountants.heading')}</h2>
+        <h2 id={`${ids}-heading`} className="hp-sharing-heading">
+          <span className="hp-sharing-icon" aria-hidden="true">
+            <AccountantIcon size={20} />
+          </span>
+          {t('hosted.sharing.accountants.heading')}
+        </h2>
         <Button variant="secondary" size="sm" aria-disabled={blocked || undefined} aria-describedby={atLimit ? `${ids}-limit` : undefined} onClick={() => !blocked && onInvite()}>
           {t('hosted.sharing.accountants.invite')}
         </Button>
