@@ -173,7 +173,7 @@ export function accountantReadOnly(): ApiError {
   return new ApiError('READ_ONLY_PROFILE', 'This profile was shared with you to read; only its owner can change it', { reason: 'ACCOUNTANT_READ_ONLY' });
 }
 
-/** MUT-560 (ADR-246): a write attempted below a share link's view routes (shareLinkStoreGuard). Never expected. */
+/** MUT-560 (ADR-247): a write attempted below a share link's view routes (shareLinkStoreGuard). Never expected. */
 export function shareLinkReadOnly(): ApiError {
   return new ApiError('READ_ONLY_PROFILE', 'A shared link only reads', { reason: 'SHARE_LINK_READ_ONLY' });
 }

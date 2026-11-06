@@ -2579,11 +2579,11 @@ export interface LedgerStore {
   oauth: OAuthRepository;
   /** MUT-559 (ADR-245): read-only access an owner gives an accountant to one profile. Never a membership. */
   accountantGrants: AccountantGrantRepository;
-  /** MUT-560 (ADR-246): one-time links to a period of one profile, opened with a PIN and no account. */
+  /** MUT-560 (ADR-247): one-time links to a period of one profile, opened with a PIN and no account. */
   shareLinks: ShareLinkRepository;
 }
 
-// ---- MUT-560 (ADR-246): share links ------------------------------------------
+// ---- MUT-560 (ADR-247): share links ------------------------------------------
 
 /** One share link. The token and the PIN are never stored: only the token's HMAC and the PIN's argon2id. */
 export interface ShareLinkRecord {

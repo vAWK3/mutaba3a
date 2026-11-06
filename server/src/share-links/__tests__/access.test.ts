@@ -6,7 +6,7 @@ import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { shareLinkAccess } from '../access.js';
 
 /**
- * MUT-560 (ADR-246): shareLinkAccess, the one door MUT-314's download will call too. The route tests drive it through
+ * MUT-560 (ADR-247): shareLinkAccess, the one door MUT-314's download will call too. The route tests drive it through
  * the app; here, the causes the app can't reach directly (a profile gone under a live link) and the shape it answers.
  */
 const PEPPER = 'pepper-with-at-least-32-characters-long!';

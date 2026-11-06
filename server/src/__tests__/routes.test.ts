@@ -82,8 +82,8 @@ describe('operations', () => {
     const doc = (await read(res)) as { openapi: string; info: { version: string; description: string }; paths: Record<string, unknown>; components: { securitySchemes: Record<string, unknown> } };
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.version).toBe(API_VERSION);
-    // MUT-560: share links (ADR-246).
-    expect(API_VERSION).toBe('1.101.0-mut560');
+    // MUT-560: share links (ADR-247).
+    expect(API_VERSION).toBe('1.102.0-mut560');
     for (const s of SCOPES) expect(doc.info.description).toContain(s);
     expect(doc.info.description).toContain('IDEMPOTENCY_KEY_REUSED');
     expect(Object.keys(doc.paths)).toEqual(

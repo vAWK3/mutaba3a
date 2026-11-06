@@ -2,7 +2,7 @@ import { ApiError } from '../errors.js';
 import type { AuditEventInput, JsonObject, ShareLinkRecord } from '../repositories/ports.js';
 
 /**
- * MUT-560 (ADR-246): the rules of a share link's life: its limits, the PIN's shape and hash input, how the owner sees
+ * MUT-560 (ADR-247): the rules of a share link's life: its limits, the PIN's shape and hash input, how the owner sees
  * a link, its audit rows and its refusals. Access itself is shareLinkAccess (access.ts); the period is period.ts; the
  * routes are routes/share-links.ts. Kept free of Node-only imports, like accountants/grants.ts.
  */

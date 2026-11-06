@@ -4431,7 +4431,7 @@ export const EntrySchema = z
 
 export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');
 
-// ---- MUT-560 (ADR-246): share links (one-time, a period, a PIN, no account) ----
+// ---- MUT-560 (ADR-247): share links (one-time, a period, a PIN, no account) ----
 
 export const ShareLinkPeriodSchema = z.enum(SHARE_LINK_PERIODS).openapi('ShareLinkPeriod', {
   description:

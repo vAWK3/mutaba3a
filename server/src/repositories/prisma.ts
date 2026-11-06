@@ -729,7 +729,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
   };
 
-  /** MUT-560 (ADR-246). The link's row lock serialises the viewer cap; the failed-PIN count is one conditional UPDATE. */
+  /** MUT-560 (ADR-247). The link's row lock serialises the viewer cap; the failed-PIN count is one conditional UPDATE. */
   readonly shareLinks: ShareLinkRepository = {
     create: (input) =>
       translate(() =>

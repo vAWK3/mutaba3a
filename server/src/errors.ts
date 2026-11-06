@@ -71,7 +71,7 @@ export const ERROR_CODES = {
    */
   INVITE_EMAIL_MISMATCH: 403,
   /**
-   * MUT-560 (ADR-246): a share link refused to its visitor, who has no account: `details.reason` LOCKED (too many wrong
+   * MUT-560 (ADR-247): a share link refused to its visitor, who has no account: `details.reason` LOCKED (too many wrong
    * PINs; the owner makes a new link), PIN_WRONG (with `details.attemptsLeft`) or VIEWER_LIMIT (3 devices have opened it).
    * Every link that can't be used at all answers 404 NOT_FOUND, reason SHARE_LINK_UNAVAILABLE, the same for every cause.
    */

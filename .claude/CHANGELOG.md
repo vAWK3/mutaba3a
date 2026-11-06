@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-246)
+## [Unreleased] - 2026-11-06 — A one-time link to a period of a profile, opened with a PIN (MUT-560, ADR-247)
 
 **Why:** epic MUT-558. An owner shares a closed period (the last 1–3 complete months, or everything to date) with an
 accountant in one step, no account on either side. Server side only, behind `SHARE_LINKS` (off in production until
@@ -48,7 +48,7 @@ MUT-561..563).
 - The dark-launch 404 middleware is one table (`ACCOUNTANT_ACCESS`, `SHARE_LINKS`); the accountant view throttle moved
   to `access/view-touch.ts`; the owner gate is `ownedProfileOf` (personal-profile.ts), shared with MUT-559's routes.
 - The purge deletes a profile's links (`PURGE_PROFILE_TABLES`) and anonymizes a purged creator (`PURGE_USER_COLUMNS`).
-- Contract 1.101.0-mut560; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `SHARE_LINKS=true`.
+- Contract 1.102.0-mut560; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `SHARE_LINKS=true`.
 
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
 

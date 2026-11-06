@@ -21,7 +21,7 @@ import {
 } from './helpers/share-links.js';
 
 /**
- * MUT-560 (ADR-246): an owner shares a period of one profile through a link and a PIN; whoever holds both reads that
+ * MUT-560 (ADR-247): an owner shares a period of one profile through a link and a PIN; whoever holds both reads that
  * period, nothing more, with no account. Through the real app: create, list and revoke; check and unlock (the PIN
  * lockout, the 3-viewer cap, returning viewers, the 8-hour access); the uniform 404; the period boundaries; the reads
  * and their projection; read-only; throttles, audit, rate limits, closure, headers, isolation and the dark launch.

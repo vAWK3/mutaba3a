@@ -1,7 +1,7 @@
 # MUT-560 — Server: one-time share link with period, expiry and PIN, no account needed
 
 > **Status (2026-11-06):** plan approved (eng review CLEARED, auto-decided A1–A19), then amended by Basel's decisions B1–B5
-> below, which override the plan wherever they differ. Built on `feat/mut-560-share-links` (ADR-246). The "As built"
+> below, which override the plan wherever they differ. Built on `feat/mut-560-share-links` (ADR-247). The "As built"
 > section at the end records where the build follows the code rather than the plan's letter.
 
 ## Basel's decisions after the plan (2026-11-06; they override it)
@@ -22,7 +22,7 @@
 
 
 Epic MUT-558. Repo: mini-crm (`server/`). Built on MUT-559 (merged to local main 69436d7d, In Review). Blocks MUT-561 (portal owner), MUT-562 (portal link page), MUT-563 (phone owner); MUT-314 (download) calls this ticket's access check.
-Claims: **ADR-246** (main and every branch/worktree end at ADR-245), **API 1.100.0-mut559 → 1.101.0-mut560**, migration **`20261107120000_mut560_share_links`**.
+Claims: **ADR-247** (main and every branch/worktree end at ADR-245), **API 1.100.0-mut559 → 1.102.0-mut560**, migration **`20261107120000_mut560_share_links`**.
 Tracker: Jira · barmajiyat · MUT via atlassian-barmajiyat · Backlog → Planned (transition 2) by /eng-ticket; /eng-build → In Progress; finished → In Review.
 
 Ticket status was Backlog; planned on the caller's instruction (the epic is the active roadmap item, MUT-559 just landed). No blockers: MUT-559 is merged.
@@ -159,7 +159,7 @@ A sibling flag **`SHARE_LINKS`** (env, default false in prod, true in dev and QA
   - `src/accountants/grants.ts`: the view throttle moves to `src/access/view-touch.ts`.
   - `src/auth/billing-gate.ts` (PERSON_LEVEL_GATE classes), `src/app.ts` (registration, the flag table, organization-independent set, API_VERSION), `src/app-shell.ts`, `src/config.ts` (`SHARE_LINKS`, `SHARE_LINKS_PER_PROFILE_MAX`), `src/errors.ts` (`SHARE_LINK_REFUSED`), `src/schemas.ts`.
   - OpenAPI (`npm run openapi:generate`) and `npm run hosted:types`.
-- **Docs:** ADR-246 in `.claude/DECISIONS.md`; this brief as `.claude/designs/MUT-560-share-links.md` and its test plan as `.claude/designs/MUT-560-share-links-tests.md`, committed on the build branch.
+- **Docs:** ADR-247 in `.claude/DECISIONS.md`; this brief as `.claude/designs/MUT-560-share-links.md` and its test plan as `.claude/designs/MUT-560-share-links-tests.md`, committed on the build branch.
 
 ## Tests (TDD; `npm --prefix server test`, plus `test:db` for the Prisma repository)
 1. **Period (pure):** each period from fixed days, including month-end clamps (Mar 31, leap Feb 29), timezone day boundaries (UTC 22:30 vs Asia/Jerusalem), whole profile, and the exclusive `occurredBefore = to + 1`.
@@ -248,7 +248,7 @@ VERDICT: ENG CLEARED (auto-decided) — ready for /eng-build MUT-560.
 - Unblocks MUT-561/562/563 and gives MUT-314's download its access check; the server can ship dark behind `SHARE_LINKS`.
 - Risk is contained: a public surface of six POST routes, PIN lockout, 3 viewers, short viewer sessions and a uniform 404, with the data-layer read-only guard underneath.
 
-## As built (2026-11-06, ADR-246)
+## As built (2026-11-06, ADR-247)
 
 Where the build follows the code rather than the plan's letter:
 

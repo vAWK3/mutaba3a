@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.101.0-mut560
+  version: 1.102.0-mut560
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -26644,7 +26644,7 @@ paths:
       tags:
         - Profiles
       summary: Make a one-time link to a period of this profile, opened with a PIN
-      description: "MUT-560 (ADR-246). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to 3 devices, until it expires (1, 7 or 30 days), is revoked, or locks after 5 wrong PINs. The answer's `url` is the only time the link is shown: share it with the PIN, separately. At most 10 live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included."
+      description: "MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to 3 devices, until it expires (1, 7 or 30 days), is revoked, or locks after 5 wrong PINs. The answer's `url` is the only time the link is shown: share it with the PIN, separately. At most 10 live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included."
       security:
         - session: []
         - deviceSession: []
@@ -26708,7 +26708,7 @@ paths:
       tags:
         - Profiles
       summary: "The share links on this profile: active, and those that ended in the last day"
-      description: MUT-560 (ADR-246, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.
+      description: MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.
       security:
         - session: []
         - deviceSession: []
@@ -26743,7 +26743,7 @@ paths:
       tags:
         - Profiles
       summary: Revoke a share link
-      description: MUT-560 (ADR-246). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.
+      description: MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.
       security:
         - session: []
         - deviceSession: []
@@ -26780,7 +26780,7 @@ paths:
       tags:
         - Share links
       summary: Whether a share link opens, before its PIN
-      description: "MUT-560 (ADR-246). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock)."
+      description: "MUT-560 (ADR-247). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock)."
       security: []
       requestBody:
         required: true
@@ -26824,7 +26824,7 @@ paths:
       tags:
         - Share links
       summary: Open a share link with its PIN
-      description: "MUT-560 (ADR-246). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most 3 devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the 5th locks the link for everyone (LOCKED), viewers already in included."
+      description: "MUT-560 (ADR-247). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most 3 devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the 5th locks the link for everyone (LOCKED), viewers already in included."
       security: []
       requestBody:
         required: true
@@ -26874,7 +26874,7 @@ paths:
       tags:
         - Share links
       summary: The shared period’s entries, newest money date first
-      description: "MUT-560 (ADR-246). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
+      description: "MUT-560 (ADR-247). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
       security: []
       requestBody:
         required: true
@@ -26924,7 +26924,7 @@ paths:
       tags:
         - Share links
       summary: The shared period’s totals, per currency
-      description: MUT-560 (ADR-246). At most 6 a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
+      description: MUT-560 (ADR-247). At most 6 a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
       security: []
       requestBody:
         required: true
@@ -26974,7 +26974,7 @@ paths:
       tags:
         - Share links
       summary: An expense’s receipts in the shared period, as short-lived download URLs
-      description: "MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404."
+      description: "MUT-560 (ADR-247). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404."
       security: []
       requestBody:
         required: true

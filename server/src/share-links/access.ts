@@ -6,7 +6,7 @@ import { isLiveLink, shareLinkUnavailable, shareViewExpired } from './links.js';
 import type { ShareLinkRange } from './period.js';
 
 /**
- * MUT-560 (ADR-246): the one door to a share link's data. Every view route calls it, and so will MUT-314's download:
+ * MUT-560 (ADR-247): the one door to a share link's data. Every view route calls it, and so will MUT-314's download:
  * a viewer token in, the viewer, its link, the profile and the frozen money-date range out, or the one refusal.
  *
  * `store` is the base store (beneath any guard): the lookups and the hourly stamps are the link's own bookkeeping, as

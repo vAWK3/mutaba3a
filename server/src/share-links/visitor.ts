@@ -3,7 +3,7 @@ import type { EntryRow } from '../repositories/ports.js';
 import { serializeExpense, serializeIncomeEntry } from '../serializers.js';
 
 /**
- * MUT-560 review (ADR-246): what a visitor sees of an entry. Names, never ids: the client, project and category by name
+ * MUT-560 review (ADR-247): what a visitor sees of an entry. Names, never ids: the client, project and category by name
  * (the category in the request's language, MUT-464); only expenses and received payments, what the period's report holds; the vendor as written, and the entry itself by an opaque key
  * (row-key.ts) that only this link's receipts route understands. No profile, person, client, project, category,
  * vendor, settled-Owed or replaced-payment id. Built field by field, so a field added to the owner's shapes later never

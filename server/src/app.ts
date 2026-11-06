@@ -226,7 +226,7 @@ export interface AppDependencies {
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
   accountantInviteLimiter?: RateLimiter;
   /**
-   * MUT-560 (SHARE_LINKS, ADR-246): one-time share links. Absent or false = every share-link route answers the uniform
+   * MUT-560 (SHARE_LINKS, ADR-247): one-time share links. Absent or false = every share-link route answers the uniform
    * 404 before authentication (the server deploys dark).
    */
   shareLinks?: boolean;
@@ -328,7 +328,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.101.0-mut560';
+export const API_VERSION = '1.102.0-mut560';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -388,7 +388,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
-  // MUT-559 (ADR-245), MUT-560 (ADR-246): a feature that is switched off answers 404 on every route it adds, before
+  // MUT-559 (ADR-245), MUT-560 (ADR-247): a feature that is switched off answers 404 on every route it adds, before
   // anything else looks at the request (the routes stay registered, so the published contract doesn't depend on the
   // switch). One table, one mechanism: each row is a route file's exported endpoint set, its switch and its 404.
   const darkLaunches: ReadonlyArray<{ endpoints: ReadonlySet<string>; on: boolean; refusal: () => ApiError }> = [
@@ -688,7 +688,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
     tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter, reading: receiptReader } }));
 
-  // MUT-560 (ADR-246): share links, registered last so the published components keep their order. The visitor's routes share the sign-in IP limiter under their own key; the link's
+  // MUT-560 (ADR-247): share links, registered last so the published components keep their order. The visitor's routes share the sign-in IP limiter under their own key; the link's
   // own bookkeeping runs on the base store (as authenticate() reads sessions), the profile's records through the guard.
   app.route(
     '/',

@@ -6,7 +6,7 @@ import { ADMIN, DAY, businessOf, idem, json, person, read, type AccountantHarnes
 import { entriesOf, linkOn, listLinks, publicPost, receiptsOf, revokeLink as revokeLinkAt, shareLinkHarness, summaryOf, unlock, viewerOf } from './helpers/share-links.js';
 
 /**
- * MUT-560 review follow-up (ADR-246 as amended): a stale re-unlock never takes a slot; receipt URLs live at most a
+ * MUT-560 review follow-up (ADR-247 as amended): a stale re-unlock never takes a slot; receipt URLs live at most a
  * minute and never past the viewer's access; visitor payloads carry names, never other entities' ids; a per-IP budget
  * on the view routes and a tighter one on the summary; a co-owner closing keeps the profile's links; a cursor from
  * elsewhere never widens the range.

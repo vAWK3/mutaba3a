@@ -20498,8 +20498,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * The live share links on this profile: active and locked
-         * @description MUT-560 (ADR-246). Every owner sees every link on the profile. Revoked and expired links are not listed; a link’s URL is never shown again. Oldest first.
+         * The share links on this profile: active, and those that ended in the last day
+         * @description MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.
          */
         get: {
             parameters: {
@@ -20544,7 +20544,7 @@ export interface paths {
         put?: never;
         /**
          * Make a one-time link to a period of this profile, opened with a PIN
-         * @description MUT-560 (ADR-246). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to 3 devices, until it expires (1, 7 or 30 days), is revoked, or locks after 5 wrong PINs. The answer's `url` is the only time the link is shown: share it with the PIN, separately. At most 10 live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.
+         * @description MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to 3 devices, until it expires (1, 7 or 30 days), is revoked, or locks after 5 wrong PINs. The answer's `url` is the only time the link is shown: share it with the PIN, separately. At most 10 live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.
          */
         post: {
             parameters: {
@@ -20644,7 +20644,7 @@ export interface paths {
         post?: never;
         /**
          * Revoke a share link
-         * @description MUT-560 (ADR-246). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.
+         * @description MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.
          */
         delete: {
             parameters: {
@@ -20701,7 +20701,7 @@ export interface paths {
         put?: never;
         /**
          * Whether a share link opens, before its PIN
-         * @description MUT-560 (ADR-246). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock).
+         * @description MUT-560 (ADR-247). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock).
          */
         post: {
             parameters: {
@@ -20780,7 +20780,7 @@ export interface paths {
         put?: never;
         /**
          * Open a share link with its PIN
-         * @description MUT-560 (ADR-246). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most 3 devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the 5th locks the link for everyone (LOCKED), viewers already in included.
+         * @description MUT-560 (ADR-247). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most 3 devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the 5th locks the link for everyone (LOCKED), viewers already in included.
          */
         post: {
             parameters: {
@@ -20815,6 +20815,15 @@ export interface paths {
                 };
                 /** @description NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause. */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason SHARE_LINK_STALE_VIEWER: a parallel unlock from this device renewed its viewer token first; keep the token that answer holds (unlocking again with the old one counts as a new device) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -20859,7 +20868,7 @@ export interface paths {
         put?: never;
         /**
          * The shared period’s entries, newest money date first
-         * @description MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, without profile or person ids. Read live: an entry edited into the period shows, one edited out of it disappears.
+         * @description MUT-560 (ADR-247). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.
          */
         post: {
             parameters: {
@@ -20947,7 +20956,7 @@ export interface paths {
         put?: never;
         /**
          * The shared period’s totals, per currency
-         * @description MUT-560 (ADR-246). Expenses (by category and client, as /v1/summaries/expenses) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
+         * @description MUT-560 (ADR-247). At most 6 a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.
          */
         post: {
             parameters: {
@@ -21035,7 +21044,7 @@ export interface paths {
         put?: never;
         /**
          * An expense’s receipts in the shared period, as short-lived download URLs
-         * @description MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, each with a signed URL that expires soon. Any other expense (outside the period, deleted, another profile’s) answers 404.
+         * @description MUT-560 (ADR-247). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404.
          */
         post: {
             parameters: {
@@ -25767,10 +25776,15 @@ export interface components {
              */
             lastOpenedAt: string | null;
             /**
-             * @description locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one.
+             * @description locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one. Locked, expired and revoked links stay in the list for 24 hours after `endedAt`, then drop out.
              * @enum {string}
              */
-            status: "active" | "locked";
+            status: "active" | "locked" | "expired" | "revoked";
+            /**
+             * Format: date-time
+             * @description When it was revoked, locked or expired; null while active.
+             */
+            endedAt: string | null;
             /** @description Devices that have opened it. */
             viewers: number;
             maxViewers: number;
@@ -25830,27 +25844,15 @@ export interface components {
             createdAt: string;
             /** @enum {string} */
             origin: "capture" | "integration";
-            /** Format: uuid */
-            settlesOwedId: string | null;
-            /** Format: uuid */
-            replacesPaymentId: string | null;
-            income: components["schemas"]["IncomeResponse"];
-        } | {
-            /** @enum {string} */
-            kind: "owed";
-            /** Format: date-time */
-            createdAt: string;
-            income: components["schemas"]["IncomeResponse"];
-        } | {
-            /** @enum {string} */
-            kind: "conversion";
-            /** Format: date-time */
-            createdAt: string;
-            conversion: components["schemas"]["ShareLinkConversion"];
+            /** @description It paid toward one Owed entry (a settle). */
+            settlesOwed: boolean;
+            /** @description It replaced a payment Malafat reversed. */
+            replacesPayment: boolean;
+            income: components["schemas"]["ShareLinkIncome"];
         };
         ShareLinkExpense: {
-            /** Format: uuid */
-            id: string;
+            /** @description An opaque key for this entry on this link only (not an id). The receipts route takes it. */
+            key: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             occurredOn: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -25858,42 +25860,39 @@ export interface components {
             currency: components["schemas"]["Currency"];
             title: string | null;
             vendor: string | null;
-            /** Format: uuid */
-            vendorId: string | null;
-            /** Format: uuid */
-            categoryId: string | null;
-            /** Format: uuid */
-            customerId: string | null;
-            /** Format: uuid */
-            projectId: string | null;
+            /** @description The category’s name, a preset one in the request’s language (Accept-Language; Arabic by default); null when none. */
+            category: string | null;
+            /** @description The client’s name; null when none. */
+            client: string | null;
+            /** @description The project’s name; null when none. */
+            project: string | null;
             notes: string | null;
-            captureSource: components["schemas"]["StoredCaptureSource"] & unknown;
             vat: components["schemas"]["ExpenseVat"];
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
             /** @description READY receipts attached */
             receiptCount: number;
         };
-        ShareLinkConversion: {
-            /** Format: uuid */
-            id: string;
-            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
-            occurredOn: string;
+        ShareLinkIncome: {
+            kind: components["schemas"]["IncomeKind"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             currency: components["schemas"]["Currency"];
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
-            toAmount: string;
-            toCurrency: components["schemas"]["Currency"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            occurredOn: string;
+            title: string | null;
             notes: string | null;
-            version: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            dueDate: string | null;
+            status: components["schemas"]["IncomeStatus"];
+            reversalReason?: string | null;
+            reversalReasonCode?: components["schemas"]["CreditReasonCode"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credited?: string | null;
+            /** @description An opaque key for this entry on this link only (not an id). The receipts route takes it. */
+            key: string;
+            /** @description The client’s name; null when none. */
+            client: string | null;
+            /** @description The project’s name; null when none. */
+            project: string | null;
         };
         ShareLinkEntriesRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */
@@ -25911,22 +25910,22 @@ export interface components {
             from: string | null;
             /** @description Last money date shown, inclusive. */
             to: string;
-            /** @description Per currency, never summed across currencies. */
+            /** @description Per currency, never summed across currencies; breakdowns by name. */
             expenses: {
                 currency: components["schemas"]["Currency"];
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 total: string;
                 count: number;
                 byCategory: {
-                    /** Format: uuid */
-                    categoryId: string | null;
+                    /** @description The category’s name; null when none. */
+                    category: string | null;
                     /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     total: string;
                     count: number;
                 }[];
-                byCustomer: {
-                    /** Format: uuid */
-                    customerId: string | null;
+                byClient: {
+                    /** @description The client’s name; null when none. */
+                    client: string | null;
                     /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                     total: string;
                     count: number;
@@ -25946,21 +25945,22 @@ export interface components {
         };
         ShareLinkReceiptList: {
             items: {
-                /** Format: uuid */
-                id: string;
                 filename: string;
                 mimeType: components["schemas"]["AttachmentMimeType"];
                 /** Format: uri */
                 url: string;
-                /** Format: date-time */
+                /**
+                 * Format: date-time
+                 * @description At most 60 seconds away, and never past this viewer’s access or the link’s expiry.
+                 */
                 expiresAt: string;
             }[];
         };
         ShareLinkReceiptsRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */
             viewerToken: string;
-            /** Format: uuid */
-            expenseId: string;
+            /** @description An expense’s `key` from POST /v1/share-links/entries. */
+            entryKey: string;
         };
     };
     responses: never;

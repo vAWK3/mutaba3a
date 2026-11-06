@@ -95,7 +95,7 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/profiles/:profileId/accountants': 'pathProfile',
   'POST /v1/accountant-invites/accept': 'open',
   'DELETE /v1/clients/:profileId': 'open',
-  // MUT-560 (ADR-246): seeing and revoking who can read a profile is privacy, never paid; making a link is a write on
+  // MUT-560 (ADR-247): seeing and revoking who can read a profile is privacy, never paid; making a link is a write on
   // the profile in the path. The visitor's routes are public: no gate sees them, so a lapsed owner's links keep working.
   'GET /v1/profiles/:profileId/share-links': 'open',
   'DELETE /v1/profiles/:profileId/share-links/:linkId': 'open',

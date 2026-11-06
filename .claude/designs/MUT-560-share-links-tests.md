@@ -20,7 +20,7 @@ numbered groups are the plan's; each names where it lives.
 | 13 | Headers: `X-Robots-Tag: noindex`, `Cache-Control: no-store` on link routes | routes "13" |
 | 14 | Isolation: a viewer token as Bearer or cookie on `/v1` → 401; same origin only; the MUT-559 accountant matrix unchanged | routes "14"; `accountant-route-matrix.test.ts` |
 
-Also updated: `routes.test.ts` (API 1.101.0-mut560), `route-security.test.ts` (owner routes session-only, visitor routes
+Also updated: `routes.test.ts` (API 1.102.0-mut560), `route-security.test.ts` (owner routes session-only, visitor routes
 public), `billing-gate-routes.test.ts` (classification), `auth/__tests__/store-guard.test.ts` (operator list).
 
 Review follow-up: `routes-share-links-review.test.ts` (stale re-unlock, receipt URL clamps, names not ids with a

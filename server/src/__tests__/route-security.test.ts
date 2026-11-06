@@ -103,7 +103,7 @@ const ACCOUNTANT_OPERATIONS = [
   'DELETE /v1/clients/{profileId}',
 ];
 
-/** MUT-560 (ADR-246): an owner's share links — session-only, no X-Mutaba3a-Profile. */
+/** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
 const SHARE_LINK_OPERATIONS = ['POST /v1/profiles/{profileId}/share-links', 'GET /v1/profiles/{profileId}/share-links', 'DELETE /v1/profiles/{profileId}/share-links/{linkId}'];
 
 /** MUT-228: reference exchange rates — session-only, naming no X-Mutaba3a-Profile (like /v1/me). */

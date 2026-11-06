@@ -177,7 +177,7 @@ const envSchema = z.object({
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   /**
-   * MUT-560 (ADR-246): one-time share links to a period of a profile, opened with a PIN. Off, every share-link route
+   * MUT-560 (ADR-247): one-time share links to a period of a profile, opened with a PIN. Off, every share-link route
    * answers 404, so the server can deploy before the portal and phone screens (MUT-561..563). Only "true" turns it on.
    */
   SHARE_LINKS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),

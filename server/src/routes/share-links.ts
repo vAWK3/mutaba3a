@@ -58,7 +58,7 @@ import { displayCategoryNames } from '../expenses/presets.js';
 import { preferredLanguage } from './shared.js';
 
 /**
- * MUT-560 (ADR-246): one-time share links to a period of one profile, opened with a PIN and no account.
+ * MUT-560 (ADR-247): one-time share links to a period of one profile, opened with a PIN and no account.
  *
  *   Owner (session; owns the profile, else 403 NOT_OWNER; 404 when they can't see it):
  *     POST   /v1/profiles/{profileId}/share-links            create (the URL, with its token, is answered only here)
@@ -229,7 +229,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/profiles/{profileId}/share-links',
       tags: ['Profiles'],
       summary: 'Make a one-time link to a period of this profile, opened with a PIN',
-      description: `MUT-560 (ADR-246). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to ${SHARE_LINK_MAX_VIEWERS} devices, until it expires (1, 7 or 30 days), is revoked, or locks after ${SHARE_LINK_PIN_ATTEMPTS} wrong PINs. The answer's \`url\` is the only time the link is shown: share it with the PIN, separately. At most ${maxPerProfile} live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.`,
+      description: `MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to ${SHARE_LINK_MAX_VIEWERS} devices, until it expires (1, 7 or 30 days), is revoked, or locks after ${SHARE_LINK_PIN_ATTEMPTS} wrong PINs. The answer's \`url\` is the only time the link is shown: share it with the PIN, separately. At most ${maxPerProfile} live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.`,
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema, body: jsonBody(CreateShareLinkRequestSchema) },
       responses: {
@@ -294,7 +294,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/profiles/{profileId}/share-links',
       tags: ['Profiles'],
       summary: 'The share links on this profile: active, and those that ended in the last day',
-      description: 'MUT-560 (ADR-246, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.',
+      description: 'MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema },
       responses: {
@@ -318,7 +318,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/profiles/{profileId}/share-links/{linkId}',
       tags: ['Profiles'],
       summary: 'Revoke a share link',
-      description: 'MUT-560 (ADR-246). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.',
+      description: 'MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.',
       security: SESSION_ONLY,
       request: { params: ShareLinkParamSchema },
       responses: {
@@ -346,7 +346,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/check',
       tags: ['Share links'],
       summary: 'Whether a share link opens, before its PIN',
-      description: 'MUT-560 (ADR-246). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock).',
+      description: 'MUT-560 (ADR-247). The token from the link’s fragment, in the body. Says nothing about the profile or its owner: names come with the PIN (unlock).',
       security: [],
       request: { body: jsonBody(ShareLinkCheckRequestSchema) },
       responses: {
@@ -371,7 +371,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/unlock',
       tags: ['Share links'],
       summary: 'Open a share link with its PIN',
-      description: `MUT-560 (ADR-246). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most ${SHARE_LINK_MAX_VIEWERS} devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the ${SHARE_LINK_PIN_ATTEMPTS}th locks the link for everyone (LOCKED), viewers already in included.`,
+      description: `MUT-560 (ADR-247). The right PIN answers a viewer token, good for 8 hours (never past the link's expiry), and the names of the profile and its owner. Send the viewer token this browser held before for this link (even an ended one) to keep its place: at most ${SHARE_LINK_MAX_VIEWERS} devices open a link (403 SHARE_LINK_REFUSED, VIEWER_LIMIT). A wrong PIN answers PIN_WRONG with details.attemptsLeft; the ${SHARE_LINK_PIN_ATTEMPTS}th locks the link for everyone (LOCKED), viewers already in included.`,
       security: [],
       request: { body: jsonBody(ShareLinkUnlockRequestSchema) },
       responses: {
@@ -447,7 +447,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Share links'],
       summary: 'The shared period’s entries, newest money date first',
       description:
-        'MUT-560 (ADR-246). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.',
+        'MUT-560 (ADR-247). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.',
       security: [],
       request: { body: jsonBody(ShareLinkEntriesRequestSchema) },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ShareLinkEntryPageSchema } } }, ...viewRefusals },
@@ -473,7 +473,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/summary',
       tags: ['Share links'],
       summary: 'The shared period’s totals, per currency',
-      description: `MUT-560 (ADR-246). At most ${SHARE_LINK_SUMMARY_POLICY.perViewerPerMinute} a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.`,
+      description: `MUT-560 (ADR-247). At most ${SHARE_LINK_SUMMARY_POLICY.perViewerPerMinute} a minute per viewer (429 RATE_LIMITED). Expenses (by category and client name) and received payments, each per currency and never summed across currencies, over the link’s period. Reversed payments are left out.`,
       security: [],
       request: { body: jsonBody(ShareLinkViewRequestSchema) },
       responses: { 200: { description: 'The totals', content: { 'application/json': { schema: ShareLinkSummarySchema } } }, ...viewRefusals },
@@ -514,7 +514,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       path: '/v1/share-links/expense-receipts',
       tags: ['Share links'],
       summary: 'An expense’s receipts in the shared period, as short-lived download URLs',
-      description: 'MUT-560 (ADR-246). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404.',
+      description: 'MUT-560 (ADR-247). READY receipts of a live expense whose date is in the link’s period, named by its entry `key`, each with a signed URL that lives at most 60 seconds and never past this viewer’s access or the link’s expiry (with under 5 seconds left: the uniform 404). Any other key (outside the period, deleted, another profile’s, not a key) answers 404.',
       security: [],
       request: { body: jsonBody(ShareLinkReceiptsRequestSchema) },
       responses: {

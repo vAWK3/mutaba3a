@@ -4421,7 +4421,7 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
-## MUT-560 — share links (ADR-246)
+## MUT-560 — share links (ADR-247)
 
 Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
 - `server/src/__tests__/routes-share-links.test.ts`: the period end to end (from − 1 / from / to / to + 1 / future,
@@ -4437,7 +4437,7 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
 - `server/src/auth/__tests__/share-link-store-guard.test.ts`; `server/src/access/__tests__/view-touch.test.ts`.
 - Store contract `store-contract-share-links.ts` (memory; Prisma under `test:db`): cap, revoke, the failed-PIN count and
   its race, the viewer cap and its race, returning viewers, unusable links, touches, purge both ways.
-- Updated: routes (1.101.0-mut560), route-security, billing-gate-routes, store-guard (operator list), purge catalog
+- Updated: routes (1.102.0-mut560), route-security, billing-gate-routes, store-guard (operator list), purge catalog
   (`share_link_viewers` outside profiles).
 - Review follow-up: `routes-share-links-review.test.ts` (stale re-unlock at 3 viewers, receipt URL clamps and the 5 s
   floor, names not ids with a no-UUID scan, the view per-IP budget, the summary budget, a co-owner closing, a foreign

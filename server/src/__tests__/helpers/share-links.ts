@@ -3,7 +3,7 @@ import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { accountantHarness, json, read, SAME_ORIGIN, type AccountantHarness, type Loose, type Person } from './accountants.js';
 
 /**
- * MUT-560 (ADR-246): the accountant harness (a memory store, a movable clock at T0 = 2026-11-06 09:00 UTC, phone
+ * MUT-560 (ADR-247): the accountant harness (a memory store, a movable clock at T0 = 2026-11-06 09:00 UTC, phone
  * sessions) with share links on, and the sign-in IP budget opened wide so only the rate-limit tests meet it.
  */
 export function shareLinkHarness(overrides: Partial<AppDependencies> = {}) {

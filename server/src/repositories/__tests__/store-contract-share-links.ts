@@ -4,7 +4,7 @@ import { closureDeadline } from '../../accounts/closure.js';
 import type { AuditEventInput, CreateUserInput, LedgerStore, ShareLinkRecord } from '../ports.js';
 
 /**
- * MUT-560 storage contract (ADR-246): share links. The live-link cap per profile, the failed-PIN count that parallel
+ * MUT-560 storage contract (ADR-247): share links. The live-link cap per profile, the failed-PIN count that parallel
  * guesses can't push past the lock, the viewer cap that parallel unlocks can't push past 3, returning viewers keeping
  * their slot, revoke, and the account purge (the profile's links go; a creator's link on a surviving profile stays
  * with no creator). Run against the memory store and Postgres.

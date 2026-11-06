@@ -1,7 +1,7 @@
 import { addDays, addMonths, compareIsoDates, endOfMonth, monthOf, todayIn, type IsoDate } from '../dates.js';
 
 /**
- * MUT-560 (ADR-246): what a share link shows, as a range of money dates. The one place the period rule lives: the
+ * MUT-560 (ADR-247): what a share link shows, as a range of money dates. The one place the period rule lives: the
  * link stores the resolved range at creation (frozen), and shareLinkAccess hands it to every read.
  *
  * Basel's decision (2026-11-06): "last N months" is the last N COMPLETE calendar months before the creation day, in

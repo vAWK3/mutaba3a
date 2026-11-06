@@ -3,7 +3,7 @@ import { ApiError } from '../../errors.js';
 import { SHARE_LINK_SESSION_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAccess } from '../store-guard.js';
 
 /**
- * MUT-560 (ADR-246) test group 9, at the guard: every share-link view request runs under shareLinkStoreGuard, so a
+ * MUT-560 (ADR-247) test group 9, at the guard: every share-link view request runs under shareLinkStoreGuard, so a
  * repository write anywhere below a view handler throws 403 READ_ONLY_PROFILE (SHARE_LINK_READ_ONLY).
  */
 const isRead = (access: MethodAccess) => access === 'read' || (typeof access === 'object' && 'read' in access);

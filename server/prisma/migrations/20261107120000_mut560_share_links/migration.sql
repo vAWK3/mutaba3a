@@ -1,4 +1,4 @@
--- MUT-560 (ADR-246): one-time share links to a period of one profile, with a PIN, no account needed. Additive: a new
+-- MUT-560 (ADR-247): one-time share links to a period of one profile, with a PIN, no account needed. Additive: a new
 -- enum, two tables and their indexes only.
 --
 -- To revert, ship a new migration: DROP TABLE "share_link_viewers"; DROP TABLE "share_links"; DROP TYPE "ShareLinkPeriod";

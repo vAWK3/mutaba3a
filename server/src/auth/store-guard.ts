@@ -416,7 +416,7 @@ export const STORE_ACCESS: StoreAccess = {
     touchViewed: 'operator',
   },
   /**
-   * MUT-560 (ADR-246): an owner creates, lists and revokes share links from their session (the route checks they own
+   * MUT-560 (ADR-247): an owner creates, lists and revokes share links from their session (the route checks they own
    * the profile). The public link routes and shareLinkAccess read and stamp on the store beneath any guard, so those
    * methods are refused to every principal, like the accountant invite's public pair.
    */
@@ -537,14 +537,14 @@ export function accountantStoreGuard(): StoreGuard {
 }
 
 /**
- * MUT-560 (ADR-246): the `sessionOnly` methods a share link's view routes read. The entries feed is classed
+ * MUT-560 (ADR-247): the `sessionOnly` methods a share link's view routes read. The entries feed is classed
  * `sessionOnly` (it reads across a person's memberships); a link reads it for its one profile, and it never writes
  * (MUT-270 D2). Named, never derived: a method joins only by being listed here.
  */
 export const SHARE_LINK_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'entries.settledOwedIds']);
 
 /**
- * MUT-560 (ADR-246): the guard every share-link view request runs under, so even a mistaken write in a view handler
+ * MUT-560 (ADR-247): the guard every share-link view request runs under, so even a mistaken write in a view handler
  * throws 403 READ_ONLY_PROFILE (SHARE_LINK_READ_ONLY). Reads pass, and SHARE_LINK_SESSION_READS; nothing else. The
  * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
  */

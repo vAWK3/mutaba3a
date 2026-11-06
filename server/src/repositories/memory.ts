@@ -340,7 +340,7 @@ export class MemoryLedgerStore implements LedgerStore {
    * has one person and no one to share with.
    */
   private readonly accountantGrantMap = new Map<string, AccountantGrantRecord>();
-  /** MUT-560 (ADR-246): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
+  /** MUT-560 (ADR-247): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
   private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
   private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
@@ -833,7 +833,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   /**
-   * MUT-560 (ADR-246). Every method is synchronous inside, so each is one step under the store's single thread: the
+   * MUT-560 (ADR-247). Every method is synchronous inside, so each is one step under the store's single thread: the
    * viewer cap and the failed-PIN count can't be raced past, as the row locks guarantee in Postgres.
    */
   readonly shareLinks: ShareLinkRepository = {
