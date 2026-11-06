@@ -2340,6 +2340,27 @@
       "message": {
         "text": "Hi, I've shared the books of “{profile}” for {period} with you on MTB3A: {url} — the link works until {until}. I'll send you the PIN separately.",
         "wholeProfile": "the whole profile"
+      },
+      "download": {
+        "title": "Download a period",
+        "note": "For your own records: whole months, up to 24. The report is an Excel file with Expenses, Income and a Summary; the receipts come as a zip.",
+        "from": "From",
+        "to": "To",
+        "report": "Excel report",
+        "receipts": "Receipts (zip)",
+        "reportEstimate": "Excel report for {months}: {expenses} expenses · {income} income",
+        "receiptsEstimate": "Receipts for {months}: {count} · about {size}",
+        "download": "Download",
+        "cancel": "Cancel",
+        "started": "Your download has started.",
+        "preparing": "Preparing…",
+        "errors": {
+          "tooLarge": "This period is too large to download at once. Pick fewer months.",
+          "range": "Pick whole months, up to 24, none in the future.",
+          "rate": "Too many downloads in an hour. Try again later.",
+          "gone": "This download isn't available any more.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
       }
     }
   }

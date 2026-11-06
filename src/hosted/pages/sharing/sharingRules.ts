@@ -278,3 +278,37 @@ const UNREACHABLE_LINK: InviteError = { banner: { key: 'hosted.sharing.newLink.e
 
 /** The contract's names for the period (lower case) in `share_link_created`. */
 export const periodEvent = (period: ShareLinkPeriod) => period.toLowerCase();
+
+// ---- The owner's "Download a period" (MUT-314, Basel 13244) ------------------------------------------------------------
+
+/** The server's most months in one download (MUT-314). */
+export const DOWNLOAD_MAX_MONTHS = 24;
+
+/** The months one can pick: this month and the 23 before it, newest first, as `YYYY-MM` (never a future month). */
+export function monthOptions(today: string, count: number = DOWNLOAD_MAX_MONTHS): string[] {
+  const day = new Date(`${today.slice(0, 7)}-01T00:00:00Z`);
+  return Array.from({ length: count }, (_, back) => new Date(Date.UTC(day.getUTCFullYear(), day.getUTCMonth() - back, 1)).toISOString().slice(0, 7));
+}
+
+/** How many calendar months `from`…`to` spans (inclusive); 0 when `to` is before `from`. */
+export function monthSpan(from: string, to: string): number {
+  const months = (month: string) => {
+    const at = new Date(`${month}-01T00:00:00Z`);
+    return at.getUTCFullYear() * 12 + at.getUTCMonth();
+  };
+  return Math.max(0, months(to) - months(from) + 1);
+}
+
+/** "Oct 2026" for a `YYYY-MM`. */
+export const monthName = (month: string, language: Language) => monthsLabel(`${month}-01`, `${month}-01`, language) ?? month;
+
+/** Where a ticket refusal shows: the row's one message line. */
+export function downloadErrorOf(error: unknown): Line {
+  if (!(error instanceof ApiError)) return { key: 'hosted.sharing.download.errors.unreachable' };
+  const reason = apiErrorReason(error);
+  if (error.status === 422 && reason === 'PERIOD_TOO_LARGE') return { key: 'hosted.sharing.download.errors.tooLarge' };
+  if (error.status === 422) return { key: 'hosted.sharing.download.errors.range' };
+  if (error.status === 429) return { key: 'hosted.sharing.download.errors.rate' };
+  if (error.status === 404) return { key: 'hosted.sharing.download.errors.gone' };
+  return { key: 'hosted.sharing.download.errors.unreachable' };
+}

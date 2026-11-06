@@ -1484,6 +1484,14 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-sharing-done h3 { margin: var(--space-3) 0 var(--space-1); font-size: var(--text-headline); }
 .hp-sharing-done .form-group, .hp-sharing-done .hp-banner { text-align: start; }
 .hp-sharing-copy { margin-block-end: var(--space-2); }
+.hp-sharing-download { margin-block-start: var(--space-8); padding-block-start: var(--space-6); border-block-start: 1px solid var(--divider); }
+.hp-sharing-download h2 { margin: 0 0 var(--space-1); font-size: var(--text-headline); }
+.hp-sharing-download-range { display: flex; flex-wrap: wrap; gap: var(--space-4); }
+.hp-sharing-download-range .form-group { min-width: 10rem; }
+.hp-sharing-download-actions { justify-content: flex-start; }
+.hp-sharing-download-ready { margin-block-start: var(--space-3); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); }
+.hp-sharing-download-ready p { margin: 0 0 var(--space-2); }
+.hp-sharing-download-ready .hp-empty-actions { justify-content: flex-start; }
 /* Review 2: the PIN is a text field (no password manager) masked by style; Show removes the class */
 .hp-pin-masked { -webkit-text-security: disc; }
 /* 375px: actions wrap under the meta (DESIGN.md › Rows with their own actions) */

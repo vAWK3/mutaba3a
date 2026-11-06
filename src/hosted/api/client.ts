@@ -35,6 +35,9 @@ export type ShareLinkList = Schemas['ShareLinkList'];
 export type ShareLinkCreated = Schemas['ShareLinkCreated'];
 export type ShareLinkPeriod = Schemas['ShareLinkPeriod'];
 export type CreateShareLinkRequest = Schemas['CreateShareLinkRequest'];
+/** MUT-561 (MUT-314's routes): a period download's ticket and what the period holds. */
+export type PeriodDownloadTicket = Schemas['PeriodDownloadTicket'];
+export type PeriodDownloadType = PeriodDownloadTicket['type'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -802,6 +805,10 @@ export const api = {
     request<ShareLinkCreated>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/share-links`, { body }),
   revokeShareLink: (profileId: string, linkId: string) =>
     request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/share-links/${encodeURIComponent(linkId)}`),
+  // MUT-561 (MUT-314, ADR-248): a period download's ticket for the open profile. The file itself is a form post to
+  // /v1/period-downloads/stream (data/periodDownload.ts), so the browser's own downloader saves it.
+  periodDownloadTicket: (profileId: string, query: { type: PeriodDownloadType; from: string; to: string; asOf: string; lang: 'en' | 'ar' }) =>
+    request<PeriodDownloadTicket>('GET', '/v1/period-downloads/ticket', { profileId, query }),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>

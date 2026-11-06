@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError, type AccountantGrant } from '../../../api/client';
 import type { ShareLink } from '../../../api/client';
-import { foldDigits, grantRow, inviteErrorOf, isolate, linkErrorOf, linkRow, liveLinks, monthsLabel, periodRange, pinOf, relativeDay, revokeErrorOf, sharingOpen, shortDay } from '../sharingRules';
+import { downloadErrorOf, monthName, monthOptions, monthSpan, foldDigits, grantRow, inviteErrorOf, isolate, linkErrorOf, linkRow, liveLinks, monthsLabel, periodRange, pinOf, relativeDay, revokeErrorOf, sharingOpen, shortDay } from '../sharingRules';
 
 /**
  * MUT-561: the Sharing page's pure rules. Each accountant row's chip, meta and one action at a fixed clock; who gets
@@ -242,6 +242,37 @@ describe('review 3: a link past its expiry while the page is open', () => {
     const later = new Date('2026-11-13T09:00:01.000Z');
     expect(linkRow(link(), later, 'en', TZ)).toMatchObject({ chip: 'ended', canTurnOff: false, ended: { key: 'hosted.sharing.links.ended', vars: { date: 'Nov 13' } } });
     expect(liveLinks([link()], later)).toBe(0);
+  });
+});
+
+describe('Download a period (MUT-314)', () => {
+  it('offers this month and the 23 before it, newest first, across a year', () => {
+    const months = monthOptions('2026-11-06');
+    expect(months).toHaveLength(24);
+    expect(months[0]).toBe('2026-11');
+    expect(months[10]).toBe('2026-01');
+    expect(months[11]).toBe('2025-12');
+    expect(months[23]).toBe('2024-12');
+  });
+
+  it('counts whole months inclusively', () => {
+    expect(monthSpan('2026-10', '2026-10')).toBe(1);
+    expect(monthSpan('2025-12', '2026-02')).toBe(3);
+    expect(monthSpan('2026-03', '2026-02')).toBe(0);
+  });
+
+  it('names a month', () => {
+    expect(monthName('2026-10', 'en')).toBe('Oct 2026');
+  });
+
+  it.each([
+    ['PERIOD_TOO_LARGE', err(422, 'VALIDATION_FAILED', { reason: 'PERIOD_TOO_LARGE', type: 'receipts', limit: 524288000, estimate: 600000000 }), 'hosted.sharing.download.errors.tooLarge'],
+    ['PERIOD_RANGE', err(422, 'VALIDATION_FAILED', { reason: 'PERIOD_RANGE' }), 'hosted.sharing.download.errors.range'],
+    ['RATE_LIMITED', err(429, 'RATE_LIMITED'), 'hosted.sharing.download.errors.rate'],
+    ['gone', err(404, 'NOT_FOUND'), 'hosted.sharing.download.errors.gone'],
+    ['the network', err(0, 'NETWORK'), 'hosted.sharing.download.errors.unreachable'],
+  ])('%s', (_label, error, key) => {
+    expect(downloadErrorOf(error)).toEqual({ key });
   });
 });
 

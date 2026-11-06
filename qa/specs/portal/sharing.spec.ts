@@ -335,3 +335,42 @@ test('link rows show each state, and a live link can be turned off', { tag: '@po
   });
 });
 
+test("the owner downloads a period's receipts from the bottom of the Sharing page", { tag: '@portal.sharing.download-period' }, async ({ page, step, analytics }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Personal'), studio()], accountants: { [OFFICE_B]: [SAMI] }, periodDownloads: true });
+  const section = page.locator('section', { has: page.getByRole('heading', { name: 'Download a period' }) });
+
+  await step('With usage counts on, open Sharing: Download a period is at the bottom', async () => {
+    await actAsPerson(page);
+    await api.open(page, `/p/${OFFICE_B}/payments`);
+    await page.getByRole('region', { name: 'Share anonymous usage?' }).getByRole('button', { name: 'Share anonymous usage' }).click();
+    await expect.poll(() => analytics.events().some((e) => e.event === 'analytics_opted_in'), { timeout: 15_000 }).toBe(true);
+    await page.goto(sharingPath);
+    await expect(section).toBeVisible();
+    await expect(section.getByLabel('From').locator('option')).toHaveCount(24);
+  });
+
+  await step('Pick two months and press Receipts (zip): the size before anything downloads', async () => {
+    const months = await section.getByLabel('From').locator('option').evaluateAll((options) => options.map((o) => (o as HTMLOptionElement).value));
+    await section.getByLabel('From').selectOption(months[2]);
+    await section.getByLabel('To').selectOption(months[1]);
+    await section.getByRole('button', { name: 'Receipts (zip)' }).click();
+    await expect(section.getByRole('status')).toContainText('29 · about 12.3 MB');
+    const asked = api.last('GET', /\/v1\/period-downloads\/ticket$/);
+    expect(asked?.query.get('type')).toBe('receipts');
+    expect(asked?.query.get('from')).toBe(months[2]);
+    expect(asked?.query.get('to')).toBe(months[1]);
+  });
+
+  await step('Download: the browser saves the zip, and only the place, file and months are counted', async () => {
+    const download = page.waitForEvent('download');
+    await section.getByRole('button', { name: 'Download', exact: true }).click();
+    expect((await download).suggestedFilename()).toBe('mtb3a-receipts.zip');
+    await expect(section.getByText('Your download has started.')).toBeVisible();
+    expect(api.last('POST', /\/v1\/period-downloads\/stream$/)?.body).toMatchObject({ ticket: expect.stringMatching(/^qa-ticket-receipts/) });
+    await expect.poll(() => analytics.events().some((e) => e.event === 'period_downloaded'), { timeout: 15_000 }).toBe(true);
+    const event = analytics.events().find((e) => e.event === 'period_downloaded')!;
+    expect(event.properties).toMatchObject({ place: 'owner', file: 'receipts', months: 2 });
+    expect(JSON.stringify(event.properties)).not.toMatch(/22222222|Studio|qa-ticket|"from"|"to"/);
+  });
+});
+

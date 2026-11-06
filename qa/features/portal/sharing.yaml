@@ -128,4 +128,19 @@ features:
       - The locked one reads Whole profile and Locked, never opened, with Turn off; the ended one reads Ended … with no action
       - The note says what Locked means and that a link is never shown twice
       - Turn off confirms in place (Cancel focused); confirming says "Link turned off", the row reads Ended and the server got the DELETE
+  - id: download-period
+    title: The owner downloads a period's Excel report or receipts from the bottom of the Sharing page
+    tier: secondary
+    tickets: [MUT-561, MUT-314]
+    paths:
+      - src/hosted/data/periodDownload.ts
+    steps:
+      - With usage counts on, open Sharing
+      - Pick two whole months and press Receipts (zip)
+      - Press Download
+    expect:
+      - Download a period sits at the bottom with From and To over this month and the 23 before it
+      - The ticket asks for receipts over those months, and the row shows the count and the size before anything downloads
+      - The browser saves the zip; period_downloaded counts place owner, file receipts and 2 months, and nothing else
+      - With period downloads off on the server the row isn't there (unit-tested)
 

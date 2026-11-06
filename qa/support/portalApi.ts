@@ -511,6 +511,8 @@ export interface FakeApiSeed {
    * so every …/share-links call answers 404 and the Sharing page shows Accountants alone.
    */
   shareLinks?: Record<string, StubShareLink[]>;
+  /** MUT-561 + MUT-314: period downloads on (the ticket and the stream answer); absent = off, every call 404. */
+  periodDownloads?: boolean;
 }
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
@@ -747,6 +749,8 @@ export class FakeApi {
   readonly accountantAccess: boolean;
   /** MUT-561: share links per profile; null = SHARE_LINKS off on this server. */
   readonly shareLinks: Map<string, StubShareLink[]> | null;
+  /** MUT-561 + MUT-314: period downloads on or off. */
+  readonly periodDownloads: boolean;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -777,6 +781,7 @@ export class FakeApi {
     this.libraryReceipts = seed.receipts ? [...seed.receipts] : null;
     this.accountantAccess = seed.accountantAccess ?? true;
     this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
+    this.periodDownloads = seed.periodDownloads ?? false;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -958,6 +963,7 @@ export class FakeApi {
     if (resource === 'me' && id === 'password' && method === 'POST') return this.changePasswordAnswer(e.body as { currentPassword?: string; newPassword?: string } | null);
 
     if (resource === 'profiles') return this.profileAnswer(e, id, sub, subId);
+    if (resource === 'period-downloads') return this.periodDownloadAnswer(e, id, q);
 
     if (resource === 'summaries') {
       if (id === 'organization') return json({ asOf: '2026-10-15', currencies: this.summary });
@@ -1127,6 +1133,25 @@ export class FakeApi {
   }
 
   /** MUT-561: MUT-559's owner routes, as the server answers them (one invite per address, the limit, never yourself). */
+  /** MUT-561 + MUT-314: a ticket (what the period holds), and the stream that answers it with an attachment. */
+  private periodDownloadAnswer(e: Logged, id: string | undefined, q: (key: string) => string | undefined) {
+    if (!this.periodDownloads) return notFound();
+    if (e.method === 'GET' && id === 'ticket') {
+      const type = q('type');
+      if (type !== 'report' && type !== 'receipts') return json({ error: { code: 'VALIDATION_FAILED', message: 'type', details: [{ path: ['type'] }] } }, 422);
+      const ticket = `qa-ticket-${type}-${q('from')}-${q('to')}`;
+      const filename = type === 'report' ? `mtb3a-${q('from')}-${q('to')}.xlsx` : `mtb3a-receipts-${q('from')}-${q('to')}.zip`;
+      return json({ type, ticket, expiresAt: new Date(Date.now() + 120_000).toISOString(), filename, estimate: { expenses: 84, income: 12, receipts: 29, receiptBytes: 12_900_000 } });
+    }
+    if (e.method === 'POST' && id === 'stream') {
+      const ticket = new URLSearchParams(String(e.body ?? '')).get('ticket') ?? (e.body as { ticket?: string } | null)?.ticket ?? '';
+      const report = ticket.startsWith('qa-ticket-report');
+      const filename = report ? 'mtb3a-report.xlsx' : 'mtb3a-receipts.zip';
+      return { status: 200, contentType: report ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' : 'application/zip', headers: { 'Content-Disposition': `attachment; filename="${filename}"` }, body: 'PK qa' };
+    }
+    return notFound();
+  }
+
   /** MUT-561 slice B: MUT-560's owner routes, as the server answers them (the PIN rule, the limit, whole months). */
   private shareLinksAnswer(e: Logged, profile: StubProfile, linkId?: string) {
     if (!this.shareLinks) return notFound();

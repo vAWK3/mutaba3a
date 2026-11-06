@@ -15,6 +15,7 @@ import { useMe, useWritableFor } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { youPath } from '../../shell/youRoutes';
 import { AccountantsColumn } from './AccountantsColumn';
+import { DownloadPeriodRow } from './DownloadPeriodRow';
 import { InviteAccountantDrawer } from './InviteAccountantDrawer';
 import { LinksColumn } from './LinksColumn';
 import { NewShareLinkDrawer } from './NewShareLinkDrawer';
@@ -123,7 +124,8 @@ function SharingBody({ profile, search }: { profile: HostedProfile; search: Shar
         </div>
       )}
 
-      {/* MUT-314 (Basel 13244): the owner's own "Download a period" row goes here, at the bottom of the page. */}
+      {/* MUT-314 (Basel 13244): the owner's own "Download a period", at the bottom of the page; hidden while the server has it off */}
+      <DownloadPeriodRow profile={profile} />
 
       {search.invite && <InviteAccountantDrawer profile={profile} listLimit={accountants.data?.limit} onClose={() => setDrawer({})} onInvited={invited} />}
       {search.newLink && !search.invite && !linksOff && <NewShareLinkDrawer profile={profile} listLimit={linkLimit} onClose={() => setDrawer({})} />}

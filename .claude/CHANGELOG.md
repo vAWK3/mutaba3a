@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-11-07 — The owner's "Download a period" on the Sharing page (MUT-561, MUT-314)
+
+### Added
+- `DownloadPeriodRow` at the bottom of the Sharing page: whole months (this month and the 23 before it), Excel report
+  or Receipts (zip); a ticket from GET /v1/period-downloads/ticket shows the size first, Download form-posts it to the
+  stream (`data/periodDownload.ts`, `postDownload`); one asOf for both files; an expired ticket is re-minted with it;
+  cap and rate refusals in plain words; hidden while the server answers 404 (probe with an invalid type: no ticket is
+  minted). `period_downloaded` {place: owner, file, months} (the contract's `owner`, not `owner_sharing`).
+  QA `portal.sharing.download-period`; FakeApi ticket and stream.
+
 ## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice B: links with a PIN, and review fixes (MUT-561)
 
 ### Added
