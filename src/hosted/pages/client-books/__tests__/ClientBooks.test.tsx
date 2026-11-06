@@ -3,6 +3,7 @@ import { screen, waitFor, within } from '@testing-library/react';
 import type { AccountantClient, AccountantClientWithStats, Entry } from '../../../api/client';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
+import { stripeNavigation } from '../../../data/billingQueries';
 
 /** MUT-562: the Client books desk (layout C): the list, the empty state, a client's book, its receipts, an ended client. */
 
@@ -72,7 +73,10 @@ beforeEach(() => {
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => {
+  vi.unstubAllGlobals();
+  vi.restoreAllMocks();
+});
 
 describe('the Client books corner', () => {
   it('shows beside Reports while any client is listed, and opens the desk', async () => {
@@ -191,3 +195,91 @@ describe('a client book (AC2, AC3)', () => {
     expect(await screen.findByRole('heading', { name: 'No longer shared' })).toBeInTheDocument();
   });
 });
+
+const ticket = (type: 'report' | 'receipts', receiptBytes = 4 * 1024 * 1024) => ({ type, ticket: `${type}-ticket`, expiresAt: '2099-01-01T00:00:00.000Z', filename: `f.${type === 'report' ? 'xlsx' : 'zip'}`, estimate: { expenses: 9, income: 3, receipts: 11, receiptBytes } });
+
+function captureForms() {
+  const sent: Record<string, string>[] = [];
+  vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (this: HTMLFormElement) {
+    sent.push(Object.fromEntries(new FormData(this) as unknown as Iterable<[string, string]>));
+  });
+  return sent;
+}
+
+describe('downloads (MUT-314)', () => {
+  it('the client book’s Download mints both files for the period with one asOf, shows their size and posts the ticket', async () => {
+    const sent = captureForms();
+    const { user, api } = portal(`/client-books/${STUDIO}?preset=custom&from=2026-07&to=2026-09`, {
+      'GET /v1/period-downloads/ticket': (request) => ok(ticket(request.url.searchParams.get('type') as 'report' | 'receipts')),
+    });
+    await screen.findByRole('table', { name: 'Entries' });
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+    expect(await screen.findByText('12 entries')).toBeInTheDocument();
+    expect(screen.getByText('11 receipts · about 4 MB')).toBeInTheDocument();
+    const mints = api.calls.filter((c) => c.url.pathname === '/v1/period-downloads/ticket');
+    expect(mints.map((m) => [m.url.searchParams.get('type'), m.url.searchParams.get('from'), m.url.searchParams.get('to')])).toEqual([
+      ['report', '2026-07', '2026-09'],
+      ['receipts', '2026-07', '2026-09'],
+    ]);
+    expect(new Set(mints.map((m) => m.url.searchParams.get('asOf'))).size).toBe(1);
+    expect(mints[0]!.headers.get('X-Mutaba3a-Profile')).toBe(STUDIO);
+    await user.click(screen.getByRole('button', { name: 'Excel report' }));
+    expect(sent).toEqual([{ ticket: 'report-ticket' }]);
+  });
+
+  it('over the zip cap, Receipts is off with a hint', async () => {
+    const { user } = portal(`/client-books/${STUDIO}`, {
+      'GET /v1/period-downloads/ticket': (request) =>
+        request.url.searchParams.get('type') === 'receipts' ? fail(422, 'VALIDATION_FAILED', { reason: 'PERIOD_TOO_LARGE' }) : ok(ticket('report')),
+    });
+    await screen.findByRole('table', { name: 'Entries' });
+    await user.click(screen.getByRole('button', { name: 'Download' }));
+    expect(await screen.findByText('Too large for one download. Pick a shorter period.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Receipts (zip)' })).toBeDisabled();
+  });
+
+  it('a row’s Download {last month} is last month’s Excel report only', async () => {
+    const sent = captureForms();
+    const { user, api } = portal('/client-books', { 'GET /v1/period-downloads/ticket': () => ok(ticket('report')) });
+    await user.click(await screen.findByRole('button', { name: /^Download the Excel report for .*, Studio$/ }));
+    await waitFor(() => expect(sent).toEqual([{ ticket: 'report-ticket' }]));
+    const mint = api.calls.find((c) => c.url.pathname === '/v1/period-downloads/ticket')!;
+    expect(mint.url.searchParams.get('type')).toBe('report');
+    expect(mint.url.searchParams.get('from')).toBe(mint.url.searchParams.get('to'));
+  });
+});
+
+describe('the Accountant plan on the desk (MUT-565, gated on its fields)', () => {
+  const withPlan = (over: Record<string, unknown> = {}) => ({ count: 4, freeLimit: 3, cap: 3, readable: 3, plan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false }, ...over });
+
+  it('shows "readable of freeLimit", fades a needsPlan row and offers the plan with the catalog’s price', async () => {
+    const locked = client({ profileId: '12121212-1212-4121-8121-121212121212', name: 'Sweets', ownerName: 'Omar Nassar', needsPlan: true } as never);
+    const api = stubApi({
+      'GET /v1/me': () => ok({ ...me([profile({ owned: true })]), clients: [client(), locked].map(meRow), clientBooks: withPlan() }),
+      ...emptyProfileRoutes(),
+      'GET /v1/clients': () => ok({ items: [{ ...client(), needsPlan: false }, locked] }),
+      'GET /v1/billing': () => ok({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } }),
+      'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/x' }),
+    });
+    const { user } = renderPortal('/client-books');
+    expect(await screen.findByText('3 of 3 free client books')).toBeInTheDocument();
+    const row = (await screen.findAllByRole('row')).find((r) => r.textContent?.includes('Sweets'))!;
+    expect(row).toHaveClass('hp-row-needs-plan');
+    expect(within(row).getByText('Needs the Accountant plan')).toBeInTheDocument();
+    await user.click(within(row).getByRole('button', { name: 'Subscribe to the Accountant plan to read Sweets' }));
+    expect(await screen.findByText(/₪99\.00.*\$29\.00 a month/)).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Country'), 'IL');
+    const assign = vi.spyOn(stripeNavigation, 'assign').mockImplementation(() => {});
+    await user.click(screen.getByRole('button', { name: 'Subscribe' }));
+    await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/x'));
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toEqual({ interval: 'month', buyer: 'person', plan: 'accountant', country: 'IL', returnPath: '/client-books' });
+  });
+
+  it('without MUT-565’s fields nothing of the plan shows', async () => {
+    portal('/client-books');
+    await screen.findByRole('table', { name: 'Client books' });
+    expect(screen.queryByText(/free client books/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Subscribe/ })).toBeNull();
+  });
+});
+

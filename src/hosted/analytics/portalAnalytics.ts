@@ -22,7 +22,7 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | 'period_downloaded';
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
 /** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */
@@ -121,7 +121,7 @@ export function countWelcomeChoice(choice: WelcomeChoice): void {
 export type PublicPageEvent =
   | { event: 'share_link_opened'; properties: { period: 'last_1_month' | 'last_2_months' | 'last_3_months' | 'whole_profile' } }
   | { event: 'accountant_accepted'; properties: { via: 'signed_in' | 'signup' } }
-  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months: number } };
+  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months?: number } };
 
 export function countPublicPage({ event, properties }: PublicPageEvent): void {
   if (!POSTHOG_KEY) return;

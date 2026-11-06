@@ -3,6 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler } from '../../../__tests__/harness';
 import { fakeTurnstile } from '../../../__tests__/turnstile';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
+import { stripeNavigation } from '../../../data/billingQueries';
 
 /** MUT-562: the accept-invite page (layout B): signed out, signup then sign-in, signed in, and every refusal (AC4, AC6). */
 
@@ -172,3 +173,53 @@ describe('signed in', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
   });
 });
+
+describe('the Accountant plan (MUT-565, gated on its fields)', () => {
+  const plan = (state: string, count = 3) => ({ count, freeLimit: 3, cap: 3, readable: 3, plan: { state, source: state === 'NONE' ? null : 'STRIPE', until: null, cancelAtPeriodEnd: false } });
+  const billing = () => ok({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: null } } });
+
+  it('with the free client books used, the plan card takes Accept’s place, with the price; Subscribe returns to the invite', async () => {
+    const api = stubApi(
+      routes(true, {
+        'GET /v1/me': () => ok({ ...signedInMe(), clientBooks: plan('NONE') }),
+        'GET /v1/billing': billing,
+        'POST /v1/billing/checkout-session': () => ok({ url: 'https://checkout.stripe.com/c/pay/x' }),
+      }),
+    );
+    const assign = vi.spyOn(stripeNavigation, 'assign').mockImplementation(() => {});
+    const { user } = renderPortal(`/accountant-invite#${TOKEN}`);
+    expect(await screen.findByRole('heading', { name: 'Your free client books are used' })).toBeInTheDocument();
+    expect(screen.getByText('Reading up to 3 client books is free. To read Studio as well, subscribe to the Accountant plan.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
+    expect(await screen.findByText(/₪99\.00 a month/)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Not now \(the invite stays open until/ })).toBeInTheDocument();
+    await user.selectOptions(screen.getByLabelText('Country'), 'IL');
+    await user.click(screen.getByRole('button', { name: 'Subscribe' }));
+    await waitFor(() => expect(assign).toHaveBeenCalled());
+    expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toMatchObject({ plan: 'accountant', returnPath: '/accountant-invite', interval: 'month' });
+    assign.mockRestore();
+  });
+
+  it('a 402 ACCOUNTANT_PLAN_REQUIRED on Accept shows the card; a 409 ceiling says to write to us', async () => {
+    stubApi(routes(true, { [ACCEPT]: () => fail(402, 'ACCOUNTANT_PLAN_REQUIRED', { freeLimit: 3, active: 3, inviteExpiresAt: '2026-11-17T10:00:00.000Z' }), 'GET /v1/billing': billing }));
+    const { user } = renderPortal(`/accountant-invite#${TOKEN}`);
+    await user.click(await screen.findByRole('button', { name: 'Accept' }));
+    expect(await screen.findByRole('heading', { name: 'Your free client books are used' })).toBeInTheDocument();
+
+    stubApi(routes(true, { [ACCEPT]: () => fail(409, 'CONFLICT', { reason: 'CLIENT_BOOKS_CEILING' }) }));
+    const second = renderPortal(`/accountant-invite#${TOKEN}`);
+    await second.user.click((await screen.findAllByRole('button', { name: 'Accept' })).at(-1)!);
+    expect(await screen.findByRole('heading', { name: "You've reached the most client books we open online" })).toBeInTheDocument();
+  });
+
+  it('back from Checkout, /v1/me is asked again until the plan covers, then the invite is accepted', async () => {
+    sessionStorage.setItem('mtb3a-accountant-invite', TOKEN);
+    let reads = 0;
+    const api = stubApi(routes(true, { 'GET /v1/me': () => ok({ ...signedInMe(), clientBooks: plan(++reads < 3 ? 'NONE' : 'ACTIVE') }), [ACCEPT]: () => ok(clientRow) }));
+    const { router } = renderPortal('/accountant-invite?billing=true&checkout=success');
+    expect(await screen.findByText('Confirming your Accountant plan…')).toBeInTheDocument();
+    await waitFor(() => expect(locationOf(router)).toBe(`/client-books/${STUDIO}`), { timeout: 8000 });
+    expect(api.count(ACCEPT)).toBe(1);
+  }, 12_000);
+});
+

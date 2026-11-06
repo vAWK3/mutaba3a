@@ -2289,14 +2289,34 @@
         "label": "Download",
         "report": "Excel report",
         "receipts": "Receipts (zip)",
-        "pending": "Downloads come soon."
+        "followsPeriod": "For the period above. The report always has the Expenses, Income and Summary sheets.",
+        "entries": {
+          "one": "{count} entry",
+          "other": "{count} entries"
+        },
+        "noReceipts": "No receipts in this period",
+        "about": "about {size}",
+        "tooLarge": "Too large for one download. Pick a shorter period.",
+        "rateLimited": {
+          "one": "Too many downloads started. Try again in {count} minute.",
+          "other": "Too many downloads started. Try again in {count} minutes."
+        },
+        "unavailable": "Downloads aren't available right now.",
+        "failed": "Couldn't start the download. Check your connection and try again.",
+        "month": "Download {month}",
+        "monthAria": "Download the Excel report for {month}, {profile}"
       },
       "gone": {
         "title": "No longer shared",
         "body": "{owner} stopped sharing {profile} with you. Anything you downloaded before stays with you.",
         "bodyNoOwner": "{profile} is no longer shared with you. Anything you downloaded before stays with you.",
         "back": "Back to Client books"
-      }
+      },
+      "free": "{readable} of {freeLimit} free client books",
+      "needsPlan": "Needs the Accountant plan",
+      "needsPlanTitle": "{profile} needs the Accountant plan",
+      "subscribeAria": "Subscribe to the Accountant plan to read {profile}",
+      "planPrompt": "Reading up to {count} client books is free. Subscribe to the Accountant plan to read more."
     },
     "shareLink": {
       "privateView": "A private, read-only view. No names or numbers show before the right PIN.",
@@ -2410,7 +2430,26 @@
         "title": "This invite is no longer available",
         "body": "It was used, withdrawn or ended. Ask whoever sent it for a new one."
       },
-      "failed": "Couldn't reach MTB3A. Check your connection and try again."
+      "failed": "Couldn't reach MTB3A. Check your connection and try again.",
+      "fourth": {
+        "title": "Your free client books are used",
+        "body": "Reading up to {count} client books is free. To read {profile} as well, subscribe to the Accountant plan.",
+        "notNow": "Not now (the invite stays open until {date})",
+        "confirming": "Confirming your Accountant plan…",
+        "slow": "Your payment is still being confirmed. Press Accept again in a minute."
+      },
+      "ceiling": {
+        "title": "You've reached the most client books we open online",
+        "body": "Write to {email} and we'll add more."
+      }
+    },
+    "accountantPlan": {
+      "name": "Accountant plan · unlimited client books",
+      "price": "{price} a month",
+      "country": "Country",
+      "pickCountry": "Choose your country",
+      "subscribe": "Subscribe",
+      "failed": "Couldn't open the payment page. Try again."
     }
   }
 }

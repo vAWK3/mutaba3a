@@ -16,7 +16,8 @@ import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
 import { ME_KEY, meQuery } from '../../session/me';
 import { setMode, useMode } from '../../session/mode';
 import { useSignOut } from '../../session/useSignOut';
-import { TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
+import { SUPPORT_EMAIL, TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
+import { AccountantPlanOffer, atFreeCap, clientBooksOf, planCovers } from '../../components/AccountantPlanOffer';
 import { CLIENT_BOOKS_KEY } from '../../data/clientBooksQueries';
 import { NEW_PASSWORD_POLICY, passwordProblem, tokenFromHash } from '../auth/setupLink';
 import {
@@ -39,8 +40,9 @@ import {
  *
  * TODO(MUT-561): the context panel's `shared-books` scene and the four scope bullets (AccessScopeList) once MUT-561's
  * Scene and AccessScopeList merge; until then the panel is the one-line explanation.
- * TODO(blocked-by MUT-565): a 402 ACCOUNTANT_PLAN_REQUIRED on accept (a 4th client) shows the Accountant plan card in
- * place of Accept, the invite staying open (SL6); see `acceptOutcome`.
+ * MUT-565 (SL6): with the free client books used (/v1/me `clientBooks`, or a 402 ACCOUNTANT_PLAN_REQUIRED on accept)
+ * the Accountant plan's card takes Accept's place, the invite staying open; Checkout returns here, /v1/me is asked
+ * again (≤30 s) and the invite is accepted. Every part shows only when the server sends MUT-565's fields.
  */
 const INVITE_PATH = '/accountant-invite';
 const NAME_MAX_LENGTH = 200;
@@ -164,6 +166,16 @@ function Body({ view, token, invite, email, hasClients, onSignup, onOutcome, onR
           <SignInToAccept />
         </section>
       );
+    case 'needsPlan':
+      // Shown inside the accept card (it needs the signed-in person's plan); never reached as a page outcome
+      return null;
+    case 'ceiling':
+      return (
+        <section className="hp-two-panel-form" data-state="ceiling">
+          <h1>{t('hosted.accountantInvite.ceiling.title')}</h1>
+          <p className="hp-setup-lead">{t('hosted.accountantInvite.ceiling.body', { email: SUPPORT_EMAIL })}</p>
+        </section>
+      );
     case 'signInToContinue':
       return (
         <section className="hp-two-panel-form">
@@ -254,11 +266,26 @@ function useLandOnClient() {
   };
 }
 
+/** MUT-565's Checkout comes back to `/accountant-invite?billing=true&checkout=success`; /v1/me is asked again until it does. */
+const CONFIRM_POLL_MS = 2_000;
+const CONFIRM_LIMIT_MS = 30_000;
+
 function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite: AccountantInviteCheck; email: string; onOutcome: (outcome: InviteOutcome) => void }) {
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const land = useLandOnClient();
+  const returned = useLocation({ select: (location) => (location.search as Record<string, unknown>).checkout === 'success' });
+  const [startedAt] = useState(() => Date.now());
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  const [refused, setRefused] = useState<Extract<InviteOutcome, { kind: 'needsPlan' }> | null>(null);
+  // Back from Checkout: /v1/me is read every 2 s for at most 30 s, until the plan covers client books (MUT-565)
+  const confirming = returned && !refused;
+  const me = useQuery({ ...meQuery, refetchInterval: (query) => (confirming && !planCovers(clientBooksOf(query.state.data)) && Date.now() - startedAt < CONFIRM_LIMIT_MS ? CONFIRM_POLL_MS : false) });
+  const summary = clientBooksOf(me.data);
+  const covered = planCovers(summary);
+  const timedOut = confirming && !covered && Date.now() - startedAt >= CONFIRM_LIMIT_MS;
+  // The card shows before any press when /v1/me says the free books are used (gated on MUT-565's fields), or on a 402
+  const card = refused ?? (atFreeCap(summary) && !confirming ? { kind: 'needsPlan' as const, freeLimit: summary!.freeLimit, inviteExpiresAt: invite.expiresAt } : null);
 
   async function accept() {
     setBusy(true);
@@ -268,17 +295,51 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
       land(client.profileId, 'signed_in');
     } catch (error) {
       setBusy(false);
-      // TODO(blocked-by MUT-565): 402 ACCOUNTANT_PLAN_REQUIRED → the Accountant plan card in place of Accept.
       const outcome = acceptOutcome(error);
-      if (outcome) onOutcome(outcome);
+      if (outcome?.kind === 'needsPlan') setRefused(outcome);
+      else if (outcome) onOutcome(outcome);
       else setFailed(true);
     }
   }
 
+  // The plan is confirmed: accept again, once, without another press
+  const acceptedAfterPlan = useRef(false);
+  useEffect(() => {
+    if (!confirming || !covered || acceptedAfterPlan.current) return;
+    acceptedAfterPlan.current = true;
+    void accept();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirming, covered]);
+
+  const heading = invite.ownerName ? t('hosted.accountantInvite.accept.title', { owner: invite.ownerName }) : t('hosted.accountantInvite.accept.titleNoOwner');
+  if (card) {
+    const freeLimit = card.freeLimit ?? summary?.freeLimit ?? 3;
+    const until = inviteEnds(card.inviteExpiresAt ?? invite.expiresAt, language);
+    return (
+      <section className="hp-two-panel-form" data-state="needs-plan">
+        <h1>{t('hosted.accountantInvite.fourth.title')}</h1>
+        <p className="hp-setup-lead">{t('hosted.accountantInvite.fourth.body', { count: freeLimit, profile: invite.profileName })}</p>
+        <AccountantPlanOffer returnPath={INVITE_PATH} />
+        <Link to="/" className="btn btn-secondary btn-md hp-block">
+          {t('hosted.accountantInvite.fourth.notNow', { date: until })}
+        </Link>
+      </section>
+    );
+  }
   return (
     <section className="hp-two-panel-form">
-      <h1>{invite.ownerName ? t('hosted.accountantInvite.accept.title', { owner: invite.ownerName }) : t('hosted.accountantInvite.accept.titleNoOwner')}</h1>
-      <p className="hp-setup-lead">{t('hosted.accountantInvite.accept.body', { profile: invite.profileName, email: `⁨${email}⁩` })}</p>
+      <h1>{heading}</h1>
+      <p className="hp-setup-lead">{t('hosted.accountantInvite.accept.body', { profile: invite.profileName, email: `\u2068${email}\u2069` })}</p>
+      {confirming && !timedOut && (
+        <p className="hp-banner" role="status">
+          <span>{t('hosted.accountantInvite.fourth.confirming')}</span>
+        </p>
+      )}
+      {timedOut && (
+        <p className="hp-banner" role="status">
+          <span>{t('hosted.accountantInvite.fourth.slow')}</span>
+        </p>
+      )}
       {failed && (
         <p className="hp-banner hp-banner-error" role="alert">
           <AlertIcon />
@@ -286,7 +347,7 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
         </p>
       )}
       <div className="hp-two-panel-actions">
-        <Button variant="primary" className="hp-block" onClick={() => void accept()} disabled={busy} aria-busy={busy}>
+        <Button variant="primary" className="hp-block" onClick={() => void accept()} disabled={busy || (confirming && !timedOut)} aria-busy={busy}>
           {t(busy ? 'hosted.accountantInvite.accept.accepting' : 'hosted.accountantInvite.accept.accept')}
         </Button>
         <Link to="/" className="btn btn-secondary btn-md hp-block">

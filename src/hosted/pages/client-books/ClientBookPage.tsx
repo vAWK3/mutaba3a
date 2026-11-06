@@ -3,7 +3,10 @@ import { Link } from '@tanstack/react-router';
 import { SegmentedControl } from '../../../components/ui/SegmentedControl';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
-import type { AccountantClientWithStats } from '../../api/client';
+import { api, type AccountantClientWithStats, type ClientRowWithPlan } from '../../api/client';
+import { AccountantPlanOffer } from '../../components/AccountantPlanOffer';
+import { trackPortal } from '../../analytics/portalAnalytics';
+import { PeriodDownloads } from '../../components/PeriodDownloads';
 import { EntriesTable, deskRow, type EntryRow } from '../../components/EntriesTable';
 import { Skeleton, Unreachable } from '../../components/QueryView';
 import { DecimalAmount } from '../../format/DecimalAmount';
@@ -14,6 +17,7 @@ import {
   dayLabel,
   isEnded,
   monthOfDate,
+  monthsBetween,
   periodLabel,
   periodOf,
   periodSearch,
@@ -57,7 +61,23 @@ export function ClientBookPage({ profileId, search, setSearch }: ClientBookPageP
   if (books.isError) return <Unreachable onRetry={() => void books.refetch()} />;
   // Not on the list (removed, never shared) or ended: the same answer as a 404 mid-session
   if (gone || !client || isEnded(client)) return <NoLongerShared client={client} />;
+  // MUT-565: past the free client books, a client opens only with the Accountant plan (gated on the field)
+  if ((client as ClientRowWithPlan).needsPlan === true) return <NeedsPlan client={client} />;
   return <ClientBook client={client} search={search} setSearch={setSearch} onGone={onGone} />;
+}
+
+function NeedsPlan({ client }: { client: AccountantClientWithStats }) {
+  const { t } = useLanguage();
+  return (
+    <section className="hp-empty hp-client-gone" role="status">
+      <h1>{t('hosted.clientBooks.needsPlanTitle', { profile: client.name })}</h1>
+      <p>{t('hosted.clientBooks.planPrompt', { count: 3 })}</p>
+      <AccountantPlanOffer returnPath={`/client-books/${client.profileId}`} />
+      <Link to="/client-books" className="btn btn-secondary btn-md">
+        {t('hosted.clientBooks.gone.back')}
+      </Link>
+    </section>
+  );
 }
 
 function NoLongerShared({ client }: { client: AccountantClientWithStats | null }) {
@@ -148,9 +168,12 @@ function ClientBook({ client, search, setSearch, onGone }: { client: AccountantC
               ))
             )}
           </section>
-          {/* TODO(blocked-by MUT-314): "Excel report" and "Receipts (zip)" for this period's months (both sheets
-              whatever the type filter, Basel 13244), through MUT-314's mint and a hidden form POST (periodDownload),
-              counted as period_downloaded { place: client_books }. */}
+          {/* AW3/SL3 + Basel 13244: the downloads follow the period only (both sheets whatever the type filter) */}
+          <PeriodDownloads
+            key={`${period.from}…${period.to}`}
+            mint={(type, asOf) => api.periodDownloadTicket(profileId, { type, from: period.from, to: period.to, lang: language, asOf })}
+            onDownloaded={(file) => void trackPortal('period_downloaded', { place: 'client_books', file, months: monthsBetween(period.from, period.to) })}
+          />
         </aside>
 
         <section className="hp-client-book-main">

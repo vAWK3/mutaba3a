@@ -5,6 +5,8 @@ import { SegmentedControl } from '../../../components/ui/SegmentedControl';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
 import { api, ApiError, type ShareLinkUnlock } from '../../api/client';
+import { countPublicPage } from '../../analytics/portalAnalytics';
+import { PeriodDownloads } from '../../components/PeriodDownloads';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { Drawer } from '../../components/Drawer';
 import { EntriesTable, linkRow, type EntryRow } from '../../components/EntriesTable';
@@ -95,8 +97,19 @@ export function ShareLinkView({ digest, unlock, onViewFailed }: ShareLinkViewPro
           ) : summary.data ? (
             <BandTotals summary={summary.data} />
           ) : null}
-          {/* TODO(blocked-by MUT-314): "Excel report" and "Receipts (zip)" for the link's period, through the link mint
-              and a hidden form POST (periodDownload), counted as period_downloaded { place: link_page }. */}
+          {/* SL3: the link's period, both files; a refusal of the viewer (8 hours up, ended) goes back to the page */}
+          <PeriodDownloads
+            viewerToken={viewerToken}
+            mint={async (type, asOf) => {
+              try {
+                return await api.shareLinkDownloadTicket({ viewerToken, type, lang: language, asOf });
+              } catch (error) {
+                if (isRefusal(error)) onViewFailed(error);
+                throw error;
+              }
+            }}
+            onDownloaded={(file) => countPublicPage({ event: 'period_downloaded', properties: { place: 'link_page', file, ...(firstMonth ? { months: monthsBetween(firstMonth, lastMonth) } : {}) } })}
+          />
         </section>
 
         <div className="hp-share-filters">

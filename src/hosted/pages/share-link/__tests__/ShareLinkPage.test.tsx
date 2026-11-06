@@ -184,4 +184,31 @@ describe('the open link', () => {
     await router.navigate({ to: '/sign-in' });
     await waitFor(() => expect(reporter.users.at(-1)).toBe(signedIn.user.id));
   });
+
+  it('downloads the link’s period with the viewer token, minted for both files at once', async () => {
+    const sent: Record<string, string>[] = [];
+    vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(function (this: HTMLFormElement) {
+      sent.push(Object.fromEntries(new FormData(this) as unknown as Iterable<[string, string]>));
+    });
+    const api = stubApi(
+      routes({
+        'POST /v1/share-links/download-ticket': (request) => {
+          const type = (request.body as { type: string }).type;
+          return ok({ type, ticket: `${type}-t`, expiresAt: '2099-01-01T00:00:00.000Z', filename: 'f', estimate: { expenses: 9, income: 3, receipts: 2, receiptBytes: 300 * 1024 } });
+        },
+      }),
+    );
+    const { user } = renderPortal(`/share#${TOKEN}`);
+    await typePin(user, '4821');
+    await user.click(screen.getByRole('button', { name: 'Open' }));
+    await user.click(await screen.findByRole('button', { name: 'Download' }));
+    expect(await screen.findByText('2 receipts · about 300 KB')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Receipts (zip)' }));
+    expect(sent).toEqual([{ ticket: 'receipts-t', viewerToken: VIEWER }]);
+    const mints = api.calls.filter((c) => c.url.pathname === '/v1/share-links/download-ticket').map((c) => c.body as { viewerToken: string; asOf: string });
+    expect(mints).toHaveLength(2);
+    expect(mints.every((m) => m.viewerToken === VIEWER && m.asOf === mints[0]!.asOf)).toBe(true);
+    vi.restoreAllMocks();
+  });
 });
+

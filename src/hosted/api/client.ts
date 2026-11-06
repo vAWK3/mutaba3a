@@ -41,6 +41,35 @@ export type ShareLinkEntryPage = Schemas['ShareLinkEntryPage'];
 export type ShareLinkSummary = Schemas['ShareLinkSummary'];
 export type ShareLinkReceiptList = Schemas['ShareLinkReceiptList'];
 export type ShareLinkEntriesRequest = Schemas['ShareLinkEntriesRequest'];
+/** MUT-562 (MUT-314's routes): a period download's ticket, minted per file, posted to the stream by a form. */
+export type PeriodDownloadTicket = Schemas['PeriodDownloadTicket'];
+export type PeriodDownloadType = PeriodDownloadTicket['type'];
+/**
+ * MUT-562 (MUT-565's contract, ADR-251, not merged here yet): read defensively, so every Accountant-plan surface shows
+ * only when the server sends these fields. They become generated types when MUT-565 merges.
+ */
+export interface AccountantPlanState {
+  state: 'NONE' | 'ACTIVE' | 'GRACE' | 'LAPSED';
+  source: 'OPERATOR' | 'STRIPE' | null;
+  until: string | null;
+  cancelAtPeriodEnd: boolean;
+}
+export interface ClientBooksSummary {
+  count: number;
+  freeLimit: number;
+  cap: number | null;
+  readable: number;
+  plan: AccountantPlanState;
+}
+export interface AccountantPlanBilling extends AccountantPlanState {
+  interval: 'month' | 'year' | null;
+  currency: string | null;
+  catalog: { ILS: { month: number } | null; USD: { month: number } | null };
+}
+/** `/v1/me` as MUT-565 extends it. */
+export type MeWithClientBooks = Me & { clientBooks?: ClientBooksSummary };
+/** A client row as MUT-565 extends it. */
+export type ClientRowWithPlan = { needsPlan?: boolean };
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -855,6 +884,15 @@ export const api = {
       `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
       { profileId, query: disposition === 'inline' ? { disposition } : {} },
     ),
+  // MUT-562 (MUT-314, ADR-248): a period download's ticket; the form POST to the stream is periodDownload.ts's.
+  periodDownloadTicket: (profileId: string, query: { type: PeriodDownloadType; from: string; to: string; lang?: 'ar' | 'en'; asOf?: string }) =>
+    request<PeriodDownloadTicket>('GET', '/v1/period-downloads/ticket', { profileId, query }),
+  shareLinkDownloadTicket: (body: { viewerToken: string; type: PeriodDownloadType; lang?: 'ar' | 'en'; asOf?: string }) =>
+    request<PeriodDownloadTicket>('POST', '/v1/share-links/download-ticket', { body }),
+  // MUT-562 (MUT-565, ADR-251): the Accountant plan's Checkout; `plan` is MUT-565's additive field (not generated here yet).
+  startAccountantCheckout: (body: { country: string; returnPath: string }) =>
+    request<BillingRedirect>('POST', '/v1/billing/checkout-session', { body: { interval: 'month', buyer: 'person', plan: 'accountant', ...body } }),
+
   // MUT-562 (MUT-560, ADR-247): a share link's visitor. Tokens travel in bodies only; nothing here names a profile.
   checkShareLink: (token: string, signal?: AbortSignal) => request<Schemas['ShareLinkCheck']>('POST', '/v1/share-links/check', { body: { token }, signal }),
   unlockShareLink: (body: { token: string; pin: string; viewerToken?: string }) => request<ShareLinkUnlock>('POST', '/v1/share-links/unlock', { body }),

@@ -157,3 +157,9 @@ export const useEndPause = () => usePlanChange(() => api.endPause());
 export const useCancelPlan = () => usePlanChange((body: { reason: CancellationReason; comment?: string }) => api.cancelPlan(body));
 export const useKeepPlan = () => usePlanChange(() => api.keepPlan());
 export const useTakeStayOffer = () => usePlanChange((body: { reason: CancellationReason }) => api.takeStayOffer(body));
+
+/** MUT-562 (MUT-565's Checkout, `plan: 'accountant'`): the Accountant plan, monthly; back to `returnPath`. */
+export function useStartAccountantCheckout() {
+  const onError = useRefreshOnRefusal();
+  return useMutation({ mutationFn: (body: { country: string; returnPath: string }) => checked(api.startAccountantCheckout(body)), onSuccess: leaveFor, onError });
+}

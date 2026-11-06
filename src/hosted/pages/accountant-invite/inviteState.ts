@@ -22,7 +22,11 @@ export type InviteView =
   /** 409 ACCOUNT_EXISTS from the signup: sign in and accept instead. */
   | { kind: 'exists' }
   /** The account was made, but signing in after failed (a network blip): sign in to continue, never a second signup. */
-  | { kind: 'signInToContinue' };
+  | { kind: 'signInToContinue' }
+  /** MUT-565 (402 ACCOUNTANT_PLAN_REQUIRED, SL6): the free client books are used; the invite stays open. */
+  | { kind: 'needsPlan'; freeLimit: number | null; inviteExpiresAt: string | null }
+  /** MUT-565 (409 CLIENT_BOOKS_CEILING): the plan's ceiling; contact us. */
+  | { kind: 'ceiling' };
 
 export type InviteOutcome = Exclude<InviteView, { kind: 'checking' | 'invite' | 'signup' | 'accept' | 'unreachable' }> | null;
 
@@ -59,6 +63,15 @@ export function acceptOutcome(error: unknown): InviteOutcome {
     return { kind: 'mismatch', maskedEmail: typeof masked === 'string' ? masked : '' };
   }
   if (error.status === 409 && apiErrorReason(error) === 'ALREADY_HAS_ACCESS') return { kind: 'already' };
+  if (error.status === 409 && apiErrorReason(error) === 'CLIENT_BOOKS_CEILING') return { kind: 'ceiling' };
+  if (error.status === 402 && (error.code as string) === 'ACCOUNTANT_PLAN_REQUIRED') {
+    const details = error.details as { freeLimit?: unknown; inviteExpiresAt?: unknown } | null;
+    return {
+      kind: 'needsPlan',
+      freeLimit: typeof details?.freeLimit === 'number' ? details.freeLimit : null,
+      inviteExpiresAt: typeof details?.inviteExpiresAt === 'string' ? details.inviteExpiresAt : null,
+    };
+  }
   return null;
 }
 
