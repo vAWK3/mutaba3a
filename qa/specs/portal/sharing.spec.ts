@@ -290,7 +290,7 @@ test('make a link with a PIN: whole months by name, the link once, Copy message 
   await step('Copy message: the link and the date, never the PIN', async () => {
     await drawer.getByRole('button', { name: 'Copy message' }).click();
     const message = await page.evaluate(() => navigator.clipboard.readText());
-    expect(message).toMatch(/^Hi, I've shared the books of “Studio” for \w{3}( \d{4})? – \w{3} \d{4} with you on Mutaba3a: http\S+\/share#qaShareToken\S+ — the link works until \w{3} \d{1,2}\. I'll send you the PIN separately\.$/);
+    expect(message).toMatch(/^Hi, I've shared the books of “Studio” for \w{3}( \d{4})? – \w{3} \d{4} with you on MTB3A: http\S+\/share#qaShareToken\S+ — the link works until \w{3} \d{1,2}\. I'll send you the PIN separately\.$/);
     expect(message).not.toContain('4821');
   });
 

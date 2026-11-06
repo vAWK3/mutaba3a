@@ -2325,7 +2325,7 @@
         "done": "Done"
       },
       "message": {
-        "text": "Hi, I've shared the books of “{profile}” for {period} with you on Mutaba3a: {url} — the link works until {until}. I'll send you the PIN separately.",
+        "text": "Hi, I've shared the books of “{profile}” for {period} with you on MTB3A: {url} — the link works until {until}. I'll send you the PIN separately.",
         "wholeProfile": "the whole profile"
       }
     }

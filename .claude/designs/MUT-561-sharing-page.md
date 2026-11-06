@@ -10,7 +10,7 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
 - **Owner's "Download a period"** is a row at the bottom of the Sharing page, built with MUT-314. Slice A reserves its
   place in `SharingPage.tsx` (a comment, nothing visible).
 - **Copy message** text (slice B), never with the PIN:
-  - EN: "Hi, I've shared the books of “{profile}” for {period} with you on Mutaba3a: {url} — the link works until {until}. I'll send you the PIN separately."
+  - EN: "Hi, I've shared the books of “{profile}” for {period} with you on MTB3A: {url} — the link works until {until}. I'll send you the PIN separately."
   - AR: "مرحباً، شاركتُ معك دفاتر «{profile}» لفترة {period} على متابعة: {url} — يعمل الرابط حتى {until}. سأرسل لك الرمز بشكل منفصل."
 - **Ended items per OW5:** locked and ended links hide one day after (server rule S1, slice B).
 
@@ -34,8 +34,8 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
   locked links listed for 24 h (OW5, S1 was folded into MUT-560). Expired and revoked read "Ended {day}" with no
   action; locked keeps Turn off. Turn off marks the row ended at once and restores it if refused.
 - New link drawer and done pane in one side drawer (`?newLink=true`). Default period last 3 months, 7 days. The PIN is
-  sent folded to 0–9. Copy message is Basel's 13244 text in the portal language ("Mutaba3a" in the English text, as
-  given); the done pane also says "Message copied, without the PIN".
+  sent folded to 0–9. Copy message is Basel's 13244 text in the portal language, with "MTB3A" in the English text
+  (ADR-173 brand rule; the comment said "Mutaba3a"); the done pane also says "Message copied, without the PIN".
 - Review fixes: concurrent revokes (mutationKey + isMutating, per-item undo); Invite again refetches on stale refusals
   and is inert at the limit; the new row takes focus; FSI/PDI isolates around emails, names and profile names in
   sentences (not in aria-labels or clipboard text); gender-neutral Arabic confirms; the limit falls back to the list's.

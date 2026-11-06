@@ -148,7 +148,7 @@ describe('the done pane (B4)', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Copy message' }));
     const message = await navigator.clipboard.readText();
-    expect(message).toBe(`Hi, I've shared the books of “Studio” for Aug – Oct 2026 with you on Mutaba3a: ${URL_ONCE} — the link works until Nov 13. I'll send you the PIN separately.`);
+    expect(message).toBe(`Hi, I've shared the books of “Studio” for Aug – Oct 2026 with you on MTB3A: ${URL_ONCE} — the link works until Nov 13. I'll send you the PIN separately.`);
     expect(message).not.toContain('4821');
   });
 
