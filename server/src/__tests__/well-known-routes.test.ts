@@ -46,6 +46,7 @@ describe('wellKnownRoutes (MUT-111)', () => {
       const paths: string[] = body.applinks.details[0].paths;
       const literal = (part: string) => part.replace(/[.+?^${}()|[\]\\]/g, '\\$&');
       const claims = (pattern: string, path: string) => new RegExp(`^${pattern.split('*').map(literal).join('.*')}$`).test(path);
+      expect(paths).toEqual(['/p/*/expenses*', '/p/*/payments*', '/capture*', '/accountant-invite*']);
       expect(paths.filter((pattern) => claims(pattern, '/accountant-invite'))).toEqual(['/accountant-invite*']);
       for (const path of ['/share', '/share/x', '/client-books', '/client-books/x', '/setup', '/sign-in']) expect(paths.filter((pattern) => claims(pattern, path)), path).toEqual([]);
     });

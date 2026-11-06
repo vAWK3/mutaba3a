@@ -1045,6 +1045,81 @@ describe('ExpenseDrawer VAT row (MUT-302)', () => {
   });
 });
 
+describe('ExpenseDrawer allocation number (MUT-557)', () => {
+  const EXISTING = {
+    id: 'e1', occurredOn: '2026-09-01', amount: '7080.00', currency: 'ILS', title: 'Laptop', vendor: null, vendorId: null,
+    categoryId: 'cat-1', customerId: null, projectId: null, notes: null, createdByUserId: 'u', captureSource: null, version: 3,
+    createdAt: '', updatedAt: '', receipts: [], vat: { treatment: 'STANDARD_RATED', rateBasisPoints: 1800, net: '6000.00', vat: '1080.00', gross: '7080.00' },
+    allocationNumber: null, allocationNumberMissing: true,
+  };
+  let sent: unknown;
+  const capture = (extra: Record<string, () => Response> = {}) => {
+    sent = undefined;
+    route({
+      'GET /v1/expense-categories': () => ok(EMPTY_CATEGORIES),
+      'GET /v1/customers': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/projects': () => ok(EMPTY_DIRECTORY),
+      'GET /v1/expenses/e1': () => ok(EXISTING),
+      'PATCH /v1/expenses/e1': () => ok(EXISTING),
+      ...extra,
+    });
+    const handler = fetchMock.getMockImplementation()!;
+    fetchMock.mockImplementation(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      if (init.method === 'POST' || init.method === 'PATCH') sent = typeof init.body === 'string' ? JSON.parse(init.body) : undefined;
+      return handler(input, init);
+    });
+  };
+
+  it('a non-firm profile has no allocation number field', async () => {
+    capture();
+    renderDrawer({ mode: 'edit', expenseId: 'e1' });
+    await screen.findByDisplayValue('Laptop');
+    expect(screen.queryByTestId('expense-allocation-number')).not.toBeInTheDocument();
+  });
+
+  it('a firm ILS expense: typing it with dashes saves the nine digits; untouched, the PATCH leaves it off', async () => {
+    const user = userEvent.setup();
+    capture();
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Laptop');
+    await user.type(screen.getByLabelText('Allocation number'), '304-512-876');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).toMatchObject({ allocationNumber: '304512876' });
+  });
+
+  it('an untouched edit sends no allocationNumber', async () => {
+    const user = userEvent.setup();
+    capture();
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Laptop');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).not.toHaveProperty('allocationNumber');
+  });
+
+  it('eight digits stop at the field and send nothing', async () => {
+    const user = userEvent.setup();
+    capture();
+    renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await screen.findByDisplayValue('Laptop');
+    await user.type(screen.getByLabelText('Allocation number'), '30451287');
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText('An allocation number is 9 digits.')).toBeInTheDocument();
+    expect(sent).toBeUndefined();
+  });
+
+  it('emptying a saved one sends null', async () => {
+    const user = userEvent.setup();
+    capture({ 'GET /v1/expenses/e1': () => ok({ ...EXISTING, allocationNumber: '304512876', allocationNumberMissing: false }) });
+    const { onClose } = renderDrawer({ mode: 'edit', expenseId: 'e1', firm: true });
+    await user.clear(await screen.findByDisplayValue('304512876'));
+    await user.click(screen.getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    expect(sent).toMatchObject({ allocationNumber: null });
+  });
+});
+
 describe('ExpenseDrawer VAT row summary (MUT-302 review)', () => {
   it('reads the rate as a clean percent, whatever was typed', async () => {
     const user = userEvent.setup();

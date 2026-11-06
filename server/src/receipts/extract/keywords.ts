@@ -128,6 +128,16 @@ export const REGISTRATION = keywords(
   "מס' תאגיד", 'מספר תאגיד', 'תאגיד מס', "תאג'ד מס",
 );
 
+/**
+ * MUT-557 (D2): the label of an Israeli tax invoice's allocation number (מספר הקצאה). Its nine digits are read only
+ * beside one of these: a bare nine-digit number is as likely a ח.פ or ע.מ.
+ */
+export const ALLOCATION = keywords(
+  'מספר הקצאה', "מס' הקצאה", 'מס הקצאה', 'מס. הקצאה', 'אישור הקצאה', 'מספר אישור הקצאה',
+  'allocation no', 'allocation no.', 'allocation number', 'allocation num',
+  'رقم التخصيص', 'رقم تخصيص',
+);
+
 export const PHONE = keywords('טל', "טל'", 'טלפון', 'נייד', 'פלאפון', 'هاتف', 'تلفون', 'جوال', 'ت', 'tel', 'phone', 'mobile', 'mob');
 
 /** A receipt's title or boilerplate, never its vendor. */

@@ -1262,6 +1262,8 @@ model Expense {
   vatRateBasisPoints Int?
   netMinor           BigInt?
   vatMinor           BigInt?
+  /// MUT-557 (ADR-246): the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; CHECK (raw SQL).
+  allocationNumber   String?          @db.VarChar(9)
   version         Int              @default(1)
   createdAt       DateTime
   updatedAt       DateTime

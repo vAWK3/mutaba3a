@@ -1,8 +1,14 @@
+import { aboveAllocationThreshold } from '../../israel/allocation-number.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
 
-/** Every field a `ReceiptSuggestion` can carry, besides its reader version. */
+/** The fields every receipt is read for: a suggestion holding all of them is complete (`isCompleteSuggestion`). */
 export const SUGGESTION_FIELDS = ['date', 'totalMinor', 'currency', 'vatMinor', 'vatRateBasisPoints', 'vendorName', 'registrationNo', 'phone', 'email'] as const;
-export type SuggestionField = (typeof SUGGESTION_FIELDS)[number];
+/**
+ * Every field a `ReceiptSuggestion` can carry, besides its reader version. MUT-557 (D3): the allocation number is only
+ * on Israeli tax invoices above the threshold, so it is not one every receipt must have.
+ */
+export const READ_FIELDS = [...SUGGESTION_FIELDS, 'allocationNumber'] as const;
+export type SuggestionField = (typeof READ_FIELDS)[number];
 
 /**
  * MUT-441 review: the fields that describe one money reading. `totalMinor` and `vatMinor` are minor units of the
@@ -35,7 +41,7 @@ export function fillAbsent(stored: ReceiptSuggestion | null, incoming: ReceiptSu
   const merged: Record<string, unknown> = { readerVersion: base.readerVersion };
   const added: SuggestionField[] = [];
   const moneyFills = moneyGroupFills(base, incoming);
-  for (const field of SUGGESTION_FIELDS) {
+  for (const field of READ_FIELDS) {
     if (base[field] !== undefined) merged[field] = base[field];
     else if (incoming[field] !== undefined && (moneyFills || !isMoneyField(field))) {
       merged[field] = incoming[field];
@@ -46,7 +52,20 @@ export function fillAbsent(stored: ReceiptSuggestion | null, incoming: ReceiptSu
   return { merged: merged as unknown as ReceiptSuggestion, added };
 }
 
-/** MUT-441: a suggestion that already carries every field leaves the server nothing to read for. */
+/**
+ * MUT-441: a suggestion that already carries every field leaves the server nothing to read for. MUT-557 (D3): nor
+ * does it while it reads as an ILS tax invoice at or above the allocation threshold without a number: the server
+ * reads it once for that (A2: a never-read To-review receipt too; one already read is never picked again).
+ */
 export function isCompleteSuggestion(suggestion: ReceiptSuggestion | null | undefined): boolean {
-  return Boolean(suggestion) && SUGGESTION_FIELDS.every((field) => suggestion![field] !== undefined);
+  if (!suggestion || !SUGGESTION_FIELDS.every((field) => suggestion[field] !== undefined)) return false;
+  return suggestion.allocationNumber !== undefined || !expectsAllocationNumber(suggestion);
+}
+
+/** MUT-557: what the suggestion read is an ILS invoice with VAT whose net (total − VAT) is at or above the threshold on its date. */
+export function expectsAllocationNumber(suggestion: ReceiptSuggestion): boolean {
+  const { currency, date, totalMinor, vatMinor } = suggestion;
+  if (!currency || !date || !totalMinor || !vatMinor) return false;
+  const vat = BigInt(vatMinor.value);
+  return aboveAllocationThreshold({ currency: currency.value, occurredOn: date.value, netMinor: BigInt(totalMinor.value) - vat, vatMinor: vat });
 }

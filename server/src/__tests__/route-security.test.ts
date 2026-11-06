@@ -100,10 +100,9 @@ const ACCOUNTANT_OPERATIONS = [
   'GET /v1/profiles/{profileId}/accountants',
   'DELETE /v1/profiles/{profileId}/accountants/{grantId}',
   'POST /v1/accountant-invites/accept',
-  'DELETE /v1/clients/{profileId}',
-  // MUT-575: the client books with stats, and a client's profile-scoped feed.
+  // MUT-575: the accountant's client books.
   'GET /v1/clients',
-  'GET /v1/profile-entries',
+  'DELETE /v1/clients/{profileId}',
 ];
 
 /** MUT-560 (ADR-247): an owner's share links — session-only, no X-Mutaba3a-Profile. */
@@ -113,7 +112,8 @@ const SHARE_LINK_OPERATIONS = ['POST /v1/profiles/{profileId}/share-links', 'GET
 const FX_OPERATIONS = ['GET /v1/fx-rates'];
 
 /** MUT-270: the entries feed — session-only, naming no X-Mutaba3a-Profile (it reads across the person's memberships). */
-const ENTRIES_OPERATIONS = ['GET /v1/entries'];
+// MUT-575: one profile's feed (profile-scoped, X-Mutaba3a-Profile), session-only like /v1/entries.
+const ENTRIES_OPERATIONS = ['GET /v1/entries', 'GET /v1/profile-entries'];
 
 /** MUT-325: Download my records, signed in — session-only, on the profile named by X-Mutaba3a-Profile. */
 const RECORDS_EXPORT_OPERATIONS = ['GET /v1/records-export', 'GET /v1/records-export/receipts/{receiptId}'];

@@ -1444,12 +1444,15 @@ components:
         expiresAt:
           type: string
           format: date-time
+        termsVersion:
+          type: string
       required:
         - profileName
         - ownerName
         - maskedEmail
         - expired
         - expiresAt
+        - termsVersion
     AccountantInviteTokenRequest:
       type: object
       properties:
@@ -4999,6 +5002,14 @@ components:
             - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436.
         vat:
           $ref: "#/components/schemas/ExpenseVat"
+        allocationNumber:
+          type: string
+          nullable: true
+          pattern: ^\d{9}$
+          description: "MUT-557: the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557."
+        allocationNumberMissing:
+          type: boolean
+          description: "MUT-557: worked out on every read, never stored. True on a firm profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.106.0-mut557."
         version:
           type: integer
         createdAt:
@@ -5022,6 +5033,8 @@ components:
         - createdByUserId
         - captureSource
         - vat
+        - allocationNumber
+        - allocationNumberMissing
         - version
         - createdAt
         - updatedAt
@@ -8277,6 +8290,27 @@ components:
             - value
             - source
             - confidence
+        allocationNumber:
+          type: object
+          properties:
+            value:
+              type: string
+              pattern: ^\d{9}$
+            source:
+              type: string
+              enum:
+                - qr
+                - pdf-text
+                - ocr
+                - vendor
+            confidence:
+              type: number
+              minimum: 0
+              maximum: 1
+          required:
+            - value
+            - source
+            - confidence
       required:
         - readerVersion
     ApprovedReceiptFields:
@@ -8373,6 +8407,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557."
       required:
         - occurredOn
         - amount
@@ -8437,6 +8476,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: absent keeps the treatment and rate (re-split when the amount changes); null clears it; an object sets it, split from the amount sent or the row's own. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557."
       additionalProperties: false
     CreateReceiptUploadResponse:
       type: object
@@ -10104,8 +10148,12 @@ components:
           properties:
             vendorDefaults:
               $ref: "#/components/schemas/ReceiptVendorDefaults"
+            allocationNumberExpected:
+              type: boolean
+              description: "MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.106.0-mut557."
           required:
             - vendorDefaults
+            - allocationNumberExpected
     ReceiptVendorDefaults:
       type: object
       nullable: true
@@ -10191,6 +10239,11 @@ components:
             - rateBasisPoints
           additionalProperties: false
           description: "MUT-302: the VAT inside the amount. Absent or null records none. Since 1.92.0-mut302."
+        allocationNumber:
+          type: string
+          nullable: true
+          maxLength: 40
+          description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557."
         suggested:
           allOf:
             - $ref: "#/components/schemas/ReceiptSuggestion"
@@ -12910,8 +12963,7 @@ components:
             enum:
               - expense
               - received
-          minItems: 1
-          description: "MUT-575: only these kinds (expense, received); both when absent. Never more than the link shows."
+          description: "MUT-575: only these kinds (expense, received); both when absent, none (an empty page) when empty. Never more than the link shows."
         occurredFrom:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -14087,7 +14139,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or accountant access is off on this server
+          description: No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:
@@ -17309,9 +17361,9 @@ paths:
                 - received
                 - owed
                 - conversion
-            description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent."
+            description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
           required: false
-          description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent."
+          description: "Repeatable. Only these kinds: expense, received, owed, conversion. All four when absent; an empty `kinds=` names none (an empty page)."
           style: form
           explode: true
           name: kinds
@@ -27023,7 +27075,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
-          description: No such profile for you, or share links are off on this server
+          description: No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577)
           content:
             application/json:
               schema:

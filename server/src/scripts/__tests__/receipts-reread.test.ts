@@ -82,7 +82,7 @@ describe('receipts:reread (MUT-514)', () => {
     const current = await w.oldRead({ ...OLD_READ, readerVersion: serverReaderVersion('rapid-tess') });
     const phone = await w.oldRead({ ...OLD_READ, readerVersion: 'phone-1' });
     const filed = await w.oldRead();
-    await w.store.expenseReceipts.fileOntoExpense({ organizationId: w.ORG, receiptId: filed.id, expenseId: (await w.store.expenses.create({ organizationId: w.ORG, occurredOn: '2026-10-21', amountMinor: 17637n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: USER }, LATER)).id, maxReceipts: 10 });
+    await w.store.expenseReceipts.fileOntoExpense({ organizationId: w.ORG, receiptId: filed.id, expenseId: (await w.store.expenses.create({ organizationId: w.ORG, occurredOn: '2026-10-21', amountMinor: 17637n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: USER }, LATER)).id, maxReceipts: 10 });
     const r = await rereadReceipts(w.store, { readerBelow: 2, apply: true, now: LATER });
     expect(r.planned).toEqual([]);
     for (const x of [current, phone]) expect((await w.store.expenseReceipts.getById(w.ORG, x.id))?.suggested).toEqual(x.suggested);

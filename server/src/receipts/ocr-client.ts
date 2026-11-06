@@ -10,7 +10,8 @@ import type { OcrLine } from './extract/types.js';
  *     X-Capture-Hint  `scanned` (the phone's Scan, already cleaned) or `photo` (everything else: full preprocessing)
  *     Authorization  `Bearer <Google ID token, audience OCR_URL>` in production; none against a local http sidecar
  *
- *   200  { engine, lines: [{ text, conf 0..1, box [x0, y0, x1, y1], script? }], pdfText?, pages }
+ *   200  { engine, lines: [{ text, conf 0..1, box [x0, y0, x1, y1], script? }], pdfText?, pages, qr? }
+ *        qr: MUT-557, the QR payloads it decoded (at most 8, each at most 4,096 chars); absent from an older sidecar = []
  *   422  { error: 'unreadable' }   undecodable, or over the pixel or page caps (terminal, R3)
  *   413  { error: 'too_large' }    (terminal)
  *   504  { error: 'timeout' }      the sidecar's own deadline (worth retrying)
@@ -69,8 +70,10 @@ export const OcrResultSchema = z.object({
   lines: z.array(OcrLineSchema).max(5_000),
   pdfText: z.string().max(200_000).optional(),
   pages: z.number().int().min(0).max(100),
+  // MUT-557 (A3): an older sidecar sends none, and a QR list this side can't take is no QR, never a failed read.
+  qr: z.array(z.string().min(1).max(4_096)).max(8).default([]).catch([]),
 });
-export type OcrResult = { engine: string; lines: OcrLine[]; pdfText?: string | undefined; pages: number };
+export type OcrResult = { engine: string; lines: OcrLine[]; pdfText?: string | undefined; pages: number; qr?: string[] | undefined };
 
 const OcrRefusalSchema = z.object({ error: z.enum(['unreadable', 'too_large', 'timeout']) });
 

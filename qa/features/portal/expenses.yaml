@@ -288,6 +288,25 @@ features:
       - The second opens in EUR with VAT 16%, marked "From this vendor’s last expense"
       - Saving sends EUR and the 16 % rate
       - With an amount typed first, the currency stays and only the VAT fills
+  - id: allocation-number
+    title: A firm's ₪5,000+ ILS expense with VAT and no allocation number is flagged in the list; adding the number clears it (MUT-557)
+    tier: secondary
+    tickets: [MUT-557]
+    paths:
+      - src/hosted/components/expenseForm/ExpenseAllocationNumberRow.tsx
+      - src/hosted/components/expenseForm/HostedExpenseFields.tsx
+      - src/hosted/components/expenseForm/useHostedExpenseForm.ts
+      - src/hosted/pages/views/ExpensesList.tsx
+      - server/src/israel/allocation-number.ts
+    steps:
+      - On a firm profile, record an ILS expense of 7,080 with Standard VAT at 18 %
+      - Look at it in the list
+      - Open it and type 8 digits as the allocation number, then save
+      - Type 304-512-876 instead and save
+    expect:
+      - The list marks it "No allocation number"
+      - Eight digits stop at the field with "An allocation number is 9 digits." and nothing is sent
+      - The server gets 304512876 and the mark is gone from the list
   - id: vat-none-personal
     title: A profile without firm features has no VAT row, and its expenses send no VAT (MUT-302 AC3)
     tier: secondary

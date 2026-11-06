@@ -18,7 +18,7 @@ const url = process.env.MUTABA3A_TEST_DATABASE_URL;
 const SERVER = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const MIGRATIONS = join(SERVER, 'prisma/migrations');
 const PRISMA = join(SERVER, 'node_modules/.bin/prisma');
-const MUT575 = '20261107130000_mut575_client_books';
+const MUT575 = '20261107140000_mut575_client_books';
 
 const migrationDirs = () => readdirSync(MIGRATIONS, { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => d.name).sort();
 const sqlOf = (dir: string) => readFileSync(join(MIGRATIONS, dir, 'migration.sql'), 'utf8');
