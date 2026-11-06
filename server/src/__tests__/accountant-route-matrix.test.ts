@@ -41,7 +41,6 @@ const ALLOWED_GETS = [
   'GET /v1/receivables',
   'GET /v1/receivables/{receivableId}',
   'GET /v1/receivables/{receivableId}/credits',
-  'GET /v1/retainers/{agreementId}/charges',
   'GET /v1/summaries/activity',
   'GET /v1/summaries/customers/{customerId}',
   'GET /v1/summaries/expenses',
@@ -74,6 +73,10 @@ let operations: Operation[];
 /** Profile-scoped routes only an API key may call (Malafat's): an accountant's session is refused before any profile. */
 let keyOnly: Operation[];
 let routeAccess: RouteAccessIndex;
+/** One real record of the shared profile per path parameter, so every allowlisted detail GET runs its handler to the end. */
+const ids: Record<string, string> = {};
+let storage: MemoryAttachmentStorage;
+const keyOf = (url: string) => new URL(url).pathname.replace(/^\/+/, '').replace(/^upload\//, '');
 
 const hono = (path: string) => path.replace(/\{([^}]+)\}/g, ':$1');
 const scopesOf = (op: Operation) => routeAccess.get(`${op.method} ${hono(op.path)}`)?.scopes ?? [];
@@ -86,7 +89,8 @@ const call = (op: Operation, query = '') =>
   });
 
 beforeAll(async () => {
-  h = accountantHarness({ receiptsLibrary: true, attachments: new MemoryAttachmentStorage() });
+  storage = new MemoryAttachmentStorage();
+  h = accountantHarness({ receiptsLibrary: true, attachments: storage });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');
@@ -94,7 +98,35 @@ beforeAll(async () => {
   await expenseOn(h, owner, other, 'Private rent');
   const customer = await read(await h.app.request('/v1/customers', json({ name: 'Haddad Trading' }, { ...owner.on(profileId), ...idem() })));
   await h.app.request('/v1/customers', json({ name: 'Hidden Client' }, { ...owner.on(other), ...idem() }));
-  await h.app.request('/v1/income', json({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-11-01', customerId: customer.id }, { ...owner.on(profileId), ...idem() }));
+  const as = () => ({ ...owner.on(profileId), ...idem() });
+  const seed = async (path: string, body: object) => {
+    const res = await h.app.request(path, json(body, as()));
+    if (res.status !== 201 && res.status !== 200) throw new Error(`${path}: ${res.status} ${await res.text()}`);
+    return read(res);
+  };
+  ids.customerId = customer.id;
+  ids.projectId = (await seed('/v1/projects', { customerId: customer.id, name: 'Rebrand', currency: 'ILS' })).id;
+  ids.paymentId = (await seed('/v1/income', { kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-11-01', customerId: customer.id })).id;
+  ids.receivableId = (await seed('/v1/income', { kind: 'owed', amount: '80.00', currency: 'ILS', occurredOn: '2026-11-01', customerId: customer.id })).id;
+  ids.conversionId = (await seed('/v1/conversions', { occurredOn: '2026-11-01', amount: '100.00', currency: 'USD', toAmount: '365.00', toCurrency: 'ILS' })).id;
+  ids.groupId = (await seed('/v1/expense-groups', { name: 'Jordan trip', startOn: '2026-11-01', endOn: '2026-11-03' })).id;
+  ids.expenseId = await expenseOn(h, owner, profileId, 'Printer ink');
+  const file = { filename: 'ink.pdf', mimeType: 'application/pdf', sizeBytes: 2048 };
+  const expenseReceipt = await seed(`/v1/expenses/${ids.expenseId}/receipts`, file);
+  storage.put(keyOf(expenseReceipt.upload.url), { sizeBytes: file.sizeBytes, contentType: file.mimeType });
+  expect((await h.app.request(`/v1/expenses/${ids.expenseId}/receipts/${expenseReceipt.receipt.id}/complete`, { method: 'POST', headers: owner.on(profileId) })).status).toBe(200);
+  ids.expenseReceiptId = expenseReceipt.receipt.id;
+  const library = await seed('/v1/receipts/uploads', file);
+  storage.put(keyOf(library.upload.url), { sizeBytes: file.sizeBytes, contentType: file.mimeType });
+  expect((await h.app.request(`/v1/receipts/${library.receipt.id}/complete`, { method: 'POST', headers: owner.on(profileId) })).status).toBe(200);
+  ids.receiptId = library.receipt.id;
+  // Attachments are Malafat's to write (an owned profile has no key), so the store makes one.
+  const attachment = await h.store.attachments.create({ organizationId: profileId, kind: 'INVOICE', filename: 'invoice.pdf', mimeType: 'application/pdf', sizeBytes: 2048, customerId: customer.id, projectId: null, paymentId: null, invoiceNumber: null, invoiceDate: null, uploadedByKeyId: null, requestId: null }, h.now());
+  const attachmentKey = `attachments/${profileId}/${attachment.id}`;
+  await h.store.attachments.setKey(profileId, attachment.id, attachmentKey);
+  storage.put(attachmentKey, { sizeBytes: 2048, contentType: 'application/pdf' });
+  await h.store.attachments.complete(profileId, attachment.id, h.now());
+  ids.attachmentId = attachment.id;
   accountant = await shared(h, owner, profileId);
   await expenseOn(h, accountant, accountant.personalId, 'My own lunch');
 
@@ -158,24 +190,35 @@ describe('the accountant route matrix (MUT-559)', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('answers every allowlisted GET (a missing record is 404, a missing query 422; never a refusal or a failure)', async () => {
+  it('answers every allowlisted GET on a real record of the shared profile, its handler run to the end under the store guard', async () => {
     const wrong: string[] = [];
     for (const key of ALLOWED_GETS) {
       const op = operations.find((o) => o.key === key)!;
-      const res = await call(op, QUERIES[key] ?? '');
-      // A placeholder id is a missing record; the streak is the person's own personal profile's (409 NOT_PERSONAL here).
-      const expected = op.path.includes('{') ? [200, 404] : key === 'GET /v1/expenses/streak' ? [409] : [200];
-      if (!expected.includes(res.status)) wrong.push(`${key} → ${res.status} ${await res.text()}`);
+      // The expense's receipt and the library's receipt are both {receiptId}.
+      const path = op.path.replace(/\{([^}]+)\}/g, (_m, name: string) => (name === 'receiptId' && op.path.startsWith('/v1/expenses/') ? ids.expenseReceiptId : ids[name]) ?? `missing-${name}`);
+      const res = await h.app.request(`${path}${QUERIES[key] ?? ''}`, { headers: accountant.on(profileId) });
+      // The streak is a person's own personal profile's (409 NOT_PERSONAL on a shared business profile).
+      const expected = key === 'GET /v1/expenses/streak' ? 409 : 200;
+      if (res.status !== expected) wrong.push(`${key} → ${res.status} ${await res.text()}`);
     }
     expect(wrong).toEqual([]);
   });
 
+  it('refuses the retainer charges: they need agreements:read, which an accountant never holds', async () => {
+    const op = operations.find((o) => o.key === 'GET /v1/retainers/{agreementId}/charges')!;
+    expect(scopesOf(op)).toEqual(expect.arrayContaining(['payments:read', 'agreements:read']));
+    const res = await call(op);
+    expect(res.status).toBe(403);
+    expect((await read(res)).error.details).toEqual({ reason: 'ACCOUNTANT_READ_ONLY' });
+  });
+
   it('the list reads carry only the shared profile’s rows', async () => {
     const get = async (path: string) => read(await h.app.request(path, { headers: accountant.on(profileId) }));
-    expect((await get('/v1/expenses')).items.map((e: Loose) => e.title)).toEqual(['Shared paper']);
+    expect((await get('/v1/expenses')).items.map((e: Loose) => e.title).sort()).toEqual(['Printer ink', 'Shared paper']);
     expect((await get('/v1/customers')).items.map((c: Loose) => c.name)).toEqual(['Haddad Trading']);
     const payments = await get('/v1/payments');
     expect(payments.items).toHaveLength(1);
+    expect(payments.items[0].id).toBe(ids.paymentId);
     expect(payments.items[0].amount).toBe('50.00');
     const summary = JSON.stringify(await get('/v1/summaries/organization'));
     expect(summary).not.toContain('Hidden Client');
