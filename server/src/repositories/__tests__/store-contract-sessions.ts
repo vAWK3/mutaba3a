@@ -51,6 +51,16 @@ export function describeLedgerStoreSessionsContract(name: string, makeStore: () 
       expect(await store.sessions.findByDigest(digest())).toBeNull();
     });
 
+    it('getById finds a session by its id, revoked or not; an unknown id is null (MUT-314)', async () => {
+      const store = await makeStore();
+      const u = await user(store);
+      const created = await store.sessions.create(input(u.id));
+      expect((await store.sessions.getById(created.id))?.tokenDigest).toBe(created.tokenDigest);
+      await store.sessions.revoke(created.id, 'signed_out', at(1));
+      expect((await store.sessions.getById(created.id))?.revokedAt?.toISOString()).toBe(at(1).toISOString());
+      expect(await store.sessions.getById('00000000-0000-4000-8000-000000000001')).toBeNull();
+    });
+
     it('refuses a duplicate digest and an unknown user', async () => {
       const store = await makeStore();
       const u = await user(store);

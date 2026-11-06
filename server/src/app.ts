@@ -86,7 +86,7 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
-import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, type DownloadLimits } from './period-pack/index.js';
+import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, UsedTickets, type DownloadLimits } from './period-pack/index.js';
 import { RECEIPT_UPLOAD_POLICY, receiptRoutes } from './routes/receipts.js';
 import { receiptReadingRoutes } from './routes/receipt-reading.js';
 import { RECEIPT_READ_JOB_PATH } from './receipts/reading/cloud-tasks.js';
@@ -408,6 +408,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     limits: deps.periodPackLimits ?? { maxRows: PERIOD_PACK_MAX_ROWS_DEFAULT, maxReceiptBytes: PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT },
     mintLimiter: deps.periodDownloadMintLimiter ?? new SlidingWindowRateLimiter(PERIOD_DOWNLOAD_POLICY.mintsPerSubjectPerHour, 3_600_000),
     slots: new StreamSlots(deps.periodPackConcurrency ?? PERIOD_PACK_CONCURRENCY_DEFAULT),
+    usedTickets: new UsedTickets(),
   };
   // MUT-559 (ADR-245), MUT-560 (ADR-247), MUT-314 (ADR-248): a feature that is switched off answers 404 on every route it adds, before
   // anything else looks at the request (the routes stay registered, so the published contract doesn't depend on the

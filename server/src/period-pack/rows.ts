@@ -47,11 +47,21 @@ export interface IncomeLine {
   loggedBy: string | null;
 }
 
+/**
+ * Review (MUT-314): what a download collects. The report reads both kinds and every name; the receipts zip reads
+ * expenses and vendor names only. A link's files leave out who logged a row and every id (`forLink`).
+ */
+export interface CollectOptions {
+  scope: 'report' | 'receipts';
+  forLink: boolean;
+}
+
 export interface PeriodRows {
   organization: Organization;
   range: PeriodRange;
   asOf: Date;
   lang: Lang;
+  forLink: boolean;
   expenses: ExpenseLine[];
   income: IncomeLine[];
 }
@@ -88,13 +98,14 @@ function oldestFirst(a: EntryRow, b: EntryRow): number {
   return at !== 0 ? at : a.record.id < b.record.id ? -1 : a.record.id > b.record.id ? 1 : 0;
 }
 
-export async function collectRows(store: LedgerStore, organization: Organization, range: PeriodRange, asOf: Date, lang: Lang): Promise<PeriodRows> {
+export async function collectRows(store: LedgerStore, organization: Organization, range: PeriodRange, asOf: Date, lang: Lang, options: CollectOptions): Promise<PeriodRows> {
+  const report = options.scope === 'report';
   const expenses: ExpenseRecord[] = [];
   const payments: PaymentRecord[] = [];
   const logged = (at: Date) => at.getTime() <= asOf.getTime();
   let cursor = null;
   do {
-    const page = await store.entries.list([organization.id], { limit: FEED_PAGE, order: 'occurredOn', kinds: ['expense', 'payment'], cursor, ...boundsOf(range) });
+    const page = await store.entries.list([organization.id], { limit: FEED_PAGE, order: 'occurredOn', kinds: report ? ['expense', 'payment'] : ['expense'], cursor, ...boundsOf(range) });
     for (const row of page.items) {
       if (row.kind === 'expense' && logged(row.record.createdAt)) expenses.push(row.record);
       if (row.kind === 'payment' && row.record.status === 'POSTED' && logged(row.record.createdAt)) payments.push(row.record);
@@ -105,7 +116,7 @@ export async function collectRows(store: LedgerStore, organization: Organization
   const sortedPayments = payments.map((record) => ({ kind: 'payment' as const, record })).sort(oldestFirst).map((r) => r.record);
 
   const receipts = await receiptsOf(store, organization.id, sortedExpenses, asOf);
-  const names = await namesOf(store, organization.id, sortedExpenses, sortedPayments, lang);
+  const names = await namesOf(store, organization.id, sortedExpenses, sortedPayments, lang, report);
 
   const expenseLines = sortedExpenses.map((record, i): ExpenseLine => {
     const ref = refOf('E', i);
@@ -132,7 +143,7 @@ export async function collectRows(store: LedgerStore, organization: Organization
       loggedBy: record.createdByUserId ? (names.users.get(record.createdByUserId) ?? null) : null,
     }),
   );
-  return { organization, range, asOf, lang, expenses: expenseLines, income: incomeLines };
+  return { organization, range, asOf, lang, forLink: options.forLink, expenses: expenseLines, income: incomeLines };
 }
 
 /** Receipts per expense id, oldest upload first, in batches (one query each). */
@@ -149,7 +160,8 @@ async function receiptsOf(store: LedgerStore, organizationId: string, expenses: 
   return byExpense;
 }
 
-async function namesOf(store: LedgerStore, organizationId: string, expenses: readonly ExpenseRecord[], payments: readonly PaymentRecord[], lang: Lang) {
+/** Every name the report writes; for the receipts zip (`all` false) only the vendors its index names. */
+async function namesOf(store: LedgerStore, organizationId: string, expenses: readonly ExpenseRecord[], payments: readonly PaymentRecord[], lang: Lang, all: boolean) {
   const customers = new Set<string>();
   const projects = new Set<string>();
   const vendors = new Set<string>();
@@ -157,9 +169,10 @@ async function namesOf(store: LedgerStore, organizationId: string, expenses: rea
   const categoryIds = new Set<string>();
   const add = (set: Set<string>, id: string | null) => void (id && set.add(id));
   for (const e of expenses) {
+    add(vendors, e.vendorId);
+    if (!all) continue;
     add(customers, e.customerId);
     add(projects, e.projectId);
-    add(vendors, e.vendorId);
     add(users, e.createdByUserId);
     add(categoryIds, e.categoryId);
   }

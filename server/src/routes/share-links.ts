@@ -584,6 +584,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         kind: 'link',
         organization: access.organization,
         sub: access.viewer.id,
+        sid: null,
         range: access.range,
         asOf: resolveAsOf(body.asOf, now),
         lang: body.lang ?? visitorLanguage(c),

@@ -24,6 +24,8 @@ const ClaimsSchema = z.object({
   to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   asOf: z.string().datetime(),
   lang: z.enum(['ar', 'en']),
+  /** The session that minted a member's or accountant's ticket (its id: no credential); null for a link. */
+  sid: z.string().uuid().nullable(),
 });
 export type TicketClaims = z.infer<typeof ClaimsSchema>;
 
@@ -37,8 +39,11 @@ export function mintTicket(pepper: string, claims: TicketClaims, now: Date): { t
   return { ticket: `${payload}.${sign(pepper, payload)}`, expiresAt };
 }
 
+/** A verified ticket: its claims, and its nonce and expiry (for single use). */
+export type VerifiedTicket = TicketClaims & { n: string; exp: number };
+
 /** The ticket's claims, or null when it is malformed, forged, of the wrong shape, or expired. */
-export function verifyTicket(pepper: string, ticket: string, now: Date): TicketClaims | null {
+export function verifyTicket(pepper: string, ticket: string, now: Date): VerifiedTicket | null {
   const parts = ticket.split('.');
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   const [payload, signature] = parts as [string, string];
@@ -53,6 +58,5 @@ export function verifyTicket(pepper: string, ticket: string, now: Date): TicketC
   }
   const parsed = PayloadSchema.safeParse(decoded);
   if (!parsed.success || parsed.data.exp <= now.getTime()) return null;
-  // The claims alone: zod drops the envelope's v, exp and n.
-  return ClaimsSchema.parse(parsed.data);
+  return { ...ClaimsSchema.parse(parsed.data), n: parsed.data.n, exp: parsed.data.exp };
 }

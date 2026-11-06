@@ -713,6 +713,7 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...record };
     },
     findByDigest: async (tokenDigest) => clone([...this.sessionsById.values()].find((s) => s.tokenDigest === tokenDigest)),
+    getById: async (id) => clone(this.sessionsById.get(id)),
     touch: async (id, at, idleExpiresAt) => {
       const s = this.sessionsById.get(id);
       if (s) Object.assign(s, { lastSeenAt: at, idleExpiresAt });

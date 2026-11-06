@@ -76,9 +76,11 @@ export function receiptsZip(rows: PeriodRows, options: ReceiptsZipOptions): Asyn
   let cancelled = false;
 
   function writeIndex(): void {
+    // Review (MUT-314): a link's index has no Row id (its visitor gets no ids); the Ref names the row.
+    const columns = rows.forLink ? INDEX_COLUMNS.filter((c) => c.key !== 'rowId') : INDEX_COLUMNS;
     const lines: CsvCell[][] = [
-      headersOf(INDEX_COLUMNS, rows.lang),
-      ...planned.map((p): CsvCell[] => [{ text: p.receipt.path }, { text: p.ref }, { raw: p.date }, { text: p.vendor ?? '' }, { raw: p.currency }, { raw: p.amount }, { raw: p.status }, { raw: p.rowId }]),
+      headersOf(columns, rows.lang),
+      ...planned.map((p): CsvCell[] => [{ text: p.receipt.path }, { text: p.ref }, { raw: p.date }, { text: p.vendor ?? '' }, { raw: p.currency }, { raw: p.amount }, { raw: p.status }, ...(rows.forLink ? [] : [{ raw: p.rowId }])]),
     ];
     const index = new ZipDeflate('index.csv', { level: 6 });
     zip.add(index);

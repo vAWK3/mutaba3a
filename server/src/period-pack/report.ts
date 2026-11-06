@@ -1,5 +1,5 @@
 import { formatMoney, type Currency } from '../money.js';
-import { EXPENSE_COLUMNS, INCOME_COLUMNS, PAYMENT_METHOD_LABELS, SHEET_NAMES, SOURCE_LABELS, SUMMARY_COLUMNS, SUMMARY_LABELS, VAT_TREATMENT_LABELS, headersOf, type Lang } from './columns.js';
+import { EXPENSE_COLUMNS, INCOME_COLUMNS, PAYMENT_METHOD_LABELS, SHEET_NAMES, SOURCE_LABELS, SUMMARY_COLUMNS, SUMMARY_LABELS, VAT_TREATMENT_LABELS, headersOf, type Column, type Lang } from './columns.js';
 import type { PeriodRows } from './rows.js';
 import { dateSerial, dateTimeSerial, moneyCell, writeXlsx, type Cell, type Sheet } from './xlsx.js';
 
@@ -14,53 +14,68 @@ const money = (minor: bigint, currency: string): Cell => moneyCell(formatMoney({
 const text = (value: string | null | undefined): Cell => (value ? value : null);
 const words = (map: Readonly<Record<string, Readonly<Record<Lang, string>>>>, key: string | null, lang: Lang): Cell => (key ? (map[key]?.[lang] ?? key) : null);
 
+/** Review (MUT-314): what a link's visitor never gets: who logged a row, and any id. */
+const HIDDEN_FROM_LINKS: ReadonlySet<string> = new Set(['loggedBy', 'id']);
+
+/** A table sheet from rows keyed by column, the link's hidden columns left out. */
+function tableSheet(name: string, rows: PeriodRows, columns: readonly Column[], body: ReadonlyArray<Record<string, Cell>>): Sheet {
+  const shown = columns.filter((c) => !(rows.forLink && HIDDEN_FROM_LINKS.has(c.key)));
+  return {
+    name,
+    rtl: rows.lang === 'ar',
+    table: true,
+    widths: shown.map((c) => c.width),
+    rows: [headersOf(shown, rows.lang), ...body.map((cells) => shown.map((c) => cells[c.key] ?? null))],
+  };
+}
+
 function expenseSheet(rows: PeriodRows): Sheet {
   const { lang } = rows;
   const tz = rows.organization.timezone;
-  const body = rows.expenses.map(({ ref, record: e, vendor, category, client, project, loggedBy, receipts }): Cell[] => [
+  const body = rows.expenses.map(({ ref, record: e, vendor, category, client, project, loggedBy, receipts }): Record<string, Cell> => ({
     ref,
-    { serial: dateSerial(e.occurredOn), fmt: 'date' },
-    text(vendor),
-    text(e.title),
-    text(category),
-    text(client),
-    text(project),
-    e.currency,
-    money(e.amountMinor, e.currency),
-    e.netMinor !== null ? money(e.netMinor, e.currency) : null,
-    e.vatMinor !== null ? money(e.vatMinor, e.currency) : null,
-    e.vatRateBasisPoints !== null ? { n: (e.vatRateBasisPoints / 100).toFixed(2), fmt: 'decimal2' } : null,
-    words(VAT_TREATMENT_LABELS, e.vatTreatment, lang),
-    text(e.notes),
-    { n: String(receipts.length), fmt: 'int' },
-    receipts.length ? receipts.map((r) => r.name).join('; ') : null,
-    text(loggedBy),
-    { serial: dateTimeSerial(e.createdAt, tz), fmt: 'datetime' },
-    e.id,
-  ]);
-  return { name: SHEET_NAMES.expenses[lang], rtl: lang === 'ar', table: true, widths: EXPENSE_COLUMNS.map((c) => c.width), rows: [headersOf(EXPENSE_COLUMNS, lang), ...body] };
+    date: { serial: dateSerial(e.occurredOn), fmt: 'date' },
+    vendor: text(vendor),
+    description: text(e.title),
+    category: text(category),
+    client: text(client),
+    project: text(project),
+    currency: e.currency,
+    amount: money(e.amountMinor, e.currency),
+    net: e.netMinor !== null ? money(e.netMinor, e.currency) : null,
+    vat: e.vatMinor !== null ? money(e.vatMinor, e.currency) : null,
+    vatRate: e.vatRateBasisPoints !== null ? { n: (e.vatRateBasisPoints / 100).toFixed(2), fmt: 'decimal2' } : null,
+    vatTreatment: words(VAT_TREATMENT_LABELS, e.vatTreatment, lang),
+    notes: text(e.notes),
+    receipts: { n: String(receipts.length), fmt: 'int' },
+    receiptFiles: receipts.length ? receipts.map((r) => r.name).join('; ') : null,
+    loggedBy: text(loggedBy),
+    loggedAt: { serial: dateTimeSerial(e.createdAt, tz), fmt: 'datetime' },
+    id: e.id,
+  }));
+  return tableSheet(SHEET_NAMES.expenses[lang], rows, EXPENSE_COLUMNS, body);
 }
 
 function incomeSheet(rows: PeriodRows): Sheet {
   const { lang } = rows;
   const tz = rows.organization.timezone;
-  const body = rows.income.map(({ ref, record: p, client, project, loggedBy }): Cell[] => [
+  const body = rows.income.map(({ ref, record: p, client, project, loggedBy }): Record<string, Cell> => ({
     ref,
-    { serial: dateSerial(p.receivedOn), fmt: 'date' },
-    text(client),
-    text(project),
-    p.currency,
-    money(p.amountMinor, p.currency),
-    words(PAYMENT_METHOD_LABELS, p.method, lang),
-    text(p.reference),
-    text(p.receiptNumber),
-    text(p.notes),
-    SOURCE_LABELS[p.origin][lang],
-    text(loggedBy),
-    { serial: dateTimeSerial(p.createdAt, tz), fmt: 'datetime' },
-    p.id,
-  ]);
-  return { name: SHEET_NAMES.income[lang], rtl: lang === 'ar', table: true, widths: INCOME_COLUMNS.map((c) => c.width), rows: [headersOf(INCOME_COLUMNS, lang), ...body] };
+    date: { serial: dateSerial(p.receivedOn), fmt: 'date' },
+    client: text(client),
+    project: text(project),
+    currency: p.currency,
+    amount: money(p.amountMinor, p.currency),
+    method: words(PAYMENT_METHOD_LABELS, p.method, lang),
+    reference: text(p.reference),
+    receiptNumber: text(p.receiptNumber),
+    notes: text(p.notes),
+    source: SOURCE_LABELS[p.origin][lang],
+    loggedBy: text(loggedBy),
+    loggedAt: { serial: dateTimeSerial(p.createdAt, tz), fmt: 'datetime' },
+    id: p.id,
+  }));
+  return tableSheet(SHEET_NAMES.income[lang], rows, INCOME_COLUMNS, body);
 }
 
 interface CurrencyTotals {

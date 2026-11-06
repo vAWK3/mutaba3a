@@ -13,6 +13,7 @@ const claims: TicketClaims = {
   to: '2026-10-31',
   asOf: '2026-11-06T09:00:00.000Z',
   lang: 'ar',
+  sid: '7c2b3c1e-0000-4000-8000-000000000003',
 };
 
 describe('ticket (MUT-314)', () => {

@@ -576,6 +576,7 @@ export class PrismaLedgerStore implements LedgerStore {
       );
     },
     findByDigest: async (tokenDigest) => mapNullable(await this.prisma.session.findUnique({ where: { tokenDigest } }), toSession),
+    getById: async (id) => mapNullable(await this.prisma.session.findUnique({ where: { id } }), toSession),
     touch: async (id, at, idleExpiresAt) => {
       await this.prisma.session.updateMany({ where: { id }, data: { lastSeenAt: at, idleExpiresAt } });
     },

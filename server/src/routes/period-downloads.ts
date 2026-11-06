@@ -10,6 +10,7 @@ import type { Logger } from '../logger.js';
 import {
   PERIOD_DOWNLOAD_POLICY,
   type StreamSlots,
+  type UsedTickets,
   XLSX_MIME,
   ZIP_MIME,
   buildReport,
@@ -54,6 +55,8 @@ export interface PeriodDownloadServices {
   /** PERIOD_DOWNLOAD_POLICY.mintsPerSubjectPerHour, keyed per person or viewer. */
   mintLimiter: RateLimiter;
   slots: StreamSlots;
+  /** Each ticket streams once (review, MUT-314). */
+  usedTickets: UsedTickets;
 }
 
 export interface PeriodDownloadRouteOptions {
@@ -117,6 +120,7 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
         kind: auth.access === 'accountant' ? 'accountant' : 'member',
         organization: auth.organization,
         sub: auth.user.id,
+        sid: auth.session.id,
         range,
         asOf,
         lang: query.lang ?? auth.user.locale,
@@ -161,6 +165,7 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
       const now = c.get('now')();
       const claims = verifyTicket(settings.pepper, body.ticket, now);
       if (!claims || (claims.kind === 'link' && !options.shareLinks)) throw downloadUnavailable();
+      if (!services.usedTickets.claim(claims.n, claims.exp, now)) throw downloadUnavailable();
       // Before any read: nothing below may write, whoever asked.
       c.set('storeGuard', periodDownloadStoreGuard(claims.kind));
       const { organization, shareLinkId } = await recheckAccess(claims, { store: baseStore, pepper: settings.pepper, accountantAccess: options.accountantAccess, viewerToken: body.viewerToken ?? null, now });
@@ -178,7 +183,7 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
 
   async function respond(c: Context<AppEnv>, claims: TicketClaims, organization: Organization, shareLinkId: string | null, release: () => void): Promise<Response> {
     const range = { from: claims.from, to: claims.to };
-    const rows = await collectRows(store, organization, range, new Date(claims.asOf), claims.lang);
+    const rows = await collectRows(store, organization, range, new Date(claims.asOf), claims.lang, { scope: claims.type === 'report' ? 'report' : 'receipts', forLink: claims.kind === 'link' });
     const requestId = c.get('requestId');
     const receiptFiles = rows.expenses.reduce((n, line) => n + line.receipts.length, 0);
     await baseStore.audit.append({

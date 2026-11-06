@@ -66,7 +66,7 @@ if (!url) {
 
       queries.length = 0;
       const started = performance.now();
-      const rows = await collectRows(store, org, { from: '2026-10-01', to: '2026-10-31' }, new Date('2026-11-01T00:00:00Z'), 'en');
+      const rows = await collectRows(store, org, { from: '2026-10-01', to: '2026-10-31' }, new Date('2026-11-01T00:00:00Z'), 'en', { scope: 'report', forLink: false });
       const elapsed = performance.now() - started;
       expect(rows.expenses).toHaveLength(600);
       expect(rows.income).toHaveLength(400);

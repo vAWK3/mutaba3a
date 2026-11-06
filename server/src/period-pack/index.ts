@@ -15,7 +15,8 @@ export { monthRange, resolveAsOf, PERIOD_MAX_MONTHS, type PeriodRange } from './
 export { collectRows, type PeriodRows } from './rows.js';
 export { buildReport, XLSX_MIME } from './report.js';
 export { receiptsZip, ZIP_MIME, RECEIPT_IDLE_MS } from './receipts-zip.js';
-export { DOWNLOAD_TYPES, TICKET_TTL_MS, verifyTicket, type DownloadKind, type DownloadType, type TicketClaims } from './ticket.js';
+export { DOWNLOAD_TYPES, TICKET_TTL_MS, verifyTicket, type DownloadKind, type DownloadType, type TicketClaims, type VerifiedTicket } from './ticket.js';
+export { type CollectOptions } from './rows.js';
 
 /** PERIOD_PACK_MAX_ROWS's default: expense and income rows one report may hold (D13). */
 export const PERIOD_PACK_MAX_ROWS_DEFAULT = 20_000;
@@ -38,6 +39,8 @@ export interface MintInput {
   organization: Organization;
   /** The user id, or the link viewer's id. */
   sub: string;
+  /** The minting session's id (member, accountant); null for a link. */
+  sid: string | null;
   range: PeriodRange;
   asOf: Date;
   lang: Lang;
@@ -56,16 +59,18 @@ export interface MintedDownload {
 /** The estimate, the cap for this type checked up front (422 PERIOD_TOO_LARGE), then a ticket. */
 export async function mintDownload(store: LedgerStore, input: MintInput): Promise<MintedDownload> {
   const estimate = await store.periodPack.estimate(input.organization.id, boundsOf(input.range), input.asOf);
-  const [size, limit] = input.type === 'report' ? [estimate.expenses + estimate.income, input.limits.maxRows] : [estimate.receiptBytes, input.limits.maxReceiptBytes];
+  // Review (MUT-314): the row cap holds for both downloads, over the rows each one collects (the zip: expenses).
+  const rows = input.type === 'report' ? estimate.expenses + estimate.income : estimate.expenses;
+  const [size, limit] = rows > input.limits.maxRows ? [rows, input.limits.maxRows] : input.type === 'receipts' ? [estimate.receiptBytes, input.limits.maxReceiptBytes] : [0, Infinity];
   if (size > limit) {
-    throw new ApiError('VALIDATION_FAILED', input.type === 'report' ? `This period has more than ${limit} rows; pick a shorter period` : 'This period’s receipts are too large for one download; pick a shorter period', {
+    throw new ApiError('VALIDATION_FAILED', limit === input.limits.maxRows ? `This period has more than ${limit} rows; pick a shorter period` : 'This period’s receipts are too large for one download; pick a shorter period', {
       reason: 'PERIOD_TOO_LARGE',
       type: input.type,
       limit,
       estimate: size,
     });
   }
-  const claims: TicketClaims = { type: input.type, kind: input.kind, org: input.organization.id, sub: input.sub, from: input.range.from, to: input.range.to, asOf: input.asOf.toISOString(), lang: input.lang };
+  const claims: TicketClaims = { type: input.type, kind: input.kind, org: input.organization.id, sub: input.sub, from: input.range.from, to: input.range.to, asOf: input.asOf.toISOString(), lang: input.lang, sid: input.sid };
   const { ticket, expiresAt } = mintTicket(input.pepper, claims, input.now);
   return { type: input.type, ticket, expiresAt: expiresAt.toISOString(), filename: downloadFilename(input.type, input.organization.name, input.range), estimate };
 }
@@ -106,5 +111,21 @@ export class StreamSlots {
       released = true;
       this.used -= 1;
     };
+  }
+}
+
+/**
+ * Review (MUT-314): a ticket streams once. Its nonce is kept on this instance until the ticket expires (at most 120 s),
+ * so a replayed form post or a leaked ticket is the uniform 404. Per instance: the API runs on one (TD-017); with more,
+ * a ticket could stream once per instance within its 120 s, still bound to its live session or viewer.
+ */
+export class UsedTickets {
+  private readonly used = new Map<string, number>();
+  /** True the first time a nonce is seen before its expiry; false after. */
+  claim(nonce: string, exp: number, now: Date): boolean {
+    for (const [n, until] of this.used) if (until <= now.getTime()) this.used.delete(n);
+    if (this.used.has(nonce)) return false;
+    this.used.set(nonce, exp);
+    return true;
   }
 }

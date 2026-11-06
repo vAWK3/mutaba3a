@@ -637,3 +637,86 @@ describe('15. response headers (MUT-314)', () => {
     await zip.arrayBuffer();
   });
 });
+
+describe('review fixes (MUT-314)', () => {
+  it('an accountant’s ticket dies when the owner starts closing their account (MUT-575’s rule, in clientAccess)', async () => {
+    const h = downloadHarness();
+    const { p, profileId } = await owner(h);
+    const acc = await shared(h, p, profileId);
+    const { ticket } = await mintOk(h, acc, profileId);
+    expect((await h.app.request('/v1/me/closure', json({ password: p.password }, p.auth))).status).toBe(200);
+    expect((await streamRequest(h, { ticket })).status).toBe(404);
+    expect((await mintRequest(h, acc, profileId)).status).toBe(404);
+  });
+
+  it('a link visitor’s files carry no “Logged by”, no ids and no row ids; an owner’s keep them', async () => {
+    const h = downloadHarness();
+    const { p, profileId } = await owner(h);
+    const a = await expenseOn(h, p, profileId, { title: 'A' });
+    await receivedOn(h, p, profileId, '2026-10-09');
+    await receiptOn(h, p, profileId, a.id, PNG);
+    const link = await linkOn(h, p, profileId);
+    const viewer = await viewerOf(h, link.token);
+    const report = await read(await linkMint(h, { viewerToken: viewer, type: 'report', lang: 'en' }));
+    const wb = await workbookOf(await streamRequest(h, { ticket: report.ticket, viewerToken: viewer }));
+    expect(rowsOf(wb.getWorksheet('Expenses')!)[0]).toEqual(['Ref', 'Date', 'Vendor', 'Description', 'Category', 'Client', 'Project', 'Currency', 'Amount', 'Net', 'VAT', 'VAT rate %', 'VAT treatment', 'Notes', 'Receipts', 'Receipt files', 'Logged at']);
+    expect(rowsOf(wb.getWorksheet('Income')!)[0]).toEqual(['Ref', 'Date received', 'Client', 'Project', 'Currency', 'Amount', 'Method', 'Reference', 'Receipt number', 'Notes', 'Source', 'Logged at']);
+    const bytes = new Uint8Array(await (await streamRequest(h, { ticket: (await read(await linkMint(h, { viewerToken: viewer, type: 'report' }))).ticket, viewerToken: viewer })).arrayBuffer());
+    expect(new TextDecoder().decode(bytes)).not.toContain(a.id);
+    const zip = await read(await linkMint(h, { viewerToken: viewer, type: 'receipts', lang: 'en' }));
+    const index = indexOf(await zipOf(await streamRequest(h, { ticket: zip.ticket, viewerToken: viewer })));
+    expect(index).toEqual([
+      ['File', 'Ref', 'Date', 'Vendor', 'Currency', 'Amount', 'Status'],
+      ['receipts/E0001-1.png', 'E0001', '2026-10-05', '', 'ILS', '12.00', 'ok'],
+    ]);
+    const owners = await workbookOf(await download(h, p, profileId));
+    expect(rowsOf(owners.getWorksheet('Expenses')!)[0]).toContain('Logged by');
+    expect(rowsOf(owners.getWorksheet('Expenses')!)[0]).toContain('Id');
+  });
+
+  it('the row cap applies to the receipts download too, counting what it holds: expenses', async () => {
+    const h = downloadHarness({ periodPackLimits: { maxRows: 1, maxReceiptBytes: 1_000_000 } });
+    const { p, profileId } = await owner(h);
+    await expenseOn(h, p, profileId, { title: 'A' });
+    for (const day of ['2026-10-09', '2026-10-10']) await receivedOn(h, p, profileId, day);
+    expect((await mintRequest(h, p, profileId, { type: 'receipts' })).status).toBe(200);
+    expect((await mintRequest(h, p, profileId)).status).toBe(422);
+    await expenseOn(h, p, profileId, { title: 'B' });
+    const refused = await mintRequest(h, p, profileId, { type: 'receipts' });
+    expect(refused.status).toBe(422);
+    expect((await errorOf(refused)).details).toEqual({ reason: 'PERIOD_TOO_LARGE', type: 'receipts', limit: 1, estimate: 2 });
+  });
+
+  it('the receipts download reads expenses only, and only the vendor names it writes', async () => {
+    const h = downloadHarness();
+    const { p, profileId } = await owner(h);
+    const a = await expenseOn(h, p, profileId, { title: 'A' });
+    await receivedOn(h, p, profileId, '2026-10-09');
+    await receiptOn(h, p, profileId, a.id, PNG);
+    const feed = vi.spyOn(h.store.entries, 'list');
+    const names = vi.spyOn(h.store.periodPack, 'names');
+    const categories = vi.spyOn(h.store.expenseCategories, 'list');
+    await (await download(h, p, profileId, { type: 'receipts' })).arrayBuffer();
+    expect(feed.mock.calls.every(([, page]) => JSON.stringify(page.kinds) === '["expense"]')).toBe(true);
+    expect(names.mock.calls.every(([, ids]) => ids.customers.size + ids.projects.size + ids.users.size === 0)).toBe(true);
+    expect(categories).not.toHaveBeenCalled();
+  });
+
+  it('a ticket streams once; a second use is the uniform 404', async () => {
+    const h = downloadHarness();
+    const { p, profileId } = await owner(h);
+    const { ticket } = await mintOk(h, p, profileId);
+    expect((await streamRequest(h, { ticket })).status).toBe(200);
+    const again = await streamRequest(h, { ticket });
+    expect(again.status).toBe(404);
+    expect((await errorOf(again)).details).toEqual({ reason: 'DOWNLOAD_UNAVAILABLE' });
+  });
+
+  it('a ticket from a session signed out before the stream is refused', async () => {
+    const h = downloadHarness();
+    const { p, profileId } = await owner(h);
+    const { ticket } = await mintOk(h, p, profileId);
+    expect((await h.app.request('/v1/device-sessions/current', { method: 'DELETE', headers: p.auth })).status).toBe(204);
+    expect((await streamRequest(h, { ticket })).status).toBe(404);
+  });
+});

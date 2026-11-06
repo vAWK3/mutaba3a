@@ -1785,6 +1785,8 @@ export interface SessionRepository {
   /** UniqueViolation on a duplicate digest; ForeignKeyViolation on an unknown user. */
   create(input: CreateSessionInput): Promise<SessionRecord>;
   findByDigest(tokenDigest: string): Promise<SessionRecord | null>;
+  /** MUT-314: a session by its id (the period download's ticket names the session that minted it). */
+  getById(id: string): Promise<SessionRecord | null>;
   touch(id: string, at: Date, idleExpiresAt: Date): Promise<void>;
   /** The first revocation wins (time and reason are kept). Null for an unknown id. */
   revoke(id: string, reason: string, at: Date): Promise<SessionRecord | null>;
