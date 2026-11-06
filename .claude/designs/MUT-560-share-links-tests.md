@@ -23,4 +23,8 @@ numbered groups are the plan's; each names where it lives.
 Also updated: `routes.test.ts` (API 1.101.0-mut560), `route-security.test.ts` (owner routes session-only, visitor routes
 public), `billing-gate-routes.test.ts` (classification), `auth/__tests__/store-guard.test.ts` (operator list).
 
+Review follow-up: `routes-share-links-review.test.ts` (stale re-unlock, receipt URL clamps, names not ids with a
+no-UUID scan, per-IP view budget, summary budget, co-owner closing, foreign cursor), three more store-contract cases
+(stale, parallel re-unlock, right PIN vs 5th wrong) and `routes-share-links-prisma.test.ts` (key flows on Postgres).
+
 [→E2E] create → share → PIN → read → revoke belongs to MUT-561/562 (Playwright release-QA).

@@ -4439,3 +4439,7 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   its race, the viewer cap and its race, returning viewers, unusable links, touches, purge both ways.
 - Updated: routes (1.101.0-mut560), route-security, billing-gate-routes, store-guard (operator list), purge catalog
   (`share_link_viewers` outside profiles).
+- Review follow-up: `routes-share-links-review.test.ts` (stale re-unlock at 3 viewers, receipt URL clamps and the 5 s
+  floor, names not ids with a no-UUID scan, the view per-IP budget, the summary budget, a co-owner closing, a foreign
+  cursor); store contract gains the stale case, the parallel re-unlock and the right-PIN-vs-5th-wrong race;
+  `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.

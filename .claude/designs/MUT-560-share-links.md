@@ -272,11 +272,37 @@ Where the build follows the code rather than the plan's letter:
 - **Summary.** Totals are formatted amounts (`total`, as `/v1/summaries/expenses`), not `totalMinor`; reversed
   payments are left out of `received`.
 - **Receipts.** `POST /v1/share-links/expense-receipts` answers `{ items: [...] }` (the repo's list shape) rather than a
-  bare array.
+  bare array; since the review it takes an entry `key` and answers no receipt id.
 - **Dark launch.** One table in `app.ts` (`darkLaunches`: each route file's exported endpoint set, its switch and its
   404); SHARE_LINKS off answers the same uniform 404 (`SHARE_LINK_UNAVAILABLE`) as an unusable link.
 - **Owner gate.** `ownedProfileOf` (personal-profile.ts) is the owner check MUT-559's routes had inline, now shared.
 - **Route registration.** The share-link routes are registered last, so the published components keep their order.
+
+## Review follow-up (2026-11-06)
+
+1. **Stale re-unlock.** `addOrRotateViewer` answers `stale` when a previous viewer token is given and no viewer of the
+   link holds it (a parallel re-unlock rotated it first); nothing is added. Unlock answers **409 CONFLICT, reason
+   SHARE_LINK_STALE_VIEWER**: the portal keeps the viewer token the winning request answered (unlocking again with the
+   old one would count as a new device). A correct re-unlock at 3 viewers never meets VIEWER_LIMIT.
+2. **Receipt URLs** live `min(configured, 60 s, viewer access left, link time left)`; with under 5 s left the receipts
+   answer the uniform 404. A revoke or a lock therefore cuts receipts within 60 s (URLs already handed out run out).
+3. **Names, never ids.** Visitor entries carry `category` (presets in the request's language, Accept-Language, Arabic by
+   default, as MUT-464), `client`, `project` and `vendor` by name, `settlesOwed` / `replacesPayment` as booleans, and an
+   opaque per-link `key` (one AES block over the entry id, keyed from the session pepper and the link id) instead of any
+   id. The receipts route takes `entryKey`. The summary's breakdowns are `byCategory: [{category, total, count}]` and
+   `byClient: [{client, total, count}]`. The only UUIDs left in a visitor answer are inside signed URLs (the storage
+   object key).
+4. **Per-IP budget on the view routes**, spent before the viewer token is read (`SHARE_LINK_VIEW_IP_POLICY`, 120 a
+   minute per address), beside the per-viewer budget.
+5. **Summary cost: a budget, not SQL.** The summary keeps walking the range through the feed (so its rows are exactly
+   the feed's) and gets its own budget, 6 a minute per viewer (`SHARE_LINK_SUMMARY_POLICY`). SQL aggregation would
+   restate the feed's row rules in a second query per store; revisit with TD-291.
+6. **Closure.** Links die when the profile's creator (`profileOwnerOf`) is closing their account, or the profile is
+   gone. A co-owner closing keeps the links: the profile lives on with its creator, who still sees and revokes them
+   (pinned by a test).
+7. **More proof.** The right PIN racing the 5th wrong one (store contract, memory and Postgres); a cursor from another
+   profile or range never brings in an outside row (the bounds and the profile are always ANDed), and a logged-order
+   cursor is 422; the key route flows run on Postgres under test:db (`routes-share-links-prisma.test.ts`).
 
 ## QA scenarios
 
