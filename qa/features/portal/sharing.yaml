@@ -1,0 +1,98 @@
+app: portal
+area: sharing
+title: Sharing a profile with your accountant (the owner's Sharing page)
+tier: secondary
+# MUT-561 (epic MUT-558, layout B): one profile's Sharing page, /p/:id/you/sharing. Slice A: the Accountants column,
+# the invite drawer and the empty page, on MUT-559's routes. The Links column (create-link, link-rows) comes with
+# MUT-560 (slice B). The live journey (invite → accept → stop) is MUT-562's portal-selfservice feature.
+paths:
+  - src/hosted/pages/sharing/**
+  - src/hosted/data/sharingQueries.ts
+  - src/hosted/components/AccessScopeList.tsx
+  - src/hosted/components/Scene.tsx
+  - src/hosted/components/SharingEntryRow.tsx
+  - src/components/illustrations/**
+features:
+  - id: entry
+    title: Only an owner, on a server with accountant access, sees the way into Sharing
+    tier: secondary
+    tickets: [MUT-561]
+    paths:
+      - src/hosted/pages/you/YouProfiles.tsx
+      - src/hosted/components/ProfileEditForm.tsx
+    steps:
+      - Open You › Profiles as the owner of Studio
+      - Go back to Profiles, open Manage profiles and edit Studio
+      - Open You › Profiles on a firm profile you're only a member of
+      - Open You › Profiles on a server with accountant access off
+    expect:
+      - The owner sees "Share with your accountant" under the profiles, with Studio's name, and it opens /p/<id>/you/sharing
+      - Studio's edit pane has a Sharing row that opens the same page and closes the drawer
+      - A member of a firm profile sees no such row, and the page's URL sends them back to You › Profiles
+      - With accountant access off there is no row and the page's URL sends the owner back too
+  - id: accountants-list
+    title: The Accountants column shows each accountant's state, when they last looked, and one action
+    tier: secondary
+    tickets: [MUT-561]
+    steps:
+      - Open Sharing on Studio, which has an active, a pending and an expired accountant
+    expect:
+      - The title reads Sharing Studio, with the note that whoever you share with reads only and changes nothing
+      - Sami Khoury is Active, "Since … · viewed 2 days ago", with Stop
+      - maya@ledger.co is Pending, "Sent … · ends …", with Cancel
+      - h.audit@firm.com is Expired, "Not accepted within 14 days", with Invite again
+      - Under the list, "Up to 5 accountants per profile."
+      - No Links column while share links are off (MUT-560)
+  - id: invite
+    title: Invite an accountant by email, in the portal's language, with every refusal in its place
+    tier: core
+    tickets: [MUT-561]
+    steps:
+      - With usage counts on, open Sharing and press Invite by email
+      - Send your own address
+      - Send an address already invited
+      - Send a new address
+    expect:
+      - The side drawer opens (?invite=true) with the email field and the four points of what an accountant can do
+      - Your own address is refused under the field ("That's your own email. Use your accountant's.")
+      - An address already invited is refused in the drawer's banner, naming it
+      - A new address closes the drawer, says "Invite sent to …", and adds a Pending row; the request carried locale en
+      - accountant_invited is counted, with no address or profile in it
+  - id: revoke-access
+    title: Stop an accountant, cancel an invite, or invite an expired one again
+    tier: core
+    tickets: [MUT-561]
+    steps:
+      - Open Sharing and press Stop on Sami Khoury
+      - Confirm Stop access
+      - Press Cancel on maya@ledger.co and confirm Cancel invite
+      - Press Invite again on h.audit@firm.com
+    expect:
+      - Stop turns the row into a confirm naming Sami and Studio, with Cancel focused
+      - Confirming removes Sami's row and says he can no longer open Studio; the server got the DELETE
+      - The pending invite is cancelled the same way
+      - Invite again sends the same address with no confirm and the row turns Pending
+  - id: empty
+    title: A profile shared with nobody explains what sharing means and offers the way to start
+    tier: secondary
+    tickets: [MUT-561]
+    steps:
+      - Open Sharing on a profile shared with nobody
+    expect:
+      - The scene (placeholder art until Claude Design's accountant-empty lands), "You haven't shared this profile yet"
+      - The four points of what an accountant can and can't do
+      - Invite by email, and no link button while share links are off
+  - id: layout
+    title: In Arabic on a 375px phone the page is one column with no sideways scroll; on desktop it passes axe
+    tier: secondary
+    tickets: [MUT-561]
+    paths:
+      - src/hosted/hosted.css
+    steps:
+      - On a 375px phone in Arabic, open Sharing with three accountants
+      - Open the invite drawer
+      - On a desktop in English and dark mode, open Sharing
+    expect:
+      - The page is right to left, one column, nothing scrolls sideways; emails read left to right; actions sit under each row's text
+      - The drawer fills the screen and its email field reads left to right
+      - On desktop the page has no axe violations

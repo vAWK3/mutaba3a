@@ -486,7 +486,28 @@ export interface FakeApiSeed {
   receipts?: StubLibraryReceipt[];
   /** MUT-260: vendors already saved on the profile (as earlier expenses would have), with their last category. */
   vendors?: { name: string; categoryId?: string; currency?: string; vat?: VendorVatStub }[];
+  /**
+   * MUT-561: each owned profile's accountants (MUT-559), which turns accountant access on (/v1/me carries `clients`).
+   * Absent: the server has ACCOUNTANT_ACCESS off, so /v1/me has no `clients` and every …/accountants call answers 404.
+   */
+  accountants?: Record<string, StubGrant[]>;
 }
+
+/** MUT-561: one accountant grant as GET /v1/profiles/{id}/accountants lists it. */
+export interface StubGrant {
+  id: string;
+  email: string;
+  name: string | null;
+  status: 'pending' | 'expired' | 'active';
+  invitedAt: string;
+  expiresAt: string;
+  acceptedAt: string | null;
+  lastViewedAt: string | null;
+}
+
+/** The most pending and active accountants one profile may have (the server's default). */
+export const ACCOUNTANT_LIMIT = 5;
+const INVITE_TTL_DAYS = 14;
 
 /** MUT-175: what one profile's Reports reads. */
 export interface StubReportRecords {
@@ -681,6 +702,8 @@ export class FakeApi {
   closure: { requestedAt: string; deleteAfter: string } | null;
   /** MUT-260: the receipts library; null = off (404). */
   readonly libraryReceipts: StubLibraryReceipt[] | null;
+  /** MUT-561: accountants per profile; null = accountant access off on this server. */
+  readonly accountants: Map<string, StubGrant[]> | null;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -709,6 +732,7 @@ export class FakeApi {
     this.termsAccepted = seed.termsAccepted ?? true;
     this.closure = seed.closure ?? null;
     this.libraryReceipts = seed.receipts ? [...seed.receipts] : null;
+    this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
 
@@ -774,6 +798,8 @@ export class FakeApi {
     return {
       ...body,
       user: { ...body.user, closure: this.closure },
+      // MUT-559: present only while the server has accountant access on (the portal's gate, MUT-561 D8)
+      ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
@@ -1053,6 +1079,38 @@ export class FakeApi {
     return uid(kind, this.serial);
   }
 
+  /** MUT-561: MUT-559's owner routes, as the server answers them (one invite per address, the limit, never yourself). */
+  private accountantsAnswer(e: Logged, profile: StubProfile, grantId?: string) {
+    const grants = this.accountants?.get(profile.id);
+    if (!this.accountants) return notFound();
+    if (!profile.owned) return json({ error: { code: 'READ_ONLY_PROFILE', message: 'Not an owner', details: { reason: 'NOT_OWNER' } } }, 403);
+    const list = grants ?? [];
+    if (!grants) this.accountants.set(profile.id, list);
+    if (e.method === 'GET' && !grantId) return json({ items: list, limit: ACCOUNTANT_LIMIT });
+    if (e.method === 'DELETE' && grantId) {
+      const index = list.findIndex((g) => g.id === grantId && g.status !== 'expired');
+      if (index < 0) return notFound();
+      list.splice(index, 1);
+      return { status: 204, body: '' };
+    }
+    if (e.method === 'POST' && !grantId) {
+      const email = String((e.body as { email?: unknown } | null)?.email ?? '').trim().toLowerCase();
+      const refuse = (status: number, code: string, details: unknown) => json({ error: { code, message: code, details } }, status);
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return refuse(422, 'VALIDATION_FAILED', [{ path: ['email'] }]);
+      if (email === 'nour@office.ps') return refuse(422, 'VALIDATION_FAILED', { reason: 'SELF_INVITE' });
+      if (email.endsWith('@mailinator.com')) return refuse(422, 'VALIDATION_FAILED', { reason: 'INVITE_ADDRESS_REFUSED' });
+      const existing = list.find((g) => g.email === email);
+      if (existing && existing.status !== 'expired') return refuse(409, 'CONFLICT', { reason: 'ALREADY_INVITED' });
+      if (list.filter((g) => g.status !== 'expired').length >= ACCOUNTANT_LIMIT) return refuse(409, 'CONFLICT', { reason: 'ACCOUNTANT_LIMIT', limit: ACCOUNTANT_LIMIT });
+      if (existing) list.splice(list.indexOf(existing), 1);
+      const now = new Date();
+      const grant: StubGrant = { id: this.nextId(0x56), email, name: null, status: 'pending', invitedAt: now.toISOString(), expiresAt: new Date(now.getTime() + INVITE_TTL_DAYS * 86_400_000).toISOString(), acceptedAt: null, lastViewedAt: null };
+      list.push(grant);
+      return json(grant, 201);
+    }
+    return notFound();
+  }
+
   private profileAnswer(e: Logged, id?: string, sub?: string, subId?: string) {
     const state = this.profiles.find((p) => p.stub.id === id);
     if (e.method === 'POST' && !id) {
@@ -1062,6 +1120,7 @@ export class FakeApi {
       return json(this.me().profiles[0], 201);
     }
     if (!state) return notFound();
+    if (sub === 'accountants') return this.accountantsAnswer(e, state.stub, subId);
     if (e.method === 'POST' && sub === 'firm-request') {
       // MUT-300: idempotent like the server; the version stays put (eng review O3).
       state.stub = { ...state.stub, firmRequestedAt: state.stub.firmRequestedAt ?? FIRM_REQUESTED_AT };
