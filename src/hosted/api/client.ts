@@ -25,6 +25,10 @@ export type Passkey = Schemas['Passkey'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type RemoveProfileOwnerResponse = Schemas['RemoveProfileOwnerResponse'];
 export type ProfileOwner = Schemas['ProfileOwner'];
+/** MUT-561 (MUT-559's routes): an accountant invited to, or reading, one of the owner's profiles. */
+export type AccountantGrant = Schemas['AccountantGrant'];
+export type AccountantGrantList = Schemas['AccountantGrantList'];
+export type InviteAccountantRequest = Schemas['InviteAccountantRequest'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -777,6 +781,14 @@ export const api = {
   // MUT-373: yourself to leave a profile you co-own, a co-owner to remove them (the creator only); attempt-scoped key.
   removeProfileOwner: (profileId: string, userId: string, idempotencyKey: string) =>
     request<RemoveProfileOwnerResponse>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/owners/${encodeURIComponent(userId)}`, { idempotencyKey }),
+  // MUT-561 (MUT-559, ADR-245): the owner's accountants on one profile; session routes, no profile header. A 404 is a
+  // profile that isn't theirs or a server with accountant access off; 403 NOT_OWNER a profile they belong to only.
+  listAccountants: (profileId: string, signal?: AbortSignal) =>
+    request<AccountantGrantList>('GET', `/v1/profiles/${encodeURIComponent(profileId)}/accountants`, { signal }),
+  inviteAccountant: (profileId: string, body: InviteAccountantRequest) =>
+    request<AccountantGrant>('POST', `/v1/profiles/${encodeURIComponent(profileId)}/accountants`, { body }),
+  revokeAccountant: (profileId: string, grantId: string) =>
+    request<void>('DELETE', `/v1/profiles/${encodeURIComponent(profileId)}/accountants/${encodeURIComponent(grantId)}`),
 
   // Conversions (MUT-161); edit and delete since MUT-194 (ADR-075), the same shape as expenses.
   conversions: (profileId: string, query: Query<'/v1/conversions'> = {}) =>

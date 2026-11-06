@@ -33,6 +33,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.5.0': '7a3a3dad36914c664d29669fdc6bb5d628d9729b173f54f2c4d3bb443211a9bb',
   // MUT-525: billing_offer_shown (offer, place) and billing_checkout_started (interval, currency, offer), portal only.
   '2.6.0': 'cb18870706f1ea3938125cebb4e763df70f3782f36921a3a7c8b9245be8f456d',
+  // MUT-561: accountant_invited and accountant_revoked (was), portal only for now (MUT-563 adds the phone).
+  '2.7.0': '2bf4eebe645e0bd1cd852a1043517c6c93f154355ca13bcaf75775cb935de6af',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -223,6 +225,8 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       portal_welcome_choice: ['portal'],
       billing_offer_shown: ['portal'],
       billing_checkout_started: ['portal'],
+      accountant_invited: ['portal'],
+      accountant_revoked: ['portal'],
     });
   });
 

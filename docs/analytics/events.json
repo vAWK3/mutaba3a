@@ -1,5 +1,5 @@
 {
-  "version": "2.6.0",
+  "version": "2.7.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -140,6 +140,17 @@
         "interval": { "type": "enum", "values": ["month", "year"], "description": "The plan chosen: monthly or yearly." },
         "currency": { "type": "currency", "description": "The Checkout's currency code, from the billing country. Never the amount." },
         "offer": { "type": "enum", "values": ["launch_2026"], "description": "The offer the drawer showed and sent with this Checkout. Absent when none applied." }
+      }
+    },
+    "accountant_invited": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner invited an accountant to read one of their profiles, or invited an expired one again (the server answered 201). Never the address, the name or the profile. The phone adds itself in MUT-563."
+    },
+    "accountant_revoked": {
+      "emitters": ["portal"],
+      "description": "MUT-561: an owner stopped an accountant's access or cancelled a pending invite (the server answered 204, or the grant was already gone). Never the address, the name or the profile. The phone adds itself in MUT-563.",
+      "properties": {
+        "was": { "type": "enum", "values": ["pending", "active"], "description": "pending = an invite not yet accepted was cancelled; active = an accountant's access was stopped." }
       }
     }
   }
