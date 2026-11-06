@@ -235,3 +235,22 @@ The server slice S moved to MUT-575 (MUT-562 comment 13246); this branch consume
 `qa/support/clientBooksApi.ts`: client-books.{list,empty,client,receipt,revoked}, accountant-invite.{signed-out,
 signup,accept,refusals}, share-link.{pin,view}. The live `portal-selfservice.accountant` journeys wait for MUT-561 and
 MUT-575 on main (and MUT-314 for the Excel step).
+
+### Round 3 (2026-11-07): the blocked parts built
+
+- **Downloads (MUT-314 merged in):** `PeriodDownloads` (client book side pane, link page band) opens with one `asOf`,
+  mints both tickets (entries; receipts and about how big), posts the chosen one by a hidden form into a hidden frame
+  (`data/periodDownload.ts`, one module with MUT-561's owner download). A row's "Download {last month}" is the report
+  only. 422 PERIOD_TOO_LARGE, 429 and 404 have their own copy. `period_downloaded`: `trackPortal` on the desk,
+  `countPublicPage` on the link page (`months` left out for a whole-profile link).
+- **Accountant plan (MUT-565's contract, its branch not merged):** coded against defensive types in `api/client.ts`
+  (`ClientBooksSummary`, `AccountantPlanBilling`, `needsPlan?`), chosen over a temporary merge-and-revert because
+  nothing of MUT-565's server lands here and the fields become generated types when it merges. Every surface shows only
+  when the fields are present: the 4th-client card (also on 402), the 409 ceiling, "readable of freeLimit", faded
+  `needsPlan` rows and a client page with Subscribe; Checkout (`plan: 'accountant'`) returns to `/accountant-invite`,
+  `/v1/me` is polled ≤30 s, then the invite is accepted. `accountant_plan_offer_shown` (contract 2.8.0) is not sent
+  until MUT-565 brings that contract.
+- **Scenes and scope bullets (MUT-561 merged in):** shared-books, link-closed, client-books-empty, share-ended;
+  AccessScopeList on the invite.
+- QA: 14 flows pass on the stubbed portal (download, share-link.download and accountant-invite.plan added).
+
