@@ -5,7 +5,6 @@ import {
   ACCOUNTANT_INVITE_TTL_MS,
   accountantInviteUrl,
   clientOf,
-  displayNameOf,
   grantAudit,
   grantStatusView,
   maskEmail,
@@ -98,6 +97,13 @@ const errorResponse = (description: string) => ({ description, content: { 'appli
 let sharedDomainLists: ReadonlySet<string>[] | null = null;
 const sharedMailDomainLists = () => (sharedDomainLists ??= DOMAIN_LIST_NAMES.map((name) => loadDomainList(name)));
 
+/** Decision A: an invite never goes to a disposable or relay address (the same lists signup refuses or reviews). */
+let refusedInviteLists: ReadonlySet<string>[] | null = null;
+function isRefusedInviteDomain(domain: string): boolean {
+  refusedInviteLists ??= (['disposable', 'relay'] as const).map((name) => loadDomainList(name));
+  return refusedInviteLists.some((list) => isListedDomain(domain, list));
+}
+
 /**
  * MUT-559 (D4): who may accept an invite. The invited address itself; or a colleague on exactly the same domain (no
  * subdomains), when that domain is a business's own: never a free-webmail, disposable or relay domain, where sharing
@@ -125,13 +131,14 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
     return organization;
   }
 
-  const nameOf = (userId: string | null) => displayNameOf(store, userId);
 
   async function grantView(grant: AccountantGrantRecord, now: Date) {
+    // An ACTIVE grant shows who really accepted (a colleague on the invited domain may have, D4); an invite, its address.
+    const accountant = grant.status === 'ACTIVE' && grant.accountantUserId ? await store.users.getById(grant.accountantUserId) : null;
     return {
       id: grant.id,
-      email: grant.inviteEmail,
-      name: grant.status === 'ACTIVE' ? await nameOf(grant.accountantUserId) : null,
+      email: accountant?.email ?? grant.inviteEmail,
+      name: accountant?.displayName ?? null,
       status: grantStatusView(grant, now),
       invitedAt: grant.createdAt.toISOString(),
       expiresAt: grant.inviteExpiresAt.toISOString(),
@@ -202,7 +209,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
         403: errorResponse('READ_ONLY_PROFILE, details.reason NOT_OWNER: a profile you belong to but don’t own'),
         404: errorResponse('No such profile for you, or accountant access is off on this server'),
         409: errorResponse('CONFLICT: details.reason ALREADY_INVITED or ACCOUNTANT_LIMIT'),
-        422: errorResponse('VALIDATION_FAILED: not an address, or details.reason SELF_INVITE'),
+        422: errorResponse('VALIDATION_FAILED: not an address, or details.reason SELF_INVITE, or INVITE_ADDRESS_REFUSED (a disposable or relay address)'),
         429: errorResponse('RATE_LIMITED: too many invites this hour'),
       },
     }),
@@ -219,6 +226,8 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       }
       const email = normalizeEmail(body.email);
       if (email === normalizeEmail(user.email)) throw new ApiError('VALIDATION_FAILED', 'You already have this profile; invite your accountant’s address', { reason: 'SELF_INVITE' });
+      // Decision A: no invite to a throwaway or forwarding address (webmail is fine: only its exact address can accept).
+      if (isRefusedInviteDomain(domainOf(email))) throw new ApiError('VALIDATION_FAILED', 'Invite your accountant’s own address, not a throwaway or forwarding one', { reason: 'INVITE_ADDRESS_REFUSED' });
       const token = generateSetupToken();
       const requestId = c.get('requestId');
       const result = await store.accountantGrants.invite({
@@ -372,7 +381,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       tags: ['Sessions'],
       summary: 'Create an account from an accountant invite, and accept it',
       description:
-        'MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and the 14-day trial. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED).',
+        'MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and no free trial: that profile is read-only until the person subscribes. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED).',
       security: [],
       request: { body: jsonBody(AccountantInviteSignupRequestSchema) },
       responses: {
@@ -407,7 +416,6 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
         passwordHash,
         displayName: body.displayName ?? defaultDisplayName(grant.inviteEmail),
         personal: personalProfileFor(grant.locale, { defaultCurrency: body.defaultCurrency ?? organization.defaultCurrency, timezone: body.timezone ?? organization.timezone }),
-        trialStartsAt: at,
         terms: termsAcceptanceOf(terms, body.termsLocale ?? grant.locale, 'cookie', body.clientRelease),
         auditFor: ({ userId, personalOrganizationId, grant: accepted }) => [
           { organizationId: personalOrganizationId, actorType: 'USER', actorId: userId, action: 'organization.created', entityType: 'organization', entityId: personalOrganizationId, metadata: { personal: true, ownerUserId: userId }, requestId },

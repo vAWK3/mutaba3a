@@ -1867,7 +1867,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description VALIDATION_FAILED: not an address, or details.reason SELF_INVITE */
+                /** @description VALIDATION_FAILED: not an address, or details.reason SELF_INVITE, or INVITE_ADDRESS_REFUSED (a disposable or relay address) */
                 422: {
                     headers: {
                         [name: string]: unknown;
@@ -2111,7 +2111,7 @@ export interface paths {
         put?: never;
         /**
          * Create an account from an accountant invite, and accept it
-         * @description MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and the 14-day trial. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED).
+         * @description MUT-559 (ADR-245). The account takes the invited address, which the link proves: ACTIVE at once (no signup review), with its own personal profile (the shared profile’s currency and timezone unless given) and no free trial: that profile is read-only until the person subscribes. Issues no session: sign in through POST /v1/sessions with the email and password, as after /setup. 409 CONFLICT (ACCOUNT_EXISTS) when the address already has an account (sign in and accept instead). The Turnstile check is the signup one (403 CHECK_FAILED).
          */
         post: {
             parameters: {

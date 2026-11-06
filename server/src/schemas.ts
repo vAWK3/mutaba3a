@@ -1401,7 +1401,7 @@ export const SetupLinkRedeemRequestSchema = z
 export const AccountantGrantSchema = z
   .object({
     id: z.string().uuid(),
-    /** The address invited. */
+    /** The invited address while pending; once active, the address of the account that accepted (D4: maybe a colleague's). */
     email: z.string(),
     /** The accountant's name once they have accepted; null while pending. */
     name: z.string().nullable(),
@@ -2267,8 +2267,9 @@ export const VALIDATION_REASONS = [
   'NOTHING_TO_CORRECT',
   // MUT-444: a correction that changes a billed line's trigger or drops a billed line (details: position, change).
   'POSTED_INSTALLMENT_CHANGED',
-  // MUT-559: an owner inviting their own address as an accountant.
+  // MUT-559: an owner inviting their own address as an accountant, or a disposable or relay address.
   'SELF_INVITE',
+  'INVITE_ADDRESS_REFUSED',
 ] as const;
 
 // ---- Milestone 3: VAT rates, agreements, installments, retainers, receivables ----

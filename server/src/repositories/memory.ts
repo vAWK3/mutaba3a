@@ -788,7 +788,7 @@ export class MemoryLedgerStore implements LedgerStore {
         status: 'ACTIVE',
         emailVerifiedAt: input.at,
       });
-      this.trialStarts.set(user.id, input.trialStartsAt);
+      // Decision A: no trial (trialStarts stays unset: READ_ONLY, source NONE, until they subscribe or are granted).
       this.recordTermsAcceptance(user.id, input.terms, input.at);
       Object.assign(claimable, { status: 'ACTIVE', accountantUserId: user.id, acceptedAt: input.at, tokenDigest: null });
       this.pushEvents(input.auditFor({ userId: user.id, personalOrganizationId: personalOrganization.id, grant: { ...claimable } }), input.at);
@@ -810,7 +810,7 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     touchViewed: async ({ grantId, at, audit }) => {
       const grant = this.accountantGrantMap.get(grantId);
-      if (!grant) return;
+      if (!grant || grant.status !== 'ACTIVE') return;
       grant.lastViewedAt = at;
       this.pushEvents(audit, at);
     },
@@ -3220,7 +3220,8 @@ export class MemoryLedgerStore implements LedgerStore {
     // MUT-559: the person's grants as an accountant (ON DELETE CASCADE), and invites to their address; those they sent
     // as an owner, on profiles that survive, lose their name (SET NULL).
     for (const [key, grant] of this.accountantGrantMap) {
-      if (grant.accountantUserId === id || grant.inviteEmail === person.email) this.accountantGrantMap.delete(key);
+      // Only an invite still PENDING to the address: one a colleague accepted is theirs, and stays (review C).
+      if (grant.accountantUserId === id || (grant.status === 'PENDING' && grant.inviteEmail === person.email)) this.accountantGrantMap.delete(key);
       else if (grant.invitedByUserId === id) grant.invitedByUserId = null;
     }
     // MUT-434: grants and decided requests cascade with the person; codes and tokens with their grant.

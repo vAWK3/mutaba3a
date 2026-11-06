@@ -2629,8 +2629,6 @@ export interface SignupAccountantInput {
   displayName: string;
   /** The accountant's own personal profile (`personalProfileFor`), as every account has (MUT-120). */
   personal: CreateUserInput['personal'];
-  /** The 14-day trial starts with the account, as a business signup's does (ADR-160). */
-  trialStartsAt: Date;
   terms: TermsAcceptanceInput;
   auditFor(created: { userId: string; personalOrganizationId: string; grant: AccountantGrantRecord }): AuditEventInput[];
 }
@@ -2662,15 +2660,16 @@ export interface AccountantGrantRepository {
   accept(input: { tokenDigest: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
   /**
    * One transaction, serialised per address: no account may hold the invite's address (`account_exists`); the grant is
-   * claimed as `accept` does (`unusable` when it can't be); then the user (ACTIVE, email verified, no signup review),
-   * their personal profile and membership, the trial, the terms, and the grant's accountant are written.
+   * claimed as `accept` does (`unusable` when it can't be); then the user (ACTIVE, email verified, no signup review, no
+   * trial: entitled only once they subscribe or the operator grants it), their personal profile and membership, the
+   * terms, and the grant's accountant are written.
    */
   signupAndAccept(input: SignupAccountantInput): Promise<SignupAccountantResult>;
   /** An owner ends a PENDING or ACTIVE grant on their profile (REVOKED). Null when there is none to end. */
   revoke(input: { organizationId: string; grantId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
   /** The accountant ends their ACTIVE grant (LEFT). Null when they hold none on that profile. */
   leave(input: { organizationId: string; accountantUserId: string; at: Date; auditFor(grant: AccountantGrantRecord): AuditEventInput[] }): Promise<AccountantGrantRecord | null>;
-  /** Stamps lastViewedAt and appends `audit` (the caller throttles). */
+  /** Stamps lastViewedAt and appends `audit` (the caller throttles); only on an ACTIVE grant, else nothing is written. */
   touchViewed(input: { grantId: string; at: Date; audit: AuditEventInput[] }): Promise<void>;
 }
 

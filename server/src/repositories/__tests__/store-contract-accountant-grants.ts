@@ -145,14 +145,21 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       expect(await store.accountantGrants.accept({ tokenDigest: again.grant.tokenDigest!, accountantUserId: a.id, at: at(9), auditFor: audit(o.profileId, 'accountant.accepted') })).toMatchObject({ status: 'ACTIVE' });
     });
 
-    it('stamps lastViewedAt with its audit row', async () => {
+    it('stamps lastViewedAt with its audit row on an ACTIVE grant only', async () => {
       const store = await makeStore();
       const o = await owner(store);
-      const created = await invite(store, o, `view-${unique()}@books.ps`);
+      const a = (await store.users.create(userInput('acc'))).user;
+      const created = await invite(store, o, a.email);
       if (created.kind !== 'created') throw new Error('invite failed');
+      const viewed = async () => (await store.audit.listByOrganization(o.profileId, 50)).filter((e) => e.action === 'accountant.viewed').length;
+      // A pending invite is never "viewed".
+      await store.accountantGrants.touchViewed({ grantId: created.grant.id, at: at(8), audit: audit(o.profileId, 'accountant.viewed')(created.grant) });
+      expect((await store.accountantGrants.listByOrganization(o.profileId))[0]?.lastViewedAt).toBeNull();
+      expect(await viewed()).toBe(0);
+      await store.accountantGrants.accept({ tokenDigest: created.grant.tokenDigest!, accountantUserId: a.id, at: at(8), auditFor: () => [] });
       await store.accountantGrants.touchViewed({ grantId: created.grant.id, at: at(9), audit: audit(o.profileId, 'accountant.viewed')(created.grant) });
       expect((await store.accountantGrants.listByOrganization(o.profileId))[0]?.lastViewedAt).toEqual(at(9));
-      expect((await store.audit.listByOrganization(o.profileId, 50)).filter((e) => e.action === 'accountant.viewed')).toHaveLength(1);
+      expect(await viewed()).toBe(1);
     });
 
     it('signs up and accepts in one step: ACTIVE, no review, a personal profile; an existing address or used token refuses', async () => {
@@ -163,7 +170,7 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       if (created.kind !== 'created') throw new Error('invite failed');
       const input = (digest: string) => ({
         tokenDigest: digest, at: at(2), passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA', displayName: 'Hadi Accountant',
-        personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, trialStartsAt: at(2), terms,
+        personal: { name: 'Personal', slug: `personal-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, terms,
         auditFor: ({ userId, grant }: { userId: string; grant: AccountantGrantRecord }): AuditEventInput[] => [{ organizationId: grant.organizationId, actorType: 'USER', actorId: userId, action: 'accountant.accepted', entityType: 'accountant_grant', entityId: grant.id, metadata: {}, requestId: null }],
       });
       const result = await store.accountantGrants.signupAndAccept(input(created.grant.tokenDigest!));
@@ -172,6 +179,8 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       expect(result.personalOrganization.personalOwnerUserId).toBe(result.user.id);
       expect(result.grant).toMatchObject({ status: 'ACTIVE', accountantUserId: result.user.id });
       expect(await store.signupReviews.findByUser(result.user.id)).toBeNull();
+      // Decision A: no trial; the account is entitled only once it subscribes or the operator grants it.
+      expect((await store.billing.summaryOf(result.user.id)).trialStartedAt).toBeNull();
       expect(await store.memberships.find(result.user.id, o.profileId)).toBeNull();
       expect(await store.accountantGrants.signupAndAccept(input(created.grant.tokenDigest!))).toEqual({ kind: 'unusable' });
 
@@ -180,6 +189,21 @@ export function describeLedgerStoreAccountantGrantsContract(name: string, makeSt
       if (second.kind !== 'created') throw new Error('invite failed');
       expect(await store.accountantGrants.signupAndAccept(input(second.grant.tokenDigest!))).toEqual({ kind: 'account_exists' });
       expect((await store.accountantGrants.findByDigest(second.grant.tokenDigest!))?.status).toBe('PENDING');
+    });
+
+    it('purging an address’s owner takes only the invites still pending to it, never a grant a colleague accepted', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const invited = (await store.users.create(userInput('invited'))).user;
+      const colleague = (await store.users.create(userInput('colleague'))).user;
+      const accepted = await invite(store, o, invited.email);
+      if (accepted.kind !== 'created') throw new Error('invite failed');
+      await store.accountantGrants.accept({ tokenDigest: accepted.grant.tokenDigest!, accountantUserId: colleague.id, at: at(2), auditFor: () => [] });
+      const other = await owner(store);
+      expect((await invite(store, other, invited.email)).kind).toBe('created');
+      await purge(store, invited.id, 3);
+      expect(await store.accountantGrants.findActive(colleague.id, o.profileId)).toMatchObject({ id: accepted.grant.id, inviteEmail: invited.email });
+      expect(await store.accountantGrants.listByOrganization(other.profileId)).toEqual([]);
     });
 
     it('a profile deleted by the purge takes its grants; the accountant’s purge takes theirs (and never blocks)', async () => {

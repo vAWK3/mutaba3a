@@ -151,7 +151,8 @@ export function accountantScopes(): readonly Scope[] {
 /**
  * MUT-559 (D1): whether an accountant may call a GET whose `requireScope` tags are `routeScopes` (the route-access
  * index). Derived, never listed: at least one tag, every one of them the accountant's. An untagged GET (the records
- * export, the activity summary) is refused, so a route added later is closed until it declares what it reads.
+ * export) is refused, as is one tagged with any scope the accountant lacks (the retainer charges' agreements:read), so
+ * a route added later is closed until it declares what it reads.
  */
 export function accountantMayRead(routeScopes: readonly Scope[]): boolean {
   const held = new Set<Scope>(accountantScopes());

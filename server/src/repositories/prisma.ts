@@ -621,8 +621,15 @@ export class PrismaLedgerStore implements LedgerStore {
           }),
         );
       } catch (err) {
-        // The address's live invite (an ACTIVE grant whose address differs only in case included) answers as one.
-        if (err instanceof UniqueViolation && !err.constraint.includes('tokenDigest')) return { kind: 'already_invited' };
+        // A racing invite to the same address won (the lower(inviteEmail) index, whose name Postgres may not report as
+        // columns): ask the table rather than the constraint name. Anything else is rethrown.
+        if (err instanceof UniqueViolation) {
+          const live = await this.prisma.accountantGrant.findFirst({
+            where: { organizationId: input.organizationId, inviteEmail: { equals: input.inviteEmail, mode: 'insensitive' }, OR: [{ status: 'ACTIVE' }, { status: 'PENDING', inviteExpiresAt: { gt: input.at } }] },
+            select: { id: true },
+          });
+          if (live) return { kind: 'already_invited' };
+        }
         throw err;
       }
     },
@@ -673,7 +680,8 @@ export class PrismaLedgerStore implements LedgerStore {
               at: input.at,
               status: 'ACTIVE',
               emailVerifiedAt: input.at,
-              trialStartedAt: input.trialStartsAt,
+              // Decision A: no trial; READ_ONLY (source NONE) until they subscribe or the operator grants it.
+              trialStartedAt: null,
             });
             await insertTermsAcceptance(tx, user.id, input.terms, input.at);
             const grant = toAccountantGrant(await tx.accountantGrant.update({ where: { id: found.id }, data: { accountantUserId: user.id } }));
@@ -710,8 +718,8 @@ export class PrismaLedgerStore implements LedgerStore {
       }),
     touchViewed: async ({ grantId, at, audit }) => {
       await this.prisma.$transaction(async (tx) => {
-        await tx.accountantGrant.updateMany({ where: { id: grantId }, data: { lastViewedAt: at } });
-        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
+        if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
     },
   };
@@ -3031,7 +3039,8 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.signupReview.deleteMany({ where: { userId } });
         // MUT-559: the person's grants as an accountant, and any invite still naming their address (the owner's own
         // profiles took theirs with them above; invites they sent on surviving profiles were anonymized).
-        await tx.accountantGrant.deleteMany({ where: { OR: [{ accountantUserId: userId }, { inviteEmail: locked.email }] } });
+        // Only invites still PENDING to the address: a grant a colleague accepted from it is theirs (review C).
+        await tx.accountantGrant.deleteMany({ where: { OR: [{ accountantUserId: userId }, { inviteEmail: locked.email, status: 'PENDING' }] } });
         await tx.user.delete({ where: { id: userId } });
         return { ...decision, auditRowsScrubbed };
       }, PURGE_TX_OPTIONS),

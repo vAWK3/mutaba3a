@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ACCOUNTANT_INVITE_TTL_MS, ACCOUNTANTS_PER_PROFILE_DEFAULT } from '../accountants/grants.js';
+import { mayAcceptInvite } from '../routes/accountants.js';
 import {
   ADMIN,
   DAY,
@@ -83,6 +84,19 @@ describe('the owner invites (MUT-559)', () => {
     expect((await read(self)).error.details).toEqual({ reason: 'SELF_INVITE' });
     const bad = await inviteAccountant(h, owner, profileId, 'not-an-address');
     expect(bad.status).toBe(422);
+  });
+
+  it.each([
+    ['a disposable', 'books@0-mail.com'],
+    ['a relay', 'books@33mail.com'],
+  ])('refuses inviting %s address (422 INVITE_ADDRESS_REFUSED); a webmail address is fine', async (_label, email) => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    const res = await inviteAccountant(h, owner, profileId, email);
+    expect(res.status).toBe(422);
+    expect((await read(res)).error.details).toEqual({ reason: 'INVITE_ADDRESS_REFUSED' });
+    expect(h.transport.list({ to: email })).toEqual([]);
+    expect((await inviteAccountant(h, owner, profileId, 'hadi.books@gmail.com')).status).toBe(201);
   });
 
   it('only an owner invites: a stranger gets 404, a firm member who doesn’t own it 403 NOT_OWNER', async () => {
@@ -170,9 +184,38 @@ describe('who may accept (MUT-559 D4)', () => {
     expect(await read(res)).toEqual({ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', sharedSince: T0.toISOString() });
   });
 
-  it('a colleague on the same professional domain → ACTIVE', async () => {
-    const { res } = await invitedAs('a@firm.com', 'b@firm.com');
+  it('a colleague on the same professional domain → ACTIVE, and the owner’s list shows who really accepted', async () => {
+    const { res, h, owner, profileId } = await invitedAs('a@firm.com', 'b@firm.com');
     expect(res.status).toBe(200);
+    expect((await listOf(h, owner, profileId)).items).toEqual([expect.objectContaining({ email: 'b@firm.com', status: 'active' })]);
+    // A pending invite still shows the invited address.
+    await inviteAccountant(h, owner, profileId, 'c@firm.com');
+    expect((await listOf(h, owner, profileId)).items.map((g: Loose) => g.email).sort()).toEqual(['b@firm.com', 'c@firm.com']);
+  });
+
+  it('the matching rule normalises: case, a trailing dot and an IDN against its punycode', () => {
+    expect(mayAcceptInvite('Hadi@Books.PS', 'hadi@books.ps')).toBe(true);
+    expect(mayAcceptInvite('b@FIRM.com', 'a@firm.com')).toBe(true);
+    expect(mayAcceptInvite('b@firm.com.', 'a@firm.com')).toBe(true);
+    expect(mayAcceptInvite('b@xn--bcher-kva.de', 'a@bücher.de')).toBe(true);
+    expect(mayAcceptInvite('b@bücher.de', 'a@xn--bcher-kva.de')).toBe(true);
+    expect(mayAcceptInvite('b@mail.bücher.de', 'a@bücher.de')).toBe(false);
+    expect(mayAcceptInvite('b@GMAIL.com', 'a@gmail.com')).toBe(false);
+  });
+
+  it('one person accepts invites to two profiles; a second invite to a profile they already read is 409', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    const second = await businessOf(h, owner, 'Second Studio');
+    const acc = await person(h, { email: 'hadi@books.ps' });
+    await shared(h, owner, profileId, acc);
+    await shared(h, owner, second, acc);
+    expect((await me(h, acc)).clients.map((c: Loose) => c.profileId).sort()).toEqual([profileId, second].sort());
+
+    await inviteAccountant(h, owner, profileId, 'hadi.other@books.ps');
+    const res = await acceptInvite(h, acc, inviteTokenFor(h, 'hadi.other@books.ps'));
+    expect(res.status).toBe(409);
+    expect((await read(res)).error.details).toEqual({ reason: 'ALREADY_HAS_ACCESS' });
   });
 
   it.each([
@@ -254,6 +297,8 @@ describe('signing up from an invite (MUT-559)', () => {
     const user = (await h.store.users.findByEmail('new.accountant@gmail.com'))!;
     expect(user).toMatchObject({ status: 'ACTIVE', locale: 'ar' });
     expect(await h.store.signupReviews.findByUser(user.id)).toBeNull();
+    // Decision A: no free trial; its own profile is read-only (unpaid) until it subscribes or the operator acts.
+    expect((await h.store.billing.summaryOf(user.id)).trialStartedAt).toBeNull();
     const memberships = await h.store.memberships.listByUser(user.id);
     expect(memberships).toHaveLength(1);
     const personal = (await h.store.organizations.getById(memberships[0]!.organizationId))!;
@@ -261,7 +306,9 @@ describe('signing up from an invite (MUT-559)', () => {
     // The new account signs in like any other and reads the client.
     const acc = await signedIn(h, user.email, 'a-long-enough-password', user.id, personal.id);
     expect((await h.app.request('/v1/expenses', { headers: acc.on(profileId) })).status).toBe(200);
-    expect((await read(await h.app.request('/v1/me', { headers: acc.auth }))).profiles.map((p: Loose) => p.id)).toEqual([personal.id]);
+    const accMe = await read(await h.app.request('/v1/me', { headers: acc.auth }));
+    expect(accMe.profiles.map((p: Loose) => p.id)).toEqual([personal.id]);
+    expect(accMe.profiles[0].billing).toMatchObject({ state: 'READ_ONLY', source: 'NONE' });
   });
 
   it('refuses an address that already has an account (409 ACCOUNT_EXISTS) and leaves the invite pending', async () => {
@@ -313,6 +360,21 @@ describe('isolation (MUT-559)', () => {
     expect((await h.app.request(`/v1/profiles/${profileId}`, json({ name: 'Mine now' }, { ...acc.auth, 'if-match': '1' }, 'PATCH'))).status).toBe(404);
     expect((await h.app.request(`/v1/profiles/${profileId}/type-change?to=PERSONAL`, { headers: acc.auth })).status).toBe(404);
     expect((await h.app.request(`/v1/profiles/${profileId}/accountants`, { headers: acc.auth })).status).toBe(404);
+  });
+
+  it('a portal (cookie) session reads the shared profile the same way, and its writes are refused', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    const acc = await shared(h, owner, profileId);
+    const signIn = await h.app.request('/v1/sessions', json({ email: acc.email, password: acc.password }, SAME_ORIGIN));
+    expect(signIn.status).toBe(201);
+    const cookie = (signIn.headers.get('set-cookie') ?? '').split(';')[0]!;
+    const portal = { cookie, ...SAME_ORIGIN, 'x-mutaba3a-profile': profileId };
+    expect((await h.app.request('/v1/expenses', { headers: portal })).status).toBe(200);
+    const write = await h.app.request('/v1/expenses', json({ amount: '1.00', currency: 'ILS', occurredOn: '2026-11-01' }, { ...portal, ...idem() }));
+    expect(write.status).toBe(403);
+    expect((await read(write)).error.details).toEqual({ reason: 'ACCOUNTANT_READ_ONLY' });
+    expect((await h.app.request('/v1/records-export', { headers: portal })).status).toBe(403);
   });
 
   it('an accountant can’t write the shared profile: 403 READ_ONLY_PROFILE, ACCOUNTANT_READ_ONLY', async () => {
@@ -388,6 +450,18 @@ describe('closing an account (MUT-559)', () => {
     await purge(h, owner);
     expect(await h.store.accountantGrants.listActiveByAccountant(acc.userId)).toEqual([]);
     expect((await me(h, acc)).clients).toEqual([]);
+  });
+
+  it('purging the invited address’s own account keeps the grant a colleague accepted (and the owner still sees it)', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    const invited = await person(h, { email: 'a@firm.com' });
+    const colleague = await person(h, { email: 'b@firm.com' });
+    await inviteAccountant(h, owner, profileId, invited.email);
+    expect((await acceptInvite(h, colleague, inviteTokenFor(h, invited.email))).status).toBe(200);
+    await purge(h, invited);
+    expect((await listOf(h, owner, profileId)).items).toEqual([expect.objectContaining({ email: 'b@firm.com', status: 'active' })]);
+    expect((await h.app.request('/v1/expenses', { headers: colleague.on(profileId) })).status).toBe(200);
   });
 
   it('the accountant’s purge removes their grants; the owner’s profile stays', async () => {
