@@ -4455,3 +4455,8 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.
 - OW5 and report rows: the owner's list over a moving clock (active → revoked/locked/expired for 24 h → gone) and the
   visitor's feed and totals without Owed entries or conversions (memory and Postgres).
+- Slice B: `data/__tests__/sharingQueries.test.tsx` (two revokes at once, 404 = done, links off, Turn off undo);
+  `NewShareLinkDrawer.test.tsx` (months per chip, PIN rules incl. Arabic-Indic, errors, busy, lapse, done pane, Copy
+  link, Copy message EN/AR without the PIN, nothing left after Done); `SharingPage.test.tsx` (Links column states, Turn
+  off, limit, column error, empty with both ways, review fixes b/c/h); QA `portal.sharing.{create-link,link-rows}`.
+

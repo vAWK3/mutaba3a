@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice B: links with a PIN, and review fixes (MUT-561)
+
+### Added
+- `LinksColumn` (hidden on a 404), `NewShareLinkDrawer` (form + done pane, `?newLink=true`), Turn off; the empty page's
+  Create a link with a PIN; `api.listShareLinks/createShareLink/revokeShareLink`; `useShareLinks`, `useCreateShareLink`,
+  `useRevokeShareLink`; rules `periodRange`, `monthsLabel`, `pinOf`, `linkRow`, `linkErrorOf`; events
+  `share_link_created`, `share_link_revoked`; QA `portal.sharing.{create-link,link-rows}`; FakeApi share-link routes.
+
+### Fixed
+- Concurrent revokes no longer restore each other's rows; Invite again refetches on stale refusals and waits at the
+  limit; focus lands on the new row; bidi isolates in sentences; gender-neutral Arabic confirms.
+
 ## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice A: accountants (MUT-561)
 
 **Why:** epic MUT-558, the owner half on the web (layout B, Basel 13236/13244). Slice A needs only MUT-559; the Links

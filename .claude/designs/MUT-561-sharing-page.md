@@ -28,6 +28,20 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
 - Telemetry: `accountant_invited` has no properties; `accountant_revoked` has `was`. Contract 2.7.0. If MUT-575 owns
   the events contract later, these two entries are already in place for it to extend (phone emitters in MUT-563).
 
+## Slice B and review fixes as built (2026-11-06, after MUT-560 merged)
+
+- Links column on MUT-560's list: `active | locked | expired | revoked` with `endedAt`; the server keeps ended and
+  locked links listed for 24 h (OW5, S1 was folded into MUT-560). Expired and revoked read "Ended {day}" with no
+  action; locked keeps Turn off. Turn off marks the row ended at once and restores it if refused.
+- New link drawer and done pane in one side drawer (`?newLink=true`). Default period last 3 months, 7 days. The PIN is
+  sent folded to 0–9. Copy message is Basel's 13244 text in the portal language ("Mutaba3a" in the English text, as
+  given); the done pane also says "Message copied, without the PIN".
+- Review fixes: concurrent revokes (mutationKey + isMutating, per-item undo); Invite again refetches on stale refusals
+  and is inert at the limit; the new row takes focus; FSI/PDI isolates around emails, names and profile names in
+  sentences (not in aria-labels or clipboard text); gender-neutral Arabic confirms; the limit falls back to the list's.
+- Events `share_link_created` (period, expires_in_days) and `share_link_revoked` (was) join contract 2.7.0, kept at
+  2.7.0 on this branch; MUT-575 defines the same entries, and whichever merges second reconciles the version pin.
+
 ## QA scenarios (slice A; `qa/features/portal/sharing.yaml`, `qa/specs/portal/sharing.spec.ts`)
 
 | id | tier | steps → outcome |
@@ -39,7 +53,8 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
 | `empty` | secondary | Never-shared profile → scene, title, 4 points, Invite only. |
 | `layout` | secondary | Arabic 375 px → RTL, one column, no sideways scroll, emails LTR; drawer fits; English desktop dark → axe clean. |
 
-Slice B adds `create-link` and `link-rows` and re-runs `layout`.
+| `create-link` | core | Create link → months per chip; PIN 12 refused; 4821/7 days/last 3 months → done pane, link once; Copy link; Copy message without the PIN; Done + reload → URL nowhere, row 0 / 3. |
+| `link-rows` | secondary | Live, locked, ended rows; Turn off confirm → Ended, DELETE sent. |
 
 ---
 

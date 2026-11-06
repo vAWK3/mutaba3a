@@ -13,3 +13,12 @@ Written before the code (TDD). Unit tests run with `npx vitest run <files> --max
 | `src/styles/__tests__/direction.test.ts` | The new `dir` sites classified (emails LTR, names auto). |
 
 Release-QA (web, recorded): `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}`.
+
+## Slice B and review fixes
+
+| File | What it pins |
+|---|---|
+| `src/hosted/data/__tests__/sharingQueries.test.tsx` | Two revokes at once, B fails → A gone, B back in place, one list read after the last; a 404 is done; a 404 links list is off; Turn off marks ended and undoes on refusal. |
+| `src/hosted/pages/sharing/__tests__/NewShareLinkDrawer.test.tsx` | Period chips with their months on 2026-11-06; defaults; PIN refusals; Arabic-Indic folded; PIN_FORMAT / SHARE_LINK_LIMIT / 429 slots; busy; lapse; done pane text, Copy link, Copy message (EN exact, AR pattern, never the PIN); Done leaves no URL in DOM, URL or cache. |
+| `sharingRules.test.ts` | `periodRange` against the server's examples and year/February edges; `monthsLabel`; `pinOf`/`foldDigits`; `linkRow`; `linkErrorOf`; limit fallback; `isolate`. |
+| `SharingPage.test.tsx` | Links column rows/chips/Turn off/limit/error; 404 → one column; empty page with both ways; review b (refetch, inert at limit), c (focus), h (non-owner member redirect). |
