@@ -2194,6 +2194,210 @@
         "continue": "Continue on this device"
       },
       "whatIs": "What is MTB3A?"
+    },
+    "clientBooks": {
+      "title": "Client books",
+      "corner": "Client books",
+      "myBooks": "My books",
+      "deskNav": "Client books or my books",
+      "search": "Search owner or profile",
+      "searchEmpty": "No client book matches “{query}”.",
+      "cols": {
+        "owner": "Owner",
+        "profile": "Profile",
+        "thisMonth": "Entries this month",
+        "lastActivity": "Last activity",
+        "action": "Action"
+      },
+      "noActivity": "—",
+      "ended": "No longer shared",
+      "remove": "Remove",
+      "removeAria": "Remove {profile} from your client books",
+      "removeConfirm": "Remove {profile} from your list? You can't read it again unless its owner invites you.",
+      "removeYes": "Remove",
+      "removeNo": "Keep",
+      "removeFailed": "Couldn't remove it. Try again.",
+      "open": "Open {profile}",
+      "empty": {
+        "title": "No client books yet",
+        "body": "Ask your client to invite you from MTB3A › their profile › Sharing. You'll get an email to accept."
+      },
+      "readOnly": "Read-only · since {date}",
+      "back": "Client books",
+      "filters": {
+        "label": "Filters",
+        "period": "Period",
+        "month": "This month",
+        "quarter": "This quarter",
+        "year": "This year",
+        "custom": "Months",
+        "fromMonth": "From",
+        "toMonth": "To",
+        "type": "Type",
+        "expenses": "Expenses",
+        "income": "Income",
+        "withReceipt": "Only with a receipt"
+      },
+      "totals": {
+        "label": "Totals for {period}",
+        "spent": "Spent",
+        "received": "Received",
+        "none": "Nothing in this period."
+      },
+      "table": {
+        "label": "Entries",
+        "date": "Date",
+        "what": "What",
+        "category": "Category",
+        "receipt": "Receipt",
+        "amount": "Amount",
+        "income": "Income",
+        "noReceipt": "—",
+        "receipts": {
+          "one": "{count} receipt",
+          "other": "{count} receipts"
+        },
+        "view": "View",
+        "untitled": "Expense",
+        "receivedFrom": "Received",
+        "loadMore": "Load more",
+        "loading": "Loading…",
+        "empty": "No entries in this period.",
+        "emptyFiltered": "No entries match these filters."
+      },
+      "receipt": {
+        "title": "Receipt",
+        "download": "Download receipt",
+        "close": "Close",
+        "none": "This entry has no receipt.",
+        "failed": "Couldn't load the receipt. Try again."
+      },
+      "download": {
+        "label": "Download",
+        "report": "Excel report",
+        "receipts": "Receipts (zip)",
+        "pending": "Downloads come soon."
+      },
+      "gone": {
+        "title": "No longer shared",
+        "body": "{owner} stopped sharing {profile} with you. Anything you downloaded before stays with you.",
+        "bodyNoOwner": "{profile} is no longer shared with you. Anything you downloaded before stays with you.",
+        "back": "Back to Client books"
+      }
+    },
+    "shareLink": {
+      "privateView": "A private, read-only view. No names or numbers show before the right PIN.",
+      "enterPin": "Enter the PIN you were given",
+      "open": "Open",
+      "opening": "Opening…",
+      "askSender": "Don't know the PIN? Ask whoever sent you this link.",
+      "wrong": {
+        "zero": "That PIN isn't right. No tries left.",
+        "one": "That PIN isn't right. 1 try left, then the link locks.",
+        "other": "That PIN isn't right. {count} tries left, then the link locks."
+      },
+      "pinShort": "Enter at least 4 digits.",
+      "retry": "Press Open again.",
+      "locked": {
+        "title": "This link is locked",
+        "body": "A wrong PIN was entered 5 times, so the link is locked for everyone. Ask whoever sent it for a new one."
+      },
+      "gone": {
+        "title": "This link is no longer available",
+        "body": "It ended or was turned off. Ask for a new one if you need it."
+      },
+      "limit": {
+        "title": "This link has reached its viewer limit",
+        "body": "Only 3 people can open it, and 3 already have. Ask for a link of your own."
+      },
+      "again": {
+        "title": "Enter the PIN again",
+        "body": "For safety, the PIN is asked for every 8 hours."
+      },
+      "unreachable": "Couldn't reach MTB3A. Check your connection and try again.",
+      "retryButton": "Try again",
+      "sharedBy": "Shared with you by",
+      "readOnly": "read-only",
+      "band": {
+        "label": "Summary",
+        "spent": "Spent",
+        "received": "Received",
+        "none": "Nothing in this period."
+      },
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "expenses": "Expenses",
+        "income": "Income",
+        "month": "Month",
+        "allMonths": "All months"
+      },
+      "view": "View",
+      "viewAria": "View the receipt for {what}",
+      "receiptsTitle": "Receipts",
+      "downloadReceipt": "Download {name}",
+      "rateLimited": {
+        "one": "Too many tries. Wait {count} minute and try again.",
+        "other": "Too many tries. Wait {count} minutes and try again."
+      },
+      "until": "Up to {month}"
+    },
+    "accountantInvite": {
+      "about": "MTB3A helps business owners log their expenses and income. {owner} wants you to read their profile, without changing anything.",
+      "aboutNoOwner": "MTB3A helps business owners log their expenses and income. You're invited to read a profile, without changing anything.",
+      "invited": "{owner} invited you to read {profile}",
+      "invitedNoOwner": "You're invited to read {profile}",
+      "forAddress": "For {email} · ends {date}",
+      "signIn": "Sign in to accept",
+      "create": "Create an account",
+      "checking": "Checking the invite…",
+      "signup": {
+        "title": "Create an account to accept",
+        "email": "Email",
+        "emailFixed": "The invite's address; it can't be changed.",
+        "name": "Name",
+        "password": "Password",
+        "freeNote": "An account for reading your clients' books. Reading up to 3 client books is always free.",
+        "submit": "Create account and accept",
+        "creating": "Creating your account…",
+        "signingIn": "Signing in…",
+        "back": "Back",
+        "checkFailed": "The check didn't pass. Wait for it to finish and try again.",
+        "termsChanged": "The terms were just updated. Read them and tick the box again."
+      },
+      "exists": {
+        "title": "You already have an account",
+        "body": "Sign in with it to accept the invite."
+      },
+      "signInToContinue": {
+        "title": "Your account is ready",
+        "body": "Sign in to open {profile}."
+      },
+      "accept": {
+        "title": "Accept {owner}'s invite?",
+        "titleNoOwner": "Accept this invite?",
+        "body": "You'll read {profile} under Client books. You're signed in as {email}.",
+        "accept": "Accept",
+        "accepting": "Accepting…",
+        "notNow": "Not now"
+      },
+      "mismatch": {
+        "context": "An invite to read a profile.",
+        "title": "This invite was sent to another address",
+        "body": "It was sent to {invited}, and you're signed in as {email}.",
+        "domainHint": "Sign in with that address, or ask the sender to invite this one. An address on the same company domain works too (not Gmail or similar).",
+        "signOut": "Sign out and use another account",
+        "back": "Back to MTB3A"
+      },
+      "already": {
+        "title": "You can already read this profile",
+        "open": "Open"
+      },
+      "gone": {
+        "title": "This invite is no longer available",
+        "body": "It was used, withdrawn or ended. Ask whoever sent it for a new one."
+      },
+      "failed": "Couldn't reach MTB3A. Check your connection and try again."
     }
   }
 }

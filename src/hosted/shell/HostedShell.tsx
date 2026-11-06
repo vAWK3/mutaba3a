@@ -4,9 +4,10 @@ import { useT } from '../../lib/i18n/core';
 import { syncPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
-import { ChartIcon } from '../components/Icons';
+import { ChartIcon, ClientBooksIcon } from '../components/Icons';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { billingGateOf } from '../data/trialPrompt';
+import { showsClientBooks } from '../pages/client-books/clientBooksRules';
 import { useMe } from '../session/me';
 import { useIsLocalMode } from '../session/mode';
 import { AccountDrawers } from './AccountDrawers';
@@ -29,8 +30,14 @@ import { backOf, sectionOf } from './youRoutes';
 
 /** MUT-448: the account-level Reports (the Glance). */
 const GLANCE_PATH = '/reports';
+/** MUT-562: the accountant's Client books desk, outside any profile. */
+const CLIENT_BOOKS_PATH = '/client-books';
 
-export function HostedShell({ profile, children }: { profile: HostedProfile | null; children: ReactNode }) {
+/**
+ * `pill` (MUT-562): a page outside any profile can bring its own pill (the desk's "Client books | My books"); a
+ * profile's four destinations show otherwise.
+ */
+export function HostedShell({ profile, children, pill }: { profile: HostedProfile | null; children: ReactNode; pill?: ReactNode }) {
   const t = useT();
   const me = useMe();
   const userId = me.user.id;
@@ -43,6 +50,9 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
   const lit = destinationOf(pathname);
   // MUT-361: a LOCKED profile has one page (ProfileLayout's LockedScreen), so no sections to move between.
   const sections = profile !== null && billingGateOf(me, profile) !== 'locked';
+  // MUT-562 (13246): the Client books corner while any client is listed (active, or ended and not yet removed)
+  const onDesk = pathname === CLIENT_BOOKS_PATH || pathname.startsWith(`${CLIENT_BOOKS_PATH}/`);
+  const clientBooks = !local && showsClientBooks(me.clients);
   // MUT-155: another account's choice is reset; a stored "on" starts counting this visit. Never signed out (brief §10).
   useEffect(() => {
     if (!local) void syncPortalUsage(userId);
@@ -70,8 +80,19 @@ export function HostedShell({ profile, children }: { profile: HostedProfile | nu
             <ChartIcon />
           </Link>
         )}
+        {clientBooks && (
+          <Link
+            to={CLIENT_BOOKS_PATH}
+            className={`hp-client-books-corner hp-glass press${sections ? '' : ' hp-corner-first'}`}
+            aria-label={t('hosted.clientBooks.corner')}
+            aria-current={onDesk ? 'page' : undefined}
+          >
+            <ClientBooksIcon />
+          </Link>
+        )}
         <div className="hp-chrome-bar">
-          {sections && (
+          {pill}
+          {!pill && sections && (
             <nav className="hp-pill hp-glass" aria-label={t('hosted.shell.sections')}>
               {DESTINATIONS.map((destination) => (
                 <Link
