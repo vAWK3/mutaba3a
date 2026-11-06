@@ -73,6 +73,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/RecordPaymentDrawer.tsx': { ltr: 1 },
   // MUT-453: Reduce amount owed's amount field, like Record payment's.
   'src/hosted/components/CorrectionPane.tsx': { ltr: 1 },
+  'src/hosted/components/expenseForm/ExpenseAllocationNumberRow.tsx': { ltr: 1 }, // MUT-557: the allocation number, a code
   // MUT-302: the VAT row's rate input, a figure like the amount beside it.
   'src/hosted/components/expenseForm/ExpenseVatRow.tsx': { ltr: 1 },
   // D: a title that takes its direction from its own first letter
