@@ -13,6 +13,8 @@ const EVENTS: PublicPageEvent[] = [
   { event: 'accountant_accepted', properties: { via: 'signup' } },
   { event: 'accountant_accepted', properties: { via: 'signed_in' } },
   { event: 'period_downloaded', properties: { place: 'link_page', file: 'report', months: 3 } },
+  // A whole-profile link has no month count: the event goes without it
+  { event: 'period_downloaded', properties: { place: 'link_page', file: 'receipts' } },
 ];
 
 const beforeSend = posthogInitOptions(() => ({ surface: 'portal', appVersion: '0.3.4', locale: 'en', cookieless: true, origin: 'https://portal.example' }), () => 'production')
