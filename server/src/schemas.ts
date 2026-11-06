@@ -2,6 +2,7 @@ import { z } from '@hono/zod-openapi';
 import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
 import { CANCELLATION_COMMENT_MAX, CANCELLATION_REASONS } from './billing/retention.js';
 import { NEW_PASSWORD_POLICY, SETUP_LINK_POLICY, SETUP_TOKEN_PATTERN } from './auth/account-setup.js';
+import { SHARE_LINK_PERIODS } from './share-links/period.js';
 import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
@@ -4429,6 +4430,130 @@ export const EntrySchema = z
   .openapi('Entry');
 
 export const EntryPageSchema = z.object({ items: z.array(EntrySchema), nextCursor: z.string().nullable() }).openapi('EntryPage');
+
+// ---- MUT-560 (ADR-246): share links (one-time, a period, a PIN, no account) ----
+
+export const ShareLinkPeriodSchema = z.enum(SHARE_LINK_PERIODS).openapi('ShareLinkPeriod', {
+  description:
+    'LAST_1_MONTH, LAST_2_MONTHS, LAST_3_MONTHS: the last 1–3 complete calendar months before the day the link is made, in the profile’s timezone (made 2026-11-06, LAST_3_MONTHS = 2026-08-01 … 2026-10-31). WHOLE_PROFILE: everything up to and including that day. Frozen when the link is made.',
+});
+
+const shareRange = {
+  from: IsoDateSchema.nullable().openapi({ description: 'First money date shown, inclusive; null = from the profile’s first record (WHOLE_PROFILE).' }),
+  to: IsoDateSchema.openapi({ description: 'Last money date shown, inclusive.' }),
+};
+
+export const CreateShareLinkRequestSchema = z
+  .object({
+    period: ShareLinkPeriodSchema,
+    expiresInDays: z.union([z.literal(1), z.literal(7), z.literal(30)]).openapi({ description: 'The link stops working this many days after it is made: 1, 7 or 30.' }),
+    pin: z.string().max(32).openapi({ description: '4 to 8 digits; Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. Anything else answers 422 VALIDATION_FAILED, details.reason PIN_FORMAT.' }),
+  })
+  .strict()
+  .openapi('CreateShareLinkRequest');
+
+export const ShareLinkCreatedSchema = z
+  .object({
+    id: uuid,
+    url: z.string().url().openapi({ description: 'The link, its token in the fragment. Shown only in this answer: only its hash is kept, so it can never be shown again.' }),
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+    expiresAt: z.string().datetime(),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('ShareLinkCreated');
+
+export const ShareLinkSchema = z
+  .object({
+    id: uuid,
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+    createdAt: z.string().datetime(),
+    expiresAt: z.string().datetime(),
+    lastOpenedAt: z.string().datetime().nullable().openapi({ description: 'The last unlock, or a view (written at most hourly).' }),
+    status: z.enum(['active', 'locked']).openapi({ description: 'locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one.' }),
+    viewers: z.number().int().openapi({ description: 'Devices that have opened it.' }),
+    maxViewers: z.number().int(),
+    createdByName: z.string().nullable().openapi({ description: 'The owner who made it; null once their account is deleted.' }),
+  })
+  .openapi('ShareLink');
+
+export const ShareLinkListSchema = z
+  .object({ items: z.array(ShareLinkSchema), limit: z.number().int().openapi({ description: 'The most live links one profile may have (409 SHARE_LINK_LIMIT past it).' }) })
+  .openapi('ShareLinkList');
+
+export const ShareLinkParamSchema = ProfileIdParamSchema.extend({ linkId: z.string().uuid().openapi({ param: { name: 'linkId', in: 'path' } }) });
+
+const shareToken = z.string().regex(SETUP_TOKEN_PATTERN, 'must be a share-link token');
+const viewerToken = z.string().regex(SETUP_TOKEN_PATTERN, 'must be a viewer token').openapi({ description: 'From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.' });
+
+export const ShareLinkCheckRequestSchema = z.object({ token: shareToken.openapi({ description: 'The token from the link’s fragment.' }) }).strict().openapi('ShareLinkCheckRequest');
+
+export const ShareLinkCheckResponseSchema = z
+  .object({ state: z.literal('pin').openapi({ description: 'The link can be opened with its PIN. Nothing about the profile or its owner is said before it.' }) })
+  .openapi('ShareLinkCheck');
+
+export const ShareLinkUnlockRequestSchema = z
+  .object({
+    token: shareToken,
+    pin: z.string().max(32).openapi({ description: 'Arabic-Indic and Eastern Arabic-Indic digits are read as 0–9. A PIN that is not 4–8 digits counts as a wrong one.' }),
+    viewerToken: viewerToken.optional().openapi({ description: 'The viewer token this browser held for this link before, even if its access has ended: it keeps its place among the 3 devices.' }),
+  })
+  .strict()
+  .openapi('ShareLinkUnlockRequest');
+
+export const ShareLinkUnlockResponseSchema = z
+  .object({
+    viewerToken: viewerToken,
+    viewerExpiresAt: z.string().datetime().openapi({ description: '8 hours from now, or the link’s expiry if sooner; then the PIN again.' }),
+    linkExpiresAt: z.string().datetime(),
+    profileName: z.string(),
+    ownerName: z.string().nullable(),
+    period: ShareLinkPeriodSchema,
+    ...shareRange,
+  })
+  .openapi('ShareLinkUnlock');
+
+export const ShareLinkViewRequestSchema = z.object({ viewerToken }).strict().openapi('ShareLinkViewRequest');
+
+export const ShareLinkEntriesRequestSchema = z
+  .object({
+    viewerToken,
+    limit: z.number().int().min(1).max(100).default(20).openapi({ description: 'Page size, 1–100.' }),
+    cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  })
+  .strict()
+  .openapi('ShareLinkEntriesRequest');
+
+/** The feed's items as a stranger sees them: no profile id, and no person's id anywhere. */
+export const ShareLinkEntrySchema = z
+  .discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('expense'),
+      createdAt: z.string().datetime(),
+      expense: ExpenseSchema.omit({ createdByUserId: true }).extend({ receiptCount: z.number().int().nonnegative().openapi({ description: 'READY receipts attached' }) }).openapi('ShareLinkExpense'),
+    }),
+    z.object({ kind: z.literal('received'), createdAt: z.string().datetime(), origin: z.enum(['capture', 'integration']), settlesOwedId: uuid.nullable(), replacesPaymentId: uuid.nullable(), income: IncomeResponseSchema }),
+    z.object({ kind: z.literal('owed'), createdAt: z.string().datetime(), income: IncomeResponseSchema }),
+    z.object({ kind: z.literal('conversion'), createdAt: z.string().datetime(), conversion: ConversionSchema.omit({ createdByUserId: true }).openapi('ShareLinkConversion') }),
+  ])
+  .openapi('ShareLinkEntry');
+
+export const ShareLinkEntryPageSchema = z.object({ items: z.array(ShareLinkEntrySchema), nextCursor: z.string().nullable() }).openapi('ShareLinkEntryPage');
+
+export const ShareLinkSummarySchema = z
+  .object({
+    ...shareRange,
+    expenses: ExpenseSummarySchema.shape.currencies.openapi({ description: 'Per currency, never summed across currencies.' }),
+    received: z.array(z.object({ currency: CurrencySchema, total: AmountSchema, count: z.number().int() })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+  })
+  .openapi('ShareLinkSummary');
+
+export const ShareLinkReceiptsRequestSchema = z.object({ viewerToken, expenseId: z.string().uuid() }).strict().openapi('ShareLinkReceiptsRequest');
+
+export const ShareLinkReceiptListSchema = z
+  .object({ items: z.array(z.object({ id: uuid, filename: z.string(), mimeType: AttachmentMimeTypeSchema, url: z.string().url(), expiresAt: z.string().datetime() })) })
+  .openapi('ShareLinkReceiptList');
 
 // ---- MUT-434: connecting an agent (OAuth for MCP clients) -------------------------
 
