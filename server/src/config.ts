@@ -177,6 +177,15 @@ const envSchema = z.object({
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   /**
+   * MUT-565 (ADR-251): the Accountant plan. Off (the default, production until live prices exist): no cap, and
+   * `/v1/me.clientBooks.cap` is null. On: ACCOUNTANT_FREE_CLIENTS client books free, the plan for more. Only "true".
+   */
+  ACCOUNTANT_PLAN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-565: the client books an accountant reads without the plan. */
+  ACCOUNTANT_FREE_CLIENTS: z.coerce.number().int().min(1).max(50).default(3),
+  /** MUT-565: the ceiling with the plan (abuse guard; past it the 4th-client answer says "Contact us"). */
+  ACCOUNTANT_PLAN_MAX_CLIENTS: z.coerce.number().int().min(1).max(1000).default(100),
+  /**
    * MUT-560 (ADR-247): one-time share links to a period of a profile, opened with a PIN. Off, every share-link route
    * answers 404, so the server can deploy before the portal and phone screens (MUT-561..563). Only "true" turns it on.
    */

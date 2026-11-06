@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { OpenAPIHono } from '@hono/zod-openapi';
 import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './auth/middleware.js';
+import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
 import { ApiError } from './errors.js';
 import type { Logger } from './logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
@@ -21,6 +22,8 @@ export interface ApiShellDependencies {
   maxOwnedProfiles?: number | undefined;
   /** MUT-559 (ACCOUNTANT_ACCESS): whether /v1/me lists `clients`. Absent = off (the portal's local mode). */
   accountantAccess?: boolean;
+  /** MUT-565 (ACCOUNTANT_PLAN): the client-books cap. Absent = off, no cap. */
+  accountantPlan?: AccountantPlanConfig;
 }
 
 /**
@@ -53,6 +56,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('passkeys', deps.passkeys ?? false);
     c.set('maxOwnedProfiles', deps.maxOwnedProfiles);
     c.set('accountantAccess', deps.accountantAccess ?? false);
+    c.set('accountantPlan', deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF);
     // MUT-447 (review): a handled failure inside a partial answer is logged and reported like an unhandled one, so it
     // leaves a trace even where the reporter is a no-op (local mode, tests).
     c.set('reportError', (err: unknown) => {

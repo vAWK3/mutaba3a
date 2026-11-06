@@ -19,10 +19,11 @@ import type { TurnstileVerifier } from '../auth/turnstile.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import { setupLinkOrigin } from '../auth/account-setup.js';
 import { todayIn } from '../dates.js';
+import { ACCOUNTANT_PLAN_OFF, clientCapOf, planCovers, resolveAccountantPlan, type AccountantPlan, type AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { DOMAIN_LIST_NAMES, isListedDomain, loadDomainList } from '../email/domains/lists.js';
 import { domainOf } from '../email/domains/screen.js';
 import type { CalendarDay, Mailer } from '../email/ports.js';
-import { ApiError } from '../errors.js';
+import { accountantPlanRequired, ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { Logger } from '../logger.js';
 import { ownedProfileOf, personalProfileFor } from '../personal-profile.js';
@@ -91,6 +92,8 @@ export interface AccountantRouteOptions {
   logger: Logger;
   /** The signup bot check (the self-service verifier), action "signup". */
   turnstile: TurnstileVerifier;
+  /** MUT-565 (ACCOUNTANT_PLAN): the client-books cap at accept and on the list. Absent = off: no cap. */
+  accountantPlan?: AccountantPlanConfig;
 }
 
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -124,7 +127,12 @@ export function mayAcceptInvite(signedInEmail: string, inviteEmail: string): boo
 
 export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<AppEnv> {
   const { store, settings, passwordHasher, ipLimiter, inviteLimiter, maxPerProfile, terms, mailer, logger, turnstile } = options;
+  const planConfig = options.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
   const app = new OpenAPIHono<AppEnv>();
+
+  /** MUT-565: the person's Accountant plan (one billing read); never read while ACCOUNTANT_PLAN is off. */
+  const planOf = async (userId: string, now: Date): Promise<AccountantPlan | null> =>
+    planConfig.on ? resolveAccountantPlan(userId, await store.billing.factsFor({ ownerUserIds: [userId], organizationIds: [] }), now) : null;
 
   /** The profile at `profileId` if the caller owns it (creator or co-owner): 404 when they can't see it, else 403. */
   const ownedBy = (user: UserRecord, profileId: string): Promise<Organization> => ownedProfileOf(store, user.id, profileId);
@@ -340,14 +348,16 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       tags: ['Sessions'],
       summary: 'Accept an accountant invite as the signed-in person',
       description:
-        'MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404.',
+        'MUT-559 (ADR-245, D4). The signed-in address must be the invited one, or on exactly the same domain when that domain is a business’s own (never a webmail, disposable or relay domain, never a subdomain); otherwise 403 INVITE_EMAIL_MISMATCH with details.maskedEmail. 409 CONFLICT (ALREADY_HAS_ACCESS) when the person already owns, belongs to or reads the profile. Of two accepts of one invite, one wins; the other answers 404. ' +
+        'MUT-565 (ADR-251): with the Accountant plan switched on, an accountant without the plan holds at most `clientBooks.freeLimit` client books; the next accept answers 402 ACCOUNTANT_PLAN_REQUIRED `{freeLimit, active, inviteExpiresAt}`, writes nothing and leaves the invite open until it expires, so the same call works once the plan is paid. With the plan, past the server ceiling: 409 CONFLICT reason CLIENT_BOOKS_CEILING (contact us). Checked under a lock on the accountant: of two parallel accepts at the last free place, one wins. Pending invites and share links never count. Since 1.105.0-mut565.',
       security: SESSION_ONLY,
       request: { body: jsonBody(AccountantInviteTokenRequestSchema) },
       responses: {
         200: { description: 'Accepted: the profile is now among /v1/me `clients`', content: { 'application/json': { schema: AccountantClientSchema } } },
         403: errorResponse('INVITE_EMAIL_MISMATCH'),
+        402: errorResponse('ACCOUNTANT_PLAN_REQUIRED (MUT-565): the free client books are used; details {freeLimit, active, inviteExpiresAt}'),
         404: errorResponse('NOT_FOUND: no such invite, used, revoked or expired'),
-        409: errorResponse('CONFLICT, details.reason ALREADY_HAS_ACCESS'),
+        409: errorResponse('CONFLICT, details.reason ALREADY_HAS_ACCESS, or CLIENT_BOOKS_CEILING (MUT-565: the paid plan’s ceiling; contact us)'),
       },
     }),
     async (c) => {
@@ -361,14 +371,20 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       const alreadyIn = (await store.memberships.find(user.id, grant.organizationId)) ?? (await store.accountantGrants.findActive(user.id, grant.organizationId));
       if (alreadyIn) throw new ApiError('CONFLICT', 'You can already open this profile', { reason: 'ALREADY_HAS_ACCESS' });
       const requestId = c.get('requestId');
+      const plan = await planOf(user.id, now);
       const accepted = await store.accountantGrants.accept({
         tokenDigest: sessionDigest(settings.pepper, token),
         accountantUserId: user.id,
         at: now,
+        maxActive: plan ? clientCapOf(plan, planConfig) : null,
         auditFor: (g) => [grantAudit(g, 'accountant.accepted', user.id, requestId)],
       });
       if (!accepted) throw inviteNotFound();
-      return c.json(await clientView(accepted), 200);
+      if (accepted.kind === 'cap_reached') {
+        if (plan && planCovers(plan)) throw new ApiError('CONFLICT', 'You have reached the most client books we open online; contact us to add more', { reason: 'CLIENT_BOOKS_CEILING' });
+        throw accountantPlanRequired({ freeLimit: planConfig.freeClients, active: accepted.active, inviteExpiresAt: grant.inviteExpiresAt.toISOString() });
+      }
+      return c.json(await clientView(accepted.grant), 200);
     },
   );
 
@@ -441,7 +457,12 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
         404: errorResponse('Accountant access is off on this server'),
       },
     }),
-    async (c) => c.json({ items: await clientBooksOf(store, c.get('identity').user.id, c.get('now')()) }, 200),
+    async (c) => {
+      const userId = c.get('identity').user.id;
+      const now = c.get('now')();
+      const plan = await planOf(userId, now);
+      return c.json({ items: (await clientBooksOf(store, userId, plan ? clientCapOf(plan, planConfig) : null, now)).rows }, 200);
+    },
   );
 
   app.openapi(

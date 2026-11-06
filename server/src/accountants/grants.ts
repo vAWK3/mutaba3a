@@ -1,5 +1,6 @@
 import { closingSince, profileOwner } from '../access/owner-closing.js';
 import { addMonths, monthOf, todayIn } from '../dates.js';
+import { readableClientIds } from '../billing/accountant-plan.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { AccountantGrantRecord, AuditEventInput, ClientActivity, ClientActivityWindow, LedgerStore, Organization } from '../repositories/ports.js';
 
@@ -76,6 +77,8 @@ export interface AccountantClientRow {
   status: 'active' | 'ended';
   endedReason: 'revoked' | 'closed' | null;
   endedAt: string | null;
+  /** MUT-565 (ADR-251): active, but past the books the accountant may read without the plan: every read answers 402. */
+  needsPlan: boolean;
 }
 
 const PROFILE_TYPE_VIEW = { PERSONAL: 'personal', BUSINESS: 'business' } as const;
@@ -85,8 +88,9 @@ const PROFILE_TYPE_VIEW = { PERSONAL: 'personal', BUSINESS: 'business' } as cons
  * while the owner is closing; else the latest REVOKED grant (by `revokedAt`) is `ended/revoked`. `grants` are what
  * `listForAccountant` answers (LEFT and dismissed are never there, and are skipped if they are). A profile missing
  * from `profiles` is gone (purged): no row. Active first, oldest accept first; then ended, newest end first.
+ * MUT-565: `readable` (readableClientIds over the ACTIVE grants) marks every other active row `needsPlan`; null: none.
  */
-export function clientRows(grants: readonly AccountantGrantRecord[], profiles: ReadonlyMap<string, ClientProfileFacts>): AccountantClientRow[] {
+export function clientRows(grants: readonly AccountantGrantRecord[], profiles: ReadonlyMap<string, ClientProfileFacts>, readable: ReadonlySet<string> | null = null): AccountantClientRow[] {
   const chosen = new Map<string, AccountantGrantRecord>();
   for (const grant of grants) {
     if (grant.status !== 'ACTIVE' && (grant.status !== 'REVOKED' || grant.dismissedAt !== null)) continue;
@@ -96,7 +100,7 @@ export function clientRows(grants: readonly AccountantGrantRecord[], profiles: R
   const rows: Array<{ row: AccountantClientRow; order: number }> = [];
   for (const grant of chosen.values()) {
     const facts = profiles.get(grant.organizationId);
-    if (facts) rows.push(clientRowOf(grant, facts));
+    if (facts) rows.push(clientRowOf(grant, facts, readable !== null && grant.status === 'ACTIVE' && !readable.has(grant.id)));
   }
   const byId = (a: { row: AccountantClientRow }, b: { row: AccountantClientRow }) => a.row.profileId.localeCompare(b.row.profileId);
   const active = rows.filter((r) => r.row.status === 'active').sort((a, b) => a.order - b.order || byId(a, b));
@@ -111,7 +115,7 @@ function outranks(grant: AccountantGrantRecord, held: AccountantGrantRecord): bo
 }
 
 /** `order` sorts: the accept instant for an active row, the end instant for an ended one. */
-function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts): { row: AccountantClientRow; order: number } {
+function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts, locked: boolean): { row: AccountantClientRow; order: number } {
   const { organization, ownerName, closingSince } = facts;
   const endedAt = grant.status === 'REVOKED' ? grant.revokedAt : closingSince;
   const endedReason = grant.status === 'REVOKED' ? 'revoked' : closingSince ? 'closed' : null;
@@ -125,6 +129,7 @@ function clientRowOf(grant: AccountantGrantRecord, facts: ClientProfileFacts): {
     status: endedReason ? 'ended' : 'active',
     endedReason,
     endedAt: endedReason && endedAt ? endedAt.toISOString() : null,
+    needsPlan: endedReason ? false : locked,
   };
   return { row, order: (endedReason ? (endedAt ?? shared) : shared).getTime() };
 }
@@ -156,24 +161,34 @@ function monthWindowOf(organization: Pick<Organization, 'id' | 'timezone'>, now:
   return { organizationId: organization.id, from: `${month}-01`, before: `${addMonths(month, 1)}-01` };
 }
 
+/** MUT-565: the person's client books with the cap applied: the rows, and how many grants are ACTIVE (what the cap counts). */
+export interface ClientBooks<R> {
+  rows: R[];
+  activeCount: number;
+}
+
 /**
  * MUT-575: the person's client books. Without `activityAt`, the rows (/v1/me `clients`, no stat queries); with it, each
  * active row adds `entriesThisMonth` (in the profile's own calendar month at that instant) and `lastActivityAt`, in
- * two queries in all (/v1/clients). Ended rows carry null stats.
+ * two queries in all (/v1/clients). Ended rows carry null stats. MUT-565: `cap` (clientCapOf; null = no cap) marks the
+ * rows past the readable ones `needsPlan`, and those carry null stats too: a locked client is never read.
  */
-export async function clientBooksOf(store: LedgerStore, userId: string): Promise<AccountantClientRow[]>;
-export async function clientBooksOf(store: LedgerStore, userId: string, activityAt: Date): Promise<Array<AccountantClientRow & { entriesThisMonth: number | null; lastActivityAt: string | null }>>;
-export async function clientBooksOf(store: LedgerStore, userId: string, activityAt?: Date) {
+export async function clientBooksOf(store: LedgerStore, userId: string, cap?: number | null): Promise<ClientBooks<AccountantClientRow>>;
+export async function clientBooksOf(store: LedgerStore, userId: string, cap: number | null, activityAt: Date): Promise<ClientBooks<AccountantClientRow & { entriesThisMonth: number | null; lastActivityAt: string | null }>>;
+export async function clientBooksOf(store: LedgerStore, userId: string, cap: number | null = null, activityAt?: Date) {
   const grants = await store.accountantGrants.listForAccountant(userId);
   const profiles = await profileFactsOf(store, grants);
-  const rows = clientRows(grants, profiles);
-  if (!activityAt) return rows;
-  const windows = rows.filter((r) => r.status === 'active').map((r) => monthWindowOf(profiles.get(r.profileId)!.organization, activityAt));
+  const active = grants.filter((g) => g.status === 'ACTIVE');
+  const rows = clientRows(grants, profiles, cap === null ? null : readableClientIds(active, cap));
+  if (!activityAt) return { rows, activeCount: active.length };
+  const read = rows.filter((r) => r.status === 'active' && !r.needsPlan);
+  const windows = read.map((r) => monthWindowOf(profiles.get(r.profileId)!.organization, activityAt));
   const activity = windows.length > 0 ? await store.entries.clientActivity(windows) : new Map<string, ClientActivity>();
-  return rows.map((row) => {
-    const stats = row.status === 'active' ? activity.get(row.profileId) : undefined;
+  const withStats = rows.map((row) => {
+    const stats = row.status === 'active' && !row.needsPlan ? activity.get(row.profileId) : undefined;
     return { ...row, entriesThisMonth: stats ? stats.entriesThisMonth : null, lastActivityAt: stats?.lastActivityAt?.toISOString() ?? null };
   });
+  return { rows: withStats, activeCount: active.length };
 }
 
 /** One ACTIVE grant as the accountant sees it (what accepting answers). Null if the profile is gone. */

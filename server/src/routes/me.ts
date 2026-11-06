@@ -1,7 +1,8 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
-import { entitlementsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
+import { entitlementsWithFactsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
+import { ACCOUNTANT_PLAN_OFF, clientBooksSummaryOf, clientCapOf, resolveAccountantPlan, type AccountantPlan, type AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { personStanding } from '../billing/gate.js';
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { passkeyPromptView } from '../auth/passkey-prompt.js';
@@ -45,7 +46,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess')), 200),
+    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 200),
   );
 
   return app;
@@ -57,15 +58,29 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
  * (MUT-358), and every profile's `billing` is then null; otherwise it is the request's clock. MUT-361:
  * `billingStanding` is the lapse gate's verdict on the person (gate.ts), null wherever the gate is off. MUT-370:
  * `passkeysAt` is the request's clock where this server offers passkeys (null elsewhere, the local mode included);
- * only then is the suggestion read (`user.passkeyPrompt`, else null).
+ * only then is the suggestion read (`user.passkeyPrompt`, else null). MUT-565: with `clients`, `clientBooks` (the
+ * cap and the person's Accountant plan, resolved from the same billing read: no query of its own).
  */
-export async function buildMe(store: LedgerStore, user: UserRecord, terms: CurrentTerms | null, billingAt: Date | null, billingGate = false, passkeysAt: Date | null = null, maxOwnedProfiles = MAX_OWNED_PROFILES, accountantAccess = false) {
+export async function buildMe(
+  store: LedgerStore,
+  user: UserRecord,
+  terms: CurrentTerms | null,
+  billingAt: Date | null,
+  billingGate = false,
+  passkeysAt: Date | null = null,
+  maxOwnedProfiles = MAX_OWNED_PROFILES,
+  accountantAccess = false,
+  accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
+) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
   // MUT-358: one billing read for all the profiles (billing/coverage.ts), never one per profile. MUT-373 (eng review
   // D1): likewise one owners read for every profile the caller owns; the two are independent, so they run together.
   const ownedIds = loaded.filter(({ organization, membership }) => ownsProfile(organization, user.id, membership.role)).map(({ organization }) => organization.id);
-  const [entitlements, ownerEntries] = await Promise.all([billingAt ? entitlementsFor(store, loaded, billingAt) : null, store.memberships.listOwnersOf(ownedIds)]);
+  const [billingRead, ownerEntries] = await Promise.all([billingAt ? entitlementsWithFactsFor(store, loaded, billingAt, user.id) : null, store.memberships.listOwnersOf(ownedIds)]);
+  const entitlements = billingRead?.entitlements ?? null;
+  // MUT-565: the Accountant plan from the facts just read; no billing (the signed-out portal) is no plan.
+  const plan: AccountantPlan = billingRead && billingAt ? resolveAccountantPlan(user.id, billingRead.facts, billingAt) : { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false };
   const profiles = loaded.map(({ organization, membership, malafatConnected }) => {
     const entitlement = entitlements?.get(organization.id);
     return {
@@ -85,7 +100,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     store.features.activeFor(user.id),
     // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`. MUT-575: ended ones too,
     // until removed, so the clients show the tab while any row is left. No stat queries here (GET /v1/clients has them).
-    accountantAccess ? clientBooksOf(store, user.id) : null,
+    accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
   ]);
   return {
     user: {
@@ -110,7 +125,7 @@ export async function buildMe(store: LedgerStore, user: UserRecord, terms: Curre
     currencies: [...SUPPORTED_CURRENCIES],
     terms: termsNow,
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
-    ...(clients ? { clients } : {}),
+    ...(clients ? { clients: clients.rows, clientBooks: clientBooksSummaryOf(clients.activeCount, plan, accountantPlan) } : {}),
   };
 }
 

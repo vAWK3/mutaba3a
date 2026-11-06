@@ -63,7 +63,7 @@ describe('2. /v1/me clients (MUT-575)', () => {
     const acc = await person(h, { displayName: 'Hadi Accountant' });
     expect((await inviteAccountant(h, owner, profileId, acc.email)).status).toBe(201);
     const accepted = await acceptInvite(h, acc, inviteTokenFor(h, acc.email));
-    const active = { profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null };
+    const active = { profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null, needsPlan: false };
     expect(await read(accepted)).toEqual(active);
     expect((await me(h, acc)).clients).toEqual([active]);
 

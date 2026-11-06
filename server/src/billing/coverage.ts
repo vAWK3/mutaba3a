@@ -14,8 +14,17 @@ export interface ProfileForBilling {
  * The facts are the owners' subscriptions, grants and trial starts, plus anything tied to the profiles themselves.
  */
 export async function entitlementsFor(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date): Promise<Map<string, Entitlement>> {
-  const facts = await factsOf(store, profiles);
-  return new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now)]));
+  return (await entitlementsWithFactsFor(store, profiles, now)).entitlements;
+}
+
+/**
+ * MUT-565 (ADR-251): the same single read, also handing back the facts, so /v1/me resolves the person's Accountant
+ * plan from them with no query of its own. `personUserId` joins the owners asked about (always already there through
+ * the personal profile; the set keeps it to one read either way).
+ */
+export async function entitlementsWithFactsFor(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date, personUserId?: string): Promise<{ entitlements: Map<string, Entitlement>; facts: BillingFactsRecord }> {
+  const facts = await factsOf(store, profiles, personUserId);
+  return { entitlements: new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now)])), facts };
 }
 
 /** A profile the person belongs to, with what billing needs to resolve it. */
@@ -62,8 +71,8 @@ export async function billingStatusOf(store: Pick<LedgerStore, 'billing'>, profi
   };
 }
 
-async function factsOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[]) {
-  const owners = new Set<string>();
+async function factsOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], personUserId?: string) {
+  const owners = new Set<string>(personUserId ? [personUserId] : []);
   for (const { organization } of profiles) {
     const owner = profileOwnerOf(organization);
     if (owner) owners.add(owner);

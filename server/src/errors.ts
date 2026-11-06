@@ -65,6 +65,13 @@ export const ERROR_CODES = {
    */
   SUBSCRIPTION_LAPSED: 402,
   /**
+   * MUT-565 (ADR-251): the accountant needs the Accountant plan. On accept (the 4th client book without the plan):
+   * `details` { freeLimit, active, inviteExpiresAt }; nothing was written and the invite stays open until it expires.
+   * On a client past the free ones while the plan isn't paid (selectProfile): `details` { profileId, freeLimit }.
+   * Not 409 ACCOUNTANT_LIMIT-style: that reason is the owner's 5-accountants-per-profile limit.
+   */
+  ACCOUNTANT_PLAN_REQUIRED: 402,
+  /**
    * MUT-559 (ADR-245, D4): an accountant invite accepted by someone else: neither the invited address nor a colleague
    * on the same business domain (webmail, disposable and relay domains never match). `details.maskedEmail` names the
    * invited address, mostly hidden, so the person can sign in with it.
@@ -162,4 +169,9 @@ export class ApiError extends Error {
  */
 export function ownedProfileConflict(organization: { personalOwnerUserId: string | null }, message: string): ApiError {
   return new ApiError('CONFLICT', message, { reason: organization.personalOwnerUserId ? 'PERSONAL_PROFILE' : 'OWNED_PROFILE' });
+}
+
+/** MUT-565 (ADR-251): one wording for both places the Accountant plan is needed (accept and selectProfile). */
+export function accountantPlanRequired(details: { profileId: string; freeLimit: number } | { freeLimit: number; active: number; inviteExpiresAt: string }): ApiError {
+  return new ApiError('ACCOUNTANT_PLAN_REQUIRED', `You read ${details.freeLimit} client books for free; the Accountant plan opens more`, details);
 }

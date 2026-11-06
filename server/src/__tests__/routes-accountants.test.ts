@@ -161,7 +161,7 @@ describe('the owner invites (MUT-559)', () => {
     const h = accountantHarness();
     const { owner, profileId } = await ownerWithProfile(h);
     const acc = await shared(h, owner, profileId);
-    expect((await me(h, acc)).clients).toEqual([{ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null }]);
+    expect((await me(h, acc)).clients).toEqual([{ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null, needsPlan: false }]);
     expect((await h.app.request(`/v1/clients/${profileId}`, { method: 'DELETE', headers: acc.auth })).status).toBe(204);
     expect((await me(h, acc)).clients).toEqual([]);
     expect((await h.app.request('/v1/expenses', { headers: acc.on(profileId) })).status).toBe(404);
@@ -182,7 +182,7 @@ describe('who may accept (MUT-559 D4)', () => {
   it('the exact address → ACTIVE, and the response names the client', async () => {
     const { res, profileId } = await invitedAs('hadi@books.ps', 'hadi@books.ps');
     expect(res.status).toBe(200);
-    expect(await read(res)).toEqual({ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null });
+    expect(await read(res)).toEqual({ profileId, name: 'Sader Studio', ownerName: 'Basel Sader', profileType: 'business', sharedSince: T0.toISOString(), status: 'active', endedReason: null, endedAt: null, needsPlan: false });
   });
 
   it('a colleague on the same professional domain → ACTIVE, and the owner’s list shows who really accepted', async () => {

@@ -43,7 +43,7 @@ describe('clientRows (MUT-575)', () => {
   it('an ACTIVE grant is an active row with the profile, owner and type', () => {
     const rows = clientRows([grant(A)], new Map([profile(A, 'Sader Studio', null, 'PERSONAL')]));
     expect(rows).toEqual([
-      { profileId: A, name: 'Sader Studio', ownerName: 'Owner of Sader Studio', profileType: 'personal', sharedSince: at(1).toISOString(), status: 'active', endedReason: null, endedAt: null },
+      { profileId: A, name: 'Sader Studio', ownerName: 'Owner of Sader Studio', profileType: 'personal', sharedSince: at(1).toISOString(), status: 'active', endedReason: null, endedAt: null, needsPlan: false },
     ]);
   });
 
@@ -96,5 +96,14 @@ describe('clientRows (MUT-575)', () => {
       new Map([profile(A, 'A'), profile(B, 'B'), profile(C, 'C'), profile('00000000-0000-4000-8000-00000000000d', 'D', at(5)), profile('00000000-0000-4000-8000-00000000000e', 'E')]),
     );
     expect(rows.map((r) => `${r.name}:${r.status}`)).toEqual(['E:active', 'B:active', 'C:ended', 'D:ended', 'A:ended']);
+  });
+
+  it('MUT-565: `needsPlan` on the active rows outside the readable set only; ended rows never; no set: none', () => {
+    const g1 = grant(A, { acceptedAt: at(1) });
+    const g2 = grant(B, { acceptedAt: at(2) });
+    const g3 = grant(C, { status: 'REVOKED', revokedAt: at(3) });
+    const profiles = new Map([profile(A, 'A'), profile(B, 'B'), profile(C, 'C')]);
+    expect(clientRows([g1, g2, g3], profiles, new Set([g1.id])).map((r) => `${r.name}:${r.needsPlan}`)).toEqual(['A:false', 'B:true', 'C:false']);
+    expect(clientRows([g1, g2, g3], profiles).every((r) => !r.needsPlan)).toBe(true);
   });
 });

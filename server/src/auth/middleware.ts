@@ -2,7 +2,7 @@ import type { Context, MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { matchedRoutes } from 'hono/route';
 import type { PostingActor } from '../agreements/posting.js';
-import { ApiError, ownedProfileConflict } from '../errors.js';
+import { accountantPlanRequired, ApiError, ownedProfileConflict } from '../errors.js';
 import { profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { AccountantGrantRecord, ApiKeyRecord, LedgerStore, MembershipRecord, MembershipRole, OAuthGrantRecord, Organization, SessionRecord, UserRecord } from '../repositories/ports.js';
@@ -14,6 +14,7 @@ import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
 import { CLOSING_OPEN_ENDPOINTS, closingRefusal, isAccountGone } from '../accounts/closure.js';
 import type { Entitlement } from '../billing/entitlement.js';
+import { clientCapOf, resolveAccountantPlan, type AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { hasScope, isScope, type Scope } from './scopes.js';
 import { DEFAULT_DEVICE_IDLE_DAYS, isDeviceSessionToken, isSamePortalOrigin, sessionCookieName, sessionDigest } from './sessions.js';
 import { accountantStoreGuard, principalStoreGuard, unguarded, type StoreGuard } from './store-guard.js';
@@ -86,6 +87,8 @@ export type AppEnv = {
     maxOwnedProfiles: number | undefined;
     /** MUT-559 (app-shell.ts, from ACCOUNTANT_ACCESS): whether /v1/me lists the person's `clients`. */
     accountantAccess: boolean;
+    /** MUT-565 (app-shell.ts, from ACCOUNTANT_PLAN): the client-books cap; off = no cap. */
+    accountantPlan: AccountantPlanConfig;
     /** MUT-361: on a person-level route, each of the person's profiles' entitlements (a cross-profile read leaves LOCKED ones out). */
     personEntitlements: ReadonlyMap<string, Entitlement>;
     /** MUT-447: report an error a route handled itself (a partial answer), as the shell reports an unhandled one (ADR-091). */
@@ -175,6 +178,8 @@ export interface AuthenticateOptions {
   organizationIndependent: ReadonlySet<string>;
   /** MUT-559 (ACCOUNTANT_ACCESS): whether a profile shared with the person as an accountant can be selected. Absent = off. */
   accountantAccess?: boolean;
+  /** MUT-565 (ACCOUNTANT_PLAN): the client-books cap selectProfile enforces on an accountant's reads. Absent = off. */
+  accountantPlan?: AccountantPlanConfig;
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -249,6 +254,8 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
     profileWriter = auth.writerOfRecord;
     // MUT-559: an accountant's request is refused before the lapse gate, so a write is always 403, never 402.
     if (grant) assertAccountantMayCall(c.req.method, endpoint, options.routeAccess().get(endpoint));
+    // MUT-565 (ADR-251): then the Accountant plan's door, still before any read of the client's records.
+    if (grant) await assertClientReadable(options, grant, identity.user.id, c.get('now')());
     if (gated) await gateSelectedProfile(c, auth, endpoint, options.store);
     if (grant) await touchAccountantView(c, options.store, grant, identity.user.id);
   } else if (endpoint && gated) {
@@ -266,6 +273,23 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
 function assertAccountantMayCall(method: string, endpoint: string, access: RouteAccess | undefined): void {
   if (method !== 'GET' && method !== 'HEAD') throw accountantReadOnly();
   if (!access || !accountantMayRead(endpoint, access.scopes)) throw accountantReadOnly();
+}
+
+/**
+ * MUT-565 (ADR-251, P4): a lapsed accountant still reads the oldest `freeClients` of their client books; the rest answer
+ * 402 ACCOUNTANT_PLAN_REQUIRED here, the one door every accountant read passes (feed, summaries, receipts,
+ * downloads), so no route checks it again. The grant's rank is one indexed count; only a client past the free ones
+ * costs a billing read. Derived, never stored: a revoke, a leave or a new subscription changes the answer by itself.
+ * After the method gate, so an accountant's write is still 403, never 402.
+ */
+async function assertClientReadable(options: AuthenticateOptions, grant: AccountantGrantRecord, userId: string, now: Date): Promise<void> {
+  const config = options.accountantPlan;
+  if (!config?.on || !grant.accountantUserId) return;
+  const rank = await options.store.accountantGrants.countActiveBefore(grant.accountantUserId, grant);
+  if (rank < config.freeClients) return;
+  const facts = await options.store.billing.factsFor({ ownerUserIds: [userId], organizationIds: [] });
+  const cap = clientCapOf(resolveAccountantPlan(userId, facts, now), config);
+  if (cap !== null && rank >= cap) throw accountantPlanRequired({ profileId: grant.organizationId, freeLimit: config.freeClients });
 }
 
 /**
