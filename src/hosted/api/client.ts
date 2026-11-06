@@ -25,6 +25,22 @@ export type Passkey = Schemas['Passkey'];
 export type FirmRequestResponse = Schemas['FirmRequestResponse'];
 export type RemoveProfileOwnerResponse = Schemas['RemoveProfileOwnerResponse'];
 export type ProfileOwner = Schemas['ProfileOwner'];
+/** MUT-562 (MUT-559/575's routes): a client book an accountant reads, as /v1/me and GET /v1/clients list it. */
+export type AccountantClient = Schemas['AccountantClient'];
+export type AccountantClientWithStats = Schemas['AccountantClientWithStats'];
+export type AccountantInviteCheck = Schemas['AccountantInviteCheck'];
+export type AccountantInviteSignupRequest = Schemas['AccountantInviteSignupRequest'];
+export type AccountantInviteSignup = Schemas['AccountantInviteSignup'];
+/** MUT-562 (MUT-575): one row of a profile's money-date feed (GET /v1/profile-entries), the /v1/entries shape. */
+export type Entry = Schemas['Entry'];
+export type EntryPage = Schemas['EntryPage'];
+/** MUT-562 (MUT-560's visitor routes): what a share link's page reads. */
+export type ShareLinkUnlock = Schemas['ShareLinkUnlock'];
+export type ShareLinkEntry = Schemas['ShareLinkEntry'];
+export type ShareLinkEntryPage = Schemas['ShareLinkEntryPage'];
+export type ShareLinkSummary = Schemas['ShareLinkSummary'];
+export type ShareLinkReceiptList = Schemas['ShareLinkReceiptList'];
+export type ShareLinkEntriesRequest = Schemas['ShareLinkEntriesRequest'];
 export type MalafatSuggestions = Schemas['MalafatSuggestions'];
 /** MUT-418: the person's answers to the trial's card prompt. */
 export type TrialPrompt = Schemas['TrialPrompt'];
@@ -289,7 +305,8 @@ type QueryValue = string | number | boolean | null | undefined;
 
 interface RequestOptions {
   profileId?: string;
-  query?: Record<string, QueryValue>;
+  /** MUT-562: an array is a repeatable parameter (`kinds=expense&kinds=received`). */
+  query?: Record<string, QueryValue | readonly QueryValue[]>;
   body?: unknown;
   signal?: AbortSignal;
   /** Client-generated key for a write that must not replay (MUT-42 §14.2). Omitted for receipt-upload starts, which are idempotent by nature — a repeat leaves an unlisted PENDING row. */
@@ -313,7 +330,13 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
  * passkey sign-in challenge (MUT-115), asked for while signed out.
  */
 // MUT-434: connecting an agent (/v1/oauth) is the server's alone: the agent talks to the hosted service, never this page.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth)(\/|\?|$)/;
+// MUT-562: an accountant invite and a share link are the server's too: public pages a stranger opens, signed in or not.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth|accountant-invites|share-links)(\/|\?|$)/;
+/**
+ * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
+ * link page's own PIN-again state, never the end of whoever is signed in on this browser.
+ */
+const SESSIONLESS_401 = /^\/v1\/share-links\//;
 /** The local backend's errors that stop the page, by class name: the classes live in the lazy chunk (transport.ts). */
 const LOCAL_STOPS: Readonly<Record<string, LocalStopCode>> = {
   LocalFormatTooNewError: 'LOCAL_FORMAT_TOO_NEW',
@@ -410,11 +433,13 @@ async function sendLocal(url: string, init: RequestInit): Promise<Response> {
   return backend.fetch(new Request(new URL(url, window.location.origin), init));
 }
 
-function withQuery(path: string, query?: Record<string, QueryValue>): string {
+function withQuery(path: string, query?: Record<string, QueryValue | readonly QueryValue[]>): string {
   const params = new URLSearchParams();
-  for (const [key, value] of Object.entries(query ?? {})) {
-    if (value === undefined || value === null || value === '') continue;
-    params.append(key, String(value));
+  for (const [key, given] of Object.entries(query ?? {})) {
+    for (const value of Array.isArray(given) ? given : [given]) {
+      if (value === undefined || value === null || value === '') continue;
+      params.append(key, String(value));
+    }
   }
   const text = params.toString();
   return text ? `${path}?${text}` : path;
@@ -505,7 +530,7 @@ export async function send(method: Method, path: string, options: RequestOptions
     const isSignIn = method === 'POST' && SIGN_IN_PATHS.has(path);
     // A local 401 is the local backend's own business (it re-mints its session); only the server's ends a session.
     // The change itself never waits on itself.
-    if (error.status === 401 && !isSignIn && wentRemote) await reportUnauthorised(error, sentUnder, !(method === 'POST' && path === CHANGE_PASSWORD_PATH));
+    if (error.status === 401 && !isSignIn && wentRemote && !SESSIONLESS_401.test(path)) await reportUnauthorised(error, sentUnder, !(method === 'POST' && path === CHANGE_PASSWORD_PATH));
     throw error;
   }
   return response;
@@ -810,6 +835,33 @@ export const api = {
       profileId,
       body: mode ? { mode } : undefined,
     }),
+
+  // MUT-562 (MUT-559, ADR-245): an accountant invite, from its page. Check and signup are public (the token in the
+  // body, never a URL); accept is the signed-in person's. Signup issues no session: sign in after (13231).
+  checkAccountantInvite: (token: string, signal?: AbortSignal) =>
+    request<AccountantInviteCheck>('POST', '/v1/accountant-invites/check', { body: { token }, signal }),
+  acceptAccountantInvite: (token: string) => request<AccountantClient>('POST', '/v1/accountant-invites/accept', { body: { token } }),
+  signupFromAccountantInvite: (body: AccountantInviteSignupRequest) =>
+    request<AccountantInviteSignup>('POST', '/v1/accountant-invites/signup', { body }),
+  // MUT-562 (MUT-575, ADR-249): the accountant's client books, with this month's stats; DELETE removes an ended one.
+  clientBooks: (signal?: AbortSignal) => request<Schemas['AccountantClientList']>('GET', '/v1/clients', { signal }),
+  removeClientBook: (profileId: string) => request<void>('DELETE', `/v1/clients/${encodeURIComponent(profileId)}`),
+  // MUT-562 (MUT-575): one profile's money-date feed, through the profile header (a client's, read-only).
+  profileEntries: (profileId: string, query: Query<'/v1/profile-entries'> = {}, signal?: AbortSignal) =>
+    request<EntryPage>('GET', '/v1/profile-entries', { profileId, query, signal }),
+  expenseReceiptDownload: (profileId: string, expenseId: string, receiptId: string, disposition: ReceiptDisposition = 'attachment') =>
+    request<Get<'/v1/expenses/{expenseId}/receipts/{receiptId}/download'>>(
+      'GET',
+      `/v1/expenses/${encodeURIComponent(expenseId)}/receipts/${encodeURIComponent(receiptId)}/download`,
+      { profileId, query: disposition === 'inline' ? { disposition } : {} },
+    ),
+  // MUT-562 (MUT-560, ADR-247): a share link's visitor. Tokens travel in bodies only; nothing here names a profile.
+  checkShareLink: (token: string, signal?: AbortSignal) => request<Schemas['ShareLinkCheck']>('POST', '/v1/share-links/check', { body: { token }, signal }),
+  unlockShareLink: (body: { token: string; pin: string; viewerToken?: string }) => request<ShareLinkUnlock>('POST', '/v1/share-links/unlock', { body }),
+  shareLinkEntries: (body: ShareLinkEntriesRequest, signal?: AbortSignal) => request<ShareLinkEntryPage>('POST', '/v1/share-links/entries', { body, signal }),
+  shareLinkSummary: (viewerToken: string, signal?: AbortSignal) => request<ShareLinkSummary>('POST', '/v1/share-links/summary', { body: { viewerToken }, signal }),
+  shareLinkReceipts: (viewerToken: string, entryKey: string) =>
+    request<ShareLinkReceiptList>('POST', '/v1/share-links/expense-receipts', { body: { viewerToken, entryKey } }),
 
   /** Display-only reference rates (MUT-228, ADR-087); no profile header. */
   fxRates: (base: Currency) => request<FxRatesResponse>('GET', '/v1/fx-rates', { query: { base } }),
