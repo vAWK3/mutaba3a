@@ -24,6 +24,24 @@ describe('reading the allocation number (D2)', () => {
     expect(allocation(receipt(['ספק בע"מ', ...rows, 'סה"כ 100.00']))).toBe(ALLOCATION);
   });
 
+  it.each([
+    ['printed in threes with spaces', [`מספר הקצאה: 304 512 876`]],
+    ['printed in threes with dashes', [`Allocation No. 304-512-876`]],
+    ['alone on the row under its label', ['מספר הקצאה:', ` ${ALLOCATION} `]],
+  ] as const)('reads it %s', (_label, rows) => {
+    expect(allocation(receipt(['ספק בע"מ', ...rows, 'סה"כ 100.00']))).toBe(ALLOCATION);
+  });
+
+  it.each([
+    ['a phone under a blank label', ['מספר הקצאה:', 'טל 035555555']],
+    ['a reference under a blank label', ['מספר הקצאה:', 'אסמכתא 100234567']],
+    ['an invoice number further along a blank label\'s row', ['מספר הקצאה:      חשבונית מס 100234567']],
+    ['a table: the invoice number under the header row', ['מספר חשבונית    מספר הקצאה', '100234567    304512876']],
+    ['a registration number before a blank label', [`ח.פ ${REG_VALID_COMPANY} מספר הקצאה`]],
+  ] as const)('never takes %s', (_label, rows) => {
+    expect(allocation(receipt(['ספק בע"מ', ...rows, 'סה"כ 100.00']))).toBeUndefined();
+  });
+
   it('never takes a bare nine-digit number (a ח.פ or ע.מ looks the same)', () => {
     expect(allocation(receipt(['ספק בע"מ', ALLOCATION, 'סה"כ 100.00']))).toBeUndefined();
   });
@@ -31,6 +49,13 @@ describe('reading the allocation number (D2)', () => {
   it('a registration number beside the label is not the allocation number', () => {
     expect(allocation(receipt(['ספק בע"מ', `ח.פ ${REG_VALID_COMPANY} מספר הקצאה ${ALLOCATION}`, 'סה"כ 100.00']))).toBe(ALLOCATION);
     expect(allocation(receipt(['ספק בע"מ', `מספר הקצאה ${ALLOCATION} ח.פ ${REG_VALID_COMPANY}`, 'סה"כ 100.00']))).toBe(ALLOCATION);
+  });
+
+  it('a QR parser fills what the text did not read, and never replaces what it did (D6)', () => {
+    const parser = (payload: string) => (payload.startsWith('IL:') ? { allocationNumber: payload.slice(3) } : null);
+    const read = (rows: string[]) => extractReceipt({ lines: receipt(rows), qr: ['IL:111222333'] }, { readerVersion: READER, qrParsers: [parser] }).allocationNumber;
+    expect(read(['ספק בע"מ', 'סה"כ 100.00'])).toEqual({ value: '111222333', source: 'qr', confidence: 1 });
+    expect(read(['ספק בע"מ', `מספר הקצאה ${ALLOCATION}`, 'סה"כ 100.00'])?.value).toBe(ALLOCATION);
   });
 
   it('the row under the label is not read when it is a registration row', () => {

@@ -58,7 +58,7 @@ CONTENT_TYPES = {".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".png": "image/png
 LANG_GROUP = {"ar": "ar", "ar+en": "ar", "he": "he", "he+en": "he", "en": "en"}
 LANGS = ("ar", "he", "en")
 #: Fields scored when the truth has them; a filled field that disagrees is wrong and confident.
-FIELDS = ("totalMinor", "date", "currency", "vendorName", "vatMinor", "vatRateBasisPoints", "registrationNo", "phone", "email")
+FIELDS = ("totalMinor", "date", "currency", "vendorName", "vatMinor", "vatRateBasisPoints", "registrationNo", "phone", "email", "allocationNumber")
 #: Vendor names match loosely: after folding, one contains the other or they are this similar.
 VENDOR_SIMILARITY = 0.8
 #: The currencies the API takes (server/src/money.ts SUPPORTED_CURRENCIES). A receipt in any other (the SAR fixtures)
@@ -355,6 +355,19 @@ def qr_hits(reads: list[dict]) -> dict:
     return {"withQr": sum(1 for t in reads if t["payload"].get("qr")), "n": len(reads)}
 
 
+def allocation_line(rows: list[dict]) -> str | None:
+    """MUT-557: the allocation number on the real receipts: right, missed, and filled wrong (a number where the truth
+    has another or none, e.g. a ח.פ taken). None when no receipt's truth has one and none was filled."""
+    cells = [r["scores"]["allocationNumber"] for r in rows if "allocationNumber" in r["scores"]]
+    with_truth = [c for c in cells if c["hit"] is not None]
+    wrong = sum(1 for c in cells if c["wrong"])
+    if not with_truth and not wrong:
+        return None
+    hits = sum(1 for c in with_truth if c["hit"])
+    missed = sum(1 for c in with_truth if not c["filled"])
+    return f"Allocation number (MUT-557): {hits}/{len(with_truth)} right, {missed} missed, {wrong} filled wrong (of {len(cells)} real receipts)."
+
+
 def gate(md: list[str], args: argparse.Namespace, synthetic: list[dict], real: list[dict]) -> int:
     """`--compare`: append the lost fields to the report; 1 when any."""
     if not args.compare:
@@ -382,7 +395,7 @@ def rescore(args: argparse.Namespace) -> int:
     if not args.no_real and (real_dir / "reads.json").is_file() and (real_dir / "manifest.json").is_file():
         real, _ = real_items(real_dir)
         payloads = {r["id"]: r["result"] for r in json.loads((real_dir / "reads.json").read_text(encoding="utf-8"))}
-        real_suggestions = extract(real_reads(real, payloads), real_dir, args.server, buyer_memory=True)
+        real_suggestions = extract(real_reads(real, payloads), real_dir, args.server, buyer_memory=not args.no_buyer_memory)
         real_rows, real_agg = real_report(real_dir, real, real_suggestions, {}, args.real_detail)
     (out / "suggestions.json").write_text(json.dumps(suggestions, ensure_ascii=False, indent=1), encoding="utf-8")
     summary = {"label": args.label, "rescoredFrom": str(args.rescore), "synthetic": agg, "perFixture": rows, "real": {"aggregate": real_agg}, "realPerReceipt": real_rows}
@@ -390,6 +403,9 @@ def rescore(args: argparse.Namespace) -> int:
     md = [f"### {args.label} (extractor re-run over {args.rescore.name}'s reads)", "", table(agg["photo"], "Photos (AC1's bar, the spike's scope)"), "", table(agg["all"], "All kinds (photos, screenshots, PDFs)")]
     if real_agg:
         md += ["", table(real_agg["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+        allocation = allocation_line(real_rows)
+        if allocation:
+            md += ["", allocation]
     status = gate(md, args, rows, real_rows)
     (out / "summary.md").write_text("\n".join(md) + "\n", encoding="utf-8")
     print("\n".join(md))
@@ -406,6 +422,7 @@ def main() -> int:
     ap.add_argument("--env", action="append", default=[], help="KEY=VALUE for the sidecar, e.g. OCR_THREADS=4")
     ap.add_argument("--only", default="", help="comma-separated fixture ids")
     ap.add_argument("--no-real", action="store_true")
+    ap.add_argument("--no-buyer-memory", action="store_true", help="MUT-557: the real receipts are many buyers' (an accountant's samples), so none learns a buyer's numbers from another")
     ap.add_argument("--real-detail", action="store_true", help="write per-receipt field results into the real folder (never into --out)")
     ap.add_argument("--rescore", type=Path, help="an earlier run's output folder: re-run only the extractor over its reads.json")
     ap.add_argument("--server", type=Path, default=SERVER_DIR, help="the server/ folder whose extractor runs (a main checkout's, for a baseline)")
@@ -453,7 +470,7 @@ def main() -> int:
     real_ok = [t for t in ok if t["item"] in real]
     suggestions = extract([{"id": t["item"]["id"], "result": t["payload"]} for t in syn_ok], out, args.server)
     real_payloads = {t["item"]["id"]: t["payload"] for t in real_ok}
-    real_suggestions = extract(real_reads(real, real_payloads), real_dir, args.server, buyer_memory=True) if real_ok else {}
+    real_suggestions = extract(real_reads(real, real_payloads), real_dir, args.server, buyer_memory=not args.no_buyer_memory) if real_ok else {}
     (out / "suggestions.json").write_text(json.dumps(suggestions, ensure_ascii=False, indent=1), encoding="utf-8")
 
     rows = []
@@ -480,13 +497,15 @@ def main() -> int:
     real_summary: dict = {"folder": "present" if real_dir.is_dir() else "missing", "files": len(real)}
     if real and not real_scored:
         draft = {
-            "note": "Draft from the pipeline's reading (MUT-441 bench). Correct truth.* by hand (totalMinor in minor units, date YYYY-MM-DD, currency ISO code), set lang to ar|he|en and kind to photo|scanned|screenshot|pdf, then rename to manifest.json.",
+            "note": "Draft from the pipeline's reading (MUT-441 bench). Correct truth.* by hand (totalMinor and vatMinor in minor units, date YYYY-MM-DD, currency ISO code, allocationNumber nine digits or null when the invoice prints none), set lang to ar|he|en and kind to photo|scanned|screenshot|pdf, then rename to manifest.json.",
             "receipts": [
                 {
                     "file": t["item"]["id"],
                     "lang": "",
                     "kind": "photo",
-                    "truth": {k: (real_suggestions.get(t["item"]["id"], {}).get(k) or {}).get("value") for k in ("totalMinor", "date", "currency", "vendorName")},
+                    "truth": {k: (real_suggestions.get(t["item"]["id"], {}).get(k) or {}).get("value") for k in ("totalMinor", "date", "currency", "vendorName", "vatMinor", "allocationNumber")},
+                    # MUT-557: whether the sidecar decoded a QR on it (bench/qr_shapes.py shows what kind).
+                    "qr": bool(t["payload"].get("qr")),
                 }
                 for t in timed
                 if t["item"] in real
@@ -526,6 +545,9 @@ def main() -> int:
     ]
     if real_summary.get("aggregate"):
         md += ["", table(real_summary["aggregate"]["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+        allocation = allocation_line(real_rows)
+        if allocation:
+            md += ["", allocation]
     qr = summary["qr"]
     md += ["", f"QR (MUT-557): {qr['synthetic']['withQr']}/{qr['synthetic']['n']} synthetic and {qr['real']['withQr']}/{qr['real']['n']} real receipts carried a QR payload."]
     if failures:

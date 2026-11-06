@@ -343,8 +343,14 @@ describe('MUT-557: GET /v1/receipts/{id} says when the review needs an allocatio
   const big = { readerVersion: 'phone-1.0', date: field('2026-10-22'), totalMinor: field('708000'), currency: field('ILS'), vatMinor: field('108000') };
   const detail = async (h: Harness, headers: Record<string, string>, id: string) => read(await h.app.request(`/v1/receipts/${id}`, { headers }));
 
-  it('a big ILS invoice with VAT and no number read: expected', async () => {
-    const { h, as } = await setup();
+  const firmSetup = async () => {
+    const s = await setup();
+    await s.h.store.organizations.setFirm(s.org.id, { enabled: true, ownerUserIds: [s.userId] }, s.h.clock.now, { actorId: null, requestId: null });
+    return s;
+  };
+
+  it('a big ILS invoice with VAT and no number read, on a firm: expected', async () => {
+    const { h, as } = await firmSetup();
     const receipt = await upload(h, as(), { ...FILE, suggested: big });
     expect((await detail(h, as(), receipt.id)).allocationNumberExpected).toBe(true);
   });
@@ -355,13 +361,19 @@ describe('MUT-557: GET /v1/receipts/{id} says when the review needs an allocatio
     ['no VAT read', { ...big, vatMinor: undefined }],
     ['nothing read', undefined],
   ])('not expected: %s', async (_label, suggested) => {
-    const { h, as } = await setup();
+    const { h, as } = await firmSetup();
     const receipt = await upload(h, as(), suggested ? { ...FILE, suggested } : FILE);
     expect((await detail(h, as(), receipt.id)).allocationNumberExpected).toBe(false);
   });
 
+  it('never without firm features', async () => {
+    const { h, as } = await setup();
+    const receipt = await upload(h, as(), { ...FILE, suggested: big });
+    expect((await detail(h, as(), receipt.id)).allocationNumberExpected).toBe(false);
+  });
+
   it('never on a Personal profile', async () => {
-    const { h, as, personalProfileId } = await setup();
+    const { h, as, personalProfileId } = await firmSetup();
     const receipt = await upload(h, as(personalProfileId), { ...FILE, suggested: big });
     expect((await detail(h, as(personalProfileId), receipt.id)).allocationNumberExpected).toBe(false);
   });

@@ -3669,7 +3669,7 @@ export const ExpenseSchema = z
     vat: ExpenseVatSchema.nullable().openapi({ description: 'MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302.' }),
     allocationNumber: z.string().regex(/^\d{9}$/).nullable().openapi({ description: 'MUT-557: the supplier invoice\'s Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.101.0-mut557.' }),
     allocationNumberMissing: z.boolean().openapi({
-      description: 'MUT-557: worked out on every read, never stored. True on a Business profile\'s ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557.',
+      description: 'MUT-557: worked out on every read, never stored. True on a firm profile\'s ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557.',
     }),
     version: z.number().int(),
     createdAt: z.string().datetime(),
@@ -3703,7 +3703,7 @@ export const ReceiptSuggestionSchema = z
     registrationNo: suggestedField(z.string().min(1).max(64)).optional(),
     phone: suggestedField(z.string().min(1).max(40)).optional(),
     email: suggestedField(z.string().min(1).max(254)).optional(),
-    /** MUT-557: nine digits, read only beside its label. Since 1.101.0-mut557. */
+    /** MUT-557: nine digits, read only beside its label (every reader sends the bare digits). Since 1.101.0-mut557. */
     allocationNumber: suggestedField(z.string().regex(/^\d{9}$/)).optional(),
   })
   .openapi('ReceiptSuggestion');
@@ -3790,7 +3790,7 @@ export const VendorSuggestionListSchema = z.object({ items: z.array(VendorSugges
 export const ReceiptDetailSchema = ExpenseReceiptSchema.extend({
   vendorDefaults: ReceiptVendorDefaultsSchema.nullable(),
   allocationNumberExpected: z.boolean().openapi({
-    description: 'MUT-557: on a Business profile, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557.',
+    description: 'MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557.',
   }),
 }).openapi('ReceiptDetail');
 

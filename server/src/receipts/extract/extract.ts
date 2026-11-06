@@ -4,7 +4,7 @@ import { isConfident, round2 } from './confidence.js';
 import { exponentOf, inferFromDecimals, readCurrency } from './currency.js';
 import { dateWindow, readDate } from './dates.js';
 import { readAllocationNumber, readEmail, readPhone, readRegistration, readVendor } from './fields.js';
-import { readQrFields } from './qr.js';
+import { readQrFields, type QrParser } from './qr.js';
 import { orderedRows, pdfRows } from './rows.js';
 import { knownVatRates, readMoney } from './total.js';
 import type { ExtractInput } from './types.js';
@@ -19,6 +19,8 @@ export interface ExtractOptions {
   buyerIds?: readonly string[] | undefined;
   /** MUT-540 (D8): a lone card slip may be the total. On unless false; only the benchmark turns it off. */
   loneCardSlip?: boolean | undefined;
+  /** MUT-557 (D6): the QR parsers to try; the registry's unless given (tests). */
+  qrParsers?: readonly QrParser[] | undefined;
 }
 
 /**
@@ -77,9 +79,9 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
     email: email ? field(email.value, email.rule, email.conf) : undefined,
     allocationNumber: allocationNumber ? field(allocationNumber.value, allocationNumber.rule, allocationNumber.conf) : undefined,
   };
-  // MUT-557 (D6): a QR's exact fields fill what the text did not give.
-  const qr = readQrFields(input.qr ?? []);
-  const filled = Object.fromEntries(Object.entries({ ...qr, ...suggestion }).filter(([, v]) => v !== undefined)) as unknown as ReceiptSuggestion;
+  const read = Object.fromEntries(Object.entries(suggestion).filter(([, v]) => v !== undefined));
+  // MUT-557 (D6): a QR's exact fields fill what the text did not give (the text's own reading wins a field).
+  const filled = { ...readQrFields(input.qr ?? [], options.qrParsers), ...read } as unknown as ReceiptSuggestion;
   return { suggestion: filled, buyerIdentifiers: buyer.ownIdentifiers, vendorIdentifiers: vendorIdentifiersOf(rows) };
 }
 

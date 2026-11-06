@@ -73,7 +73,7 @@ export const OcrResultSchema = z.object({
   // MUT-557 (A3): an older sidecar sends none, and a QR list this side can't take is no QR, never a failed read.
   qr: z.array(z.string().min(1).max(4_096)).max(8).default([]).catch([]),
 });
-export type OcrResult = { engine: string; lines: OcrLine[]; pdfText?: string | undefined; pages: number; qr: string[] };
+export type OcrResult = { engine: string; lines: OcrLine[]; pdfText?: string | undefined; pages: number; qr?: string[] | undefined };
 
 const OcrRefusalSchema = z.object({ error: z.enum(['unreadable', 'too_large', 'timeout']) });
 

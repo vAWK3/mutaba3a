@@ -61,9 +61,12 @@ export const VAT_RATE_INVALID = 'vatRateInvalid';
 /** MUT-557: the allocation number's schema message, worded by its row. */
 export const ALLOCATION_NUMBER_INVALID = 'allocationNumberInvalid';
 
-/** MUT-557 (D1): spaces and dashes out, then exactly nine digits (the server's `normalizeAllocationNumber`); else null. */
+/** MUT-557 (D1): spaces, dashes and a pasted PDF's direction marks out (the server's `readAllocationDigits`). */
+const ALLOCATION_SEPARATORS = /[\s\-\u2010-\u2015\u2212\uFE63\uFF0D\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+/** MUT-557 (D1): separators out, then exactly nine digits (the server's `normalizeAllocationNumber`); else null. */
 export function allocationDigits(text: string): string | null {
-  const digits = text.replace(/[\s-]/g, '');
+  const digits = text.replace(ALLOCATION_SEPARATORS, '');
   return /^[0-9]{9}$/.test(digits) ? digits : null;
 }
 

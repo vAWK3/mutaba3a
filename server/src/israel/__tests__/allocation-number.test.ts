@@ -55,13 +55,13 @@ describe('aboveAllocationThreshold', () => {
 });
 
 describe('allocationNumberRequired', () => {
-  const base = { profileType: 'BUSINESS', currency: 'ILS', occurredOn: '2026-07-01', vatTreatment: 'STANDARD_RATED', netMinor: shekels(6_000), vatMinor: shekels(1_080) } as const;
+  const base = { firm: true, currency: 'ILS', occurredOn: '2026-07-01', vatTreatment: 'STANDARD_RATED', netMinor: shekels(6_000), vatMinor: shekels(1_080) } as const;
 
-  it('a Business ILS expense with VAT at or above the threshold', () => {
+  it('a firm profile\'s ILS expense with VAT at or above the threshold', () => {
     expect(allocationNumberRequired(base)).toBe(true);
   });
-  it('never on a Personal profile', () => {
-    expect(allocationNumberRequired({ ...base, profileType: 'PERSONAL' })).toBe(false);
+  it('never on a profile without firm features (a Personal one included)', () => {
+    expect(allocationNumberRequired({ ...base, firm: false })).toBe(false);
   });
   it('needs the VAT treatment, net and VAT all recorded (A4)', () => {
     expect(allocationNumberRequired({ ...base, vatTreatment: null })).toBe(false);
@@ -98,5 +98,11 @@ describe('readAllocationDigits', () => {
   it('the same rule without throwing', () => {
     expect(readAllocationDigits('123-456-789')).toBe('123456789');
     expect(readAllocationDigits('12345678')).toBeNull();
+  });
+});
+
+describe('pasted numbers (review)', () => {
+  it.each(['304\u2013512\u2013876', '304\u2212512\u2212876', '\u200F304512876\u200E', '304\uFF0D512\uFF0D876'])('reads %j as the nine digits', (raw) => {
+    expect(readAllocationDigits(raw)).toBe('304512876');
   });
 });

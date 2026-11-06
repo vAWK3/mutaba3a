@@ -1,5 +1,4 @@
 import { validationError } from '../agreements/compose.js';
-import type { ProfileType } from '../repositories/ports.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -32,21 +31,27 @@ export function aboveAllocationThreshold(invoice: { currency: string; occurredOn
   return threshold !== null && invoice.netMinor >= threshold;
 }
 
-/** D4 + A4: a Business profile's expense with its VAT recorded (treatment, net and VAT) that needs a number. */
+/**
+ * D4 + A4: an expense with its VAT recorded (treatment, net and VAT) that needs a number, on a profile with firm
+ * features: the only profiles whose forms record VAT and show the number (a firm is always a business).
+ */
 export function allocationNumberRequired(expense: {
-  profileType: ProfileType;
+  firm: boolean;
   currency: string;
   occurredOn: string;
   vatTreatment: VatTreatment | null;
   netMinor: bigint | null;
   vatMinor: bigint | null;
 }): boolean {
-  return expense.profileType === 'BUSINESS' && expense.vatTreatment !== null && aboveAllocationThreshold(expense);
+  return expense.firm && expense.vatTreatment !== null && aboveAllocationThreshold(expense);
 }
 
-/** Spaces and dashes out, then exactly nine ASCII digits; null when it isn't one. */
+/** What a typed or pasted number may carry besides its digits: spaces, dashes (any), and a Hebrew PDF's direction marks. */
+const ALLOCATION_SEPARATORS = /[\s\-\u2010-\u2015\u2212\uFE63\uFF0D\u200E\u200F\u202A-\u202E\u2066-\u2069]/g;
+
+/** Separators out, then exactly nine ASCII digits; null when it isn't one. */
 export function readAllocationDigits(raw: string): string | null {
-  const digits = raw.replace(/[\s-]/g, '');
+  const digits = raw.replace(ALLOCATION_SEPARATORS, '');
   return new RegExp(`^[0-9]{${ALLOCATION_NUMBER_DIGITS}}$`).test(digits) ? digits : null;
 }
 

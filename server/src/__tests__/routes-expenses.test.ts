@@ -565,23 +565,34 @@ describe('MUT-557: the Israeli allocation number (ADR-246)', () => {
   const NUMBER = '304512876';
   const patch = (h: Harness, as: Record<string, string>, id: string, version: number, body: Record<string, unknown>) =>
     h.app.request(`/v1/expenses/${id}`, json(body, { ...as, 'if-match': String(version) }, 'PATCH'));
+  /** Profile A with firm features, the profiles whose forms record VAT and the number; B stays without. */
+  const firmSetup = async () => {
+    const s = await setup();
+    await s.h.store.organizations.setFirm(s.a.org.id, { enabled: true, ownerUserIds: [s.p.userId] }, s.h.clock.now, { actorId: null, requestId: null });
+    return s;
+  };
 
   it('stores the number, spaces and dashes dropped, and reads it back', async () => {
-    const { create } = await setup();
+    const { create } = await firmSetup();
     const res = await create({ amount: '7080.00', vat: STD18, allocationNumber: '304-512 876' });
     expect(res.status).toBe(201);
     expect(await read(res)).toMatchObject({ allocationNumber: NUMBER, allocationNumberMissing: false });
   });
 
   it.each(['30451287', '3045128761', '30451287a'])('refuses %j with ALLOCATION_NUMBER_INVALID', async (allocationNumber) => {
-    const { create } = await setup();
+    const { create } = await firmSetup();
     const res = await create({ allocationNumber });
     expect(res.status).toBe(422);
     expect((await read(res)).error.details).toMatchObject({ reason: 'ALLOCATION_NUMBER_INVALID', field: 'allocationNumber' });
   });
 
-  it('flags a Business ILS expense with VAT at or above ₪5,000 net and no number; adding one clears the flag', async () => {
-    const { h, a, p, create } = await setup();
+  it('a Business profile without firm features is never flagged (its forms record no VAT)', async () => {
+    const { b, create } = await firmSetup();
+    expect((await read(await create({ amount: '9000.00', vat: STD18 }, b.org.id))).allocationNumberMissing).toBe(false);
+  });
+
+  it('flags a firm\'s ILS expense with VAT at or above ₪5,000 net and no number; adding one clears the flag', async () => {
+    const { h, a, p, create } = await firmSetup();
     const e = await read(await create({ amount: '5900.00', vat: STD18 }));
     expect(e).toMatchObject({ allocationNumber: null, allocationNumberMissing: true });
     const fixed = await read(await patch(h, p.as(a.org.id), e.id, 1, { allocationNumber: NUMBER }));
@@ -597,24 +608,24 @@ describe('MUT-557: the Israeli allocation number (ADR-246)', () => {
     ['no VAT recorded', { amount: '9000.00' }],
     ['another currency', { amount: '9000.00', currency: 'USD', vat: STD18 }],
   ])('no flag: %s', async (_label, body) => {
-    const { create } = await setup();
+    const { create } = await firmSetup();
     expect((await read(await create(body))).allocationNumberMissing).toBe(false);
   });
 
   it('no flag before the first threshold (2024-05-05)', async () => {
-    const { h, a, p } = await setup();
+    const { h, a, p } = await firmSetup();
     // Under MUT-227's floor for a new expense: written straight to the store, as an old row reads.
     const old = await h.store.expenses.create({ organizationId: a.org.id, occurredOn: '2024-05-04', amountMinor: 9_000_000n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, createdByUserId: p.userId, vatTreatment: 'STANDARD_RATED', vatRateBasisPoints: 1800, netMinor: 7_627_119n, vatMinor: 1_372_881n, allocationNumber: null }, h.clock.now);
     expect((await read(await h.app.request(`/v1/expenses/${old.id}`, { headers: p.as(a.org.id) }))).allocationNumberMissing).toBe(false);
   });
 
   it('never on a Personal profile', async () => {
-    const { p, create } = await setup();
+    const { p, create } = await firmSetup();
     expect((await read(await create({ amount: '9000.00', vat: STD18 }, p.personalProfileId))).allocationNumberMissing).toBe(false);
   });
 
   it('the list, the expense and the entries feed carry the flag', async () => {
-    const { h, a, p, create } = await setup();
+    const { h, a, p, create } = await firmSetup();
     const e = await read(await create({ amount: '9000.00', vat: STD18 }));
     await create({ amount: '9000.00', vat: STD18 }, p.personalProfileId);
     const list = await read(await h.app.request('/v1/expenses', { headers: p.as(a.org.id) }));

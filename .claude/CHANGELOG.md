@@ -44,7 +44,7 @@ to be claimed back. Mutaba3a now reads it, keeps it on the expense, and flags on
   reading, marked when needed), and a "No allocation number" badge in the expenses list.
 
 ### Changed
-- `serializeExpense` takes the profile (`ExpenseContext`); `isCompleteSuggestion` also wants the number on a big ILS
+- `serializeExpense` takes the profile (`ExpenseContext`, firm features); `isCompleteSuggestion` also wants the number on a big ILS
   invoice; snapshot format 16; contract 1.101.0-mut557; `src/hosted/api/schema.d.ts` regenerated.
 
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)

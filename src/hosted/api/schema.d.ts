@@ -22279,7 +22279,7 @@ export interface components {
             vat: components["schemas"]["ExpenseVat"];
             /** @description MUT-557: the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.101.0-mut557. */
             allocationNumber: string | null;
-            /** @description MUT-557: worked out on every read, never stored. True on a Business profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557. */
+            /** @description MUT-557: worked out on every read, never stored. True on a firm profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.101.0-mut557. */
             allocationNumberMissing: boolean;
             version: number;
             /** Format: date-time */
@@ -24191,7 +24191,7 @@ export interface components {
         };
         ReceiptDetail: components["schemas"]["ExpenseReceipt"] & {
             vendorDefaults: components["schemas"]["ReceiptVendorDefaults"];
-            /** @description MUT-557: on a Business profile, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557. */
+            /** @description MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.101.0-mut557. */
             allocationNumberExpected: boolean;
         };
         ReceiptVendorDefaults: {

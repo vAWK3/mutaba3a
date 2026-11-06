@@ -226,8 +226,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       storage();
       const { organization } = sessionAuth(c);
       const receipt = await mustGet(organization.id, c.req.valid('param').receiptId);
-      // MUT-557 (D4): the review marks the allocation number as needed, on a Business profile only.
-      const allocationNumberExpected = expenseContextOf(organization).profileType === 'BUSINESS' && receipt.suggested !== null && !receipt.suggested.allocationNumber && expectsAllocationNumber(receipt.suggested);
+      // MUT-557 (D4): the review marks the allocation number as needed, on a firm profile only (as its form shows it).
+      const allocationNumberExpected = expenseContextOf(organization).firm && receipt.suggested !== null && !receipt.suggested.allocationNumber && expectsAllocationNumber(receipt.suggested);
       return c.json({ ...serializeExpenseReceipt(receipt), vendorDefaults: await receiptVendorDefaults(store, organization, receipt), allocationNumberExpected }, 200);
     },
   );
