@@ -1849,7 +1849,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description No such profile for you, or accountant access is off on this server */
+                /** @description No such profile for you, or accountant access is off on this server or for your account (the operator’s accountant_access feature, MUT-577) */
                 404: {
                     headers: {
                         [name: string]: unknown;
@@ -20737,7 +20737,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description No such profile for you, or share links are off on this server */
+                /** @description No such profile for you, or share links are off on this server or for your account (the operator’s accountant_access feature, MUT-577) */
                 404: {
                     headers: {
                         [name: string]: unknown;
