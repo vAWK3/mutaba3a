@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.102.0-mut560
+  version: 1.103.0-mut314
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9162,6 +9162,60 @@ components:
         - savedAt
         - origin
         - maps
+    PeriodDownloadTicket:
+      type: object
+      properties:
+        type:
+          type: string
+          enum:
+            - report
+            - receipts
+          description: "`report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv."
+        ticket:
+          type: string
+          description: POST it (with a share link’s viewer token) to /v1/period-downloads/stream within 120 seconds. Never put it in a URL.
+        expiresAt:
+          type: string
+          format: date-time
+        filename:
+          type: string
+          example: mutaba3a-Sader-Studio-2026-10.xlsx
+        estimate:
+          type: object
+          properties:
+            expenses:
+              type: integer
+            income:
+              type: integer
+            receipts:
+              type: integer
+            receiptBytes:
+              type: integer
+              description: The receipts zip is about this size.
+          required:
+            - expenses
+            - income
+            - receipts
+            - receiptBytes
+          description: What the period holds, as of `asOf`.
+      required:
+        - type
+        - ticket
+        - expiresAt
+        - filename
+        - estimate
+    PeriodDownloadStreamRequest:
+      type: object
+      properties:
+        ticket:
+          type: string
+          maxLength: 2048
+        viewerToken:
+          type: string
+          maxLength: 256
+          description: "A share link’s download: the viewer token its ticket was minted with."
+      required:
+        - ticket
     BillingOverview:
       type: object
       properties:
@@ -12860,6 +12914,33 @@ components:
       required:
         - viewerToken
         - entryKey
+      additionalProperties: false
+    ShareLinkDownloadTicketRequest:
+      type: object
+      properties:
+        viewerToken:
+          type: string
+          pattern: ^[A-Za-z0-9_-]{43}$
+          description: From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else.
+        type:
+          type: string
+          enum:
+            - report
+            - receipts
+          description: "`report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv."
+        lang:
+          type: string
+          enum:
+            - ar
+            - en
+          description: Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent.
+        asOf:
+          type: string
+          format: date-time
+          description: Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree.
+      required:
+        - viewerToken
+        - type
       additionalProperties: false
   parameters: {}
 paths:
@@ -21971,6 +22052,137 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/period-downloads/ticket:
+    get:
+      tags:
+        - Your data
+      summary: "Start a period download: its size, and a ticket for the stream"
+      description: "MUT-314 (ADR-248). Whole calendar months (`from`…`to`, YYYY-MM, at most 24, never past the profile's current month) of the profile named by X-Mutaba3a-Profile. `type=report` is the Excel report (Expenses, Income and a per-currency Summary, always both sheets); `type=receipts` the receipt files, named by Ref, with index.csv. Over 30 starts an hour: 429. Over the report's row cap or the zip's byte cap: 422 VALIDATION_FAILED, details.reason PERIOD_TOO_LARGE with { type, limit, estimate }: pick a shorter period. Owners, members and accountants alike; a lapsed profile still downloads."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - report
+              - receipts
+            description: "`report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv."
+          required: true
+          description: "`report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv."
+          name: type
+          in: query
+        - schema:
+            type: string
+            description: First month, YYYY-MM (inclusive).
+            example: 2026-10
+          required: true
+          description: First month, YYYY-MM (inclusive).
+          name: from
+          in: query
+        - schema:
+            type: string
+            description: "Last month, YYYY-MM (inclusive): at most 24 months on, never past the current month."
+            example: 2026-10
+          required: true
+          description: "Last month, YYYY-MM (inclusive): at most 24 months on, never past the current month."
+          name: to
+          in: query
+        - schema:
+            type: string
+            enum:
+              - ar
+              - en
+            description: Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent.
+          required: false
+          description: Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent.
+          name: lang
+          in: query
+        - schema:
+            type: string
+            format: date-time
+            description: Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree.
+          required: false
+          description: Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree.
+          name: asOf
+          in: query
+      responses:
+        "200":
+          description: The ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodDownloadTicket"
+        "404":
+          description: No such profile for you, or period downloads are off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: details.reason PERIOD_RANGE, AS_OF or PERIOD_TOO_LARGE"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/period-downloads/stream:
+    post:
+      tags:
+        - Your data
+      summary: "Download a period: the file a ticket names"
+      description: "MUT-314 (ADR-248). The ticket from GET /v1/period-downloads/ticket or POST /v1/share-links/download-ticket, in the body (a form post works: the browser's own downloader saves the file), within 120 seconds; a share link's also carries its viewer token. Access is checked again here, so a revoke after the ticket wins. The report: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet with Content-Length. The receipts: application/zip, streamed; a receipt the bucket can't give is listed `missing` in index.csv. 404 (one answer for every cause) for a bad, expired or no longer authorised ticket; 429 with Retry-After when this server is busy. Audited as period.downloaded."
+      security: []
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PeriodDownloadStreamRequest"
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: "#/components/schemas/PeriodDownloadStreamRequest"
+      responses:
+        "200":
+          description: The file, as an attachment
+          content:
+            application/vnd.openxmlformats-officedocument.spreadsheetml.sheet:
+              schema:
+                type: string
+                format: binary
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          description: NOT_FOUND, details.reason DOWNLOAD_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: this server is serving its most downloads; retry shortly"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: ATTACHMENTS_NOT_CONFIGURED (receipts only)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/billing:
     get:
       tags:
@@ -27021,6 +27233,56 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: ATTACHMENTS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/share-links/download-ticket:
+    post:
+      tags:
+        - Share links
+      summary: "Start a download of the shared period: its size, and a ticket for the stream"
+      description: "MUT-314 (ADR-248). The link’s own period, never another: `type=report` is the Excel report, `type=receipts` the receipt files with index.csv. POST the answer’s ticket with this viewer token to /v1/period-downloads/stream within 120 seconds. Headers follow `lang`, else Accept-Language (Arabic by default). 422 PERIOD_TOO_LARGE over a cap. Also needs period downloads switched on."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ShareLinkDownloadTicketRequest"
+      responses:
+        "200":
+          description: The ticket
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PeriodDownloadTicket"
+        "401":
+          description: "UNAUTHENTICATED, details.reason SHARE_VIEW_EXPIRED: this viewer’s 8 hours have passed; unlock again with the PIN (and this viewer token, to keep its place)"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND, details.reason SHARE_LINK_UNAVAILABLE: unknown, revoked, expired or locked, its profile gone or its owner closing their account, or share links are off. The same answer for every cause."
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: "RATE_LIMITED: too many requests from this viewer"
           content:
             application/json:
               schema:
