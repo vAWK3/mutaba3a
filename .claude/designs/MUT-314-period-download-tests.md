@@ -24,7 +24,7 @@ The numbered groups are the plan's; each names where it lives.
 Store contract `repositories/__tests__/store-contract-period-pack.ts` (memory; Prisma under `test:db`): the estimate's
 row rules and `asOf`, `listReadyByExpenseIds` (READY, live, this profile's, oldest first), `names` (own ids only).
 
-Also updated: `routes.test.ts` and the other API version assertions (1.103.0-mut314), `route-security.test.ts` (the
+Also updated: `routes.test.ts` and the other API version assertions (1.107.0-mut314), `route-security.test.ts` (the
 mint session-only; the stream and the link mint public), `writability-routes.test.ts` (40 session reads),
 `accountant-route-matrix.test.ts` (the mint in the derived allowlist), `routes-share-links.test.ts` (the link paths).
 

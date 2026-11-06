@@ -52,7 +52,7 @@ production until MUT-561..564). Also fixes MUT-501 (a cancelled records export l
 - `http/pull-stream.ts` replaces the records export's `streamOf`: a cancel is quiet (MUT-501).
 - The mint joins `LOCKED_OPEN_ENDPOINTS`; the flag table gains `PERIOD_DOWNLOADS`.
 - Terraform: the API's Cloud Run request timeout is 900 s (on the next apply).
-- Contract 1.103.0-mut314, carried as 1.106.0-mut557 once merged after MUT-575 and MUT-557 (the higher version wins); `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
+- Contract 1.107.0-mut314 (after MUT-557's 1.106.0); `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
 
 ## [Unreleased] - 2026-11-06 — Accountant access per account: the operator's `accountant_access` feature (MUT-577, ADR-249 addendum)
 

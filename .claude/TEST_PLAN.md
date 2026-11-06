@@ -4461,7 +4461,7 @@ Full map: `.claude/designs/MUT-314-period-download-tests.md` (the plan's 15 grou
 - Store contract `store-contract-period-pack.ts` (memory; Prisma under `test:db`) and
   `period-downloads-prisma.test.ts` (both downloads on Postgres; 1,000 rows and 600 receipts in < 3 s and ≤ 20 queries).
 - `routes-records-export.test.ts`: a cancelled export logs no error (MUT-501).
-- Updated: API version assertions (1.103.0-mut314, then 1.104.0-mut575 at the MUT-575 merge), route-security, writability-routes (41 session reads with MUT-575),
+- Updated: API version assertions (1.107.0-mut314), route-security, writability-routes (41 session reads with MUT-575),
   accountant-route-matrix (the mint is allowlisted), routes-share-links (link paths).
 
 ## MUT-575 — client books server (ADR-249)
