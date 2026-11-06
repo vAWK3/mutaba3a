@@ -51,21 +51,33 @@ describe('viewer tokens', () => {
     localStorage.clear();
     resetViewerTokensForTests();
   });
+  const record = (over: Partial<{ viewerExpiresAt: string; linkExpiresAt: string }> = {}) => ({ viewerToken: 'viewer-1', viewerExpiresAt: '2026-11-06T20:00:00.000Z', linkExpiresAt: '2026-11-13T12:00:00.000Z', ...over });
+  const NOW = new Date('2026-11-06T12:00:00.000Z');
 
-  it('are stored under the link token’s SHA-256, never the link token', async () => {
+  it('persist under the link token’s SHA-256 with viewerExpiresAt, never the link token', async () => {
     const digest = await linkDigest('link-token-abc');
     expect(digest).toMatch(/^[0-9a-f]{64}$/);
-    saveViewerToken(digest, 'viewer-1');
-    expect(readViewerToken(digest)).toBe('viewer-1');
+    saveViewerToken(digest, record());
+    expect(readViewerToken(digest, NOW)).toBe('viewer-1');
+    const stored = JSON.parse(localStorage.getItem(`mtb3a-share-viewer:${digest}`)!);
+    expect(stored).toEqual(record());
     expect(JSON.stringify({ ...localStorage })).not.toContain('link-token-abc');
   });
 
-  it('survive a reload (storage) and go when the link is gone', async () => {
+  it('survive a reload, past the viewer’s 8 hours (the slot is kept with the PIN)', async () => {
     const digest = await linkDigest('t');
-    saveViewerToken(digest, 'viewer-2');
+    saveViewerToken(digest, record());
     resetViewerTokensForTests();
-    expect(readViewerToken(digest)).toBe('viewer-2');
+    expect(readViewerToken(digest, new Date('2026-11-07T12:00:00.000Z'))).toBe('viewer-1');
+  });
+
+  it('are dropped once the link has ended, and when the link is gone', async () => {
+    const digest = await linkDigest('t');
+    saveViewerToken(digest, record());
+    expect(readViewerToken(digest, new Date('2026-11-14T00:00:00.000Z'))).toBeNull();
+    expect(localStorage.getItem(`mtb3a-share-viewer:${digest}`)).toBeNull();
+    saveViewerToken(digest, record());
     forgetViewerToken(digest);
-    expect(readViewerToken(digest)).toBeNull();
+    expect(readViewerToken(digest, NOW)).toBeNull();
   });
 });
