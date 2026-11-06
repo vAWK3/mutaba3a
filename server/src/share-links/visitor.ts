@@ -1,10 +1,10 @@
 import type { ExpenseSummaryBlock } from '../expenses/summary.js';
 import type { EntryRow } from '../repositories/ports.js';
-import { serializeConversion, serializeExpense, serializeIncomeEntry } from '../serializers.js';
+import { serializeExpense, serializeIncomeEntry } from '../serializers.js';
 
 /**
  * MUT-560 review (ADR-246): what a visitor sees of an entry. Names, never ids: the client, project and category by name
- * (the category in the request's language, MUT-464), the vendor as written, and the entry itself by an opaque key
+ * (the category in the request's language, MUT-464); only expenses and received payments, what the period's report holds; the vendor as written, and the entry itself by an opaque key
  * (row-key.ts) that only this link's receipts route understands. No profile, person, client, project, category,
  * vendor, settled-Owed or replaced-payment id. Built field by field, so a field added to the owner's shapes later never
  * reaches a stranger by accident.
@@ -21,7 +21,14 @@ export interface VisitorContext {
   settledOwed: ReadonlyMap<string, string>;
 }
 
-export function visitorEntry(row: EntryRow, ctx: VisitorContext) {
+/** A row a visitor reads: an expense or a received payment (SHARE_LINK_ENTRY_KINDS). */
+export type VisitorRow = Extract<EntryRow, { kind: 'expense' | 'payment' }>;
+
+export function isVisitorRow(row: EntryRow): row is VisitorRow {
+  return row.kind === 'expense' || row.kind === 'payment';
+}
+
+export function visitorEntry(row: VisitorRow, ctx: VisitorContext) {
   const createdAt = row.record.createdAt.toISOString();
   switch (row.kind) {
     case 'expense': {
@@ -54,16 +61,11 @@ export function visitorEntry(row: EntryRow, ctx: VisitorContext) {
         replacesPayment: row.record.replacesPaymentId !== null,
         income: visitorIncome(serializeIncomeEntry({ kind: 'received', payment: row.record }), ctx),
       };
-    case 'receivable':
-      return { kind: 'owed' as const, createdAt, income: visitorIncome(serializeIncomeEntry({ kind: 'owed', receivable: row.record }), ctx) };
-    case 'conversion': {
-      const c = serializeConversion(row.record);
-      return { kind: 'conversion' as const, createdAt, conversion: { key: ctx.key(c.id), occurredOn: c.occurredOn, amount: c.amount, currency: c.currency, toAmount: c.toAmount, toCurrency: c.toCurrency, notes: c.notes } };
-    }
   }
 }
 
 function visitorIncome(i: ReturnType<typeof serializeIncomeEntry>, ctx: VisitorContext) {
+  // A received payment's shape; `title`, `dueDate` and `credited` are an Owed entry's and always null here.
   return {
     key: ctx.key(i.id),
     kind: i.kind,

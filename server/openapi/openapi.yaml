@@ -12413,7 +12413,14 @@ components:
           enum:
             - active
             - locked
-          description: "locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one."
+            - expired
+            - revoked
+          description: "locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one. Locked, expired and revoked links stay in the list for 24 hours after `endedAt`, then drop out."
+        endedAt:
+          type: string
+          nullable: true
+          format: date-time
+          description: When it was revoked, locked or expired; null while active.
         viewers:
           type: integer
           description: Devices that have opened it.
@@ -12432,6 +12439,7 @@ components:
         - expiresAt
         - lastOpenedAt
         - status
+        - endedAt
         - viewers
         - maxViewers
         - createdByName
@@ -12571,36 +12579,6 @@ components:
             - settlesOwed
             - replacesPayment
             - income
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - owed
-            createdAt:
-              type: string
-              format: date-time
-            income:
-              $ref: "#/components/schemas/ShareLinkIncome"
-          required:
-            - kind
-            - createdAt
-            - income
-        - type: object
-          properties:
-            kind:
-              type: string
-              enum:
-                - conversion
-            createdAt:
-              type: string
-              format: date-time
-            conversion:
-              $ref: "#/components/schemas/ShareLinkConversion"
-          required:
-            - kind
-            - createdAt
-            - conversion
     ShareLinkExpense:
       type: object
       properties:
@@ -12720,40 +12698,6 @@ components:
         - key
         - client
         - project
-    ShareLinkConversion:
-      type: object
-      properties:
-        key:
-          type: string
-          pattern: ^[A-Za-z0-9_-]{22}$
-          description: An opaque key for this entry on this link only (not an id). The receipts route takes it.
-        occurredOn:
-          type: string
-          pattern: ^\d{4}-\d{2}-\d{2}$
-          description: Calendar date in the organization timezone, YYYY-MM-DD
-        amount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        currency:
-          $ref: "#/components/schemas/Currency"
-        toAmount:
-          type: string
-          pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
-        toCurrency:
-          $ref: "#/components/schemas/Currency"
-        notes:
-          type: string
-          nullable: true
-      required:
-        - key
-        - occurredOn
-        - amount
-        - currency
-        - toAmount
-        - toCurrency
-        - notes
     ShareLinkEntriesRequest:
       type: object
       properties:
@@ -26763,8 +26707,8 @@ paths:
     get:
       tags:
         - Profiles
-      summary: "The live share links on this profile: active and locked"
-      description: MUT-560 (ADR-246). Every owner sees every link on the profile. Revoked and expired links are not listed; a link’s URL is never shown again. Oldest first.
+      summary: "The share links on this profile: active, and those that ended in the last day"
+      description: MUT-560 (ADR-246, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.
       security:
         - session: []
         - deviceSession: []
@@ -26930,7 +26874,7 @@ paths:
       tags:
         - Share links
       summary: The shared period’s entries, newest money date first
-      description: "MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
+      description: "MUT-560 (ADR-246). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears."
       security: []
       requestBody:
         required: true

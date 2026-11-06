@@ -92,6 +92,31 @@ export function isLiveLink(link: Pick<ShareLinkRecord, 'revokedAt' | 'expiresAt'
   return link.revokedAt === null && link.expiresAt > at;
 }
 
+/** OW5: how long the owner's list keeps a link after it ended (revoked or expired) or locked. */
+export const SHARE_LINK_ENDED_VISIBLE_MS = 24 * 3_600_000;
+
+export type ShareLinkState = 'active' | 'locked' | 'expired' | 'revoked';
+
+/**
+ * OW5: a link's state at `at` and when it ended or locked (null while active). Revoked wins, then locked, then expired:
+ * a link locked and later revoked reads revoked, one locked and later expired stays locked.
+ */
+export function linkStateAt(link: Pick<ShareLinkRecord, 'revokedAt' | 'lockedAt' | 'expiresAt'>, at: Date): { status: ShareLinkState; endedAt: Date | null } {
+  if (link.revokedAt) return { status: 'revoked', endedAt: link.revokedAt };
+  if (link.lockedAt) return { status: 'locked', endedAt: link.lockedAt };
+  if (link.expiresAt <= at) return { status: 'expired', endedAt: link.expiresAt };
+  return { status: 'active', endedAt: null };
+}
+
+/** OW5: active links, and the others for a day after they ended or locked. */
+export function isListedAt(link: Pick<ShareLinkRecord, 'revokedAt' | 'lockedAt' | 'expiresAt'>, at: Date): boolean {
+  const { endedAt } = linkStateAt(link, at);
+  return endedAt === null || endedAt.getTime() > at.getTime() - SHARE_LINK_ENDED_VISIBLE_MS;
+}
+
+/** The entry kinds a visitor reads: what the period's report holds (expenses and received payments). */
+export const SHARE_LINK_ENTRY_KINDS = ['expense', 'payment'] as const;
+
 /** When a viewer unlocking at `at` loses access: 8 hours on, or the link's expiry if sooner. */
 export function viewerAccessExpiry(link: Pick<ShareLinkRecord, 'expiresAt'>, at: Date): Date {
   return new Date(Math.min(at.getTime() + SHARE_VIEWER_ACCESS_MS, link.expiresAt.getTime()));

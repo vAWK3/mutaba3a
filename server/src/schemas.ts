@@ -4471,7 +4471,10 @@ export const ShareLinkSchema = z
     createdAt: z.string().datetime(),
     expiresAt: z.string().datetime(),
     lastOpenedAt: z.string().datetime().nullable().openapi({ description: 'The last unlock, or a view (written at most hourly).' }),
-    status: z.enum(['active', 'locked']).openapi({ description: 'locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one.' }),
+    status: z.enum(['active', 'locked', 'expired', 'revoked']).openapi({
+      description: 'locked: too many wrong PINs; it opens for no one, viewers already in included. Revoke it and make a new one. Locked, expired and revoked links stay in the list for 24 hours after `endedAt`, then drop out.',
+    }),
+    endedAt: z.string().datetime().nullable().openapi({ description: 'When it was revoked, locked or expired; null while active.' }),
     viewers: z.number().int().openapi({ description: 'Devices that have opened it.' }),
     maxViewers: z.number().int(),
     createdByName: z.string().nullable().openapi({ description: 'The owner who made it; null once their account is deleted.' }),
@@ -4549,11 +4552,7 @@ export const ShareLinkIncomeSchema = IncomeResponseSchema.omit({ id: true, custo
   .extend({ key: visitorKey, client: visitorName('client'), project: visitorName('project') })
   .openapi('ShareLinkIncome');
 
-export const ShareLinkConversionSchema = z
-  .object({ key: visitorKey, occurredOn: IsoDateSchema, amount: AmountSchema, currency: CurrencySchema, toAmount: AmountSchema, toCurrency: CurrencySchema, notes: z.string().nullable() })
-  .openapi('ShareLinkConversion');
-
-/** The feed's items as a stranger sees them: names, never ids (review, MUT-560). */
+/** The feed's items as a stranger sees them: expenses and received payments only (the report's rows), names, never ids. */
 export const ShareLinkEntrySchema = z
   .discriminatedUnion('kind', [
     z.object({ kind: z.literal('expense'), createdAt: z.string().datetime(), expense: ShareLinkExpenseSchema }),
@@ -4565,8 +4564,6 @@ export const ShareLinkEntrySchema = z
       replacesPayment: z.boolean().openapi({ description: 'It replaced a payment Malafat reversed.' }),
       income: ShareLinkIncomeSchema,
     }),
-    z.object({ kind: z.literal('owed'), createdAt: z.string().datetime(), income: ShareLinkIncomeSchema }),
-    z.object({ kind: z.literal('conversion'), createdAt: z.string().datetime(), conversion: ShareLinkConversionSchema }),
   ])
   .openapi('ShareLinkEntry');
 

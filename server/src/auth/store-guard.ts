@@ -422,7 +422,7 @@ export const STORE_ACCESS: StoreAccess = {
    */
   shareLinks: {
     create: 'sessionOnly',
-    listLiveByOrganization: 'sessionOnly',
+    listRecentByOrganization: 'sessionOnly',
     revoke: 'sessionOnly',
     findByTokenDigest: 'operator',
     findViewerByDigest: 'operator',

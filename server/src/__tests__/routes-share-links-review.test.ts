@@ -3,7 +3,7 @@ import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { SHARE_LINK_SUMMARY_POLICY } from '../share-links/links.js';
 import { ADMIN, DAY, businessOf, idem, json, person, read, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
-import { entriesOf, linkOn, listLinks, publicPost, receiptsOf, shareLinkHarness, summaryOf, unlock, viewerOf } from './helpers/share-links.js';
+import { entriesOf, linkOn, listLinks, publicPost, receiptsOf, revokeLink as revokeLinkAt, shareLinkHarness, summaryOf, unlock, viewerOf } from './helpers/share-links.js';
 
 /**
  * MUT-560 review follow-up (ADR-246 as amended): a stale re-unlock never takes a slot; receipt URLs live at most a
@@ -190,5 +190,68 @@ describe('cursors (review 7)', () => {
     expect(page.items.map((e: Loose) => e.expense.title)).toEqual(['shared 2026-10-20', 'shared 2026-10-05']);
     const loggedOrder = await read(await h.app.request('/v1/entries?limit=1', { headers: owner.auth }));
     expect((await entriesOf(h, viewer, { cursor: loggedOrder.nextCursor })).status).toBe(422);
+  });
+});
+
+describe('the owner’s list keeps ended links for a day (OW5)', () => {
+  it('active, then locked (shown 24 h after it locked), revoked and expired (shown 24 h after they ended), then gone', async () => {
+    const h = shareLinkHarness();
+    const owner = await person(h);
+    const p = owner.personalId;
+    const T = h.now().getTime();
+    const active = await linkOn(h, owner, p, { expiresInDays: 30 });
+    const expiring = await linkOn(h, owner, p, { expiresInDays: 1 });
+    const revoked = await linkOn(h, owner, p, { expiresInDays: 30 });
+    const locked = await linkOn(h, owner, p, { expiresInDays: 30 });
+    const stateOf = async () =>
+      Object.fromEntries(((await listLinks(h, owner, p)).items as Loose[]).map((l) => [l.id, { status: l.status, endedAt: l.endedAt }]));
+
+    later(h, HOUR);
+    expect((await revokeLinkAt(h, owner, p, revoked.id)).status).toBe(204);
+    for (let i = 0; i < 5; i++) await unlock(h, locked.token, '0000');
+    const at1h = new Date(T + HOUR).toISOString();
+    expect(await stateOf()).toEqual({
+      [active.id]: { status: 'active', endedAt: null },
+      [expiring.id]: { status: 'active', endedAt: null },
+      [revoked.id]: { status: 'revoked', endedAt: at1h },
+      [locked.id]: { status: 'locked', endedAt: at1h },
+    });
+
+    h.setNow(new Date(T + DAY + 30 * 60_000));
+    expect(await stateOf()).toEqual({
+      [active.id]: { status: 'active', endedAt: null },
+      [expiring.id]: { status: 'expired', endedAt: expiring.expiresAt },
+      [revoked.id]: { status: 'revoked', endedAt: at1h },
+      [locked.id]: { status: 'locked', endedAt: at1h },
+    });
+
+    h.setNow(new Date(T + DAY + HOUR + 1_000));
+    expect(Object.keys(await stateOf()).sort()).toEqual([active.id, expiring.id].sort());
+
+    h.setNow(new Date(T + 2 * DAY + 1_000));
+    expect(Object.keys(await stateOf())).toEqual([active.id]);
+  });
+});
+
+describe('the visitor sees expenses and received payments only (as the report)', () => {
+  it('no Owed entries and no conversions in the feed or the totals', async () => {
+    const h = shareLinkHarness();
+    const owner = await person(h);
+    const p = owner.personalId;
+    await expenseAt(h, owner, p, { occurredOn: '2026-10-05', title: 'paper' });
+    expect((await h.app.request('/v1/income', json({ kind: 'received', amount: '50.00', currency: 'ILS', occurredOn: '2026-10-06' }, { ...owner.on(p), ...idem() }))).status).toBe(201);
+    const client = await read(await h.app.request('/v1/customers', json({ name: 'Haddad' }, { ...owner.on(p), ...idem() })));
+    const owed = await h.app.request('/v1/income', json({ kind: 'owed', amount: '70.00', currency: 'ILS', occurredOn: '2026-10-07', customerId: client.id }, { ...owner.on(p), ...idem() }));
+    expect(owed.status, await owed.clone().text()).toBe(201);
+    expect((await h.app.request('/v1/conversions', json({ amount: '10.00', currency: 'USD', toAmount: '36.00', toCurrency: 'ILS', occurredOn: '2026-10-08' }, { ...owner.on(p), ...idem() }))).status).toBe(201);
+    const viewer = await viewerOf(h, (await linkOn(h, owner, p)).token);
+    const page = await read(await entriesOf(h, viewer, { limit: 1 }));
+    expect(page.items.map((e: Loose) => e.kind)).toEqual(['received']);
+    const rest = await read(await entriesOf(h, viewer, { limit: 5, cursor: page.nextCursor }));
+    expect(rest.items.map((e: Loose) => e.kind)).toEqual(['expense']);
+    expect(rest.nextCursor).toBeNull();
+    const summary = await read(await summaryOf(h, viewer));
+    expect(summary.received).toEqual([{ currency: 'ILS', total: '50.00', count: 1 }]);
+    expect(summary.expenses).toEqual([expect.objectContaining({ currency: 'ILS', total: '12.00', count: 1 })]);
   });
 });

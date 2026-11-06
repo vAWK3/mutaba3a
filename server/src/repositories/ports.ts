@@ -2667,8 +2667,11 @@ export interface ShareLinkRepository {
   findByTokenDigest(tokenDigest: string): Promise<ShareLinkWithViewers | null>;
   /** The viewer with this token digest and its link, or null. */
   findViewerByDigest(tokenDigest: string): Promise<{ viewer: ShareLinkViewerRecord; link: ShareLinkRecord } | null>;
-  /** Not revoked and unexpired at `at` (locked ones included), oldest first. */
-  listLiveByOrganization(organizationId: string, at: Date): Promise<ShareLinkWithViewers[]>;
+  /**
+   * OW5: every link on the profile that was still unrevoked and unexpired at `since` (the owner's list shows ended links
+   * for a day; the route decides each one's state and whether it still shows), oldest first.
+   */
+  listRecentByOrganization(organizationId: string, since: Date): Promise<ShareLinkWithViewers[]>;
   /**
    * Atomic: one more wrong PIN on an unlocked link; the `maxAttempts`th locks it and writes `lockAudit(link)`.
    * Null when the link is already locked (or gone), so parallel guesses can never count past `maxAttempts`.
@@ -3800,6 +3803,8 @@ export interface FeedPageRequest {
   occurredBefore?: IsoDate;
   /** Logged at or after. */
   loggedSince?: Date;
+  /** MUT-560: only these kinds (all four when absent); the others' branches are never read. */
+  kinds?: ReadonlyArray<EntryRow['kind']>;
 }
 
 export interface FeedPage<T> {

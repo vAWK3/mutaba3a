@@ -767,10 +767,10 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.shareLinkViewer.findUnique({ where: { tokenDigest }, include: { shareLink: true } });
       return row ? { viewer: toShareLinkViewer(row), link: toShareLink(row.shareLink) } : null;
     },
-    listLiveByOrganization: async (organizationId, at) =>
+    listRecentByOrganization: async (organizationId, since) =>
       (
         await this.prisma.shareLink.findMany({
-          where: { organizationId, revokedAt: null, expiresAt: { gt: at } },
+          where: { organizationId, OR: [{ revokedAt: null }, { revokedAt: { gt: since } }], expiresAt: { gt: since } },
           include: { _count: { select: { viewers: true } } },
           orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
         })
@@ -3318,19 +3318,29 @@ export class PrismaLedgerStore implements LedgerStore {
       const bounds = (dateColumn: MoneyDateColumn) => ({ AND: feedBounds(dateColumn, page, moneyCursor, loggedCursor) });
       const orderBy = (dateColumn: MoneyDateColumn) =>
         byMoneyDate ? [{ [dateColumn]: 'desc' as const }, { createdAt: 'desc' as const }, { id: 'desc' as const }] : [{ createdAt: 'desc' as const }, { id: 'desc' as const }];
-      const branchesOf = (organizationId: string) => [
-        this.prisma.expense
-          .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
-          .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record }))),
-        this.prisma.payment
-          .findMany({ where: { organizationId, OR: [{ reversalReason: null }, { reversalReason: { not: CAPTURE_UNDO_REASON } }], ...bounds('receivedOn') }, orderBy: orderBy('receivedOn'), take })
-          .then((rows) => rows.map((record): EntryRow => ({ kind: 'payment', record }))),
-        this.prisma.receivable
-          .findMany({ where: { organizationId, origin: 'ADJUSTMENT', deletedAt: null, ...bounds('postingDate') }, orderBy: orderBy('postingDate'), take })
-          .then((rows) => rows.map((record): EntryRow => ({ kind: 'receivable', record }))),
-        this.prisma.conversion
-          .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
-          .then((rows) => rows.map((record): EntryRow => ({ kind: 'conversion', record }))),
+      // MUT-560: a kind left out of `page.kinds` is never queried.
+      const wanted = (kind: EntryRow['kind']) => page.kinds === undefined || page.kinds.includes(kind);
+      const branchesOf = (organizationId: string): Array<Promise<EntryRow[]>> => [
+        wanted('expense')
+          ? this.prisma.expense
+              .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
+              .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record })))
+          : Promise.resolve([]),
+        wanted('payment')
+          ? this.prisma.payment
+              .findMany({ where: { organizationId, OR: [{ reversalReason: null }, { reversalReason: { not: CAPTURE_UNDO_REASON } }], ...bounds('receivedOn') }, orderBy: orderBy('receivedOn'), take })
+              .then((rows) => rows.map((record): EntryRow => ({ kind: 'payment', record })))
+          : Promise.resolve([]),
+        wanted('receivable')
+          ? this.prisma.receivable
+              .findMany({ where: { organizationId, origin: 'ADJUSTMENT', deletedAt: null, ...bounds('postingDate') }, orderBy: orderBy('postingDate'), take })
+              .then((rows) => rows.map((record): EntryRow => ({ kind: 'receivable', record })))
+          : Promise.resolve([]),
+        wanted('conversion')
+          ? this.prisma.conversion
+              .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
+              .then((rows) => rows.map((record): EntryRow => ({ kind: 'conversion', record })))
+          : Promise.resolve([]),
       ];
       const branches: EntryRow[][] = [];
       for (const organizationId of organizationIds) branches.push(...(await Promise.all(branchesOf(organizationId))));

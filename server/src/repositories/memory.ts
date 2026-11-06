@@ -860,9 +860,9 @@ export class MemoryLedgerStore implements LedgerStore {
       const link = viewer ? this.shareLinkMap.get(viewer.shareLinkId) : undefined;
       return viewer && link ? { viewer: { ...viewer }, link: { ...link } } : null;
     },
-    listLiveByOrganization: async (organizationId, at) =>
+    listRecentByOrganization: async (organizationId, since) =>
       [...this.shareLinkMap.values()]
-        .filter((l) => l.organizationId === organizationId && l.revokedAt === null && l.expiresAt > at)
+        .filter((l) => l.organizationId === organizationId && (l.revokedAt === null || l.revokedAt > since) && l.expiresAt > since)
         .sort(compareByCreatedAtThenId)
         .map((l) => ({ ...l, viewers: this.shareLinkViewerCount(l.id) })),
     recordFailedPin: async ({ linkId, at, maxAttempts, lockAudit }) => {
@@ -3662,6 +3662,7 @@ export class MemoryLedgerStore implements LedgerStore {
       ].filter((row) => {
         const day = moneyDateOf(row);
         return (
+          (page.kinds === undefined || page.kinds.includes(row.kind)) &&
           organizationIds.includes(row.record.organizationId) &&
           (page.occurredFrom === undefined || day >= page.occurredFrom) &&
           (page.occurredBefore === undefined || day < page.occurredBefore) &&

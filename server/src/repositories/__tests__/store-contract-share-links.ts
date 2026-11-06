@@ -77,7 +77,7 @@ export function describeLedgerStoreShareLinksContract(name: string, makeStore: (
       expect(await store.shareLinks.findByTokenDigest(link.tokenDigest)).toEqual({ ...link, viewers: 0 });
       expect(await store.shareLinks.findByTokenDigest('nope')).toBeNull();
       const second = await created(store, o);
-      expect((await store.shareLinks.listLiveByOrganization(o.profileId, at(3))).map((l) => l.id)).toEqual([link.id, second.id].sort((a, b) => (a < b ? -1 : 1)));
+      expect((await store.shareLinks.listRecentByOrganization(o.profileId, at(3))).map((l) => l.id)).toEqual([link.id, second.id].sort((a, b) => (a < b ? -1 : 1)));
       const events = (await store.audit.listByOrganization(o.profileId, 50)).filter((e) => e.action === 'share_link.created');
       expect(events).toHaveLength(2);
     });
@@ -92,7 +92,8 @@ export function describeLedgerStoreShareLinksContract(name: string, makeStore: (
       expect((await create(store, o, { max: 2, minute: 3 })).kind).toBe('created');
       // Eight days on, every 7-day link has expired: none count.
       expect((await create(store, o, { max: 1, minute: 8 * 24 * 60 })).kind).toBe('created');
-      expect(await store.shareLinks.listLiveByOrganization(o.profileId, at(8 * 24 * 60 + 1))).toHaveLength(1);
+      // Links still live at `since` only: the 7-day ones ended before it.
+      expect(await store.shareLinks.listRecentByOrganization(o.profileId, at(8 * 24 * 60 + 1))).toHaveLength(1);
     });
 
     it('revokes only a live link on its own profile', async () => {
@@ -103,7 +104,9 @@ export function describeLedgerStoreShareLinksContract(name: string, makeStore: (
       expect(await store.shareLinks.revoke({ organizationId: other.profileId, linkId: link.id, at: at(2), auditFor: audit('share_link.revoked') })).toBeNull();
       expect(await store.shareLinks.revoke({ organizationId: o.profileId, linkId: link.id, at: at(2), auditFor: audit('share_link.revoked') })).not.toBeNull();
       expect(await store.shareLinks.revoke({ organizationId: o.profileId, linkId: link.id, at: at(3), auditFor: audit('share_link.revoked') })).toBeNull();
-      expect(await store.shareLinks.listLiveByOrganization(o.profileId, at(4))).toEqual([]);
+      // Revoked at minute 2: still listed from a `since` before it, gone from one after it.
+      expect((await store.shareLinks.listRecentByOrganization(o.profileId, at(1))).map((l) => l.id)).toEqual([link.id]);
+      expect(await store.shareLinks.listRecentByOrganization(o.profileId, at(4))).toEqual([]);
     });
 
     it('counts wrong PINs one by one and locks at the limit, auditing the lock once', async () => {

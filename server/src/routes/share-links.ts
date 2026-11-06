@@ -44,12 +44,16 @@ import {
   shareLinkRefused,
   shareLinkUnavailable,
   shareLinkUrl,
+  SHARE_LINK_ENDED_VISIBLE_MS,
+  SHARE_LINK_ENTRY_KINDS,
+  isListedAt,
+  linkStateAt,
   receiptUrlTtlSeconds,
   viewerAccessExpiry,
 } from '../share-links/links.js';
 import { feedBoundsOf, isInRange, shareLinkRangeAt } from '../share-links/period.js';
 import { shareRowId, shareRowKey } from '../share-links/row-key.js';
-import { namedIds, visitorEntry, visitorExpenseSummary, type VisitorContext } from '../share-links/visitor.js';
+import { isVisitorRow, namedIds, visitorEntry, visitorExpenseSummary, type VisitorContext } from '../share-links/visitor.js';
 import { displayCategoryNames } from '../expenses/presets.js';
 import { preferredLanguage } from './shared.js';
 
@@ -199,7 +203,8 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     return { key: (id) => shareRowKey(settings.pepper, access.link.id, id), category: lookup(categories), client: lookup(clients), project: lookup(projects), ...extra };
   }
 
-  async function linkView(link: ShareLinkWithViewers) {
+  async function linkView(link: ShareLinkWithViewers, now: Date) {
+    const { status, endedAt } = linkStateAt(link, now);
     return {
       id: link.id,
       period: link.period,
@@ -208,7 +213,8 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       createdAt: link.createdAt.toISOString(),
       expiresAt: link.expiresAt.toISOString(),
       lastOpenedAt: link.lastOpenedAt?.toISOString() ?? null,
-      status: link.lockedAt ? ('locked' as const) : ('active' as const),
+      status,
+      endedAt: endedAt?.toISOString() ?? null,
       viewers: link.viewers,
       maxViewers: SHARE_LINK_MAX_VIEWERS,
       createdByName: await displayNameOf(store, link.createdByUserId),
@@ -287,8 +293,8 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       method: 'get',
       path: '/v1/profiles/{profileId}/share-links',
       tags: ['Profiles'],
-      summary: 'The live share links on this profile: active and locked',
-      description: 'MUT-560 (ADR-246). Every owner sees every link on the profile. Revoked and expired links are not listed; a link’s URL is never shown again. Oldest first.',
+      summary: 'The share links on this profile: active, and those that ended in the last day',
+      description: 'MUT-560 (ADR-246, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.',
       security: SESSION_ONLY,
       request: { params: ProfileIdParamSchema },
       responses: {
@@ -300,8 +306,9 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     async (c) => {
       const { user } = c.get('identity');
       const organization = await ownedProfileOf(store, user.id, c.req.valid('param').profileId);
-      const links = await store.shareLinks.listLiveByOrganization(organization.id, c.get('now')());
-      return c.json({ items: await Promise.all(links.map(linkView)), limit: maxPerProfile }, 200);
+      const now = c.get('now')();
+      const links = (await store.shareLinks.listRecentByOrganization(organization.id, new Date(now.getTime() - SHARE_LINK_ENDED_VISIBLE_MS))).filter((link) => isListedAt(link, now));
+      return c.json({ items: await Promise.all(links.map((link) => linkView(link, now))), limit: maxPerProfile }, 200);
     },
   );
 
@@ -440,7 +447,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Share links'],
       summary: 'The shared period’s entries, newest money date first',
       description:
-        'MUT-560 (ADR-246). Expenses, received payments, Owed entries and conversions of the shared profile whose money date is in the link’s period, as GET /v1/entries?order=occurredOn shows them, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.',
+        'MUT-560 (ADR-246). Expenses and received payments of the shared profile whose money date is in the link’s period (what the period’s report holds: no Owed entries, no conversions), newest money date first, by name: no profile, person, client, project, category or vendor id; each entry has an opaque `key` for this link. Category names follow Accept-Language (Arabic by default). Read live: an entry edited into the period shows, one edited out of it disappears.',
       security: [],
       request: { body: jsonBody(ShareLinkEntriesRequestSchema) },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ShareLinkEntryPageSchema } } }, ...viewRefusals },
@@ -451,12 +458,12 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       const { organization, range } = access;
       const lang = visitorLanguage(c);
       const organizationIds = [organization.id];
-      const page = await store.entries.list(organizationIds, { limit: body.limit, order: 'occurredOn', cursor: body.cursor ? decodeFeedCursor(body.cursor, 'occurredOn') : null, ...feedBoundsOf(range) });
+      const page = await store.entries.list(organizationIds, { limit: body.limit, order: 'occurredOn', kinds: SHARE_LINK_ENTRY_KINDS, cursor: body.cursor ? decodeFeedCursor(body.cursor, 'occurredOn') : null, ...feedBoundsOf(range) });
       const expenseIds = page.items.flatMap((row) => (row.kind === 'expense' ? [row.record.id] : []));
       const settleCandidates = page.items.flatMap((row) => (row.kind === 'payment' && row.record.origin === 'CAPTURE' && row.record.allocatedMinor > 0n ? [row.record.id] : []));
       const [receiptCounts, settledOwed] = await Promise.all([store.expenseReceipts.countReadyByExpenseIds(organizationIds, expenseIds), store.entries.settledOwedIds(organizationIds, settleCandidates)]);
       const ctx = await visitorContext(access, page.items, lang, { receiptCounts, settledOwed });
-      return c.json({ items: page.items.map((row) => visitorEntry(row, ctx)), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
+      return c.json({ items: page.items.filter(isVisitorRow).map((row) => visitorEntry(row, ctx)), nextCursor: page.nextCursor ? encodeFeedCursor(page.nextCursor) : null }, 200);
     },
   );
 
@@ -494,7 +501,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
     const rows: EntryRow[] = [];
     let cursor = null;
     do {
-      const page = await store.entries.list([organizationId], { limit: SUMMARY_PAGE, order: 'occurredOn', cursor, ...feedBoundsOf(range) });
+      const page = await store.entries.list([organizationId], { limit: SUMMARY_PAGE, order: 'occurredOn', kinds: SHARE_LINK_ENTRY_KINDS, cursor, ...feedBoundsOf(range) });
       rows.push(...page.items);
       cursor = page.nextCursor;
     } while (cursor);

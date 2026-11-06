@@ -424,7 +424,8 @@ describe('7. one 404 for every unusable link (MUT-560)', () => {
     const { owner, profileId, link, viewer } = await opened(h);
     expect((await revokeLink(h, owner, profileId, link.id)).status).toBe(204);
     await expectUniform(await everyRoute(h, link.token, viewer));
-    expect((await listLinks(h, owner, profileId)).items).toEqual([]);
+    // OW5: the owner still sees it, revoked, for a day.
+    expect((await listLinks(h, owner, profileId)).items).toEqual([expect.objectContaining({ id: link.id, status: 'revoked', endedAt: T0.toISOString() })]);
   });
 
   it('the owner closing their account', async () => {
@@ -663,8 +664,9 @@ describe('12. closure and purge (MUT-560)', () => {
     expect((await h.app.request(`/admin/v1/users/${co.userId}/memberships`, json({ organizationId: business, role: 'OWNER' }, ADMIN))).status).toBe(201);
     const link = await linkOn(h, co, business, { expiresInDays: 30 });
     await purge(h, co);
+    // Expired a minute ago: listed (OW5) as expired, its creator gone.
     const listed = (await listLinks(h, owner, business)).items;
-    expect(listed).toEqual([]);
+    expect(listed).toEqual([expect.objectContaining({ id: link.id, status: 'expired', createdByName: null })]);
     // Expired by now (30 days and a minute): the row remains, its creator gone.
     expect(await h.store.shareLinks.findByTokenDigest(sessionDigest(PEPPER, link.token))).toMatchObject({ id: link.id, createdByUserId: null });
   });

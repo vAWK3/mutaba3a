@@ -28,6 +28,10 @@ if (!url) {
       for (const [day, title] of [['2026-09-30', 'before'], ['2026-10-01', 'from'], ['2026-10-31', 'to'], ['2026-11-01', 'after']]) {
         expect((await h.app.request('/v1/expenses', json({ amount: '10.00', currency: 'ILS', occurredOn: day, title }, { ...o.on(o.personalId), ...idem() }))).status).toBe(201);
       }
+      // Owed entries and conversions are not the report's rows: the visitor never sees them (the kinds filter in SQL).
+      const client = await read(await h.app.request('/v1/customers', json({ name: 'Haddad' }, { ...o.on(o.personalId), ...idem() })));
+      expect((await h.app.request('/v1/income', json({ kind: 'owed', amount: '70.00', currency: 'ILS', occurredOn: '2026-10-07', customerId: client.id }, { ...o.on(o.personalId), ...idem() }))).status).toBe(201);
+      expect((await h.app.request('/v1/conversions', json({ amount: '10.00', currency: 'USD', toAmount: '36.00', toCurrency: 'ILS', occurredOn: '2026-10-08' }, { ...o.on(o.personalId), ...idem() }))).status).toBe(201);
       const link = await linkOn(h, o, o.personalId);
       expect(await read(await check(h, link.token))).toEqual({ state: 'pin' });
       const viewer = await viewerOf(h, link.token);
@@ -37,6 +41,7 @@ if (!url) {
       expect(summary.expenses).toEqual([expect.objectContaining({ currency: 'ILS', total: '20.00', count: 2 })]);
       expect((await revokeLink(h, o, o.personalId, link.id)).status).toBe(204);
       expect((await entriesOf(h, viewer)).status).toBe(404);
+      expect((await listLinks(h, o, o.personalId)).items).toEqual([expect.objectContaining({ id: link.id, status: 'revoked' })]);
     });
 
     it('parallel wrong PINs lock at exactly the limit; viewers already in are cut off', async () => {
