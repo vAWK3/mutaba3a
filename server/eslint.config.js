@@ -31,6 +31,11 @@ export default defineConfig([
               regex: '(^|/)src/(assets|components|content|db|demo|hooks|hosted|lib|pages|services|styles|test|types|utils)(/|$)',
               message: 'The server never imports the web app (ADR-097).',
             },
+            {
+              // MUT-314 (ADR-248): period-pack/index.ts is the module's only door; its files import each other relatively.
+              regex: '(^|/)period-pack/(?!index\\.js$)[^/]+$',
+              message: 'Import the period download through period-pack/index.js only.',
+            },
           ],
         },
       ],

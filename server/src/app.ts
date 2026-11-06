@@ -84,6 +84,8 @@ import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { recordsExportRoutes } from './routes/records-export.js';
+import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
+import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, type DownloadLimits } from './period-pack/index.js';
 import { RECEIPT_UPLOAD_POLICY, receiptRoutes } from './routes/receipts.js';
 import { receiptReadingRoutes } from './routes/receipt-reading.js';
 import { RECEIPT_READ_JOB_PATH } from './receipts/reading/cloud-tasks.js';
@@ -240,6 +242,17 @@ export interface AppDependencies {
   shareLinkViewIpLimiter?: RateLimiter;
   /** MUT-560 review: summaries per viewer per minute. Defaults to SHARE_LINK_SUMMARY_POLICY. */
   shareLinkSummaryLimiter?: RateLimiter;
+  /**
+   * MUT-314 (PERIOD_DOWNLOADS, ADR-248): period downloads (the Excel report and the receipts zip). Absent or false =
+   * every download route answers 404 before authentication (the server deploys dark). A link's also needs `shareLinks`.
+   */
+  periodDownloads?: boolean;
+  /** MUT-314: PERIOD_PACK_MAX_ROWS and PERIOD_PACK_MAX_RECEIPT_BYTES. Defaults 20,000 rows and 500 MiB. */
+  periodPackLimits?: DownloadLimits;
+  /** MUT-314: PERIOD_PACK_CONCURRENCY, streams per instance. Default 3. */
+  periodPackConcurrency?: number;
+  /** MUT-314: download mints per person or viewer per hour. Defaults to PERIOD_DOWNLOAD_POLICY. */
+  periodDownloadMintLimiter?: RateLimiter;
 }
 
 /**
@@ -328,7 +341,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.102.0-mut560';
+export const API_VERSION = '1.103.0-mut314';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -388,12 +401,20 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
     }),
   );
-  // MUT-559 (ADR-245), MUT-560 (ADR-247): a feature that is switched off answers 404 on every route it adds, before
+  const periodDownloads = deps.periodDownloads ?? false;
+  // MUT-314 (ADR-248): one set of download services for both mints (owner/accountant, share link) and the stream.
+  const downloadServices: PeriodDownloadServices = {
+    limits: deps.periodPackLimits ?? { maxRows: PERIOD_PACK_MAX_ROWS_DEFAULT, maxReceiptBytes: PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT },
+    mintLimiter: deps.periodDownloadMintLimiter ?? new SlidingWindowRateLimiter(PERIOD_DOWNLOAD_POLICY.mintsPerSubjectPerHour, 3_600_000),
+    slots: new StreamSlots(deps.periodPackConcurrency ?? PERIOD_PACK_CONCURRENCY_DEFAULT),
+  };
+  // MUT-559 (ADR-245), MUT-560 (ADR-247), MUT-314 (ADR-248): a feature that is switched off answers 404 on every route it adds, before
   // anything else looks at the request (the routes stay registered, so the published contract doesn't depend on the
   // switch). One table, one mechanism: each row is a route file's exported endpoint set, its switch and its 404.
   const darkLaunches: ReadonlyArray<{ endpoints: ReadonlySet<string>; on: boolean; refusal: () => ApiError }> = [
     { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
+    { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
   ];
   app.use('/v1/*', async (c, next) => {
     const endpoint = endpointKey(c);
@@ -516,6 +537,21 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
   app.route('/', recordsExportRoutes(store, { storage: deps.attachments ?? null, logger: deps.logger }));
+  // MUT-314 (ADR-248): period downloads. The stream is public (the ticket is its credential); it re-checks access and
+  // writes its audit row on the base store, and reads the rows through the guard.
+  app.route(
+    '/',
+    periodDownloadRoutes({
+      store,
+      baseStore: deps.store,
+      settings: sessions,
+      services: downloadServices,
+      storage: deps.attachments ?? null,
+      accountantAccess,
+      shareLinks: deps.shareLinks ?? false,
+      logger: deps.logger,
+    }),
+  );
   const billingLimiter = deps.billingSessionLimiter ?? new SlidingWindowRateLimiter(BILLING_SESSION_POLICY.perMinute);
   // MUT-362: signed in only and person-level, so outside PORTAL_ROUTES (the signed-out portal has no billing).
   app.route(
@@ -705,6 +741,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       maxPerProfile: deps.shareLinksPerProfileMax ?? SHARE_LINKS_PER_PROFILE_DEFAULT,
       storage: deps.attachments ?? null,
       urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900,
+      downloads: downloadServices,
     }),
   );
   app.openAPIRegistry.registerComponent('securitySchemes', 'apiKey', {

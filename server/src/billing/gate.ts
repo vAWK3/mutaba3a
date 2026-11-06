@@ -21,8 +21,11 @@ import type { Entitlement, EntitlementState } from './entitlement.js';
 export type Standing = 'open' | 'read-only' | 'locked';
 export type GateClass = 'open' | 'person' | 'pathProfile';
 
-/** The only profile-scoped endpoints a LOCKED profile still answers (MUT-325's records export and its receipts). */
-export const LOCKED_OPEN_ENDPOINTS: ReadonlySet<string> = new Set(['GET /v1/records-export', 'GET /v1/records-export/receipts/:receiptId']);
+/**
+ * The only profile-scoped endpoints a LOCKED profile still answers: MUT-325's records export and its receipts, and
+ * MUT-314's period download (D14: a lapse never blocks a download; its stream is public, outside the gate).
+ */
+export const LOCKED_OPEN_ENDPOINTS: ReadonlySet<string> = new Set(['GET /v1/records-export', 'GET /v1/records-export/receipts/:receiptId', 'GET /v1/period-downloads/ticket']);
 
 /**
  * Every organization-independent session endpoint, classified. A test walks the app's organization-independent set

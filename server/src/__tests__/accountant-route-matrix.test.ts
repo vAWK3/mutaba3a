@@ -31,6 +31,8 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
   'GET /v1/payments',
+  // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
+  'GET /v1/period-downloads/ticket',
   'GET /v1/payments/{paymentId}',
   'GET /v1/projects',
   'GET /v1/projects/{projectId}',
@@ -54,6 +56,7 @@ const ALLOWED_GETS = [
 const QUERIES: Record<string, string> = {
   'GET /v1/summaries/period': '?from=2026-11-01&to=2026-11-30&currency=ILS',
   'GET /v1/customers/{customerId}/statement': '?currency=ILS',
+  'GET /v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10',
 };
 const PLACEHOLDER = '00000000-0000-4000-8000-0000000000aa';
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
@@ -90,7 +93,7 @@ const call = (op: Operation, query = '') =>
 
 beforeAll(async () => {
   storage = new MemoryAttachmentStorage();
-  h = accountantHarness({ receiptsLibrary: true, attachments: storage });
+  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');
@@ -162,7 +165,7 @@ describe('the accountant route matrix (MUT-559)', () => {
   it('derives exactly the reviewed GET allowlist from the routes’ scope tags (D1)', () => {
     const allowed = operations.filter((op) => op.method === 'GET' && accountantMayRead(`${op.method} ${hono(op.path)}`, scopesOf(op))).map((op) => op.key).sort();
     expect(allowed).toEqual(ALLOWED_GETS);
-    // The records export has no scope tag, so it is refused (download is MUT-314).
+    // The records export has no scope tag, so it is refused (an accountant downloads a period instead, MUT-314).
     expect(allowed).not.toContain('GET /v1/records-export');
   });
 

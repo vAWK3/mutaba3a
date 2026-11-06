@@ -1,0 +1,42 @@
+import { resolveProfileAccess } from '../auth/middleware.js';
+import { ApiError } from '../errors.js';
+import type { LedgerStore, Organization } from '../repositories/ports.js';
+import { shareLinkAccess } from '../share-links/access.js';
+import type { TicketClaims } from './ticket.js';
+
+/**
+ * MUT-314 (ADR-248, D5, D6): a ticket proves who minted it and for what, not that they may still read. At stream time
+ * each kind's access is checked again, the same way its mint checked it:
+ * - member and accountant: resolveProfileAccess (the rule selectProfile applies to every request), of the same kind,
+ *   for a person still ACTIVE and not closing their account (a closing account reaches no profile, MUT-333);
+ * - link: shareLinkAccess on the viewer token the body carries (MUT-560's one door), whose viewer, profile and frozen
+ *   range must be the ticket's.
+ * Anything else is the uniform 404: a forged, expired, revoked or someone else's ticket all look the same.
+ */
+export function downloadUnavailable(): ApiError {
+  return new ApiError('NOT_FOUND', 'This download is no longer available; start it again', { reason: 'DOWNLOAD_UNAVAILABLE' });
+}
+
+export interface RecheckContext {
+  /** The base store: the access lookups and the link's stamps are bookkeeping, as authenticate() reads sessions. */
+  store: LedgerStore;
+  pepper: string;
+  accountantAccess: boolean;
+  viewerToken: string | null;
+  now: Date;
+}
+
+export async function recheckAccess(claims: TicketClaims, ctx: RecheckContext): Promise<{ organization: Organization; shareLinkId: string | null }> {
+  if (claims.kind === 'link') {
+    if (!ctx.viewerToken) throw downloadUnavailable();
+    const access = await shareLinkAccess(ctx.store, ctx.pepper, ctx.viewerToken, ctx.now).catch(() => null);
+    if (!access || access.viewer.id !== claims.sub || access.organization.id !== claims.org) throw downloadUnavailable();
+    if (access.range.from !== claims.from || access.range.to !== claims.to) throw downloadUnavailable();
+    return { organization: access.organization, shareLinkId: access.link.id };
+  }
+  const user = await ctx.store.users.getById(claims.sub);
+  if (!user || user.status !== 'ACTIVE' || user.closure) throw downloadUnavailable();
+  const access = await resolveProfileAccess(ctx.store, claims.sub, claims.org, { accountantAccess: ctx.accountantAccess });
+  if (!access || access.access !== claims.kind) throw downloadUnavailable();
+  return { organization: access.organization, shareLinkId: null };
+}
