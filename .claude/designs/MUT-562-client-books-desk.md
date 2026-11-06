@@ -215,7 +215,12 @@ The server slice S moved to MUT-575 (MUT-562 comment 13246); this branch consume
    panel is words only, with `TODO(MUT-561)` hooks. MUT-558's drawn client-books icon is used for the corner.
 6. **Share-link referrer:** the portal's own `<meta name="referrer" content="same-origin">` is switched to
    `no-referrer` while the page is open and put back on leaving; `noindex` is already the portal's.
-7. **SHARE_VIEW_EXPIRED** (401 on a visitor route) never ends a signed-in session (`SESSIONLESS_401` in the client).
+7. **Viewer token (review fix 2):** the live token stays in memory; localStorage keeps `{viewerToken, viewerExpiresAt,
+   linkExpiresAt}` only to keep this device's place, dropped once the link has ended (not at `viewerExpiresAt`: MUT-560
+   keeps a place only when the ended token comes back with the PIN). Gone/locked/full also clears the tab's link token;
+   the crash reporter's user is cleared while /share is open. The public counts are allowed on the cookieless instance
+   (`COOKIELESS_PORTAL_EVENTS`).
+8. **SHARE_VIEW_EXPIRED** (401 on a visitor route) never ends a signed-in session (`SESSIONLESS_401` in the client).
 
 ### Blocked (TODOs in code)
 
