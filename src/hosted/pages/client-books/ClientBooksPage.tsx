@@ -11,7 +11,8 @@ import { downloadProblem, submitDownload, type DownloadProblem } from '../../dat
 import { useMe } from '../../session/me';
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { InPlaceConfirm } from '../../components/InPlaceConfirm';
-import { Empty, QueryView, Skeleton } from '../../components/QueryView';
+import { QueryView, Skeleton } from '../../components/QueryView';
+import { Scene } from '../../components/Scene';
 import { useClientBooks, useRemoveClientBook } from '../../data/clientBooksQueries';
 import { PageHeader } from '../views/shared';
 import { addMonths, dayLabel, isEnded, matchesClient, monthOfDate, periodLabel } from './clientBooksRules';
@@ -55,8 +56,13 @@ export function ClientBooksPage() {
         data={books.data?.items}
         loading={<Skeleton rows={3} />}
         isEmpty={(items) => items.length === 0}
-        // TODO(MUT-561): the `client-books-empty` scene above the title once MUT-561's Scene renderer merges.
-        empty={<Empty title={t('hosted.clientBooks.empty.title')} body={t('hosted.clientBooks.empty.body')} />}
+        empty={
+          <div className="hp-empty hp-client-books-empty">
+            <Scene name="client-books-empty" motion="drop-in" />
+            <h2>{t('hosted.clientBooks.empty.title')}</h2>
+            <p>{t('hosted.clientBooks.empty.body')}</p>
+          </div>
+        }
       >
         {(items) => <ClientBooksTable items={items} query={query} onSubscribe={() => setSubscribing(true)} />}
       </QueryView>

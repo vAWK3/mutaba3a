@@ -53,6 +53,8 @@ describe('downloadProblem', () => {
     expect(aboutSize(4.2 * 1024 * 1024, 'en')).toBe('4 MB');
     expect(aboutSize(300 * 1024, 'en')).toBe('300 KB');
     expect(aboutSize(10, 'en')).toBe('1 KB');
+  });
+});
 
 /** MUT-561 + MUT-314: the owner download's form post, and the probe that tells whether the server has downloads on. */
 describe('postDownload', () => {

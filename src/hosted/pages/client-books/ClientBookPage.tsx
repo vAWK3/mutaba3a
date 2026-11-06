@@ -5,6 +5,7 @@ import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import { api, type AccountantClientWithStats, type ClientRowWithPlan } from '../../api/client';
 import { AccountantPlanOffer } from '../../components/AccountantPlanOffer';
+import { Scene } from '../../components/Scene';
 import { trackPortal } from '../../analytics/portalAnalytics';
 import { PeriodDownloads } from '../../components/PeriodDownloads';
 import { EntriesTable, deskRow, type EntryRow } from '../../components/EntriesTable';
@@ -85,7 +86,7 @@ function NoLongerShared({ client }: { client: AccountantClientWithStats | null }
   const profile = client?.name ?? '';
   return (
     <section className="hp-empty hp-client-gone" role="status">
-      {/* TODO(MUT-561): the `share-ended` scene once MUT-561's Scene renderer merges. */}
+      <Scene name="share-ended" motion="drop-in" />
       <h1>{t('hosted.clientBooks.gone.title')}</h1>
       <p>{client?.ownerName ? t('hosted.clientBooks.gone.body', { owner: client.ownerName, profile }) : t('hosted.clientBooks.gone.bodyNoOwner', { profile })}</p>
       <Link to="/client-books" className="btn btn-primary btn-md">

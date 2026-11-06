@@ -1606,3 +1606,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @media (max-width: 480px) {
   .hp-sharing-row .hp-sharing-action { margin-inline-start: var(--space-10); }
 }
+/* MUT-562: the scenes on the public pages and the desk (MUT-561's Scene) */
+.hp-two-panel-scene { display: block; margin-bottom: var(--space-4); }
+.hp-two-panel-ended .hp-scene, .hp-client-gone .hp-scene, .hp-client-books-empty .hp-scene { display: block; margin-inline: auto; }
+.hp-client-books-empty { text-align: center; }

@@ -9,6 +9,8 @@ import { api, type AccountantInviteCheck } from '../../api/client';
 import { countPublicPage } from '../../analytics/portalAnalytics';
 import { AlertIcon, LockIcon } from '../../components/Icons';
 import { TwoPanelLayout } from '../../components/TwoPanelLayout';
+import { Scene } from '../../components/Scene';
+import { AccessScopeList } from '../../components/AccessScopeList';
 import { TurnstileWidget } from '../../components/turnstile/TurnstileWidget';
 import { useTurnstile } from '../../components/turnstile/useTurnstile';
 import { browserTimezone } from '../../format/timezones';
@@ -38,8 +40,8 @@ import {
  * then kept for this tab so it survives the sign-in round trip. Signed out: Sign in to accept, or Create an account
  * (signup, then POST /v1/sessions, 13231). Signed in: Accept. Either way the person lands on the new client (AC4).
  *
- * TODO(MUT-561): the context panel's `shared-books` scene and the four scope bullets (AccessScopeList) once MUT-561's
- * Scene and AccessScopeList merge; until then the panel is the one-line explanation.
+ * The context panel shows the `shared-books` scene (TwoPanelLayout); the invite lists what a reader can and can't do
+ * (AccessScopeList, the one copy MUT-561's Sharing page uses).
  * MUT-565 (SL6): with the free client books used (/v1/me `clientBooks`, or a 402 ACCOUNTANT_PLAN_REQUIRED on accept)
  * the Accountant plan's card takes Accept's place, the invite staying open; Checkout returns here, /v1/me is asked
  * again (≤30 s) and the invite is accepted. Every part shows only when the server sends MUT-565's fields.
@@ -212,6 +214,7 @@ function SignedOutInvite({ invite, onSignup }: { invite: AccountantInviteCheck; 
   return (
     <section className="hp-two-panel-form">
       <InviteHeading invite={invite} />
+      <AccessScopeList />
       <div className="hp-two-panel-actions">
         <SignInToAccept />
         <Button variant="secondary" className="hp-block" onClick={onSignup}>
@@ -226,7 +229,7 @@ function GoneCard() {
   const { t } = useLanguage();
   return (
     <section className="hp-two-panel-ended" role="status" data-state="gone">
-      {/* TODO(MUT-561): the `link-closed` scene once MUT-561's Scene renderer merges. */}
+      <Scene name="link-closed" motion="drop-in" />
       <h1>{t('hosted.accountantInvite.gone.title')}</h1>
       <p className="hp-setup-lead">{t('hosted.accountantInvite.gone.body')}</p>
     </section>
@@ -330,6 +333,7 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
     <section className="hp-two-panel-form">
       <h1>{heading}</h1>
       <p className="hp-setup-lead">{t('hosted.accountantInvite.accept.body', { profile: invite.profileName, email: `\u2068${email}\u2069` })}</p>
+      <AccessScopeList />
       {confirming && !timedOut && (
         <p className="hp-banner" role="status">
           <span>{t('hosted.accountantInvite.fourth.confirming')}</span>

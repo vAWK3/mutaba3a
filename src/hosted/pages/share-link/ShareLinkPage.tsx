@@ -12,6 +12,7 @@ import { countPublicPage } from '../../analytics/portalAnalytics';
 import { AlertIcon } from '../../components/Icons';
 import { PIN_MIN, PinBoxes } from '../../components/PinBoxes';
 import { TwoPanelLayout } from '../../components/TwoPanelLayout';
+import { Scene } from '../../components/Scene';
 import { tokenFromHash } from '../auth/setupLink';
 import { INITIAL_SHARE_LINK_STATE, forgetsViewer, shareLinkReducer, type PinProblem, type ShareLinkState } from './shareLinkState';
 import { ShareLinkView } from './ShareLinkView';
@@ -220,8 +221,8 @@ function Ended({ state }: { state: Extract<ShareLinkState, { kind: 'locked' | 'g
   const t = useT();
   return (
     <TwoPanelLayout context={<PrivateViewNote />}>
-      {/* TODO(MUT-561): the `link-closed` scene above the heading once MUT-561's Scene renderer merges. */}
       <section className="hp-two-panel-ended" role="status" data-state={state.kind}>
+        <Scene name="link-closed" motion="drop-in" />
         <h1>{t(`hosted.shareLink.${state.kind}.title`)}</h1>
         <p className="hp-setup-lead">{t(`hosted.shareLink.${state.kind}.body`)}</p>
       </section>
