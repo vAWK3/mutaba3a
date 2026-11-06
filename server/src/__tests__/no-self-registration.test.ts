@@ -97,6 +97,13 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/passkey-challenges',
       'POST /v1/sessions',
       'POST /v1/sessions/passkey',
+      // MUT-560 (ADR-246): a share link's visitor. No account is created and no one is signed in: a viewer token opens
+      // only the link's period, through these routes.
+      'POST /v1/share-links/check',
+      'POST /v1/share-links/entries',
+      'POST /v1/share-links/expense-receipts',
+      'POST /v1/share-links/summary',
+      'POST /v1/share-links/unlock',
       'POST /v1/signups',
     ]);
   });
