@@ -173,7 +173,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     const result = await ocr.read({ body, contentType: receipt.mimeType, hint: receipt.captureHint === 'SCANNED' ? 'scanned' : 'photo' });
     const learned = await buyerIds(receipt);
     const options = { readerVersion: serverReaderVersion(result.engine), receivedOn: receipt.receivedOn, buyerIds: learned };
-    const reading = await scrubbed('extract_failed', () => readReceipt({ lines: result.lines, pdfText: result.pdfText }, options));
+    const reading = await scrubbed('extract_failed', () => readReceipt({ lines: result.lines, pdfText: result.pdfText, qr: result.qr }, options));
     return { read: reading.suggestion, identifiers: { buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers }, lines: result.lines.length };
   }
 

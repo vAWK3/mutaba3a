@@ -3,8 +3,9 @@
 Tesseract runs the MUT-253 spike's script-picked strategy: one `ara+heb+eng` pass, on the page scaled by
 `script_pick_scale`, picks the page's script, and a full-size pass reads with `<script>+eng` (`eng` for a Latin page).
 RapidOCR reads every page, while Tesseract runs beside it (`parallel`). The MUT-441 benchmark chose both.
+MUT-557 (D6): the same pages' QR codes go back as `qr` (qr.py), on every 200, `[]` when there are none.
 
-Logging: counts and timings only (AC5). No line text, no decoder message, ever.
+Logging: counts and timings only (AC5). No line text, no QR payload, no decoder message, ever.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from .engines import RapidReader, Segment, TesseractReader
 from .merge import merge
 from .orientation import reorient, turn
 from .preprocess import prepare
+from .qr import read_qr
 from .text import pdf_text_to_logical, script_of
 
 log = logging.getLogger("receipt_ocr.pipeline")
@@ -111,9 +113,12 @@ class Reader:
         started = time.perf_counter()
         decoded = decode(body, content_type)
         decode_ms = _ms(started)
+        t = time.perf_counter()
+        qr = read_qr(decoded.pages_for_qr)
+        qr_stats = {"qr": len(qr), "qrMs": _ms(t)}
         if decoded.pdf_text is not None:
-            log.info("read", extra={"stats": {"engine": ENGINE_PDF_TEXT, "pages": decoded.page_count, "chars": len(decoded.pdf_text), "decodeMs": decode_ms}})
-            return {"engine": ENGINE_PDF_TEXT, "lines": [], "pdfText": pdf_text_to_logical(decoded.pdf_text)[:MAX_PDF_TEXT], "pages": decoded.page_count}
+            log.info("read", extra={"stats": {"engine": ENGINE_PDF_TEXT, "pages": decoded.page_count, "chars": len(decoded.pdf_text), "decodeMs": decode_ms, **qr_stats}})
+            return {"engine": ENGINE_PDF_TEXT, "lines": [], "pdfText": pdf_text_to_logical(decoded.pdf_text)[:MAX_PDF_TEXT], "pages": decoded.page_count, "qr": qr}
 
         lines: list[dict[str, Any]] = []
         offset = 0.0
@@ -152,9 +157,9 @@ class Reader:
         lines = lines[:MAX_LINES]
         log.info(
             "read",
-            extra={"stats": {"engine": ENGINE_OCR, "pages": decoded.page_count, "lines": len(lines), "scripts": scripts, "hint": hint, **turns, **timings, "totalMs": _ms(started)}},
+            extra={"stats": {"engine": ENGINE_OCR, "pages": decoded.page_count, "lines": len(lines), "scripts": scripts, "hint": hint, **turns, **timings, **qr_stats, "totalMs": _ms(started)}},
         )
-        return {"engine": ENGINE_OCR, "lines": lines, "pages": decoded.page_count}
+        return {"engine": ENGINE_OCR, "lines": lines, "pages": decoded.page_count, "qr": qr}
 
 
 def _ms(since: float) -> int:

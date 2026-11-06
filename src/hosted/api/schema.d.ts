@@ -23087,6 +23087,10 @@ export interface components {
             createdByUserId: string | null;
             captureSource: components["schemas"]["StoredCaptureSource"] & unknown;
             vat: components["schemas"]["ExpenseVat"];
+            /** @description MUT-557: the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557. */
+            allocationNumber: string | null;
+            /** @description MUT-557: worked out on every read, never stored. True on a firm profile's ILS expense with VAT recorded whose net is at or above the allocation threshold on its date (₪5,000 from 2026-06-01) and that has no allocation number. Since 1.106.0-mut557. */
+            allocationNumberMissing: boolean;
             version: number;
             /** Format: date-time */
             createdAt: string;
@@ -24321,6 +24325,12 @@ export interface components {
                 source: "qr" | "pdf-text" | "ocr" | "vendor";
                 confidence: number;
             };
+            allocationNumber?: {
+                value: string;
+                /** @enum {string} */
+                source: "qr" | "pdf-text" | "ocr" | "vendor";
+                confidence: number;
+            };
         } | null;
         /** @description What approval wrote into the expense, in minor units like the suggestion */
         ApprovedReceiptFields: {
@@ -24368,6 +24378,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
         };
         UpdateExpenseRequest: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not more than ten years (3660 days) before the organization's today nor ten years (3660 days) after it: 422 DATE_INVALID with details.bound past or future. Checked only when it differs from the stored date. */
@@ -24391,6 +24403,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
         };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
@@ -24987,6 +25001,8 @@ export interface components {
         };
         ReceiptDetail: components["schemas"]["ExpenseReceipt"] & {
             vendorDefaults: components["schemas"]["ReceiptVendorDefaults"];
+            /** @description MUT-557: on a profile with firm features, what was read is an ILS invoice with VAT at or above the allocation threshold and no allocation number was read: a client marks the field as needed. Since 1.106.0-mut557. */
+            allocationNumberExpected: boolean;
         };
         ReceiptVendorDefaults: {
             /** Format: uuid */
@@ -25029,6 +25045,8 @@ export interface components {
                 /** @description The rate in basis points (1700 = 17 %). STANDARD_RATED needs 1..10000 (422 VAT_RATE_INVALID); the other treatments store 0. */
                 rateBasisPoints: number;
             } | null;
+            /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent or null records none. Since 1.106.0-mut557. */
+            allocationNumber?: string | null;
             suggested?: components["schemas"]["ReceiptSuggestion"] & unknown;
         };
         /** @description The expense with its READY receipts (the filed one among them), and the filed receipt */

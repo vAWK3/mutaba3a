@@ -166,7 +166,7 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       const deleted = await w.pending();
       await store.expenseReceipts.softDelete(w.a.id, deleted.id, at(3));
       expect(await store.expenseReceipts.finishRead(deleted.id, deleted.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped' });
-      const e = await store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, createdByUserId: w.user.id }, at(4));
+      const e = await store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: w.user.id }, at(4));
       const filed = await w.pending();
       const result = await store.expenseReceipts.fileOntoExpense({ organizationId: w.a.id, receiptId: filed.id, expenseId: e.id, maxReceipts: 10 });
       expect(result.kind).toBe('filed');
@@ -216,6 +216,24 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       expect(await store.expenseReceipts.getById(w.a.id, waiting.id)).toMatchObject({ readStatus: 'PENDING', readRequestedAt: at(50) });
       for (const id of [unfinished.id, notMine.id, complete.id]) expect((await store.expenseReceipts.getById(w.a.id, id))?.readStatus ?? 'NONE').toBe('NONE');
       expect((await store.expenseReceipts.getById(w.a.id, already.id))?.readRequestedAt).toEqual(at(1));
+    });
+
+    it('MUT-557 (A2): a never-read receipt with every field that reads as a big ILS invoice without an allocation number is picked once', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const f = (value: string) => ({ value, source: 'ocr' as const, confidence: 0.9 });
+      const every = { readerVersion: 'p', date: f('2026-10-28'), currency: f('ILS'), vatRateBasisPoints: { value: 1800, source: 'ocr' as const, confidence: 0.9 }, vendorName: f('x'), registrationNo: f('520022732'), phone: f('1'), email: f('a@b.co') };
+      // ₪6,000 net + ₪1,080 VAT: above the ₪5,000 threshold.
+      const big = await w.started({ suggested: { ...every, totalMinor: f('708000'), vatMinor: f('108000') } });
+      await store.expenseReceipts.complete(w.a.id, big.id, at(1));
+      const withNumber = await w.started({ suggested: { ...every, totalMinor: f('708000'), vatMinor: f('108000'), allocationNumber: f('304512876') } });
+      await store.expenseReceipts.complete(w.a.id, withNumber.id, at(1));
+      const small = await w.started({ suggested: { ...every, totalMinor: f('59000'), vatMinor: f('9000') } });
+      await store.expenseReceipts.complete(w.a.id, small.id, at(1));
+
+      expect(await store.expenseReceipts.markBacklogPending({ userId: w.user.id }, at(50))).toEqual([big.id]);
+      expect(await store.expenseReceipts.markBacklogPending({ userId: w.user.id }, at(60))).toEqual([]);
+      for (const id of [withNumber.id, small.id]) expect((await store.expenseReceipts.getById(w.a.id, id))?.readStatus ?? 'NONE').toBe('NONE');
     });
 
     it('vendors.findByRegistration finds the profile\'s vendor by its registration key, never another profile\'s', async () => {

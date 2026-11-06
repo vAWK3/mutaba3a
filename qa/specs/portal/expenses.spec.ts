@@ -690,6 +690,49 @@ test('A firm records an expense with VAT: Standard 17 % on 117 previews and save
   });
 });
 
+test('A firm\'s ₪5,000+ ILS expense with VAT and no allocation number is flagged; adding the number clears it (MUT-557)', { tag: '@portal.expenses.allocation-number' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), firm: true, role: 'OWNER' }], categories: [office_, travel] });
+  const drawer = page.getByRole('dialog', { name: 'Record expense' });
+  const table = page.getByRole('table', { name: 'Expenses' });
+  const row = table.getByRole('row', { name: /7,080/ });
+
+  await step('Record an ILS expense of 7,080 with Standard VAT at 18 %', async () => {
+    await api.open(page, `/p/${OFFICE_A}/expenses`);
+    await page.getByRole('button', { name: 'Record expense' }).first().click();
+    await drawer.getByLabel('Currency').selectOption('ILS');
+    await drawer.getByLabel('Amount').fill('7080');
+    await drawer.getByLabel('Category').selectOption({ label: 'Office supplies' });
+    const vat = drawer.getByTestId('expense-vat');
+    await vat.getByRole('button', { name: /VAT/ }).click();
+    await vat.getByLabel('Treatment').selectOption('STANDARD_RATED');
+    await vat.getByLabel('Rate').fill('18');
+    await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('The list marks it "No allocation number"', async () => {
+    await expect(row.getByTestId('expense-allocation-missing')).toHaveText('No allocation number');
+  });
+
+  const edit = page.getByRole('dialog', { name: 'Edit expense' });
+  await step('Eight digits stop at the field, and nothing is sent', async () => {
+    await row.click();
+    await edit.getByLabel('Allocation number').fill('30451287');
+    const patches = api.calls('PATCH', /^\/v1\/expenses\//).length;
+    await edit.getByRole('button', { name: 'Save' }).click();
+    await expect(edit.getByText('An allocation number is 9 digits.')).toBeVisible();
+    expect(api.calls('PATCH', /^\/v1\/expenses\//).length).toBe(patches);
+  });
+
+  await step('Type 304-512-876 and save: the server gets the nine digits and the mark is gone', async () => {
+    await edit.getByLabel('Allocation number').fill('304-512-876');
+    await edit.getByRole('button', { name: 'Save' }).click();
+    await expect(edit).toHaveCount(0);
+    expect(api.last('PATCH', /^\/v1\/expenses\//)?.body).toMatchObject({ allocationNumber: '304512876' });
+    await expect(row.getByTestId('expense-allocation-missing')).toHaveCount(0);
+  });
+});
+
 test('A profile without firm features has no VAT row on its expense form (MUT-302 AC3)', { tag: '@portal.expenses.vat-none-personal' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], categories: [office_, travel] });
   const drawer = page.getByRole('dialog', { name: 'Record expense' });

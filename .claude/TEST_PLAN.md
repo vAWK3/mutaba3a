@@ -4468,3 +4468,11 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
   needs no feature; the env switch still wins. `user-features.test.ts` and `routes-operator-billing-firms.test.ts`
   list the feature.
 
+### MUT-557 — the Israeli allocation number (ADR-246)
+- `israel/__tests__/allocation-number.test.ts`: the dated thresholds and their boundaries (₪4,999.99 / ₪5,000 on 2026-06-01, ₪9,000 the day before, 2024-05-04), USD, no VAT, unknown net, Personal, the A4 guard, normalizing.
+- `receipts/extract/__tests__/allocation.test.ts` (labels he/en/ar, row under, right to left, ח.פ beside it, bare number, bill-to, PDF, unsure row; D3 completeness; fillAbsent) and `qr.test.ts` (the registry).
+- `ocr-client.test.ts`: `qr` passed through, absent = [], an unusable list = [] (A3). Sidecar: `server/ocr/tests/test_qr.py`, `test_privacy.py`.
+- Routes: `routes-expenses.test.ts` (store, 422, flag, clear, Personal, list/detail/feed), `routes-receipts.test.ts` (approve, `allocationNumberExpected`).
+- Store contract: the column and its CHECK (`store-contract-expenses.ts`), the A2 backlog pick (`store-contract-receipt-reading.ts`); Prisma under `test:db`.
+- Portal: local migration 15 → 16, `receiptSuggestion.test.ts`, `ExpenseDrawer.test.tsx` (field, dashes, untouched, invalid, clear).
+

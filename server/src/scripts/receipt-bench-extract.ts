@@ -8,7 +8,7 @@ import type { OcrLine } from '../receipts/extract/types.js';
  *
  *   tsx src/scripts/receipt-bench-extract.ts <reads.json> [--buyer-memory] [--no-lone-slip]
  *
- * Input: [{ id, result: { engine, lines, pdfText? }, receivedOn? }]. Output (stdout): [{ id, suggestion }], the same
+ * Input: [{ id, result: { engine, lines, pdfText?, qr? }, receivedOn? }]. Output (stdout): [{ id, suggestion }], the same
  * ReceiptSuggestion the read job would merge. MUT-514: `receivedOn` is passed as the upload day, and with
  * `--buyer-memory` the reads are one organization's in scan order: each is given the buyer numbers learned from the
  * reads before it (R4, never from later ones), as the read job learns from earlier receipts. Local benchmark only;
@@ -16,7 +16,8 @@ import type { OcrLine } from '../receipts/extract/types.js';
  */
 interface BenchRead {
   id: string;
-  result: { engine: string; lines?: OcrLine[]; pdfText?: string | null };
+  /** MUT-557: `qr`, the sidecar's QR payloads, for the QR parser registry. */
+  result: { engine: string; lines?: OcrLine[]; pdfText?: string | null; qr?: string[] };
   receivedOn?: string;
 }
 
@@ -31,7 +32,7 @@ const loneCardSlip = !process.argv.includes('--no-lone-slip');
 const reads = JSON.parse(readFileSync(path, 'utf8')) as BenchRead[];
 const earlier: ReadIdentifiers[] = [];
 const out = reads.map(({ id, result, receivedOn }) => {
-  const reading = readReceipt({ lines: result.lines ?? [], pdfText: result.pdfText ?? null }, { readerVersion: `bench-${result.engine}`, receivedOn, buyerIds: buyerMemory ? learnedBuyerIds(earlier) : [], loneCardSlip });
+  const reading = readReceipt({ lines: result.lines ?? [], pdfText: result.pdfText ?? null, qr: result.qr ?? [] }, { readerVersion: `bench-${result.engine}`, receivedOn, buyerIds: buyerMemory ? learnedBuyerIds(earlier) : [], loneCardSlip });
   earlier.push({ buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers });
   return { id, suggestion: reading.suggestion };
 });

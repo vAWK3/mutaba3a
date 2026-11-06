@@ -85,6 +85,24 @@ MUT-561..563).
   to `access/view-touch.ts`; the owner gate is `ownedProfileOf` (personal-profile.ts), shared with MUT-559's routes.
 - The purge deletes a profile's links (`PURGE_PROFILE_TABLES`) and anonymizes a purged creator (`PURGE_USER_COLUMNS`).
 - Contract 1.102.0-mut560; `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `SHARE_LINKS=true`.
+## [Unreleased] - 2026-11-06 — The Israeli allocation number on received invoices (MUT-557, ADR-246)
+
+**Why:** since 2026-06-01 a supplier's tax invoice of ₪5,000 or more before VAT needs an allocation number for its VAT
+to be claimed back. Mutaba3a now reads it, keeps it on the expense, and flags one that is missing.
+
+### Added
+- Migration `20261107130000_mut557_expense_allocation_number` (`expenses.allocationNumber`, nine-digit CHECK).
+- `server/src/israel/allocation-number.ts` (dated thresholds, the flag rule, normalizing); `ALLOCATION` keywords and
+  `readAllocationNumber`; `receipts/extract/qr.ts` (QR parser registry, empty until real samples).
+- API: `allocationNumber` on Expense, create, update and approve; `allocationNumberMissing` on Expense;
+  `allocationNumberExpected` on ReceiptDetail; `ReceiptSuggestion.allocationNumber`; reason ALLOCATION_NUMBER_INVALID.
+- OCR sidecar: QR decoding (zxing-cpp 3.1.1), `qr` in `/v1/read`, a QR line in the bench report.
+- Portal: the allocation number field under VAT on a firm ILS expense (drawer and Receipt Review, prefilled from a
+  reading, marked when needed), and a "No allocation number" badge in the expenses list.
+
+### Changed
+- `serializeExpense` takes the profile (`ExpenseContext`, firm features); `isCompleteSuggestion` also wants the number on a big ILS
+  invoice; snapshot format 16; contract 1.106.0-mut557; `src/hosted/api/schema.d.ts` regenerated.
 
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
 
