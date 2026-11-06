@@ -142,3 +142,45 @@ test('When the owner stops sharing, the book says so and the list shows the fade
     await expect(row).toContainText('No longer shared');
   });
 });
+
+test('A client book downloads its period: the Excel report and the receipts, and a row its last month', { tag: '@portal.client-books.download' }, async ({ page, step }) => {
+  const api = new ClientBooksApi();
+
+  await step('Open Download on a client book for months July to September', async () => {
+    await api.open(page, `/client-books/${STUDIO}?preset=custom&from=2026-07&to=2026-09`);
+    await page.getByRole('button', { name: 'Download' }).click();
+    await expect(page.getByText('12 entries')).toBeVisible();
+    await expect(page.getByText('11 receipts · about 4 MB')).toBeVisible();
+    const mints = api.calls('GET', '/v1/period-downloads/ticket');
+    expect(mints.map((m) => [m.query.get('type'), m.query.get('from'), m.query.get('to')])).toEqual([
+      ['report', '2026-07', '2026-09'],
+      ['receipts', '2026-07', '2026-09'],
+    ]);
+    expect(new Set(mints.map((m) => m.query.get('asOf'))).size).toBe(1);
+  });
+
+  await step('Download the Excel report', async () => {
+    await page.getByRole('button', { name: 'Excel report' }).click();
+    await expect.poll(() => api.streamed.length).toBe(1);
+    expect(api.streamed[0]!.ticket).toMatch(/^report-ticket/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Rana Haddad · Studio' })).toBeVisible();
+  });
+
+  await step('Over the zip cap, Receipts is off with a hint', async () => {
+    const capped = new ClientBooksApi({ zipTooLarge: true });
+    await capped.open(page, `/client-books/${STUDIO}`);
+    await page.getByRole('button', { name: 'Download' }).click();
+    await expect(page.getByText('Too large for one download. Pick a shorter period.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Receipts (zip)' })).toBeDisabled();
+  });
+
+  await step("Download a row's last month from the list", async () => {
+    const list = new ClientBooksApi();
+    await list.open(page, '/client-books');
+    await page.getByRole('button', { name: /^Download the Excel report for .*, Studio$/ }).click();
+    await expect.poll(() => list.streamed.length).toBe(1);
+    const mint = list.calls('GET', '/v1/period-downloads/ticket')[0]!;
+    expect(mint.query.get('type')).toBe('report');
+    expect(mint.query.get('from')).toBe(mint.query.get('to'));
+  });
+});

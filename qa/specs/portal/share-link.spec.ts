@@ -125,3 +125,25 @@ test('The right PIN shows the owner, the period’s totals and the entries with 
     await expect(pane.getByRole('link', { name: 'Download rent.png' })).toBeVisible();
   });
 });
+
+test('The link page downloads its period with the viewer token', { tag: '@portal.share-link.download' }, async ({ page, step }) => {
+  const api = visitor();
+
+  await step('Open the link and Download', async () => {
+    await openLink(page, api);
+    await typePin(page, PIN);
+    await page.getByRole('button', { name: 'Open' }).click();
+    await page.getByRole('button', { name: 'Download' }).click();
+    await expect(page.getByText('11 receipts · about 4 MB')).toBeVisible();
+    const mints = api.calls('POST', '/v1/share-links/download-ticket');
+    expect(mints.map((m) => m.body?.type)).toEqual(['report', 'receipts']);
+    expect(mints.every((m) => m.body?.viewerToken === 'v'.repeat(43))).toBe(true);
+  });
+
+  await step('Download the receipts', async () => {
+    await page.getByRole('button', { name: 'Receipts (zip)' }).click();
+    await expect.poll(() => api.streamed.length).toBe(1);
+    expect(api.streamed[0]).toMatchObject({ viewerToken: 'v'.repeat(43) });
+    expect(api.streamed[0]!.ticket).toMatch(/^receipts-ticket/);
+  });
+});

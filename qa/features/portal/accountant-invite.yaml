@@ -53,3 +53,17 @@ features:
       - '"You already have an account" with Sign in to accept'
       - '"You can already read this profile" with Open'
       - '"This invite is no longer available"'
+  - id: plan
+    title: With the free client books used, the Accountant plan takes Accept's place; back from Checkout the invite is accepted (MUT-565)
+    tier: secondary
+    tickets: [MUT-562, MUT-565]
+    paths:
+      - src/hosted/components/AccountantPlanOffer.tsx
+    steps:
+      - Open the invite with three client books already
+      - Pick a country and Subscribe
+      - Come back from Checkout
+    expect:
+      - The card says the free client books are used, with the price per month and "Not now (the invite stays open until …)"
+      - Checkout is asked with plan accountant, monthly, back to /accountant-invite
+      - /v1/me is asked again until the plan covers, then the invite is accepted and the client book opens

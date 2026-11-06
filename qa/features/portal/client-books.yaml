@@ -68,3 +68,20 @@ features:
     expect:
       - '"No longer shared" with "{owner} stopped sharing {profile} with you"'
       - The list shows the client faded with "No longer shared"
+  - id: download
+    title: A client book downloads its period (Excel report, receipts zip), and a row its last month (AC2)
+    tier: secondary
+    tickets: [MUT-562, MUT-314]
+    paths:
+      - src/hosted/components/PeriodDownloads.tsx
+      - src/hosted/data/periodDownload.ts
+    steps:
+      - Open Download on a client book for months July to September
+      - Download the Excel report
+      - Over the zip cap, Receipts is off with a hint
+      - Download a row's last month from the list
+    expect:
+      - Both tickets are minted for 2026-07..2026-09 with one asOf; "12 entries" and "11 receipts · about 4 MB"
+      - The report's ticket is posted to the stream by a form and the page stays
+      - '"Too large for one download. Pick a shorter period." and Receipts (zip) off'
+      - The row mints last month's report only and posts it

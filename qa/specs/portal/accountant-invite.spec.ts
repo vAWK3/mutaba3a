@@ -120,3 +120,30 @@ test('An invite refuses another address, an existing account, one already read, 
     await expect(page.getByRole('heading', { name: 'This invite is no longer available' })).toBeVisible();
   });
 });
+
+test('With the free client books used, the Accountant plan takes Accept’s place; back from Checkout the invite is accepted', { tag: '@portal.accountant-invite.plan' }, async ({ page, step }) => {
+  const api = new ClientBooksApi({ freeBooksUsed: true, clients: [] });
+
+  await step('Open the invite with three client books already', async () => {
+    await openInvite(page, api);
+    await expect(page.getByRole('heading', { name: 'Your free client books are used' })).toBeVisible();
+    await expect(page.getByText('Reading up to 3 client books is free. To read Studio as well, subscribe to the Accountant plan.')).toBeVisible();
+    await expect(page.getByText(/₪99\.00 \/ \$29\.00 a month/)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+    await expect(page.getByRole('link', { name: /Not now \(the invite stays open until/ })).toBeVisible();
+  });
+
+  await step('Pick a country and Subscribe', async () => {
+    await page.route('https://checkout.stripe.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>Stripe Checkout (QA)</title>' }));
+    await page.getByLabel('Country').selectOption('IL');
+    await page.getByRole('button', { name: 'Subscribe' }).click();
+    await expect(page).toHaveURL(/checkout\.stripe\.com/);
+    expect(api.calls('POST', '/v1/billing/checkout-session')[0]!.body).toMatchObject({ plan: 'accountant', interval: 'month', country: 'IL', returnPath: '/accountant-invite' });
+  });
+
+  await step('Come back from Checkout', async () => {
+    await page.goto('/accountant-invite?billing=true&checkout=success');
+    await expect(page).toHaveURL(new RegExp(`/client-books/${STUDIO}`), { timeout: 20_000 });
+    expect(api.calls('POST', '/v1/accountant-invites/accept')).toHaveLength(1);
+  });
+});

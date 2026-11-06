@@ -77,6 +77,11 @@ export class ClientBooksApi {
   attemptsLeft = 4;
   /** expireView: every view read after the first unlock answers 401 (the 8 hours ended) until the PIN is entered again. */
   private viewExpired: boolean;
+  /** MUT-565: set by the Checkout stub; /v1/me reports the plan ACTIVE from the next read. */
+  planActive = false;
+  /** MUT-314: every stream form post, as the stream received it. */
+  readonly streamed: Record<string, string>[] = [];
+  private lastBody: string | null = null;
   private unlocks = 0;
 
   constructor(private readonly options: ClientBooksOptions = {}) {
@@ -95,7 +100,16 @@ export class ClientBooksApi {
   }
 
   private me(language: 'en' | 'ar') {
-    return { ...meBody(this.profiles(), language), clients: this.clients.map((c) => this.clientRow(c)) };
+    const plan = { state: this.planActive ? 'ACTIVE' : 'NONE', source: this.planActive ? 'STRIPE' : null, until: null, cancelAtPeriodEnd: false };
+    return {
+      ...meBody(this.profiles(), language),
+      clients: this.clients.map((c) => this.clientRow(c)),
+      ...(this.options.freeBooksUsed ? { clientBooks: { count: 3, freeLimit: 3, cap: this.planActive ? 50 : 3, readable: 3, plan } } : {}),
+    };
+  }
+
+  private ticket(type: string) {
+    return json({ type, ticket: `${type}-ticket-${this.log.length}`, expiresAt: new Date(Date.now() + 120_000).toISOString(), filename: type === 'report' ? 'period.xlsx' : 'receipts.zip', estimate: { expenses: 9, income: 3, receipts: 11, receiptBytes: 4 * 1024 * 1024 } });
   }
 
   private clientRow(c: StubClient) {
@@ -112,6 +126,7 @@ export class ClientBooksApi {
     const method = request.method();
     const path = url.pathname;
     let body: Record<string, unknown> | null = null;
+    this.lastBody = request.postData();
     try {
       body = request.postDataJSON() as Record<string, unknown> | null;
     } catch {
@@ -127,7 +142,20 @@ export class ClientBooksApi {
   private answer(method: string, path: string, url: URL, body: Record<string, unknown> | null, headers: Record<string, string>, language: 'en' | 'ar') {
     const key = `${method} ${path}`;
     if (key === 'GET /v1/me') return this.signedIn ? json(this.me(language)) : error(401, 'UNAUTHENTICATED');
-    if (key === 'GET /v1/billing') return json({ configured: false });
+    if (key === 'GET /v1/billing') {
+      if (!this.options.freeBooksUsed) return json({ configured: false });
+      return json({ configured: true, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } });
+    }
+    if (key === 'POST /v1/billing/checkout-session') {
+      // Stripe's side is not driven here: the spec opens the success return itself
+      this.planActive = true;
+      return json({ url: 'https://checkout.stripe.com/c/pay/qa' });
+    }
+    if (key === 'POST /v1/period-downloads/stream') {
+      this.streamed.push(Object.fromEntries(new URLSearchParams(String(this.lastBody ?? ''))));
+      return { status: 200, headers: { 'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'Content-Disposition': 'attachment; filename="period.xlsx"' }, body: 'PK' };
+    }
+    if (key === 'POST /v1/share-links/download-ticket') return this.ticket(String(body?.type));
     // The accountant invite
     if (key === 'POST /v1/accountant-invites/check') return json({ profileName: 'Studio', ownerName: 'Rana Haddad', maskedEmail: 's***@khoury-cpa.com', expired: false, expiresAt: new Date(Date.now() + 11 * DAY).toISOString(), termsVersion: QA_TERMS_VERSION });
     if (key === 'POST /v1/accountant-invites/accept') return this.accept();
@@ -176,6 +204,11 @@ export class ClientBooksApi {
     }
     if (key === 'GET /v1/summaries/activity') {
       return json({ from: url.searchParams.get('from'), to: url.searchParams.get('to'), bucket: 'month', asOf: thisMonthDay(28), dataSince: null, earlierData: false, buckets: [], currencies: [{ currency: 'ILS', spent: '350.00', received: '3200.00', byCategory: [], byCustomer: [] }, { currency: 'USD', spent: '20.00', received: '0.00', byCategory: [], byCustomer: [] }], history: [], daysToPaid: { overall: null, byCustomer: [], samples: [] } });
+    }
+    if (key === 'GET /v1/period-downloads/ticket') {
+      const type = url.searchParams.get('type')!;
+      if (type === 'receipts' && this.options.zipTooLarge) return error(422, 'VALIDATION_FAILED', { reason: 'PERIOD_TOO_LARGE', type, limit: 1, estimate: 2 });
+      return this.ticket(type);
     }
     if (key === 'GET /v1/expense-categories') return json({ items: [{ id: 'c0000001-0000-4000-8000-000000000000', name: 'Rent' }] });
     if (key === `GET /v1/expenses/${RENT}`) return json({ ...clientEntries()[0]!.expense, receipts: [{ id: RENT_RECEIPT, filename: 'rent.png', mimeType: 'image/png', status: 'READY', sizeBytes: 68 }] });
