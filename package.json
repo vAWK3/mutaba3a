@@ -28,7 +28,8 @@
     "release:notes": "tsx scripts/check-release-notes.ts",
     "release:oauth-client": "tsx scripts/check-oauth-client.ts",
     "icons:generate": "tsx scripts/generate-icons.ts",
-    "icons:check": "tsx scripts/validate-icon-set.ts"
+    "icons:check": "tsx scripts/validate-icon-set.ts",
+    "illustrations:generate": "tsx scripts/generate-illustrations.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-mono": "^5.2.7",

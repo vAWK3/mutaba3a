@@ -1431,3 +1431,12 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
   100% { transform: none; }
 }
 @keyframes hp-welcome-twinkle { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .35; transform: scale(.8); } }
+
+/* ---------- Scenes (MUT-561): brand art on a page, painted with tokens; the empty states' drop-in ---------- */
+.hp-scene { display: inline-flex; justify-content: center; color: var(--text); }
+.hp-scene svg { display: block; max-width: 100%; height: auto; }
+.hp-scene--drop-in [data-part="nuqta"] { animation: hp-scene-drop 900ms var(--ease-overshoot) both; }
+@keyframes hp-scene-drop { from { opacity: 0; transform: translateY(-24px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .hp-scene--drop-in [data-part="nuqta"] { animation: none; }
+}

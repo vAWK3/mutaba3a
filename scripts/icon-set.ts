@@ -22,7 +22,7 @@ export interface SvgNode {
 }
 
 const ALLOWED_TAGS = new Set(['svg', 'path', 'circle', 'rect', 'g']);
-const ALLOWED_ATTRS = new Set([
+export const ICON_ATTRS: ReadonlySet<string> = new Set([
   'xmlns', 'viewBox', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin',
   'd', 'id', 'cx', 'cy', 'r', 'x', 'y', 'width', 'height', 'rx',
 ]);
@@ -32,6 +32,8 @@ const CAMEL_CASE_ATTRS: Record<string, string> = {
   'stroke-width': 'strokeWidth',
   'stroke-linecap': 'strokeLinecap',
   'stroke-linejoin': 'strokeLinejoin',
+  // MUT-561: the scenes' dialect (scripts/illustration-set.ts) adds dashed strokes; no icon uses it.
+  'stroke-dasharray': 'strokeDasharray',
 };
 
 interface Token {
@@ -58,8 +60,11 @@ function tokenize(source: string): Token[] {
   return tokens;
 }
 
-/** Parses one source SVG's controlled dialect into a tree. Throws IconSetError, naming `fileLabel`, on anything outside it. */
-export function parseSvg(source: string, fileLabel: string): SvgNode {
+/**
+ * Parses one source SVG's controlled dialect into a tree. Throws IconSetError, naming `fileLabel`, on anything outside it.
+ * `allowedAttrs` widens the dialect for the scenes (MUT-561), which also carry dashes and rotations.
+ */
+export function parseSvg(source: string, fileLabel: string, allowedAttrs: ReadonlySet<string> = ICON_ATTRS): SvgNode {
   const tokens = tokenize(source);
   if (tokens.length === 0 || tokens[0].tag !== 'svg' || tokens[0].kind === 'close') {
     throw new IconSetError(`${fileLabel}: expected a root <svg> element`);
@@ -72,7 +77,7 @@ export function parseSvg(source: string, fileLabel: string): SvgNode {
       throw new IconSetError(`${fileLabel}: unrecognized element <${token.tag}>`);
     }
     for (const attr of Object.keys(token.attrs)) {
-      if (!ALLOWED_ATTRS.has(attr)) {
+      if (!allowedAttrs.has(attr)) {
         throw new IconSetError(`${fileLabel}: unrecognized attribute "${attr}" on <${token.tag}>`);
       }
     }
@@ -113,7 +118,8 @@ function renderAttr(name: string, value: string): string {
   return `${jsxName}={${JSON.stringify(value)}}`;
 }
 
-function renderNode(node: SvgNode, indent: string): string {
+/** One element and its children as JSX; a named `id` becomes `data-part`. Shared with the scenes' generator. */
+export function renderNode(node: SvgNode, indent: string): string {
   const attrs = Object.entries(node.attrs)
     .filter(([name]) => name !== 'xmlns' && name !== 'id')
     .map(([name, value]) => renderAttr(name, value));
