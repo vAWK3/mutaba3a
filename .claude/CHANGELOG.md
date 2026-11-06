@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice A: accountants (MUT-561)
+
+**Why:** epic MUT-558, the owner half on the web (layout B, Basel 13236/13244). Slice A needs only MUT-559; the Links
+column waits for MUT-560 (slice B). Brief: `.claude/designs/MUT-561-sharing-page.md`.
+
+### Added
+- `/p/$profileId/you/sharing` (`pages/sharing/SharingPage.tsx`): Accountants column (`AccountantsColumn.tsx`) with
+  Stop / Cancel (in-place confirm, optimistic with rollback) and Invite again; the invite side drawer
+  (`InviteAccountantDrawer.tsx`, `?invite=true`, sends the portal language); the empty page with the `accountant-empty`
+  scene (placeholder art). Entry rows in You › Profiles and the Manage profiles edit pane (`SharingEntryRow`).
+- `sharingRules.ts`, `data/sharingQueries.ts`, `api.listAccountants/inviteAccountant/revokeAccountant`.
+- `AccessScopeList` (shared with MUT-562), `Scene` and `npm run illustrations:generate`
+  (`scripts/illustration-set.ts` → `src/components/illustrations/generated/`): the portal's first scene renderer.
+- Events `accountant_invited`, `accountant_revoked` (`was`); contract 2.7.0. i18n `hosted.sharing.*`, `hosted.accessScope.*`.
+- QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}`; FakeApi accountants routes.
+
+### Changed
+- `scripts/icon-set.ts`: `parseSvg` takes the allowed attributes (scenes add dashes and rotations); `renderNode` exported.
+
 ## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
 
 **Why:** epic MUT-558. An accountant reads a client's books without being a member of the profile; the owner can see

@@ -4421,3 +4421,13 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
+## MUT-561 — the owner's Sharing page, slice A
+
+Detail in `.claude/designs/MUT-561-sharing-page-tests.md`.
+- `scripts/__tests__/illustration-set.test.ts` (palette mapping, dialect, drift of the generated scenes),
+  `components/__tests__/Scene.test.tsx` (placeholder, reduced motion).
+- `pages/sharing/__tests__/sharingRules.test.ts`, `InviteAccountantDrawer.test.tsx`, `SharingPage.test.tsx` (gate, entry
+  rows, row states, stop/cancel/invite again, rollback, telemetry, empty, loading, error).
+- Contract 2.7.0 pinned (`analytics-taxonomy.test.ts`); new `dir` sites (`direction.test.ts`).
+- Release-QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}` (stubbed API).
+
