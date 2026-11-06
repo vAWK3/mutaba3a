@@ -36,6 +36,10 @@
   `useRevokeShareLink`; rules `periodRange`, `monthsLabel`, `pinOf`, `linkRow`, `linkErrorOf`; events
   `share_link_created`, `share_link_revoked`; QA `portal.sharing.{create-link,link-rows}`; FakeApi share-link routes.
 
+### Changed
+- MUT-577: the Sharing page and its entry rows also need the person's `accountant_access` feature on `/v1/me` (the
+  operator's per-account switch); absent on a server that doesn't name it yet, so hidden.
+
 ### Fixed
 - Concurrent revokes no longer restore each other's rows; Invite again refetches on stale refusals and waits at the
   limit; focus lands on the new row; bidi isolates in sentences; gender-neutral Arabic confirms.

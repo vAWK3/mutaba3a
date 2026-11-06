@@ -9,9 +9,17 @@ import { initialsOf } from '../../shell/initials';
  * the drawer never decides an error twice).
  */
 
-/** D8: an owner of the profile (creator or co-owner), signed in, on a server with accountant access (`/v1/me.clients`). */
-export function sharingOpen(me: Pick<Me, 'clients'>, profile: { owned?: boolean }, local: boolean): boolean {
-  return !local && me.clients !== undefined && profile.owned === true;
+/** MUT-577: the operator's per-account switch for accountant access (MUT-433 features), named on /v1/me. */
+export const ACCOUNTANT_ACCESS_FEATURE = 'accountant_access';
+
+/**
+ * D8 + MUT-577: an owner of the profile (creator or co-owner), signed in, on a server with accountant access
+ * (`/v1/me.clients`), and the person's own `accountant_access` feature. Read defensively: a server that doesn't name
+ * features yet (or not this one) keeps the page hidden.
+ */
+export function sharingOpen(me: { clients?: Me['clients']; user?: { features?: readonly string[] } }, profile: { owned?: boolean }, local: boolean): boolean {
+  const featured = Array.isArray(me.user?.features) && me.user.features.includes(ACCOUNTANT_ACCESS_FEATURE);
+  return !local && featured && me.clients !== undefined && profile.owned === true;
 }
 
 /** The page's own search: `?invite=true` and `?newLink=true` open its drawers (the shell's drawer-key style, DESIGN.md). */

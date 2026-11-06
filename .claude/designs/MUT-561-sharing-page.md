@@ -42,6 +42,10 @@ drawer and done pane, Turn off, Copy message) waits for MUT-560.
 - Events `share_link_created` (period, expires_in_days) and `share_link_revoked` (was) join contract 2.7.0, kept at
   2.7.0 on this branch; MUT-575 defines the same entries, and whichever merges second reconciles the version pin.
 
+- **MUT-577 (Basel):** the gate also needs the person's `accountant_access` feature on `/v1/me` (operator switch, like
+  `receipt_reading`). Read defensively: absent → hidden. FakeApi seeds it with accountants (`accountantAccess: false`
+  withholds it).
+
 ## QA scenarios (slice A; `qa/features/portal/sharing.yaml`, `qa/specs/portal/sharing.spec.ts`)
 
 | id | tier | steps → outcome |

@@ -12,7 +12,7 @@ const iso = (text: string) => `\u2068${text}\u2069`;
  */
 
 const studio = profile({ id: ORG_B, name: 'Studio', owned: true, type: 'BUSINESS', isPersonalDefault: false, writerOfRecord: null, owners: [] });
-const account = (overrides: Partial<Me> = {}): Me => ({ ...me([studio]), clients: [], ...overrides });
+const account = (overrides: Partial<Me> = {}): Me => { const base = me([studio]); return { ...base, user: { ...base.user, features: ['accountant_access'] }, clients: [], ...overrides }; };
 
 const pending = (email: string): AccountantGrant => ({
   id: 'g-new',

@@ -22,7 +22,8 @@ const NOW = new Date('2026-11-06T10:00:00.000Z');
 const personal = profile({ id: ORG_A, name: 'Personal', owned: true, type: 'PERSONAL', isPersonalDefault: true, writerOfRecord: null, owners: [] });
 const studio = profile({ id: ORG_B, name: 'Studio', owned: true, type: 'BUSINESS', isPersonalDefault: false, writerOfRecord: null, owners: [] });
 const firm = profile({ id: ORG_B, name: 'Haddad & Partners', owned: false });
-const on = (profiles = [personal, studio]): Me => ({ ...me(profiles), clients: [] });
+/** Accountant access on for this server (`clients`) and this person (MUT-577's `accountant_access` feature). */
+const on = (profiles = [personal, studio]): Me => { const base = me(profiles); return { ...base, user: { ...base.user, features: ['accountant_access'] }, clients: [] }; };
 
 const SAMI: AccountantGrant = {
   id: 'g-sami',
@@ -73,6 +74,7 @@ describe('who gets the Sharing page (D8)', () => {
   it.each([
     ['a member of a firm profile', on([personal, firm])],
     ['a server with accountant access off', me([personal, studio])],
+    ['MUT-577: a person without the accountant_access feature', { ...me([personal, studio]), clients: [] }],
   ])('%s goes back to You › Profiles', async (_label, account) => {
     const { router } = portal(`/p/${ORG_B}/you/sharing`, {}, account);
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/you`));
@@ -107,6 +109,7 @@ describe('the ways in', () => {
   it.each([
     ['a member of a firm profile', on([personal, firm])],
     ['a server with accountant access off', me([personal, studio])],
+    ['MUT-577: a person without the accountant_access feature', { ...me([personal, studio]), clients: [] }],
   ])('You › Profiles has no such row for %s', async (_label, account) => {
     portal(`/p/${ORG_B}/you`, {}, account);
     await screen.findByRole('button', { name: /Manage profiles/ });
@@ -368,6 +371,14 @@ describe('the Links column (slice B)', () => {
     await user.click(await screen.findByRole('button', { name: 'Create a link with a PIN' }));
     expect(await screen.findByRole('dialog', { name: 'New link' })).toBeInTheDocument();
     expect(locationOf(router)).toContain('newLink=true');
+  });
+});
+
+describe('MUT-577: the accountant_access feature', () => {
+  it('off: no row in the Manage profiles edit pane either', async () => {
+    portal(`/p/${ORG_A}/you?manageProfiles=true&editProfile=${ORG_B}`, {}, { ...me([personal, studio]), clients: [] });
+    const dialog = await screen.findByRole('dialog', { name: 'Studio' });
+    expect(within(dialog).queryByRole('link', { name: /^Sharing/ })).not.toBeInTheDocument();
   });
 });
 

@@ -26,7 +26,7 @@ function grant(overrides: Partial<AccountantGrant> = {}): AccountantGrant {
 }
 
 const owner = { owned: true };
-const meOn = { clients: [] };
+const meOn = { clients: [], user: { features: ['accountant_access'] } };
 
 describe('sharingOpen (D8)', () => {
   it('opens for an owner, signed in, on a server with accountant access', () => {
@@ -35,7 +35,9 @@ describe('sharingOpen (D8)', () => {
 
   it.each([
     ['a member of a firm profile', meOn, { owned: false }, false],
-    ['accountant access off (no clients on /v1/me)', {}, owner, false],
+    ['accountant access off (no clients on /v1/me)', { user: { features: ['accountant_access'] } }, owner, false],
+    ['MUT-577: the person without the accountant_access feature', { clients: [], user: { features: ['agent_access'] } }, owner, false],
+    ['MUT-577: a server that names no features', { clients: [] }, owner, false],
     ['signed out on this device', meOn, owner, true],
   ])('stays shut for %s', (_label, me, profile, local) => {
     expect(sharingOpen(me, profile, local)).toBe(false);

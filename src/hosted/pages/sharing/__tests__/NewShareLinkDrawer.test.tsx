@@ -19,7 +19,7 @@ const NOW = new Date('2026-11-06T10:00:00.000Z');
 const URL_ONCE = 'https://app.mtb3a.com/share#k7Qp29fXhb3Lk7Qp29fXhb3Lk7Qp29fXhb3L';
 const personal = profile({ id: ORG_A, name: 'Personal', owned: true, type: 'PERSONAL', isPersonalDefault: true, writerOfRecord: null, owners: [] });
 const studio = profile({ id: ORG_B, name: 'Studio', owned: true, type: 'BUSINESS', isPersonalDefault: false, writerOfRecord: null, owners: [] });
-const account = (overrides: Partial<Me> = {}): Me => ({ ...me([personal, studio]), clients: [], ...overrides });
+const account = (overrides: Partial<Me> = {}): Me => { const base = me([personal, studio]); return { ...base, user: { ...base.user, features: ['accountant_access'] }, clients: [], ...overrides }; };
 
 const created = (body: { period: ShareLinkCreated['period']; expiresInDays: number }): ShareLinkCreated => ({
   id: 'l-new',
