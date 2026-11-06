@@ -4398,3 +4398,23 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Portal `BillingDrawer.test.tsx`: the welcome-back line per interval and currency, `expectedOffer`, the refusal banner.
 - Release-QA (portal-live, Stripe sandbox): `comeback-offer` (core), `comeback-yearly`, `comeback-usd`.
 
+## MUT-559 — accountant grants (ADR-245)
+
+- `server/src/__tests__/accountant-route-matrix.test.ts`: every profile-scoped route from the published contract and
+  the route-access index, as an accountant: key-only routes 403; every write 403 ACCOUNTANT_READ_ONLY; every GET outside
+  the derived allowlist the same; every allowlisted GET answers (the 34 it yields today are pinned, so a new one fails
+  until reviewed); list reads carry only the shared profile's rows.
+- `routes-accountants.test.ts`: invite (mail ar + en, token in the fragment), duplicate, cap, self, non-owner, rate
+  limit; 14-day expiry and re-invite; revoke → next request 404; leave; accept by exact address, same business domain,
+  refused on gmail.com / a subdomain / another domain (masked); parallel accepts; already a member; check's single 404 and
+  no `{token}` path; signup (ACTIVE, no review, personal profile), existing address, stale terms; isolation (another
+  profile, the feed, the verdict, `/v1/profiles/*`); personal profile shareable while the operator's co-owner grant stays
+  409 PERSONAL_PROFILE; owner READ_ONLY and LOCKED; closure both ways; audit rows and the hourly/daily view throttle; the
+  switch off.
+- `auth/__tests__/accountant-store-guard.test.ts`: `accountantScopes`, `accountantMayRead`, the guard over every
+  STORE_ACCESS method, and a write refused under an accountant request while the unguarded store writes.
+- Store contract `store-contract-accountant-grants.ts` (memory; Prisma under `test:db`): invite/duplicate/cap/expired
+  replace, conditional accept race, one ACTIVE per accountant, revoke/leave/re-invite, touch, signup-and-accept, purge.
+- Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
+  templates/mailer (new mail), store-guard (operator list), API version assertions.
+

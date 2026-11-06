@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-06 — An owner shares one profile with their accountant, read-only (MUT-559, ADR-245)
+
+**Why:** epic MUT-558. An accountant reads a client's books without being a member of the profile; the owner can see
+and end that access at any time. Server side only, behind `ACCOUNTANT_ACCESS` (off in production until MUT-561..564).
+
+### Added
+- Migration `20261106120000_mut559_accountant_grants`: `accountant_grants`, `AccountantGrantStatus`, two partial unique
+  indexes (one live invite per profile and address, one ACTIVE grant per profile and accountant).
+- `accountantGrants` repository (memory + Prisma, store contract), `accountantScopes()`, `accountantStoreGuard()`.
+- Routes (`server/src/routes/accountants.ts`): `POST|GET /v1/profiles/{id}/accountants`,
+  `DELETE /v1/profiles/{id}/accountants/{grantId}`, `POST /v1/accountant-invites/check|accept|signup`,
+  `DELETE /v1/clients/{id}`; `/v1/me` `clients`; the `accountant-invite` mail (ar + en).
+- `ACCOUNTANT_ACCESS`, `ACCOUNTANTS_PER_PROFILE_MAX`; error code `INVITE_EMAIL_MISMATCH`; conflict reasons
+  `ALREADY_INVITED`, `ACCOUNTANT_LIMIT`, `ALREADY_HAS_ACCESS`, `ACCOUNT_EXISTS`; validation reason `SELF_INVITE`.
+
+### Changed
+- `selectProfile` admits an ACTIVE grant after a membership miss; `SessionAuth.membershipRole` is nullable and gains
+  `access`. A LOCKED profile is read-only for its accountant. GET `/v1/expense-categories` seeds only for members.
+- The purge deletes grants both ways (`PURGE_PROFILE_TABLES`, `PURGE_USER_COLUMNS`).
+- Contract 1.100.0-mut559; `src/hosted/api/schema.d.ts` regenerated.
+
 ## [Unreleased] - 2026-11-03 — The come-back offer: ₪9 / $3 for the first month back (MUT-534, ADR-243)
 
 **Why:** MUT-528 D7. A lapsed payer keeps their records forever; this gives them a reason to come back. Basel approved

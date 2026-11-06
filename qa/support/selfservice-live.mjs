@@ -167,6 +167,8 @@ async function main() {
       ATTACHMENTS_DIR: ATTACHMENTS,
       // MUT-441: Expenses › Receipts, and the server reading what's uploaded there (receipts.spec.ts server-reading).
       RECEIPTS_LIBRARY: 'true',
+      // MUT-559: accountant access (the portal's invite and client screens, MUT-561..563).
+      ACCOUNTANT_ACCESS: 'true',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });
