@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 160">
+<g id="reader"><circle cx="80" cy="46" r="13" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"></circle><path d="M50 96a30 30 0 0 1 60 0" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="6 7"></path></g>
+<g id="book"><path d="M80 98Q58 86 26 92V134Q58 128 80 140Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path><path d="M80 98Q102 86 134 92V134Q102 128 80 140Z" fill="#F4F2FB" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path><path d="M40 106h26M40 118h26M94 106h12M94 118h12" fill="none" stroke="#795DBA" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"></path></g>
+<circle id="nuqta" cx="118" cy="64" r="7" fill="#E89960"></circle>
+</svg>
