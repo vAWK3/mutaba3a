@@ -270,6 +270,9 @@ describe('who may accept (MUT-559 D4)', () => {
     expect(native.status).toBe(200);
     expect(await read(native)).toMatchObject({ profileName: 'Sader Studio', expired: false });
     expect((await h.app.request('/v1/accountant-invites/check', json({ token: 'A'.repeat(43) }))).status).toBe(404);
+    // A signed-in phone (device bearer, still no Origin or cookie) checks the same way: the route is public, the bearer is ignored.
+    const signedIn = await h.app.request('/v1/accountant-invites/check', json({ token }, owner.auth as Record<string, string>));
+    expect(signedIn.status).toBe(200);
     const foreign = await h.app.request('/v1/accountant-invites/check', json({ token }, { origin: 'https://evil.example' }));
     expect(foreign.status).toBe(403);
     const crossSite = await h.app.request('/v1/accountant-invites/check', json({ token }, { 'sec-fetch-site': 'cross-site' }));
