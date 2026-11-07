@@ -19,6 +19,9 @@ const SECTION_KEYS = [
   'whatYouEnter',
   'network',
   'sharing',
+  // MUT-382 (epic MUT-558): accountant access (MUT-559), share links (MUT-560) and their downloads (MUT-314)
+  'accountant',
+  'shareLinks',
   'security',
   'noTracking',
   'usageAnalytics',
