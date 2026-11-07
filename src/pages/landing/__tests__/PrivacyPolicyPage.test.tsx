@@ -318,6 +318,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(links).toMatch(/at most 3 devices/);
     expect(links).toMatch(/up to 8 hours/);
     expect(links).toMatch(/IP address briefly, in memory, .* and don't store it/);
+    expect(links).toMatch(/When a link has been over for 30 days, we delete its devices' records/);
   });
 
   it('names the invite email, the people you share with, the public pages’ counts and what closing an account ends', () => {
@@ -325,6 +326,8 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(sectionOf('Emails we send')).toMatch(/we use that address only for the invite/);
     expect(sectionOf(/Who else handles your data/)).toMatch(/anyone you give a share link and its PIN/);
     expect(sectionOf(/Anonymous usage counts/)).toMatch(/pages for share links and accountant invites count the same way, without cookies/);
+    // The Accountant plan is off: its offer and checkout counts are not described (Basel, 2026-11-07)
+    expect(sectionOf(/Anonymous usage counts/)).not.toMatch(/Accountant plan/);
     expect(sectionOf(/What reaches the network/)).toMatch(/share-link and accountant-invite pages/);
     const deletion = sectionOf(/Deleting your account/);
     expect(deletion).toMatch(/your accountants and your share links can't open the profiles you own/);
@@ -339,6 +342,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(links).toContain('بصمة مُجزّأة للرابط ولرمز PIN');
     expect(links).toContain('3 أجهزة على الأكثر');
     expect(links).toContain('ولا نخزّنه');
+    expect(links).toContain('بعد مرور 30 يومًا على انتهاء الرابط، نحذف سجلات أجهزته');
     expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('رابط مشاركة ورمزه');
     expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('صفحتا روابط المشاركة ودعوات المحاسبين');
     expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 7 نوفمبر 2026');
