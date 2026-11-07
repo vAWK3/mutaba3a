@@ -177,6 +177,8 @@ describe('STORE_ACCESS', () => {
       'sessions.revokeAllForUser',
       // MUT-560: the public share-link routes and shareLinkAccess read, count and stamp on the base store.
       'shareLinks.addOrRotateViewer',
+      // MUT-382: the purge job's sweep of ended links' viewers.
+      'shareLinks.deleteEndedViewers',
       'shareLinks.findByTokenDigest',
       'shareLinks.findViewerByDigest',
       'shareLinks.recordFailedPin',

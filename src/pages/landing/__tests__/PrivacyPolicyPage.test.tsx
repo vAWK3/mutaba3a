@@ -284,6 +284,71 @@ describe('PrivacyPolicyPage ?lang', () => {
   });
 });
 
+/** MUT-382 (epic MUT-558): accountant access, share links and what was downloaded through them. */
+describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => {
+  const sectionOf = (name: string | RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+
+  it('adds "Sharing with your accountant" and "Share links" right after "Who else handles your data", and dates the revision', () => {
+    renderPage('en');
+    const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    const sharing = headings.indexOf('Who else handles your data');
+    expect(headings.slice(sharing + 1, sharing + 3)).toEqual(['Sharing with your accountant', 'Share links']);
+    expect(document.querySelector('main')?.textContent).toContain('Last updated November 7, 2026');
+  });
+
+  it('says what an accountant reads, for how long an invite works, that they change nothing, and who ends it', () => {
+    renderPage('en');
+    const accountant = sectionOf('Sharing with your accountant');
+    expect(accountant).toMatch(/works for 14 days/);
+    expect(accountant).toMatch(/can read that one profile/);
+    expect(accountant).toMatch(/Excel report and a zip of the receipts for whole months/);
+    expect(accountant).toMatch(/They can't add, change or delete anything/);
+    expect(accountant).toMatch(/when they last viewed/);
+    expect(accountant).toMatch(/files your accountant \(or someone you gave a link\) already downloaded are their copy, held under their own responsibilities\. We can't recall them\./);
+  });
+
+  it('says a share link is shown once, stored only as fingerprints, PIN-gated, capped and what is kept about visitors', () => {
+    renderPage('en');
+    const links = sectionOf('Share links');
+    expect(links).toMatch(/1, 7 or 30 days/);
+    expect(links).toMatch(/We show you the link once/);
+    expect(links).toMatch(/scrambled fingerprint of the link and of the PIN/);
+    expect(links).toMatch(/shows nothing about you or the profile/);
+    expect(links).toMatch(/after 5 wrong PINs the link locks for good/);
+    expect(links).toMatch(/at most 3 devices/);
+    expect(links).toMatch(/up to 8 hours/);
+    expect(links).toMatch(/IP address briefly, in memory, .* and don't store it/);
+    expect(links).toMatch(/When a link has been over for 30 days, we delete its devices' records/);
+  });
+
+  it('names the invite email, the people you share with, the public pages’ counts and what closing an account ends', () => {
+    renderPage('en');
+    expect(sectionOf('Emails we send')).toMatch(/we use that address only for the invite/);
+    expect(sectionOf(/Who else handles your data/)).toMatch(/anyone you give a share link and its PIN/);
+    expect(sectionOf(/Anonymous usage counts/)).toMatch(/pages for share links and accountant invites count the same way, without cookies/);
+    // The Accountant plan is off: its offer and checkout counts are not described (Basel, 2026-11-07)
+    expect(sectionOf(/Anonymous usage counts/)).not.toMatch(/Accountant plan/);
+    expect(sectionOf(/What reaches the network/)).toMatch(/share-link and accountant-invite pages/);
+    const deletion = sectionOf(/Deleting your account/);
+    expect(deletion).toMatch(/your accountants and your share links can't open the profiles you own/);
+    expect(deletion).toMatch(/If you're an accountant, your access to the profiles shared with you is deleted with your account/);
+  });
+
+  it('says the same in Arabic', () => {
+    renderPage('ar');
+    expect(sectionOf('المشاركة مع محاسبك')).toContain('صالحة لمدة 14 يومًا');
+    expect(sectionOf('المشاركة مع محاسبك')).toContain('ولا نستطيع استرجاعها');
+    const links = sectionOf('روابط المشاركة');
+    expect(links).toContain('بصمة مُجزّأة للرابط ولرمز PIN');
+    expect(links).toContain('3 أجهزة على الأكثر');
+    expect(links).toContain('ولا نخزّنه');
+    expect(links).toContain('بعد مرور 30 يومًا على انتهاء الرابط، نحذف سجلات أجهزته');
+    expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('رابط مشاركة ورمزه');
+    expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('صفحتا روابط المشاركة ودعوات المحاسبين');
+    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 7 نوفمبر 2026');
+  });
+});
+
 /**
  * MUT-369 (ADR-159 §9): the policy names what self-service signup adds. A draft until Basel approves the wording
  * (before-release.md); these tests pin what the draft must keep saying.

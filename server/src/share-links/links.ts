@@ -92,6 +92,12 @@ export function isLiveLink(link: Pick<ShareLinkRecord, 'revokedAt' | 'expiresAt'
   return link.revokedAt === null && link.expiresAt > at;
 }
 
+/**
+ * MUT-382: how long a link's viewer rows (the devices that opened it) outlive its end (revoked, locked or expired).
+ * The hourly account-purge job deletes them after this; the link row and its audit rows stay with the profile.
+ */
+export const SHARE_LINK_VIEWER_RETENTION_MS = 30 * 86_400_000;
+
 /** OW5: how long the owner's list keeps a link after it ended (revoked or expired) or locked. */
 export const SHARE_LINK_ENDED_VISIBLE_MS = 24 * 3_600_000;
 
