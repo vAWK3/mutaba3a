@@ -160,9 +160,15 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
     return client;
   }
 
-  /** The public routes: same origin only (the portal is the one browser caller), then the client address's budget. */
-  async function publicGuard(c: Context<AppEnv>): Promise<Date> {
-    if (!isSamePortalOrigin(c.req, settings)) throw new ApiError('CROSS_SITE_REQUEST', 'Open the invite from the MTB3A portal itself');
+  /**
+   * The public routes: same origin only (the portal is the one browser caller), then the client address's budget.
+   * `nativeToo` (the check only, which changes nothing): a request carrying no browser fetch metadata (no Sec-Fetch-Site,
+   * no Origin) and no cookie is the phone app opening an invite link, and passes too. A browser on another site, or
+   * anything with a cookie, still needs the portal's origin.
+   */
+  async function publicGuard(c: Context<AppEnv>, nativeToo = false): Promise<Date> {
+    const native = nativeToo && !c.req.header('sec-fetch-site') && !c.req.header('origin') && !c.req.header('cookie');
+    if (!native && !isSamePortalOrigin(c.req, settings)) throw new ApiError('CROSS_SITE_REQUEST', 'Open the invite from the MTB3A portal itself');
     const now = c.get('now')();
     const ip = await ipLimiter.check(`accountant-invite:${requestClientIp((name) => c.req.header(name), settings)}`, now);
     if (!ip.allowed) {
@@ -327,7 +333,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       },
     }),
     async (c) => {
-      const now = await publicGuard(c);
+      const now = await publicGuard(c, true);
       const grant = await pendingGrant(c.req.valid('json').token, now, true);
       const organization = await store.organizations.getById(grant.organizationId);
       if (!organization) throw inviteNotFound();

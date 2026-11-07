@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ACCOUNTANT_INVITE_TTL_MS, ACCOUNTANTS_PER_PROFILE_DEFAULT } from '../accountants/grants.js';
 import { mayAcceptInvite } from '../routes/accountants.js';
+import { CURRENT_TERMS } from '../legal.js';
 import {
   ADMIN,
   DAY,
@@ -258,6 +259,26 @@ describe('who may accept (MUT-559 D4)', () => {
     const acc = await shared(h, owner, profileId);
     const used = await acceptInvite(h, acc, inviteTokenFor(h, acc.email));
     expect(used.status).toBe(404);
+  });
+
+  it('check also answers the phone app (no browser fetch metadata, no cookie), but never a foreign or cookie-bearing browser request', async () => {
+    const h = accountantHarness();
+    const { owner, profileId } = await ownerWithProfile(h);
+    await inviteAccountant(h, owner, profileId, 'hadi@books.ps');
+    const token = inviteTokenFor(h, 'hadi@books.ps');
+    const native = await h.app.request('/v1/accountant-invites/check', json({ token }));
+    expect(native.status).toBe(200);
+    expect(await read(native)).toMatchObject({ profileName: 'Sader Studio', expired: false });
+    expect((await h.app.request('/v1/accountant-invites/check', json({ token: 'A'.repeat(43) }))).status).toBe(404);
+    const foreign = await h.app.request('/v1/accountant-invites/check', json({ token }, { origin: 'https://evil.example' }));
+    expect(foreign.status).toBe(403);
+    const crossSite = await h.app.request('/v1/accountant-invites/check', json({ token }, { 'sec-fetch-site': 'cross-site' }));
+    expect(crossSite.status).toBe(403);
+    const withCookie = await h.app.request('/v1/accountant-invites/check', json({ token }, { cookie: 'mtb3a_session=x' }));
+    expect(withCookie.status).toBe(403);
+    // Signup stays portal-only: the phone opens the portal for it.
+    const signup = await h.app.request('/v1/accountant-invites/signup', json({ token, password: 'a-long-enough-password', displayName: 'Hadi Accountant', acceptedTermsVersion: CURRENT_TERMS.version, turnstileToken: 'XXXX.DUMMY.TOKEN.XXXX' }));
+    expect(signup.status).toBe(403);
   });
 
   it('check answers the same 404 for unknown, used and revoked tokens, and never takes the token in a path', async () => {
