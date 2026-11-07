@@ -402,6 +402,25 @@ at the 4th client with no way to pay.
 4. Restricted key and webhook endpoint: no change (prices read, Checkout write and the existing events cover it).
 5. dev/QA `server/.env`: `ACCOUNTANT_PLAN=true` (`.env.example` has it).
 
+**Before every API deploy (release step, from 0.1.20 on; MUT-565 fix).** The mirror reads a subscription's plan only
+from its product's `metadata.tier`; a product in use without one stops its subscriptions mirroring (`UNKNOWN_TIER`,
+now logged at **error** as `stripe subscription not mirrored` with the subscription and product ids), and the people
+paying lapse 7 days after the stored period. Check it read-only, in live mode, before `deploy.sh`:
+
+- [ ] Every Stripe product a live subscription uses carries `metadata.tier` = `freelancer`, `firm` or `accountant`:
+
+  ```bash
+  cd server
+  STRIPE_SECRET_KEY="$(gcloud secrets versions access latest --secret=mutaba3a-api-stripe-secret-key --project=$GCP_PROJECT_ID)" \
+    npm run billing:product-tiers
+  ```
+
+  Read-only (only `GET /v1/products` and `GET /v1/subscriptions`; the restricted key's Products and Subscriptions
+  read is enough). It lists each product with its tier and its live subscriptions, and exits 1 naming any product in
+  use without a known tier: tag it in the dashboard (Products › the product › Metadata › `tier`), run it again until
+  `OK`, then deploy. After the deploy, Cloud Logging shows no `stripe subscription not mirrored` line
+  (`severity>=ERROR`); one that does names the product to fix, then `npm run billing:reconcile -- --url "$URL"`.
+
 **Live (before launch).** Basel sets the final price (open; ₪99 / $25 are placeholders, nothing in code names a
 price), then steps 1–4 in live mode, then `ACCOUNTANT_PLAN=true` on the production service and deploy.
 

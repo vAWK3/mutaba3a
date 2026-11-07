@@ -14,7 +14,7 @@ const NOW = new Date('2026-11-01T09:00:00.000Z');
 let n = 0;
 const unique = () => `${Date.now().toString(36)}${(n++).toString(36)}`;
 
-function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudgetMs?: number } = {}) {
+function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudgetMs?: number; logs?: string[] } = {}) {
   const store = new MemoryLedgerStore();
   const clock = { now: NOW };
   const stripe = new FakeStripeGateway(() => clock.now);
@@ -28,7 +28,7 @@ function harness(options: { reconcileGateway?: StripeGateway; reconcileTimeBudge
     reconcileGateway: options.reconcileGateway ?? stripe,
     invoiceTaxNumbers: checkoutGateway,
     ...(options.reconcileTimeBudgetMs !== undefined ? { reconcileTimeBudgetMs: options.reconcileTimeBudgetMs } : {}),
-    logger: pino({ level: 'silent' }),
+    logger: options.logs ? pino({ level: 'info' }, { write: (line: string) => void options.logs!.push(line) }) : pino({ level: 'silent' }),
     now: () => clock.now,
   });
   const tick = (ms = 1000) => {
@@ -339,6 +339,25 @@ describe('Stripe sync (MUT-360)', () => {
     expect(await h.store.billing.getSubscription('sub_1')).toMatchObject({ status: 'canceled', tier: 'FREELANCER', cancelAtPeriodEnd: true, currentPeriodEnd: stored });
     expect(await h.billingOf(u.personalId)).toMatchObject({ state: 'READ_ONLY', source: 'STRIPE' });
     expect(await h.sync.handleEvent(e, null)).not.toMatchObject({ result: 'duplicate' });
+  });
+
+  it('a Freelancer subscription that can no longer be tiered is logged as an error with its subscription and product ids, never silently (MUT-565 fix)', async () => {
+    const logs: string[] = [];
+    const h = harness({ logs });
+    const u = await h.person();
+    h.stripe.customers.set('cus_1', stripeObjects.customer('cus_1', { mutaba3a_user_id: u.userId }));
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_F' }));
+    await h.sync.handleEvent(h.event('customer.subscription.created', { id: 'sub_1' }), 'req-1');
+    h.stripe.subscriptions.set('sub_1', stripeObjects.subscription({ id: 'sub_1', customer: 'cus_1', product: 'prod_NOTIER' }));
+    h.tick();
+    await h.sync.handleEvent(h.event('customer.subscription.updated', { id: 'sub_1' }, 'evt_untiered'), 'req-2');
+    const errors = logs.map((l) => JSON.parse(l) as Record<string, unknown>).filter((l) => l['level'] === 50);
+    expect(errors).toEqual([
+      expect.objectContaining({ code: 'UNKNOWN_TIER', stripeSubscriptionId: 'sub_1', productIds: ['prod_NOTIER'], storedTier: 'FREELANCER', eventId: 'evt_untiered', requestId: 'req-2' }),
+    ]);
+    // No PII: no email address, no person id.
+    expect(JSON.stringify(errors)).not.toMatch(/@/);
+    expect(JSON.stringify(errors)).not.toContain(u.userId);
   });
 
   it('a subscription Stripe refuses is answered 200, recorded, and handled again on redelivery', async () => {

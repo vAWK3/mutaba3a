@@ -117,6 +117,19 @@ export async function subscribeByApi(customerId: string, lookupKey = 'freelancer
 }
 
 /**
+ * MUT-565 fix (release QA 2026-11-07): `subscribeByApi` returns once Stripe has the subscription, but its webhook
+ * reaches the API only ~5 s later, about when the flow has signed in. When the portal's first reads beat it, /v1/me
+ * says READ_ONLY, the lapse banner caches GET /v1/billing with no subscription (30 s stale time) and the Billing drawer
+ * shows that cached "Subscribe" for good: only a return from Stripe polls. Call this after `signIn`, before the first
+ * page, wherever a flow starts as a subscriber made by API.
+ */
+export async function untilSubscriptionMirrored(page: Page): Promise<void> {
+  await expect
+    .poll(async () => ((await (await page.request.get('/v1/billing')).json()) as Json).subscription?.status ?? null, { timeout: 60_000, intervals: [500, 1_000, 2_000] })
+    .not.toBeNull();
+}
+
+/**
  * MUT-525 (R3, R6): this run's launch coupon, made only by the launch-offer specs and deleted by them (absent is the
  * default the other flows rely on). `redeemBy` defaults to three days from now; the offer shown ends an hour before.
  */

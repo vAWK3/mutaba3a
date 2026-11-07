@@ -101,6 +101,10 @@ const NO_PRODUCTS: ReadonlyMap<string, Stripe.Product> = new Map();
  * 300 s request timeout for one more page fetch (10 s, two retries) after the last check (MUT-360 review).
  */
 export const RECONCILE_TIME_BUDGET_MS = 200_000;
+/** The product ids a subscription's items name (expanded or not): what the operator fixes for UNKNOWN_TIER. */
+function productIdsOf(sub: Stripe.Subscription): string[] {
+  return [...new Set(sub.items.data.map((item) => (typeof item.price.product === 'string' ? item.price.product : item.price.product.id)))];
+}
 /** An expected state, not something for the operator: a deleted customer's subscriptions end on their own. */
 const needsOperator = (code: string) => code !== 'CUSTOMER_DELETED';
 
@@ -152,9 +156,9 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
    * frozen out, and a still-active one stops covering 7 days after the stored period. Nothing to keep when we never
    * mirrored it.
    */
-  async function keepStatus(sub: Stripe.Subscription, stripeCustomerId: string, fetchedAt: Date, context: SyncContext): Promise<Omit<SyncResult, 'codes' | 'blocked'>> {
+  async function keepStatus(sub: Stripe.Subscription, stripeCustomerId: string, fetchedAt: Date, context: SyncContext): Promise<Omit<SyncResult, 'codes' | 'blocked'> & { storedTier: string | null }> {
     const stored = await store.billing.getSubscription(sub.id);
-    if (!stored) return { subscriptionId: sub.id, outcome: 'error', reachesNobody: true };
+    if (!stored) return { subscriptionId: sub.id, outcome: 'error', reachesNobody: true, storedTier: null };
     const state = stateOf(sub);
     const pause = pauseOf(sub);
     const payer = (await store.billing.getAccount(stripeCustomerId))?.userId ?? null;
@@ -181,7 +185,7 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },
     });
-    return { subscriptionId: sub.id, outcome, reachesNobody: profileIds.length === 0 };
+    return { subscriptionId: sub.id, outcome, reachesNobody: profileIds.length === 0, storedTier: stored.tier };
   }
 
   async function syncSubscription(input: SyncInput, context: SyncContext): Promise<SyncResult> {
@@ -200,7 +204,17 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
     if (!customer && !(await store.billing.getAccount(stripeCustomerId))) return { subscriptionId: sub.id, outcome: 'skipped', codes, reachesNobody: true, blocked: false };
 
     const mirror = mirrorOf(sub, products);
-    if ('error' in mirror) return { ...(await keepStatus(sub, stripeCustomerId, fetchedAt, context)), codes: [...codes, mirror.error], blocked: true };
+    if ('error' in mirror) {
+      const { storedTier, ...kept } = await keepStatus(sub, stripeCustomerId, fetchedAt, context);
+      // MUT-565 fix (fail-safe): a subscription we can't map (a product without `metadata.tier`, say) must never stop
+      // mirroring quietly: a paying person would lapse 7 days after the stored period. Loud, with ids only (no PII);
+      // pilot runbook §1.12 checks every product's tier before a deploy (npm run billing:product-tiers).
+      logger.error(
+        { code: mirror.error, stripeSubscriptionId: sub.id, productIds: productIdsOf(sub), storedTier, status: sub.status, source: context.source, eventId: context.eventId, requestId: context.requestId },
+        'stripe subscription not mirrored: fix the product in Stripe, then resend the event or run the reconcile',
+      );
+      return { ...kept, codes: [...codes, mirror.error], blocked: true };
+    }
     codes.push(...mirror.notes);
 
     const candidate = customer ? (context.linkHint ?? customer.metadata?.['mutaba3a_user_id'] ?? null) : null;

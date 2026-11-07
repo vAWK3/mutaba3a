@@ -20,6 +20,7 @@ import {
   signIn,
   stripeApi,
   subscribeByApi,
+  untilSubscriptionMirrored,
   waitUntilPast,
 } from '../../support/livePortal';
 import { openYou } from '../../support/you';
@@ -135,6 +136,7 @@ test('Manage billing opens Stripe’s Customer Portal for the card and invoices;
   const { customerId } = await customerOnClock(person);
   await subscribeByApi(customerId);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
 
   const drawer = await step('Open Billing as a subscriber', async () => {
     const d = await openBilling(page, person.personalId);
@@ -592,6 +594,7 @@ test('Switch to yearly - no line before the 2nd payment', { tag: '@portal-live.b
   const { customerId } = await customerOnClock(person);
   await subscribeByApi(customerId);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
   await step('Open Billing after the first payment: Active, Manage billing, no switch line', async () => {
     const d = await openBilling(page, person.personalId);
     await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
@@ -641,6 +644,7 @@ test('Pause instead of cancelling - booked from the paid month’s end, read-onl
   const person = await provisionPerson('en', 'pause');
   const { customerId, clockId, subscriptionId, periodEnd } = await step('A monthly subscriber whose paid month ends in two minutes', async () => payingUntilSoon(person));
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
 
   const drawer = await step('Open Billing and press Cancel plan', async () => {
     const d = await openBilling(page, person.personalId);
@@ -708,6 +712,7 @@ test('Resume now during a pause - a month charged today, writable again', { tag:
   const person = await provisionPerson('en', 'resume');
   const { customerId, clockId, subscriptionId, periodEnd } = await payingUntilSoon(person);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
   await step('A monthly subscriber has paused for a month, and the pause is running', async () => {
     await expect.poll(async () => (await billingOf(page, person.personalId))?.source, { timeout: 45_000 }).toBe('STRIPE');
     await pauseByApi(page, 1);
@@ -740,6 +745,7 @@ test('A second Cancel within 12 months of a pause offers no pause', { tag: '@por
   const person = await provisionPerson('en', 'pause-again');
   const { clockId, periodEnd } = await payingUntilSoon(person);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
   await step('A monthly subscriber paused, and resumed', async () => {
     await expect.poll(async () => (await billingOf(page, person.personalId))?.source, { timeout: 45_000 }).toBe('STRIPE');
     await pauseByApi(page, 1);
@@ -765,6 +771,7 @@ test('The stay offer - half price for 2 months, once per person ever', { tag: '@
   const { customerId, clockId, now } = await customerOnClock(person);
   const subscriptionId = await subscribeByApi(customerId);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
   const drawer = await step('Open Billing as a monthly subscriber', async () => {
     const d = await openBilling(page, person.personalId);
     await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
@@ -809,6 +816,7 @@ test('Cancel with a reason - the plan stays on to the period end, and Keep my pl
   const { customerId } = await customerOnClock(person);
   const subscriptionId = await subscribeByApi(customerId);
   await signIn(page, person);
+  await untilSubscriptionMirrored(page);
   const drawer = await step('Open Billing as a monthly subscriber', async () => {
     const d = await openBilling(page, person.personalId);
     await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible({ timeout: 45_000 });
