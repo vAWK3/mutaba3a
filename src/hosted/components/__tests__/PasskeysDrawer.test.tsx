@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
+import { resetStepUpPrefetch } from '../../operator/stepUp';
 import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
 
 /**
@@ -23,6 +24,8 @@ const REGISTRATION = { id: 'cred', rawId: 'cred', type: 'public-key', response: 
 beforeEach(() => {
   vi.stubGlobal('__PASSKEY_RP_ID__', 'localhost');
   browser.startRegistration.mockReset().mockResolvedValue(REGISTRATION);
+  browser.startAuthentication.mockReset();
+  resetStepUpPrefetch();
 });
 afterEach(() => vi.unstubAllGlobals());
 
@@ -106,14 +109,60 @@ describe('Passkeys drawer (MUT-115)', () => {
     expect(calls(api.calls, 'POST', '/v1/passkeys')[0]?.body).toMatchObject({ currentPassword: 'correct-horse-battery-staple' });
   });
 
-  it('an operator asked for a passkey first is told so, never shown the password form (MUT-459)', async () => {
-    const { user } = portal(`/p/${ORG_A}?passkeys=true`, [], {
-      'POST /v1/passkeys/creation-options': () => fail(403, 'RECENT_SIGN_IN_REQUIRED', { method: 'passkey', windowMinutes: 10 }),
+  describe('an operator (MUT-459): a passkey step-up, never the password', () => {
+    const STEP_UP_OPTIONS = { challengeId: 'dddddddd-dddd-4ddd-8ddd-dddddddddddd', publicKey: { challenge: 'xyz', rpId: 'localhost', allowCredentials: [] } };
+    const ASSERTION = { id: 'cred', rawId: 'cred', type: 'public-key', response: { clientDataJSON: 'e30', authenticatorData: 'e30', signature: 'e30' }, clientExtensionResults: {} };
+    function operatorPortal(routes: Record<string, Handler> = {}) {
+      let steppedUp = false;
+      const passkeyFirst = () => fail(403, 'RECENT_SIGN_IN_REQUIRED', { method: 'passkey', windowMinutes: 10 });
+      return portal(`/p/${ORG_A}?passkeys=true`, [CHROME], {
+        'POST /v1/passkeys/creation-options': () => (steppedUp ? ok(OPTIONS) : passkeyFirst()),
+        [`DELETE /v1/passkeys/${CHROME.id}`]: () => (steppedUp ? new Response(null, { status: 204 }) : passkeyFirst()),
+        'POST /v1/operator/step-up/options': () => ok(STEP_UP_OPTIONS),
+        'POST /v1/operator/step-up': () => ((steppedUp = true), ok({ stepUpUntil: '2026-11-07T12:10:00.000Z' })),
+        ...routes,
+      });
+    }
+
+    it('Add turns into "Confirm with passkey" (its challenge fetched ahead); that tap steps up, the next adds', async () => {
+      browser.startAuthentication.mockResolvedValue(ASSERTION);
+      const { user, api } = operatorPortal();
+      const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
+      await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
+      expect(await within(dialog).findByText(/As an operator, confirm it’s you with one of your passkeys first/)).toBeInTheDocument();
+      expect(within(dialog).queryByLabelText('Password')).not.toBeInTheDocument();
+      const confirm = within(dialog).getByRole('button', { name: 'Confirm with passkey' });
+      await waitFor(() => expect(calls(api.calls, 'POST', '/v1/operator/step-up/options')).toHaveLength(1));
+      expect(browser.startAuthentication).not.toHaveBeenCalled();
+
+      await user.click(confirm);
+      expect(await screen.findByText('Confirmed. Now add your new passkey.')).toBeInTheDocument();
+      expect(calls(api.calls, 'POST', '/v1/operator/step-up/options')).toHaveLength(1);
+      expect(calls(api.calls, 'POST', '/v1/operator/step-up')[0]?.body).toEqual({ challengeId: STEP_UP_OPTIONS.challengeId, response: ASSERTION });
+      expect(browser.startRegistration).not.toHaveBeenCalled();
+
+      await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
+      expect(await screen.findByText('Passkey added')).toBeInTheDocument();
     });
-    const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
-    await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
-    expect(await within(dialog).findByText('As an operator, confirm with one of your passkeys first: sign in again with a passkey, then add the new one.')).toBeInTheDocument();
-    expect(within(dialog).queryByLabelText('Password')).not.toBeInTheDocument();
+
+    it('removing meets the same step-up', async () => {
+      const { user } = operatorPortal();
+      const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
+      await user.click(await within(dialog).findByRole('button', { name: 'Remove Chrome on Mac' }));
+      await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
+      expect(await within(dialog).findByRole('button', { name: 'Confirm with passkey' })).toBeInTheDocument();
+      expect(within(dialog).queryByText('Couldn’t remove the passkey. Try again.')).not.toBeInTheDocument();
+    });
+
+    it('a browser error is named, with the phone (QR) as the way through; nothing reaches the server', async () => {
+      browser.startAuthentication.mockRejectedValue(Object.assign(new Error('nope'), { name: 'NotSupportedError' }));
+      const { user, api } = operatorPortal();
+      const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
+      await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
+      await user.click(await within(dialog).findByRole('button', { name: 'Confirm with passkey' }));
+      expect(await within(dialog).findByText(/This browser couldn’t use your passkey \(NotSupportedError\)\. A passkey on another device works too/)).toBeInTheDocument();
+      expect(calls(api.calls, 'POST', '/v1/operator/step-up')).toHaveLength(0);
+    });
   });
 
   it('a wrong password is the change-password banner', async () => {

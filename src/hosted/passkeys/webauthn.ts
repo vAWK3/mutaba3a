@@ -17,7 +17,7 @@ import {
  *
  * Cancelling the system sheet, or having no passkey for this site, is not an error to show: `cancelled`.
  */
-export type CeremonyOutcome<T> = { kind: 'ok'; response: T } | { kind: 'cancelled' } | { kind: 'failed' };
+export type CeremonyOutcome<T> = { kind: 'ok'; response: T } | { kind: 'cancelled' } | { kind: 'failed'; error: string };
 
 /** The build's RP ID; "" (or absent, in Vitest) = no passkeys. */
 export function buildRpId(): string {
@@ -41,10 +41,15 @@ export function passkeyAutofillSupport(): Promise<boolean> {
   return browserSupportsWebAuthnAutofill().catch(() => false);
 }
 
-/** NotAllowedError is the platform's answer to a cancel, a timeout and "no passkey for this site" alike. */
-function outcomeOf(error: unknown): { kind: 'cancelled' } | { kind: 'failed' } {
+/**
+ * NotAllowedError is the platform's answer to a cancel, a timeout and "no passkey for this site" alike. Anything else
+ * keeps the browser's error name, so the page can say what went wrong instead of "not accepted" (a refusal the
+ * server never saw).
+ */
+function outcomeOf(error: unknown): { kind: 'cancelled' } | { kind: 'failed'; error: string } {
   const name = error instanceof Error ? error.name : '';
-  return name === 'NotAllowedError' || name === 'AbortError' ? { kind: 'cancelled' } : { kind: 'failed' };
+  if (name === 'NotAllowedError' || name === 'AbortError') return { kind: 'cancelled' };
+  return { kind: 'failed', error: name || 'Error' };
 }
 
 export async function createPasskey(optionsJSON: PublicKeyCredentialCreationOptionsJSON): Promise<CeremonyOutcome<RegistrationResponseJSON>> {

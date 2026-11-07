@@ -258,7 +258,7 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
           {day === '' && <p className="form-hint">{t('hosted.operator.billing.noEndHint')}</p>}
           {errors.day && <p className="form-error">{errors.day}</p>}
         </div>
-        {run.failure && <StepUpFailureBanner failure={run.failure} />}
+        {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
         {refusal && (
           <div className="hp-banner hp-banner-error" role="alert">
             <AlertIcon />

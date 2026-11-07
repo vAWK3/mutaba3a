@@ -105,14 +105,23 @@ export async function signInOptions(config: WebauthnConfig): Promise<PublicKeyCr
 /**
  * MUT-459 (D7): an operator's step-up: the platform offers only this person's own passkeys (one Face ID, no account
  * picker), and verifyAssertion still checks the user handle.
+ *
+ * Every listed passkey also allows `hybrid` (a phone over the QR code): a passkey made in the iPhone app can be stored
+ * as `internal` only, and a browser that holds none of them locally (the Mac, without that Keychain) then had no way to
+ * reach the phone and gave up without a sheet. An empty list already means "any transport", so it stays empty.
  */
 export async function stepUpOptions(config: WebauthnConfig, passkeys: readonly Pick<PasskeyRecord, 'credentialId' | 'transports'>[]): Promise<PublicKeyCredentialRequestOptionsJSON> {
   return generateAuthenticationOptions({
     rpID: config.rpId,
-    allowCredentials: passkeys.map((p) => ({ id: p.credentialId, transports: p.transports as AuthenticatorTransportFuture[] })),
+    allowCredentials: passkeys.map((p) => ({ id: p.credentialId, transports: withHybrid(p.transports) })),
     userVerification: 'required',
     timeout: CEREMONY_TIMEOUT_MS,
   });
+}
+
+function withHybrid(transports: readonly string[]): AuthenticatorTransportFuture[] {
+  const listed = transports as readonly AuthenticatorTransportFuture[];
+  return listed.length === 0 || listed.includes('hybrid') ? [...listed] : [...listed, 'hybrid'];
 }
 
 export interface VerifiedCreation {

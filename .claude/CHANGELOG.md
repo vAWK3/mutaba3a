@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
+
+### Fixed
+- **Operator step-up from a Mac whose Keychain lacks the passkeys** (production logs: every portal step-up/options 200 with no assertion ever sent; the 3 passkeys were made in the iPhone app and aren't on the Mac). `stepUpOptions` now lists `hybrid` on every allowed credential (an empty list stays "any"), so the browser offers the phone over the QR code instead of giving up. Files: `server/src/auth/webauthn.ts`.
+- **The step-up challenge is fetched before the tap** (`prefetchStepUpOptions`, single-use, used under 4 minutes): an operator confirm that will ask for the passkey, and the Passkeys drawer's "Confirm with passkey", fetch it when they open, so Safari shows its sheet straight from the tap instead of losing the gesture to a round trip. Files: `src/hosted/operator/stepUp.ts`, `src/hosted/operator/OperatorStepUp.tsx`.
+- **A platform error is named, not "your passkey wasn't accepted"**: a ceremony that fails with anything but NotAllowedError/AbortError keeps the browser's error name (`CeremonyOutcome.failed.error`); the step-up reports it as the new `browser` failure, and the banner shows the name with the QR hint. Files: `src/hosted/passkeys/webauthn.ts`, `src/hosted/operator/*`, the operator pages that render `StepUpFailureBanner`.
+- **An operator adding (renaming, removing) a passkey is asked for the passkey in place** (MUT-459): the drawer used to show "sign in again with a passkey" and stop. Now Add becomes "Confirm with passkey"; that tap runs the operator step-up, the next tap adds (one system sheet per tap). Files: `src/hosted/components/PasskeysDrawer.tsx`, i18n `hosted.account.passkeys.operatorConfirm(ed)` (replaces `operatorPasskeyFirst`), `hosted.operator.stepUp.browser`.
+- **Connect Claude while production has OAuth off** (Terraform `oauth_enabled` false → 503 `OAUTH_NOT_CONFIGURED`): the drawer says it isn't switched on yet instead of a retry error. File: `src/hosted/components/ConnectClaudeDrawer.tsx`, i18n `hosted.connect.notAvailable`.
+
+### Technical
+- Tests: `server/src/auth/__tests__/webauthn.test.ts` (step-up options carry hybrid), `src/hosted/operator/__tests__/stepUp.test.ts` (browser failure, prefetch reuse/expiry/failure), `src/hosted/components/__tests__/PasskeysDrawer.test.tsx` (operator confirm then add, remove meets the step-up, a named browser error), `ConnectClaudeDrawer.test.tsx` (503 message).
+- Ships with the next API release (server change) and the next portal release.
+
 ## [Unreleased] - 2026-11-08 — The Accountant plan, server: free up to 3 client books, a paid plan for more (MUT-565, ADR-251)
 
 **Why:** epic MUT-558. Accountants pay for the clients past their free three; owners never pay for sharing. Server

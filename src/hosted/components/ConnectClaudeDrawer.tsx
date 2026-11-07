@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../components/ui/Button';
 import { useLanguage, useT } from '../../lib/i18n/core';
-import { api, type Schemas } from '../api/client';
+import { api, ApiError, type Schemas } from '../api/client';
 import { OAUTH_GRANTS_KEY } from '../data/oauthQueries';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
@@ -26,11 +26,16 @@ export function ConnectClaudeDrawer({ onClose }: { onClose: () => void }) {
   const enabled = useHasFeature('agent_access');
   const grants = useQuery({ queryKey: OAUTH_GRANTS_KEY, queryFn: ({ signal }) => api.listOauthGrants(signal), enabled });
   const [failed, setFailed] = useState(false);
+  const serverOff = grants.error instanceof ApiError && grants.error.code === 'OAUTH_NOT_CONFIGURED';
 
   return (
     <Drawer title={t('hosted.connect.title')} onClose={onClose} closeLabel={t('common.close')}>
       {!enabled ? (
         <p className="hp-muted">{t('hosted.connect.notEnabled')}</p>
+      ) : serverOff ? (
+        // The server answers 503 OAUTH_NOT_CONFIGURED until production turns OAuth on (Terraform oauth_enabled): say so,
+        // rather than a retry that can't help.
+        <p className="hp-muted">{t('hosted.connect.notAvailable')}</p>
       ) : (
         <QueryView queries={[grants]} data={grants.data}>
           {(data) => (

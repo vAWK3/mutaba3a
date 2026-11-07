@@ -287,7 +287,7 @@ function SettledRow({ settled, stepUpUntil, onDone }: { settled: Settled; stepUp
           <CopyField label={t('hosted.operator.signups.emailLabel')} value={email} />
         </>
       )}
-      {run.failure && <StepUpFailureBanner failure={run.failure} />}
+      {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
       <span className="hp-passkey-actions">
         <Button type="button" variant="secondary" size="sm" onClick={onDone}>
           {t('hosted.operator.signups.done')}

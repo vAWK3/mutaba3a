@@ -81,7 +81,7 @@ function FeatureRow({ account, feature, stepUpUntil }: { account: OperatorAccoun
   return (
     <div data-feature-row={feature}>
       <RowSwitch label={text.label} sub={text.sub} on={on} busy={run.busy} onToggle={() => (on ? setConfirmingOff(true) : void set(true))} />
-      {run.failure && <StepUpFailureBanner failure={run.failure} />}
+      {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
       {run.label === 'confirm' && !on && <p className="hp-you-row hp-you-row--note">{t('hosted.operator.features.tapAgain')}</p>}
       {refusal && <Refusal text={refusal} />}
     </div>

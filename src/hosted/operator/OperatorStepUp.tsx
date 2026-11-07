@@ -1,10 +1,10 @@
 /* eslint-disable react-refresh/only-export-components */
-import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useT } from '../../lib/i18n/core';
 import { AlertIcon } from '../components/Icons';
 import { InPlaceConfirm } from '../components/InPlaceConfirm';
-import { isStepUpFresh, runOperatorAction, type OperatorActionOutcome, type StepUpFailure } from './stepUp';
+import { isStepUpFresh, prefetchStepUpOptions, runOperatorAction, type OperatorActionOutcome, type StepUpFailure } from './stepUp';
 
 /**
  * MUT-460 (ADR-213, design 1A, 10A, 11A): the operator console's step-up, as the pages use it.
@@ -40,7 +40,8 @@ export function useOperatorRun(serverUntil: string | null) {
   const stepUp = useContext(StepUpContext);
   const [forcePasskey, setForcePasskey] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [failure, setFailure] = useState<RunFailure | null>(null);
+  const [failure, setFailureState] = useState<{ reason: RunFailure; error?: string } | null>(null);
+  const setFailure = useCallback((reason: RunFailure | null) => setFailureState(reason ? { reason } : null), []);
   // Read at render, as the billing row reads today: a window that lapses while the confirm is open meets the 403 path.
   // What this page learned since the list was read (its own step-up, or a 403) is newer than the list's `stepUpUntil`.
   const fresh = isStepUpFresh(useStepUpUntil(serverUntil), new Date());
@@ -49,7 +50,7 @@ export function useOperatorRun(serverUntil: string | null) {
   const run = useCallback(
     async <T,>(action: () => Promise<T>): Promise<T | null> => {
       setBusy(true);
-      setFailure(null);
+      setFailureState(null);
       let outcome: OperatorActionOutcome<T>;
       try {
         outcome = await runOperatorAction(action, { withPasskey: forcePasskey || !fresh, onSteppedUp: stepUp.note });
@@ -66,7 +67,7 @@ export function useOperatorRun(serverUntil: string | null) {
           setForcePasskey(true);
           return null;
         case 'stepUpFailed':
-          if (outcome.reason !== 'cancelled') setFailure(outcome.reason);
+          if (outcome.reason !== 'cancelled') setFailureState({ reason: outcome.reason, ...(outcome.error ? { error: outcome.error } : {}) });
           return null;
         case 'error':
           throw outcome.error;
@@ -77,16 +78,19 @@ export function useOperatorRun(serverUntil: string | null) {
 
   /** Cancel: no failure, and no "Confirm with passkey" left over from a 403 (the label follows freshness again). */
   const clear = useCallback(() => {
-    setFailure(null);
+    setFailureState(null);
     setForcePasskey(false);
   }, []);
   /** What the action button says: as is, "… with passkey" when stale, "Confirm with passkey" after a 403. */
   const label = forcePasskey ? 'confirm' : fresh ? 'plain' : 'passkey';
-  return { run, busy, failure, setFailure, clear, label } as const;
+  return { run, busy, failure: failure?.reason ?? null, failureError: failure?.error, setFailure, clear, label } as const;
 }
 
-/** 10A: a failed step-up, in the row. A passkey on another device works through the browser's QR option. */
-export function StepUpFailureBanner({ failure }: { failure: RunFailure }) {
+/**
+ * 10A: a failed step-up, in the row. A passkey on another device works through the browser's QR option. `browser` is
+ * an error the platform raised before the server saw anything; its name is shown so a report can say which.
+ */
+export function StepUpFailureBanner({ failure, error }: { failure: RunFailure; error?: string | undefined }) {
   const t = useT();
   return (
     <div className="hp-banner hp-banner-error" role="alert">
@@ -95,6 +99,11 @@ export function StepUpFailureBanner({ failure }: { failure: RunFailure }) {
         {failure === 'refused' && (
           <>
             {t('hosted.operator.stepUp.refused')} {t('hosted.operator.stepUp.otherDevice')}
+          </>
+        )}
+        {failure === 'browser' && (
+          <>
+            {t('hosted.operator.stepUp.browser', { error: error ?? 'Error' })} {t('hosted.operator.stepUp.otherDevice')}
           </>
         )}
         {failure === 'noPasskey' && (
@@ -127,6 +136,11 @@ interface OperatorConfirmProps {
 export function OperatorConfirm({ text, labels, variant, run, error, onConfirm, onCancel }: OperatorConfirmProps) {
   const t = useT();
   const label = run.label === 'confirm' ? t('hosted.operator.stepUp.confirmWithPasskey') : run.label === 'passkey' ? labels.passkey : labels.plain;
+  const asksForPasskey = run.label !== 'plain';
+  // The tap on this confirm will open the passkey sheet: have its challenge ready, so the sheet follows the tap at once.
+  useEffect(() => {
+    if (asksForPasskey) prefetchStepUpOptions();
+  }, [asksForPasskey]);
   return (
     <InPlaceConfirm
       message={text}
@@ -140,7 +154,7 @@ export function OperatorConfirm({ text, labels, variant, run, error, onConfirm, 
       onCancel={onCancel}
       onConfirm={onConfirm}
     >
-      {run.failure && <StepUpFailureBanner failure={run.failure} />}
+      {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
       {error}
     </InPlaceConfirm>
   );

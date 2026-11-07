@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SoftAuthenticator } from '../../__tests__/helpers/soft-authenticator.js';
 import { deviceLabel, PASSKEY_PROVIDERS, passkeyNameFor, providerName } from '../passkey-names.js';
-import { creationOptions, signInOptions, verifyAssertion, verifyCreation, webauthnConfigOf, type WebauthnConfig } from '../webauthn.js';
+import { creationOptions, signInOptions, stepUpOptions, verifyAssertion, verifyCreation, webauthnConfigOf, type WebauthnConfig } from '../webauthn.js';
 
 const config: WebauthnConfig = webauthnConfigOf({ rpId: 'placeholder.example', portalOrigin: 'https://app.placeholder.example' })!;
 const user = { id: '7f1c2a8e-58a4-4a52-9b3c-0d6c1b1d2e3f', email: 'nour@firm.ps', displayName: 'Nour' };
@@ -94,6 +94,22 @@ describe('creation and assertion (MUT-115)', () => {
     const forged = auth.assert(options, PORTAL, { counter: 1 });
     forged.response.signature = forged.response.signature.slice(0, -4) + 'AAAA';
     expect(await verifyAssertion(config, forged, options.challenge, stored)).toEqual({ kind: 'refused' });
+  });
+});
+
+describe('step-up options (MUT-459 D7)', () => {
+  it('lists only this person’s passkeys, each reachable from a phone (hybrid)', async () => {
+    const options = await stepUpOptions(config, [
+      { credentialId: 'phone', transports: ['internal'] },
+      { credentialId: 'both', transports: ['hybrid', 'internal'] },
+      { credentialId: 'any', transports: [] },
+    ]);
+    expect(options.allowCredentials).toEqual([
+      { id: 'phone', type: 'public-key', transports: ['internal', 'hybrid'] },
+      { id: 'both', type: 'public-key', transports: ['hybrid', 'internal'] },
+      { id: 'any', type: 'public-key', transports: [] },
+    ]);
+    expect(options.userVerification).toBe('required');
   });
 });
 

@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ApiError } from '../../api/client';
-import { isStepUpFresh, runOperatorAction, stepUpWithPasskey } from '../stepUp';
+import { isStepUpFresh, prefetchStepUpOptions, resetStepUpPrefetch, runOperatorAction, stepUpWithPasskey } from '../stepUp';
 
 /**
  * MUT-460 (design 1A, 10A): an operator write runs straight away while the session's passkey step-up is fresh, and
@@ -18,6 +18,7 @@ const UNTIL = '2026-10-27T12:10:00.000Z';
 const recent = () => new ApiError(403, 'RECENT_SIGN_IN_REQUIRED', 'step up', { method: 'passkey' });
 
 beforeEach(() => {
+  resetStepUpPrefetch();
   mocks.options.mockReset().mockResolvedValue(CHALLENGE);
   mocks.assert.mockReset().mockResolvedValue({ kind: 'ok', response: { id: 'cred' } });
   mocks.stepUp.mockReset().mockResolvedValue({ stepUpUntil: UNTIL });
@@ -47,9 +48,10 @@ describe('stepUpWithPasskey', () => {
     expect(mocks.stepUp).not.toHaveBeenCalled();
   });
 
-  it('a platform failure or a refused passkey is "refused"', async () => {
-    mocks.assert.mockResolvedValueOnce({ kind: 'failed' });
-    expect(await stepUpWithPasskey()).toEqual({ kind: 'refused' });
+  it('a platform error the server never saw is "browser", with its name; a refused passkey is "refused"', async () => {
+    mocks.assert.mockResolvedValueOnce({ kind: 'failed', error: 'NotSupportedError' });
+    expect(await stepUpWithPasskey()).toEqual({ kind: 'browser', error: 'NotSupportedError' });
+    expect(mocks.stepUp).not.toHaveBeenCalled();
     mocks.stepUp.mockRejectedValueOnce(new ApiError(403, 'PASSKEY_NOT_ACCEPTED', 'no'));
     expect(await stepUpWithPasskey()).toEqual({ kind: 'refused' });
   });
@@ -59,6 +61,35 @@ describe('stepUpWithPasskey', () => {
     expect(await stepUpWithPasskey()).toEqual({ kind: 'noPasskey' });
     mocks.options.mockRejectedValueOnce(new ApiError(0, 'NETWORK', 'offline'));
     expect(await stepUpWithPasskey()).toEqual({ kind: 'failed' });
+  });
+});
+
+describe('prefetchStepUpOptions', () => {
+  beforeEach(() => resetStepUpPrefetch());
+
+  it('the tap uses the challenge fetched ahead, once; the next tap fetches its own', async () => {
+    prefetchStepUpOptions();
+    prefetchStepUpOptions();
+    expect(mocks.options).toHaveBeenCalledTimes(1);
+    expect(await stepUpWithPasskey()).toEqual({ kind: 'ok', until: UNTIL });
+    expect(mocks.options).toHaveBeenCalledTimes(1);
+    await stepUpWithPasskey();
+    expect(mocks.options).toHaveBeenCalledTimes(2);
+  });
+
+  it('a challenge fetched over 4 minutes ago is not used', async () => {
+    prefetchStepUpOptions(Date.now() - 5 * 60_000);
+    await stepUpWithPasskey();
+    expect(mocks.options).toHaveBeenCalledTimes(2);
+  });
+
+  it('a failed prefetch is forgotten: the tap fetches again', async () => {
+    mocks.options.mockRejectedValueOnce(new ApiError(0, 'NETWORK', 'offline'));
+    prefetchStepUpOptions();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(await stepUpWithPasskey()).toEqual({ kind: 'ok', until: UNTIL });
+    expect(mocks.options).toHaveBeenCalledTimes(2);
   });
 });
 

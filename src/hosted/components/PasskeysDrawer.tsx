@@ -6,6 +6,8 @@ import type { Language } from '../../lib/i18n/types';
 import { api, ApiError, type Passkey, type Schemas } from '../api/client';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
+import { StepUpFailureBanner, type RunFailure } from '../operator/OperatorStepUp';
+import { prefetchStepUpOptions, stepUpWithPasskey } from '../operator/stepUp';
 import { addPasskeyFlow, PASSKEYS_KEY, passkeysChanged } from '../passkeys/addPasskey';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -23,11 +25,16 @@ import { useToast } from './Toast';
  *
  * MUT-415: `review` opens it as the step after a password change or a recovery: the intro says these passkeys still
  * sign in and to remove any the person doesn't recognise, and Done takes Add's place. The list is the same.
+ *
+ * MUT-459 (ADR-212): an operator never steps up with the password. When adding, renaming or removing meets 403
+ * RECENT_SIGN_IN_REQUIRED `{ method: 'passkey' }`, Add becomes "Confirm with passkey": that tap runs the operator
+ * step-up with one of their passkeys (a phone's over the QR code included), and the next tap adds. Two taps, so each
+ * system sheet follows a tap of its own (Safari shows none otherwise).
  */
 const FORM_ID = 'hosted-passkeys-step-up';
 const NAME_MAX = 64;
 
-type Banner = 'addFailed' | 'wrongPassword' | 'renameFailed' | 'removeFailed' | 'unreachable' | 'operatorPasskeyFirst';
+type Banner = 'addFailed' | 'wrongPassword' | 'renameFailed' | 'removeFailed' | 'unreachable';
 
 export function PasskeysDrawer({ onClose, review }: { onClose: () => void; review?: 'password' | 'recovery' | undefined }) {
   const t = useT();
@@ -41,6 +48,8 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
   const [showPassword, setShowPassword] = useState(false);
   const [adding, setAdding] = useState(false);
   const [focusId, setFocusId] = useState<string | null>(null);
+  const [operatorConfirm, setOperatorConfirm] = useState(false);
+  const [confirmFailure, setConfirmFailure] = useState<{ reason: RunFailure; error?: string } | null>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
   const addRef = useRef<HTMLButtonElement>(null);
 
@@ -51,10 +60,34 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
     if (stepUp) passwordRef.current?.focus();
   }, [stepUp]);
 
+  /** The server wants this operator's passkey first: Add turns into "Confirm with passkey", its challenge fetched ahead. */
+  function needsOperatorPasskey() {
+    setBanner(null);
+    setOperatorConfirm(true);
+    prefetchStepUpOptions();
+    addRef.current?.focus();
+  }
+
+  async function confirmWithPasskey() {
+    if (adding) return;
+    setBanner(null);
+    setConfirmFailure(null);
+    setAdding(true);
+    const outcome = await stepUpWithPasskey();
+    setAdding(false);
+    if (outcome.kind === 'ok') {
+      setOperatorConfirm(false);
+      showToast(t('hosted.account.passkeys.operatorConfirmed'), { tone: 'info' });
+      return;
+    }
+    if (outcome.kind !== 'cancelled') setConfirmFailure({ reason: outcome.kind, ...(outcome.error ? { error: outcome.error } : {}) });
+  }
+
   async function add(event?: FormEvent) {
     event?.preventDefault();
     if (adding || atLimit) return;
     setBanner(null);
+    setConfirmFailure(null);
     setAdding(true);
     const outcome = await addPasskeyFlow(stepUp ? password : undefined);
     setAdding(false);
@@ -73,7 +106,7 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
         setStepUp(true);
         return;
       case 'operatorPasskeyFirst':
-        setBanner('operatorPasskeyFirst');
+        needsOperatorPasskey();
         return;
       case 'wrongPassword':
         setBanner('wrongPassword');
@@ -92,7 +125,7 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
   }
 
   const bannerId = `${ids}-banner`;
-  const addLabel = stepUp ? t('hosted.account.passkeys.continue') : t('hosted.account.passkeys.add');
+  const addLabel = operatorConfirm ? t('hosted.operator.stepUp.confirmWithPasskey') : stepUp ? t('hosted.account.passkeys.continue') : t('hosted.account.passkeys.add');
 
   return (
     <Drawer
@@ -109,7 +142,15 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
         ) : (
           <div className="drawer-footer-right">
             {atLimit && <p className="form-hint hp-passkey-limit">{t('hosted.account.passkeys.limit', { limit })}</p>}
-            <Button ref={addRef} type={stepUp ? 'submit' : 'button'} form={stepUp ? FORM_ID : undefined} onClick={stepUp ? undefined : () => void add()} disabled={atLimit} aria-disabled={adding || undefined} aria-busy={adding}>
+            <Button
+              ref={addRef}
+              type={stepUp && !operatorConfirm ? 'submit' : 'button'}
+              form={stepUp && !operatorConfirm ? FORM_ID : undefined}
+              onClick={operatorConfirm ? () => void confirmWithPasskey() : stepUp ? undefined : () => void add()}
+              disabled={atLimit && !operatorConfirm}
+              aria-disabled={adding || undefined}
+              aria-busy={adding}
+            >
               {addLabel}
             </Button>
           </div>
@@ -123,6 +164,8 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
           <span>{t(BANNER_KEYS[banner])}</span>
         </div>
       )}
+      {operatorConfirm && <p className="hp-passkey-stepup">{t('hosted.account.passkeys.operatorConfirm')}</p>}
+      {confirmFailure && <StepUpFailureBanner failure={confirmFailure.reason} error={confirmFailure.error} />}
       <QueryView
         queries={[passkeys]}
         data={passkeys.data}
@@ -143,6 +186,7 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
                 focus={focusId === passkey.id}
                 onFocused={() => setFocusId(null)}
                 onBanner={setBanner}
+                onNeedsPasskey={needsOperatorPasskey}
                 onRemoved={() => {
                   const next = data.items[index + 1] ?? data.items[index - 1];
                   if (next) setFocusId(next.id);
@@ -190,9 +234,11 @@ const BANNER_KEYS: Record<Banner, string> = {
   renameFailed: 'hosted.account.passkeys.renameFailed',
   removeFailed: 'hosted.account.passkeys.removeFailed',
   unreachable: 'hosted.auth.unreachable',
-  // MUT-459: an operator confirms with an existing passkey, never the password (ADR-212).
-  operatorPasskeyFirst: 'hosted.account.passkeys.operatorPasskeyFirst',
 };
+
+/** MUT-459: an operator's rename or remove waits for their passkey step-up, as adding does. */
+const asksForOperatorPasskey = (error: unknown) =>
+  error instanceof ApiError && error.code === 'RECENT_SIGN_IN_REQUIRED' && (error.details as { method?: string } | null)?.method === 'passkey';
 
 type RowMode = 'view' | 'rename' | 'confirm';
 
@@ -201,12 +247,14 @@ function PasskeyRow({
   focus,
   onFocused,
   onBanner,
+  onNeedsPasskey,
   onRemoved,
 }: {
   passkey: Passkey;
   focus: boolean;
   onFocused: () => void;
   onBanner: (banner: Banner | null) => void;
+  onNeedsPasskey: () => void;
   onRemoved: () => void;
 }) {
   const t = useT();
@@ -267,6 +315,7 @@ function PasskeyRow({
       showToast(t('hosted.account.passkeys.renamed'), { tone: 'info' });
     } catch (error) {
       if (error instanceof ApiError && error.status === 422) setNameError(true);
+      else if (asksForOperatorPasskey(error)) onNeedsPasskey();
       else onBanner('renameFailed');
     } finally {
       setBusy(false);
@@ -281,8 +330,9 @@ function PasskeyRow({
       onRemoved();
       await passkeysChanged(queryClient);
       showToast(t('hosted.account.passkeys.removed'), { tone: 'info' });
-    } catch {
-      onBanner('removeFailed');
+    } catch (error) {
+      if (asksForOperatorPasskey(error)) onNeedsPasskey();
+      else onBanner('removeFailed');
       setBusy(false);
     }
   }
