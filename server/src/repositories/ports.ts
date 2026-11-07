@@ -2737,6 +2737,11 @@ export interface ShareLinkRepository {
   touchOpened(input: { linkId: string; at: Date }): Promise<void>;
   /** Stamps the viewer's lastViewedAt (the caller throttles). */
   touchViewer(input: { viewerId: string; at: Date }): Promise<void>;
+  /**
+   * MUT-382: deletes the viewer rows of every link that ended (revoked, locked or expired) before `endedBefore`. The
+   * links and their audit rows stay (they carry no visitor data). Answers how many viewer rows went.
+   */
+  deleteEndedViewers(input: { endedBefore: Date }): Promise<number>;
 }
 
 // ---- MUT-559 (ADR-245): accountant grants ------------------------------------

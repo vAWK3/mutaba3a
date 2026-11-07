@@ -4,6 +4,7 @@ import type { AccountStripeGateway } from '../billing/stripe/account-gateway.js'
 import type { Logger } from '../logger.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
+import { SHARE_LINK_VIEWER_RETENTION_MS } from '../share-links/links.js';
 
 /**
  * MUT-333 (ADR-188, D11, D12 as revised by R1): the hard delete of closed accounts, run hourly by Cloud Scheduler and
@@ -73,6 +74,7 @@ export async function runAccountPurge(options: PurgeRunOptions): Promise<{ summa
 
   const summary: PurgeRunSummary = { dryRun, closing: 0, due: 0, purged: 0, skipped: 0, failed: 0, storagePrefixesEmptied: 0, storagePending: 0, incomplete: false };
   if (!dryRun) summary.storagePrefixesEmptied += await drainStorage(options);
+  if (!dryRun) await sweepEndedShareLinkViewers(options);
 
   const counts = await store.accountPurge.countClosing(now);
   summary.closing = counts.closing;
@@ -96,6 +98,19 @@ export async function runAccountPurge(options: PurgeRunOptions): Promise<{ summa
   summary.storagePending = (await store.accountPurge.listStoragePurges(STORAGE_DRAIN_LIMIT)).length;
   logger.info({ ...summary }, 'account purge run');
   return { summary, rows };
+}
+
+/**
+ * MUT-382 (privacy policy): the devices that opened a share link are deleted 30 days after the link ended, here rather
+ * than in a scheduler job of their own. The link and its audit rows stay. A failure is logged and never stops the purge.
+ */
+async function sweepEndedShareLinkViewers({ store, logger, now }: PurgeRunOptions): Promise<void> {
+  try {
+    const deleted = await store.shareLinks.deleteEndedViewers({ endedBefore: new Date(now.getTime() - SHARE_LINK_VIEWER_RETENTION_MS) });
+    logger.info({ deleted }, 'share link viewers swept');
+  } catch (err) {
+    logger.error({ err }, 'share link viewer sweep failed');
+  }
 }
 
 async function planRow({ store }: PurgeRunOptions, person: UserRecord): Promise<PurgeRunRow> {

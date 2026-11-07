@@ -166,3 +166,54 @@ describe('runAccountPurge (MUT-333)', () => {
 });
 
 const DAY_MS = 86_400_000;
+
+/** MUT-382: the hourly run also deletes the devices of share links that ended over 30 days ago (privacy policy). */
+describe('runAccountPurge sweeps ended share links’ viewers (MUT-382)', () => {
+  const DAY = 86_400_000;
+  async function linkWithViewer(store: LedgerStore, profileId: string, userId: string, expiresAt: Date) {
+    const createdAt = new Date(expiresAt.getTime() - DAY);
+    const made = await store.shareLinks.create({
+      id: randomUUID(),
+      organizationId: profileId,
+      createdByUserId: userId,
+      tokenDigest: `link-${randomUUID()}`,
+      pinHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA',
+      period: 'LAST_1_MONTH',
+      periodFrom: '2026-09-01',
+      periodTo: '2026-09-30',
+      expiresAt,
+      at: createdAt,
+      max: 10,
+      auditFor: () => [],
+    });
+    if (made.kind !== 'created') throw new Error(made.kind);
+    const digest = `viewer-${randomUUID()}`;
+    const added = await store.shareLinks.addOrRotateViewer({ linkId: made.link.id, previousTokenDigest: null, tokenDigest: digest, accessExpiresAt: expiresAt, at: createdAt, max: 3, auditFor: () => [] });
+    expect(added.kind).toBe('added');
+    return { link: made.link, digest };
+  }
+
+  it('deletes the viewers of a link that ended 31 days ago, keeps one that ended 29 days ago and a live one, and keeps the links', async () => {
+    const { store, run } = world();
+    const { user, personalOrganization } = await store.users.create({
+      email: `links${++seq}@studio.ps`,
+      displayName: 'Rana',
+      passwordHash: '$argon2id$v=19$m=19456,t=2,p=1$c2FsdA$aGFzaA',
+      locale: 'en',
+      personal: { name: 'Personal', slug: `personal-${randomUUID()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
+      at: new Date(DUE.getTime() - 60 * DAY),
+    });
+    const old = await linkWithViewer(store, personalOrganization.id, user.id, new Date(DUE.getTime() - 31 * DAY));
+    const recent = await linkWithViewer(store, personalOrganization.id, user.id, new Date(DUE.getTime() - 29 * DAY));
+    const live = await linkWithViewer(store, personalOrganization.id, user.id, new Date(DUE.getTime() + DAY));
+
+    await run({ dryRun: true });
+    expect(await store.shareLinks.findViewerByDigest(old.digest)).not.toBeNull();
+
+    await run();
+    expect(await store.shareLinks.findViewerByDigest(old.digest)).toBeNull();
+    expect(await store.shareLinks.findByTokenDigest(old.link.tokenDigest)).toMatchObject({ id: old.link.id, viewers: 0 });
+    expect(await store.shareLinks.findViewerByDigest(recent.digest)).not.toBeNull();
+    expect(await store.shareLinks.findViewerByDigest(live.digest)).not.toBeNull();
+  });
+});

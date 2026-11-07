@@ -438,6 +438,8 @@ export const STORE_ACCESS: StoreAccess = {
     addOrRotateViewer: 'operator',
     touchOpened: 'operator',
     touchViewer: 'operator',
+    // MUT-382: the hourly purge job's sweep of ended links' viewers.
+    deleteEndedViewers: 'operator',
   },
   /**
    * MUT-314 (ADR-248): a period download's estimate and name lookups. Expense data (vendors, receipts), so an API key

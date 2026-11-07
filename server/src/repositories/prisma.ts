@@ -901,6 +901,12 @@ export class PrismaLedgerStore implements LedgerStore {
     touchViewer: async ({ viewerId, at }) => {
       await this.prisma.shareLinkViewer.updateMany({ where: { id: viewerId }, data: { lastViewedAt: at } });
     },
+    deleteEndedViewers: async ({ endedBefore }) => {
+      const { count } = await this.prisma.shareLinkViewer.deleteMany({
+        where: { shareLink: { OR: [{ revokedAt: { lt: endedBefore } }, { lockedAt: { lt: endedBefore } }, { expiresAt: { lt: endedBefore } }] } },
+      });
+      return count;
+    },
   };
 
   readonly features: FeaturesRepository = {

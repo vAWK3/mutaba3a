@@ -243,6 +243,38 @@ export function describeLedgerStoreShareLinksContract(name: string, makeStore: (
       expect(await store.shareLinks.findViewerByDigest(digest)).toMatchObject({ link: { lastOpenedAt: at(40) }, viewer: { lastViewedAt: at(41) } });
     });
 
+    it('deletes the viewers of links that ended (revoked, locked or expired) before the cutoff, keeping the links and live links’ viewers (MUT-382)', async () => {
+      const store = await makeStore();
+      const o = await owner(store);
+      const withViewer = async (days = 7) => {
+        const result = await create(store, o, { days });
+        if (result.kind !== 'created') throw new Error(result.kind);
+        const digest = `viewer-${unique()}${unique()}`;
+        expect((await addViewer(store, result.link.id, { digest })).kind).toBe('added');
+        return { link: result.link, digest };
+      };
+      const expired = await withViewer(1);
+      const revoked = await withViewer();
+      await store.shareLinks.revoke({ organizationId: o.profileId, linkId: revoked.link.id, at: at(3), auditFor: audit('share_link.revoked') });
+      const locked = await withViewer();
+      await store.shareLinks.recordFailedPin({ linkId: locked.link.id, at: at(3), maxAttempts: 1, lockAudit: () => [] });
+      const live = await withViewer(60);
+      const ended = [expired, revoked, locked];
+      const retention = 30 * DAY;
+
+      // 29 days after the last of them ended: every viewer stays.
+      await store.shareLinks.deleteEndedViewers({ endedBefore: new Date(at(3).getTime() + DAY + 29 * DAY - retention) });
+      for (const { digest } of [...ended, live]) expect(await store.shareLinks.findViewerByDigest(digest), digest).not.toBeNull();
+
+      // 31 days after: the ended links' viewers go; the links stay (with no viewers), and the live link keeps its viewer.
+      expect(await store.shareLinks.deleteEndedViewers({ endedBefore: new Date(at(3).getTime() + DAY + 31 * DAY - retention) })).toBeGreaterThanOrEqual(3);
+      for (const { link, digest } of ended) {
+        expect(await store.shareLinks.findViewerByDigest(digest), digest).toBeNull();
+        expect(await store.shareLinks.findByTokenDigest(link.tokenDigest)).toMatchObject({ id: link.id, viewers: 0 });
+      }
+      expect(await store.shareLinks.findViewerByDigest(live.digest)).not.toBeNull();
+    });
+
     it('the owner’s purge takes their profile’s links and viewers, and is never blocked by them', async () => {
       const store = await makeStore();
       const o = await owner(store);

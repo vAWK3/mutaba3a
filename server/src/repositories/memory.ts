@@ -966,6 +966,18 @@ export class MemoryLedgerStore implements LedgerStore {
       const viewer = this.shareLinkViewerMap.get(viewerId);
       if (viewer) viewer.lastViewedAt = at;
     },
+    deleteEndedViewers: async ({ endedBefore }) => {
+      const before = (d: Date | null) => d !== null && d < endedBefore;
+      let deleted = 0;
+      for (const [id, viewer] of this.shareLinkViewerMap) {
+        const link = this.shareLinkMap.get(viewer.shareLinkId);
+        if (link && (before(link.revokedAt) || before(link.lockedAt) || before(link.expiresAt))) {
+          this.shareLinkViewerMap.delete(id);
+          deleted++;
+        }
+      }
+      return deleted;
+    },
   };
 
   private shareLinkViewerCount(linkId: string): number {
