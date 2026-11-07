@@ -6,7 +6,7 @@ import pino from 'pino';
 import { createApp } from '../app.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
-import { parseBaseUrl, runSmoke, type Fetch } from '../smoke.js';
+import { ACCOUNTANT_INVITE_APPLINK, parseBaseUrl, runSmoke, type Fetch } from '../smoke.js';
 
 const ADMIN_TOKEN = 'test-admin-token-with-at-least-32-characters';
 const BASE = 'https://mutaba3a-api.example';
@@ -94,6 +94,36 @@ describe('post-deploy smoke checks', () => {
     expect(results.map((r) => r.name)).toContain('revoked key → 401 API_KEY_REVOKED');
     // The secret is printed exactly once by provision.ts, never by the smoke run.
     expect(lines.join('\n')).not.toMatch(/mut_test_[a-z0-9]{8}_/i);
+  });
+
+  it('checks the AASA lists the accountant invite link only where the service serves one (MUT-558)', async () => {
+    const name = `GET /.well-known/apple-app-site-association lists ${ACCOUNTANT_INVITE_APPLINK}`;
+    const lines: string[] = [];
+    const none = await runSmoke({ baseUrl: BASE, fetch: appFetch(), log: (l) => lines.push(l) });
+    expect(none.some((r) => r.name === name)).toBe(false);
+    expect(lines.join('\n')).toContain(`skip  ${name}`);
+
+    const app = createApp({
+      store: new MemoryLedgerStore(),
+      logger: pino({ level: 'silent' }),
+      rateLimiter: new SlidingWindowRateLimiter(1000),
+      adminToken: ADMIN_TOKEN,
+      keyEnvironment: 'test',
+      version: '0.1.0-test',
+      portal: { distDir: portalDistDir },
+      appAssociation: { appleTeamId: 'TEAMID1234', appleBundleId: 'com.example.app', androidPackageName: 'com.example.app', androidSha256Fingerprints: ['AA:BB'] },
+    });
+    const served = await runSmoke({ baseUrl: BASE, fetch: async (input, init) => app.request(input.slice(BASE.length), init) });
+    expect(served.find((r) => r.name === name)).toMatchObject({ ok: true });
+    expect(served.filter((r) => !r.ok)).toEqual([]);
+
+    const stale: Fetch = async (input, init) =>
+      input.endsWith('/.well-known/apple-app-site-association')
+        ? Response.json({ applinks: { details: [{ appID: 'TEAMID1234.com.example.app', paths: ['/capture*'] }] } })
+        : appFetch()(input, init);
+    const missing = await runSmoke({ baseUrl: BASE, fetch: stale });
+    expect(missing.find((r) => r.name === name)).toMatchObject({ ok: false, detail: 'status 200, not listed' });
+    expect(missing.filter((r) => !r.ok)).toHaveLength(1);
   });
 
   it('reports a failure, not a crash, when the service is unreachable or not JSON', async () => {

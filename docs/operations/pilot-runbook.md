@@ -405,7 +405,8 @@ at the 4th client with no way to pay.
 **Before every API deploy (release step, from 0.1.20 on; MUT-565 fix).** The mirror reads a subscription's plan only
 from its product's `metadata.tier`; a product in use without one stops its subscriptions mirroring (`UNKNOWN_TIER`,
 now logged at **error** as `stripe subscription not mirrored` with the subscription and product ids), and the people
-paying lapse 7 days after the stored period. Check it read-only, in live mode, before `deploy.sh`:
+paying lapse 7 days after the stored period. Check it read-only, in live mode, before `deploy.sh` (`make release server`
+runs this for you before it asks to deploy, MUT-558: `scripts/stripe-product-tiers-check.sh`; `SKIP_PRODUCT_TIERS=1` skips it):
 
 - [ ] Every Stripe product a live subscription uses carries `metadata.tier` = `freelancer`, `firm` or `accountant`:
 

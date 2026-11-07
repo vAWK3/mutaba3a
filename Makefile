@@ -208,6 +208,7 @@ help:
 	@printf '                         On by default until the cutover (config/gcp.json "cutover": "pending"); LEGACY_STACK=0 overrides\n'
 	@printf '  SKIP_INGRESS_GUARD=1   server: skip the closed-service release guard (a restore or project move holds it closed)\n'
 	@printf '  SKIP_STRIPE_GUARD=1    server: skip the Stripe release guard (MUT-360; on by default)\n'
+	@printf '  SKIP_PRODUCT_TIERS=1   server: skip the read-only Stripe product-tier check (MUT-565; only with Stripe off or tags checked by hand)\n'
 	@printf '  ALLOW_MIN_BUILD_CHANGE=IOS_MIN_BUILD,…  server: let this release change those phone minimum builds (MUT-471)\n'
 	@printf '  SKIP_MIN_BUILD_GUARD=1 server: skip the min-build release guard (only when it cannot read terraform or Cloud Run)\n'
 	@printf '  BUMP=patch|minor|major|keep    skip the version prompt\n'
@@ -436,6 +437,10 @@ release-server: preflight-server
 	printf '\n$(C_DIM)deploy.sh will: build dist-hosted → push the image → run the Prisma migrations\n  → apply Terraform → smoke. Migrations are forward-only.$(C_OFF)\n'; \
 	scripts/ci-reminder.sh server; \
 	scripts/before-release.sh server; \
+	if ! scripts/stripe-product-tiers-check.sh; then \
+	  if [ $$bumped = yes ]; then printf '$(C_DIM)The version bump is still in your working tree — undo it or re-run.$(C_OFF)\n'; fi; \
+	  exit 1; \
+	fi; \
 	token="$${SENTRY_AUTH_TOKEN:-}"; \
 	if [ -n "$${MUTABA3A_SENTRY_DSN:-}" ] && [ -z "$$token" ]; then \
 	  token=$$(security find-generic-password -s '$(SENTRY_TOKEN_KEYCHAIN_SERVICE)' -a '$(SENTRY_TOKEN_KEYCHAIN_ACCOUNT)' -w 2>/dev/null || true); \

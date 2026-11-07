@@ -32,6 +32,10 @@ interface Reply {
 
 const TIMEOUT_MS = 15_000;
 
+const AASA_PATH = '/.well-known/apple-app-site-association';
+/** MUT-575: the accountant invite path the phone app claims (routes/well-known.ts). */
+export const ACCOUNTANT_INVITE_APPLINK = '/accountant-invite*';
+
 /** A syntactically valid key whose prefix no deployment has issued. */
 export const FORGED_KEY = 'mut_test_00000000_notarealkeynotarealkeynotarealkeynotareal';
 
@@ -116,6 +120,8 @@ class SmokeContext {
     const contract = await this.request('/openapi.json');
     this.record(contract.status === 200 && typeof contract.body.openapi === 'string', 'GET /openapi.json', `openapi ${String(contract.body.openapi)}`);
 
+    await this.appLinksCheck();
+
     const noKey = await this.request('/v1/integration');
     this.record(noKey.status === 401 && errorCode(noKey) === 'UNAUTHENTICATED', 'GET /v1/integration without a key → 401 UNAUTHENTICATED', `${noKey.status} ${errorCode(noKey)}`);
 
@@ -124,6 +130,23 @@ class SmokeContext {
 
     const noAdmin = await this.request('/admin/v1/organizations', { method: 'POST', headers: { 'content-type': 'application/json' }, body: '{}' });
     this.record(noAdmin.status === 401, 'POST /admin/v1/organizations without X-Admin-Token → 401', `${noAdmin.status} ${errorCode(noAdmin)}`);
+  }
+
+  /**
+   * MUT-558 (MUT-575): an accountant's invite link opens the phone app only if the AASA document lists it. 404 = this
+   * service serves no app association (apple_team_id unset), so there is nothing to check; any other answer must be
+   * the document, listing `/accountant-invite*`. Apple's CDN caches the file for up to a day after a change.
+   */
+  private async appLinksCheck(): Promise<void> {
+    const name = `GET ${AASA_PATH} lists ${ACCOUNTANT_INVITE_APPLINK}`;
+    const aasa = await this.request(AASA_PATH);
+    if (aasa.status === 404) {
+      this.options.log?.(`skip  ${name} (no app association on this service)`);
+      return;
+    }
+    const details = (aasa.body.applinks as { details?: Array<{ paths?: unknown }> } | undefined)?.details ?? [];
+    const listed = details.some((d) => Array.isArray(d.paths) && d.paths.includes(ACCOUNTANT_INVITE_APPLINK));
+    this.record(aasa.status === 200 && listed, name, `status ${aasa.status}, ${listed ? 'listed' : 'not listed'}`);
   }
 
   async provisioningRoundTrip(token: string): Promise<void> {

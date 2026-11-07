@@ -81,6 +81,16 @@ locals {
     var.maintenance_mode ? { MAINTENANCE_MODE = "true" } : {},
   )
 
+  # MUT-558 (MUT-577/579): epic MUT-558's global kill switches, only those on. The API reads each as off when unset
+  # (config.ts), so a switch turned off sends nothing. On, an owner still shares only once the operator grants that
+  # person the accountant_access feature (features.ts); the Accountant plan stays dormant (accountants are free).
+  accountant_env = merge(
+    var.accountant_access_enabled ? { ACCOUNTANT_ACCESS = "true" } : {},
+    var.share_links_enabled ? { SHARE_LINKS = "true" } : {},
+    var.period_downloads_enabled ? { PERIOD_DOWNLOADS = "true" } : {},
+    var.accountant_plan_enabled ? { ACCOUNTANT_PLAN = "true" } : {},
+  )
+
   # MUT-487 (R2): the new project keeps its jobs paused until the cutover; behind the forwarder the old ones would
   # reach the new service a second time, so they stay paused whatever scheduler_paused says.
   scheduler_paused = var.scheduler_paused || var.legacy_forwarder
@@ -702,6 +712,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-558: accountant access, share links, period downloads and the (dormant) Accountant plan.
+        dynamic "env" {
+          for_each = local.accountant_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-436 (review D3/D5): agents may add to the inbox only once the phone decodes 'mcp' (its minimum build raised).
         dynamic "env" {
           for_each = var.mcp_inbox_writes_enabled ? { MCP_INBOX_WRITES = "true" } : {}
@@ -866,6 +885,12 @@ resource "google_cloud_run_v2_service" "api" {
       # MUT-359: config.ts refuses these again at boot; here they fail the plan, before a release.
       condition     = var.mailer != "resend" || (local.domain != null && var.mail_reply_to != null && var.mail_daily_cap != null)
       error_message = "mailer = \"resend\" needs a domain in config/hosts.json (the sender is no-reply@<domain>), mail_reply_to and mail_daily_cap (MUT-359, DEPLOYMENT.md §6f)."
+    }
+
+    precondition {
+      # MUT-558/565: the plan sells through Stripe; without it an accountant at the 4th client has no way to pay.
+      condition     = !var.accountant_plan_enabled || var.stripe_enabled
+      error_message = "accountant_plan_enabled needs stripe_enabled: the Accountant plan is sold through Stripe (MUT-565, pilot runbook §1.12)."
     }
 
     precondition {

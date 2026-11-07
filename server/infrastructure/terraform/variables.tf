@@ -113,6 +113,30 @@ variable "receipts_library_enabled" {
   default     = false
 }
 
+variable "accountant_access_enabled" {
+  description = "MUT-559/MUT-558 (ADR-245; Basel, MUT-577/579): sets ACCOUNTANT_ACCESS=true, the global switch for accountant access (invites, /accountant-invite, /v1/me `clients`, the client books). true (default): on in production from 0.1.20, but an owner can invite an accountant only once the operator grants that person the `accountant_access` feature in the operator console. false = the kill switch: every accountant route answers 404 and existing grants open nothing (nothing is deleted)."
+  type        = bool
+  default     = true
+}
+
+variable "share_links_enabled" {
+  description = "MUT-560/MUT-558 (ADR-247; MUT-577/579): sets SHARE_LINKS=true, the global switch for one-time PIN share links. true (default): on, gated per owner by the same `accountant_access` grant. false = the kill switch: every share-link route answers 404 and live links stop opening."
+  type        = bool
+  default     = true
+}
+
+variable "period_downloads_enabled" {
+  description = "MUT-314/MUT-558 (ADR-248; MUT-577/579): sets PERIOD_DOWNLOADS=true, the global switch for period downloads (the Excel report and the receipts zip) for owners, accountants and share links (a link's download also needs share_links_enabled). true (default): on. false = the kill switch: every download route answers 404. The Cloud Run request timeout (900 s, MUT-314) is sized for these."
+  type        = bool
+  default     = true
+}
+
+variable "accountant_plan_enabled" {
+  description = "MUT-565/MUT-558 (ADR-251; MUT-577/579): sets ACCOUNTANT_PLAN=true, the Accountant plan's client-books cap (ACCOUNTANT_FREE_CLIENTS free, the plan for more). false (default): dormant, accountants are free with no cap. Turn on only once the live Accountant product and prices exist (pilot runbook §1.12) and stripe_enabled, or accountants are stranded at the 4th client with no way to pay."
+  type        = bool
+  default     = false
+}
+
 variable "mcp_inbox_writes_enabled" {
   description = "MUT-436 (review D3/D5): sets MCP_INBOX_WRITES=true, so a person's own Claude may add expenses to their inbox (captureSource 'mcp'). false (default) = add_expense offers profiles only. Turn on only after the phone release that decodes an unknown capture source is live AND the iOS/Android minimum build is raised to it (docs/operations/before-release.md); an older phone build fails to load an inbox holding an 'mcp' entry."
   type        = bool

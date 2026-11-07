@@ -40,6 +40,12 @@ live_label          = false
 # receipts_library_enabled = false
 # MUT-436: agents adding to the inbox. Only after the phone release decoding 'mcp' is live and the minimum build is raised.
 # mcp_inbox_writes_enabled = false
+# MUT-558 (MUT-577/579): accountant access, share links and period downloads ship ON (global kill switches; an owner
+# shares only once the operator grants accountant_access). The Accountant plan stays dormant: accountants are free.
+# accountant_access_enabled = true
+# share_links_enabled       = true
+# period_downloads_enabled  = true
+# accountant_plan_enabled   = false   # only with live Accountant prices and stripe_enabled (pilot runbook §1.12)
 # MUT-441: the server reads receipts. Only when piloting, and only after MUT-487's project move (docs/operations/before-release.md).
 # server_ocr_enabled = false
 # ocr_min_instances  = 0   # R4: 1 keeps one warm (about $50-70 a month)
