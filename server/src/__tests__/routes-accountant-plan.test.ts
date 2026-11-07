@@ -39,6 +39,8 @@ const COUNTRIES = parseBillingCountries({ consumerCountries: ['IL', 'GB'], custo
 function planHarness(options: { on?: boolean; maxClients?: number; checkout?: FakeCheckoutGateway; plan?: FakePlanGateway } = {}) {
   const stripe = new FakeStripeGateway(() => T0);
   return accountantHarness({
+    // MUT-314's period download is one more accountant GET; switched on so the door's matrix reaches it.
+    periodDownloads: true,
     accountantPlan: { ...PLAN_ON, on: options.on ?? true, maxClients: options.maxClients ?? 100 },
     billingCountries: COUNTRIES,
     ...(options.checkout || options.plan
