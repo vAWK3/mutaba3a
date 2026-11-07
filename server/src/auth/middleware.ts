@@ -255,7 +255,7 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
     // MUT-559: an accountant's request is refused before the lapse gate, so a write is always 403, never 402.
     if (grant) assertAccountantMayCall(c.req.method, endpoint, options.routeAccess().get(endpoint));
     // MUT-565 (ADR-251): then the Accountant plan's door, still before any read of the client's records.
-    if (grant) await assertClientReadable(options, grant, identity.user.id, c.get('now')());
+    if (grant) await assertClientReadable(options.store, options.accountantPlan, grant, identity.user.id, c.get('now')());
     if (gated) await gateSelectedProfile(c, auth, endpoint, options.store);
     if (grant) await touchAccountantView(c, options.store, grant, identity.user.id);
   } else if (endpoint && gated) {
@@ -280,14 +280,14 @@ function assertAccountantMayCall(method: string, endpoint: string, access: Route
  * 402 ACCOUNTANT_PLAN_REQUIRED here, the one door every accountant read passes (feed, summaries, receipts,
  * downloads), so no route checks it again. The grant's rank is one indexed count; only a client past the free ones
  * costs a billing read. Derived, never stored: a revoke, a leave or a new subscription changes the answer by itself.
- * After the method gate, so an accountant's write is still 403, never 402.
+ * After the method gate, so an accountant's write is still 403, never 402. Exported for MUT-314's stream re-check
+ * (period-pack/access.ts), which applies the same rule to a ticket minted before a lapse.
  */
-async function assertClientReadable(options: AuthenticateOptions, grant: AccountantGrantRecord, userId: string, now: Date): Promise<void> {
-  const config = options.accountantPlan;
+export async function assertClientReadable(store: LedgerStore, config: AccountantPlanConfig | undefined, grant: AccountantGrantRecord, userId: string, now: Date): Promise<void> {
   if (!config?.on || !grant.accountantUserId) return;
-  const rank = await options.store.accountantGrants.countActiveBefore(grant.accountantUserId, grant);
+  const rank = await store.accountantGrants.countActiveBefore(grant.accountantUserId, grant);
   if (rank < config.freeClients) return;
-  const facts = await options.store.billing.factsFor({ ownerUserIds: [userId], organizationIds: [] });
+  const facts = await store.billing.factsFor({ ownerUserIds: [userId], organizationIds: [] });
   const cap = clientCapOf(resolveAccountantPlan(userId, facts, now), config);
   if (cap !== null && rank >= cap) throw accountantPlanRequired({ profileId: grant.organizationId, freeLimit: config.freeClients });
 }
@@ -451,17 +451,47 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, opti
  */
 async function namedClient(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; grant: AccountantGrantRecord } | null> {
   const requested = c.req.header('x-mutaba3a-profile');
-  const grant = requested && UUID_RE.test(requested) ? await store.accountantGrants.findActive(identity.user.id, requested) : null;
+  return requested && UUID_RE.test(requested) ? clientAccess(store, identity.user.id, requested) : null;
+}
+
+async function namedMembership(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; membership: MembershipRecord } | null> {
+  const requested = c.req.header('x-mutaba3a-profile');
+  return requested && UUID_RE.test(requested) ? memberAccess(store, identity.user.id, requested) : null;
+}
+
+async function memberAccess(store: LedgerStore, userId: string, organizationId: string): Promise<{ organization: Organization; membership: MembershipRecord } | null> {
+  const membership = await store.memberships.find(userId, organizationId);
+  const organization = membership ? await store.organizations.getById(membership.organizationId) : null;
+  return organization && membership ? { organization, membership } : null;
+}
+
+/**
+ * An ACTIVE grant on the profile, and (MUT-575, ADR-249) its owner not closing their account. Here, not in
+ * namedClient, so every request and the period download's mint and stream re-check (MUT-314) apply the same rule.
+ */
+async function clientAccess(store: LedgerStore, userId: string, organizationId: string): Promise<{ organization: Organization; grant: AccountantGrantRecord } | null> {
+  const grant = await store.accountantGrants.findActive(userId, organizationId);
   const organization = grant ? await store.organizations.getById(grant.organizationId) : null;
   if (!organization || !grant || (await ownerIsClosing(store, organization))) return null;
   return { organization, grant };
 }
 
-async function namedMembership(c: Context<AppEnv>, identity: SessionIdentity, store: LedgerStore): Promise<{ organization: Organization; membership: MembershipRecord } | null> {
-  const requested = c.req.header('x-mutaba3a-profile');
-  const membership = requested && UUID_RE.test(requested) ? await store.memberships.find(identity.user.id, requested) : null;
-  const organization = membership ? await store.organizations.getById(membership.organizationId) : null;
-  return organization && membership ? { organization, membership } : null;
+/** How a person reaches a profile: a membership, or (with accountant access on) an ACTIVE accountant grant. */
+export type ProfileAccess =
+  | { access: 'member'; organization: Organization; membership: MembershipRecord }
+  | { access: 'accountant'; organization: Organization; grant: AccountantGrantRecord };
+
+/**
+ * MUT-314 (ADR-248): selectProfile's rule without the header: a membership first, else (only with ACCOUNTANT_ACCESS
+ * on) an ACTIVE grant; null when neither. Every profile-scoped request and the period download's stream re-check
+ * share it, so a revoke between a download's mint and its stream wins (D5).
+ */
+export async function resolveProfileAccess(store: LedgerStore, userId: string, organizationId: string, options: { accountantAccess?: boolean }): Promise<ProfileAccess | null> {
+  if (!UUID_RE.test(organizationId)) return null;
+  const member = await memberAccess(store, userId, organizationId);
+  if (member) return { access: 'member', ...member };
+  const client = options.accountantAccess ? await clientAccess(store, userId, organizationId) : null;
+  return client ? { access: 'accountant', ...client } : null;
 }
 
 /**

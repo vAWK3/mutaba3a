@@ -632,7 +632,7 @@ export const BillingOverviewSchema = z
     /**
      * MUT-565 (ADR-251): the person's Accountant plan and its monthly price per currency (`catalog`, from Stripe, cached
      * 10 minutes; a currency without a sellable price is null). Null where accountant access is off. `subscription`
-     * above is never the Accountant plan. Additive since 1.105.0-mut565.
+     * above is never the Accountant plan. Additive since 1.108.0-mut565.
      */
     accountantPlan: z.union([BillingAccountantPlanSchema, z.null()]),
   })
@@ -654,7 +654,7 @@ export const CheckoutSessionRequestSchema = z
     expectedOffer: z.string().regex(/^[a-z0-9][a-z0-9-]{0,39}$/).optional(),
     /**
      * MUT-565 (ADR-251): which plan. Absent is `freelancer`. `accountant` (monthly only: `interval` must be `month`)
-     * covers client books, never the person's own profiles; no trial carried over and no offers. Additive since 1.105.0-mut565.
+     * covers client books, never the person's own profiles; no trial carried over and no offers. Additive since 1.108.0-mut565.
      */
     plan: z.enum(['freelancer', 'accountant']).optional(),
   })
@@ -1193,7 +1193,7 @@ export const AccountantClientSchema = z
     /**
      * MUT-565 (ADR-251): active, but past the client books the accountant may read without the Accountant plan (the
      * oldest `clientBooks.freeLimit` stay readable); every profile-scoped call answers 402 ACCOUNTANT_PLAN_REQUIRED.
-     * Always false on an ended row and while the plan is switched off. Since 1.105.0-mut565.
+     * Always false on an ended row and while the plan is switched off. Since 1.108.0-mut565.
      */
     needsPlan: z.boolean(),
   })
@@ -1306,7 +1306,7 @@ export const MeSchema = z
     /**
      * MUT-565 (ADR-251): with `clients`, the cap and the person's Accountant plan. The 4th-client card shows when
      * `cap` is set, `count >= cap` and the plan is neither ACTIVE nor GRACE. Never a price (GET /v1/billing has it).
-     * Additive since 1.105.0-mut565.
+     * Additive since 1.108.0-mut565.
      */
     clientBooks: ClientBooksSummarySchema.optional(),
   })
@@ -4764,3 +4764,45 @@ export const OAuthGrantSchema = z
 export const OAuthGrantListSchema = z
   .object({ items: z.array(OAuthGrantSchema), mcpUrl: z.string().url().openapi({ description: 'The address to paste into Claude' }) })
   .openapi('OAuthGrantList');
+
+// ---- MUT-314 (ADR-248): period downloads ------------------------------------------
+
+const downloadType = z.enum(['report', 'receipts']).openapi({ description: '`report`: the Excel report (Expenses, Income, Summary). `receipts`: the receipt files, named by Ref, with index.csv.' });
+const downloadLang = z.enum(['ar', 'en']).optional().openapi({ description: 'Headers and sheet names; the person’s language (the visitor’s Accept-Language on a link) when absent.' });
+const downloadAsOf = z.string().datetime({ offset: true }).optional().openapi({ description: 'Rows logged after this moment are left out (no later than now, at most 24 hours back; default now). Pass the same value to both downloads from one screen so their Refs agree.' });
+
+export const PeriodDownloadTicketQuerySchema = z
+  .object({
+    type: downloadType,
+    from: z.string().openapi({ description: 'First month, YYYY-MM (inclusive).', example: '2026-10' }),
+    to: z.string().openapi({ description: 'Last month, YYYY-MM (inclusive): at most 24 months on, never past the current month.', example: '2026-10' }),
+    lang: downloadLang,
+    asOf: downloadAsOf,
+  })
+  .openapi('PeriodDownloadTicketQuery');
+
+export const PeriodDownloadTicketSchema = z
+  .object({
+    type: downloadType,
+    ticket: z.string().openapi({ description: 'POST it (with a share link’s viewer token) to /v1/period-downloads/stream within 120 seconds. Never put it in a URL.' }),
+    expiresAt: z.string().datetime(),
+    filename: z.string().openapi({ example: 'mutaba3a-Sader-Studio-2026-10.xlsx' }),
+    estimate: z
+      .object({
+        expenses: z.number().int(),
+        income: z.number().int(),
+        receipts: z.number().int(),
+        receiptBytes: z.number().int().openapi({ description: 'The receipts zip is about this size.' }),
+      })
+      .openapi({ description: 'What the period holds, as of `asOf`.' }),
+  })
+  .openapi('PeriodDownloadTicket');
+
+export const PeriodDownloadStreamRequestSchema = z
+  .object({
+    ticket: z.string().max(2048),
+    viewerToken: z.string().max(256).optional().openapi({ description: 'A share link’s download: the viewer token its ticket was minted with.' }),
+  })
+  .openapi('PeriodDownloadStreamRequest');
+
+export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type: downloadType, lang: downloadLang, asOf: downloadAsOf }).strict().openapi('ShareLinkDownloadTicketRequest');

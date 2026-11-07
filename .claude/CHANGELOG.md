@@ -46,13 +46,93 @@ slice only, behind `ACCOUNTANT_PLAN` (off in production until live prices exist)
 ### Changed
 - ACCOUNTANT facts never cover a profile: `resolveEntitlement` filters them, and every Billing reader (shown plan,
   offers, come-back, switch, pause, cancel, card retry, Freelancer Checkout) reads profile-plan subscriptions only.
-  The come-back mail skips an ended Accountant plan. API 1.105.0-mut565.
+  The come-back mail skips an ended Accountant plan. API 1.108.0-mut565.
 
 **Files:** `server/src/billing/{accountant-plan,entitlement,checkout,coverage,comeback-read,comeback-mail}.ts`,
 `billing/stripe/{mirror,checkout-gateway}.ts`, `routes/{accountants,billing,billing-plan,me,sessions,device-sessions}.ts`,
 `auth/{middleware,store-guard}.ts`, `accountants/grants.ts`, `operator/actions/billingGrants.ts`, `repositories/*`,
 `errors.ts`, `config.ts`, `schemas.ts`, `app.ts`, `app-shell.ts`, `prisma/`, `docs/analytics/events.json`,
 `docs/operations/pilot-runbook.md`.
+
+## [Unreleased] - 2026-11-06 — Client books for accountants on the portal, the accept-invite page and a share link's page (MUT-562, ADR-250)
+
+**What:** `/client-books` (the accountant's desk: owner, profile, entries this month, last activity; ended clients faded with Remove; the empty state explains), `/client-books/$profileId` (one client read-only: whole-month periods, type filter, per-currency totals, entries 100 at a time, receipts in a pane, "no longer shared" on a 404), `/accountant-invite` (signed out: sign in or create an account; signed in: accept; mismatch, already, exists, gone) and `/share` (PIN boxes; wrong, locked, gone, viewer limit, PIN again; then owner · profile, the band per currency, a filter and the entries with receipts). Shell: the Client books corner and a pill slot. Cookieless public counts.
+**Why:** epic MUT-558, the accountant's half; MUT-575's routes.
+**Files:** `src/hosted/pages/{client-books,accountant-invite,share-link}/**`, `src/hosted/components/{PinBoxes,TwoPanelLayout,EntriesTable}.tsx`, `src/hosted/data/clientBooksQueries.ts`, `src/hosted/api/client.ts`, `src/hosted/router.tsx`, `src/hosted/shell/HostedShell.tsx`, `src/hosted/session/{SessionBridge,useSignOut}.ts*`, `src/hosted/analytics/portalAnalytics.ts`, `src/hosted/i18n/{ar,en}.json`, `src/hosted/hosted.css`, `qa/**`. Downloads wait for MUT-314; the 4th-client card for MUT-565; scenes for MUT-561.
+
+## [Unreleased] - 2026-11-07 — The owner's "Download a period" on the Sharing page (MUT-561, MUT-314)
+
+### Added
+- `DownloadPeriodRow` at the bottom of the Sharing page: whole months (this month and the 23 before it), Excel report
+  or Receipts (zip); a ticket from GET /v1/period-downloads/ticket shows the size first, Download form-posts it to the
+  stream (`data/periodDownload.ts`, `postDownload`); one asOf for both files; an expired ticket is re-minted with it;
+  cap and rate refusals in plain words; hidden while the server answers 404 (probe with an invalid type: no ticket is
+  minted). `period_downloaded` {place: owner, file, months} (the contract's `owner`, not `owner_sharing`).
+  QA `portal.sharing.download-period`; FakeApi ticket and stream.
+
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice B: links with a PIN, and review fixes (MUT-561)
+
+### Added
+- `LinksColumn` (hidden on a 404), `NewShareLinkDrawer` (form + done pane, `?newLink=true`), Turn off; the empty page's
+  Create a link with a PIN; `api.listShareLinks/createShareLink/revokeShareLink`; `useShareLinks`, `useCreateShareLink`,
+  `useRevokeShareLink`; rules `periodRange`, `monthsLabel`, `pinOf`, `linkRow`, `linkErrorOf`; events
+  `share_link_created`, `share_link_revoked`; QA `portal.sharing.{create-link,link-rows}`; FakeApi share-link routes.
+
+### Changed
+- Claude Design's art (b2a02e37): `illustrations:generate` now yields 11 scenes; the empty page shows
+  `accountant-empty` and the done pane `link-ready` (no placeholders left); `AccountantIcon` / `LinkIcon` head the
+  columns. `Scene`'s on-order list is empty.
+- MUT-577: the Sharing page and its entry rows also need the person's `accountant_access` feature on `/v1/me` (the
+  operator's per-account switch); absent on a server that doesn't name it yet, so hidden.
+
+### Fixed
+- Concurrent revokes no longer restore each other's rows; Invite again refetches on stale refusals and waits at the
+  limit; focus lands on the new row; bidi isolates in sentences; gender-neutral Arabic confirms.
+
+## [Unreleased] - 2026-11-06 — The owner's Sharing page, slice A: accountants (MUT-561)
+
+**Why:** epic MUT-558, the owner half on the web (layout B, Basel 13236/13244). Slice A needs only MUT-559; the Links
+column waits for MUT-560 (slice B). Brief: `.claude/designs/MUT-561-sharing-page.md`.
+
+### Added
+- `/p/$profileId/you/sharing` (`pages/sharing/SharingPage.tsx`): Accountants column (`AccountantsColumn.tsx`) with
+  Stop / Cancel (in-place confirm, optimistic with rollback) and Invite again; the invite side drawer
+  (`InviteAccountantDrawer.tsx`, `?invite=true`, sends the portal language); the empty page with the `accountant-empty`
+  scene (placeholder art). Entry rows in You › Profiles and the Manage profiles edit pane (`SharingEntryRow`).
+- `sharingRules.ts`, `data/sharingQueries.ts`, `api.listAccountants/inviteAccountant/revokeAccountant`.
+- `AccessScopeList` (shared with MUT-562), `Scene` and `npm run illustrations:generate`
+  (`scripts/illustration-set.ts` → `src/components/illustrations/generated/`): the portal's first scene renderer.
+- Events `accountant_invited`, `accountant_revoked` (`was`); contract 2.7.0. i18n `hosted.sharing.*`, `hosted.accessScope.*`.
+- QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}`; FakeApi accountants routes.
+
+### Changed
+- `scripts/icon-set.ts`: `parseSvg` takes the allowed attributes (scenes add dashes and rotations); `renderNode` exported.
+
+## [Unreleased] - 2026-11-06 — Download a period: an Excel report and a receipts zip (MUT-314, ADR-248)
+
+**Why:** epic MUT-558. An owner, their accountant or a share-link visitor gets a period's books as one Excel file, with
+the receipts as a separate zip that matches it row by row. Server side only, behind `PERIOD_DOWNLOADS` (off in
+production until MUT-561..564). Also fixes MUT-501 (a cancelled records export logged an error).
+
+### Added
+- `server/src/period-pack/` (`index.ts` the only door): months and `asOf` (`range.ts`), the stateless ticket
+  (`ticket.ts`), the access re-check (`access.ts`), rows, Refs and receipt names (`rows.ts`), the column words in
+  English and Arabic (`columns.ts`), a minimal XLSX writer (`xlsx.ts`), the report (`report.ts`), the streamed receipts
+  zip (`receipts-zip.ts`) and `index.csv` (`csv.ts`).
+- Routes: `GET /v1/period-downloads/ticket`, `POST /v1/period-downloads/stream` (`routes/period-downloads.ts`),
+  `POST /v1/share-links/download-ticket`.
+- Store: `periodPack.estimate`, `periodPack.names`, `expenseReceipts.listReadyByExpenseIds` (memory + Prisma, store
+  contract); `periodDownloadStoreGuard()`.
+- Config: `PERIOD_DOWNLOADS`, `PERIOD_PACK_MAX_ROWS`, `PERIOD_PACK_MAX_RECEIPT_BYTES`, `PERIOD_PACK_CONCURRENCY`.
+  Reasons `PERIOD_RANGE`, `AS_OF`, `PERIOD_TOO_LARGE` (422) and `DOWNLOAD_UNAVAILABLE` (404); audit `period.downloaded`.
+- Dependencies: `fflate` 0.8.3; `exceljs` (devDependency, the tests' XLSX reader).
+
+### Changed
+- `resolveProfileAccess` extracted from `selectProfile` (auth/middleware.ts), shared with the stream's re-check.
+- `http/pull-stream.ts` replaces the records export's `streamOf`: a cancel is quiet (MUT-501).
+- The mint joins `LOCKED_OPEN_ENDPOINTS`; the flag table gains `PERIOD_DOWNLOADS`.
+- Terraform: the API's Cloud Run request timeout is 900 s (on the next apply).
+- Contract 1.107.0-mut314 (after MUT-557's 1.106.0); `src/hosted/api/schema.d.ts` regenerated. The QA live API sets `PERIOD_DOWNLOADS=true`.
 
 ## [Unreleased] - 2026-11-06 — Accountant access per account: the operator's `accountant_access` feature (MUT-577, ADR-249 addendum)
 

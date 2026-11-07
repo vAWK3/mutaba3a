@@ -197,6 +197,9 @@ const app = createApp({
   accountantPlan: { on: config.ACCOUNTANT_PLAN, freeClients: config.ACCOUNTANT_FREE_CLIENTS, maxClients: config.ACCOUNTANT_PLAN_MAX_CLIENTS },
   shareLinks: config.SHARE_LINKS,
   shareLinksPerProfileMax: config.SHARE_LINKS_PER_PROFILE_MAX,
+  periodDownloads: config.PERIOD_DOWNLOADS,
+  periodPackLimits: { maxRows: config.PERIOD_PACK_MAX_ROWS, maxReceiptBytes: config.PERIOD_PACK_MAX_RECEIPT_BYTES },
+  periodPackConcurrency: config.PERIOD_PACK_CONCURRENCY,
   billingGate: config.BILLING_GATE,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.

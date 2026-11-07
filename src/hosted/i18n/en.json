@@ -2207,6 +2207,406 @@
         "continue": "Continue on this device"
       },
       "whatIs": "What is MTB3A?"
+    },
+    "clientBooks": {
+      "title": "Client books",
+      "corner": "Client books",
+      "myBooks": "My books",
+      "deskNav": "Client books or my books",
+      "search": "Search owner or profile",
+      "searchEmpty": "No client book matches “{query}”.",
+      "cols": {
+        "owner": "Owner",
+        "profile": "Profile",
+        "thisMonth": "Entries this month",
+        "lastActivity": "Last activity",
+        "action": "Action"
+      },
+      "noActivity": "—",
+      "ended": "No longer shared",
+      "remove": "Remove",
+      "removeAria": "Remove {profile} from your client books",
+      "removeConfirm": "Remove {profile} from your list? You can't read it again unless its owner invites you.",
+      "removeYes": "Remove",
+      "removeNo": "Keep",
+      "removeFailed": "Couldn't remove it. Try again.",
+      "open": "Open {profile}",
+      "empty": {
+        "title": "No client books yet",
+        "body": "Ask your client to invite you from MTB3A › their profile › Sharing. You'll get an email to accept."
+      },
+      "readOnly": "Read-only · since {date}",
+      "back": "Client books",
+      "filters": {
+        "label": "Filters",
+        "period": "Period",
+        "month": "This month",
+        "quarter": "This quarter",
+        "year": "This year",
+        "custom": "Months",
+        "fromMonth": "From",
+        "toMonth": "To",
+        "type": "Type",
+        "expenses": "Expenses",
+        "income": "Income",
+        "withReceipt": "Only with a receipt"
+      },
+      "totals": {
+        "label": "Totals for {period}",
+        "spent": "Spent",
+        "received": "Received",
+        "none": "Nothing in this period."
+      },
+      "table": {
+        "label": "Entries",
+        "date": "Date",
+        "what": "What",
+        "category": "Category",
+        "receipt": "Receipt",
+        "amount": "Amount",
+        "income": "Income",
+        "noReceipt": "—",
+        "receipts": {
+          "one": "{count} receipt",
+          "other": "{count} receipts"
+        },
+        "view": "View",
+        "untitled": "Expense",
+        "receivedFrom": "Received",
+        "loadMore": "Load more",
+        "loading": "Loading…",
+        "empty": "No entries in this period.",
+        "emptyFiltered": "No entries match these filters."
+      },
+      "receipt": {
+        "title": "Receipt",
+        "download": "Download receipt",
+        "close": "Close",
+        "none": "This entry has no receipt.",
+        "failed": "Couldn't load the receipt. Try again."
+      },
+      "download": {
+        "label": "Download",
+        "report": "Excel report",
+        "receipts": "Receipts (zip)",
+        "followsPeriod": "For the period above. The report always has the Expenses, Income and Summary sheets.",
+        "entries": {
+          "one": "{count} entry",
+          "other": "{count} entries"
+        },
+        "noReceipts": "No receipts in this period",
+        "about": "about {size}",
+        "tooLarge": "Too large for one download. Pick a shorter period.",
+        "rateLimited": {
+          "one": "Too many downloads started. Try again in {count} minute.",
+          "other": "Too many downloads started. Try again in {count} minutes."
+        },
+        "unavailable": "Downloads aren't available right now.",
+        "failed": "Couldn't start the download. Check your connection and try again.",
+        "month": "Download {month}",
+        "monthAria": "Download the Excel report for {month}, {profile}"
+      },
+      "gone": {
+        "title": "No longer shared",
+        "body": "{owner} stopped sharing {profile} with you. Anything you downloaded before stays with you.",
+        "bodyNoOwner": "{profile} is no longer shared with you. Anything you downloaded before stays with you.",
+        "back": "Back to Client books"
+      },
+      "free": "{readable} of {freeLimit} free client books",
+      "needsPlan": "Needs the Accountant plan",
+      "needsPlanTitle": "{profile} needs the Accountant plan",
+      "subscribeAria": "Subscribe to the Accountant plan to read {profile}",
+      "planPrompt": "Reading up to {count} client books is free. Subscribe to the Accountant plan to read more."
+    },
+    "shareLink": {
+      "privateView": "A private, read-only view. No names or numbers show before the right PIN.",
+      "enterPin": "Enter the PIN you were given",
+      "open": "Open",
+      "opening": "Opening…",
+      "askSender": "Don't know the PIN? Ask whoever sent you this link.",
+      "wrong": {
+        "zero": "That PIN isn't right. No tries left.",
+        "one": "That PIN isn't right. 1 try left, then the link locks.",
+        "other": "That PIN isn't right. {count} tries left, then the link locks."
+      },
+      "pinShort": "Enter at least 4 digits.",
+      "retry": "Press Open again.",
+      "locked": {
+        "title": "This link is locked",
+        "body": "A wrong PIN was entered 5 times, so the link is locked for everyone. Ask whoever sent it for a new one."
+      },
+      "gone": {
+        "title": "This link is no longer available",
+        "body": "It ended or was turned off. Ask for a new one if you need it."
+      },
+      "limit": {
+        "title": "This link has reached its viewer limit",
+        "body": "Only 3 people can open it, and 3 already have. Ask for a link of your own."
+      },
+      "again": {
+        "title": "Enter the PIN again",
+        "body": "For safety, the PIN is asked for every 8 hours."
+      },
+      "unreachable": "Couldn't reach MTB3A. Check your connection and try again.",
+      "retryButton": "Try again",
+      "sharedBy": "Shared with you by",
+      "readOnly": "read-only",
+      "band": {
+        "label": "Summary",
+        "spent": "Spent",
+        "received": "Received",
+        "none": "Nothing in this period."
+      },
+      "filter": {
+        "label": "Show",
+        "all": "All",
+        "expenses": "Expenses",
+        "income": "Income",
+        "month": "Month",
+        "allMonths": "All months"
+      },
+      "view": "View",
+      "viewAria": "View the receipt for {what}",
+      "receiptsTitle": "Receipts",
+      "downloadReceipt": "Download {name}",
+      "rateLimited": {
+        "one": "Too many tries. Wait {count} minute and try again.",
+        "other": "Too many tries. Wait {count} minutes and try again."
+      },
+      "until": "Up to {month}"
+    },
+    "accountantInvite": {
+      "about": "MTB3A helps business owners log their expenses and income. {owner} wants you to read their profile, without changing anything.",
+      "aboutNoOwner": "MTB3A helps business owners log their expenses and income. You're invited to read a profile, without changing anything.",
+      "invited": "{owner} invited you to read {profile}",
+      "invitedNoOwner": "You're invited to read {profile}",
+      "forAddress": "For {email} · ends {date}",
+      "signIn": "Sign in to accept",
+      "create": "Create an account",
+      "checking": "Checking the invite…",
+      "signup": {
+        "title": "Create an account to accept",
+        "email": "Email",
+        "emailFixed": "The invite's address; it can't be changed.",
+        "name": "Name",
+        "password": "Password",
+        "freeNote": "An account for reading your clients' books. Reading up to 3 client books is always free.",
+        "submit": "Create account and accept",
+        "creating": "Creating your account…",
+        "signingIn": "Signing in…",
+        "back": "Back",
+        "checkFailed": "The check didn't pass. Wait for it to finish and try again.",
+        "termsChanged": "The terms were just updated. Read them and tick the box again."
+      },
+      "exists": {
+        "title": "You already have an account",
+        "body": "Sign in with it to accept the invite."
+      },
+      "signInToContinue": {
+        "title": "Your account is ready",
+        "body": "Sign in to open {profile}."
+      },
+      "accept": {
+        "title": "Accept {owner}'s invite?",
+        "titleNoOwner": "Accept this invite?",
+        "body": "You'll read {profile} under Client books. You're signed in as {email}.",
+        "accept": "Accept",
+        "accepting": "Accepting…",
+        "notNow": "Not now"
+      },
+      "mismatch": {
+        "context": "An invite to read a profile.",
+        "title": "This invite was sent to another address",
+        "body": "It was sent to {invited}, and you're signed in as {email}.",
+        "domainHint": "Sign in with that address, or ask the sender to invite this one. An address on the same company domain works too (not Gmail or similar).",
+        "signOut": "Sign out and use another account",
+        "back": "Back to MTB3A"
+      },
+      "already": {
+        "title": "You can already read this profile",
+        "open": "Open"
+      },
+      "gone": {
+        "title": "This invite is no longer available",
+        "body": "It was used, withdrawn or ended. Ask whoever sent it for a new one."
+      },
+      "failed": "Couldn't reach MTB3A. Check your connection and try again.",
+      "fourth": {
+        "title": "Your free client books are used",
+        "body": "Reading up to {count} client books is free. To read {profile} as well, subscribe to the Accountant plan.",
+        "notNow": "Not now (the invite stays open until {date})",
+        "confirming": "Confirming your Accountant plan…",
+        "slow": "Your payment is still being confirmed. Press Accept again in a minute."
+      },
+      "ceiling": {
+        "title": "You've reached the most client books we open online",
+        "body": "Write to {email} and we'll add more."
+      }
+    },
+    "accountantPlan": {
+      "name": "Accountant plan · unlimited client books",
+      "price": "{price} a month",
+      "country": "Country",
+      "pickCountry": "Choose your country",
+      "subscribe": "Subscribe",
+      "failed": "Couldn't open the payment page. Try again.",
+      "priceFailed": "Couldn't load the price.",
+      "retry": "Try again"
+    },
+    "accessScope": {
+      "label": "What whoever you share with can do",
+      "sees": "Sees this profile’s expenses, income and receipts",
+      "download": "Can download them for a period",
+      "cannotChange": "Can’t add, change or delete anything",
+      "cannotSeeOther": "Doesn’t see your other profiles or your account"
+    },
+    "sharing": {
+      "title": "Sharing {profile}",
+      "back": "Profiles",
+      "scopeNote": "Whoever you share with reads expenses, income and receipts only. They can't add or change anything.",
+      "entryRow": "Share with your accountant",
+      "manageRow": "Sharing",
+      "manageSub": "Who reads this profile",
+      "accountants": {
+        "heading": "Accountants",
+        "invite": "Invite by email",
+        "limit": "Up to {limit} accountants per profile.",
+        "atLimit": "This profile has {limit}, the most it can. Stop one to invite someone else.",
+        "since": "Since {date}",
+        "viewed": "viewed {when}",
+        "notViewed": "not viewed yet",
+        "sent": "Sent {date}",
+        "ends": "ends {date}",
+        "expiredMeta": "Not accepted within 14 days",
+        "chip": {
+          "active": "Active",
+          "pending": "Pending",
+          "expired": "Expired"
+        },
+        "stop": "Stop",
+        "stopAria": "Stop {name}'s access",
+        "stopConfirm": "Stop {name}'s access to {profile}? {name} won't be able to open it any more. You can send a new invite later.",
+        "stopAction": "Stop access",
+        "cancel": "Cancel",
+        "cancelAria": "Cancel the invite to {name}",
+        "cancelConfirm": "Cancel the invite to {name}? The link in the invite email stops working.",
+        "cancelAction": "Cancel invite",
+        "keep": "Keep invite",
+        "inviteAgain": "Invite again",
+        "inviteAgainAria": "Invite {name} again",
+        "stopped": "{name} can no longer open {profile}",
+        "cancelled": "Invite to {name} cancelled",
+        "revokeFailed": "That didn't go through. Check your connection and try again."
+      },
+      "invite": {
+        "title": "Invite an accountant",
+        "intro": "They'll get an email to accept. It ends after 14 days.",
+        "email": "Email",
+        "send": "Send invite",
+        "sent": "Invite sent to {email}",
+        "errors": {
+          "self": "That's your own email. Use your accountant's.",
+          "refused": "We can't send invites to this address. Use your accountant's own email.",
+          "invalid": "Enter an email address, like name@firm.ps.",
+          "already": "{email} already has an invite or access to this profile.",
+          "limit": "This profile already has {limit} accountants or invites, the most it can. Stop one first.",
+          "notOwner": "Only the profile's owners can share it.",
+          "gone": "This profile isn't available to share any more.",
+          "rate": "Too many invites in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and send again."
+        }
+      },
+      "empty": {
+        "title": "You haven't shared this profile yet",
+        "createLink": "Create a link with a PIN"
+      },
+      "links": {
+        "heading": "Links with a PIN",
+        "create": "Create link",
+        "cols": {
+          "period": "Period",
+          "ends": "Ends",
+          "lastOpened": "Last opened",
+          "viewers": "Viewers",
+          "actions": "Actions"
+        },
+        "months": "{months}",
+        "wholeProfile": "Whole profile",
+        "ended": "Ended {date}",
+        "chip": {
+          "active": "Live",
+          "locked": "Locked",
+          "ended": "Ended"
+        },
+        "turnOff": "Turn off",
+        "turnOffAria": "Turn off the link for {period}",
+        "turnOffConfirm": "Turn off the link for {period}? Anyone using it is cut off at once.",
+        "turnOffAction": "Turn off link",
+        "turnedOff": "Link turned off",
+        "footnote": "“Locked”: a wrong PIN was entered 5 times, and even people already in are cut off. A link is never shown twice; if it's lost or locked, turn it off and make a new one. No emails about link activity.",
+        "limit": "Up to {limit} live links per profile.",
+        "atLimit": "This profile has {limit} live links, the most it can. Turn one off to make another.",
+        "none": "No links yet."
+      },
+      "newLink": {
+        "title": "New link",
+        "period": "Period",
+        "last1": "Last month",
+        "last2": "Last 2 months",
+        "last3": "Last 3 months",
+        "whole": "Whole profile",
+        "worksFor": "Works for",
+        "days1": "1 day",
+        "days7": "7 days",
+        "days30": "30 days",
+        "pin": "PIN (4–8 digits)",
+        "pinHint": "Send it separately from the link.",
+        "summary": "{period} · shows expenses, income and receipts only; nothing can be changed. Up to {viewers} viewers.",
+        "create": "Create link",
+        "errors": {
+          "pin": "The PIN is 4 to 8 digits.",
+          "limit": "This profile already has {limit} live links, the most it can. Turn one off first.",
+          "rate": "Too many links in an hour. Try again later.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
+      },
+      "done": {
+        "title": "Your link is ready",
+        "summary": "{period} · works until {until} · up to {viewers} viewers",
+        "link": "Link",
+        "copyLink": "Copy link",
+        "copyMessage": "Copy message",
+        "copiedLink": "Link copied",
+        "copiedMessage": "Message copied, without the PIN",
+        "copyFailed": "Couldn't copy. Select the link and copy it by hand.",
+        "pinWarning": "Send the PIN separately — we won't show the link or the PIN again.",
+        "done": "Done"
+      },
+      "message": {
+        "text": "Hi, I've shared the books of “{profile}” for {period} with you on MTB3A: {url} — the link works until {until}. I'll send you the PIN separately.",
+        "wholeProfile": "the whole profile"
+      },
+      "download": {
+        "title": "Download a period",
+        "note": "For your own records: whole months, up to 24. The report is an Excel file with Expenses, Income and a Summary; the receipts come as a zip.",
+        "from": "From",
+        "to": "To",
+        "report": "Excel report",
+        "receipts": "Receipts (zip)",
+        "reportEstimate": "Excel report for {months}: {expenses} expenses · {income} income",
+        "receiptsEstimate": "Receipts for {months}: {count} · about {size}",
+        "download": "Download",
+        "cancel": "Cancel",
+        "started": "Your download has started.",
+        "preparing": "Preparing…",
+        "errors": {
+          "tooLarge": "This period is too large to download at once. Pick fewer months.",
+          "range": "Pick whole months, up to 24, none in the future.",
+          "rate": "Too many downloads in an hour. Try again later.",
+          "gone": "This download isn't available any more.",
+          "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
+        }
+      }
     }
   }
 }

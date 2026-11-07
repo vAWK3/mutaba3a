@@ -13,8 +13,9 @@ import { setMode } from './mode';
  * server can end the session: if `DELETE` fails, the person is told and stays
  * signed in rather than being shown a sign-out that didn't happen.
  */
-export function useSignOut(options: { onFailed?: () => void } = {}): { signOut: () => Promise<void>; signingOut: boolean } {
-  const { onFailed } = options;
+export function useSignOut(options: { onFailed?: () => void; next?: string } = {}): { signOut: () => Promise<void>; signingOut: boolean } {
+  // MUT-562: `next` signs the next person in back to a page (the accountant invite's "use another account")
+  const { onFailed, next } = options;
   const queryClient = useQueryClient();
   const router = useRouter();
   const toast = useToast();
@@ -36,7 +37,8 @@ export function useSignOut(options: { onFailed?: () => void } = {}): { signOut: 
     setMode('local');
     announceSignedOut();
     endSession(queryClient, router, { reason: 'signed_out' });
-  }, [queryClient, router, toast, t, onFailed]);
+    if (next) void router.navigate({ to: '/sign-in', search: { next }, replace: true });
+  }, [queryClient, router, toast, t, onFailed, next]);
 
   return { signOut, signingOut };
 }

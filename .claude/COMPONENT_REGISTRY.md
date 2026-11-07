@@ -2457,9 +2457,31 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `billingRetentionQuery`, `usePausePlan`, `useEndPause`, `useCancelPlan`, `useKeepPlan`, `useTakeStayOffer` — `src/hosted/data/billingQueries.ts`.
 - Server: `cycleBoundaryAfter` / `pauseOptionsOf` / `stayOfferOf` / `pauseCounts` / `CANCELLATION_REASONS` (`server/src/billing/retention.ts`); `pauseOf` (`server/src/billing/stripe/mirror.ts`); `pausedNow` (`server/src/billing/entitlement.ts`); `PlanGateway.schedulePause/endPause/cancelAtPeriodEnd/keepPlan/applyCoupon` (fake: `FakePlanGateway.failNextWrite/failNextAfterApplying`); `stayEntryOf` (`offer.ts`); store `billing.retentionEventsOf/claimRetentionEvent/releaseRetentionEvent/endRetentionEventEarly`.
 
+### Client books and the public sharing pages — MUT-562 (ADR-250)
+- `PinBoxes` — `src/hosted/components/PinBoxes.tsx`: a 4–8 digit PIN, one box per digit (4 growing to 8), paste, Arabic-Indic digits (`pinDigits`), one `role="group"` label, LTR in both languages. Props `value`, `onChange`, `label`, `onSubmit`, `invalid`, `disabled`, `describedBy`, `autoFocus`.
+- `TwoPanelLayout` — `src/hosted/components/TwoPanelLayout.tsx`: layout B for public pages: wordmark + language switch, a lavender context panel and the action panel; stacked on a phone. Used by `/accountant-invite` and `/share`.
+- `EntriesTable` + `deskRow` / `linkRow` — `src/hosted/components/EntriesTable.tsx`: one read-only table (Date, What, Category, Receipt, Amount signed) for a client's feed and a share link's; a row with receipts opens them.
+- `clientBooksRules` — `src/hosted/pages/client-books/clientBooksRules.ts`: whole-month periods (presets, ≤12 months), the desk's search, feed bounds/kinds, totals per currency, `showsClientBooks` (the corner rule).
+- `clientBooksQueries` — `src/hosted/data/clientBooksQueries.ts`: `useClientBooks`, `useRemoveClientBook`, `useClientEntries`, `useClientTotals`, `useClientCategories`, `useClientExpense`, `useClientReceiptUrl`, `isClientGone`, `useForgetClient`.
+- `shareLinkState` / `viewerTokens` (share-link page only) and `inviteState` (accept-invite page only): pure reducers and tab/viewer storage.
+- `HostedShell` `pill` slot (a page outside a profile brings its own pill: `DeskPill`), the Client books corner; `countPublicPage` (cookieless counts) in `portalAnalytics.ts`; `useSignOut({ next })`.
+
 ### Expense VAT — MUT-302 (ADR-231)
 - `ExpenseVatRow` — `src/hosted/components/expenseForm/ExpenseVatRow.tsx`: the firm-only collapsed VAT row (`.form-disclosure`) on the shared expense fields: "No VAT recorded" or the VAT inside the amount; open, treatment `Select`, Standard rate, net and VAT preview (`<bdi>`). Props `form`, `idPrefix`, `readOnly`, `hint`. Rendered by `HostedExpenseFields` when `firm`.
 - `vatPreview` / `percentToBasisPoints` / `basisPointsToPercent` / `VAT_TREATMENTS` — `src/hosted/lib/expenseVat.ts`: display-only port of the server split, held by the shared case table.
 - `vatInputOf` / `vatValuesOf` / `updateExpenseVat` — `useHostedExpenseForm.ts`: the form's VAT to and from the API; `createExpenseBody(values, { firm })`.
 - Server: `expenseVat` / `storedExpenseVat` / `assertExpenseVatColumns` / `NO_EXPENSE_VAT` (`server/src/expenses/vat.ts`).
+
+### Sharing page — MUT-561 (slice A)
+- `SharingPage` — `src/hosted/pages/sharing/SharingPage.tsx`: `/p/$profileId/you/sharing`; `profile`, `search` (`SharingSearch`, `?invite=true`). Owner + signed in + `/v1/me.clients` (`sharingOpen`) or it navigates to You › Profiles. `LINKS_ON` is false until MUT-560 (slice B adds `LinksColumn`). The bottom is reserved for MUT-314's "Download a period".
+- `AccountantsColumn` — `src/hosted/pages/sharing/AccountantsColumn.tsx`: rows on the `.hp-profile-row` recipe with one action each (Stop / Cancel → `InPlaceConfirm appearance="row"`, Invite again), its own `QueryView`, the limit foot.
+- `InviteAccountantDrawer` — `src/hosted/pages/sharing/InviteAccountantDrawer.tsx`: `profile`, `onClose`, `onInvited(grant)`. Read-only under the lapse gate.
+- `sharingRules.ts`: `sharingOpen`, `parseSharingSearch`, `grantRow`, `shortDay`, `relativeDay`, `inviteErrorOf`, `revokeErrorOf`. `data/sharingQueries.ts`: `useAccountants`, `useInviteAccountant`, `useRevokeAccountant`, `withGrant`, `accountantsKey`.
+- `SharingEntryRow` — `src/hosted/components/SharingEntryRow.tsx`: `profile`, `place: 'you' | 'manage'`; renders only where the page would open.
+- `AccessScopeList` — `src/hosted/components/AccessScopeList.tsx`: the four "sees / can download / can't change / doesn't see" points (`hosted.accessScope.*`). Reuse it for any accountant-facing promise (MUT-562).
+- `Scene` — `src/hosted/components/Scene.tsx`: `name` (`SceneName`: drawn or on order), `size`, `motion: 'drop-in' | 'none'`. A scene not drawn yet shows `empty-state` (`data-placeholder`). Art from `npm run illustrations:generate` (`scripts/illustration-set.ts`, `scripts/generate-illustrations.ts` → `src/components/illustrations/generated/`, `SCENE_ART`); never hand-edit the generated folder.
+- `LinksColumn` — `src/hosted/pages/sharing/LinksColumn.tsx`: `profile`, `query` (`useShareLinks`), `onCreate`. `HostedTable` with a sticky action; Turn off confirms in the row's detail row.
+- `NewShareLinkDrawer` — `src/hosted/pages/sharing/NewShareLinkDrawer.tsx`: `profile`, `listLimit`, `onClose`. Form pane, then the done pane (URL once, Copy link, Copy message). The URL and PIN never leave its state.
+- `sharingRules.ts` (slice B): `isolate`, `periodRange`, `monthsLabel`, `rangeLine`, `foldDigits`, `pinOf`, `linkRow`, `liveLinks`, `linkErrorOf`, `periodEvent`. `sharingQueries.ts`: `useShareLinks` (404 → `{ off: true }`), `useCreateShareLink`, `useRevokeShareLink`, `refetchAfterRefusal`; revokes share `useOptimisticItem` (per-item undo, one read after the last).
+- `DownloadPeriodRow` — `src/hosted/pages/sharing/DownloadPeriodRow.tsx`: `profile`. The owner's Download a period (MUT-314). `data/periodDownload.ts`: `postDownload(ticket)` (hidden form POST to the stream), `periodDownloadsOn`, `usePeriodDownloadsOn`; rules `monthOptions`, `monthSpan`, `monthName`, `downloadErrorOf`. MUT-562's desk download can reuse `postDownload`.
 

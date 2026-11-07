@@ -128,6 +128,15 @@ Spacing is `--space-*` (N × 4px, from the token file's one scale, MUT-165); rad
 - **Direction:** an icon that points (chevrons, back, ›) mirrors in RTL. A mark or symbol (the passkey mark, the brand mark, a lock) never does.
 - **Loading:** `BrandLoader` (`src/components/brand/BrandLoader.tsx`) is the loader for a wait on a page or boot screen, and lists use `Skeleton`. A busy button shows its own small spinner (`Button isLoading`, or `btn-spinner hp-inline-spinner` on the sign-in pages) and never a second loader beside it. The brand mark is `BrandMark`, and the name in running text is plain "MTB3A" / متابعة (`docs/brand/wordmark/README.md`).
 
+### Scenes
+
+- **Scene:** `Scene` (`src/hosted/components/Scene.tsx`, MUT-561) draws a brand illustration from Claude Design on a page: an empty state, a done pane. The art comes from `assets/illustrations/source/*.svg` through `npm run illustrations:generate`; its three colours become `--m-field-bg`, `--m-primary` and `--m-peach-strong`, so dark mode needs no second drawing, and any other colour fails the generator. It is `aria-hidden`: the copy beside it carries the meaning. It never mirrors in RTL.
+- A scene a plan names before it is drawn renders the `empty-state` art until its SVG lands. `motion="drop-in"` is the empty states' one-shot (the nuqta drops in, under a second); reduced motion shows the final frame.
+
+### Sharing page
+
+- **One profile's Sharing page** (`/p/:id/you/sharing`, MUT-561 layout B): a back link to You › Profiles, the title and a one-line scope note, then two columns (Accountants, Links with a PIN) that become one at 760 px. Each column has its own `QueryView`, so one failing never blanks the other. Rows follow `.hp-profile-row` with one visible action each; Stop, Cancel and Turn off confirm in place (`InPlaceConfirm appearance="row"`). Invite and Create link open side drawers by URL key. The four access points are always `AccessScopeList`.
+
 ### Press feedback
 
 Every `Button` presses already. Add `press` to any other control that acts (a row button, the drawer's ✕, a text button). Don't add it to tabs or links in running text. `pressFeedback.test.tsx` checks every portal button.

@@ -76,6 +76,8 @@ function harness() {
     attachments: new MemoryAttachmentStorage(),
     // The whole surface, the receipts library included (MUT-389: on wherever RECEIPTS_LIBRARY is set).
     receiptsLibrary: true,
+    // MUT-314: period downloads (their mint is a session read).
+    periodDownloads: true,
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 120, absoluteHours: 12, secureCookie: true, trustedProxyHops: 1 },
   });
   return { app, base, calls, clock };
@@ -161,7 +163,7 @@ const isWrite = (a: MethodAccess | undefined) => typeof a === 'object' && 'write
 const writes = (calls: Call[]) => calls.filter((c) => isWrite(accessOf(c))).map((c) => `${c.repo}.${c.method}`);
 
 /** Reads that refuse a request without these query parameters (MUT-478: a statement is in one currency). */
-const REQUIRED_QUERY: Record<string, string> = { '/v1/customers/:customerId/statement': '?currency=ILS' };
+const REQUIRED_QUERY: Record<string, string> = { '/v1/customers/:customerId/statement': '?currency=ILS', '/v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10' };
 
 function send(h: Harness, op: Operation, headers: Record<string, string>, ids: Record<string, string> = {}) {
   const path = op.path.replace(/:([A-Za-z]+)/g, (_m, name: string) => ids[name] ?? PLACEHOLDER) + (REQUIRED_QUERY[op.path] ?? '');
@@ -177,8 +179,9 @@ describe('every route sits inside the matrix', () => {
     expect(KEY_ONLY.length).toBeGreaterThan(30);
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
-    // the customer statement (MUT-478), the period totals (MUT-483) and one profile's feed (MUT-575).
-    expect(SESSION_READS.length).toBe(40);
+    // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
+    // download's mint (MUT-314).
+    expect(SESSION_READS.length).toBe(41);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {

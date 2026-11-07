@@ -34,12 +34,26 @@ type Kind = 'ltr' | 'rtl' | 'auto';
 const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // B: text that reads left to right in any language
   'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
-  'src/hosted/shell/YouIsland.tsx': { auto: 1 }, // MUT-426: the open profile's name on the island (D)
+  'src/hosted/shell/YouIsland.tsx': { auto: 1 },
+  // MUT-562: the Client books desk, the accept-invite page and a share link's page (names, emails, months, PINs)
+  'src/hosted/components/EntriesTable.tsx': { auto: 2 }, // an entry's title and category (D)
+  'src/hosted/components/PinBoxes.tsx': { ltr: 1 }, // a PIN's digits run left to right in both languages (B)
+  'src/hosted/pages/accountant-invite/AcceptInvitePage.tsx': { ltr: 2, auto: 1 }, // the invite's address, the password; the name (B, D)
+  'src/hosted/pages/client-books/ClientBookPage.tsx': { auto: 3, ltr: 2 }, // owner and profile names; the month inputs (D, B)
+  'src/hosted/pages/client-books/ClientBooksPage.tsx': { auto: 3 }, // owner and profile names (D)
+  'src/hosted/pages/client-books/ClientReceiptPane.tsx': { auto: 1 }, // the expense's title (D)
+  'src/hosted/pages/share-link/ShareLinkView.tsx': { auto: 4 }, // owner, profile and entry names (D)
+  // MUT-557 (on main without its entry): the allocation number, digits left to right (B)
+  'src/hosted/components/expenseForm/ExpenseAllocationNumberRow.tsx': { ltr: 1 }, // MUT-426: the open profile's name on the island (D)
   'src/hosted/pages/you/YouProfiles.tsx': { auto: 1 }, // MUT-425: each profile's name (D)
   'src/hosted/components/ProfilesManageDrawer.tsx': { ltr: 1, auto: 1 }, // currency code; the profile name (D)
   'src/hosted/components/MoveReceiptDrawer.tsx': { auto: 1 }, // MUT-503: each profile's name in the Move drawer (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
+  'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
+  'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)
+  'src/hosted/pages/sharing/InviteAccountantDrawer.tsx': { ltr: 1 }, // MUT-561: the accountant's email field
+  'src/hosted/pages/sharing/NewShareLinkDrawer.tsx': { ltr: 2 }, // MUT-561: the PIN field and the link's URL
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
   'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
@@ -69,6 +83,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/RecordPaymentDrawer.tsx': { ltr: 1 },
   // MUT-453: Reduce amount owed's amount field, like Record payment's.
   'src/hosted/components/CorrectionPane.tsx': { ltr: 1 },
+  'src/hosted/components/expenseForm/ExpenseAllocationNumberRow.tsx': { ltr: 1 }, // MUT-557: the allocation number, a code
   // MUT-302: the VAT row's rate input, a figure like the amount beside it.
   'src/hosted/components/expenseForm/ExpenseVatRow.tsx': { ltr: 1 },
   // D: a title that takes its direction from its own first letter

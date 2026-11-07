@@ -22,7 +22,13 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent;
+/**
+ * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
+ * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
+ * MUT-575's contract.
+ */
+export type AccountantEvent = 'accountant_invited' | 'accountant_revoked' | 'share_link_created' | 'share_link_revoked' | 'period_downloaded';
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
 /** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */
@@ -109,6 +115,27 @@ export function countWelcomeChoice(choice: WelcomeChoice): void {
       instance?.capture('portal_welcome_choice', { choice });
     } catch {
       // Counting must never break a door
+    }
+  });
+}
+
+/**
+ * MUT-562 (ADR-250): the public pages' counts, a share link's page and an accountant invite's page, sent the welcome's
+ * cookieless way (its own instance, nothing stored, no person id, no consent prompt) and only from a release build
+ * (the gate behind POSTHOG_KEY). Never a token, PIN, email, name or profile id: only the contract's enums.
+ */
+export type PublicPageEvent =
+  | { event: 'share_link_opened'; properties: { period: 'last_1_month' | 'last_2_months' | 'last_3_months' | 'whole_profile' } }
+  | { event: 'accountant_accepted'; properties: { via: 'signed_in' | 'signup' } }
+  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months?: number } };
+
+export function countPublicPage({ event, properties }: PublicPageEvent): void {
+  if (!POSTHOG_KEY) return;
+  void loadWelcomeInstance().then((instance) => {
+    try {
+      instance?.capture(event, properties);
+    } catch {
+      // Counting must never break the page
     }
   });
 }

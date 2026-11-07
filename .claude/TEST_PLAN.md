@@ -4421,6 +4421,16 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 - Updated: route-security, no-self-registration (reviewed invite exceptions), billing-gate-routes (classification),
   templates/mailer (new mail), store-guard (operator list), API version assertions.
 
+## MUT-561 — the owner's Sharing page, slice A
+
+Detail in `.claude/designs/MUT-561-sharing-page-tests.md`.
+- `scripts/__tests__/illustration-set.test.ts` (palette mapping, dialect, drift of the generated scenes),
+  `components/__tests__/Scene.test.tsx` (placeholder, reduced motion).
+- `pages/sharing/__tests__/sharingRules.test.ts`, `InviteAccountantDrawer.test.tsx`, `SharingPage.test.tsx` (gate, entry
+  rows, row states, stop/cancel/invite again, rollback, telemetry, empty, loading, error).
+- Contract 2.7.0 pinned (`analytics-taxonomy.test.ts`); new `dir` sites (`direction.test.ts`).
+- Release-QA `portal.sharing.{entry,accountants-list,invite,revoke-access,empty,layout}` (stubbed API).
+
 ## MUT-560 — share links (ADR-247)
 
 Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
@@ -4445,6 +4455,29 @@ Full map: `.claude/designs/MUT-560-share-links-tests.md` (the plan's 14 groups).
   `routes-share-links-prisma.test.ts` runs the key flows on Postgres under `test:db`.
 - OW5 and report rows: the owner's list over a moving clock (active → revoked/locked/expired for 24 h → gone) and the
   visitor's feed and totals without Owed entries or conversions (memory and Postgres).
+- Slice B: `data/__tests__/sharingQueries.test.tsx` (two revokes at once, 404 = done, links off, Turn off undo);
+  `NewShareLinkDrawer.test.tsx` (months per chip, PIN rules incl. Arabic-Indic, errors, busy, lapse, done pane, Copy
+  link, Copy message EN/AR without the PIN, nothing left after Done); `SharingPage.test.tsx` (Links column states, Turn
+  off, limit, column error, empty with both ways, review fixes b/c/h); QA `portal.sharing.{create-link,link-rows}`.
+
+
+## MUT-314 — period download (ADR-248)
+
+Full map: `.claude/designs/MUT-314-period-download-tests.md` (the plan's 15 groups).
+- `server/src/__tests__/routes-period-downloads.test.ts`: boundaries end to end, Ref stability across the two downloads
+  with a shared `asOf`, money per currency exponent, the report in Arabic and English (RTL, Hebrew, emoji, `=1+1`
+  text, both sheets), receipts ↔ report incl. a missing object, `index.csv`, the access matrix (owner, co-owner,
+  member, accountant via the derived allowlist, revoked, stranger, no lazy posting), the ticket (tamper, expiry,
+  revoke between steps, form post, nothing in URLs), the link (its period only, other viewer, revoke, both flags),
+  caps and estimates, slots and the mint budget, cancels (MUT-501) and a storage failure, read-only and audit, the
+  1,000-row performance check, headers.
+- `server/src/period-pack/__tests__/` (range, csv, xlsx read back with exceljs, ticket) and
+  `server/src/http/__tests__/pull-stream.test.ts`.
+- Store contract `store-contract-period-pack.ts` (memory; Prisma under `test:db`) and
+  `period-downloads-prisma.test.ts` (both downloads on Postgres; 1,000 rows and 600 receipts in < 3 s and ≤ 20 queries).
+- `routes-records-export.test.ts`: a cancelled export logs no error (MUT-501).
+- Updated: API version assertions (1.107.0-mut314), route-security, writability-routes (41 session reads with MUT-575),
+  accountant-route-matrix (the mint is allowlisted), routes-share-links (link paths).
 
 ## MUT-575 — client books server (ADR-249)
 
@@ -4486,4 +4519,13 @@ Full map: `.claude/designs/MUT-565-accountant-plan-tests.md` (the plan's 12 grou
 - Store contract (memory; Prisma under `test:db`): `cap_reached` writes nothing, parallel accepts at 2 of 3,
   `countActiveBefore`. `migration-mut565.test.ts`: the CHECK refuses an organization grant.
 - Mirror, `sellableFactOf`, Stripe's list tier, card-failed copy, closure ends both plans, come-back skips
-  ACCOUNTANT, events 2.8.0 pin; API 1.105.0-mut565 literals.
+  ACCOUNTANT, events 2.8.0 pin; API 1.108.0-mut565 literals.
+
+## MUT-562 — Client books desk, accept-invite and share-link pages (ADR-250)
+
+Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
+- Unit: `clientBooksRules`, `shareLinkState` + `viewerTokens`, `inviteState`, `PinBoxes`.
+- Page: `ClientBooks.test.tsx`, `AcceptInvitePage.test.tsx`, `ShareLinkPage.test.tsx` (real router, stubbed fetch).
+- Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
+- Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
+

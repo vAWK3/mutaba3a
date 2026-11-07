@@ -19,5 +19,5 @@ Plan state is seeded with operator grants and the Stripe mirror (the repo's fake
 | 11 | Events 2.8.0: rules, emitters, `accountant_plan_offer_shown {place}`, `billing_checkout_started.plan`, pinned sha | `scripts/__tests__/analytics-taxonomy.test.ts` |
 | 12 | Portal and phone: their own rounds (P, M in the brief) | — |
 
-Also updated: API 1.105.0-mut565 literals; MUT-575's row assertions gain `needsPlan: false`; `billing-routes.test.ts`
+Also updated: API 1.108.0-mut565 literals; MUT-575's row assertions gain `needsPlan: false`; `billing-routes.test.ts`
 (`accountantPlan: null`, audit `plan: freelancer`).
