@@ -81,9 +81,9 @@ describe('hosted bundle rules', () => {
     },
   );
 
-  // Invites wait for MUT-306: still no invite door in either language.
-  it.each(['Invite a colleague', 'invitation', 'دعوة'])('still flags the invite affordance "%s", case-insensitively', (copy) => {
-    expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).not.toEqual([]);
+  // MUT-559/MUT-562: the accountant invite is a portal door now, in both languages.
+  it.each(['Invite your accountant', 'invitation', 'دعوة'])('allows the accountant invite copy "%s"', (copy) => {
+    expect(findForbidden(`label:"${copy}"`, HOSTED_RULES)).toEqual([]);
   });
 
   it('refuses the app\'s profile store and its after-save routes, which the shared flash store must not drag in (MUT-91)', () => {
@@ -101,7 +101,7 @@ describe('hosted bundle rules', () => {
   });
 
   it('reports the matched text and the rule', () => {
-    expect(findForbidden('xx Invite someone xx', HOSTED_RULES)).toEqual([{ rule: 'invite', match: 'Invite' }]);
+    expect(findForbidden('xx serviceWorker xx', HOSTED_RULES)).toEqual([{ rule: 'service worker', match: 'serviceWorker' }]);
   });
 });
 

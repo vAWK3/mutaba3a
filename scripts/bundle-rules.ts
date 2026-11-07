@@ -37,7 +37,8 @@ export const LOCAL_RULES: Rule[] = [
 ];
 
 /**
- * The portal carries no Dexie or service worker, and no invite door in either language (invites wait for MUT-306).
+ * The portal carries no Dexie or service worker. Invites are allowed since MUT-559/MUT-562 (epic MUT-558): an owner invites
+ * their accountant from Sharing, and the accountant opens /accountant-invite.
  * `اشترك` is allowed since MUT-362 (ADR-170): a firm subscribes from Settings › Billing. Since MUT-368 (ADR-159) the
  * portal has its two self-service doors, /signup and /recover, so "sign up", "create an account", "forgot" and "reset
  * password" (and إنشاء حساب, نسيت, إعادة تعيين) are allowed on purpose; the server's no-self-registration test still pins
@@ -47,8 +48,6 @@ export const LOCAL_RULES: Rule[] = [
 export const HOSTED_RULES: Rule[] = [
   { name: 'Dexie', pattern: /\bDexie\b/ },
   { name: 'service worker', pattern: /serviceWorker/ },
-  { name: 'invite', pattern: /\binvit(e|ation)/i },
-  { name: 'ar: invite', pattern: /دعوة/ },
   // MUT-91: the portal imports the app's after-save store; nothing of the app's
   // profile store or its Show routes may come along with it.
   { name: 'app profile store', pattern: /mutaba3a-active-profile/ },
