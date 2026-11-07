@@ -5,6 +5,9 @@ import { fakeTurnstile } from '../../../__tests__/turnstile';
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 import { stripeNavigation } from '../../../data/billingQueries';
 
+const { trackPortal, countPublicPage } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}), countPublicPage: vi.fn() }));
+vi.mock('../../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../../analytics/portalAnalytics')>()), trackPortal, countPublicPage }));
+
 /** MUT-562: the accept-invite page (layout B): signed out, signup then sign-in, signed in, and every refusal (AC4, AC6). */
 
 const TOKEN = 'k'.repeat(43);
@@ -45,6 +48,8 @@ function routes(signedIn: boolean, extra: Record<string, Handler> = {}): Record<
 
 beforeEach(() => {
   localStorage.clear();
+  trackPortal.mockClear();
+  countPublicPage.mockClear();
   sessionStorage.clear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
@@ -197,6 +202,10 @@ describe('the Accountant plan (MUT-565, gated on its fields)', () => {
     await user.click(screen.getByRole('button', { name: 'Subscribe' }));
     await waitFor(() => expect(assign).toHaveBeenCalled());
     expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toMatchObject({ plan: 'accountant', returnPath: '/accountant-invite', interval: 'month' });
+    // MUT-565 (contract 2.8.0): a public page, so the cookieless counts: one offer view at invite, then the Checkout's plan
+    expect(countPublicPage.mock.calls.filter(([c]) => c.event === 'accountant_plan_offer_shown')).toEqual([[{ event: 'accountant_plan_offer_shown', properties: { place: 'invite' } }]]);
+    expect(countPublicPage).toHaveBeenCalledWith({ event: 'billing_checkout_started', properties: { plan: 'accountant', interval: 'month', currency: 'ILS' } });
+    expect(trackPortal).not.toHaveBeenCalled();
     assign.mockRestore();
   });
 
@@ -205,6 +214,7 @@ describe('the Accountant plan (MUT-565, gated on its fields)', () => {
     const { user } = renderPortal(`/accountant-invite#${TOKEN}`);
     await user.click(await screen.findByRole('button', { name: 'Accept' }));
     expect(await screen.findByRole('heading', { name: 'Your free client books are used' })).toBeInTheDocument();
+    expect(countPublicPage.mock.calls.filter(([c]) => c.event === 'accountant_plan_offer_shown')).toEqual([[{ event: 'accountant_plan_offer_shown', properties: { place: 'invite' } }]]);
 
     stubApi(routes(true, { [ACCEPT]: () => fail(409, 'CONFLICT', { reason: 'CLIENT_BOOKS_CEILING' }) }));
     const second = renderPortal(`/accountant-invite#${TOKEN}`);

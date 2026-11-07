@@ -48,7 +48,7 @@ export function ClientBooksPage() {
       {subscribing && (
         <section className="hp-card hp-plan-prompt" aria-label={t('hosted.accountantPlan.name')}>
           <p>{t('hosted.clientBooks.planPrompt', { count: summary?.freeLimit ?? 3 })}</p>
-          <AccountantPlanOffer returnPath="/client-books" />
+          <AccountantPlanOffer returnPath="/client-books" place="client_books" />
         </section>
       )}
       <QueryView

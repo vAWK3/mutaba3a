@@ -15,6 +15,9 @@ const EVENTS: PublicPageEvent[] = [
   { event: 'period_downloaded', properties: { place: 'link_page', file: 'report', months: 3 } },
   // A whole-profile link has no month count: the event goes without it
   { event: 'period_downloaded', properties: { place: 'link_page', file: 'receipts' } },
+  // MUT-565 (contract 2.8.0): the accept-invite page's 4th-client card and its Checkout
+  { event: 'accountant_plan_offer_shown', properties: { place: 'invite' } },
+  { event: 'billing_checkout_started', properties: { plan: 'accountant', interval: 'month', currency: 'USD' } },
 ];
 
 const beforeSend = posthogInitOptions(() => ({ surface: 'portal', appVersion: '0.3.4', locale: 'en', cookieless: true, origin: 'https://portal.example' }), () => 'production')

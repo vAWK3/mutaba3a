@@ -466,7 +466,7 @@ describe('MUT-525: the launch offer in the drawer (DD2–DD10, R3)', () => {
     await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
     expect(checkoutBody(api)).toEqual([{ interval: 'year', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}`, expectedOffer: 'launch-2026' }]);
     await vi.waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/cs_test_offer'));
-    expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { interval: 'year', currency: 'ILS', offer: 'launch_2026' });
+    expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { plan: 'freelancer', interval: 'year', currency: 'ILS', offer: 'launch_2026' });
   });
 
   it('with no carried trial the first year is paid today', async () => {
@@ -491,7 +491,7 @@ describe('MUT-525: the launch offer in the drawer (DD2–DD10, R3)', () => {
     expect(within(step).getByText('₪29.00')).toBeInTheDocument();
     await user.click(within(step).getByRole('button', { name: 'Continue to payment' }));
     expect(checkoutBody(api)).toEqual([{ interval: 'month', country: 'IL', buyer: 'person', returnPath: `/p/${ORG_B}` }]);
-    await vi.waitFor(() => expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { interval: 'month', currency: 'ILS', offer: null }));
+    await vi.waitFor(() => expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { plan: 'freelancer', interval: 'month', currency: 'ILS', offer: null }));
   });
 
   it('a person’s pick sticks across a billing refetch (DD5)', async () => {

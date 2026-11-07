@@ -73,7 +73,7 @@ function NeedsPlan({ client }: { client: AccountantClientWithStats }) {
     <section className="hp-empty hp-client-gone" role="status">
       <h1>{t('hosted.clientBooks.needsPlanTitle', { profile: client.name })}</h1>
       <p>{t('hosted.clientBooks.planPrompt', { count: 3 })}</p>
-      <AccountantPlanOffer returnPath={`/client-books/${client.profileId}`} />
+      <AccountantPlanOffer returnPath={`/client-books/${client.profileId}`} place="client_books" />
       <Link to="/client-books" className="btn btn-secondary btn-md">
         {t('hosted.clientBooks.gone.back')}
       </Link>

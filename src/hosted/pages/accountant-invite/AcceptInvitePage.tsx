@@ -327,7 +327,7 @@ function AcceptCard({ token, invite, email, onOutcome }: { token: string; invite
       <section className="hp-two-panel-form" data-state="needs-plan">
         <h1>{t('hosted.accountantInvite.fourth.title')}</h1>
         <p className="hp-setup-lead">{t('hosted.accountantInvite.fourth.body', { count: freeLimit, profile: invite.profileName })}</p>
-        <AccountantPlanOffer returnPath={INVITE_PATH} />
+        <AccountantPlanOffer returnPath={INVITE_PATH} place="invite" />
         <Link to="/" className="btn btn-secondary btn-md hp-block">
           {t('hosted.accountantInvite.fourth.notNow', { date: until })}
         </Link>

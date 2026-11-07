@@ -37,10 +37,11 @@ export interface GuardContext {
 
 /**
  * The events the cookieless portal instance may send: the welcome's door, and (MUT-562, ADR-250) the public pages'
- * counts: a share link opened, an accountant invite accepted, a link page's download. Each carries enums and a month
- * count only; never a token, PIN, email, name or id.
+ * counts: a share link opened, an accountant invite accepted, a link page's download, and (MUT-565) the invite page's
+ * Accountant plan card shown and its Checkout started. Each carries enums, a currency code and a month count only;
+ * never a token, PIN, email, name, amount or id.
  */
-export const COOKIELESS_PORTAL_EVENTS: ReadonlySet<string> = new Set(['portal_welcome_choice', 'share_link_opened', 'accountant_accepted', 'period_downloaded']);
+export const COOKIELESS_PORTAL_EVENTS: ReadonlySet<string> = new Set(['portal_welcome_choice', 'share_link_opened', 'accountant_accepted', 'period_downloaded', 'accountant_plan_offer_shown', 'billing_checkout_started']);
 /** What PostHog's cookieless hash reads (README rule 9), and nothing that tells one browser or visit from another. */
 const COOKIELESS_FIELDS = ['$cookieless_mode', '$raw_user_agent', '$host', '$current_url'];
 

@@ -5,6 +5,9 @@ import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPor
 import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 import { stripeNavigation } from '../../../data/billingQueries';
 
+const { trackPortal, countPublicPage } = vi.hoisted(() => ({ trackPortal: vi.fn(async () => {}), countPublicPage: vi.fn() }));
+vi.mock('../../../analytics/portalAnalytics', async (original) => ({ ...(await original<typeof import('../../../analytics/portalAnalytics')>()), trackPortal, countPublicPage }));
+
 /** MUT-562: the Client books desk (layout C): the list, the empty state, a client's book, its receipts, an ended client. */
 
 const STUDIO = '55555555-5555-4555-8555-555555555555';
@@ -70,6 +73,8 @@ function portal(path: string, routes: Record<string, Handler> = {}, clients = [c
 
 beforeEach(() => {
   localStorage.clear();
+  trackPortal.mockClear();
+  countPublicPage.mockClear();
   localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en');
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query.includes('reduce'), media: query, addEventListener: () => {}, removeEventListener: () => {} }));
 });
@@ -273,6 +278,24 @@ describe('the Accountant plan on the desk (MUT-565, gated on its fields)', () =>
     await user.click(screen.getByRole('button', { name: 'Subscribe' }));
     await waitFor(() => expect(assign).toHaveBeenCalledWith('https://checkout.stripe.com/c/pay/x'));
     expect(api.calls.find((c) => c.url.pathname === '/v1/billing/checkout-session')?.body).toEqual({ interval: 'month', buyer: 'person', plan: 'accountant', country: 'IL', returnPath: '/client-books' });
+    // MUT-565 (contract 2.8.0): one offer view on the desk, then the Checkout with its plan; the consented tracker only
+    expect(trackPortal.mock.calls.filter(([event]) => event === 'accountant_plan_offer_shown')).toEqual([['accountant_plan_offer_shown', { place: 'client_books' }]]);
+    expect(trackPortal).toHaveBeenCalledWith('billing_checkout_started', { plan: 'accountant', interval: 'month', currency: 'ILS' });
+    expect(countPublicPage).not.toHaveBeenCalled();
+  });
+
+  it('a locked client’s own page (the 402 panel) counts one offer view at client_books', async () => {
+    const locked = client({ profileId: '12121212-1212-4121-8121-121212121212', name: 'Sweets', ownerName: 'Omar Nassar', needsPlan: true } as never);
+    stubApi({
+      'GET /v1/me': () => ok({ ...me([profile({ owned: true })]), clients: [client(), locked].map(meRow), clientBooks: withPlan() }),
+      ...emptyProfileRoutes(),
+      'GET /v1/clients': () => ok({ items: [{ ...client(), needsPlan: false }, locked] }),
+      'GET /v1/billing': () => ok({ configured: true, countries: { consumer: ['IL'], consumerEverywhere: false, customTaxId: [] }, accountantPlan: { state: 'NONE', source: null, until: null, cancelAtPeriodEnd: false, interval: null, currency: null, catalog: { ILS: { month: 9900 }, USD: { month: 2900 } } } }),
+    });
+    renderPortal('/client-books/12121212-1212-4121-8121-121212121212');
+    expect(await screen.findByRole('heading', { name: 'Sweets needs the Accountant plan' })).toBeInTheDocument();
+    await screen.findByText(/a month/);
+    expect(trackPortal.mock.calls.filter(([event]) => event === 'accountant_plan_offer_shown')).toEqual([['accountant_plan_offer_shown', { place: 'client_books' }]]);
   });
 
   it('without MUT-565’s fields nothing of the plan shows', async () => {

@@ -1,5 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useLanguage } from '../../lib/i18n/core';
 import { Button } from '../../components/ui/Button';
@@ -10,13 +10,31 @@ import { checkoutRouteOf, currencyOfCountry } from '../data/billingView';
 import { Banner, BuyerChoice } from './billingParts';
 import { countryName, countryOptions } from '../data/countries';
 import { formatDecimal } from '../format/DecimalAmount';
+import { countPublicPage, trackPortal } from '../analytics/portalAnalytics';
 
 /**
  * MUT-562 over MUT-565's contract (ADR-251): the Accountant plan's offer (SL6): the monthly price from GET /v1/billing
  * `accountantPlan.catalog` (in the chosen country's currency, both before one is picked), a country, who is buying (the
  * Subscribe step's own choice and rule, `BuyerChoice` + `checkoutRouteOf`), and Subscribe → Stripe Checkout
  * (`plan: 'accountant'`), back to `returnPath`. Subscribe stays off until a price shows. Shown only when the server sends the plan's fields.
+ *
+ * Counts (contract 2.8.0): `accountant_plan_offer_shown {place}` once per view, and `billing_checkout_started
+ * {plan: 'accountant'}` when Checkout opens. `invite` is the public accept page, outside the signed-in shell where the
+ * consent is read, so it counts the public pages' cookieless way (ADR-250, as `accountant_accepted`); the desk's places
+ * use the consented tracker.
  */
+export type PlanOfferPlace = 'invite' | 'client_books';
+
+function countOffer(place: PlanOfferPlace): void {
+  if (place === 'invite') countPublicPage({ event: 'accountant_plan_offer_shown', properties: { place } });
+  else void trackPortal('accountant_plan_offer_shown', { place });
+}
+
+function countCheckout(place: PlanOfferPlace, currency: 'ILS' | 'USD'): void {
+  const properties = { plan: 'accountant', interval: 'month', currency } as const;
+  if (place === 'invite') countPublicPage({ event: 'billing_checkout_started', properties });
+  else void trackPortal('billing_checkout_started', properties);
+}
 
 /** The plan's state covers client books now (paid or retrying a payment). */
 export function planCovers(summary: Pick<ClientBooksSummary, 'plan'> | undefined): boolean {
@@ -40,13 +58,20 @@ function checkoutRefusal(error: unknown): 'contactUs' | 'failed' {
   return error instanceof ApiError && apiErrorReason(error) === 'COUNTRY_NEEDS_BUSINESS' ? 'contactUs' : 'failed';
 }
 
-export function AccountantPlanOffer({ returnPath }: { returnPath: string }) {
+export function AccountantPlanOffer({ returnPath, place }: { returnPath: string; place: PlanOfferPlace }) {
   const { t, language } = useLanguage();
   const ids = useId();
   const billing = useQuery(billingQuery);
   const checkout = useStartAccountantCheckout();
   const [country, setCountry] = useState('');
   const [buyer, setBuyer] = useState<'person' | 'business'>('person');
+  // Once per view: a re-render (a price arriving, a country picked) is the same view
+  const counted = useRef(false);
+  useEffect(() => {
+    if (counted.current) return;
+    counted.current = true;
+    countOffer(place);
+  }, [place]);
   const plan = (billing.data as { accountantPlan?: AccountantPlanBilling | null } | undefined)?.accountantPlan ?? null;
   const prices = plan
     ? (['ILS', 'USD'] as const)
@@ -91,7 +116,7 @@ export function AccountantPlanOffer({ returnPath }: { returnPath: string }) {
           {t('hosted.accountantPlan.failed')}
         </p>
       )}
-      <Button variant="primary" className="hp-block" disabled={!canSubscribe} aria-busy={checkout.isPending} onClick={() => checkout.mutate({ country, buyer, returnPath })}>
+      <Button variant="primary" className="hp-block" disabled={!canSubscribe} aria-busy={checkout.isPending} onClick={() => checkout.mutate({ country, buyer, returnPath }, { onSuccess: () => countCheckout(place, currencyOfCountry(country)) })}>
         {t('hosted.accountantPlan.subscribe')}
       </Button>
     </div>

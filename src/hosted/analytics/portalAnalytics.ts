@@ -22,7 +22,7 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent;
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | 'accountant_plan_offer_shown';
 /**
  * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
  * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
@@ -127,7 +127,10 @@ export function countWelcomeChoice(choice: WelcomeChoice): void {
 export type PublicPageEvent =
   | { event: 'share_link_opened'; properties: { period: 'last_1_month' | 'last_2_months' | 'last_3_months' | 'whole_profile' } }
   | { event: 'accountant_accepted'; properties: { via: 'signed_in' | 'signup' } }
-  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months?: number } };
+  | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months?: number } }
+  // MUT-565 (contract 2.8.0): the accept-invite page's 4th-client card, and the Accountant plan's Checkout started from it
+  | { event: 'accountant_plan_offer_shown'; properties: { place: 'invite' } }
+  | { event: 'billing_checkout_started'; properties: { plan: 'accountant'; interval: 'month'; currency: 'ILS' | 'USD' } };
 
 export function countPublicPage({ event, properties }: PublicPageEvent): void {
   if (!POSTHOG_KEY) return;

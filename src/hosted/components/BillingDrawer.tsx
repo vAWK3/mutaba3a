@@ -862,7 +862,7 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
         ...(expectedOffer ? { expectedOffer } : {}),
       },
       {
-        onSuccess: () => void trackPortal('billing_checkout_started', { interval, currency, offer: expectedOffer ? offerAnalyticsName(expectedOffer) : null }),
+        onSuccess: () => void trackPortal('billing_checkout_started', { plan: 'freelancer', interval, currency, offer: expectedOffer ? offerAnalyticsName(expectedOffer) : null }),
         onError: (error) => {
           if (expectedOffer && error instanceof ApiError && apiErrorReason(error) === 'OFFER_ENDED') setRefusedOffer(expectedOffer);
         },
