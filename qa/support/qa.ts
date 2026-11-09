@@ -21,9 +21,19 @@ export interface Persona {
   password?: string;
   [key: string]: unknown;
 }
+/** One form-factor target (QA-STANDARD.md rule 3): its Playwright `use` and the flows it proves. */
+export interface Target {
+  name: string;
+  use: { viewport: { width: number; height: number }; deviceScaleFactor: number; isMobile: boolean; hasTouch: boolean };
+  /** Feature ids this target must prove in this run; null when only listing tests. */
+  features: string[] | null;
+}
 interface AppContext {
   baseURL: string;
   personas: Record<string, Persona>;
+  targets?: Target[];
+  permissions?: string[];
+  geolocation?: { latitude: number; longitude: number } | null;
 }
 interface QaContext {
   apps: Record<string, AppContext>;
@@ -67,12 +77,28 @@ export const qa = {
   baseURL(key: string): string {
     return qa.app(key).baseURL;
   },
+  /** The app's form-factor targets ([] until qa.config.mjs declares formFactors). */
+  targets(key: string): Target[] {
+    return qa.app(key).targets ?? [];
+  },
+  /** Browser permissions granted up front (rule 1: no prompt unless a test is about it). */
+  permissions(key: string): string[] {
+    return qa.app(key).permissions ?? ['geolocation', 'notifications', 'camera', 'microphone', 'clipboard-read', 'clipboard-write'];
+  },
   persona(app: string, name: string): Persona {
     const p = qa.app(app).personas[name];
     if (!p) throw new Error(`release-qa: app "${app}" has no persona "${name}" in qa.config.mjs`);
     return p;
   },
 };
+
+/**
+ * The app a Playwright project belongs to: `web-setup` and the form-factor projects `web@desktop`,
+ * `web@tablet-landscape` (QA-STANDARD.md rule 3) all share the app's one signed-in state.
+ */
+export function appOfProject(name: string): string {
+  return name.replace(/-setup$/, '').replace(/@.*$/, '');
+}
 
 /** Where an app's auth.setup.ts saves, and specs load, a persona's signed-in session. */
 export function authFile(app: string, persona: string): string {
@@ -183,14 +209,14 @@ export const test = base.extend<{ persona: string | null; step: Step; analytics:
   // run asks production's API. Other apps talk to their own server and are left alone.
   signupDoor: [
     async ({ context }, use, testInfo) => {
-      if (testInfo.project.name !== 'web') return use(null);
+      if (appOfProject(testInfo.project.name) !== 'web') return use(null);
       await use(await answerSignupDoor(context, qa.baseURL('web')));
     },
     { auto: true },
   ],
 
   storageState: async ({ persona, storageState }, use, testInfo) => {
-    const app = testInfo.project.name.replace(/-setup$/, '');
+    const app = appOfProject(testInfo.project.name);
     await use(persona ? authFile(app, persona) : storageState);
   },
 
@@ -201,7 +227,7 @@ export const test = base.extend<{ persona: string | null; step: Step; analytics:
 
   context: async ({ context, persona }, use, testInfo) => {
     await context.addInitScript(OVERLAY);
-    if (persona) await restoreSessionStorage(context, testInfo.project.name.replace(/-setup$/, ''), persona);
+    if (persona) await restoreSessionStorage(context, appOfProject(testInfo.project.name), persona);
     await use(context);
   },
 

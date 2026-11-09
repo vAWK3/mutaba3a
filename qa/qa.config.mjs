@@ -36,6 +36,8 @@ export default {
     web: {
       label: 'Website',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // `make release web` tags web-v<version> (scripts/tag-release.sh). The plain v* tags
       // belong to the retired desktop app and stopped at v0.0.67.
       release: { strategy: 'tag', pattern: 'web-v*', version: 'web-v(.+)' },
@@ -73,6 +75,8 @@ export default {
     portal: {
       label: 'Hosted portal',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // The portal ships inside the API image (server/scripts/deploy.sh builds dist-hosted),
       // so its last release is the last `make release server`: api-v<version>.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
@@ -111,6 +115,8 @@ export default {
     'portal-live': {
       label: 'Hosted portal on a live API (Stripe sandbox)',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // MUT-362 (eng review D8 B): Settings › Billing against a real dev API and Stripe's real hosted pages. Ships
       // with the portal and the API, so it follows the same release tag.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
@@ -170,6 +176,8 @@ export default {
     'portal-selfservice': {
       label: 'Hosted portal: signup, recovery and the review queue on a live API',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // MUT-368 (D11): Create an account, Forgot your password and the under-review screen against a real dev API on
       // the memory mailer (read through its dev outbox) and the fixture domain checker, serving the BUILT portal so
       // the real PORTAL_CSP applies. Turnstile is a page-routed stand-in (support/turnstile.ts): QA never contacts
@@ -259,6 +267,8 @@ export default {
     'carry-over': {
       label: 'Carry-over: the old address, or a file from the old web app, to the new address',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // The receiver and both portals ship with the API (api-v*).
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       watch: ['src/lib/carryOver/**', 'src/hosted/pages/carry-over/**', 'src/hosted/local/carryOver/**', '!**/__tests__/**', '!src/**/*.test.{ts,tsx}'],
