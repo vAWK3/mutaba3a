@@ -56,3 +56,39 @@ test('I upload a receipt photo and the server reads it; the review page fills in
     await expect(page.getByText('Reading the receipt…')).toHaveCount(0);
   });
 });
+
+/** MUT-590: a vendor-made invoice PDF (synthetic; its label and amount drawn apart on one line), read from its text layer. */
+const VENDOR_PDF = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'server', 'ocr', 'tests', 'fixtures', 'syn-vendor-invoice-en.pdf');
+const VENDOR_PDF_NAME = 'studio-invoice.pdf';
+
+test("I upload an invoice PDF a vendor's software made and the server reads it; the review page fills in the amount, date and vendor", { tag: '@portal-selfservice.receipts.vendor-pdf' }, async ({ page, step }) => {
+  expect(liveState().ocr, 'the env runs the receipt-ocr sidecar (Tesseract on PATH: brew install tesseract)').toBe(true);
+  const me = await person(page, { agentAccess: false });
+  await grantCoverage(me.id);
+  await grantFeature(me.id, 'receipt_reading');
+  const card = page.getByRole('list', { name: 'Receipts' }).getByRole('link', { name: `Open ${VENDOR_PDF_NAME}` });
+
+  await step('Open Expenses › Receipts', async () => {
+    await page.goto(`/p/${me.profileId}/expenses/receipts`);
+    await expect(page.getByTestId('receipts-upload-input')).toBeAttached();
+  });
+  await step("Upload a design studio's invoice PDF", async () => {
+    await page.getByTestId('receipts-upload-input').setInputFiles({ name: VENDOR_PDF_NAME, mimeType: 'application/pdf', buffer: fs.readFileSync(VENDOR_PDF) });
+    await expect(card).toBeVisible();
+  });
+  await step('Open the receipt and wait for the reading to finish', async () => {
+    await card.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Review receipt' })).toBeVisible();
+    await expect(page.getByLabel('Amount')).toHaveValue('200.00', { timeout: READ_TIMEOUT_MS });
+  });
+  await step('The amount, date and vendor are filled in from the receipt', async () => {
+    await expect(page.getByLabel('Currency')).toHaveValue('USD');
+    await expect(page.getByLabel('Date')).toHaveValue('2026-11-09');
+    const vendor = page.getByLabel('Vendor', { exact: true });
+    await expect(vendor).toHaveValue('Studio Shubak Ltd');
+    for (const field of ['Amount', 'Date']) await expect(page.getByLabel(field)).toHaveAttribute('data-suggested', 'true');
+    // The vendor picker's mark sits on its wrapper.
+    await expect(page.locator('[data-suggested="true"]').filter({ has: vendor })).toHaveCount(1);
+    await expect(page.getByText('Reading the receipt…')).toHaveCount(0);
+  });
+});

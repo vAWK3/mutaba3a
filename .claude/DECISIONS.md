@@ -6532,3 +6532,31 @@ Contract 1.108.0-mut565; migrations `20261108120000_mut565_accountant_tier`, `20
 **Alternatives rejected:** a part of You or the island menu for the desk (layouts A/B, Basel chose C); a consent prompt on public pages (a stranger has no account to hold a choice); storing the link token for a returning browser.
 
 **Consequences:** downloads (MUT-314), the 4th-client card and free counter (MUT-565), and the scenes / scope bullets (MUT-561) are hooks marked in code until those land.
+
+## ADR-252: A PDF's Text Layer Is Read by Position Through the OCR Row Builder; a Skipped Read Says Why (MUT-590, Epic MUT-252)
+
+**Status:** Accepted (2026-11-11; plan and eng review CLEARED, Basel's D1–D4: `.claude/designs/mut-590-vendor-pdf-reading.md`).
+
+**Context:** invoices a vendor's software makes (Hebrew, Arabic, English) carry a real text layer, but print a label and
+its amount far apart on one line, or the amount under its label. The API read that layer line by line in the PDF's own
+stream order (`pdfRows`), so the label and the amount often landed on different rows and the total was missed. Visual-
+order Hebrew layers came reversed. Separately, receipt 27e28e05's read ended `skipped` with no reason in the log.
+
+**Decision:**
+1. The `receipt-ocr` sidecar returns the text layer **placed on the page**: pdfium text runs with boxes, top-down, page 2
+   under page 1, at conf 1, in the OCR `lines` contract, next to `pdfText`. Past 20 000 characters or on a pdfium error,
+   `lines` is empty.
+2. The API reads a `pdf-text` read's lines through `orderedRows` (the OCR row builder: vertical-overlap rows,
+   `joinLabelAbove`), source still `pdf-text`. No lines (cap, error, older sidecar) → `pdfRows(pdfText)` as before (D4).
+   One row builder, not two.
+3. A Hebrew layer is visual when a Hebrew word starts with a final letter (impossible in logical text); its Hebrew lines
+   are reordered whole (UAX #9, `get_display`). Logical layers are untouched.
+4. `SERVER_READER_GENERATION` 4. After rollout, `receipts:reread -- --reader-below 4 --mime application/pdf` re-reads
+   To-review PDFs only (D3); images would read the same.
+5. `finishRead`'s skip carries a reason (`deleted | filed`), the reader adds `complete` and `ungranted`, and the log line
+   carries it as `code`, with `engine` and (text PDFs) `chars`; never text (D1). 27e28e05 was filed onto an expense
+   10 s into its read: the drop was right.
+
+**Consequences:** conf-1 rows clear every rule weight, so more label/value pairs mean more chances of a confident wrong
+field; the bench's vendor-pdf scope (0 wrong-and-confident, ≥95% of present fields) and `--compare` against main are the
+guard, and AC2 waits for Basel's vendor PDFs (TD-307). Mixed-version rollout is safe both ways.

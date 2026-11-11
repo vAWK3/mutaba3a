@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-11 — Vendor-made invoice PDFs read right; a skipped receipt read says why (MUT-590, ADR-252)
+
+### Fixed
+- **A PDF's text layer is read by position** (AC2/AC3): the sidecar returns it as placed runs (`server/ocr/app/decode.py`, `pipeline.py`), and the API runs them through `orderedRows` (`server/src/receipts/extract/extract.ts`), so a label and its amount printed apart on one line, or one over the other, meet. Without places it reads `pdfText` line by line as before.
+- **Visual-order Hebrew text layers** are put in logical order (`server/ocr/app/text.py`).
+- **A skipped read says why** (AC1): `code: deleted | filed | complete | ungranted`, plus `engine` and `chars` (`server/src/receipts/reading/reader.ts`, `repositories/{ports,prisma,memory}.ts`). Receipt 27e28e05 was filed onto an expense mid-read; nothing was lost.
+
+### Technical
+- `SERVER_READER_GENERATION` 3 → 4; `receipts:reread` takes `--mime <type>` (`server/src/scripts/receipts-reread.ts`).
+- Bench: `vendor-pdf` scope (`server/ocr/bench/run.py`). Release-QA: `portal-selfservice.receipts.vendor-pdf` with a synthetic fixture `server/ocr/tests/fixtures/syn-vendor-invoice-en.pdf`.
+- Ships with the next API release: `receipt-ocr` image and API in the same apply (before-release.md).
+
 ## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
 
 ### Fixed

@@ -4529,3 +4529,10 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
 - Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
 
+## MUT-590 — vendor-made invoice PDFs, read skip reasons (ADR-252)
+
+- `server/ocr/tests/test_caps.py`: placed runs (label and value apart on one line, page 2 under page 1), the character cap and a pdfium error keep `pdfText` with no lines; `test_units.py`: visual Hebrew repaired, logical Hebrew and Arabic unchanged.
+- `server/src/receipts/extract/__tests__/extract.test.ts`: placed text layer → total/currency/date (Hebrew label and amount apart), label over amount in a column, registration label and number in neighbouring runs; `pdfText` without lines → line-by-line (back-compat).
+- `server/src/receipts/__tests__/reader-skip-reason.test.ts`: deleted, filed (mid-read), complete and ungranted skips log their `code`; a text-PDF read logs `engine` and `chars`, no text.
+- `server/src/scripts/__tests__/receipts-reread.test.ts`: `--mime application/pdf` picks PDFs only; a generation above the current reader is refused.
+- Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope awaits real PDFs (TD-307).
