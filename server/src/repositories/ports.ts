@@ -3608,11 +3608,14 @@ export interface ReadIdentifiers {
  */
 export type FinishReadOutcome = { status: 'DONE'; suggested?: ReceiptSuggestion; identifiers?: ReadIdentifiers } | { status: 'FAILED'; failReason: string } | { status: 'SKIPPED' };
 
-/** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED, so SKIPPED with nothing written; `not_pending`: someone ended it first. */
+/** MUT-590: why a read that ended SKIPPED wrote nothing: the receipt was deleted, or filed onto an expense. */
+export type ReadSkipReason = 'deleted' | 'filed';
+
+/** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED (`reason`), so SKIPPED with nothing written; `not_pending`: someone ended it first. */
 export type FinishReadResult =
   | { kind: 'saved'; record: ExpenseReceiptRecord }
   | { kind: 'stale'; record: ExpenseReceiptRecord }
-  | { kind: 'skipped' }
+  | { kind: 'skipped'; reason: ReadSkipReason }
   | { kind: 'not_pending' }
   | { kind: 'not_found' };
 

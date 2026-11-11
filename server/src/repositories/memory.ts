@@ -3038,7 +3038,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const end = (status: ReceiptReadStatus, failReason: string | null) => Object.assign(r, { readStatus: status, readLeaseUntil: null, readFailReason: failReason });
       if (r.deletedAt || r.filingStatus === 'FILED') {
         end('SKIPPED', null);
-        return { kind: 'skipped' };
+        return { kind: 'skipped', reason: r.deletedAt ? 'deleted' : 'filed' };
       }
       if (outcome.status === 'DONE' && outcome.suggested) {
         if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
