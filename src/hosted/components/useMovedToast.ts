@@ -19,3 +19,15 @@ export function useMovedToast(): (target: HostedProfile, receiptId: string) => v
 export function hasOtherProfiles(me: { profiles: readonly { id: string }[] }, profileId: string): boolean {
   return me.profiles.some((p) => p.id !== profileId);
 }
+
+/** MUT-589: "Moved to <name>" with Open, which opens the expense on its new profile. */
+export function useExpenseMovedToast(): (target: HostedProfile, expenseId: string) => void {
+  const { t } = useLanguage();
+  const showToast = useToast();
+  const navigate = useNavigate();
+  return (target, expenseId) =>
+    showToast(t('hosted.expenses.move.moved', { name: target.name }), {
+      tone: 'info',
+      action: { label: t('hosted.receipts.move.open'), onAction: () => void navigate({ to: `/p/${target.id}/expenses`, search: { expense: expenseId } } as never) },
+    });
+}

@@ -539,6 +539,15 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 .hp-move-receipt-lead { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-label); }
 .hp-move-receipt .hp-banner { margin-block-end: var(--space-3); }
 .hp-move-receipt-profiles .hp-profile-row + .hp-profile-row { border-block-start: 1px solid var(--divider); }
+/* MUT-589: what moving an expense changes on the chosen profile, under its rows. */
+.hp-move-changes { margin-block-start: var(--space-4); }
+.hp-move-changes-title { margin: 0 0 var(--space-2); font-size: var(--text-label); font-weight: 600; }
+.hp-move-changes-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--divider); border-radius: var(--radius-md); }
+.hp-move-change { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); justify-content: space-between; padding: var(--space-2) var(--space-3); min-height: 44px; align-items: center; }
+.hp-move-change + .hp-move-change { border-block-start: 1px solid var(--divider); }
+.hp-move-change-field { color: var(--muted); font-size: var(--text-label); }
+.hp-move-change-value { text-align: end; overflow-wrap: anywhere; }
+.hp-move-changes-none { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--text-label); display: flex; gap: var(--space-2); align-items: flex-start; }
 .hp-profile-row-on, button.hp-profile-row-on:hover { background: var(--accent-subtle); color: var(--on-accent-subtle); }
 .hp-profile-row-on .hp-option-sub { color: var(--on-accent-subtle); }
 button.hp-profile-row[aria-disabled="true"] { cursor: default; }

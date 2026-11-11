@@ -59,6 +59,11 @@ export interface ExpenseDrawerProps {
   firm?: boolean;
   /** MUT-319: the profile's `defaultCurrency`; a new expense opens in it when the drawer offers it, else USD. */
   defaultCurrency?: Currency;
+  /**
+   * MUT-589: Move, beside Delete, opens the move drawer for this expense. The caller passes it only where there is
+   * another profile and the profile is writable and signed in; without it there is no Move.
+   */
+  onMove?: (expenseId: string) => void;
 }
 
 /** A new expense's currency (MUT-319): the profile's, when the drawer offers it, else USD (as the income drawer's). */
@@ -66,7 +71,7 @@ function newExpenseCurrency(profileCurrency: Currency | undefined): Currency {
   return profileCurrency && (HOSTED_CURRENCIES as readonly string[]).includes(profileCurrency) ? profileCurrency : 'USD';
 }
 
-export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated, firm = false, defaultCurrency }: ExpenseDrawerProps) {
+export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, onDeleted, canAddClient = false, readOnly = false, onCreated, firm = false, defaultCurrency, onMove }: ExpenseDrawerProps) {
   // After-save feedback (R1 via HP1, MUT-91): always from the drawer, the one
   // place that knows a save happened (ADR-057 §4). Delete marks nothing.
   const markSaved = (id: string) => useSavedFlashStore.getState().markSaved({ kind: 'expense', ids: [id], profileId });
@@ -233,6 +238,11 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
             {mode === 'edit' && (
               <Button ref={deleteTriggerRef} type="button" variant="danger" onClick={askDelete}>
                 {t('common.delete')}
+              </Button>
+            )}
+            {mode === 'edit' && onMove && existingExpense && (
+              <Button type="button" variant="secondary" onClick={() => onMove(existingExpense.id)}>
+                {t('hosted.expenses.drawer.move')}
               </Button>
             )}
           </div>

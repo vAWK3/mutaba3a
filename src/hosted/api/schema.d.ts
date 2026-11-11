@@ -10355,6 +10355,206 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/expenses/{expenseId}/move-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What moving an expense to another of your profiles would change (MUT-589)
+         * @description The move's own gates, in its order, so a refusal shows before the person confirms. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. Changes are listed in the request's language (Accept-Language, else the user's). Creates nothing.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The profile to move to */
+                    profileId: string;
+                };
+                header?: never;
+                path: {
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseMovePreview"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expenses/{expenseId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an expense, with its receipts, to another of your profiles (MUT-589)
+         * @description The expense keeps its id, amount, currency, date, title, notes and typed vendor (ADR-004). Its category is matched by name on the target, then by the same preset in either language, then the target's Other, else none; its vendor is found or created on the target; its client and matter are cleared; its VAT and allocation number are kept only on a firm; its group marks are dropped (membership on the target follows its date). Every receipt on it moves too: same id, its file copied inside the bucket and removed from this profile. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. 409 CONFLICT VERSION_MISMATCH (details.currentVersion) when expectedVersion is stale or a receipt was filed onto it meanwhile: load the preview again. 409 CONFLICT RECEIPT_NOT_READY while an upload on it is unfinished. Answers the changes applied. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MoveExpenseRequest"];
+                };
+            };
+            responses: {
+                /** @description Moved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MoveExpenseResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/expenses/{expenseId}/receipts": {
         parameters: {
             query?: never;
@@ -24678,6 +24878,39 @@ export interface components {
             } | null;
             /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557. */
             allocationNumber?: string | null;
+        };
+        ExpenseMovePreview: {
+            changes: components["schemas"]["ExpenseMoveChange"][];
+            /** @description READY receipts that move with it */
+            receiptCount: number;
+            /** @description Send as expectedVersion to the move */
+            expenseVersion: number;
+        };
+        /** @description One field a move changes. Listed in this order: category, client, matter, vat, allocationNumber, groups. Never the amount, currency, date, title, notes or typed vendor. */
+        ExpenseMoveChange: {
+            /** @enum {string} */
+            field: "category" | "client" | "matter" | "vat" | "allocationNumber" | "groups";
+            /** @description As the viewer reads it: a seeded category in their language, VAT as an amount in the expense's currency, groups joined with ", " */
+            from: string | null;
+            /** @description null = cleared (or no category, no group) */
+            to: string | null;
+        };
+        /** @description The expense on its new profile (same id) with its receipts, the profile it left, and what changed */
+        MoveExpenseResponse: {
+            expense: components["schemas"]["ExpenseDetail"];
+            /** Format: uuid */
+            fromProfileId: string;
+            /** @description The changes applied (they can differ from the preview's if the target changed in between) */
+            changes: components["schemas"]["ExpenseMoveChange"][];
+        };
+        MoveExpenseRequest: {
+            /**
+             * Format: uuid
+             * @description Another profile of the person's, which they may write now
+             */
+            profileId: string;
+            /** @description The preview's expenseVersion */
+            expectedVersion: number;
         };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
