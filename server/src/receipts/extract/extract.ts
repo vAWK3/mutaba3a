@@ -34,7 +34,7 @@ export interface ReceiptReading {
 }
 
 /**
- * MUT-441: what a receipt says, from its PDF text layer when it has one, else its OCR lines: date, total, currency,
+ * MUT-441: what a receipt says, from its PDF text layer when it has one (placed on the page, MUT-590), else its OCR lines: date, total, currency,
  * VAT and its rate, the vendor's name, registration no., phone and email, and an Israeli allocation number (MUT-557). Pure: no I/O, and nothing it reads is logged.
  * Money is minor units of the currency read (two decimals assumed when none is). Fields under the threshold are absent.
  */
@@ -45,7 +45,10 @@ export function extractReceipt(input: ExtractInput, options: ExtractOptions): Re
 /** `extractReceipt`, with the buyer and vendor numbers the read job keeps (MUT-514). */
 export function readReceipt(input: ExtractInput, options: ExtractOptions): ReceiptReading {
   const fromPdf = Boolean(input.pdfText?.trim());
-  const rows = fromPdf ? pdfRows(input.pdfText ?? '') : orderedRows(input.lines ?? []);
+  // MUT-590: a text layer placed on the page comes as lines, and is read by position like OCR boxes; without places
+  // (a cap, a pdfium error, an older reader) it is read line by line.
+  const lines = input.lines ?? [];
+  const rows = fromPdf && !lines.length ? pdfRows(input.pdfText ?? '') : orderedRows(lines);
   const source: SuggestionSource = fromPdf ? 'pdf-text' : 'ocr';
   const field = <T>(value: T, rule: number, conf: number): SuggestedField<T> | undefined => {
     const confidence = round2(rule * conf);

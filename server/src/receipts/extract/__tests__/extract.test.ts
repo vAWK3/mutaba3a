@@ -115,9 +115,30 @@ describe('extractReceipt (MUT-441)', () => {
     expect(new Set(Object.values(s).filter((f) => typeof f === 'object').map((f) => f.source))).toEqual(new Set(['ocr']));
   });
 
-  it("reads a PDF's text layer as pdf-text, at full confidence of the text, ignoring OCR lines", () => {
-    const s = read({ pdfText: 'Bistro Verde LTD\nDate: 2026-10-28\nTotal € 23.80\n', lines: receipt(['Something else', 'Total 1.00']) });
+  it("reads a PDF's text layer line by line as pdf-text when it comes without places (an older reader)", () => {
+    const s = read({ pdfText: 'Bistro Verde LTD\nDate: 2026-10-28\nTotal € 23.80\n' });
     expect(s).toMatchObject({ totalMinor: { value: '2380', source: 'pdf-text' }, currency: { value: 'EUR', source: 'pdf-text' }, date: { value: '2026-10-28', source: 'pdf-text' } });
+  });
+
+  /** MUT-590: an invoice generator's text layer, placed on the page by the reader (conf 1: it is the document's text). */
+  const placed = (rows: Parameters<typeof receipt>[0]) => receipt(rows, { conf: 1 });
+
+  it("reads a PDF's placed text layer by position: a label and its amount drawn apart on one line meet on one row", () => {
+    // The layer's own line order puts the amount on a line of its own, after the label's line.
+    const pdfText = 'שובך בע"מ\nתאריך 09/11/2026\nסה"כ לתשלום\n200.00 ₪';
+    const lines = placed(['שובך בע"מ', [{ text: 'תאריך', x: 300 }, { text: '09/11/2026', x: 20 }], [{ text: 'סה"כ לתשלום', x: 260, script: 'hebr' }, { text: '200.00 ₪', x: 20 }]]);
+    const s = read({ pdfText, lines });
+    expect(s).toMatchObject({ totalMinor: { value: '20000', source: 'pdf-text' }, currency: { value: 'ILS', source: 'pdf-text' }, date: { value: '2026-11-09', source: 'pdf-text' } });
+  });
+
+  it("reads a PDF's placed text layer by position: a total label over its amount in a column", () => {
+    const lines = placed(['Studio Shubak', 'Invoice date: 09/11/2026', [{ text: 'Total due', x: 250 }], [{ text: '200.00', x: 250 }]]);
+    expect(value(read({ pdfText: 'Studio Shubak\nInvoice date: 09/11/2026\nTotal due\n200.00', lines }), 'totalMinor')).toBe('20000');
+  });
+
+  it("reads a PDF's placed text layer by position: a registration label and its number in neighbouring runs", () => {
+    const lines = placed(['שובך', [{ text: 'עוסק מורשה', x: 280, script: 'hebr' }, { text: REG_VALID_DEALER, x: 120 }], 'סה"כ 200.00']);
+    expect(value(read({ pdfText: `שובך\nעוסק מורשה\n${REG_VALID_DEALER}\nסה"כ 200.00`, lines }), 'registrationNo')).toBe(REG_VALID_DEALER);
   });
 
   it('finds the PDF reordered lam-meem ligature label (MUT-253 spike quirk)', () => {
