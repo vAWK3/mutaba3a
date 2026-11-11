@@ -153,6 +153,13 @@ export function presetKeyForName(name: string): string | null {
   return KEY_BY_NAME_KEY.get(categoryNameKey(name)) ?? null;
 }
 
+/** MUT-589: one stored category name as `lang` reads it: a seeded name in that language, a typed one as typed. */
+export function categoryNameIn(name: string, lang: UserLocale): string {
+  const key = presetKeyForName(name);
+  const names = key === null ? undefined : NAMES_BY_KEY.get(key);
+  return names ? (lang === 'ar' ? names.ar : names.en) : name;
+}
+
 /**
  * MUT-464: categories as the viewer reads them. A seeded name shows in `lang`; a typed one as typed. When two rows
  * are the same entry (an "Other" next to an "أخرى" from before the cross-language check), only the oldest follows the
