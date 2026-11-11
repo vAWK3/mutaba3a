@@ -37,6 +37,9 @@ const EXPENSE_OPERATIONS = [
   'POST /v1/expenses',
   'POST /v1/expenses/{expenseId}/receipts',
   'POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete',
+  // MUT-589 (ADR-252): a saved expense, with its receipts, to another of the person's profiles.
+  'GET /v1/expenses/{expenseId}/move-preview',
+  'POST /v1/expenses/{expenseId}/move',
   // MUT-267 (ADR-094): expense groups belong to the expenses domain.
   'GET /v1/expense-groups',
   'POST /v1/expense-groups',

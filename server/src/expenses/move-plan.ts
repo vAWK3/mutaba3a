@@ -6,8 +6,9 @@ import { NO_EXPENSE_VAT } from './vat.js';
 
 /**
  * MUT-589 (ADR-252, D1): what a saved expense becomes when it moves to another of the person's profiles, and the list
- * of what a person sees change. Pure: the caller reads everything it needs (and the store re-runs it under the move's
- * lock with the target's categories as they are then, review R2), so the preview and the move answer the same list.
+ * of what a person sees change. Pure: the caller reads everything it needs. The preview and the move both run it (the
+ * move again, right before its transaction, with the target as it is then: review R2), and the move answers the list it
+ * applied.
  *
  * Never changed: the amount and its currency (ADR-004), the date, title, notes and the typed vendor text.
  */

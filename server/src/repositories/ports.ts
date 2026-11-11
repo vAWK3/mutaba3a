@@ -3352,6 +3352,28 @@ export interface ExpensePage {
   nextCursor: ExpenseCursor | null;
 }
 
+/** MUT-589 (ADR-252): `expenses.moveToProfile`'s input. */
+export interface MoveExpenseParams {
+  organizationId: string;
+  expenseId: string;
+  targetOrganizationId: string;
+  expectedVersion: number;
+  patch: UpdateExpensePatch;
+  /** The new storage key of each READY receipt on the expense, by receipt id (copied before the transaction). */
+  receiptKeys: Readonly<Record<string, string>>;
+  /** The category a receipt's approval names on the target (the expense's mapped one). */
+  approvedCategoryId: string | null;
+  audit: AuditEventInput[];
+  at: Date;
+}
+
+export type MoveExpenseResult =
+  | { kind: 'moved'; expense: ExpenseRecord; receipts: ExpenseReceiptRecord[]; previousStorageKeys: string[] }
+  | { kind: 'not_found' }
+  | { kind: 'stale'; currentVersion: number }
+  | { kind: 'receipts_changed'; currentVersion: number }
+  | { kind: 'receipt_not_ready' };
+
 export interface ExpenseRepository {
   create(input: CreateExpenseInput, at: Date): Promise<ExpenseRecord>;
   /** Live expenses only; a deleted one reads null. */
@@ -3369,6 +3391,16 @@ export interface ExpenseRepository {
   softDelete(organizationId: string, id: string, at: Date, receipts: 'unlink' | 'remove'): Promise<{ record: ExpenseRecord; changed: boolean; removedReceipts: ExpenseReceiptRecord[] } | null>;
   /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
   totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
+  /**
+   * MUT-589 (ADR-252): re-home a live expense and every receipt on it to `targetOrganizationId`, in one transaction.
+   * Locks the expense, then its receipts (the order a delete and a completion take). Refuses, writing nothing, when the
+   * expense is gone (`not_found`), its version is not `expectedVersion` (`stale`), a receipt on it is unfinished
+   * (`receipt_not_ready`), or its READY receipts are not exactly `receiptKeys`' ids (`receipts_changed`, review R1).
+   * Otherwise: the expense takes the target, `patch` and version + 1; each receipt the target and its new key, its
+   * approval naming `approvedCategoryId` (the rest kept as history) and version + 1; its group marks are deleted; and
+   * `audit` is appended.
+   */
+  moveToProfile(params: MoveExpenseParams): Promise<MoveExpenseResult>;
 }
 
 // ---- MUT-267: expense groups (ADR-094) --------------------------------------

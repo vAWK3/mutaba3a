@@ -2354,6 +2354,43 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.expenseReceipt.updateMany({ where: { id: { in: pending.map((r) => r.id) } }, data: { deletedAt: at } });
         return { record, changed: true, removedReceipts: pending.map((r) => toExpenseReceipt({ ...r, deletedAt: at })) };
       }, RECEIPT_TX_OPTIONS),
+    moveToProfile: (params) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { organizationId, expenseId, targetOrganizationId } = params;
+          // Expense first, then its receipts: the order a delete and a MUT-44 completion take. A filing onto this
+          // expense (fileOntoExpense) holds its own To-review receipt, then waits here, and after the commit finds no
+          // live expense on the source.
+          if (!(await lockLiveExpense(tx, organizationId, expenseId))) return { kind: 'not_found' as const };
+          const { version } = await tx.expense.findUniqueOrThrow({ where: { id: expenseId }, select: { version: true } });
+          if (version !== params.expectedVersion) return { kind: 'stale' as const, currentVersion: version };
+          const onExpense = await tx.$queryRaw<Array<{ id: string; status: string; storageKey: string }>>`SELECT "id", "status", "storageKey" FROM "expense_receipts" WHERE "organizationId" = ${organizationId}::uuid AND "expenseId" = ${expenseId}::uuid AND "deletedAt" IS NULL ORDER BY "id" FOR NO KEY UPDATE`;
+          if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' as const };
+          const wanted = Object.keys(params.receiptKeys).sort();
+          if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed' as const, currentVersion: version };
+
+          const data: Prisma.ExpenseUncheckedUpdateInput = { organizationId: targetOrganizationId, version: { increment: 1 }, updatedAt: params.at };
+          for (const [k, v] of Object.entries(params.patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+          const expense = await tx.expense.update({ where: { id: expenseId }, data });
+          const receipts: ExpenseReceiptRecord[] = [];
+          for (const r of onExpense) {
+            const { approved } = await tx.expenseReceipt.findUniqueOrThrow({ where: { id: r.id }, select: { approved: true } });
+            const moved = await tx.expenseReceipt.update({
+              where: { id: r.id },
+              data: {
+                organizationId: targetOrganizationId,
+                storageKey: params.receiptKeys[r.id]!,
+                version: { increment: 1 },
+                ...(approved !== null && typeof approved === 'object' ? { approved: { ...(approved as Prisma.JsonObject), categoryId: params.approvedCategoryId } } : {}),
+              },
+            });
+            receipts.push(toExpenseReceipt(moved));
+          }
+          await tx.expenseGroupOverride.deleteMany({ where: { expenseId } });
+          if (params.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(params.audit, params.at) });
+          return { kind: 'moved' as const, expense, receipts, previousStorageKeys: onExpense.map((r) => r.storageKey) };
+        }, RECEIPT_TX_OPTIONS),
+      ),
     totalsByCurrency: async (organizationId, filter) => {
       const rows = await this.prisma.expense.groupBy({
         by: ['currency'],
