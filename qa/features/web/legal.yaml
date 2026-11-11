@@ -103,3 +103,17 @@ features:
     expect:
       - Both sections follow "Where your records live"; they name Cloudflare Turnstile, public DNS records, RDAP and Resend, and say only the domain is sent and Resend's records sit in the United States
       - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a
+  - id: privacy-accountant
+    title: The privacy policy says what sharing with an accountant and share links involve, dated November 7, 2026, in English and Arabic (MUT-382, epic MUT-558)
+    tier: secondary
+    tickets: [MUT-382, MUT-558]
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+    steps:
+      - Open /privacy in English and read "Sharing with your accountant" and "Share links"
+      - Open it in Arabic and read «المشاركة مع محاسبك» and «روابط المشاركة»
+    expect:
+      - The policy says "Last updated November 7, 2026" and both sections follow "Who else handles your data"
+      - The accountant section says the invite works for 14 days, the access is read-only and revocable, and downloaded files are the accountant's copy
+      - The share-links section names the PIN of 4 to 8 digits, at most 3 devices, the lock after 5 wrong PINs and the deletion of device records 30 days after a link ends
+      - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a

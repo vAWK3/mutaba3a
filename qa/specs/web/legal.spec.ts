@@ -212,3 +212,28 @@ test('The privacy policy says what signup and account emails involve, in English
     });
   }
 });
+
+test('The privacy policy covers sharing with an accountant and share links, in English and Arabic (MUT-382)', { tag: '@web.legal.privacy-accountant' }, async ({ page, step }) => {
+  for (const language of ['en', 'ar'] as const) {
+    const copy = privacy[language];
+    await step(`Open /privacy in ${language === 'en' ? 'English' : 'Arabic'}: the accountant and share-link sections follow who else handles your data`, async () => {
+      await preferLanguage(page, language);
+      await page.goto('/privacy');
+      await expect(page.getByText(copy.updated)).toBeVisible();
+      await expect(page.getByRole('heading', { level: 2, name: copy.accountant.title })).toBeVisible();
+      const titles = await page.getByRole('heading', { level: 2 }).allTextContents();
+      const sharing = titles.indexOf(copy.sharing.title);
+      expect(titles.slice(sharing + 1, sharing + 3)).toEqual([copy.accountant.title, copy.shareLinks.title]);
+      await page.getByRole('heading', { level: 2, name: copy.accountant.title }).scrollIntoViewIfNeeded();
+      await expect(page.getByText(copy.accountant.body)).toBeVisible();
+      await page.getByRole('heading', { level: 2, name: copy.shareLinks.title }).scrollIntoViewIfNeeded();
+      await expect(page.getByText(copy.shareLinks.body)).toBeVisible();
+      await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
+      if (language === 'en') {
+        expect(copy.updated).toContain('November 7, 2026');
+        for (const fact of ['14 days', '4 to 8 digits', 'at most 3 devices', 'after 5 wrong PINs', 'over for 30 days']) expect(copy.accountant.body + copy.shareLinks.body).toContain(fact);
+        await expect(page.getByRole('main')).not.toContainText('Mutaba3a');
+      }
+    });
+  }
+});
