@@ -3,7 +3,8 @@
 Images: the size is read from the header (Pillow opens lazily) and checked against MAX_PIXELS before a single pixel is
 decoded. PDFs: refused past MAX_PDF_PAGES, at most PDF_PAGES_READ pages read, each rasterised at PDF_DPI or lower so the
 raster stays under MAX_PIXELS. A text layer is used instead of OCR only when its text is drawn visibly: an invisible
-layer is a scanner's own OCR (MUT-504). Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
+layer is a scanner's own OCR (MUT-504); MUT-590: the layer also comes placed on the page (`pdf_lines`), so a label
+and the value printed apart from it meet on one row, as OCR boxes do. Anything the decoders can't make sense of is `unreadable`; their messages are dropped.
 MUT-557: the QR reader looks at the same pages; a text-layer PDF's are rasterised for it alone, at QR_PDF_DPI, and a
 failure there only leaves them out.
 """
@@ -30,6 +31,9 @@ class Decoded:
     pages: list[np.ndarray] = field(default_factory=list)
     #: The PDF's text layer, when it has enough characters to skip OCR.
     pdf_text: str | None = None
+    #: MUT-590: that text layer placed on the page, `{text, conf, box}` like OCR lines; empty past MAX_LAYER_CHARS or
+    #: when pdfium can't place it (the extractor then reads `pdf_text` line by line).
+    pdf_lines: list[dict] = field(default_factory=list)
     #: How many pages were read.
     page_count: int = 0
     #: True for rasterised PDF pages: flat already, so no perspective step.
@@ -94,7 +98,7 @@ def _decode_pdf(body: bytes) -> Decoded:
         count = min(total, config.PDF_PAGES_READ)
         text = _text_layer(pdf, count)
         if len("".join(text.split())) >= config.MIN_PDF_TEXT_CHARS and not _invisible_text(pdf, count):
-            return Decoded(pdf_text=text, page_count=count, flat=True, qr_pages=_qr_rasters(pdf, count))
+            return Decoded(pdf_text=text, pdf_lines=_placed_lines(pdf, count), page_count=count, flat=True, qr_pages=_qr_rasters(pdf, count))
         return Decoded(pages=[_rasterise(pdf[i]) for i in range(count)], page_count=count, flat=True)
     except Refusal:
         raise
@@ -113,6 +117,77 @@ def _text_layer(pdf, count: int) -> str:
         finally:
             textpage.close()
     return "\n".join(parts).replace("\r\n", "\n").replace("\r", "\n")
+
+
+#: MUT-590: a text layer with more characters than this (on the pages read) is not placed, only read as text, so a
+#: crafted PDF can't make the reader walk millions of character boxes.
+MAX_LAYER_CHARS = 20_000
+#: Two characters of one line further apart than this many character heights are two runs (a label and its value in
+#: another column); the extractor puts runs that share a line back together in reading order.
+RUN_GAP_HEIGHTS = 1.5
+
+
+def _placed_lines(pdf, count: int) -> list[dict]:
+    """The text layer as runs placed on the page; never a refusal: on any failure the text is read without places."""
+    try:
+        return _layer_lines(pdf, count)
+    except Exception:
+        return []
+
+
+def _layer_lines(pdf, count: int) -> list[dict]:
+    """Runs of the text layer, top-down page coordinates in points, pages stacked (page 2 below page 1). A run ends at
+    pdfium's own line break or at a gap wider than RUN_GAP_HEIGHTS character heights. Characters stay in the layer's
+    order; `pdf_text_to_logical`'s repair is applied to them later, with the whole layer's verdict."""
+    textpages = [pdf[i].get_textpage() for i in range(count)]
+    try:
+        if sum(tp.count_chars() for tp in textpages) > MAX_LAYER_CHARS:
+            return []
+        lines: list[dict] = []
+        offset = 0.0
+        for i, tp in enumerate(textpages):
+            height = pdf[i].get_size()[1]
+            lines.extend(_page_runs(tp, height, offset))
+            offset += height + 1
+        return lines
+    finally:
+        for tp in textpages:
+            tp.close()
+
+
+def _page_runs(tp, height: float, offset: float) -> list[dict]:
+    runs: list[dict] = []
+    text: list[str] = []
+    box: list[float] | None = None
+    last: tuple[float, float, float, float] | None = None
+
+    def close() -> None:
+        nonlocal text, box, last
+        joined = "".join(text).strip()
+        if joined and box is not None:
+            left, bottom, right, top = box
+            runs.append({"text": joined, "conf": 1.0, "box": [round(left, 1), round(height - top + offset, 1), round(right, 1), round(height - bottom + offset, 1)]})
+        text, box, last = [], None, None
+
+    for index in range(tp.count_chars()):
+        ch = tp.get_text_range(index, 1)
+        if ch in ("\r", "\n"):
+            close()
+            continue
+        if not ch.strip():
+            if text:
+                text.append(" ")
+            continue
+        left, bottom, right, top = tp.get_charbox(index)
+        if last is not None:
+            gap = max(last[0] - right, left - last[2])
+            if gap > RUN_GAP_HEIGHTS * max(top - bottom, last[3] - last[1], 1.0):
+                close()
+        text.append(ch)
+        box = [left, bottom, right, top] if box is None else [min(box[0], left), min(box[1], bottom), max(box[2], right), max(box[3], top)]
+        last = (left, bottom, right, top)
+    close()
+    return runs
 
 
 #: Text drawn without paint: invisible (3), or only added to the clip path (7). Both are another reader's OCR layer.
