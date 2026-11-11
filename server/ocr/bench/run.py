@@ -139,7 +139,8 @@ def percentile(values: list[float], q: float) -> float:
 def aggregate(rows: list[dict]) -> dict:
     """rows: [{lang, kind, scores, ms}] -> per language and scope, hit counts, wrong-and-confident counts, timings."""
     result: dict = {}
-    for scope, keep in (("photo", lambda r: r["kind"] == "photo"), ("all", lambda r: True)):
+    # MUT-590: vendor-pdf is an invoice a vendor's software made (its own text layer), AC2's scope.
+    for scope, keep in (("photo", lambda r: r["kind"] == "photo"), ("vendor-pdf", lambda r: r["kind"] == "vendor-pdf"), ("all", lambda r: True)):
         per_lang = {}
         for lang in LANGS:
             sel = [r for r in rows if r["lang"] == lang and keep(r)]
@@ -342,6 +343,12 @@ def table(agg: dict, title: str) -> str:
     return "\n".join(lines)
 
 
+def vendor_pdf_table(agg: dict, rows: list[dict]) -> list[str]:
+    """MUT-590 (AC2): the vendor-made invoice PDFs on their own, when the set has any (>= 95% of present fields, 0 wrong-and-confident)."""
+    n = sum(1 for r in rows if r["kind"] == "vendor-pdf")
+    return ["", table(agg["vendor-pdf"], f"Vendor-made invoice PDFs ({n}, AC2 of MUT-590)")] if n else []
+
+
 def real_report(real_dir: Path, real: list[dict], suggestions: dict[str, dict], ms: dict[str, float], detail: bool) -> tuple[list[dict], dict]:
     """The real receipts' per-receipt scores (booleans only, no receipt text) and aggregate; `detail` writes real-detail.json there."""
     rows = [{"id": i["id"], "lang": i["lang"], "kind": i["kind"], "ms": ms.get(i["id"]), "scores": score_one(suggestions.get(i["id"], {}), i["truth"])} for i in real if i["id"] in suggestions]
@@ -403,6 +410,7 @@ def rescore(args: argparse.Namespace) -> int:
     md = [f"### {args.label} (extractor re-run over {args.rescore.name}'s reads)", "", table(agg["photo"], "Photos (AC1's bar, the spike's scope)"), "", table(agg["all"], "All kinds (photos, screenshots, PDFs)")]
     if real_agg:
         md += ["", table(real_agg["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+        md += vendor_pdf_table(real_agg, real_rows)
         allocation = allocation_line(real_rows)
         if allocation:
             md += ["", allocation]
@@ -497,7 +505,7 @@ def main() -> int:
     real_summary: dict = {"folder": "present" if real_dir.is_dir() else "missing", "files": len(real)}
     if real and not real_scored:
         draft = {
-            "note": "Draft from the pipeline's reading (MUT-441 bench). Correct truth.* by hand (totalMinor and vatMinor in minor units, date YYYY-MM-DD, currency ISO code, allocationNumber nine digits or null when the invoice prints none), set lang to ar|he|en and kind to photo|scanned|screenshot|pdf, then rename to manifest.json.",
+            "note": "Draft from the pipeline's reading (MUT-441 bench). Correct truth.* by hand (totalMinor and vatMinor in minor units, date YYYY-MM-DD, currency ISO code, allocationNumber nine digits or null when the invoice prints none), set lang to ar|he|en and kind to photo|scanned|screenshot|pdf|vendor-pdf (an invoice a vendor's software made), then rename to manifest.json.",
             "receipts": [
                 {
                     "file": t["item"]["id"],
@@ -545,6 +553,7 @@ def main() -> int:
     ]
     if real_summary.get("aggregate"):
         md += ["", table(real_summary["aggregate"]["all"], f"Real receipts ({len(real_rows)}, scan order, buyer memory)")]
+        md += vendor_pdf_table(real_summary["aggregate"], real_rows)
         allocation = allocation_line(real_rows)
         if allocation:
             md += ["", allocation]
