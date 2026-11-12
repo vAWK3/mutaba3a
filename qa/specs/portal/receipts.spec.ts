@@ -200,8 +200,9 @@ test('With the receipts library off there is no Receipts tab, and its link says 
   });
 });
 
-/** MUT-503: two profiles of Nour's, a third that is read-only; three receipts on Nour Studio. */
+/** MUT-503: two profiles of Nour's, a third that is read-only; three receipts on Nour Studio (MUT-589: the filed one on an expense). */
 function moveWorld(opts: { othersLapsed?: boolean } = {}) {
+  const spinneys = { ...expense(7, { amount: '212.00', vendor: 'Spinneys', occurredOn: '2026-10-20', categoryId: groceries.id }), profileId: OFFICE_A };
   const lapsed = { state: 'READ_ONLY' as const, source: 'TRIAL' as const, tier: 'FREELANCER' as const, until: null };
   return new FakeApi({
     profiles: [
@@ -211,10 +212,12 @@ function moveWorld(opts: { othersLapsed?: boolean } = {}) {
     ],
     billingStanding: 'open',
     categories: [groceries],
+    expenses: [spinneys],
+    expenseMoveChanges: [{ field: 'category', from: 'Groceries', to: 'Other' }],
     receipts: [
       libraryReceipt(1, { filename: 'taxi.pdf', mimeType: 'application/pdf', profileId: OFFICE_A }),
       libraryReceipt(2, { filename: 'cafe.pdf', mimeType: 'application/pdf', profileId: OFFICE_A, receivedOn: '2026-10-23' }),
-      libraryReceipt(3, { filename: 'spinneys.pdf', mimeType: 'application/pdf', profileId: OFFICE_A, filingStatus: 'FILED', receivedOn: '2026-10-20' }),
+      libraryReceipt(3, { filename: 'spinneys.pdf', mimeType: 'application/pdf', profileId: OFFICE_A, filingStatus: 'FILED', expenseId: spinneys.id, receivedOn: '2026-10-20' }),
     ],
   });
 }
@@ -302,20 +305,56 @@ test('A read-only profile is offered but can\'t be chosen; with every other prof
   });
 });
 
-test('A Filed receipt has no Move, on its card or its page', { tag: '@portal.receipts.filed-no-move' }, async ({ page, step }) => {
+test('A Filed receipt never moves alone, on its card or its page', { tag: '@portal.receipts.filed-no-move' }, async ({ page, step }) => {
   const api = moveWorld();
 
-  await step('Filed cards have no ⋯', async () => {
+  await step("A Filed card's ⋯ offers its expense's move, not its own", async () => {
     await api.open(page, `${BASE}/receipts?status=filed`);
     const grid = page.getByRole('list', { name: 'Receipts' });
     await expect(grid.getByRole('listitem')).toHaveCount(1);
-    await expect(grid.getByRole('button', { name: /More actions/ })).toHaveCount(0);
+    await grid.getByRole('button', { name: 'More actions for spinneys.pdf' }).click();
+    await expect(page.getByRole('menuitem')).toHaveText(['Open', 'Move with its expense…']);
+    await page.keyboard.press('Escape');
   });
 
   await step("A Filed receipt's page has no Move to profile…", async () => {
     await page.goto(`${BASE}/receipts/${libraryReceipt(3).id}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Filed receipt' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Move to profile…' })).toHaveCount(0);
+  });
+});
+
+test('Move a Filed receipt with its expense from its card', { tag: '@portal.receipts.move-filed' }, async ({ page, step }) => {
+  const api = moveWorld();
+  const grid = page.getByRole('list', { name: 'Receipts' });
+  const dialog = page.getByRole('dialog', { name: 'Move expense' });
+
+  await step('Open Receipts › Filed on Nour Studio', async () => {
+    await api.open(page, `${BASE}/receipts?status=filed`);
+    await expect(grid.getByRole('listitem')).toHaveCount(1);
+  });
+
+  await step("Open spinneys.pdf's ⋯ and choose Move with its expense…", async () => {
+    await grid.getByRole('button', { name: 'More actions for spinneys.pdf' }).click();
+    await page.getByRole('menuitem', { name: 'Move with its expense…' }).click();
+    await expect(dialog).toBeVisible();
+  });
+
+  await step('Choose Cedar Consulting: the drawer lists what changes and that the receipt goes with it', async () => {
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await expect(dialog.getByText('What changes on Cedar Consulting')).toBeVisible();
+    await expect(dialog.getByRole('listitem')).toHaveText([/Category\s*Other\s*was Groceries/]);
+    await expect(dialog.getByText('Its receipt moves with it.')).toBeVisible();
+  });
+
+  await step('Move it: the card leaves Nour Studio and the toast names Cedar Consulting', async () => {
+    await dialog.getByRole('button', { name: 'Move to Cedar Consulting' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('Moved to Cedar Consulting')).toBeVisible();
+    await expect(grid.getByRole('listitem')).toHaveCount(0);
+    const move = api.last('POST', /^\/v1\/expenses\/[^/]+\/move$/);
+    expect(move?.body).toEqual({ profileId: OFFICE_B, expectedVersion: 1 });
+    expect(move?.headers['idempotency-key']).toBeTruthy();
   });
 });
 

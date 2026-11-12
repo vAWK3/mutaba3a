@@ -107,13 +107,26 @@ features:
       - Each is listed with "Read-only until it's paid" and can't be chosen; Move stays off
       - A note says no other profile can take it, with Billing; nothing is sent
   - id: filed-no-move
-    title: A Filed receipt has no Move, on its card or its page (MUT-503 AC3)
+    title: A Filed receipt never moves alone, on its card or its page (MUT-503 AC3; its expense moves it, MUT-589)
     tier: secondary
-    tickets: [MUT-503]
+    tickets: [MUT-503, MUT-589]
     steps:
-      - Open Receipts › Filed, then open a Filed receipt
+      - Open Receipts › Filed, open a card's ⋯, then open a Filed receipt
     expect:
-      - Filed cards have no ⋯, and the Filed receipt's page has no Move to profile…
+      - A Filed card's ⋯ offers Open and Move with its expense…, never Move to profile…; the Filed receipt's page has no Move to profile…
+  - id: move-filed
+    title: Move a Filed receipt with its expense from its card's ⋯ menu (MUT-589)
+    tier: secondary
+    tickets: [MUT-589]
+    paths:
+      - src/hosted/pages/views/ReceiptsGallery.tsx
+      - src/hosted/components/MoveExpenseDrawer.tsx
+    steps:
+      - On Receipts › Filed, open a card's ⋯ and choose Move with its expense…
+      - Choose Cedar Consulting and press Move to Cedar Consulting
+    expect:
+      - The Move expense drawer opens for the receipt's expense, lists what changes and that its receipt moves with it
+      - After the move the card leaves Nour Studio's Filed list and the toast says "Moved to Cedar Consulting"
   - id: move-arabic
     title: In Arabic on a 375 px phone, Move reads right to left and its drawer fills the screen (MUT-503 AC9)
     tier: secondary

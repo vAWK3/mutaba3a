@@ -277,6 +277,8 @@ export function expense(n: number, e: { amount: string; currency?: Currency; tit
     createdAt: STAMP,
     updatedAt: STAMP,
     receipts: [] as StubReceipt[],
+    /** MUT-589: the profile it is on; absent = every profile sees it (the fixtures before moves existed). */
+    profileId: undefined as string | undefined,
   };
 }
 
@@ -460,6 +462,8 @@ export interface FakeApiSeed {
   attachments?: ReturnType<typeof attachment>[];
   categories?: ReturnType<typeof category>[];
   expenses?: StubExpense[];
+  /** MUT-589: what GET /v1/expenses/{id}/move-preview lists (and the move answers); [] when absent. */
+  expenseMoveChanges?: Array<{ field: string; from: string | null; to: string | null }>;
   conversions?: StubConversion[];
   /** Expense groups (MUT-268) and their keep / leave-out marks, keyed `groupId:expenseId`. */
   groups?: StubGroup[];
@@ -713,6 +717,7 @@ export class FakeApi {
   private readonly attachments;
   private readonly categories;
   private readonly expenses;
+  private readonly expenseMoveChanges;
   /** MUT-254 (A18): vendors as the server saves them, matched on a minimal exact key (case and spacing only). */
   private readonly vendors: { id: string; name: string; keys: Set<string>; lastCategoryId: string | null; lastCurrency: string | null; lastVat: VendorVatStub | null; lastUsed: number }[] = [];
   private readonly conversions;
@@ -766,6 +771,7 @@ export class FakeApi {
     this.attachments = [...(seed.attachments ?? [])];
     this.categories = [...(seed.categories ?? [])];
     this.expenses = [...(seed.expenses ?? [])];
+    this.expenseMoveChanges = seed.expenseMoveChanges ?? [];
     this.conversions = [...(seed.conversions ?? [])];
     this.groups = [...(seed.groups ?? [])];
     this.marks = new Map(Object.entries(seed.marks ?? {}));
@@ -1076,6 +1082,26 @@ export class FakeApi {
       return json({ expense: listed(made), receipt: found }, 201);
     }
     return undefined;
+  }
+
+  /**
+   * MUT-589 (ADR-252): the expense move's preview (`expectedVersion` null) and the move, as the server answers them:
+   * the same profile 422, a profile not the person's 404, a lapsed target 402, a stale version 409; the move takes the
+   * expense and its filed library receipts to the target, with the seeded changes.
+   */
+  private expenseMoveAnswer(found: StubExpense, from: string | undefined, to: string, expectedVersion: number | null) {
+    if (to === from) return json({ error: { code: 'VALIDATION_FAILED', message: 'Same profile', details: { reason: 'SAME_PROFILE' } } }, 422);
+    const target = this.profiles.find((p) => p.stub.id === to)?.stub;
+    if (!target) return json({ error: { code: 'NOT_FOUND', message: 'No such profile', details: { reason: 'PROFILE_NOT_FOUND' } } }, 404);
+    const state = target.billing?.state;
+    if (state === 'READ_ONLY' || state === 'LOCKED') return json({ error: { code: 'SUBSCRIPTION_LAPSED', message: 'Lapsed', details: { profileId: to, state, source: target.billing?.source ?? 'NONE', until: null } } }, 402);
+    const filed = (this.libraryReceipts ?? []).filter((r) => r.expenseId === found.id && r.status === 'READY');
+    const changes = this.expenseMoveChanges;
+    if (expectedVersion === null) return json({ changes, receiptCount: filed.length + found.receipts.filter((r) => r.status === 'READY').length, expenseVersion: found.version });
+    if (expectedVersion !== found.version) return conflict('VERSION_MISMATCH');
+    Object.assign(found, { profileId: to, version: found.version + 1 });
+    for (const r of filed) Object.assign(r, { profileId: to, version: r.version + 1 });
+    return json({ expense: found, fromProfileId: from, changes });
   }
 
   /** MUT-503: POST /v1/receipts/{id}/move, as the server answers it: filed 409, a lapsed target 402, else moved. */
@@ -1450,6 +1476,7 @@ export class FakeApi {
         const group = groupId ? this.groups.find((g) => g.id === groupId) : undefined;
         if (groupId && !group) return notFound();
         const rows = this.expenses
+          .filter((x) => !x.profileId || x.profileId === e.headers['x-mutaba3a-profile'])
           .filter((x) => (!q('categoryId') || x.categoryId === q('categoryId')) && (!q('customerId') || x.customerId === q('customerId')))
           .filter((x) => (!q('from') || x.occurredOn >= q('from')!) && (!q('to') || x.occurredOn <= q('to')!))
           .filter((x) => !group || (q('groupMembership') === 'excluded' ? this.isLeftOut(group, x) : this.isMember(group, x)))
@@ -1471,8 +1498,13 @@ export class FakeApi {
       }
       return undefined;
     }
-    const found = this.expenses.find((x) => x.id === id);
+    const found = this.expenses.find((x) => x.id === id && (!x.profileId || x.profileId === e.headers['x-mutaba3a-profile']));
     if (!found) return notFound();
+    if (sub === 'move-preview' && e.method === 'GET') return this.expenseMoveAnswer(found, e.headers['x-mutaba3a-profile'], e.query.get('profileId') ?? '', null);
+    if (sub === 'move' && e.method === 'POST') {
+      const b = e.body as { profileId: string; expectedVersion: number };
+      return this.expenseMoveAnswer(found, e.headers['x-mutaba3a-profile'], b.profileId, b.expectedVersion);
+    }
     if (!sub) {
       if (e.method === 'GET') return json(found);
       if (e.method === 'PATCH') {
