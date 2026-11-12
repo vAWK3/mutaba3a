@@ -7,7 +7,7 @@ import { api, type SelfServiceDoors } from '../api/client';
  * "can't reach" with a retry instead.
  */
 export const SELF_SERVICE_KEY = ['self-service-doors'] as const;
-export const CLOSED_DOORS: SelfServiceDoors = { signup: false, recovery: false };
+export const CLOSED_DOORS: SelfServiceDoors = { signup: false, recovery: false, malafatSignIn: false };
 
 export const selfServiceQuery = queryOptions({
   queryKey: SELF_SERVICE_KEY,
