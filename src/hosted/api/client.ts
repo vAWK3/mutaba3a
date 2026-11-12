@@ -381,7 +381,8 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
  */
 // MUT-434: connecting an agent (/v1/oauth) is the server's alone: the agent talks to the hosted service, never this page.
 // MUT-562: an accountant invite and a share link are the server's too: public pages a stranger opens, signed in or not.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth|accountant-invites|share-links)(\/|\?|$)/;
+// MUT-596: Sign in with Malafat (office, exchange, link, consent) is the server's: the page is signed out while it runs.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat)(\/|\?|$)/;
 /**
  * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
  * link page's own PIN-again state, never the end of whoever is signed in on this browser.

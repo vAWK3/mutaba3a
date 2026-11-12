@@ -91,6 +91,11 @@ describe('request() by mode', () => {
     ['local', 'signup', (api: Api) => api.signup({ email: 'a@b.ps', locale: 'ar', turnstileToken: 't' }), 'POST', '/v1/signups'],
     ['local', 'recovery', (api: Api) => api.recoverAccount({ email: 'a@b.ps', locale: 'ar', turnstileToken: 't' }), 'POST', '/v1/account-recovery'],
     ['probe', 'signup', (api: Api) => api.signup({ email: 'a@b.ps', locale: 'en', turnstileToken: 't' }), 'POST', '/v1/signups'],
+    // MUT-596: Sign in with Malafat runs signed out; every step is the server's.
+    ['local', 'Malafat office', (api: Api) => api.malafatOffice('sader'), 'GET', '/v1/auth/malafat/office?tenant=sader'],
+    ['local', 'Malafat exchange', (api: Api) => api.malafatExchange('code'), 'POST', '/v1/auth/malafat/exchange'],
+    ['local', 'Malafat link', (api: Api) => api.malafatLink({ ticket: 't', password: 'p' }), 'POST', '/v1/auth/malafat/link'],
+    ['probe', 'Malafat consent', (api: Api) => api.malafatConsent({ ticket: 't' }), 'POST', '/v1/auth/malafat/consent'],
   ] as const)('%s: the %s request goes straight to the server, with no probe first', async (mode, _name, call, method, path) => {
     const { api } = await freshClient();
     if (mode === 'local') setMode('local');
