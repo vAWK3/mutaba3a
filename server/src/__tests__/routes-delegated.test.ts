@@ -99,10 +99,10 @@ describe('the organization key (AC2)', () => {
     expect(expenses.status).toBe(403);
   });
 
-  it('a delegated token never opens /mcp, and an agent’s token never opens a delegated route', async () => {
+  it('a delegated token opens /mcp only with the person’s agent_access (MUT-598), and an agent’s token never opens a delegated route', async () => {
     const { h, p, conn } = await setup();
     const mcp = await h.app.request('/mcp', { method: 'POST', headers: { authorization: conn.headers().authorization!, 'content-type': 'application/json', accept: 'application/json, text/event-stream' }, body: '{}' });
-    expect(mcp.status).toBe(401);
+    expect(mcp.status).toBe(403);
     await h.app.request(`/admin/v1/users/${p.userId}/features/agent_access`, { method: 'PUT', headers: ADMIN });
     const agent = await connect(h, p);
     const res = await h.app.request('/v1/expenses', { headers: { ...agent.bearer, 'x-mutaba3a-profile': p.personalId } });
@@ -184,8 +184,8 @@ describe('consent names one firm the person is in (R6)', () => {
     const h = await delegatedHarness();
     const noTenant = await h.app.request(`/oauth/authorize?${new URLSearchParams({ response_type: 'code', client_id: h.clientId, redirect_uri: MALAFAT_CB, code_challenge: 'x'.repeat(43), code_challenge_method: 'S256', resource: V1 }).toString()}`);
     expect(new URL(noTenant.headers.get('location') ?? '').searchParams.get('error')).toBe('invalid_request');
-    const mcp = await authorizeDelegated(h, 'tenant-x', { resource: `${ORIGIN}/mcp` });
-    expect(new URL(mcp.headers.get('location') ?? '').searchParams.get('error')).toBe('invalid_target');
+    const other = await authorizeDelegated(h, 'tenant-x', { resource: `${ORIGIN}/admin` });
+    expect(new URL(other.headers.get('location') ?? '').searchParams.get('error')).toBe('invalid_target');
   });
 });
 

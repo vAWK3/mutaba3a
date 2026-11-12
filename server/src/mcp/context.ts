@@ -8,8 +8,8 @@ import type { AgentIdentity } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { OAuthScope } from '../oauth/protocol.js';
 import type { ErrorReporter } from '../observability/reporter.js';
-import { ownsProfile } from '../personal-profile.js';
-import type { LedgerStore, Organization } from '../repositories/ports.js';
+import { ownedOrCoOwnedProfilesOf, ownsProfile } from '../personal-profile.js';
+import type { LedgerStore, MembershipRole, Organization } from '../repositories/ports.js';
 
 /**
  * MUT-435: what every MCP tool runs with, for one /mcp request. `store` is the request-scoped (guarded) store: every
@@ -39,7 +39,7 @@ export function hasScope(ctx: McpContext, scope: OAuthScope): boolean {
 export async function agentProfile(ctx: McpContext, profileId: string): Promise<Organization> {
   const membership = await ctx.store.memberships.find(ctx.agent.user.id, profileId);
   const organization = membership ? await ctx.store.organizations.getById(profileId) : null;
-  if (!membership || !organization || !ownsProfile(organization, ctx.agent.user.id, membership.role)) {
+  if (!membership || !organization || !mayAct(ctx, organization, membership.role)) {
     throw new ApiError('NOT_FOUND', 'Profile not found. Call list_profiles for the profiles you can use.');
   }
   const refusal = await agentReadRefusal(ctx.gateStore, organization, ctx.now(), ctx.billingGate);
@@ -47,9 +47,34 @@ export async function agentProfile(ctx: McpContext, profileId: string): Promise<
   return organization;
 }
 
+/**
+ * P1 (ADR-200): an agent acts on a profile the person owns or co-owns. MUT-598 (ADR-254 D9, D11): Malafat's connector
+ * acts on its tenant's firm only, and there the person must be a partner, the OWNER role Malafat's member sync gives
+ * (D3); `ownsProfile` says no for every Malafat-fed profile until MUT-594's owner rule, so the role is read here.
+ */
+function mayAct(ctx: McpContext, organization: Organization, role: MembershipRole): boolean {
+  const { via } = ctx.agent;
+  if (via) return organization.id === via.organizationId && role === 'OWNER';
+  return ownsProfile(organization, ctx.agent.user.id, role);
+}
+
+/** The profiles a tool may list or search: owned or co-owned; through Malafat, the tenant's firm when `mayAct` holds. */
+export async function agentProfiles(ctx: McpContext): Promise<Organization[]> {
+  const { via } = ctx.agent;
+  if (!via) return ownedOrCoOwnedProfilesOf(ctx.store, ctx.agent.user.id);
+  const membership = await ctx.store.memberships.find(ctx.agent.user.id, via.organizationId);
+  const organization = membership ? await ctx.store.organizations.getById(via.organizationId) : null;
+  return organization && membership && mayAct(ctx, organization, membership.role) ? [organization] : [];
+}
+
+/** MUT-598 (D9): the person's inbox is their own, never Malafat's to read or write. */
+export function personalInboxRefusal(ctx: McpContext): ApiError | null {
+  return ctx.agent.via ? new ApiError('NOT_FOUND', 'The inbox is the person’s own; it isn’t reachable through Malafat. Choose the firm profile.') : null;
+}
+
 /** The person's inbox may be read unless every profile they have is LOCKED (as a session's GET /v1/inbox). */
 export async function inboxReadable(ctx: McpContext): Promise<ApiError | null> {
-  return agentPersonReadRefusal(ctx.gateStore, ctx.agent.user.id, ctx.now(), ctx.billingGate);
+  return personalInboxRefusal(ctx) ?? agentPersonReadRefusal(ctx.gateStore, ctx.agent.user.id, ctx.now(), ctx.billingGate);
 }
 
 /** The profiles an agent may read right now: owned or co-owned (P1), minus any LOCKED by billing (review D2). */

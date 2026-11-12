@@ -4573,3 +4573,10 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | Operator per-firm switch: on/off audited ADMIN, NOT_MALAFAT_FED, dark when off | `server/src/__tests__/routes-operator-malafat-delegation.test.ts` |
 | Contract: every delegated route also takes a session; none under a never prefix; organization-independent ones only through the tenant allowlist | `server/src/__tests__/route-security.test.ts` |
 | Store: confidential client, tenant on grants, `claimAssertion`, `disableClient`, `revokeForUserTenant`, cleanup keeps confidential clients | `server/src/repositories/__tests__/store-contract-oauth.ts` (memory; Prisma in `test:db`) |
+
+## MUT-598 — Malafat's connector on /mcp (ADR-254 D11)
+
+| What | Where |
+|---|---|
+| The tools list and write the tenant's firm only, audited `via: malafat`; the person's own profile and inbox refused; partner (OWNER) only; `agent_access` still applies; an agent's own token unchanged | `server/src/__tests__/mcp-delegated.test.ts` |
+| Each §4.7 revocation ends `/mcp`: Connected apps, disconnect, per-firm switch, client disable, account disable; leaving the firm hides it from the tools | same |

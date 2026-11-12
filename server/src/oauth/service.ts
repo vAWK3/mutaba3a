@@ -367,8 +367,18 @@ export class OAuthService {
     if (!isAccessToken(token)) return null;
     const found = await this.deps.store.oauth.findToken(this.digest(token));
     if (!found || found.token.kind !== 'ACCESS' || found.token.expiresAt.getTime() <= at.getTime()) return null;
-    if (!isLive(found.grant, at) || found.grant.resource !== resource) return null;
-    return found;
+    if (!isLive(found.grant, at)) return null;
+    if (found.grant.resource === resource) return found;
+    // MUT-598 (ADR-254 D11): one consent covers every resource the operator registered the confidential client for,
+    // so Malafat's connector reaches /mcp with the grant the person gave for /v1. An agent's grant stays bound to its own.
+    if (found.grant.tenantId === null) return null;
+    const client = await this.deps.store.oauth.findClient(found.grant.clientId);
+    return client?.kind === 'CONFIDENTIAL' && this.resourcesFor(client).includes(resource) ? found : null;
+  }
+
+  /** MUT-598: `<issuer>/mcp`, the resource /mcp checks a token against. */
+  get mcpResource(): string {
+    return this.resource;
   }
 
   /** RFC 7009: either token ends its whole grant; an unknown token is not an error. */

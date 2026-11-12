@@ -647,7 +647,9 @@ function guardRepository(name: string, repository: Record<string, unknown>): Rec
         } catch (err) {
           return Promise.reject(err);
         }
-        if (vars?.identity?.via) stampDelegatedAudit(args, vars.identity.user.id);
+        // MUT-593/598: a delegated call, on /v1 (identity) or Malafat's connector on /mcp (agent).
+        const delegatedUser = vars?.identity?.via ? vars.identity.user : vars?.agent?.via ? vars.agent.user : null;
+        if (delegatedUser) stampDelegatedAudit(args, delegatedUser.id);
         return (value as (...a: unknown[]) => unknown).apply(target, args);
       };
     },
