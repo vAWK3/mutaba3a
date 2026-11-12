@@ -641,6 +641,11 @@ model Integration {
   connectedByApiKeyId String?             @db.Uuid
   connectedAt         DateTime
   disconnectedAt      DateTime?
+  /// MUT-593 (ADR-254 D10): the operator's per-firm switch for Malafat acting as each person. Null = off: delegated
+  /// tokens for this tenant are refused. Set and cleared only by the operator action, audited.
+  delegationEnabledAt DateTime?
+  /// The operator who last turned it on.
+  delegationEnabledBy String?             @db.Uuid
   updatedAt           DateTime            @updatedAt
 
   @@unique([organizationId, provider])
@@ -1743,10 +1748,12 @@ model StoragePurge {
 }
 
 /// MUT-434 (ADR-197): how an OAuth client registered. DCR = RFC 7591 at /oauth/register; CIMD = a Client ID Metadata
-/// Document, whose URL is the client id.
+/// Document, whose URL is the client id. MUT-593 (ADR-254): CONFIDENTIAL = registered by the operator, authenticating
+/// with private_key_jwt against its JWKS (Malafat); never created by /oauth/register.
 enum OAuthClientKind {
   DCR
   CIMD
+  CONFIDENTIAL
 }
 
 /// MUT-434: an MCP client known to the authorization server. Anonymous (registration is unauthenticated), so no user
@@ -1762,9 +1769,16 @@ model OAuthClient {
   /// CIMD only: when the document was fetched and when it goes stale (≤ 24 h, OV2). Null for DCR.
   metadataFetchedAt DateTime?
   metadataExpiresAt DateTime?
+  /// MUT-593 (CONFIDENTIAL only): where its public keys are published; MTB3A never holds a secret of the client's.
+  jwksUri           String?         @db.VarChar(2048)
+  /// MUT-593: the resources it may ask for (`<origin>/v1`). Empty for a public client, which may ask only for /mcp.
+  allowedResources  String[]        @default([])
+  /// MUT-593: the operator's disable; every grant of the client ends with it.
+  disabledAt        DateTime?
 
-  requests OAuthAuthorizationRequest[]
-  grants   OAuthGrant[]
+  requests   OAuthAuthorizationRequest[]
+  grants     OAuthGrant[]
+  assertions OAuthClientAssertion[]
 
   @@index([createdAt])
   @@map("oauth_clients")
@@ -1781,6 +1795,8 @@ model OAuthAuthorizationRequest {
   state         String?     @db.VarChar(500)
   /// The canonical resource the tokens will be bound to (S2a).
   resource      String      @db.VarChar(2048)
+  /// MUT-593: the Malafat tenant a confidential client asks to act in; null for a public client.
+  tenantId      String?     @db.VarChar(255)
   createdAt     DateTime
   expiresAt     DateTime
   decidedAt     DateTime?
@@ -1806,6 +1822,8 @@ model OAuthGrant {
   redirectUri   String      @db.VarChar(2048)
   scopes        String[]
   resource      String      @db.VarChar(2048)
+  /// MUT-593 (ADR-254 D9): the one Malafat tenant a delegated grant acts in; null for an agent's grant.
+  tenantId      String?     @db.VarChar(255)
   createdAt     DateTime
   /// Absolute: 180 days (D13).
   expiresAt     DateTime
@@ -1818,7 +1836,22 @@ model OAuthGrant {
 
   @@index([userId])
   @@index([clientId])
+  @@index([tenantId])
   @@map("oauth_grants")
+}
+
+/// MUT-593 (RFC 7523): a confidential client's assertion id, kept until the assertion expires so it is used once.
+model OAuthClientAssertion {
+  id        String      @id @default(uuid()) @db.Uuid
+  clientId  String      @db.VarChar(2048)
+  client    OAuthClient @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  jti       String      @db.VarChar(255)
+  expiresAt DateTime
+  createdAt DateTime
+
+  @@unique([clientId, jti])
+  @@index([expiresAt])
+  @@map("oauth_client_assertions")
 }
 
 /// MUT-434: an authorization code (60 s, single use, D6). Only its digest is stored.

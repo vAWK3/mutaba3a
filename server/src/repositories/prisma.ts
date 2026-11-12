@@ -933,7 +933,10 @@ export class PrismaLedgerStore implements LedgerStore {
           const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
           if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
           // MUT-434 AC7 (OV10): the person's agent grants go in the same transaction, even if the flag was already off.
-          const agentGrantsRevoked = input.agentGrants ? await revokeOAuthGrantsInTx(tx, input.userId, 'feature_revoked', input.at, input.agentGrants.audit) : 0;
+          // MUT-593: agents only; a confidential client's grant (Malafat) isn't governed by the agent flag.
+          const agentGrantsRevoked = input.agentGrants
+            ? await revokeOAuthGrantsWhereInTx(tx, { userId: input.userId, client: { kind: { not: 'CONFIDENTIAL' } } }, 'feature_revoked', input.at, input.agentGrants.audit)
+            : 0;
           return { revoked: count > 0, agentGrantsRevoked };
         }),
       ),
@@ -953,6 +956,31 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(async () =>
         toOAuthClient(await this.prisma.oAuthClient.create({ data: { id: input.id, kind: 'DCR', clientName: input.clientName, redirectUris: input.redirectUris, createdAt: input.at } })),
       ),
+    createConfidentialClient: (input) =>
+      translate(async () =>
+        toOAuthClient(
+          await this.prisma.oAuthClient.create({
+            data: { id: input.id, kind: 'CONFIDENTIAL', clientName: input.clientName, redirectUris: input.redirectUris, jwksUri: input.jwksUri, allowedResources: input.allowedResources, createdAt: input.at },
+          }),
+        ),
+      ),
+    disableClient: ({ clientId, at }) =>
+      this.prisma.$transaction(async (tx) => {
+        const existing = await tx.oAuthClient.findUnique({ where: { id: clientId } });
+        if (!existing) return null;
+        const client = existing.disabledAt ? existing : await tx.oAuthClient.update({ where: { id: clientId }, data: { disabledAt: at } });
+        const grantsRevoked = await revokeOAuthGrantsWhereInTx(tx, { clientId }, 'client_disabled', at, []);
+        return { client: toOAuthClient(client), grantsRevoked };
+      }),
+    claimAssertion: async ({ clientId, jti, expiresAt, at }) => {
+      try {
+        await this.prisma.oAuthClientAssertion.create({ data: { clientId, jti, expiresAt, createdAt: at } });
+        return true;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false;
+        throw err;
+      }
+    },
     upsertCimdClient: async (input) =>
       toOAuthClient(
         await this.prisma.oAuthClient.upsert({
@@ -966,7 +994,7 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(async () =>
         toOAuthRequest(
           await this.prisma.oAuthAuthorizationRequest.create({
-            data: { clientId: input.clientId, redirectUri: input.redirectUri, codeChallenge: input.codeChallenge, scopes: input.scopes, state: input.state, resource: input.resource, createdAt: input.createdAt, expiresAt: input.expiresAt },
+            data: { clientId: input.clientId, redirectUri: input.redirectUri, codeChallenge: input.codeChallenge, scopes: input.scopes, state: input.state, resource: input.resource, tenantId: input.tenantId, createdAt: input.createdAt, expiresAt: input.expiresAt },
           }),
         ),
       ),
@@ -984,7 +1012,7 @@ export class PrismaLedgerStore implements LedgerStore {
           let grant: OAuthGrantRecord | null = null;
           if (input.approve) {
             const row = await tx.oAuthGrant.create({
-              data: { userId: input.userId, clientId: request.clientId, redirectUri: request.redirectUri, scopes: request.scopes, resource: request.resource, createdAt: input.at, expiresAt: input.approve.grantExpiresAt },
+              data: { userId: input.userId, clientId: request.clientId, redirectUri: request.redirectUri, scopes: request.scopes, resource: request.resource, tenantId: request.tenantId, createdAt: input.at, expiresAt: input.approve.grantExpiresAt },
             });
             await tx.oAuthCode.create({
               data: { codeDigest: input.approve.code.digest, grantId: row.id, codeChallenge: request.codeChallenge, redirectUri: request.redirectUri, resource: request.resource, createdAt: input.at, expiresAt: input.approve.code.expiresAt },
@@ -1036,6 +1064,8 @@ export class PrismaLedgerStore implements LedgerStore {
         return count > 0;
       }),
     revokeAllForUser: (input) => this.prisma.$transaction((tx) => revokeOAuthGrantsInTx(tx, input.userId, input.reason, input.at, input.audit)),
+    revokeForUserTenant: (input) =>
+      this.prisma.$transaction((tx) => revokeOAuthGrantsWhereInTx(tx, { userId: input.userId, clientId: input.clientId, tenantId: input.tenantId }, input.reason, input.at, input.audit)),
     listLiveGrants: async (userId, at) => {
       const rows = await this.prisma.oAuthGrant.findMany({
         where: { userId, revokedAt: null, expiresAt: { gt: at } },
@@ -1057,8 +1087,11 @@ export class PrismaLedgerStore implements LedgerStore {
             where: { OR: [{ expiresAt: { lte: before } }, { grant: { revokedAt: { lte: before } } }, { grant: { revokedAt: null, expiresAt: { lte: before } } }] },
           })
         ).count;
-        const clients = (await tx.oAuthClient.deleteMany({ where: { createdAt: { lte: clientsBefore }, grants: { none: {} }, requests: { none: { createdAt: { gt: clientsBefore } } } } })).count;
-        return { requests, codes, tokens, clients };
+        const clients = (
+          await tx.oAuthClient.deleteMany({ where: { kind: { not: 'CONFIDENTIAL' }, createdAt: { lte: clientsBefore }, grants: { none: {} }, requests: { none: { createdAt: { gt: clientsBefore } } } } })
+        ).count;
+        const assertions = (await tx.oAuthClientAssertion.deleteMany({ where: { expiresAt: { lte: at } } })).count;
+        return { requests, codes, tokens, clients, assertions };
       }),
   };
 
@@ -1393,10 +1426,26 @@ export class PrismaLedgerStore implements LedgerStore {
           },
         }),
       ),
-    disconnect: async (id, at) => {
-      await this.prisma.integration.updateMany({ where: { id }, data: { status: 'DISCONNECTED', disconnectedAt: at } });
-      return this.prisma.integration.findUnique({ where: { id } });
-    },
+    disconnect: (id, at) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.integration.updateMany({ where: { id }, data: { status: 'DISCONNECTED', disconnectedAt: at } });
+        const integration = await tx.integration.findUnique({ where: { id } });
+        // MUT-593 (ADR-254 §4.7): every person's delegated access to the tenant ends with the connection.
+        if (integration) await revokeOAuthGrantsWhereInTx(tx, { tenantId: integration.externalTenantId }, 'integration_disconnected', at, []);
+        return integration;
+      }),
+    setDelegation: ({ id, enabled, by, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const existing = await tx.integration.findUnique({ where: { id } });
+        if (!existing) return null;
+        const integration = await tx.integration.update({
+          where: { id },
+          data: enabled ? { delegationEnabledAt: existing.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null },
+        });
+        const grantsRevoked = enabled ? 0 : await revokeOAuthGrantsWhereInTx(tx, { tenantId: integration.externalTenantId }, 'delegation_disabled', at, []);
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { integration, grantsRevoked };
+      }),
   };
 
   readonly audit: AuditRepository = {
@@ -3663,7 +3712,12 @@ function toUserFeature(row: { userId: string; feature: string; grantedBy: string
 
 /** Every live grant of the person in one UPDATE; `audit` only when there was one. */
 async function revokeOAuthGrantsInTx(tx: Prisma.TransactionClient, userId: string, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
-  const { count } = await tx.oAuthGrant.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
+  return revokeOAuthGrantsWhereInTx(tx, { userId }, reason, at, audit);
+}
+
+/** MUT-593: every live grant matching `where` in one UPDATE; `audit` only when there was one. */
+async function revokeOAuthGrantsWhereInTx(tx: Prisma.TransactionClient, where: Prisma.OAuthGrantWhereInput, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
+  const { count } = await tx.oAuthGrant.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
   if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
   return count;
 }
@@ -3687,15 +3741,26 @@ function oauthTokenRows(grantId: string, tokens: readonly OAuthTokenInput[], at:
 }
 
 function toOAuthClient(row: Prisma.OAuthClientGetPayload<object>): OAuthClientRecord {
-  return { id: row.id, kind: row.kind, clientName: row.clientName, redirectUris: row.redirectUris, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, metadataExpiresAt: row.metadataExpiresAt };
+  return {
+    id: row.id,
+    kind: row.kind,
+    clientName: row.clientName,
+    redirectUris: row.redirectUris,
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt,
+    metadataExpiresAt: row.metadataExpiresAt,
+    jwksUri: row.jwksUri,
+    allowedResources: row.allowedResources,
+    disabledAt: row.disabledAt,
+  };
 }
 
 function toOAuthRequest(row: Prisma.OAuthAuthorizationRequestGetPayload<object>): OAuthAuthorizationRequestRecord {
-  return { id: row.id, clientId: row.clientId, redirectUri: row.redirectUri, codeChallenge: row.codeChallenge, scopes: row.scopes, state: row.state, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, decidedAt: row.decidedAt, userId: row.userId };
+  return { id: row.id, clientId: row.clientId, redirectUri: row.redirectUri, codeChallenge: row.codeChallenge, scopes: row.scopes, state: row.state, resource: row.resource, tenantId: row.tenantId, createdAt: row.createdAt, expiresAt: row.expiresAt, decidedAt: row.decidedAt, userId: row.userId };
 }
 
 function toOAuthGrant(row: Prisma.OAuthGrantGetPayload<object>): OAuthGrantRecord {
-  return { id: row.id, userId: row.userId, clientId: row.clientId, redirectUri: row.redirectUri, scopes: row.scopes, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revokedReason: row.revokedReason };
+  return { id: row.id, userId: row.userId, clientId: row.clientId, redirectUri: row.redirectUri, scopes: row.scopes, resource: row.resource, tenantId: row.tenantId, createdAt: row.createdAt, expiresAt: row.expiresAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revokedReason: row.revokedReason };
 }
 
 function toOAuthCode(row: Prisma.OAuthCodeGetPayload<object>): OAuthCodeRecord {

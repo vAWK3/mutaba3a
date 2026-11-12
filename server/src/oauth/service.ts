@@ -1,13 +1,17 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
+import type { JWTVerifyGetKey } from 'jose';
 import { sessionDigest } from '../auth/sessions.js';
 import type { AuditActorType, AuditEventInput, LedgerStore, OAuthClientRecord, OAuthGrantRecord, OAuthGrantRevokedReason, OAuthTokenInput, OAuthTokenRecord } from '../repositories/ports.js';
-import { canonicalResource, isValidCodeChallenge, mcpResourceUrl, parseScopeParam, redirectMatches, validateDcrRequest, verifyS256 } from './protocol.js';
+import { assertionIssuer, CLIENT_ASSERTION_TYPE, remoteKeys, verifyClientAssertion } from './client-assertion.js';
+import { canonicalResource, isValidCodeChallenge, mcpResourceUrl, parseScopeParam, redirectMatches, v1ResourceUrl, validateDcrRequest, verifyS256 } from './protocol.js';
 import { isAccessToken, isOAuthToken, OAUTH_TOKEN_PREFIX } from './tokens.js';
 import { cimdCacheUntil, isCimdClientId, type CimdFetchResult } from './trust.js';
 
 /**
- * MUT-434 (ADR-197): the authorization server's state machine over the store port. Hand-rolled (D9), public clients
- * only, PKCE S256, opaque tokens stored as digests under SESSION_TOKEN_PEPPER (rotating it signs agents out too).
+ * MUT-434 (ADR-197): the authorization server's state machine over the store port. Hand-rolled (D9), PKCE S256,
+ * opaque tokens stored as digests under SESSION_TOKEN_PEPPER (rotating it signs agents out too). Public clients
+ * (DCR, CIMD) reach `/mcp` only. MUT-593 (ADR-254): a CONFIDENTIAL client (Malafat, operator-registered) also proves
+ * itself with private_key_jwt at the token endpoint, may ask for `/v1`, and names the tenant it acts in.
  * Every decision that must happen once — a consent, a code exchange, a refresh — is a conditional claim in the store
  * (D6). The clock is passed in, so every rule is testable on the memory store.
  */
@@ -28,6 +32,8 @@ export const OAUTH_TTL = {
 const PREFIX = OAUTH_TOKEN_PREFIX;
 const RANDOM_BYTES = 32;
 const MAX_STATE_LENGTH = 500;
+/** The `tenantId` column's width. */
+const MAX_TENANT_LENGTH = 255;
 
 function randomToken(prefix: string): string {
   return prefix + randomBytes(RANDOM_BYTES).toString('base64url');
@@ -52,6 +58,10 @@ export interface OAuthServiceDeps {
   fetchMetadata: (url: string) => Promise<CimdFetchResult>;
   captureMessage: (level: 'warning' | 'info', message: string, tags: Record<string, string>) => void;
   auditFor: AuditFor;
+  /** MUT-593 (MALAFAT_DELEGATION): whether a confidential client is served at all. Absent = off. */
+  delegation?: boolean;
+  /** MUT-593: a confidential client's published keys; tests pass a local key set. Defaults to fetching its JWKS URL. */
+  keysFor?: (client: OAuthClientRecord) => JWTVerifyGetKey;
 }
 
 export type PageError = 'invalid_client' | 'invalid_redirect_uri' | 'invalid_request';
@@ -64,13 +74,27 @@ type Params = Record<string, string | undefined>;
 
 export class OAuthService {
   private readonly resource: string;
+  /** MUT-593: `<issuer>/v1`, for a confidential client only. */
+  readonly v1Resource: string;
 
   constructor(private readonly deps: OAuthServiceDeps) {
     this.resource = canonicalResource(mcpResourceUrl(deps.issuer)) ?? mcpResourceUrl(deps.issuer);
+    this.v1Resource = canonicalResource(v1ResourceUrl(deps.issuer)) ?? v1ResourceUrl(deps.issuer);
   }
 
   get issuer(): string {
     return this.deps.issuer.endsWith('/') ? this.deps.issuer.slice(0, -1) : this.deps.issuer;
+  }
+
+  /** MUT-593: whether a confidential client is served (MALAFAT_DELEGATION). */
+  get delegation(): boolean {
+    return this.deps.delegation ?? false;
+  }
+
+  /** A public client asks only for `/mcp`; a confidential one for what the operator registered it for. */
+  private resourcesFor(client: OAuthClientRecord): string[] {
+    if (client.kind !== 'CONFIDENTIAL') return [this.resource];
+    return client.allowedResources.map((r) => canonicalResource(r)).filter((r): r is string => r !== null);
   }
 
   private digest(token: string): string {
@@ -91,9 +115,13 @@ export class OAuthService {
     return { ok: true, client };
   }
 
-  /** A DCR client by id, or a CIMD client fetched (or re-fetched once stale) and stored as a row (OV2). */
+  /**
+   * A DCR client by id, or a CIMD client fetched (or re-fetched once stale) and stored as a row (OV2). MUT-593: or a
+   * confidential client, while it isn't disabled and delegation is on.
+   */
   private async resolveClient(clientId: string, at: Date): Promise<OAuthClientRecord | null> {
     const existing = await this.deps.store.oauth.findClient(clientId);
+    if (existing?.kind === 'CONFIDENTIAL') return this.servesConfidential(existing) ? existing : null;
     if (!isCimdClientId(clientId)) return existing?.kind === 'DCR' ? existing : null;
     if (existing?.kind === 'CIMD' && existing.metadataExpiresAt && existing.metadataExpiresAt.getTime() > at.getTime()) return existing;
     const fetched = await this.deps.fetchMetadata(clientId);
@@ -136,8 +164,12 @@ export class OAuthService {
     if (params.code_challenge_method !== 'S256' || !params.code_challenge || !isValidCodeChallenge(params.code_challenge)) return fail('invalid_request');
     const scopes = parseScopeParam(params.scope);
     if (!scopes.ok) return fail('invalid_scope');
-    const resource = params.resource === undefined ? this.resource : canonicalResource(params.resource);
-    if (resource !== this.resource) return fail('invalid_target');
+    const allowed = this.resourcesFor(client);
+    const resource = params.resource === undefined ? (allowed[0] ?? null) : canonicalResource(params.resource);
+    if (resource === null || !allowed.includes(resource)) return fail('invalid_target');
+    // MUT-593 (ADR-254 D9): a confidential client names the one Malafat tenant it will act in; consent checks it.
+    const tenantId = client.kind === 'CONFIDENTIAL' ? (params.malafat_tenant ?? null) : null;
+    if (client.kind === 'CONFIDENTIAL' && (!tenantId || tenantId.length > MAX_TENANT_LENGTH)) return fail('invalid_request');
 
     const request = await this.deps.store.oauth.createAuthorizationRequest({
       clientId: client.id,
@@ -146,6 +178,7 @@ export class OAuthService {
       scopes: scopes.scopes,
       state,
       resource,
+      tenantId,
       createdAt: at,
       expiresAt: new Date(at.getTime() + OAUTH_TTL.requestMs),
     });
@@ -201,10 +234,43 @@ export class OAuthService {
   }
 
   async token(params: Params, at: Date): Promise<TokenResult> {
-    if (!params.client_id) return this.error('invalid_request', 'client_id is required for public clients');
-    if (params.grant_type === 'authorization_code') return this.exchangeCode(params, params.client_id, at);
-    if (params.grant_type === 'refresh_token') return this.refresh(params, params.client_id, at);
+    const clientId = params.client_id ?? (params.client_assertion ? assertionIssuer(params.client_assertion) : null);
+    if (!clientId) return this.error('invalid_request', 'client_id is required for public clients');
+    const client = await this.deps.store.oauth.findClient(clientId);
+    const authenticated = await this.authenticateClient(client, params, at);
+    if (authenticated) return authenticated;
+    if (params.grant_type === 'authorization_code') return this.exchangeCode(params, clientId, at);
+    if (params.grant_type === 'refresh_token') return this.refresh(params, clientId, at);
     return this.error('unsupported_grant_type', 'Only authorization_code and refresh_token are supported');
+  }
+
+  private servesConfidential(client: OAuthClientRecord): boolean {
+    return this.delegation && client.disabledAt === null;
+  }
+
+  /**
+   * MUT-593 (RFC 7523): a confidential client must prove itself on every token request, code and refresh alike; a
+   * public client must not try. Null = go on; otherwise the refusal. A disabled client, or delegation off, is
+   * `invalid_client` before any assertion is read.
+   */
+  private async authenticateClient(client: OAuthClientRecord | null, params: Params, at: Date): Promise<TokenResult | null> {
+    const presented = params.client_assertion;
+    if (client?.kind !== 'CONFIDENTIAL') {
+      return presented || params.client_assertion_type ? this.error('invalid_client', 'This client does not authenticate with an assertion', 401) : null;
+    }
+    if (!this.servesConfidential(client)) return this.error('invalid_client', 'This client is not available', 401);
+    if (params.client_assertion_type !== CLIENT_ASSERTION_TYPE || !presented || !client.jwksUri) return this.error('invalid_client', 'A signed client assertion is required', 401);
+    const result = await verifyClientAssertion({
+      assertion: presented,
+      client,
+      audiences: [`${this.issuer}/oauth/token`, this.issuer],
+      now: at,
+      keys: this.deps.keysFor ? this.deps.keysFor(client) : remoteKeys(client.jwksUri),
+      claimJti: (jti, expiresAt) => this.deps.store.oauth.claimAssertion({ clientId: client.id, jti, expiresAt, at }),
+    });
+    if (result.ok) return null;
+    if (result.reason === 'replay') this.deps.captureMessage('warning', 'OAuth client assertion replayed', { clientId: client.id });
+    return this.error('invalid_client', 'The client assertion is not valid', 401);
   }
 
   private resourceMismatch(presented: string | undefined, bound: string): boolean {
@@ -293,12 +359,15 @@ export class OAuthService {
 
   // ---- resource side ---------------------------------------------------------------
 
-  /** An access token's live grant, bound to this server's resource (D3); null for anything else. */
-  async authenticateAccess(token: string, at: Date): Promise<{ grant: OAuthGrantRecord; token: OAuthTokenRecord } | null> {
+  /**
+   * An access token's live grant, bound to `resource` (D3): `/mcp` by default, MUT-593's `/v1` for a delegated call.
+   * Null for anything else, so a `/v1` token never opens /mcp and an agent's token never opens /v1.
+   */
+  async authenticateAccess(token: string, at: Date, resource: string = this.resource): Promise<{ grant: OAuthGrantRecord; token: OAuthTokenRecord } | null> {
     if (!isAccessToken(token)) return null;
     const found = await this.deps.store.oauth.findToken(this.digest(token));
     if (!found || found.token.kind !== 'ACCESS' || found.token.expiresAt.getTime() <= at.getTime()) return null;
-    if (!isLive(found.grant, at) || found.grant.resource !== this.resource) return null;
+    if (!isLive(found.grant, at) || found.grant.resource !== resource) return null;
     return found;
   }
 

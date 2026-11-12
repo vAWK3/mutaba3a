@@ -26,6 +26,8 @@ const ClaimsSchema = z.object({
   lang: z.enum(['ar', 'en']),
   /** The session that minted a member's or accountant's ticket (its id: no credential); null for a link. */
   sid: z.string().uuid().nullable(),
+  /** MUT-593: the delegated grant that minted a member's ticket in place of a session (Malafat acting as the person). */
+  gid: z.string().uuid().nullable().optional(),
 });
 export type TicketClaims = z.infer<typeof ClaimsSchema>;
 

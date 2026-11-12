@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { deleteCookie, setCookie } from 'hono/cookie';
-import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
 import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
@@ -189,7 +189,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       },
     }),
     async (c) => {
-      await store.sessions.revoke(c.get('identity').session.id, 'signed_out', c.get('now')());
+      await store.sessions.revoke(personSession(c).session.id, 'signed_out', c.get('now')());
       deleteCookie(c, cookieName, cookieOptions);
       return c.body(null, 204);
     },
@@ -267,7 +267,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
     async (c) => {
       const { version, locale, clientRelease } = c.req.valid('json');
       if (version !== terms.version) throw staleTerms(terms);
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const acceptance = termsAcceptanceOf(terms, locale, session.kind, clientRelease);
       const audit = await termsAcceptedAudit(store, user, acceptance, c.get('requestId'));
       await store.users.acceptTerms({ userId: user.id, ...acceptance, at: c.get('now')(), audit });
@@ -304,7 +304,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
     async (c) => {
       // No same-origin check here: authenticate() already enforces it for the cookie branch (middleware.ts:172),
       // and a device bearer token has no comparable CSRF signal to check (same reasoning as GET /v1/me below).
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const { currentPassword, newPassword, rotateToken } = c.req.valid('json');
       // MUT-333: the same check closing an account makes (auth/current-password.ts).
       const verifiedPasswordHash = await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword, c.get('now')(), c.get('requestId'));

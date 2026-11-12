@@ -95,6 +95,9 @@ export interface IntegrationRecord {
   connectedByApiKeyId: string | null;
   connectedAt: Date;
   disconnectedAt: Date | null;
+  /** MUT-593 (ADR-254 D10): the operator's per-firm switch for delegated access; null = off. */
+  delegationEnabledAt: Date | null;
+  delegationEnabledBy: string | null;
 }
 
 export interface ConnectIntegrationInput {
@@ -328,7 +331,13 @@ export interface IntegrationRepository {
   listByOrganization(organizationId: string): Promise<IntegrationRecord[]>;
   /** Creates, or re-connects a DISCONNECTED row for the same (organization, provider) keeping its id. */
   connect(input: ConnectIntegrationInput): Promise<IntegrationRecord>;
+  /** MUT-593 (ADR-254 §4.7): also ends every live delegated grant for the tenant, in the same transaction. */
   disconnect(id: string, at: Date): Promise<IntegrationRecord | null>;
+  /**
+   * MUT-593 (ADR-254 D10): the operator's per-firm switch, with `audit` in the same transaction. Turning it off also
+   * ends every live delegated grant for the tenant (reason `delegation_disabled`), so turning it on again revives none.
+   */
+  setDelegation(input: { id: string; enabled: boolean; by: string | null; at: Date; audit: AuditEventInput[] }): Promise<{ integration: IntegrationRecord; grantsRevoked: number } | null>;
 }
 
 export interface AuditFilter {
@@ -2906,7 +2915,8 @@ export interface FeaturesRepository {
 
 // ---- MUT-434: OAuth 2.1 for MCP clients (ADR-197) ------------------------------
 
-export type OAuthClientKind = 'DCR' | 'CIMD';
+/** MUT-593: CONFIDENTIAL = operator-registered, private_key_jwt (ADR-254); never made by /oauth/register. */
+export type OAuthClientKind = 'DCR' | 'CIMD' | 'CONFIDENTIAL';
 
 export interface OAuthClientRecord {
   /** `mcl_…` (DCR) or the metadata document URL (CIMD). */
@@ -2918,6 +2928,11 @@ export interface OAuthClientRecord {
   lastUsedAt: Date | null;
   /** CIMD: when the cached document goes stale; null for DCR. */
   metadataExpiresAt: Date | null;
+  /** MUT-593 (CONFIDENTIAL only): where the client publishes its public keys. */
+  jwksUri: string | null;
+  /** MUT-593: the resources a confidential client may ask for; empty for a public client (MCP only). */
+  allowedResources: string[];
+  disabledAt: Date | null;
 }
 
 export interface OAuthAuthorizationRequestRecord {
@@ -2928,6 +2943,8 @@ export interface OAuthAuthorizationRequestRecord {
   scopes: string[];
   state: string | null;
   resource: string;
+  /** MUT-593: the Malafat tenant a confidential client asks to act in; null for a public client. */
+  tenantId: string | null;
   createdAt: Date;
   expiresAt: Date;
   decidedAt: Date | null;
@@ -2935,7 +2952,19 @@ export interface OAuthAuthorizationRequestRecord {
 }
 
 /** Why a grant ended; stored in `revokedReason`. */
-export type OAuthGrantRevokedReason = 'user' | 'feature_revoked' | 'disabled' | 'operator' | 'password_changed' | 'refresh_reuse' | 'code_reuse' | 'account_changed';
+export type OAuthGrantRevokedReason =
+  | 'user'
+  | 'feature_revoked'
+  | 'disabled'
+  | 'operator'
+  | 'password_changed'
+  | 'refresh_reuse'
+  | 'code_reuse'
+  | 'account_changed'
+  // MUT-593 (ADR-254 §4.7): the delegated grant's own endings.
+  | 'integration_disconnected'
+  | 'delegation_disabled'
+  | 'client_disabled';
 
 export interface OAuthGrantRecord {
   id: string;
@@ -2944,6 +2973,8 @@ export interface OAuthGrantRecord {
   redirectUri: string;
   scopes: string[];
   resource: string;
+  /** MUT-593 (ADR-254 D9): the one Malafat tenant a delegated grant acts in; null for an agent's grant. */
+  tenantId: string | null;
   createdAt: Date;
   expiresAt: Date;
   lastUsedAt: Date | null;
@@ -2992,6 +3023,12 @@ export interface OAuthRepository {
   createClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date }): Promise<OAuthClientRecord>;
   /** CIMD (OV2): creates the row for a fetched document, or refreshes name, redirects and expiry on a re-fetch. */
   upsertCimdClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date; metadataExpiresAt: Date }): Promise<OAuthClientRecord>;
+  /** MUT-593 (operator script): a CONFIDENTIAL client. UniqueViolation on an id already taken. */
+  createConfidentialClient(input: { id: string; clientName: string; redirectUris: string[]; jwksUri: string; allowedResources: string[]; at: Date }): Promise<OAuthClientRecord>;
+  /** MUT-593: disables a client and ends every live grant of it (`client_disabled`) in one transaction. Null = unknown client. */
+  disableClient(input: { clientId: string; at: Date }): Promise<{ client: OAuthClientRecord; grantsRevoked: number } | null>;
+  /** MUT-593 (RFC 7523 §3): records an assertion id; false when the client used it before (a replay). */
+  claimAssertion(input: { clientId: string; jti: string; expiresAt: Date; at: Date }): Promise<boolean>;
   findClient(id: string): Promise<OAuthClientRecord | null>;
   createAuthorizationRequest(input: Omit<OAuthAuthorizationRequestRecord, 'id' | 'decidedAt' | 'userId'>): Promise<OAuthAuthorizationRequestRecord>;
   findAuthorizationRequest(id: string): Promise<OAuthAuthorizationRequestRecord | null>;
@@ -3033,15 +3070,18 @@ export interface OAuthRepository {
   revokeGrant(input: { grantId: string; userId?: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<boolean>;
   /** Every live grant the person holds, in one statement; `audit` is written only when there was one. */
   revokeAllForUser(input: { userId: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<number>;
+  /** MUT-593: the person's live grants of one client in one tenant (Connected apps' revoke); `audit` only when there was one. */
+  revokeForUserTenant(input: { userId: string; clientId: string; tenantId: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<number>;
   /** Live (unrevoked, unexpired) grants, newest first, with the client's name. */
   listLiveGrants(userId: string, at: Date): Promise<OAuthGrantListing[]>;
   /** Throttled by the caller; never moves `expiresAt`. */
   touchGrant(grantId: string, at: Date): Promise<void>;
   /**
    * Nightly housekeeping: expired requests and codes, tokens of grants revoked or expired before `before`, and clients
-   * created before `clientsBefore` that never had a grant (OV5) and has no request newer than that.
+   * created before `clientsBefore` that never had a grant (OV5) and has no request newer than that. MUT-593: never a
+   * CONFIDENTIAL client (the operator registered it), and assertion ids once expired.
    */
-  cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number }>;
+  cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number; assertions: number }>;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------

@@ -18,9 +18,11 @@ import type { Logger } from './logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
 import { SENTRY_INGEST_ORIGIN } from './observability/sentry-ingest.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
-import type { LedgerStore } from './repositories/ports.js';
+import type { LedgerStore, OAuthClientRecord } from './repositories/ports.js';
+import type { JWTVerifyGetKey } from 'jose';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
+import { adminOAuthClientRoutes } from './routes/admin-oauth-clients.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
 import { EMAIL_WEBHOOK_POLICY, emailWebhookRoutes } from './routes/email-webhook.js';
 import { devOutboxRoutes } from './routes/dev-outbox.js';
@@ -68,7 +70,8 @@ import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, share
 import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_SUMMARY_POLICY, SHARE_LINK_VIEW_IP_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
-import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
+import { MALAFAT_DELEGATION_OPERATOR_ENDPOINTS, OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
+import { CONNECTED_APPS_ENDPOINTS, CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, connectedAppRoutes } from './routes/connected-apps.js';
 import { operatorGate } from './auth/operator-gate.js';
 import { createReviewDigest, type ReviewDigest } from './email/review-digest.js';
 import { auditRoutes } from './routes/audit.js';
@@ -211,7 +214,15 @@ export interface AppDependencies {
    * the /oauth endpoints, the OAuth discovery documents, /mcp and /v1/oauth/* answer 503 OAUTH_NOT_CONFIGURED.
    * `fetchMetadata` and the limiters are injected by tests; production uses the guarded CIMD fetch and OAUTH_POLICY.
    */
-  oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter; agentPersonLimiter?: RateLimiter } | null;
+  oauth?: {
+    deriveKey: string;
+    fetchMetadata?: (url: string) => Promise<CimdFetchResult>;
+    limiters?: OAuthLimiters;
+    agentLimiter?: RateLimiter;
+    agentPersonLimiter?: RateLimiter;
+    /** MUT-593: a confidential client's keys (tests); default fetches its JWKS URL. */
+    keysFor?: (client: OAuthClientRecord) => JWTVerifyGetKey;
+  } | null;
   /**
    * MUT-441 (SERVER_OCR): the server reads receipts, on the OCR service through `ocr`, scheduled by `dispatcher`
    * (Cloud Tasks; an InlineDispatcher is bound to the reader here). Needs `attachments`. Null or absent = no receipt is
@@ -225,6 +236,11 @@ export interface AppDependencies {
    * /v1/me has no `clients`, and selectProfile never reads a grant (the server deploys dark).
    */
   accountantAccess?: boolean;
+  /**
+   * MUT-593 (MALAFAT_DELEGATION, ADR-254): Malafat acting as each person. Absent or false = delegated tokens are
+   * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
+   */
+  malafatDelegation?: boolean;
   /** MUT-559: ACCOUNTANTS_PER_PROFILE_MAX. Default ACCOUNTANTS_PER_PROFILE_DEFAULT (5). */
   accountantsPerProfileMax?: number;
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
@@ -263,7 +279,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -345,7 +361,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.108.0-mut565';
+export const API_VERSION = '1.109.0-mut593';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -357,6 +373,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
   const accountantAccess = deps.accountantAccess ?? false;
+  const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
   const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
@@ -391,6 +408,21 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
+  // MUT-434 (ADR-197): the OAuth server. MUT-593: built before authenticate(), which verifies Malafat's delegated tokens with it.
+  const oauthService =
+    deps.oauth && sessions.portalOrigin
+      ? new OAuthService({
+          store: deps.store,
+          issuer: sessions.portalOrigin,
+          pepper: sessions.pepper,
+          deriveKey: deps.oauth.deriveKey,
+          fetchMetadata: deps.oauth.fetchMetadata ?? ((url) => fetchClientMetadata(url)),
+          captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
+          auditFor: agentAuditFor(deps.store),
+          delegation: malafatDelegation,
+          ...(deps.oauth.keysFor ? { keysFor: deps.oauth.keysFor } : {}),
+        })
+      : null;
   // Shared by the cookie and device-session sign-in routes (MUT-64): one throttle/IP-budget per email or address, whichever surface it comes from.
   const signInThrottle = deps.signInThrottle ?? new SignInThrottle();
   const signInIpLimiter = deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
@@ -421,6 +453,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
+    { endpoints: new Set([...CONNECTED_APPS_ENDPOINTS, ...MALAFAT_DELEGATION_OPERATOR_ENDPOINTS]), on: malafatDelegation, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
   ];
   app.use('/v1/*', async (c, next) => {
     const endpoint = endpointKey(c);
@@ -439,6 +473,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       organizationIndependent: SESSION_ORGANIZATION_INDEPENDENT_ROUTES,
       accountantAccess,
       accountantPlan,
+      delegation: { service: oauthService, on: malafatDelegation },
     }),
   );
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
@@ -622,6 +657,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
+  app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
@@ -719,21 +755,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   if (deps.localAttachments) app.route('/', devAttachmentRoutes(deps.localAttachments));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
   // MUT-434 (ADR-197): the OAuth server and the MCP endpoint, always mounted so an unconfigured server answers 503, not the SPA.
-  const oauthService =
-    deps.oauth && sessions.portalOrigin
-      ? new OAuthService({
-          store: deps.store,
-          issuer: sessions.portalOrigin,
-          pepper: sessions.pepper,
-          deriveKey: deps.oauth.deriveKey,
-          fetchMetadata: deps.oauth.fetchMetadata ?? ((url) => fetchClientMetadata(url)),
-          captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
-          auditFor: agentAuditFor(deps.store),
-        })
-      : null;
   const requestPaths = { trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) };
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
+  app.route('/', connectedAppRoutes({ store }));
   app.route('/', oauthCleanupRoutes(deps.store));
   app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
     tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter, reading: receiptReader } }));
@@ -776,6 +801,14 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       'Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. ' +
       'Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — ' +
       'organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'delegated', {
+    type: 'http',
+    scheme: 'bearer',
+    description:
+      'Malafat acting as one person (MUT-593, ADR-254): `Authorization: Bearer mat_…`, an OAuth access token issued to Malafat\'s confidential ' +
+      'client for resource <origin>/v1 and bound to one Malafat tenant. The person\'s own permissions apply unchanged, on the tenant\'s profile ' +
+      'only (X-Mutaba3a-Profile must name it; any other profile is 404 PROFILE_NOT_FOUND). Only routes that list this scheme accept it.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'jobToken', {
     type: 'apiKey',

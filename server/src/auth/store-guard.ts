@@ -1,6 +1,7 @@
 import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
-import type { LedgerStore } from '../repositories/ports.js';
+import type { AuditEventInput, LedgerStore } from '../repositories/ports.js';
+import { DELEGATED_AUDIT_VIA } from './delegation.js';
 import type { AppEnv } from './middleware.js';
 import { accountantReadOnly, shareLinkReadOnly, mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
@@ -134,7 +135,12 @@ export const STORE_ACCESS: StoreAccess = {
     decide: 'sessionOnly',
     listLiveGrants: 'sessionOnly',
     revokeGrant: 'sessionOnly',
+    // MUT-593: Connected apps' revoke of Malafat for one firm.
+    revokeForUserTenant: 'sessionOnly',
     createClient: 'operator',
+    createConfidentialClient: 'operator',
+    disableClient: 'operator',
+    claimAssertion: 'operator',
     upsertCimdClient: 'operator',
     createAuthorizationRequest: 'operator',
     findCode: 'operator',
@@ -154,6 +160,8 @@ export const STORE_ACCESS: StoreAccess = {
     listByOrganization: 'read',
     connect: { write: 'integration' },
     disconnect: { write: 'integration' },
+    // MUT-593: the operator's per-firm switch (operator console, on the raw store).
+    setDelegation: 'operator',
   },
   audit: { append: 'control', listByOrganization: 'read', list: 'read' },
   idempotency: { claim: 'control', get: 'read', complete: 'control', fail: 'control' },
@@ -631,13 +639,38 @@ function guardRepository(name: string, repository: Record<string, unknown>): Rec
       const value: unknown = Reflect.get(target, method, target);
       if (typeof method !== 'string' || typeof value !== 'function') return value;
       return (...args: unknown[]) => {
+        const vars = tryGetContext<AppEnv>()?.var;
         try {
-          tryGetContext<AppEnv>()?.var.storeGuard?.assertCanCall(name, method);
+          vars?.storeGuard?.assertCanCall(name, method);
         } catch (err) {
           return Promise.reject(err);
         }
+        if (vars?.identity?.via) stampDelegatedAudit(args, vars.identity.user.id);
         return (value as (...a: unknown[]) => unknown).apply(target, args);
       };
     },
   });
+}
+
+/** How deep stampDelegatedAudit looks for audit rows in a store call's arguments (`input.agentGrants.audit` is 3). */
+const AUDIT_SEARCH_DEPTH = 3;
+
+/**
+ * MUT-593 (ADR-254 AC9): every audit row a delegated request writes as the person is marked `via: malafat`, here
+ * where every write passes, so no route has to remember it. A row reaches the store either as `audit.append`'s
+ * argument or inside a transactional write's input (`audit: [...]`, sometimes one level deeper). Rows credited to
+ * anyone else (SYSTEM catch-up, ADMIN) are left as they are.
+ */
+function stampDelegatedAudit(args: readonly unknown[], userId: string): void {
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > AUDIT_SEARCH_DEPTH || value === null || typeof value !== 'object' || value instanceof Date || ArrayBuffer.isView(value)) return;
+    if (Array.isArray(value)) return value.forEach((item) => visit(item, depth + 1));
+    const row = value as Partial<AuditEventInput>;
+    if (typeof row.action === 'string' && typeof row.entityType === 'string' && 'actorType' in row) {
+      if (row.actorType === 'USER' && row.actorId === userId) row.metadata = { ...(row.metadata ?? {}), via: DELEGATED_AUDIT_VIA };
+      return;
+    }
+    for (const nested of Object.values(value)) visit(nested, depth + 1);
+  };
+  for (const arg of args) visit(arg, 0);
 }

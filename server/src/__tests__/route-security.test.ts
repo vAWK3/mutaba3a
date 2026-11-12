@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
-import { createApp } from '../app.js';
+import { createApp, SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
+import { DELEGATED_PERSON_ROUTES, DELEGATED_PROFILE_PATH_ROUTES } from '../auth/delegation.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { domainOfScope, matrixRow } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -169,6 +170,38 @@ const OPERATOR_OPERATIONS = [
   'GET /v1/operator/firm-requests/{organizationId}',
   'POST /v1/operator/firm-requests/{organizationId}/enable',
   'POST /v1/operator/firm-requests/{organizationId}/decline',
+  // MUT-593: the per-firm Malafat switch.
+  'POST /v1/operator/organizations/{organizationId}/malafat-delegation',
+];
+
+/** MUT-593 (ADR-254): You › Connected apps, from the portal or the phone; never a delegated token. */
+const CONNECTED_APP_OPERATIONS = ['GET /v1/me/connected-apps', 'DELETE /v1/me/connected-apps/{grantId}'];
+
+/**
+ * MUT-593 (ADR-254 §4.2): what Malafat's delegated token may never reach, by path prefix — the person's own
+ * credentials, sessions, account, billing, agents and connected apps, the operator console, the records export, and
+ * every person-level read across profiles. Matched by prefix, so a new route under one of these is covered at once.
+ */
+const NEVER_DELEGATED_PREFIXES = [
+  '/v1/me/password',
+  '/v1/me/closure',
+  '/v1/me/connected-apps',
+  '/v1/me/passkey-prompt',
+  '/v1/me/terms-acceptance',
+  '/v1/me/malafat-suggestions',
+  '/v1/me/trial-prompt',
+  '/v1/passkeys',
+  '/v1/sessions',
+  '/v1/device-sessions',
+  '/v1/billing',
+  '/v1/oauth',
+  '/v1/operator',
+  '/v1/records-export',
+  '/v1/inbox',
+  '/v1/entries',
+  '/v1/summaries/verdict',
+  '/v1/accountant-invites',
+  '/v1/clients',
 ];
 
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
@@ -188,6 +221,7 @@ const SESSION_OPERATIONS = [
   ...FX_OPERATIONS,
   ...ENTRIES_OPERATIONS,
   ...RECORDS_EXPORT_OPERATIONS,
+  ...CONNECTED_APP_OPERATIONS,
   'DELETE /v1/sessions/current',
   'GET /v1/agreements',
   'GET /v1/agreements/{agreementId}',
@@ -290,6 +324,7 @@ beforeAll(async () => {
     receiptsLibrary: true,
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
+    malafatDelegation: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
     // MUT-314: and period downloads (PERIOD_DOWNLOADS).
@@ -354,6 +389,30 @@ describe('route security declarations', () => {
   });
 });
 
+describe('Malafat’s delegated token (MUT-593, ADR-254)', () => {
+  const delegated = () => operations.filter((op) => (op.security ?? []).some((req) => 'delegated' in req));
+
+  it('is opted into the brief’s person features, and only where a person may already go', () => {
+    expect(delegated().length).toBeGreaterThan(40);
+    const withoutPerson = delegated().filter((op) => !accepts(op, 'session') || !accepts(op, 'deviceSession')).map((op) => op.key);
+    expect(withoutPerson).toEqual([]);
+  });
+
+  it('never reaches a credential, session, account, billing, agent, operator or cross-profile route', () => {
+    const leaked = delegated().filter((op) => NEVER_DELEGATED_PREFIXES.some((prefix) => op.path.startsWith(prefix))).map((op) => op.key);
+    expect(leaked).toEqual([]);
+  });
+
+  it('reaches a route that names no profile in the header only when the tenant check covers it', () => {
+    const honoKey = (op: Operation) => `${op.method} ${op.path.replace(/\{([^}]+)\}/g, ':$1')}`;
+    const covered = new Set([...DELEGATED_PERSON_ROUTES, ...DELEGATED_PROFILE_PATH_ROUTES]);
+    const uncovered = delegated()
+      .filter((op) => SESSION_ORGANIZATION_INDEPENDENT_ROUTES.has(honoKey(op)) && !covered.has(honoKey(op)))
+      .map((op) => op.key);
+    expect(uncovered).toEqual([]);
+  });
+});
+
 describe('authenticate() enforces each declaration', () => {
   it('reads every key-reachable operation’s scopes from its middleware', () => {
     const unscoped = operations.filter((o) => accepts(o, 'apiKey') && scopesOf(o).length === 0).map((o) => o.key);
@@ -393,7 +452,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -403,7 +462,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

@@ -1,5 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
-import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -130,7 +130,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
       },
     }),
     async (c) => {
-      await store.sessions.revoke(c.get('identity').session.id, 'signed_out', c.get('now')());
+      await store.sessions.revoke(personSession(c).session.id, 'signed_out', c.get('now')());
       return c.body(null, 204);
     },
   );

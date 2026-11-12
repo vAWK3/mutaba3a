@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.108.0-mut565
+  version: 1.109.0-mut593
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -114,6 +114,10 @@ components:
       type: http
       scheme: bearer
       description: "Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user's memberships."
+    delegated:
+      type: http
+      scheme: bearer
+      description: "Malafat acting as one person (MUT-593, ADR-254): `Authorization: Bearer mat_…`, an OAuth access token issued to Malafat's confidential client for resource <origin>/v1 and bound to one Malafat tenant. The person's own permissions apply unchanged, on the tenant's profile only (X-Mutaba3a-Profile must name it; any other profile is 404 PROFILE_NOT_FOUND). Only routes that list this scheme accept it."
     jobToken:
       type: apiKey
       in: header
@@ -10671,6 +10675,60 @@ components:
         - requestedByUserId
         - requestedByEmail
         - owned
+    ConfidentialClient:
+      type: object
+      properties:
+        clientId:
+          type: string
+        name:
+          type: string
+        redirectUris:
+          type: array
+          items:
+            type: string
+        jwksUri:
+          type: string
+          nullable: true
+        allowedResources:
+          type: array
+          items:
+            type: string
+        disabledAt:
+          type: string
+          nullable: true
+          format: date-time
+        grantsRevoked:
+          type: integer
+      required:
+        - clientId
+        - name
+        - redirectUris
+        - jwksUri
+        - allowedResources
+        - disabledAt
+    RegisterConfidentialClientRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 100
+        redirectUris:
+          type: array
+          items:
+            type: string
+            maxLength: 2048
+            format: uri
+          minItems: 1
+          maxItems: 5
+        jwksUri:
+          type: string
+          maxLength: 2048
+          format: uri
+      required:
+        - name
+        - redirectUris
+        - jwksUri
     CreateUserResponse:
       type: object
       properties:
@@ -11476,6 +11534,34 @@ components:
             format: uuid
           maxItems: 50
       additionalProperties: false
+    OperatorMalafatDelegation:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        delegationEnabledAt:
+          type: string
+          nullable: true
+          format: date-time
+          description: "Null = off: Malafat can’t act for anyone in this firm"
+        grantsRevoked:
+          type: integer
+          description: Members’ Malafat connections this change ended (0 when turning it on)
+      required:
+        - organizationId
+        - tenantId
+        - delegationEnabledAt
+        - grantsRevoked
+    OperatorMalafatDelegationRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+        - enabled
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -12465,6 +12551,8 @@ components:
               enum:
                 - DCR
                 - CIMD
+                - CONFIDENTIAL
+              description: CONFIDENTIAL = an app MTB3A registered itself (Malafat, MUT-593), acting in one firm
             trust:
               type: string
               enum:
@@ -12492,7 +12580,7 @@ components:
           format: date-time
         agentAccess:
           type: boolean
-          description: Whether this person may approve it (the agent_access feature); false = show the refusal
+          description: "Whether this person may approve it: the agent_access feature for an agent; for Malafat (MUT-593), membership of the firm it names with Malafat access turned on. False = show the refusal"
       required:
         - id
         - client
@@ -12578,6 +12666,51 @@ components:
         - connectedAt
         - lastUsedAt
         - expiresAt
+    ConnectedAppList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ConnectedApp"
+      required:
+        - items
+    ConnectedApp:
+      type: object
+      properties:
+        grantId:
+          type: string
+          format: uuid
+        clientName:
+          type: string
+        tenantId:
+          type: string
+        firmName:
+          type: string
+          nullable: true
+          description: The firm the connection acts in, as Malafat names it; null once disconnected
+        scopes:
+          type: array
+          items:
+            type: string
+            enum:
+              - read
+              - write
+        connectedAt:
+          type: string
+          format: date-time
+        lastUsedAt:
+          type: string
+          nullable: true
+          format: date-time
+      required:
+        - grantId
+        - clientName
+        - tenantId
+        - firmName
+        - scopes
+        - connectedAt
+        - lastUsedAt
     OAuthCleanupSummary:
       type: object
       properties:
@@ -14193,6 +14326,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -14251,6 +14385,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -14286,6 +14421,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -17432,6 +17568,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: array
@@ -19369,6 +19506,7 @@ paths:
         - apiKey: []
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             $ref: "#/components/schemas/Currency"
@@ -19416,6 +19554,7 @@ paths:
         - apiKey: []
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -19482,6 +19621,7 @@ paths:
         - apiKey: []
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -19536,6 +19676,7 @@ paths:
         - apiKey: []
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -19589,6 +19730,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20027,6 +20169,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: integer
@@ -20164,6 +20307,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20220,6 +20364,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       responses:
         "200":
           description: Streak
@@ -20259,6 +20404,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20311,6 +20457,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20382,6 +20529,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20431,6 +20579,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20496,6 +20645,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20560,6 +20710,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       description: "`disposition=inline` (MUT-575, as the library route since MUT-260) signs a URL that displays the file instead of saving it, for the desk's preview. The default `attachment` saves it."
       parameters:
         - schema:
@@ -20636,6 +20787,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20697,6 +20849,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20754,6 +20907,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20802,6 +20956,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20864,6 +21019,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20936,6 +21092,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -20995,6 +21152,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21051,6 +21209,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21099,6 +21258,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21171,6 +21331,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21225,6 +21386,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21280,6 +21442,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21332,6 +21495,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21403,6 +21567,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21452,6 +21617,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21516,6 +21682,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21571,6 +21738,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21624,6 +21792,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21678,6 +21847,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: integer
@@ -21773,6 +21943,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21825,6 +21996,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -21896,6 +22068,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -22324,9 +22497,11 @@ paths:
       tags:
         - Sessions
       summary: The signed-in person and the hosted profiles they may open
+      description: "MUT-593: under a delegated token (Malafat acting as the person), only the profile its Malafat tenant names, and nothing of the person’s own (no client books, billing standing or operator flag)."
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       responses:
         "200":
           description: Me
@@ -22455,6 +22630,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23326,6 +23502,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23388,6 +23565,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23447,6 +23625,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23506,6 +23685,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: integer
@@ -23591,6 +23771,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       responses:
         "200":
           description: Counts
@@ -23630,6 +23811,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23688,6 +23870,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23743,6 +23926,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23813,6 +23997,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23891,6 +24076,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -23971,6 +24157,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -24051,6 +24238,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -24513,6 +24701,78 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/oauth/confidential-clients:
+    post:
+      tags:
+        - Admin
+      summary: Register a confidential client that acts as each person (Malafat, MUT-593)
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RegisterConfidentialClientRequest"
+      responses:
+        "201":
+          description: Registered; give clientId to the client
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfidentialClient"
+        "401":
+          description: Missing or wrong admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: OAUTH_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/oauth/confidential-clients/{clientId}/disable:
+    post:
+      tags:
+        - Admin
+      summary: "Disable a confidential client: every token it holds ends on its next call (MUT-593)"
+      description: For a compromised key. Not needed for a routine key rotation, which the client does at its JWKS URL.
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 64
+          required: true
+          name: clientId
+          in: path
+      responses:
+        "200":
+          description: Disabled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConfidentialClient"
+        "401":
+          description: Missing or wrong admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — no such confidential client
           content:
             application/json:
               schema:
@@ -26267,6 +26527,58 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/operator/organizations/{organizationId}/malafat-delegation:
+    post:
+      tags:
+        - Operator
+      summary: Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+      description: Off ends every member’s Malafat connection for this firm at once; turning it on again revives none (each person reconnects from Malafat). Audited.
+      security:
+        - session: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorMalafatDelegationRequest"
+      responses:
+        "200":
+          description: The switch as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorMalafatDelegation"
+        "401":
+          description: Not signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: 'CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first'
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Not an operator (or, on a decision, no review for this user)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT with details.reason NOT_MALAFAT_FED: no CONNECTED Malafat integration on this profile"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /admin/v1/billing/grants:
     post:
       tags:
@@ -27218,6 +27530,76 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/connected-apps:
+    get:
+      tags:
+        - Account
+      summary: "Apps that act for you in a firm: Malafat (MUT-593)"
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Live connections, newest first
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ConnectedAppList"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — Malafat access is switched off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/connected-apps/{grantId}:
+    delete:
+      tags:
+        - Account
+      summary: Stop an app acting for you in a firm (MUT-593)
+      description: Ends every connection of that app in that firm; its next call fails. Malafat asks you to reconnect if you use it again.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: grantId
+          in: path
+      responses:
+        "204":
+          description: Disconnected
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND — no such live connection of yours, or Malafat access is switched off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /jobs/v1/oauth/cleanup:
     post:
       tags:
@@ -27254,6 +27636,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -27318,6 +27701,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string
@@ -27353,6 +27737,7 @@ paths:
       security:
         - session: []
         - deviceSession: []
+        - delegated: []
       parameters:
         - schema:
             type: string

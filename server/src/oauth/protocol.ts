@@ -73,6 +73,11 @@ export function mcpResourceUrl(issuer: string): string {
   return `${stripTrailingSlash(issuer)}/mcp`;
 }
 
+/** MUT-593 (ADR-254): the API itself, `<issuer>/v1`, a resource only a confidential client may ask for. */
+export function v1ResourceUrl(issuer: string): string {
+  return `${stripTrailingSlash(issuer)}/v1`;
+}
+
 // ---- Redirect URIs --------------------------------------------------------------
 
 const LOOPBACK_HOSTS = new Set(['127.0.0.1', '[::1]', 'localhost']);

@@ -61,6 +61,7 @@ import { displayCategoryNames } from '../expenses/presets.js';
 import { preferredLanguage } from './shared.js';
 import { mintDownload, resolveAsOf } from '../period-pack/index.js';
 import { checkMintBudget, type PeriodDownloadServices } from './period-downloads.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /**
  * MUT-560 (ADR-247): one-time share links to a period of one profile, opened with a PIN and no account.
@@ -128,7 +129,6 @@ export interface ShareLinkRouteOptions {
   downloads: PeriodDownloadServices;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const DAY_MS = 86_400_000;
 /** The summary walks the range a page at a time, as /v1/summaries/expenses does. */
 const SUMMARY_PAGE = 200;
@@ -240,7 +240,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'Make a one-time link to a period of this profile, opened with a PIN',
       description: `MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to ${SHARE_LINK_MAX_VIEWERS} devices, until it expires (1, 7 or 30 days), is revoked, or locks after ${SHARE_LINK_PIN_ATTEMPTS} wrong PINs. The answer's \`url\` is the only time the link is shown: share it with the PIN, separately. At most ${maxPerProfile} live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema, body: jsonBody(CreateShareLinkRequestSchema) },
       responses: {
         201: { description: 'Made', content: { 'application/json': { schema: ShareLinkCreatedSchema } } },
@@ -307,7 +307,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'The share links on this profile: active, and those that ended in the last day',
       description: 'MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema },
       responses: {
         200: { description: 'The links', content: { 'application/json': { schema: ShareLinkListSchema } } },
@@ -331,7 +331,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'Revoke a share link',
       description: 'MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ShareLinkParamSchema },
       responses: {
         204: { description: 'Revoked' },

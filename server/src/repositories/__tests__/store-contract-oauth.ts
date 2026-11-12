@@ -29,7 +29,7 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
     const { user, personalOrganization: personal } = await store.users.create(userInput());
     const clientId = `mcl_${unique()}${unique()}`;
     await store.oauth.createClient({ id: clientId, clientName: 'Claude', redirectUris: ['https://claude.ai/cb'], at: at(1) });
-    const request = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read', 'write'], state: 's', resource: 'https://app.example/mcp', createdAt: at(1), expiresAt: at(31) });
+    const request = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read', 'write'], state: 's', resource: 'https://app.example/mcp', tenantId: null, createdAt: at(1), expiresAt: at(31) });
     const codeDigest = digest();
     const decided = await store.oauth.decide({ requestId: request.id, userId: user.id, at: at(2), approve: { grantExpiresAt: at(59), code: { digest: codeDigest, expiresAt: at(3) } }, audit: [audit(personal.id, user.id, 'user.agent_connected')] });
     if (!decided.decided || !decided.grant) throw new Error('fixture decision failed');
@@ -58,14 +58,14 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       const { user, personal, clientId, request } = await grantFixture(store);
       expect(await store.oauth.decide({ requestId: request.id, userId: user.id, at: at(4), approve: null, audit: [] })).toEqual({ decided: false });
       expect(await agentAudit(store, personal.id)).toEqual(['user.agent_connected']);
-      const late = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: null, resource: 'https://app.example/mcp', createdAt: at(1), expiresAt: at(5) });
+      const late = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: null, resource: 'https://app.example/mcp', tenantId: null, createdAt: at(1), expiresAt: at(5) });
       expect(await store.oauth.decide({ requestId: late.id, userId: user.id, at: at(5), approve: null, audit: [] })).toEqual({ decided: false });
     });
 
     it('two racing decisions change it once', async () => {
       const store = await makeStore();
       const { user, clientId } = await grantFixture(store);
-      const request = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: null, resource: 'https://app.example/mcp', createdAt: at(1), expiresAt: at(30) });
+      const request = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: null, resource: 'https://app.example/mcp', tenantId: null, createdAt: at(1), expiresAt: at(30) });
       const decide = () => store.oauth.decide({ requestId: request.id, userId: user.id, at: at(2), approve: { grantExpiresAt: at(59), code: { digest: digest(), expiresAt: at(3) } }, audit: [] });
       const results = await Promise.all([decide(), decide()]);
       expect(results.filter((r) => r.decided)).toHaveLength(1);
@@ -154,7 +154,7 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       const store = await makeStore();
       const clientId = `mcl_${unique()}${unique()}`;
       await store.oauth.createClient({ id: clientId, clientName: 'Claude', redirectUris: ['https://claude.ai/cb'], at: at(0) });
-      await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: 's', resource: 'https://app.example/mcp', createdAt: at(15), expiresAt: at(45) });
+      await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://claude.ai/cb', codeChallenge: 'c'.repeat(43), scopes: ['read'], state: 's', resource: 'https://app.example/mcp', tenantId: null, createdAt: at(15), expiresAt: at(45) });
       await store.oauth.cleanup({ at: at(20), before: at(10), clientsBefore: at(10) });
       expect(await store.oauth.findClient(clientId)).not.toBeNull();
     });
@@ -169,6 +169,64 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       expect(result.clients).toBeGreaterThanOrEqual(1);
       expect(await store.oauth.findClient(orphan)).toBeNull();
       expect(await store.oauth.findClient(clientId)).not.toBeNull();
+    });
+
+    // ---- MUT-593 (ADR-254): the confidential client and its delegated grants ----
+
+    async function delegatedFixture(store: LedgerStore, tenantId = `tenant-${unique()}`) {
+      const { user, personalOrganization: personal } = await store.users.create(userInput());
+      const clientId = `mcc_${unique()}`;
+      const client = await store.oauth.createConfidentialClient({ id: clientId, clientName: 'Malafat', redirectUris: ['https://office.malafat.app/cb'], jwksUri: 'https://office.malafat.app/jwks.json', allowedResources: ['https://app.example/v1'], at: at(0) });
+      const request = await store.oauth.createAuthorizationRequest({ clientId, redirectUri: 'https://office.malafat.app/cb', codeChallenge: 'c'.repeat(43), scopes: ['read', 'write'], state: null, resource: 'https://app.example/v1', tenantId, createdAt: at(1), expiresAt: at(31) });
+      const decided = await store.oauth.decide({ requestId: request.id, userId: user.id, at: at(2), approve: { grantExpiresAt: at(59), code: { digest: digest(), expiresAt: at(3) } }, audit: [] });
+      if (!decided.decided || !decided.grant) throw new Error('fixture decision failed');
+      return { user, personal, client, tenantId, grant: decided.grant };
+    }
+
+    it('stores a confidential client and carries the tenant from request to grant', async () => {
+      const store = await makeStore();
+      const { client, tenantId, grant } = await delegatedFixture(store);
+      expect(client).toMatchObject({ kind: 'CONFIDENTIAL', jwksUri: 'https://office.malafat.app/jwks.json', allowedResources: ['https://app.example/v1'], disabledAt: null });
+      expect(await store.oauth.findClient(client.id)).toMatchObject({ kind: 'CONFIDENTIAL' });
+      expect(grant.tenantId).toBe(tenantId);
+      expect((await store.oauth.findGrant(grant.id))?.tenantId).toBe(tenantId);
+    });
+
+    it('claims an assertion id once per client', async () => {
+      const store = await makeStore();
+      const { client } = await delegatedFixture(store);
+      expect(await store.oauth.claimAssertion({ clientId: client.id, jti: 'j-1', expiresAt: at(5), at: at(1) })).toBe(true);
+      expect(await store.oauth.claimAssertion({ clientId: client.id, jti: 'j-1', expiresAt: at(5), at: at(2) })).toBe(false);
+      expect(await store.oauth.claimAssertion({ clientId: client.id, jti: 'j-2', expiresAt: at(5), at: at(2) })).toBe(true);
+    });
+
+    it('disabling a client ends every grant of it', async () => {
+      const store = await makeStore();
+      const { client, grant } = await delegatedFixture(store);
+      const result = await store.oauth.disableClient({ clientId: client.id, at: at(4) });
+      expect(result).toMatchObject({ grantsRevoked: 1, client: { disabledAt: at(4) } });
+      expect(await store.oauth.findGrant(grant.id)).toMatchObject({ revokedReason: 'client_disabled' });
+      expect(await store.oauth.disableClient({ clientId: 'mcc_unknown', at: at(4) })).toBeNull();
+    });
+
+    it('revokes one person’s grants of one client in one tenant, and nobody else’s', async () => {
+      const store = await makeStore();
+      const mine = await delegatedFixture(store, 'tenant-a');
+      const other = await delegatedFixture(store, 'tenant-b');
+      expect(await store.oauth.revokeForUserTenant({ userId: mine.user.id, clientId: mine.client.id, tenantId: 'tenant-a', reason: 'user', at: at(4), audit: [] })).toBe(1);
+      expect((await store.oauth.findGrant(mine.grant.id))?.revokedAt).toEqual(at(4));
+      expect((await store.oauth.findGrant(other.grant.id))?.revokedAt).toBeNull();
+    });
+
+    it('cleanup never removes a confidential client, and drops expired assertion ids', async () => {
+      const store = await makeStore();
+      const clientId = `mcc_${unique()}`;
+      await store.oauth.createConfidentialClient({ id: clientId, clientName: 'Malafat', redirectUris: ['https://office.malafat.app/cb'], jwksUri: 'https://office.malafat.app/jwks.json', allowedResources: [], at: at(0) });
+      await store.oauth.claimAssertion({ clientId, jti: 'old', expiresAt: at(2), at: at(1) });
+      const result = await store.oauth.cleanup({ at: at(40), before: at(30), clientsBefore: at(10) });
+      expect(result.assertions).toBeGreaterThanOrEqual(1);
+      expect(await store.oauth.findClient(clientId)).not.toBeNull();
+      expect(await store.oauth.claimAssertion({ clientId, jti: 'old', expiresAt: at(50), at: at(41) })).toBe(true);
     });
   });
 }

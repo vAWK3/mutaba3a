@@ -295,7 +295,7 @@ describe('nightly cleanup job', () => {
     expect(res.status).toBe(200);
     // Both requests (the decided one and the orphan's), the used code, and the 1-hour access token expired over a week
     // ago go; the refresh token (45 days) stays.
-    expect(await read(res)).toEqual({ requests: 2, codes: 1, tokens: 1, clients: 1 });
+    expect(await read(res)).toEqual({ requests: 2, codes: 1, tokens: 1, clients: 1, assertions: 0 });
     expect(await h.store.oauth.findClient(orphan)).toBeNull();
     expect(await h.store.oauth.findClient(clientId)).not.toBeNull();
   });

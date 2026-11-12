@@ -14,9 +14,9 @@ import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js'
 import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeCaptureResponseSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
 import { serializeIncomeEntry } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 // MUT-64: a device session is the same 'session' principal, so it reaches every route a cookie session does.
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const noContent = { 204: { description: 'Done' } } as const;
 
@@ -39,7 +39,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Capture money received or owed, directly — no agreement, no allocation dance',
       description:
         'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('capture:write'), idempotent(store, 'income.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateIncomeRequestSchema) },
       responses: { 201: { description: 'Captured', content: { 'application/json': { schema: IncomeCaptureResponseSchema } } }, ...validationResponse, ...errorResponses },
@@ -117,7 +117,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Undo an income entry this session created',
       description:
         '204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('capture:write')] as const,
       request: { params: IncomeIdParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...conflictResponse, ...errorResponses },
@@ -167,7 +167,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Change the date of an income entry you captured (optimistic, If-Match)',
       description:
         'Date only (MUT-223). An Owed entry moves its date and keeps its stored dueDate, unless the new date is after it: then dueDate becomes EOM_15 of the new date (MUT-392); a Received entry moves its payment\'s receivedOn. Only on a profile this person owns, and only an entry they captured: any other id, a voided Owed entry or an undone Received answers 404. A Received payment already applied to an entry (a settle) is 409 ALREADY_ALLOCATED — change it through PATCH /v1/payments/{id}. An Owed entry may move ahead even with money applied to it (MUT-392 D2): it then counts from its first payment or credit, nothing is refused. occurredOn is not more than ten years before the organization\'s today (MUT-227); for a Received entry not later than today, for an Owed one not more than ten years after it (MUT-392). A malformed date is 422 before the entry is looked up; the bounds are checked once its kind is known.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('capture:write'), ifMatch()] as const,
       request: { params: IncomeIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateIncomeRequestSchema) },
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: IncomeResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },

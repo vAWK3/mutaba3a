@@ -22,6 +22,7 @@ import { serializeFeeProposalSummary } from '../serializers.js';
 import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, oldestOverdueDueDate, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /** MUT-175: Reports reads a hosted profile's expenses too, so like /v1/summaries/expenses it is session-only. */
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -55,7 +56,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
       description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8) except retainer (RECURRING) ones, whose monthly amount is left out of the sum (MUT-479); every open proposal also appears on its customer\'s row and in counts.openProposals. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row\'s oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: OrganizationSummarySchema } } }, ...validationResponse, ...errorResponses },
@@ -115,7 +116,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'Billed, received and credited over a period per currency, with the balance at its start and end',
       description: PERIOD_DESCRIPTION,
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: PeriodSummaryQuerySchema },
       responses: { 200: { description: 'Period figures', content: { 'application/json': { schema: PeriodSummarySchema } } }, ...validationResponse, ...errorResponses },
@@ -152,7 +153,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'One customer: buckets, unallocated and status per currency, with a summary per project',
       description: 'Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency\'s block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392). A block\'s oldestOverdueDueDate and daysOverdue come from the same receivables as its `overdue` (MUT-482).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: CustomerIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: CustomerSummarySchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -204,7 +205,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status',
       description: 'In the project\'s currency only: an Owed on the project in another currency is left out here and counts in that currency\'s block of GET /v1/summaries/customers/{customerId} (MUT-488).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: ProjectIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ProjectSummaryResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -231,7 +232,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       summary: 'Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)',
       description:
         'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('summaries:read'), requireScope('expenses:read')] as const,
       request: { query: ActivitySummaryQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ActivitySummarySchema } } }, ...validationResponse, ...errorResponses },

@@ -30,7 +30,7 @@ export const json = (body: unknown, headers: Record<string, string> = {}, method
 export const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
 let seq = 0;
 
-export function harness(options: { billingGate?: boolean; webauthn?: boolean } = {}) {
+export function harness(options: { billingGate?: boolean; webauthn?: boolean; malafatDelegation?: boolean } = {}) {
   const store = new MemoryLedgerStore();
   const logger = pino({ level: 'silent' });
   const clock = { now: new Date('2026-10-27T09:00:00Z') };
@@ -52,6 +52,7 @@ export function harness(options: { billingGate?: boolean; webauthn?: boolean } =
     selfService: { signupEnabled: true, turnstile: OK_ONLY, ipLimiter: generous(), addressMinuteLimiter: generous(), addressDayLimiter: generous(), floors: { signupMs: 1, recoveryMs: 1 } },
     signupReview: { digest: createReviewDigest({ store, mailer, logger, now, to: 'ops@studio.example' }), supportAddress: 'help@studio.example' },
     billingGate: options.billingGate ?? false,
+    ...(options.malafatDelegation ? { malafatDelegation: true } : {}),
   });
   return { app, store, clock, outbox };
 }

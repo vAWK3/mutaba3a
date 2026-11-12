@@ -38,6 +38,7 @@ import { expectsAllocationNumber } from '../receipts/extract/merge.js';
 import { expenseContextOf, serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
 import { receiptVendorDefaults } from '../vendors/receipt-defaults.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /** MUT-255 decision P3: unfinished library uploads one profile may hold from the last day, before a new one is refused. */
 export { MAX_PENDING_LIBRARY_UPLOADS } from '../expenses/receipts-compose.js';
@@ -54,7 +55,6 @@ export interface ReceiptRouteOptions {
   reading?: ReceiptReadTrigger | null;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const notConfigured = { 503: { description: 'No attachments bucket is configured for this deployment', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } } as const;
 
@@ -108,7 +108,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'Start a library upload: a To-review receipt with no expense, and a short-lived signed PUT URL',
       description: `PDF, JPEG or PNG up to 10 MB. PUT the bytes to upload.url with upload.headers, then POST /v1/receipts/{receiptId}/complete; if the URL expired first (a replayed request answers the original), POST …/upload-url for a fresh one. 429 (reason TOO_MANY_PENDING_UPLOADS) when the profile already holds ${MAX_PENDING_LIBRARY_UPLOADS} unfinished uploads from the last 24 hours; 429 past ${RECEIPT_UPLOAD_POLICY.perMinute} starts a minute per person. Either 429 leaves the Idempotency-Key free, so the same request can be sent again with it.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateLibraryReceiptUploadRequestSchema) },
       responses: { 201: { description: 'Upload started', content: { 'application/json': { schema: CreateReceiptUploadResponseSchema } } }, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -133,7 +133,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'A fresh signed PUT URL for an unfinished upload',
       description: 'For a client whose URL expired before it sent the bytes (signed URLs live minutes; a phone may retry hours later). 422 UPLOAD_ALREADY_COMPLETE once READY.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ReceiptIdParamSchema },
       responses: { 200: { description: 'A new URL', content: { 'application/json': { schema: SignedUploadSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -154,7 +154,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'Finish an upload: verify the object and mark the receipt READY',
       description: '422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ReceiptIdParamSchema },
       responses: { 200: { description: 'READY', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -173,7 +173,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: "The profile's receipts library, newest upload first",
       description: 'READY receipts only. filingStatus TO_REVIEW is the review queue; from/to are inclusive upload days in the profile timezone.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListReceiptsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ReceiptPageSchema } } }, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -200,7 +200,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       path: '/v1/receipts/counts',
       tags: ['Receipts'],
       summary: 'How many READY receipts wait To review, and how many are filed',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       responses: { 200: { description: 'Counts', content: { 'application/json': { schema: ReceiptCountsSchema } } }, ...errorResponses, ...notConfigured },
     }),
@@ -217,7 +217,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       path: '/v1/receipts/{receiptId}',
       tags: ['Receipts'],
       summary: 'One receipt, with what was read and what was approved',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ReceiptIdParamSchema },
       responses: { 200: { description: 'The receipt, with its vendor\'s defaults (MUT-303)', content: { 'application/json': { schema: ReceiptDetailSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -239,7 +239,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'A short-lived signed download URL for a READY receipt',
       description: '`disposition=inline` (MUT-260) signs a URL that displays the file instead of saving it, for the portal\'s preview. The response type is always the stored one: PDF, JPEG or PNG.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ReceiptIdParamSchema, query: ReceiptDownloadQuerySchema },
       responses: { 200: { description: 'Signed URL', content: { 'application/json': { schema: AttachmentDownloadSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -263,7 +263,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       summary: "Add to what was read off the receipt (optimistic, If-Match)",
       description:
         "To-review receipts only: 409 CONFLICT RECEIPT_ALREADY_FILED once filed. Fills only the fields the stored suggestion lacks; a field already there (the server's reading, or an earlier client's) is never replaced (since 1.84.0-mut441, MUT-441 R7). The same rule applies to the suggestion sent with approve and file. Unknown fields in the suggestion are dropped, not refused.",
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ReceiptIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(ReceiptSuggestionSchema) },
       responses: { 200: { description: 'Updated', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -287,7 +287,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       summary: 'Approve a To-review receipt: record its expense and file the receipt on it, in one transaction',
       description:
         'The body is an expense, checked exactly as POST /v1/expenses checks one. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 201 instead); 422 ATTACHMENT_NOT_READY before the upload completes — a 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.approve')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ApproveReceiptRequestSchema) },
       responses: { 201: { description: 'Approved', content: { 'application/json': { schema: ApproveReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -324,7 +324,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'File a To-review receipt onto an expense that already exists (MUT-389)',
       description: `For the expense typed by hand and the receipt scanned later. No expense is created and none of its fields change; nothing is approved. Answers the expense with its receipts. 409 CONFLICT RECEIPT_ALREADY_FILED, with details.expenseId, when the receipt is already filed (a replay with the same Idempotency-Key answers the first 200 instead); 404 for a receipt or expense that is not this profile's, or a deleted expense, with details.reason RECEIPT_NOT_FOUND or EXPENSE_NOT_FOUND saying which; 422 ATTACHMENT_NOT_READY before the upload completes; 422 TOO_MANY_RECEIPTS once the expense holds ${MAX_RECEIPTS_PER_EXPENSE}. A 4xx answer is stored under its Idempotency-Key, so retry that one with a new key.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.file')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(FileReceiptRequestSchema) },
       responses: { 200: { description: 'Filed', content: { 'application/json': { schema: FileReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -357,7 +357,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       summary: 'Move a To-review receipt to another of your profiles (MUT-503)',
       description:
         'The receipt keeps its id, upload day, suggestion and reading state; its file is copied inside the bucket to the other profile and removed from this one. An approval left by a deleted expense is cleared, since its category belongs to this profile. 422 SAME_PROFILE for this profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when that profile is read-only or locked; 404 RECEIPT_NOT_FOUND; 409 CONFLICT RECEIPT_ALREADY_FILED (details.expenseId) for a filed receipt; 409 CONFLICT RECEIPT_FILE_MISSING when its file is gone; 422 ATTACHMENT_NOT_READY before the upload completes. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.move')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(MoveReceiptRequestSchema) },
       responses: { 200: { description: 'Moved', content: { 'application/json': { schema: MoveReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -375,7 +375,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       tags: ['Receipts'],
       summary: 'Delete a receipt (soft; the object is removed)',
       description: 'Any filing status: a filed receipt leaves its expense. 204 again for a receipt already deleted; 404 for an id this profile never had.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ReceiptIdParamSchema },
       responses: { 204: { description: 'Deleted (or already was)' }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },

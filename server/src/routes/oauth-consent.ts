@@ -5,9 +5,10 @@ import { hasFeature } from '../features.js';
 import { mcpResourceUrl, OAUTH_SCOPES, type OAuthScope } from '../oauth/protocol.js';
 import type { OAuthService } from '../oauth/service.js';
 import { clientTrust } from '../oauth/trust.js';
-import type { LedgerStore, OAuthGrantListing } from '../repositories/ports.js';
+import type { LedgerStore, OAuthAuthorizationRequestRecord, OAuthGrantListing } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, OAuthAuthorizationRequestSchema, OAuthDecisionRequestSchema, OAuthDecisionSchema, OAuthGrantListSchema } from '../schemas.js';
 import { agentAuditFor } from '../oauth/audit.js';
+import { mayDelegate } from '../auth/delegation.js';
 
 /**
  * MUT-434: what the portal needs to connect an agent — the consent page's request and decision, and Connected apps
@@ -36,7 +37,21 @@ function featureRefusal(): ApiError {
   return new ApiError('FEATURE_NOT_ENABLED', 'Connecting an agent is not turned on for this account', { feature: 'agent_access' });
 }
 
-function serializeGrant(g: OAuthGrantListing) {
+/** MUT-593: Malafat asked to act in a firm this person isn't in, or one the operator hasn't turned Malafat access on for. */
+function delegationRefusal(): ApiError {
+  return new ApiError('FEATURE_NOT_ENABLED', 'Malafat can’t act for you in this firm', { feature: 'malafat_delegation' });
+}
+
+/**
+ * MUT-593: who may approve a request — the agent_access feature for an agent; for a confidential client (Malafat),
+ * membership of the firm its tenant names, with delegation on for that firm (R6: Malafat may name only a firm the
+ * person is in).
+ */
+async function mayApprove(store: LedgerStore, userId: string, request: OAuthAuthorizationRequestRecord): Promise<boolean> {
+  return request.tenantId !== null ? mayDelegate(store, userId, request.tenantId) : hasFeature(store, userId, 'agent_access');
+}
+
+function serializeGrant(g: OAuthGrantListing & { clientKind: 'DCR' | 'CIMD' }) {
   return {
     id: g.id,
     clientName: g.clientName,
@@ -85,7 +100,7 @@ export function oauthConsentRoutes(options: { store: LedgerStore; service: OAuth
           client: { name: client.clientName, kind: client.kind, trust: clientTrust(request.redirectUri), redirectHost: hostOf(request.redirectUri) },
           scopes: scopesOf(request.scopes),
           expiresAt: request.expiresAt.toISOString(),
-          agentAccess: await hasFeature(store, c.get('identity').user.id, 'agent_access'),
+          agentAccess: await mayApprove(store, c.get('identity').user.id, request),
         },
         200,
       );
@@ -113,7 +128,12 @@ export function oauthConsentRoutes(options: { store: LedgerStore; service: OAuth
       const oauth = service();
       const { user } = c.get('identity');
       const approve = c.req.valid('json').decision === 'approve';
-      if (approve && !(await hasFeature(store, user.id, 'agent_access'))) throw featureRefusal();
+      if (approve) {
+        const described = await oauth.describeRequest(c.req.valid('param').requestId, c.get('now')());
+        if (described?.request.tenantId) {
+          if (!(await mayApprove(store, user.id, described.request))) throw delegationRefusal();
+        } else if (!(await hasFeature(store, user.id, 'agent_access'))) throw featureRefusal();
+      }
       const result = await oauth.decide({ requestId: c.req.valid('param').requestId, userId: user.id, approve, at: c.get('now')(), actor: { actorType: 'USER', actorId: user.id }, requestIdForAudit: c.get('requestId') });
       if (result.kind === 'gone') throw new ApiError('CONFLICT', 'This request was already answered or has expired; start again from your agent', { reason: 'REQUEST_GONE' });
       return c.json({ redirectTo: result.redirectTo }, 200);
@@ -139,7 +159,9 @@ export function oauthConsentRoutes(options: { store: LedgerStore; service: OAuth
       const { user } = c.get('identity');
       if (!(await hasFeature(store, user.id, 'agent_access'))) throw featureRefusal();
       const grants = await store.oauth.listLiveGrants(user.id, c.get('now')());
-      return c.json({ items: grants.map(serializeGrant), mcpUrl: mcpResourceUrl(oauth.issuer) }, 200);
+      // MUT-593: Malafat's connections are listed in Connected apps (/v1/me/connected-apps), not with the agents.
+      const agents = grants.filter((g): g is OAuthGrantListing & { clientKind: 'DCR' | 'CIMD' } => g.clientKind !== 'CONFIDENTIAL');
+      return c.json({ items: agents.map(serializeGrant), mcpUrl: mcpResourceUrl(oauth.issuer) }, 200);
     },
   );
 

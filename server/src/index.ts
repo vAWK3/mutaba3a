@@ -193,6 +193,7 @@ const app = createApp({
   receiptReadVerifier,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   accountantAccess: config.ACCOUNTANT_ACCESS,
+  malafatDelegation: config.MALAFAT_DELEGATION,
   accountantsPerProfileMax: config.ACCOUNTANTS_PER_PROFILE_MAX,
   accountantPlan: { on: config.ACCOUNTANT_PLAN, freeClients: config.ACCOUNTANT_FREE_CLIENTS, maxClients: config.ACCOUNTANT_PLAN_MAX_CLIENTS },
   shareLinks: config.SHARE_LINKS,

@@ -10,6 +10,8 @@ import { grantAudit } from '../accountants/grants.js';
 import { ownerIsClosing } from '../access/owner-closing.js';
 import { viewTouch } from '../access/view-touch.js';
 import { isOAuthToken } from '../oauth/tokens.js';
+import type { OAuthService } from '../oauth/service.js';
+import { DELEGATED_PERSON_ROUTES, DELEGATED_PROFILE_PATH_ROUTES, delegatedFirm, profileIdInPath, type DelegatedVia } from './delegation.js';
 import { hashApiKey, hashesMatch, parseApiKey, type ApiKeyEnvironment } from './api-key.js';
 import { gatePersonLevel, gateSelectedProfile } from './billing-gate.js';
 import { CLOSING_OPEN_ENDPOINTS, closingRefusal, isAccountGone } from '../accounts/closure.js';
@@ -25,6 +27,8 @@ import { accountantMayRead, accountantReadOnly, accountantScopes, domainOfScope,
  *  - an organization API key (Malafat's backend), which implies its organization;
  *  - a user session (the hosted portal), which selects one of the user's
  *    memberships per request with X-Mutaba3a-Profile.
+ * MUT-593 (ADR-254) adds a third, `delegated`: Malafat acting as one person with an OAuth token bound to one tenant.
+ * It is the session path below authentication (a SessionAuth with `via` set), confined to the tenant's profile.
  * Each route declares which it accepts in its OpenAPI `security`, and
  * `authenticate()` enforces exactly that declaration.
  */
@@ -38,7 +42,10 @@ export interface SessionAuth {
   kind: 'session';
   organization: Organization;
   user: UserRecord;
-  session: SessionRecord;
+  /** MUT-593: null on a delegated call, which has no session (see `via`). */
+  session: SessionRecord | null;
+  /** MUT-593 (ADR-254): set when Malafat acts as the person; the profile is then always the tenant's. */
+  via: DelegatedVia | null;
   /** Effective scopes from the writability matrix's session column. */
   scopes: readonly Scope[];
   /** The selected profile's writer of record, for READ_ONLY_PROFILE. */
@@ -64,7 +71,9 @@ export interface AgentIdentity {
 /** The signed-in person, set for every session request (including the organization-independent identity routes). */
 export interface SessionIdentity {
   user: UserRecord;
-  session: SessionRecord;
+  /** MUT-593: null when Malafat acts as the person (a delegated token); `via` says which tenant. */
+  session: SessionRecord | null;
+  via?: DelegatedVia;
 }
 
 export type AppEnv = {
@@ -96,9 +105,12 @@ export type AppEnv = {
   };
 };
 
+/** MUT-593: what a route may declare; `delegated` reaches the matrix as the session it stands in for. */
+export type RoutePrincipal = Principal | 'delegated';
+
 export interface RouteAccess {
   public: boolean;
-  principals: ReadonlySet<Principal>;
+  principals: ReadonlySet<RoutePrincipal>;
   /** From the route's `requireScope` middleware, in declaration order. */
   scopes: readonly Scope[];
 }
@@ -135,12 +147,13 @@ export function buildRouteAccessIndex(definitions: readonly RouteDefinition[], h
   for (const def of definitions) {
     if (def.type !== 'route' || !def.route) continue;
     const security = def.route.security ?? [];
-    const principals = new Set<Principal>();
+    const principals = new Set<RoutePrincipal>();
     for (const requirement of security) {
       if ('apiKey' in requirement) principals.add('apiKey');
       if ('session' in requirement) principals.add('session');
       // A device session (MUT-64) is the 'session' Principal too — same writability, different transport.
       if ('deviceSession' in requirement) principals.add('session');
+      if ('delegated' in requirement) principals.add('delegated');
     }
     const key = `${def.route.method.toUpperCase()} ${def.route.path.replace(/\{([^}]+)\}/g, ':$1')}`;
     index.set(key, { public: Array.isArray(def.route.security) && security.length === 0, principals, scopes: scopes.get(key) ?? [] });
@@ -180,6 +193,8 @@ export interface AuthenticateOptions {
   accountantAccess?: boolean;
   /** MUT-565 (ACCOUNTANT_PLAN): the client-books cap selectProfile enforces on an accountant's reads. Absent = off. */
   accountantPlan?: AccountantPlanConfig;
+  /** MUT-593 (MALAFAT_DELEGATION): the authorization server that issued delegated tokens; absent or off = refused. */
+  delegation?: { service: OAuthService | null; on: boolean };
 }
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
@@ -201,7 +216,13 @@ export function authenticate(options: AuthenticateOptions): MiddlewareHandler<Ap
 
     if (bearer) {
       // MUT-434: an agent's OAuth token opens /mcp only; refused here explicitly rather than tried as an API key.
-      if (isOAuthToken(bearer)) throw principalNotAccepted();
+      // MUT-593: a delegated token opens only the routes that declare `delegated`, as the person, on the tenant's profile.
+      if (isOAuthToken(bearer)) {
+        if (!access?.principals.has('delegated')) throw principalNotAccepted();
+        const identity = await authenticateDelegated(c, bearer, options);
+        await finishSessionAuth(c, identity, endpoint, options);
+        return next();
+      }
       if (isDeviceSessionToken(bearer)) {
         const identity = await authenticateDeviceSessionToken(c, bearer, options);
         if (access && !access.principals.has('session')) throw await keyOnlyRefusal(c, identity, access, options.store);
@@ -242,6 +263,7 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
   // MUT-333 (D3): a closing account reaches only Me, Keep my account and sign-out, before any profile or gate.
   const closure = identity.user.closure;
   if (closure && endpoint && !CLOSING_OPEN_ENDPOINTS.has(endpoint)) throw closingRefusal(closure);
+  if (identity.via && endpoint && options.organizationIndependent.has(endpoint)) assertDelegatedPersonRoute(c, identity.via, endpoint);
   let profileWriter: ProfileWriter = null;
   // MUT-361 (ADR-181): the lapse gate, before any route work. An unmatched route (null endpoint) is never gated: its 404 answers.
   const gated = c.get('billingGate') === true;
@@ -262,6 +284,48 @@ async function finishSessionAuth(c: Context<AppEnv>, identity: SessionIdentity, 
     await gatePersonLevel(c, identity, endpoint, options.store);
   }
   c.set('storeGuard', grant ? accountantStoreGuard() : principalStoreGuard('session', profileWriter));
+}
+
+/**
+ * MUT-593 (ADR-254 D9): a route that names no profile in X-Mutaba3a-Profile is open to a delegated token only when it
+ * stays inside the tenant: `/v1/me` (filtered), or an owner route whose path names the tenant's profile. Any other
+ * person-level route (the cross-profile feed, inbox, billing, sessions) is refused even if it declared `delegated`.
+ */
+function assertDelegatedPersonRoute(c: Context<AppEnv>, via: DelegatedVia, endpoint: string): void {
+  if (DELEGATED_PERSON_ROUTES.has(endpoint)) return;
+  if (DELEGATED_PROFILE_PATH_ROUTES.has(endpoint)) {
+    if (profileIdInPath(c.req.path) === via.organizationId) return;
+    throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
+  }
+  throw principalNotAccepted();
+}
+
+/**
+ * MUT-593 (ADR-254 §4.2, §4.7): a delegated token, every request, uncached — delegation on; a live grant bound to
+ * `/v1` and to one tenant; its client confidential and not disabled; an ACTIVE person whose account isn't gone; the
+ * tenant's integration CONNECTED with the operator's switch on. Any miss is 401 `delegation_ended`, so Malafat asks
+ * the person to reconnect. Each revocation in §4.7 ends access here on the next call even if its revoke were missed.
+ */
+async function authenticateDelegated(c: Context<AppEnv>, bearer: string, options: AuthenticateOptions): Promise<SessionIdentity> {
+  const { store } = options;
+  const service = options.delegation?.on ? options.delegation.service : null;
+  const now = c.get('now')();
+  const found = service ? await service.authenticateAccess(bearer, now, service.v1Resource) : null;
+  const grant = found?.grant;
+  if (!grant?.tenantId) throw delegationEnded();
+  const client = await store.oauth.findClient(grant.clientId);
+  if (client?.kind !== 'CONFIDENTIAL' || client.disabledAt) throw delegationEnded();
+  const user = await store.users.getById(grant.userId);
+  if (!user || user.status !== 'ACTIVE' || isAccountGone(user.closure, now)) throw delegationEnded();
+  const firm = await delegatedFirm(store, grant.tenantId);
+  if (!firm) throw delegationEnded();
+  await enforceRateLimit(c, options.rateLimiter, `delegated:${grant.id}`, now, 'Too many requests for this connection');
+  if (!grant.lastUsedAt || now.getTime() - grant.lastUsedAt.getTime() >= TOUCH_INTERVAL_MS) await store.oauth.touchGrant(grant.id, now);
+  return { user, session: null, via: { clientId: client.id, grantId: grant.id, tenantId: grant.tenantId, organizationId: firm.organizationId } };
+}
+
+function delegationEnded(): ApiError {
+  return new ApiError('UNAUTHENTICATED', 'This connection has ended; reconnect MTB3A from Malafat', { reason: 'delegation_ended' });
 }
 
 /**
@@ -428,10 +492,23 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, opti
     throw new ApiError('VALIDATION_FAILED', 'Name the profile to act on in the X-Mutaba3a-Profile header', { reason: 'PROFILE_REQUIRED' });
   }
   const named = await namedMembership(c, identity, store);
+  // MUT-593 (ADR-254 D9): a delegated call reaches only the tenant's profile; any other, the person's own included,
+  // is the same 404 as a profile that was never theirs. No accountant fallback either.
+  if (identity.via && named?.organization.id !== identity.via.organizationId) throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
   if (named) {
     const { organization, membership } = named;
     const writerOfRecord = await profileWriterOf(store, organization.id);
-    const auth: SessionAuth = { kind: 'session', organization, user: identity.user, session: identity.session, scopes: sessionScopesFor(writerOfRecord), writerOfRecord, membershipRole: membership.role, access: 'member' };
+    const auth: SessionAuth = {
+      kind: 'session',
+      organization,
+      user: identity.user,
+      session: identity.session,
+      via: identity.via ?? null,
+      scopes: sessionScopesFor(writerOfRecord),
+      writerOfRecord,
+      membershipRole: membership.role,
+      access: 'member',
+    };
     return { auth, grant: null };
   }
   const client = options.accountantAccess ? await namedClient(c, identity, store) : null;
@@ -440,7 +517,7 @@ async function selectProfile(c: Context<AppEnv>, identity: SessionIdentity, opti
   if (!client) throw new ApiError('NOT_FOUND', 'Profile not found', { reason: 'PROFILE_NOT_FOUND' });
   const { organization, grant } = client;
   const writerOfRecord = await profileWriterOf(store, organization.id);
-  const auth: SessionAuth = { kind: 'session', organization, user: identity.user, session: identity.session, scopes: accountantScopes(), writerOfRecord, membershipRole: null, access: 'accountant' };
+  const auth: SessionAuth = { kind: 'session', organization, user: identity.user, session: identity.session, via: null, scopes: accountantScopes(), writerOfRecord, membershipRole: null, access: 'accountant' };
   return { auth, grant };
 }
 
@@ -567,6 +644,17 @@ export function keyAuth(c: AuthReader): ApiKeyAuth {
   const auth = c.get('auth');
   if (auth.kind !== 'apiKey') throw principalNotAccepted();
   return auth;
+}
+
+/**
+ * MUT-593: the person and their own session, for a route only a session reaches (sign-out, password, passkeys,
+ * closure, the operator console). A delegated call has no session and none of these routes declares it; if one ever
+ * got here it is refused, not handed a null.
+ */
+export function personSession(c: Context<AppEnv>): { user: UserRecord; session: SessionRecord } {
+  const { user, session } = c.get('identity');
+  if (!session) throw principalNotAccepted();
+  return { user, session };
 }
 
 /** For handlers of session-only routes (MUT-42): the mirror of keyAuth. */

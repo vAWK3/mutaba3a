@@ -6,6 +6,8 @@ import { s256Challenge } from '../../oauth/protocol.js';
 import type { ErrorContext, ErrorReporter } from '../../observability/reporter.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
+import type { OAuthClientRecord } from '../../repositories/ports.js';
+import type { JWTVerifyGetKey } from 'jose';
 import { provisionUser } from './provision.js';
 
 /**
@@ -40,7 +42,24 @@ export function recordingReporter() {
   return { reporter, messages, exceptions };
 }
 
-export function harness(options: { oauth?: boolean; registerLimit?: number; tokenClientLimit?: number; billingGate?: boolean; agentLimit?: number; agentPersonLimit?: number; mcpInboxWrites?: boolean; receiptsLibrary?: boolean; attachments?: AttachmentStorage } = {}) {
+export function harness(
+  options: {
+    oauth?: boolean;
+    registerLimit?: number;
+    tokenClientLimit?: number;
+    billingGate?: boolean;
+    agentLimit?: number;
+    agentPersonLimit?: number;
+    mcpInboxWrites?: boolean;
+    receiptsLibrary?: boolean;
+    attachments?: AttachmentStorage;
+    /** MUT-593: MALAFAT_DELEGATION, and the confidential client's keys. */
+    malafatDelegation?: boolean;
+    keysFor?: (client: OAuthClientRecord) => JWTVerifyGetKey;
+    periodDownloads?: boolean;
+    accountantAccess?: boolean;
+  } = {},
+) {
   const store = new MemoryLedgerStore();
   let now = T0;
   const { reporter, messages, exceptions } = recordingReporter();
@@ -56,6 +75,9 @@ export function harness(options: { oauth?: boolean; registerLimit?: number; toke
     reporter,
     jobToken: JOB_TOKEN,
     billingGate: options.billingGate ?? false,
+    ...(options.malafatDelegation ? { malafatDelegation: true } : {}),
+    ...(options.periodDownloads ? { periodDownloads: true } : {}),
+    ...(options.accountantAccess ? { accountantAccess: true } : {}),
     ...(options.mcpInboxWrites ? { mcpInboxWrites: true } : {}),
     ...(options.receiptsLibrary ? { receiptsLibrary: true } : {}),
     ...(options.attachments ? { attachments: options.attachments } : {}),
@@ -66,6 +88,7 @@ export function harness(options: { oauth?: boolean; registerLimit?: number; toke
         : {
             deriveKey: 'derive-key-with-at-least-32-characters!!',
             fetchMetadata,
+            ...(options.keysFor ? { keysFor: options.keysFor } : {}),
             ...(options.agentLimit ? { agentLimiter: new SlidingWindowRateLimiter(options.agentLimit) } : {}),
             ...(options.agentPersonLimit ? { agentPersonLimiter: new SlidingWindowRateLimiter(options.agentPersonLimit) } : {}),
             limiters: {

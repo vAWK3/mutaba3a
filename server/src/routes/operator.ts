@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import type { Context } from 'hono';
-import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { beginOperatorStepUp, finishOperatorStepUp, operatorStepUpUntil } from '../auth/step-up.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import { ApiError } from '../errors.js';
@@ -10,6 +10,7 @@ import { accountActions, type AccountStatusVerb } from '../operator/actions/acco
 import { assertFutureExpiry, billingGrantActions } from '../operator/actions/billingGrants.js';
 import { featureActions, type FeatureActionOptions } from '../operator/actions/features.js';
 import { firmActions } from '../operator/actions/firms.js';
+import { malafatDelegationActions } from '../operator/actions/malafatDelegation.js';
 import { signupReviewActions, type SignupReviewActionOptions } from '../operator/actions/signupReviews.js';
 import {
   EntitlementGrantSchema,
@@ -21,6 +22,8 @@ import {
   OperatorCreateBillingGrantRequestSchema,
   OperatorEnableFirmRequestSchema,
   OperatorFirmRequestDetailSchema,
+  OperatorMalafatDelegationRequestSchema,
+  OperatorMalafatDelegationSchema,
   OperatorFirmRequestListSchema,
   OrganizationResponseSchema,
   RevokeEntitlementGrantResponseSchema,
@@ -105,7 +108,11 @@ export const OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new
   'GET /v1/operator/firm-requests/:organizationId',
   'POST /v1/operator/firm-requests/:organizationId/enable',
   'POST /v1/operator/firm-requests/:organizationId/decline',
+  'POST /v1/operator/organizations/:organizationId/malafat-delegation',
 ]);
+
+/** MUT-593: the operator's per-firm Malafat switch, dark (404) while MALAFAT_DELEGATION is off. */
+export const MALAFAT_DELEGATION_OPERATOR_ENDPOINTS: ReadonlySet<string> = new Set(['POST /v1/operator/organizations/:organizationId/malafat-delegation']);
 
 const SESSION = [{ session: [] }];
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
@@ -128,6 +135,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
   const grants = billingGrantActions({ store });
   const features = featureActions({ ...accountOptions, ...(options.onGranted ? { onGranted: options.onGranted } : {}) });
   const firms = firmActions({ store });
+  const delegation = malafatDelegationActions({ store });
   const app = new OpenAPIHono<AppEnv>();
 
   app.openapi(
@@ -146,7 +154,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     }),
     async (c) => {
       const page = await actions.list(c.req.valid('query'));
-      const until = operatorStepUpUntil(c.get('identity').session, c.get('now')());
+      const until = operatorStepUpUntil(personSession(c).session, c.get('now')());
       return c.json({ ...page, stepUpUntil: until?.toISOString() ?? null }, 200);
     },
   );
@@ -226,7 +234,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       const body = c.req.valid('json');
       const until = await finishOperatorStepUp(
         { store, webauthn: configured(), logger },
-        c.get('identity'),
+        personSession(c),
         { challengeId: body.challengeId, response: body.response as unknown as AuthenticationResponseJSON },
         { now: c.get('now')(), requestId: c.get('requestId') },
       );
@@ -240,7 +248,7 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
     ...operatorErrors,
     404: errorResponse('Not an operator, or NOT_FOUND with details.reason ACCOUNT_NOT_FOUND: no such account'),
   } as const;
-  const stepUpUntilOf = (c: Context<AppEnv>) => operatorStepUpUntil(c.get('identity').session, c.get('now')())?.toISOString() ?? null;
+  const stepUpUntilOf = (c: Context<AppEnv>) => operatorStepUpUntil(personSession(c).session, c.get('now')())?.toISOString() ?? null;
 
   app.openapi(
     createRoute({
@@ -548,6 +556,24 @@ export function operatorRoutes(options: OperatorRouteOptions): OpenAPIHono<AppEn
       responses: { 200: { description: 'Declined', content: { 'application/json': { schema: OrganizationResponseSchema } } }, ...firmErrors },
     }),
     async (c) => c.json({ organization: serializeAdminOrganization(await firms.decline(c.req.valid('param').organizationId, contextOf(c))) }, 200),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/operator/organizations/{organizationId}/malafat-delegation',
+      tags: ['Operator'],
+      summary: 'Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)',
+      description: 'Off ends every member’s Malafat connection for this firm at once; turning it on again revives none (each person reconnects from Malafat). Audited.',
+      security: SESSION,
+      request: { params: OrganizationIdParam, body: { required: true, content: { 'application/json': { schema: OperatorMalafatDelegationRequestSchema } } } },
+      responses: {
+        200: { description: 'The switch as it now stands', content: { 'application/json': { schema: OperatorMalafatDelegationSchema } } },
+        409: errorResponse('CONFLICT with details.reason NOT_MALAFAT_FED: no CONNECTED Malafat integration on this profile'),
+        ...operatorErrors,
+      },
+    }),
+    async (c) => c.json(await delegation.set(c.req.valid('param').organizationId, c.req.valid('json').enabled, contextOf(c)), 200),
   );
 
   return app;

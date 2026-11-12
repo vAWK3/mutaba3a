@@ -4732,13 +4732,15 @@ export const OAuthAuthorizationRequestSchema = z
     id: z.string().uuid(),
     client: z.object({
       name: z.string().openapi({ description: 'The client’s self-declared name; show it with dir="auto" and never as proof of who it is' }),
-      kind: z.enum(['DCR', 'CIMD']),
+      kind: z.enum(['DCR', 'CIMD', 'CONFIDENTIAL']).openapi({ description: 'CONFIDENTIAL = an app MTB3A registered itself (Malafat, MUT-593), acting in one firm' }),
       trust: OAuthClientTrustSchema,
       redirectHost: z.string().openapi({ description: 'Where the code will be sent, e.g. claude.ai or 127.0.0.1' }),
     }),
     scopes: z.array(z.enum(['read', 'write'])),
     expiresAt: z.string().datetime(),
-    agentAccess: z.boolean().openapi({ description: 'Whether this person may approve it (the agent_access feature); false = show the refusal' }),
+    agentAccess: z.boolean().openapi({
+      description: 'Whether this person may approve it: the agent_access feature for an agent; for Malafat (MUT-593), membership of the firm it names with Malafat access turned on. False = show the refusal',
+    }),
   })
   .openapi('OAuthAuthorizationRequest');
 
@@ -4747,6 +4749,33 @@ export const OAuthDecisionRequestSchema = z.object({ decision: z.enum(['approve'
 export const OAuthDecisionSchema = z
   .object({ redirectTo: z.string().url().openapi({ description: 'Send the browser here: the client’s redirect with a code, or with error=access_denied' }) })
   .openapi('OAuthDecision');
+
+/** MUT-593 (ADR-254 D10): the operator's per-firm Malafat switch. */
+export const OperatorMalafatDelegationRequestSchema = z.object({ enabled: z.boolean() }).openapi('OperatorMalafatDelegationRequest');
+
+export const OperatorMalafatDelegationSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    tenantId: z.string(),
+    delegationEnabledAt: z.string().datetime().nullable().openapi({ description: 'Null = off: Malafat can’t act for anyone in this firm' }),
+    grantsRevoked: z.number().int().openapi({ description: 'Members’ Malafat connections this change ended (0 when turning it on)' }),
+  })
+  .openapi('OperatorMalafatDelegation');
+
+/** MUT-593 (ADR-254 §4.7): Malafat acting as the person in one firm, listed in You › Connected apps. */
+export const ConnectedAppSchema = z
+  .object({
+    grantId: z.string().uuid(),
+    clientName: z.string(),
+    tenantId: z.string(),
+    firmName: z.string().nullable().openapi({ description: 'The firm the connection acts in, as Malafat names it; null once disconnected' }),
+    scopes: z.array(z.enum(['read', 'write'])),
+    connectedAt: z.string().datetime(),
+    lastUsedAt: z.string().datetime().nullable(),
+  })
+  .openapi('ConnectedApp');
+
+export const ConnectedAppListSchema = z.object({ items: z.array(ConnectedAppSchema) }).openapi('ConnectedAppList');
 
 export const OAuthGrantSchema = z
   .object({

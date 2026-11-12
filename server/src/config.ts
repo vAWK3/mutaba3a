@@ -174,6 +174,12 @@ const envSchema = z.object({
    * turns it on, as above.
    */
   ACCOUNTANT_ACCESS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-593 (ADR-254 D10): Malafat acting as each person with a delegated token. Off, the token endpoint refuses a
+   * confidential client, every delegated token answers 401, and Connected apps and the operator's per-firm switch
+   * answer 404, so the server deploys dark. Only "true" turns it on; dev and the QA live API do.
+   */
+  MALAFAT_DELEGATION: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   /**

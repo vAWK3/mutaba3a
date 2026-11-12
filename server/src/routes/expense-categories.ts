@@ -19,8 +19,8 @@ import {
 } from '../schemas.js';
 import { serializeExpenseCategory } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, requestLanguage, validationResponse, versionMismatch } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const categoryJson = { content: { 'application/json': { schema: ExpenseCategorySchema } } };
 
@@ -57,7 +57,7 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expenses'],
       summary: 'The profile’s expense categories, in creation order',
       description: 'Names of seeded categories follow Accept-Language (ar or en, else the signed-in user’s language); names people typed show as typed. The first call on a profile with no categories seeds a preset in the signed-in user’s language: the law-firm preset when Malafat records the profile’s income, the personal preset on a PERSONAL profile, the general one on a BUSINESS profile or any other organization. Archived categories only with includeArchived=true.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpenseCategoriesQuerySchema },
       responses: { 200: { description: 'Categories', content: { 'application/json': { schema: ExpenseCategoryListSchema } } }, ...validationResponse, ...errorResponses },
@@ -87,7 +87,7 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expenses'],
       summary: 'Add an expense category',
       description: '409 CATEGORY_NAME_TAKEN when the profile already has the name in any letter case, or has the seeded category it names in the other language.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'expense-categories.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateExpenseCategoryRequestSchema) },
       responses: { 201: { description: 'Added', ...categoryJson }, ...conflictResponse, ...validationResponse, ...errorResponses },
@@ -108,7 +108,7 @@ export function expenseCategoryRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expenses'],
       summary: 'Rename, recolour, archive or restore a category (optimistic, If-Match)',
       description: 'An archived category stays on the expenses that have it but cannot be newly chosen.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseCategoryIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseCategoryRequestSchema) },
       responses: { 200: { description: 'Changed', ...categoryJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },

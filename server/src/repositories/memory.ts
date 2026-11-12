@@ -353,6 +353,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly oauthGrants = new Map<string, OAuthGrantRecord>();
   private readonly oauthCodes = new Map<string, OAuthCodeRecord>();
   private readonly oauthTokens = new Map<string, OAuthTokenRecord & { digest: string }>();
+  /** MUT-593: confidential clients' assertion ids, keyed `clientId NUL jti`. */
+  private readonly oauthAssertions = new Map<string, { expiresAt: Date; createdAt: Date }>();
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
@@ -1009,7 +1011,7 @@ export class MemoryLedgerStore implements LedgerStore {
         this.pushEvents(audit, at);
       }
       // MUT-434 AC7 (OV10): the grants go in the same step, even if the flag was already off.
-      const agentGrantsRevoked = agentGrants ? this.revokeOAuthGrantsOf(userId, 'feature_revoked', at) : 0;
+      const agentGrantsRevoked = agentGrants ? this.revokeOAuthGrantsWhere((g) => g.userId === userId && this.isAgentGrant(g), 'feature_revoked', at) : 0;
       if (agentGrantsRevoked > 0) this.pushEvents(agentGrants?.audit ?? [], at);
       return { revoked, agentGrantsRevoked };
     },
@@ -1125,14 +1127,24 @@ export class MemoryLedgerStore implements LedgerStore {
 
   /** MUT-434: every live grant of the person, in one step (the Prisma store's single UPDATE). */
   private revokeOAuthGrantsOf(userId: string, reason: OAuthGrantRevokedReason, at: Date): number {
+    return this.revokeOAuthGrantsWhere((g) => g.userId === userId, reason, at);
+  }
+
+  /** MUT-593: every live grant matching `match`, in one step. */
+  private revokeOAuthGrantsWhere(match: (g: OAuthGrantRecord) => boolean, reason: OAuthGrantRevokedReason, at: Date): number {
     let count = 0;
     for (const g of this.oauthGrants.values()) {
-      if (g.userId === userId && g.revokedAt === null) {
+      if (g.revokedAt === null && match(g)) {
         Object.assign(g, { revokedAt: at, revokedReason: reason });
         count++;
       }
     }
     return count;
+  }
+
+  /** MUT-593: an agent's grant, not a confidential client's (the `agent_access` feature governs only agents). */
+  private isAgentGrant(g: OAuthGrantRecord): boolean {
+    return this.oauthClients.get(g.clientId)?.kind !== 'CONFIDENTIAL';
   }
 
   /** Review finding 1: the Prisma store's revokeOAuthGrantsAuditedInTx — audited by SYSTEM on each of the person's profiles. */
@@ -1154,21 +1166,40 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly oauth: OAuthRepository = {
     createClient: async ({ id, clientName, redirectUris, at }) => {
       if (this.oauthClients.has(id)) throw new UniqueViolation('oauth_clients.id');
-      const client: OAuthClientRecord = { id, kind: 'DCR', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null };
+      const client: OAuthClientRecord = { id, kind: 'DCR', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null, ...publicClientColumns() };
       this.oauthClients.set(id, client);
-      return { ...client, redirectUris: [...client.redirectUris] };
+      return cloneOAuthClient(client);
+    },
+    createConfidentialClient: async ({ id, clientName, redirectUris, jwksUri, allowedResources, at }) => {
+      if (this.oauthClients.has(id)) throw new UniqueViolation('oauth_clients.id');
+      const client: OAuthClientRecord = { id, kind: 'CONFIDENTIAL', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null, jwksUri, allowedResources: [...allowedResources], disabledAt: null };
+      this.oauthClients.set(id, client);
+      return cloneOAuthClient(client);
+    },
+    disableClient: async ({ clientId, at }) => {
+      const client = this.oauthClients.get(clientId);
+      if (!client) return null;
+      client.disabledAt ??= at;
+      const grantsRevoked = this.revokeOAuthGrantsWhere((g) => g.clientId === clientId, 'client_disabled', at);
+      return { client: cloneOAuthClient(client), grantsRevoked };
+    },
+    claimAssertion: async ({ clientId, jti, expiresAt, at }) => {
+      const key = `${clientId}\u0000${jti}`;
+      if (this.oauthAssertions.has(key)) return false;
+      this.oauthAssertions.set(key, { expiresAt, createdAt: at });
+      return true;
     },
     upsertCimdClient: async ({ id, clientName, redirectUris, at, metadataExpiresAt }) => {
       const existing = this.oauthClients.get(id);
       const client: OAuthClientRecord = existing
         ? { ...existing, clientName, redirectUris: [...redirectUris], metadataExpiresAt }
-        : { id, kind: 'CIMD', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt };
+        : { id, kind: 'CIMD', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt, ...publicClientColumns() };
       this.oauthClients.set(id, client);
-      return { ...client, redirectUris: [...client.redirectUris] };
+      return cloneOAuthClient(client);
     },
     findClient: async (id) => {
       const c = this.oauthClients.get(id);
-      return c ? { ...c, redirectUris: [...c.redirectUris] } : null;
+      return c ? cloneOAuthClient(c) : null;
     },
     createAuthorizationRequest: async (input) => {
       if (!this.oauthClients.has(input.clientId)) throw new ForeignKeyViolation('oauth_authorization_requests.clientId');
@@ -1188,7 +1219,7 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(r, { decidedAt: at, userId });
       let grant: OAuthGrantRecord | null = null;
       if (approve) {
-        grant = { id: randomUUID(), userId, clientId: r.clientId, redirectUri: r.redirectUri, scopes: [...r.scopes], resource: r.resource, createdAt: at, expiresAt: approve.grantExpiresAt, lastUsedAt: null, revokedAt: null, revokedReason: null };
+        grant = { id: randomUUID(), userId, clientId: r.clientId, redirectUri: r.redirectUri, scopes: [...r.scopes], resource: r.resource, tenantId: r.tenantId, createdAt: at, expiresAt: approve.grantExpiresAt, lastUsedAt: null, revokedAt: null, revokedReason: null };
         this.oauthGrants.set(grant.id, grant);
         this.oauthCodes.set(approve.code.digest, { id: randomUUID(), grantId: grant.id, codeChallenge: r.codeChallenge, redirectUri: r.redirectUri, resource: r.resource, expiresAt: approve.code.expiresAt, consumedAt: null });
         const client = this.oauthClients.get(r.clientId);
@@ -1247,6 +1278,11 @@ export class MemoryLedgerStore implements LedgerStore {
       if (count > 0) this.pushEvents(audit, at);
       return count;
     },
+    revokeForUserTenant: async ({ userId, clientId, tenantId, reason, at, audit }) => {
+      const count = this.revokeOAuthGrantsWhere((g) => g.userId === userId && g.clientId === clientId && g.tenantId === tenantId, reason, at);
+      if (count > 0) this.pushEvents(audit, at);
+      return count;
+    },
     listLiveGrants: async (userId, at) =>
       [...this.oauthGrants.values()]
         .filter((g) => g.userId === userId && g.revokedAt === null && g.expiresAt.getTime() > at.getTime())
@@ -1287,12 +1323,18 @@ export class MemoryLedgerStore implements LedgerStore {
         ...[...this.oauthRequests.values()].filter((r) => r.createdAt.getTime() > clientsBefore.getTime()).map((r) => r.clientId),
       ]);
       for (const [id, c] of this.oauthClients) {
-        if (kept.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
+        if (kept.has(id) || c.kind === 'CONFIDENTIAL' || c.createdAt.getTime() > clientsBefore.getTime()) continue;
         for (const [rid, r] of this.oauthRequests) if (r.clientId === id) this.oauthRequests.delete(rid);
         this.oauthClients.delete(id);
         clients++;
       }
-      return { requests, codes, tokens, clients };
+      let assertions = 0;
+      for (const [key, a] of this.oauthAssertions) {
+        if (a.expiresAt.getTime() > at.getTime()) continue;
+        this.oauthAssertions.delete(key);
+        assertions++;
+      }
+      return { requests, codes, tokens, clients, assertions };
     },
   };
 
@@ -1567,6 +1609,8 @@ export class MemoryLedgerStore implements LedgerStore {
         connectedByApiKeyId: input.connectedByApiKeyId,
         connectedAt: input.at,
         disconnectedAt: null,
+        delegationEnabledAt: null,
+        delegationEnabledBy: null,
       };
       this.ints.set(record.id, record);
       return { ...record };
@@ -1576,7 +1620,16 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!i) return null;
       i.status = 'DISCONNECTED';
       i.disconnectedAt = at;
+      this.revokeOAuthGrantsWhere((g) => g.tenantId === i.externalTenantId, 'integration_disconnected', at);
       return { ...i };
+    },
+    setDelegation: async ({ id, enabled, by, at, audit }) => {
+      const i = this.ints.get(id);
+      if (!i) return null;
+      Object.assign(i, enabled ? { delegationEnabledAt: i.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null });
+      const grantsRevoked = enabled ? 0 : this.revokeOAuthGrantsWhere((g) => g.tenantId === i.externalTenantId, 'delegation_disabled', at);
+      this.pushEvents(audit, at);
+      return { integration: { ...i }, grantsRevoked };
     },
   };
 
@@ -4223,6 +4276,15 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 }
 
 /** MUT-434: a stored token without its digest, which never leaves the store. */
+/** MUT-593: what a public (DCR or CIMD) client carries of the confidential-client columns. */
+function publicClientColumns(): Pick<OAuthClientRecord, 'jwksUri' | 'allowedResources' | 'disabledAt'> {
+  return { jwksUri: null, allowedResources: [], disabledAt: null };
+}
+
+function cloneOAuthClient(c: OAuthClientRecord): OAuthClientRecord {
+  return { ...c, redirectUris: [...c.redirectUris], allowedResources: [...c.allowedResources] };
+}
+
 function oauthTokenRecordOf(t: OAuthTokenRecord & { digest: string }): OAuthTokenRecord {
   return { id: t.id, grantId: t.grantId, kind: t.kind, createdAt: t.createdAt, expiresAt: t.expiresAt, rotatedAt: t.rotatedAt, successorId: t.successorId };
 }

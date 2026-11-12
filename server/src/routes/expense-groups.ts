@@ -25,8 +25,8 @@ import {
 } from '../schemas.js';
 import { serializeExpenseGroup, serializeExpenseGroupOverride } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const noContent = { 204: { description: 'Done' } } as const;
 /** Per-group aggregates run at most this many at a time, so a long list can't take every pooled connection (re-review A2). */
@@ -78,7 +78,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'List expense groups, newest start first, with their totals per currency',
       description: `Unpaged: a profile holds at most ${MAX_GROUPS_PER_PROFILE} live groups. With expenseId, only the groups that expense belongs to (dated in the window and not left out, or kept); 404 for an expense this profile does not have.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpenseGroupsQuerySchema },
       responses: { 200: { description: 'The groups', content: { 'application/json': { schema: ExpenseGroupListSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
@@ -103,7 +103,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'Create an expense group',
       description: `Expenses dated from startOn to endOn (or, with no endOn, to a year after startOn) join automatically, including ones logged later. A profile holds at most ${MAX_GROUPS_PER_PROFILE} live groups (422 GROUP_LIMIT).`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'expenseGroups.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateExpenseGroupRequestSchema) },
       responses: { 201: { description: 'Created', content: { 'application/json': { schema: ExpenseGroupSchema } } }, ...validationResponse, ...errorResponses },
@@ -130,7 +130,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/expense-groups/{groupId}',
       tags: ['Expense groups'],
       summary: 'An expense group with its totals and how many expenses inside its window are left out',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ExpenseGroupIdParamSchema },
       responses: { 200: { description: 'The group', content: { 'application/json': { schema: ExpenseGroupDetailSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -150,7 +150,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'Change an expense group (optimistic, If-Match)',
       description: 'null endOn = still going; null clears the notes. The merged range is checked. Keep and leave-out marks stay when the dates change. A stale If-Match is a 409 before any validation; a PATCH that changes nothing returns the group unchanged (same version, no audit).',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseGroupIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseGroupRequestSchema) },
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: ExpenseGroupSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
@@ -180,7 +180,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'Delete an expense group (soft; its expenses are untouched)',
       description: '204 again for a group already deleted; 404 for an id this profile never had.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseGroupIdParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -201,7 +201,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'Keep (included) or leave out (excluded) one expense',
       description: 'Idempotent; the last mark wins. Any mark is accepted on any expense of the profile, and it stays when the expense\'s date changes. 404 for a group or expense this profile does not have.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseGroupExpenseParamSchema, body: jsonBody(SetExpenseGroupOverrideRequestSchema) },
       responses: { 200: { description: 'Marked', content: { 'application/json': { schema: ExpenseGroupOverrideSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -225,7 +225,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Expense groups'],
       summary: 'Remove a keep or leave-out mark: the expense follows the date rule again',
       description: '204 whether or not a mark existed; 404 for a group this profile does not have.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseGroupExpenseParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -247,7 +247,7 @@ export function expenseGroupRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'A group\'s spending per currency, by category, by client and by day',
       description:
         'One block per currency, never summed or converted (ADR-004, ADR-087). byDay zero-fills seriesFrom..seriesTo and adds a bucket for every member dated outside it (position before/after), so each currency\'s buckets sum to its total.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ExpenseGroupIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ExpenseGroupSummarySchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },

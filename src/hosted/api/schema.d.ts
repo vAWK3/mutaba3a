@@ -13002,7 +13002,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The signed-in person and the hosted profiles they may open */
+        /**
+         * The signed-in person and the hosted profiles they may open
+         * @description MUT-593: under a delegated token (Malafat acting as the person), only the profile its Malafat tenant names, and nothing of the person’s own (no client books, billing standing or operator flag).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -16380,6 +16383,132 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/oauth/confidential-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a confidential client that acts as each person (Malafat, MUT-593) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterConfidentialClientRequest"];
+                };
+            };
+            responses: {
+                /** @description Registered; give clientId to the client */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConfidentialClient"];
+                    };
+                };
+                /** @description Missing or wrong admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/oauth/confidential-clients/{clientId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a confidential client: every token it holds ends on its next call (MUT-593)
+         * @description For a compromised key. Not needed for a routine key rotation, which the client does at its JWKS URL.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    clientId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disabled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConfidentialClient"];
+                    };
+                };
+                /** @description Missing or wrong admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such confidential client */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/users": {
         parameters: {
             query?: never;
@@ -19056,6 +19185,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operator/organizations/{organizationId}/malafat-delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+         * @description Off ends every member’s Malafat connection for this firm at once; turning it on again revives none (each person reconnects from Malafat). Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OperatorMalafatDelegationRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMalafatDelegation"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_MALAFAT_FED: no CONNECTED Malafat integration on this profile */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/grants": {
         parameters: {
             query?: never;
@@ -20735,6 +20945,135 @@ export interface paths {
                 };
                 /** @description OAUTH_NOT_CONFIGURED */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apps that act for you in a firm: Malafat (MUT-593) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live connections, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectedAppList"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — Malafat access is switched off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/connected-apps/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop an app acting for you in a firm (MUT-593)
+         * @description Ends every connection of that app in that firm; its next call fails. Malafat asks you to reconnect if you use it again.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    grantId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disconnected */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such live connection of yours, or Malafat access is switched off on this server */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -25517,6 +25856,22 @@ export interface components {
             requestedByEmail: string | null;
             owned: boolean;
         };
+        ConfidentialClient: {
+            clientId: string;
+            name: string;
+            redirectUris: string[];
+            jwksUri: string | null;
+            allowedResources: string[];
+            /** Format: date-time */
+            disabledAt: string | null;
+            grantsRevoked?: number;
+        };
+        RegisterConfidentialClientRequest: {
+            name: string;
+            redirectUris: string[];
+            /** Format: uri */
+            jwksUri: string;
+        };
         CreateUserResponse: {
             user: components["schemas"]["UserSummary"];
             memberships: components["schemas"]["Membership"][];
@@ -25813,6 +26168,21 @@ export interface components {
         };
         OperatorEnableFirmRequest: {
             ownerUserIds?: string[];
+        };
+        OperatorMalafatDelegation: {
+            /** Format: uuid */
+            organizationId: string;
+            tenantId: string;
+            /**
+             * Format: date-time
+             * @description Null = off: Malafat can’t act for anyone in this firm
+             */
+            delegationEnabledAt: string | null;
+            /** @description Members’ Malafat connections this change ended (0 when turning it on) */
+            grantsRevoked: number;
+        };
+        OperatorMalafatDelegationRequest: {
+            enabled: boolean;
         };
         CreateEntitlementGrantRequest: {
             /** Format: uuid */
@@ -26173,8 +26543,11 @@ export interface components {
             client: {
                 /** @description The client’s self-declared name; show it with dir="auto" and never as proof of who it is */
                 name: string;
-                /** @enum {string} */
-                kind: "DCR" | "CIMD";
+                /**
+                 * @description CONFIDENTIAL = an app MTB3A registered itself (Malafat, MUT-593), acting in one firm
+                 * @enum {string}
+                 */
+                kind: "DCR" | "CIMD" | "CONFIDENTIAL";
                 /**
                  * @description From the redirect the code goes to, never the client’s own name: VERIFIED = Claude (claude.ai/claude.com), LOOPBACK = an app on this computer (e.g. Claude Code), UNVERIFIED = anyone else
                  * @enum {string}
@@ -26186,7 +26559,7 @@ export interface components {
             scopes: ("read" | "write")[];
             /** Format: date-time */
             expiresAt: string;
-            /** @description Whether this person may approve it (the agent_access feature); false = show the refusal */
+            /** @description Whether this person may approve it: the agent_access feature for an agent; for Malafat (MUT-593), membership of the firm it names with Malafat access turned on. False = show the refusal */
             agentAccess: boolean;
         };
         OAuthDecision: {
@@ -26226,6 +26599,22 @@ export interface components {
             lastUsedAt: string | null;
             /** Format: date-time */
             expiresAt: string;
+        };
+        ConnectedAppList: {
+            items: components["schemas"]["ConnectedApp"][];
+        };
+        ConnectedApp: {
+            /** Format: uuid */
+            grantId: string;
+            clientName: string;
+            tenantId: string;
+            /** @description The firm the connection acts in, as Malafat names it; null once disconnected */
+            firmName: string | null;
+            scopes: ("read" | "write")[];
+            /** Format: date-time */
+            connectedAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
         };
         OAuthCleanupSummary: {
             requests: number;

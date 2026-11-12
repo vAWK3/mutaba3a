@@ -1,4 +1,6 @@
+import { delegatedFirm } from '../auth/delegation.js';
 import { assertClientReadable, resolveProfileAccess } from '../auth/middleware.js';
+import { isLive } from '../oauth/service.js';
 import type { AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { ApiError } from '../errors.js';
 import type { LedgerStore, Organization } from '../repositories/ports.js';
@@ -8,7 +10,8 @@ import type { TicketClaims } from './ticket.js';
 /**
  * MUT-314 (ADR-248, D5, D6): a ticket proves who minted it and for what, not that they may still read. At stream time
  * each kind's access is checked again, the same way its mint checked it:
- * - member and accountant: the session that minted the ticket still works (not signed out, revoked or expired);
+ * - member and accountant: the session that minted the ticket still works (not signed out, revoked or expired), or
+ *   (MUT-593) the delegated grant that minted it is live and its tenant's firm is still the ticket's profile;
  *   resolveProfileAccess (the rule selectProfile applies to every request: for an accountant an ACTIVE grant on a
  *   profile whose owner isn't closing, MUT-575), of the same kind, for a person still ACTIVE and not closing their
  *   account (a closing account reaches no profile, MUT-333);
@@ -39,9 +42,8 @@ export async function recheckAccess(claims: TicketClaims, ctx: RecheckContext): 
     if (access.range.from !== claims.from || access.range.to !== claims.to) throw downloadUnavailable();
     return { organization: access.organization, shareLinkId: access.link.id };
   }
-  // Review (MUT-314): bound to the session that minted it: signed out, revoked or expired since, the ticket dies too.
-  const session = claims.sid ? await ctx.store.sessions.getById(claims.sid) : null;
-  if (!session || session.userId !== claims.sub || session.revokedAt || session.idleExpiresAt <= ctx.now || session.absoluteExpiresAt <= ctx.now) throw downloadUnavailable();
+  // Review (MUT-314): bound to the session (MUT-593: or delegated grant) that minted it: ended since, the ticket dies too.
+  if (!(await minterStillLive(claims, ctx))) throw downloadUnavailable();
   const user = await ctx.store.users.getById(claims.sub);
   if (!user || user.status !== 'ACTIVE' || user.closure) throw downloadUnavailable();
   const access = await resolveProfileAccess(ctx.store, claims.sub, claims.org, { accountantAccess: ctx.accountantAccess });
@@ -56,4 +58,14 @@ export async function recheckAccess(claims: TicketClaims, ctx: RecheckContext): 
     }
   }
   return { organization: access.organization, shareLinkId: null };
+}
+
+async function minterStillLive(claims: TicketClaims, ctx: RecheckContext): Promise<boolean> {
+  if (claims.gid) {
+    const grant = await ctx.store.oauth.findGrant(claims.gid);
+    if (!grant?.tenantId || grant.userId !== claims.sub || !isLive(grant, ctx.now)) return false;
+    return (await delegatedFirm(ctx.store, grant.tenantId))?.organizationId === claims.org;
+  }
+  const session = claims.sid ? await ctx.store.sessions.getById(claims.sid) : null;
+  return Boolean(session && session.userId === claims.sub && !session.revokedAt && session.idleExpiresAt > ctx.now && session.absoluteExpiresAt > ctx.now);
 }

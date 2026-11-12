@@ -1,3 +1,5 @@
+import { PERSON_OR_MALAFAT } from './security.js';
+import type { DelegatedVia } from '../auth/delegation.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
@@ -39,14 +41,19 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
       path: '/v1/me',
       tags: ['Sessions'],
       summary: 'The signed-in person and the hosted profiles they may open',
-      security: [{ session: [] }, { deviceSession: [] }],
+      description: 'MUT-593: under a delegated token (Malafat acting as the person), only the profile its Malafat tenant names, and nothing of the person’s own (no client books, billing standing or operator flag).',
+      security: PERSON_OR_MALAFAT,
       responses: {
         200: { description: 'Me', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('No valid session'),
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 200),
+    async (c) => {
+      const { user, via } = c.get('identity');
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
+      return c.json(via ? delegatedMe(me, via) : me, 200);
+    },
   );
 
   return app;
@@ -133,6 +140,16 @@ export async function buildMe(
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
     ...(clients ? { clients: clients.rows, clientBooks: clientBooksSummaryOf(clients.activeCount, plan, accountantPlan) } : {}),
   };
+}
+
+/**
+ * MUT-593 (ADR-254 D9): Me as Malafat sees it when acting as the person — the tenant's profile alone, and none of the
+ * person's own standing: no accountant client books, no billing standing (their own profiles' bills), no operator flag.
+ */
+function delegatedMe(me: Awaited<ReturnType<typeof buildMe>>, via: DelegatedVia): Awaited<ReturnType<typeof buildMe>> {
+  const { operator, ...user } = me.user;
+  void operator;
+  return { user, profiles: me.profiles.filter((p) => p.id === via.organizationId), limits: me.limits, currencies: me.currencies, terms: me.terms, billingStanding: null };
 }
 
 /** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */
