@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-11-11 — Move a saved expense, with its receipts, to another profile (MUT-589, ADR-252)
+
+**Why:** a receipt saved onto the wrong profile could never leave it (MUT-503 moved To-review receipts only); Basel's D4 widened it to any saved expense.
+
+### Added
+- `GET /v1/expenses/{id}/move-preview?profileId=` and `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (API 1.109.0-mut589): the same gates (SAME_PROFILE, EXPENSE_NOT_FOUND, MALAFAT_PROFILE, NOT_OWNER, PROFILE_NOT_FOUND, lapse 402), fields mapped by name with every change listed, receipts copied then re-homed in one transaction with both audits. Files: `server/src/expenses/{move-plan,expense-move}.ts`, `routes/expenses.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `auth/{store-guard,writability}.ts`.
+- Portal: Move beside Delete in the expense drawer and "Move with its expense…" on a filed receipt card open `MoveExpenseDrawer` (`?moveExpense=`), which lists what changes on the chosen profile before Move. i18n `hosted.expenses.move.*`, `hosted.expenses.drawer.move` (ar, en).
+
+### Changed
+- `MoveReceiptDrawer`'s body is now `MoveToProfileDrawer`, shared with the expense move. A Filed receipt card has a ⋯ menu (Open, Move with its expense…) where the person has another profile.
+- `writableTarget` is exported from receipts-compose; `categoryNameIn` added to presets.
+
+### Technical
+- Tests listed under MUT-589 in TEST_PLAN.md. Release-QA: `portal.expenses.move-expense`, `move-expense-refused`, `portal.receipts.move-filed`; `filed-no-move` updated. TD-307, TD-308. No migration.
+
 ## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
 
 ### Fixed
