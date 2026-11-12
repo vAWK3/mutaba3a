@@ -41,7 +41,32 @@
 - `writableTarget` is exported from receipts-compose; `categoryNameIn` added to presets.
 
 ### Technical
-- Tests listed under MUT-589 in TEST_PLAN.md. Release-QA: `portal.expenses.move-expense`, `move-expense-refused`, `portal.receipts.move-filed`; `filed-no-move` updated. TD-307, TD-308. No migration.
+- Tests listed under MUT-589 in TEST_PLAN.md. Release-QA: `portal.expenses.move-expense`, `move-expense-refused`, `portal.receipts.move-filed`; `filed-no-move` updated. TD-308, TD-309. No migration.
+## [Unreleased] - 2026-11-11 — Vendor-made invoice PDFs read right; a skipped receipt read says why (MUT-590, ADR-252)
+
+### Fixed
+- **A PDF's text layer is read by position** (AC2/AC3): the sidecar returns it as placed runs (`server/ocr/app/decode.py`, `pipeline.py`), and the API runs them through `orderedRows` (`server/src/receipts/extract/extract.ts`), so a label and its amount printed apart on one line, or one over the other, meet. Without places it reads `pdfText` line by line as before.
+- **Visual-order Hebrew text layers** are put in logical order (`server/ocr/app/text.py`).
+- **Found on Basel's real invoices:** an ordinal day reads as a date (`6th May 2026`, `dates.ts`), and a buyer's number first on a row gives way to the vendor's labelled one after it (`fields.ts`).
+- **A skipped read says why** (AC1): `code: deleted | filed | complete | ungranted`, plus `engine` and `chars` (`server/src/receipts/reading/reader.ts`, `repositories/{ports,prisma,memory}.ts`). Receipt 27e28e05 was filed onto an expense mid-read; nothing was lost.
+
+### Technical
+- `SERVER_READER_GENERATION` 3 → 4; `receipts:reread` takes `--mime <type>` (`server/src/scripts/receipts-reread.ts`).
+- Bench: `vendor-pdf` scope (`server/ocr/bench/run.py`); on Basel's 14 vendor-made invoices 57/82 fields (main 48/82), the rest is MUT-591 (TD-307). Release-QA: `portal-selfservice.receipts.vendor-pdf` with a synthetic fixture `server/ocr/tests/fixtures/syn-vendor-invoice-en.pdf`.
+- Ships with the next API release: `receipt-ocr` image and API in the same apply (before-release.md).
+
+## [Unreleased] - 2026-11-11 — Arabic dates name the Levantine months everywhere (MUT-587, ADR-253)
+
+### Changed
+- **كانون الثاني, not يناير**, on every Arabic date that names a month, portal and website and the mails: `getLocale('ar')` is now `ar-PS-u-nu-latn` (Latin digits kept). Numeric dates, amounts, relative times and country names read as before. Files: `src/lib/i18n/core.tsx`, `src/lib/utils.ts`, `src/hosted/format/reportFormat.ts`, `src/hosted/pages/sharing/sharingRules.ts`, `src/hosted/pages/client-books/clientBooksRules.ts`, `src/hosted/pages/accountant-invite/inviteState.ts`, `src/hosted/operator/time.ts`, `src/hosted/data/periodDownload.ts`, `src/pages/landing/components/mocks/useMockFormat.ts`, `server/src/dates.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/checkout.ts`.
+- Copy: the privacy page's "آخر تحديث: 7 تشرين الثاني 2026" and the web 0.3.4 Arabic release note. Frozen terms versions unchanged (ADR-102).
+
+### Removed
+- `getLocaleFromLanguage` (no caller), the three `latn()` helpers and Reports' `REPORTS_ARABIC_DATES`.
+
+### Technical
+- Lint guard `DATE_LOCALE_SYNTAX` in `eslint.config.js` and `server/eslint.config.js`. Tests: `arabicLocale.test.ts`, `dateLocaleGuard.test.ts` (ESLint run programmatically), `levantineDates.test.ts`; expectations moved in sharing, privacy, checkout, renewal-mail and templates tests. Release-QA `@portal.direction.levantine-months`.
+- Ships with the next API release (mail and pay-page dates) and the next web release.
 
 ## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
 

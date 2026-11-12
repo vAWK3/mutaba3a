@@ -9,6 +9,7 @@ import type { LedgerStore, ReceiptSuggestion, SuggestionSource } from '../reposi
  *
  *   DATABASE_URL=… npm run receipts:reread -- --reader-below 2            # dry run: lists, writes nothing
  *   DATABASE_URL=… npm run receipts:reread -- --reader-below 2 --apply    # resets them; the 5-minute sweep reads them
+ *   DATABASE_URL=… npm run receipts:reread -- --reader-below 4 --mime application/pdf   # only PDFs (MUT-590)
  *
  * A receipt qualifies while it is READY, live, To review and unapproved, its suggestion was stamped by a server
  * reader of a generation below `--reader-below`, it is not being read now, and its uploader still holds
@@ -65,13 +66,15 @@ export function withoutServerFields(suggestion: ReceiptSuggestion): ReceiptSugge
   return Object.keys(kept).length > 0 ? ({ readerVersion, ...kept } as ReceiptSuggestion) : null;
 }
 
-export async function rereadReceipts(store: LedgerStore, options: { readerBelow: number; apply: boolean; now: Date }): Promise<RereadResult> {
+/** `mimeType`: only receipts of that file type (MUT-590 D3: a reader change that only reads PDFs differently). */
+export async function rereadReceipts(store: LedgerStore, options: { readerBelow: number; mimeType?: string | undefined; apply: boolean; now: Date }): Promise<RereadResult> {
   if (options.readerBelow > SERVER_READER_GENERATION) throw new Error(`--reader-below ${options.readerBelow} is above the current reader (generation ${SERVER_READER_GENERATION})`);
   const result: RereadResult = { planned: [], noGrant: [], reset: [] };
   for (const receipt of await store.expenseReceipts.listServerReadToReview()) {
     const suggestion = receipt.suggested;
     const generation = suggestion ? serverReaderGeneration(suggestion.readerVersion) : null;
     if (!suggestion || generation === null || generation >= options.readerBelow) continue;
+    if (options.mimeType !== undefined && receipt.mimeType !== options.mimeType) continue;
     if (receipt.uploadedByUserId === null || !(await hasFeature(store, receipt.uploadedByUserId, 'receipt_reading'))) {
       result.noGrant.push(receipt.id);
       continue;
@@ -97,10 +100,14 @@ export async function rereadReceipts(store: LedgerStore, options: { readerBelow:
   return result;
 }
 
-function parseArgs(argv: readonly string[]): { readerBelow: number; apply: boolean } | null {
+function parseArgs(argv: readonly string[]): { readerBelow: number; mimeType?: string; apply: boolean } | null {
   const at = argv.indexOf('--reader-below');
   const readerBelow = at >= 0 ? Number(argv[at + 1]) : Number.NaN;
-  return Number.isInteger(readerBelow) && readerBelow > 1 && readerBelow <= SERVER_READER_GENERATION ? { readerBelow, apply: argv.includes('--apply') } : null;
+  const mimeAt = argv.indexOf('--mime');
+  const mimeType = mimeAt >= 0 ? argv[mimeAt + 1] : undefined;
+  if (mimeAt >= 0 && !mimeType?.includes('/')) return null;
+  if (!(Number.isInteger(readerBelow) && readerBelow > 1 && readerBelow <= SERVER_READER_GENERATION)) return null;
+  return { readerBelow, ...(mimeType ? { mimeType } : {}), apply: argv.includes('--apply') };
 }
 
 const isMain = process.argv[1]?.endsWith('receipts-reread.ts') || process.argv[1]?.endsWith('receipts-reread.js');
@@ -110,7 +117,7 @@ if (isMain) {
   if (!url || !args) {
     console.error(
       [
-        `usage: DATABASE_URL=… npm run receipts:reread -- --reader-below <2..${SERVER_READER_GENERATION}> [--apply]`,
+        `usage: DATABASE_URL=… npm run receipts:reread -- --reader-below <2..${SERVER_READER_GENERATION}> [--mime <type>] [--apply]`,
         'Re-reads To-review, unapproved receipts a server reader older than the generation filled (dry run without --apply).',
         'Only receipts whose suggestion still carries the server reader version are picked; one a client filled last is not.',
         'Run it only once every API instance runs the new reader.',

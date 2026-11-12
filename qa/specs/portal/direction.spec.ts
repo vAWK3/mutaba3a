@@ -6,7 +6,8 @@ import { test, expect } from '../../support/qa';
 import { attachScreenshot } from '../../support/brand';
 import { readBidi, readField } from '../../support/bidi';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, attachment, category, libraryReceipt, payment } from '../../support/portalApi';
+import { FakeApi, attachment, category, expense, expenseGroup, libraryReceipt, payment } from '../../support/portalApi';
+import { ClientBooksApi, STUDIO } from '../../support/clientBooksApi';
 
 /**
  * MUT-109 (TD-048, direction half) in the portal: an Arabic amount keeps the place
@@ -161,5 +162,50 @@ test('Arabic: the receipt review page mirrors, the receipt on the right, and sta
     await expect.poll(async () => (await preview.boundingBox())!.y < (await form.boundingBox())!.y).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
     await attachScreenshot(page, 'ar-portal-receipt-review-phone');
+  });
+});
+
+/** MUT-587: Arabic month names, Levantine (what every Arabic date must use) and Gregorian (what none may). */
+const LEVANTINE_MONTH = /كانون|شباط|آذار|نيسان|أيار|حزيران|تموز|آب|أيلول|تشرين/;
+const GREGORIAN_MONTH = /يناير|فبراير|مارس|أبريل|مايو|يونيو|يوليو|أغسطس|سبتمبر|أكتوبر|نوفمبر|ديسمبر/;
+const ARABIC_INDIC_DIGIT = /[٠-٩]/;
+
+async function expectLevantineDates(page: Page, shot: string) {
+  const text = (await page.locator('main').innerText()).trim();
+  expect(text).toMatch(LEVANTINE_MONTH);
+  expect(text).not.toMatch(GREGORIAN_MONTH);
+  expect(text).not.toMatch(ARABIC_INDIC_DIGIT);
+  await attachScreenshot(page, shot);
+}
+
+test('Arabic: dates name the Levantine months (كانون الثاني, not يناير), with Latin digits', { tag: '@portal.direction.levantine-months' }, async ({ page, step }) => {
+  await step('Open a client book in Arabic: its "since" day and period read Levantine months', async () => {
+    await new ClientBooksApi().open(page, `/client-books/${STUDIO}`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.locator('.hp-read-only-line')).toBeVisible();
+    await expectLevantineDates(page, 'ar-portal-client-book-months');
+  });
+
+  await step('Open a trip group in Arabic: its day labels read Levantine months', async () => {
+    const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+    const trip = expenseGroup(1, { name: 'Jordan trip', startOn: day(-15), endOn: day(-11) });
+    const api = new FakeApi({
+      profiles: [office(OFFICE_A, 'Nour Studio')],
+      expenses: [expense(1, { amount: '18.000', currency: 'JOD', title: 'Airport taxi', occurredOn: day(-15) }), expense(2, { amount: '66.000', currency: 'JOD', title: 'Dead Sea day pass', occurredOn: day(-13) })],
+      groups: [trip],
+    });
+    await api.open(page, `/p/${OFFICE_A}/expenses/groups/${trip.id}`, 'ar');
+    await expect(page.getByRole('group', { name: 'إجمالي المصروف' })).toBeVisible();
+    await expectLevantineDates(page, 'ar-portal-group-months');
+  });
+
+  await step('Close the account in Arabic: the closing page names the deletion day with a Levantine month', async () => {
+    const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], currentPassword: 'the-current-password' });
+    await api.open(page, `/p/${OFFICE_A}?closeAccount=true`, 'ar');
+    const dialog = page.getByRole('dialog', { name: 'إغلاق حسابي' });
+    await dialog.getByLabel('كلمة المرور').fill('the-current-password');
+    await dialog.getByRole('button', { name: 'إغلاق حسابي' }).click();
+    await expect(page.getByRole('heading', { name: 'حسابك قيد الإغلاق' })).toBeVisible();
+    await expectLevantineDates(page, 'ar-portal-closing-day');
   });
 });

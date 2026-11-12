@@ -155,7 +155,7 @@ describe('complete asks the server to read (D3, F5, R10 #5)', () => {
     await idle(h);
     const after = await stored(h, orgId, done.id);
     expect(after).toMatchObject({ readStatus: 'DONE', readAttempts: 1, readLeaseUntil: null, version: pending.version + 1 });
-    expect(after.suggested).toMatchObject({ readerVersion: 'server-ocr-test-3', totalMinor: { value: '1540', source: 'ocr' }, date: { value: '2026-10-28' }, currency: { value: 'ILS' } });
+    expect(after.suggested).toMatchObject({ readerVersion: 'server-ocr-test-4', totalMinor: { value: '1540', source: 'ocr' }, date: { value: '2026-10-28' }, currency: { value: 'ILS' } });
     expect((h.ocr as FakeOcr).calls).toEqual([{ contentType: 'image/jpeg', hint: 'scanned' }]);
     expect((await read(await h.app.request(`/v1/receipts/${done.id}`, { headers: as }))).reading).toBe('done');
   });

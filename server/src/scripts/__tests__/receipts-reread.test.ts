@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { MemoryAttachmentStorage } from '../../attachments/storage.js';
 import { receipt } from '../../receipts/extract/__tests__/fixtures.js';
 import type { OcrClient, OcrResult } from '../../receipts/ocr-client.js';
-import { createReceiptReader, READ_GIVE_UP_MS, serverReaderVersion } from '../../receipts/reading/reader.js';
+import { createReceiptReader, READ_GIVE_UP_MS, SERVER_READER_GENERATION, serverReaderVersion } from '../../receipts/reading/reader.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
 import { rereadReceipts, withoutServerFields } from '../receipts-reread.js';
@@ -35,9 +35,9 @@ async function world(granted = true, lines: OcrResult['lines'] = PAZ) {
   const clock = { now: FIRST_READ };
   const reader = createReceiptReader({ store, storage, ocr: new OneOcr(lines), dispatcher: { enqueue: async () => {} }, logger: pino({ level: 'silent' }), now: () => clock.now });
   /** A To-review receipt the old reader read (claimed once, DONE) with `suggested`. */
-  async function oldRead(suggested: ReceiptSuggestion = OLD_READ) {
-    const r = await store.expenseReceipts.create({ organizationId: ORG, expenseId: null, filename: 'r.jpg', mimeType: 'image/jpeg', sizeBytes: 4, receivedOn: '2026-10-30', uploadedByUserId: USER, requestId: null }, FIRST_READ);
-    storage.put(r.storageKey, { sizeBytes: 4, contentType: 'image/jpeg' }, new Uint8Array([1, 2, 3, 4]));
+  async function oldRead(suggested: ReceiptSuggestion = OLD_READ, mimeType = 'image/jpeg') {
+    const r = await store.expenseReceipts.create({ organizationId: ORG, expenseId: null, filename: mimeType === 'application/pdf' ? 'r.pdf' : 'r.jpg', mimeType, sizeBytes: 4, receivedOn: '2026-10-30', uploadedByUserId: USER, requestId: null }, FIRST_READ);
+    storage.put(r.storageKey, { sizeBytes: 4, contentType: mimeType }, new Uint8Array([1, 2, 3, 4]));
     await store.expenseReceipts.complete(ORG, r.id, FIRST_READ, 'PENDING');
     const claim = await store.expenseReceipts.claimRead(r.id, FIRST_READ, 90_000);
     if (claim.kind !== 'claimed') throw new Error('not claimed');
@@ -92,6 +92,14 @@ describe('receipts:reread (MUT-514)', () => {
     expect(await rereadReceipts(ungranted.store, { readerBelow: 2, apply: true, now: LATER })).toEqual({ planned: [], noGrant: [kept.id], reset: [] });
   });
 
+  it('with a file type, only receipts of that type are picked (MUT-590 D3: PDFs only)', async () => {
+    const w = await world();
+    const pdf = await w.oldRead(OLD_READ, 'application/pdf');
+    await w.oldRead();
+    const r = await rereadReceipts(w.store, { readerBelow: 2, mimeType: 'application/pdf', apply: false, now: LATER });
+    expect(r.planned.map((x) => x.id)).toEqual([pdf.id]);
+  });
+
   it('a receipt edited between the list and the reset is left alone', async () => {
     const w = await world();
     const before = await w.oldRead();
@@ -101,13 +109,13 @@ describe('receipts:reread (MUT-514)', () => {
 
   it('drops only the server-read fields; nothing left is no suggestion', () => {
     expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), currency: f('ILS', 'pdf-text') })).toBeNull();
-    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-3', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-4', date: f('2026-10-01', 'qr') });
   });
 
   it('a vendor-list name goes with the registration number it was looked up by (qa-reconcile review)', () => {
     const named = { readerVersion: 'server-ocr-x-1', registrationNo: f('123456782'), vendorName: { value: 'Old Vendor', source: 'vendor' as const, confidence: 1 }, date: f('2026-10-01', 'qr') };
-    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-3', date: f('2026-10-01', 'qr') });
-    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-3', registrationNo: f('123456782', 'qr') });
+    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-4', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-4', registrationNo: f('123456782', 'qr') });
   });
 
   it('a re-read that adds nothing is not picked again, and a generation above the current reader is refused (qa-reconcile review)', async () => {
@@ -118,6 +126,6 @@ describe('receipts:reread (MUT-514)', () => {
     await rereadReceipts(w.store, { readerBelow: 2, apply: true, now: LATER });
     await w.reader.readOne(before.id);
     expect((await rereadReceipts(w.store, { readerBelow: 2, apply: false, now: LATER })).planned).toEqual([]);
-    await expect(rereadReceipts(w.store, { readerBelow: 4, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
+    await expect(rereadReceipts(w.store, { readerBelow: SERVER_READER_GENERATION + 1, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
   });
 });

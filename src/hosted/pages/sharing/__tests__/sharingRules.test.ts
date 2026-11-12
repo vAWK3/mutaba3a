@@ -157,7 +157,7 @@ describe('monthsLabel (OW3)', () => {
   });
 
   it('in Arabic, month names in Arabic with Western digits', () => {
-    expect(monthsLabel('2026-08-01', '2026-10-31', 'ar')).toMatch(/^أغسطس – أكتوبر 2026$/);
+    expect(monthsLabel('2026-08-01', '2026-10-31', 'ar')).toMatch(/^آب – تشرين الأول 2026$/);
   });
 });
 

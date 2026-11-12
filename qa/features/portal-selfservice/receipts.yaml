@@ -46,3 +46,20 @@ features:
       - Open the new receipt and wait for the reading to finish
     expect:
       - The amount fills in as 52.470 JOD and the date as 2026-06-25, each marked "From the receipt", as for the upright photo
+  # MUT-590 (ADR-252): an invoice a vendor's software made is read from its own text layer, placed on the page, so a
+  # label and the amount printed apart from it on one line meet on one row. Synthetic fixture: no real invoice.
+  - id: vendor-pdf
+    title: I upload an invoice PDF a vendor's software made and the server reads it; the review page fills in the amount, date and vendor
+    tier: secondary
+    tickets: [MUT-590]
+    paths:
+      - server/ocr/app/decode.py
+      - server/ocr/app/text.py
+      - server/src/receipts/extract/extract.ts
+      - server/src/receipts/extract/rows.ts
+    steps:
+      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Upload a design studio's invoice PDF (its "Total due" and the amount printed far apart on one line)
+      - Open the new receipt and wait for the reading to finish
+    expect:
+      - The amount fills in as 200.00 USD, the date as 2026-11-09 and the vendor as Studio Shubak Ltd, each marked "From the receipt"

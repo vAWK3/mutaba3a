@@ -1,6 +1,6 @@
 import { type Buyer, PHONE_NUMBER, REGISTRATION_NUMBER } from './buyer.js';
 import { ALLOCATION, COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
-import { countMatches } from './normalize.js';
+import { countMatches, foldForMatch } from './normalize.js';
 import type { Row } from './types.js';
 
 /**
@@ -41,8 +41,10 @@ export function readRegistration(rows: readonly Row[], buyer: Buyer): Reading<st
         // An eight-digit dealer number is a nine-digit ID printed without its leading zero.
         const digits = match[0].replace(/\D/g, '').padStart(ISRAELI_REGISTRATION_DIGITS, '0');
         if (!isValidIsraeliRegistration(digits)) continue;
-        // MUT-514: the buyer's number where the vendor's is expected: whatever follows is a guess.
-        return buyer.has(digits) ? null : { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
+        // MUT-514: the buyer's number where the vendor's is expected: whatever follows is a guess, unless another
+        // registration label follows on the row (MUT-590: a placed layer puts the bill-to's and the vendor's side by side).
+        if (!buyer.has(digits)) return { value: digits, rule: RULE_REGISTRATION, conf: row.conf };
+        if (!hasKeyword(foldForMatch(row.text.slice(match.index + match[0].length)), REGISTRATION)) return null;
       }
     }
   }

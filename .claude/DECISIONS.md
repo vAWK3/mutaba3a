@@ -6492,23 +6492,6 @@ Contract 1.104.0-mut575, merged with MUT-557 under the higher literal 1.106.0-mu
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 
 
-## ADR-254: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
-
-**Status:** Accepted (2026-11-11, MUT-589; epic MUT-252; Basel's decisions in Jira MUT-589 comment 13297). Plan: `.claude/designs/mut-589-move-saved-receipt.md`. Amends ADR-228 ("filed receipts stay out"): a filed receipt still never moves alone (`POST /v1/receipts/{id}/move` keeps 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`); it moves with its expense.
-
-**Context:** a receipt shared into the phone lands on a profile the app picks, and once saved there it could not leave. Basel shares vendor invoices for a firm and for himself, and did not save at all rather than save onto the wrong books. D4 widened the ticket to any saved expense, with or without receipts.
-
-**Decision:**
-1. **Two routes, one set of gates.** `GET /v1/expenses/{id}/move-preview?profileId=` (session, `expenses:read`; never an accountant's, `ACCOUNTANT_EXCLUDED_ROUTES`) answers `{changes, receiptCount, expenseVersion}`; `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (session, `expenses:write`, Idempotency-Key `expenses.move`) answers `{expense (ExpenseDetail, on the target, same id), fromProfileId, changes}`. Both run, in order: 422 `SAME_PROFILE`; 404 `EXPENSE_NOT_FOUND`; the source's lapse (402, the door does it for the POST); 403 `READ_ONLY_PROFILE` reason `MALAFAT_PROFILE` when Malafat is the source's writer of record; 403 reason `NOT_OWNER` unless the person owns the source (`ownsProfile`: creator or co-owner, so a firm's members never move its expenses out, as MUT-453); the target (404 `PROFILE_NOT_FOUND`, 402 lapsed: `writableTarget`, now exported from receipts-compose); 403 `MALAFAT_PROFILE` for a Malafat-fed target. Then the move only: 409 `VERSION_MISMATCH` (`details.currentVersion`) on a stale `expectedVersion`.
-2. **Fields (D1), by the pure planner `planExpenseMove`** (`server/src/expenses/move-plan.ts`): category by the same `nameKey`, else the same preset entry across Arabic and English (`presetKeyForName`), else the target's Other, else none (never an archived one); vendor found or created on the target (registration number of the source vendor first, then the name); client and matter cleared; VAT and allocation number kept only when the target is a firm, else cleared with the gross kept; group marks dropped, membership on the target follows the date. Amount, currency, date, title, notes and typed vendor never change (ADR-004). `changes` lists, in a fixed order (category, client, matter, vat, allocationNumber, groups), each field a person sees change, in the request's language.
-3. **Copy, then one transaction, then delete** (ADR-228's pattern). Each READY receipt on the expense is copied to `movedReceiptStorageKey(target, id, nonce)`; a failed copy removes the copies made and answers 5xx. `expenses.moveToProfile` (memory and Prisma, guard `write: expenses`) locks the expense, then its receipts, and refuses, writing nothing: gone; stale; an unfinished upload on it (409 `RECEIPT_NOT_READY`); a receipt set that differs from the copied set (a filing landed meanwhile, review R1 → 409 `VERSION_MISMATCH`). Otherwise it re-homes the expense (patch, version + 1) and every receipt (target, new key, its approval's `categoryId` rewritten to the mapped one, version + 1), deletes the expense's group marks and writes `expense.moved_out` `{toProfileId, receiptCount, changes}` and `expense.moved_in` `{fromProfileId, receiptCount, changes}` in the same transaction. A refusal removes only this move's copies; after the commit the old objects are removed and the vendor touched, never thrown.
-4. **Preview drift (R2):** the move re-plans with the target as it is just before its transaction and answers the changes it applied; the clients build the confirmation from those.
-5. **Clients:** a retry answered 404 `EXPENSE_NOT_FOUND` or 409 `OPERATION_IN_PROGRESS` reads the expense on the target; found there, the move happened (ADR-228 D8). Portal: `MoveToProfileDrawer` (MUT-503's drawer, generalised) with a changes list, opened by `?moveExpense=<id>` from the expense drawer's Move and a filed receipt card's "Move with its expense…"; hidden with one profile, on a read-only profile and signed out.
-
-**Consequences:** API 1.109.0-mut589, no migration. A vendor created on the target for a move that then fails stays (R3, TD-307). An abandoned upload on an expense blocks its move until it is deleted (TD-308). The plan's "recompute under the lock" (R2) is done just before the transaction instead, since category and vendor lookups would otherwise run inside the store layer.
-
-**Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).
-
 ## ADR-251: The Accountant Plan Is a Person's Plan on the Billing Tables, Capped at Accept and Enforced at One Door (MUT-565, Epic MUT-558)
 
 **Status:** Accepted (2026-11-06; plan and eng review CLEARED, auto-decided P1–P10: `.claude/designs/MUT-565-accountant-plan.md`; defaults in Jira MUT-565 comments 13248/13249). Server built 2026-11-08; portal and phone are later rounds. Numbered 251 (MUT-314 holds 248, MUT-575 249, MUT-562 may take 250); re-check at merge.
@@ -6549,3 +6532,73 @@ Contract 1.108.0-mut565; migrations `20261108120000_mut565_accountant_tier`, `20
 **Alternatives rejected:** a part of You or the island menu for the desk (layouts A/B, Basel chose C); a consent prompt on public pages (a stranger has no account to hold a choice); storing the link token for a returning browser.
 
 **Consequences:** downloads (MUT-314), the 4th-client card and free counter (MUT-565), and the scenes / scope bullets (MUT-561) are hooks marked in code until those land.
+
+## ADR-252: A PDF's Text Layer Is Read by Position Through the OCR Row Builder; a Skipped Read Says Why (MUT-590, Epic MUT-252)
+
+**Status:** Accepted (2026-11-11; plan and eng review CLEARED, Basel's D1–D4: `.claude/designs/mut-590-vendor-pdf-reading.md`).
+
+**Context:** invoices a vendor's software makes (Hebrew, Arabic, English) carry a real text layer, but print a label and
+its amount far apart on one line, or the amount under its label. The API read that layer line by line in the PDF's own
+stream order (`pdfRows`), so the label and the amount often landed on different rows and the total was missed. Visual-
+order Hebrew layers came reversed. Separately, receipt 27e28e05's read ended `skipped` with no reason in the log.
+
+**Decision:**
+1. The `receipt-ocr` sidecar returns the text layer **placed on the page**: pdfium text runs with boxes, top-down, page 2
+   under page 1, at conf 1, in the OCR `lines` contract, next to `pdfText`. Past 20 000 characters or on a pdfium error,
+   `lines` is empty.
+2. The API reads a `pdf-text` read's lines through `orderedRows` (the OCR row builder: vertical-overlap rows,
+   `joinLabelAbove`), source still `pdf-text`. No lines (cap, error, older sidecar) → `pdfRows(pdfText)` as before (D4).
+   One row builder, not two.
+3. A Hebrew layer is visual when a Hebrew word starts with a final letter (impossible in logical text); its Hebrew lines
+   are reordered whole (UAX #9, `get_display`). Logical layers are untouched.
+4. `SERVER_READER_GENERATION` 4. After rollout, `receipts:reread -- --reader-below 4 --mime application/pdf` re-reads
+   To-review PDFs only (D3); images would read the same.
+5. `finishRead`'s skip carries a reason (`deleted | filed`), the reader adds `complete` and `ungranted`, and the log line
+   carries it as `code`, with `engine` and (text PDFs) `chars`; never text (D1). 27e28e05 was filed onto an expense
+   10 s into its read: the drop was right.
+
+**Consequences:** conf-1 rows clear every rule weight, so more label/value pairs mean more chances of a confident wrong
+field; the bench's vendor-pdf scope (0 wrong-and-confident, ≥95% of present fields) and `--compare` against main are the
+guard. Mixed-version rollout is safe both ways.
+
+**Measured (2026-11-12, Basel's 17 real invoices, 14 vendor-made):** total/date/currency 34/40 with 0 confidently wrong
+(main 32/40); the secondary fields 23/42 (main 16/42); 57/82 overall against the ticket's 95%. One field reads worse
+than main: the two-column registration row (a known buyer number is now passed over for the vendor's labelled one
+after it, but an unlearned one still wins). Basel landed it as is; the rest is MUT-591 (TD-307).
+
+
+## ADR-253: Arabic Dates Name the Levantine Months Everywhere, Through getLocale (MUT-587)
+
+**Status:** Accepted (2026-11-11; plan `.claude/designs/mut-587-levantine-dates.md`, eng review D1–D5 by Basel, R5 by default). Numbered 253 at build (252 is held by a parallel worktree); re-check at merge.
+
+**Context:** the portal and website printed Arabic months the Egyptian/Gregorian way (يناير, نوفمبر) everywhere except Reports, which MUT-448 had switched to the Levantine names on its own constant. The phone app already writes the Levantine names. Our people read كانون الثاني، شباط، آذار.
+
+**Decision:**
+- `getLocale('ar')` returns `ARABIC_LOCALE = 'ar-PS-u-nu-latn'` (`src/lib/i18n/core.tsx`); there is no second date locale. Checked on Node 22 / ICU 78: currency, unit, relative time, list, collation and country names read exactly as under plain `ar`; only month names change. Numeric dates (`dateStyle: 'medium'`) stay numeric (Basel: "keep numbers").
+- The three `latn()` helpers, `inviteEnds`'s template, Reports' own constant and the unused `getLocaleFromLanguage` go: appending `-u-nu-latn` to the new tag throws. `formatDate`/`formatPaymentDate`/`formatDateShort` take a `Language`.
+- The server keeps its own `ARABIC_LOCALE` (`server/src/dates.ts`) for `mailDay` and `payPageDay`; the period pack writes no month names.
+- A lint guard (web + server `no-restricted-syntax`) refuses a hand-written Arabic locale (a literal, or a ternary branch, starting with `ar`) in `Intl.DateTimeFormat` / `RelativeTimeFormat` / `toLocale*String`, and any template with `-u-nu-`. Locale variables are out of its reach; the getLocale and per-formatter tests cover those.
+- Frozen terms versions keep their words (their sha256 is in the manifest, ADR-102); the next version writes the Levantine name. The privacy page's "updated" line and the unreleased web 0.3.4 note change.
+
+**Supersedes:** MUT-448's "only Reports' dates" limit (ADR-189's AC6 note).
+
+**Alternatives rejected:** a separate `dateLocale` beside `getLocale` (two locales, a rule to police forever, D5); spelling out numeric dates.
+
+**Consequences:** Safari is checked by hand once (one date, one amount, one country name in Arabic) at qa-reconcile (D4).
+
+## ADR-254: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
+
+**Status:** Accepted (2026-11-11, MUT-589; epic MUT-252; Basel's decisions in Jira MUT-589 comment 13297). Plan: `.claude/designs/mut-589-move-saved-receipt.md`. Amends ADR-228 ("filed receipts stay out"): a filed receipt still never moves alone (`POST /v1/receipts/{id}/move` keeps 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`); it moves with its expense.
+
+**Context:** a receipt shared into the phone lands on a profile the app picks, and once saved there it could not leave. Basel shares vendor invoices for a firm and for himself, and did not save at all rather than save onto the wrong books. D4 widened the ticket to any saved expense, with or without receipts.
+
+**Decision:**
+1. **Two routes, one set of gates.** `GET /v1/expenses/{id}/move-preview?profileId=` (session, `expenses:read`; never an accountant's, `ACCOUNTANT_EXCLUDED_ROUTES`) answers `{changes, receiptCount, expenseVersion}`; `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (session, `expenses:write`, Idempotency-Key `expenses.move`) answers `{expense (ExpenseDetail, on the target, same id), fromProfileId, changes}`. Both run, in order: 422 `SAME_PROFILE`; 404 `EXPENSE_NOT_FOUND`; the source's lapse (402, the door does it for the POST); 403 `READ_ONLY_PROFILE` reason `MALAFAT_PROFILE` when Malafat is the source's writer of record; 403 reason `NOT_OWNER` unless the person owns the source (`ownsProfile`: creator or co-owner, so a firm's members never move its expenses out, as MUT-453); the target (404 `PROFILE_NOT_FOUND`, 402 lapsed: `writableTarget`, now exported from receipts-compose); 403 `MALAFAT_PROFILE` for a Malafat-fed target. Then the move only: 409 `VERSION_MISMATCH` (`details.currentVersion`) on a stale `expectedVersion`.
+2. **Fields (D1), by the pure planner `planExpenseMove`** (`server/src/expenses/move-plan.ts`): category by the same `nameKey`, else the same preset entry across Arabic and English (`presetKeyForName`), else the target's Other, else none (never an archived one); vendor found or created on the target (registration number of the source vendor first, then the name); client and matter cleared; VAT and allocation number kept only when the target is a firm, else cleared with the gross kept; group marks dropped, membership on the target follows the date. Amount, currency, date, title, notes and typed vendor never change (ADR-004). `changes` lists, in a fixed order (category, client, matter, vat, allocationNumber, groups), each field a person sees change, in the request's language.
+3. **Copy, then one transaction, then delete** (ADR-228's pattern). Each READY receipt on the expense is copied to `movedReceiptStorageKey(target, id, nonce)`; a failed copy removes the copies made and answers 5xx. `expenses.moveToProfile` (memory and Prisma, guard `write: expenses`) locks the expense, then its receipts, and refuses, writing nothing: gone; stale; an unfinished upload on it (409 `RECEIPT_NOT_READY`); a receipt set that differs from the copied set (a filing landed meanwhile, review R1 → 409 `VERSION_MISMATCH`). Otherwise it re-homes the expense (patch, version + 1) and every receipt (target, new key, its approval's `categoryId` rewritten to the mapped one, version + 1), deletes the expense's group marks and writes `expense.moved_out` `{toProfileId, receiptCount, changes}` and `expense.moved_in` `{fromProfileId, receiptCount, changes}` in the same transaction. A refusal removes only this move's copies; after the commit the old objects are removed and the vendor touched, never thrown.
+4. **Preview drift (R2):** the move re-plans with the target as it is just before its transaction and answers the changes it applied; the clients build the confirmation from those.
+5. **Clients:** a retry answered 404 `EXPENSE_NOT_FOUND` or 409 `OPERATION_IN_PROGRESS` reads the expense on the target; found there, the move happened (ADR-228 D8). Portal: `MoveToProfileDrawer` (MUT-503's drawer, generalised) with a changes list, opened by `?moveExpense=<id>` from the expense drawer's Move and a filed receipt card's "Move with its expense…"; hidden with one profile, on a read-only profile and signed out.
+
+**Consequences:** API 1.109.0-mut589, no migration. A vendor created on the target for a move that then fails stays (R3, TD-308). An abandoned upload on an expense blocks its move until it is deleted (TD-309). The plan's "recompute under the lock" (R2) is done just before the transaction instead, since category and vendor lookups would otherwise run inside the store layer.
+
+**Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).

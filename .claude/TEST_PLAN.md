@@ -4540,3 +4540,21 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
 - Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
 
+## MUT-590 — vendor-made invoice PDFs, read skip reasons (ADR-252)
+
+- `server/ocr/tests/test_caps.py`: placed runs (label and value apart on one line, page 2 under page 1), the character cap and a pdfium error keep `pdfText` with no lines; `test_units.py`: visual Hebrew repaired, logical Hebrew and Arabic unchanged.
+- `server/src/receipts/extract/__tests__/extract.test.ts`: placed text layer → total/currency/date (Hebrew label and amount apart), label over amount in a column, registration label and number in neighbouring runs; `pdfText` without lines → line-by-line (back-compat).
+- `server/src/receipts/__tests__/reader-skip-reason.test.ts`: deleted, filed (mid-read), complete and ungranted skips log their `code`; a text-PDF read logs `engine` and `chars`, no text.
+- `server/src/scripts/__tests__/receipts-reread.test.ts`: `--mime application/pdf` picks PDFs only; a generation above the current reader is refused.
+- `extract.test.ts` also: an ordinal day (`6th May 2026`); a buyer's number first on a row gives way to the vendor's labelled one after it, and with no label after it still ends the search.
+- `store-contract-receipt-reading.ts`: F8 pins the skip reason (deleted, filed) for memory and Prisma.
+- Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope on Basel's 17 real invoices: 57/82 (TD-307, MUT-591).
+
+
+
+## MUT-587 — Levantine Arabic months everywhere (ADR-253)
+
+- Unit: `src/lib/i18n/__tests__/arabicLocale.test.ts` (getLocale, all 12 months, numeric dates and amounts unchanged), `src/hosted/format/__tests__/levantineDates.test.ts` (close-account day, invite end, client-book labels, operator times, formatDay), `utils.test.ts` (formatDate in Arabic).
+- Guard: `src/lib/i18n/__tests__/dateLocaleGuard.test.ts` runs ESLint on probe code for the portal and the website.
+- Server: templates, renewal-mail and checkout tests hold the Levantine names.
+- Release-QA: `@portal.direction.levantine-months` (client book, trip group, closing page). Manual: Safari, one date, one amount, one country name in Arabic (D4).

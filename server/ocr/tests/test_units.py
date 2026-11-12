@@ -294,6 +294,25 @@ def test_a_logical_text_layer_and_short_words_are_left_alone(layer):
     assert "أهلا" in fixed if "أهلا" in layer else fixed == layer
 
 
+# --- PDF text layers whose Hebrew is in visual order (MUT-590) ----------------------------------------------------
+
+
+def test_a_visual_order_hebrew_text_layer_is_put_in_logical_order():
+    # An old invoice generator writes each line as it looks: letters right to left reversed, numbers kept.
+    layer = "רוודנל הפק\n511807505 השרומ קסוע\n302.97 םולשתל כ\"הס"
+    assert pdf_text_to_logical(layer) == "קפה לנדוור\nעוסק מורשה 511807505\nסה\"כ לתשלום 302.97"
+
+
+def test_a_logical_hebrew_text_layer_is_left_alone():
+    layer = "קפה לנדוור\nעוסק מורשה 511807505\nסה\"כ לתשלום 302.97\nשלום ע\"מ"
+    assert pdf_text_to_logical(layer) == layer
+
+
+def test_only_the_reversed_hebrew_lines_are_turned_and_latin_lines_stay():
+    layer = "Invoice 12\n200.00 םולשתל\nTotal 200.00"
+    assert pdf_text_to_logical(layer) == "Invoice 12\nלתשלום 200.00\nTotal 200.00"
+
+
 # --- settings (MUT-441 benchmark tuning) --------------------------------------------------------------------------
 
 

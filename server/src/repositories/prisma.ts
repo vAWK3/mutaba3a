@@ -2728,7 +2728,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (row.deletedAt || row.filingStatus === 'FILED') {
         // F8: filed or deleted while it was read: SKIPPED, and the reading is dropped.
         const skipped = await this.prisma.expenseReceipt.updateMany({ where: { id, readStatus: 'PENDING' }, data: end('SKIPPED', null) });
-        return skipped.count === 1 ? { kind: 'skipped' } : { kind: 'not_pending' };
+        return skipped.count === 1 ? { kind: 'skipped', reason: row.deletedAt ? 'deleted' : 'filed' } : { kind: 'not_pending' };
       }
       return { kind: 'stale', record: toExpenseReceipt(row) };
     },

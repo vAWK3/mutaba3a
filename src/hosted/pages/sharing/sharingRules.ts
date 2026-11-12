@@ -48,12 +48,9 @@ export function isolate(text: string): string {
 
 // ---- Dates ---------------------------------------------------------------------------------------------------------
 
-/** Western digits in both languages, as every figure in the portal (DESIGN.md › RTL). */
-const latn = (language: Language) => `${getLocale(language)}-u-nu-latn`;
-
 /** "Oct 12": an instant as its day in the profile's zone. */
 export function shortDay(iso: string, language: Language, timeZone: string): string {
-  return new Intl.DateTimeFormat(latn(language), { day: 'numeric', month: 'short', timeZone }).format(new Date(iso));
+  return new Intl.DateTimeFormat(getLocale(language), { day: 'numeric', month: 'short', timeZone }).format(new Date(iso));
 }
 
 const DAYS_PER_WEEK = 7;
@@ -72,7 +69,7 @@ export function relativeDay(iso: string, now: Date, language: Language, timeZone
   const days = Math.max(0, dayIndex(now, timeZone) - dayIndex(new Date(iso), timeZone));
   const [count, unit]: [number, Intl.RelativeTimeFormatUnit] =
     days < DAYS_PER_WEEK ? [days, 'day'] : days < DAYS_PER_MONTH ? [Math.floor(days / DAYS_PER_WEEK), 'week'] : days < DAYS_PER_YEAR ? [Math.floor(days / DAYS_PER_MONTH), 'month'] : [Math.floor(days / DAYS_PER_YEAR), 'year'];
-  return new Intl.RelativeTimeFormat(latn(language), { numeric: 'auto' }).format(-count, unit);
+  return new Intl.RelativeTimeFormat(getLocale(language), { numeric: 'auto' }).format(-count, unit);
 }
 
 // ---- Accountant rows -----------------------------------------------------------------------------------------------
@@ -195,8 +192,8 @@ export function periodRange(period: ShareLinkPeriod, today: string): { from: str
   return { from: first.toISOString().slice(0, 10), to: last.toISOString().slice(0, 10) };
 }
 
-const monthYear = (iso: string, language: Language) => new Intl.DateTimeFormat(latn(language), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
-const monthOnly = (iso: string, language: Language) => new Intl.DateTimeFormat(latn(language), { month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+const monthYear = (iso: string, language: Language) => new Intl.DateTimeFormat(getLocale(language), { month: 'short', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
+const monthOnly = (iso: string, language: Language) => new Intl.DateTimeFormat(getLocale(language), { month: 'short', timeZone: 'UTC' }).format(new Date(`${iso}T00:00:00Z`));
 
 /**
  * "Oct 2026", "Aug – Oct 2026", "Dec 2025 – Jan 2026" (OW3: whole months by name); null when `from` is null (the whole

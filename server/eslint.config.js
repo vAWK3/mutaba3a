@@ -3,6 +3,18 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 import { defineConfig, globalIgnores } from 'eslint/config';
 
+/** MUT-587: as the web's DATE_LOCALE_SYNTAX (eslint.config.js); Arabic dates take ARABIC_LOCALE from src/dates.ts. */
+const DATE_CALL = ["NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]", "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]"];
+const ARABIC_LITERAL = '/^ar(-|$)/';
+const DATE_LOCALE_SYNTAX = [
+  ...DATE_CALL.flatMap((call) => [
+    `${call}[arguments.0.type='Literal'][arguments.0.value=${ARABIC_LITERAL}]`,
+    `${call}[arguments.0.type='ConditionalExpression'][arguments.0.consequent.value=${ARABIC_LITERAL}]`,
+    `${call}[arguments.0.type='ConditionalExpression'][arguments.0.alternate.value=${ARABIC_LITERAL}]`,
+  ]).map((selector) => ({ selector, message: 'Format Arabic dates with ARABIC_LOCALE from src/dates.ts (MUT-587): Levantine months, Latin digits.' })),
+  { selector: 'TemplateElement[value.raw=/-u-nu-/]', message: 'Use ARABIC_LOCALE as it is: it already sets Latin digits, and a second -u-nu- throws (MUT-587).' },
+];
+
 export default defineConfig([
   globalIgnores(['dist', 'node_modules', 'prisma/generated']),
   {
@@ -15,6 +27,13 @@ export default defineConfig([
     rules: {
       '@typescript-eslint/no-explicit-any': 'error',
       '@typescript-eslint/consistent-type-imports': 'error',
+    },
+  },
+  {
+    files: ['src/**/*.ts'],
+    ignores: ['src/**/__tests__/**'],
+    rules: {
+      'no-restricted-syntax': ['error', ...DATE_LOCALE_SYNTAX],
     },
   },
   {

@@ -18,16 +18,21 @@
 
 ## Open Debt
 
-### TD-307: A vendor made on the target for an expense move that then fails stays behind
+### TD-308: A vendor made on the target for an expense move that then fails stays behind
 **Status**: Accepted (MUT-589, 2026-11-11; ADR-254, review R3)
 - **What:** the move resolves (finds or creates) the vendor on the target before its transaction; if the transaction refuses, a new vendor is left with no expense.
 - **Why it's acceptable:** approving a receipt does the same (MUT-254 A2), the vendor is still right, and the next expense at that vendor uses it.
 - **Fix:** if it ever matters, resolve the vendor inside the move's transaction (a store-level resolve on the `tx`).
 
-### TD-308: An abandoned upload on an expense blocks moving it
+### TD-309: An abandoned upload on an expense blocks moving it
 **Status**: Open (MUT-589, 2026-11-11; ADR-254)
 - **What:** a MUT-44 upload started on an expense and never completed leaves a PENDING_UPLOAD receipt on it; the move answers 409 `RECEIPT_NOT_READY` until that receipt is deleted, and the preview can't see it.
 - **Fix:** let the move soft-delete PENDING_UPLOAD receipts older than the pending window, or sweep them.
+### TD-307: Vendor-made invoice PDFs read 70% of their printed fields, against a 95% bar
+**Status**: Open (MUT-590, 2026-11-12; ADR-252; the work is MUT-591)
+- **What:** on Basel's 14 vendor-made invoices in receipt-bench, 57/82 printed fields are read right (total/date/currency 34/40, 0 confidently wrong; vendor, VAT, registration, allocation 23/42, 4 confidently wrong). One field reads worse than main: a registration number when the bill-to's ח.פ/ת.ז and the vendor's ח.פ/ע.מ share one printed line and the buyer's number isn't learned yet. The bench truth has no phone or email for these invoices, so a filled phone or email scores as wrong.
+- **Why it's acceptable:** Basel chose to land MUT-590 (2026-11-12): it reads more than main on every field group, with no new confidently wrong total, date or currency.
+- **Fix:** MUT-591: rank date labels (invoice date over the others), vendor name on invoices, a signal for the two-column registration row, phone/email truth.
 
 ### TD-306: The same allocation number on two expenses is not flagged
 **Status**: Accepted (MUT-557, 2026-11-06; ADR-246, Basel's R2)
