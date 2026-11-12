@@ -6585,3 +6585,25 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Alternatives rejected:** a separate `dateLocale` beside `getLocale` (two locales, a rule to police forever, D5); spelling out numeric dates.
 
 **Consequences:** Safari is checked by hand once (one date, one amount, one country name in Arabic) at qa-reconcile (D4).
+
+## ADR-254: Malafat Acts as the Person, With a Tenant-Bound Delegated Token; the Org Key Keeps the Legal Ledger (Epic MUT-592)
+
+**Status:** Accepted (design, 2026-11-12; brief `.claude/designs/malafat-delegated-access.md`, decisions D1–D11 and DF1–DF3 answered by Basel). Not built: MUT-593..598, Malafat's side MAL-1538. Number re-checked at merge.
+
+**Context:** Malafat's backend reaches only the legal ledger with its organization API key. Expenses, receipts, groups, conversions, capture, accountants, share links, downloads and the Claude connector are person-only (MUT-42 D4), and a Malafat-fed profile has no owner, so nobody can share it with an accountant (ADR-245). Basel wants every feature inside Malafat, secure, built once, while the portal and app keep working on the firm's books.
+
+**Decision:**
+1. **A third principal, `delegated`.** Malafat is the first **confidential** client of MTB3A's authorization server (extends ADR-197; `private_key_jwt`, no shared secret) and may ask for resource `<origin>/v1` (and `/mcp`). The token resolves to the person; everything below is the session path (selectProfile, scopes, firm roles, store guards, billing, features). No per-feature permission code.
+2. **Tenant-bound (D9).** A delegated call is admitted only on a profile whose CONNECTED integration names the token's tenant; any other profile, the person's own included, is 404 PROFILE_NOT_FOUND.
+3. **Default refuse.** A route accepts `delegated` only when its OpenAPI `security` declares it. Never: password, passkeys, sessions, account closure and purge, billing checkout and portal, OAuth grants, operator and admin, records export.
+4. **The org key is unchanged** and gains one route, `PUT /v1/integration/members`. It never mints or uses a person's token.
+5. **Sign in with Malafat (D1, D4, D5, DF1)** is a sign-in method on one ordinary account (`external_identities`, unique per tenant and subject). An existing account links only after its own sign-in, never by email. A signup through Malafat skips signup review and gets the normal trial on its own profile.
+6. **Malafat syncs members (D2, D3, D7):** PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER; unknown people are pending seats until their first sign-in. Members are read-only in MTB3A on a Malafat firm.
+7. **Override log (ADR-245 and `ownsProfile`).** *Why:* a Malafat firm had no owner, so it could never be shared. *What replaces it:* on a Malafat firm an OWNER-role member owns the profile; `canCoOwn` is unchanged for profiles people create. *Date:* 2026-11-12.
+8. **The legal ledger stays Malafat's to write (D6);** the writability matrix is unchanged.
+9. **Revocation (DF2, DF3):** a person's revoke, member removal, integration disconnect, password change, sign out everywhere, operator disable, the per-firm switch and a client disable each end delegated access.
+10. **Ships dark (D10):** `MALAFAT_DELEGATION` plus a per-firm operator switch; Sader's office first. Malafat's MCP forwards MTB3A's tools with the delegated token (D11).
+
+**Alternatives rejected:** widening the org key's scopes to person domains (one leaked key would act for every lawyer); sending an acting-user header with the org key (same blast radius); Malafat re-implementing receipts, accountants or downloads (duplicate logic); two Claude connectors.
+
+**Consequences:** one indexed tenant check per delegated request; a new table for external identities; every owner gate gains a Malafat-firm test.

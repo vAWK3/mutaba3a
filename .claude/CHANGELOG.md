@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — Design: Malafat runs every MTB3A feature through the lawyer's own access (epic MUT-592, ADR-254)
+
+### Added
+- **Design brief only, no code:** `.claude/designs/malafat-delegated-access.md`, approved by Basel with decisions D1–D11 and defaults DF1–DF3. Malafat calls `/v1` and `/mcp` with each person's tenant-bound delegated token (MTB3A as its authorization server, Malafat the first confidential client); Sign in with Malafat; Malafat syncs members and roles; partners own a Malafat firm (overrides part of ADR-245).
+- Tickets: MUT-593..598 under MUT-592; Malafat's side MAL-1539..1544 under MAL-1538, linked as blockers.
+
 ## [Unreleased] - 2026-11-11 — Vendor-made invoice PDFs read right; a skipped receipt read says why (MUT-590, ADR-252)
 
 ### Fixed
