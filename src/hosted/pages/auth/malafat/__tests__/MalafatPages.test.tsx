@@ -3,7 +3,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { emptyProfileRoutes, fail, locationOf, me, ok, renderPortal, stubApi, type Handler } from '../../../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../../../i18n/HostedLanguageProvider';
 import { currentMode } from '../../../../session/mode';
-import { leaveForMalafat } from '../MalafatOfficePage';
+import { leaveForMalafat } from '../malafatSignIn';
 
 /** MUT-596: Sign in with Malafat, the office step (`/malafat`) and the return (`/malafat/return`). */
 

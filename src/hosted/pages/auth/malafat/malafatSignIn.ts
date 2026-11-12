@@ -40,6 +40,9 @@ export function rememberOffice(slug: string): void {
   }
 }
 
+/** Leaves for the server's start, which sends the browser on to Malafat; a seam a test can replace. */
+export const leaveForMalafat = { go: (url: string) => window.location.assign(url) };
+
 export function malafatStartUrl(slug: string): string {
   return `${MALAFAT_START_PATH}?${new URLSearchParams({ tenant: slug, client: 'web' }).toString()}`;
 }

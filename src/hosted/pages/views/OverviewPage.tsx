@@ -3,6 +3,7 @@ import { MalafatCreatedNote } from '../../components/MalafatPortal';
 import { FirmOnBanner } from '../../components/FirmOnBanner';
 import { TrialBanner } from '../../components/TrialBanner';
 import { PasskeySuggestion } from '../../components/PasskeySuggestion';
+import { SecondWayIn } from '../../components/SecondWayIn';
 import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -65,6 +66,8 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
       <TrialBanner />
       {/* MUT-370: suggest a passkey, after the trial's first-run step and under its banner (D4) */}
       <PasskeySuggestion />
+      {/* MUT-596: an account Sign in with Malafat made, until it has a way in of its own (in the passkey card's place) */}
+      <SecondWayIn />
       {/* Right after a business profile is created, once (MUT-191); dismissed, focus goes to the heading */}
       <MalafatCreatedNote onGone={() => heading.current?.focus()} />
       {/* MUT-300 (DR5): once firm features are on, until dismissed */}

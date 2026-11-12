@@ -22,6 +22,8 @@ function me({ prompt = DUE, trialPrompt = ANSWERED_TRIAL, closing = false }: { p
       displayName: 'Rana',
       locale: 'en',
       malafatSuggestions: { off: false, dismissed: [] },
+      ownSignIn: true,
+      ownPassword: true,
       trialPrompt,
       passkeyPrompt: prompt,
       status: 'ACTIVE',

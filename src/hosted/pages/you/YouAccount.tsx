@@ -1,4 +1,7 @@
 import { useNavigate } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../../api/client';
+import { CONNECTED_APPS_KEY } from '../../data/oauthQueries';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
@@ -24,6 +27,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
   const navigate = useNavigate();
   const agentAccess = useHasFeature('agent_access');
   const operator = useIsOperator();
+  // MUT-596: the row shows only where the server has Malafat access on (the list answers 404 elsewhere).
+  const connectedApps = useQuery({ queryKey: CONNECTED_APPS_KEY, queryFn: ({ signal }) => api.listConnectedApps(signal), enabled: !local, retry: false });
 
   if (local) {
     return (
@@ -46,6 +51,7 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         {passkeySupport() && <RowButton label={t('hosted.account.passkeys.title')} sub={t('hosted.account.passkeys.rowSub')} onClick={drawers.openPasskeys} />}
         {/* MUT-434: only for a person the operator gave agent_access */}
         {agentAccess && <RowButton label={t('hosted.connect.title')} sub={t('hosted.connect.rowSub')} onClick={drawers.openConnectClaude} />}
+        {connectedApps.data && <RowButton label={t('hosted.connectedApps.title')} sub={t('hosted.connectedApps.rowSub')} onClick={drawers.openConnectedApps} />}
       </RowGroup>
       {/* MUT-460 (6A): the operator console's way in, for operators only */}
       {operator && (

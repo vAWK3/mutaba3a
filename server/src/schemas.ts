@@ -1247,6 +1247,7 @@ export const MeSchema = z
       /** MUT-191: on, nothing dismissed, until the person changes it. */
       malafatSuggestions: MalafatSuggestionsSchema,
     ownSignIn: z.boolean().openapi({ description: 'MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it.' }),
+    ownPassword: z.boolean().openapi({ description: 'MUT-596: whether the account has a password the person chose. False for an account Sign in with Malafat created until they set one: Change password then asks for no current password.' }),
       /** MUT-418: the trial's card prompt (all null until the person answers). Additive since 1.59.0-mut418. */
       trialPrompt: TrialPromptSchema,
       /** MUT-370: whether to suggest adding a passkey; null on a server that offers no passkeys. Additive since 1.70.0-mut370. */

@@ -5,12 +5,9 @@ import { api, ApiError } from '../../../api/client';
 import { AlertIcon } from '../../../components/Icons';
 import { MalafatMark } from '../../../components/MalafatMark';
 import { AuthLayout } from '../AuthLayout';
-import { MALAFAT_HOST_SUFFIX, malafatStartUrl, officeSlugOf, rememberedOffice, rememberOffice } from './malafatSignIn';
+import { leaveForMalafat, MALAFAT_HOST_SUFFIX, malafatStartUrl, officeSlugOf, rememberedOffice, rememberOffice } from './malafatSignIn';
 
 type Problem = 'officeRequired' | 'officeNotFound' | 'unreachable';
-
-/** Leaves for the server's start, which sends the browser on to Malafat; a seam a test can replace. */
-export const leaveForMalafat = { go: (url: string) => window.location.assign(url) };
 
 /**
  * `/malafat` (MUT-596): "Your Malafat office", the first step of Sign in with Malafat. The person types their office's

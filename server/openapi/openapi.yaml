@@ -219,6 +219,9 @@ components:
             ownSignIn:
               type: boolean
               description: "MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it."
+            ownPassword:
+              type: boolean
+              description: "MUT-596: whether the account has a password the person chose. False for an account Sign in with Malafat created until they set one: Change password then asks for no current password."
             trialPrompt:
               $ref: "#/components/schemas/TrialPrompt"
             passkeyPrompt:
@@ -242,6 +245,7 @@ components:
             - locale
             - malafatSuggestions
             - ownSignIn
+            - ownPassword
             - trialPrompt
             - passkeyPrompt
             - status

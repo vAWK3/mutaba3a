@@ -2725,13 +2725,14 @@
       },
       "loadFailed": "We couldn't load the members."
     },
-    "viaMalafat": "via Malafat",
+    "viaMalafat": "via {malafat}",
     "secondWayIn": {
       "title": "Add a second way to sign in",
       "lead": "Another secure way into MTB3A, next to Malafat: a passkey (your face or fingerprint) or a password.",
       "addPasskey": "Add a passkey",
       "setPassword": "Set a password",
-      "notNow": "Not now"
+      "notNow": "Not now",
+      "signInAgain": "For your security, sign in with Malafat again, then add your passkey."
     }
   }
 }

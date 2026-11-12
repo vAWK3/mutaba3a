@@ -281,6 +281,8 @@
 .hp-office-field input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
 .hp-office-suffix { padding-inline: var(--space-2); color: var(--muted); white-space: nowrap; }
 .hp-title-with-mark { display: flex; align-items: center; gap: var(--space-2); }
+/* MUT-596: a row's status with who recorded it (via Malafat), side by side, wrapping on a phone. */
+.hp-badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 /* DR9: decorative, never mirrored in RTL */
 .hp-passkey-icon { flex: none; }
 .hp-help { max-width: var(--hp-card-width); text-align: center; font-size: var(--text-label); color: var(--muted); margin: 0; }
@@ -1107,6 +1109,8 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* MUT-373 (ADR-163): the Owners section, between the profile form and firm features (design review DR1, DR9). */
 .hp-owners { border-top: 1px solid var(--divider); padding-top: var(--space-4); margin-top: var(--space-4); display: grid; gap: var(--space-2); justify-items: stretch; }
 .hp-owners > h3, .hp-owners > p { margin: 0; }
+/* MUT-596: the same list on You › Profiles, where it is its own block rather than a section of a pane. */
+.hp-you-members { border-top: 0; margin-top: var(--space-2); padding: 0 var(--space-4); }
 .hp-owners > h3:focus { outline: none; }
 .hp-owner-list { margin: 0; }
 /* The row collapses after the server answers (DR6). Under reduced motion it doesn't move: it fades (150ms) in place. */

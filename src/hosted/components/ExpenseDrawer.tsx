@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Badge } from '../../components/ui/Badge';
+import { CaptureSourceBadge } from './CaptureSourceBadge';
 import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import type { Language } from '../../lib/i18n/types';
@@ -260,7 +260,12 @@ export function ExpenseDrawer({ profileId, mode, expenseId, onClose, timezone, o
     >
       {/* noValidate: the zod schema and the server's refusals say what is wrong at the field; the browser's own check on the
           date's ten-year max (MUT-392) would otherwise block Save with no message the drawer can show. */}
-      {mode === 'edit' && existingExpense?.captureSource === 'mcp' && <AddedByClaude label={t('hosted.expenses.drawer.addedByClaude')} />}
+      {/* MUT-436, MUT-596: added by the person's own Claude, or by Malafat acting for them */}
+      {mode === 'edit' && (existingExpense?.captureSource === 'mcp' || existingExpense?.captureSource === 'malafat') && (
+        <p className="expense-drawer-source">
+          <CaptureSourceBadge source={existingExpense.captureSource} />
+        </p>
+      )}
       <form id="hosted-expense-form" onSubmit={picks.guard(handleSubmit(onSubmit))} noValidate>
         <ReadOnlyFields readOnly={readOnly}>
           <HostedExpenseFields expenseForm={expenseForm} profileId={profileId} timezone={timezone} canAddClient={canAddClient} readOnly={readOnly} currencyDisabled={mode === 'edit'} firm={firm} prefillDefaults={mode === 'create'} />
@@ -305,22 +310,5 @@ function valuesOf(expense: Expense): HostedExpenseFormValues {
     ...vatValuesOf(expense),
     allocationNumber: expense.allocationNumber ?? '',
   };
-}
-
-/**
- * MUT-436 (AC5): an expense the person's own Claude added (captureSource 'mcp', ADR-201). "Claude" is a name: it stays
- * Latin and left-to-right inside an Arabic sentence (<bdi>, ADR-101).
- */
-function AddedByClaude({ label }: { label: string }) {
-  const [before, after = ''] = label.split('{claude}');
-  return (
-    <p className="expense-drawer-source">
-      <Badge variant="info" size="sm">
-        {before}
-        <bdi>Claude</bdi>
-        {after}
-      </Badge>
-    </p>
-  );
 }
 

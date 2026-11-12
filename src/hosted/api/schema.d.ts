@@ -22698,6 +22698,8 @@ export interface components {
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
                 /** @description MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it. */
                 ownSignIn: boolean;
+                /** @description MUT-596: whether the account has a password the person chose. False for an account Sign in with Malafat created until they set one: Change password then asks for no current password. */
+                ownPassword: boolean;
                 trialPrompt: components["schemas"]["TrialPrompt"];
                 passkeyPrompt: components["schemas"]["PasskeyPrompt"];
                 status: components["schemas"]["UserStatus"];

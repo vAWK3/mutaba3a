@@ -58,7 +58,7 @@ describe('ownSignIn: an account Sign in with Malafat created sets its first own 
   it('a normal account still needs its current password; Me says ownSignIn', async () => {
     const h = await delegatedHarness();
     const p = await person(h, { flag: false });
-    expect((await read(await h.app.request('/v1/me', { headers: p.cookie }))).user.ownSignIn).toBe(true);
+    expect((await read(await h.app.request('/v1/me', { headers: p.cookie }))).user).toMatchObject({ ownSignIn: true, ownPassword: true });
     const res = await h.app.request('/v1/me/password', json({ newPassword: 'a brand new long passphrase' }, p.cookie));
     expect(res.status).toBe(403);
   });
@@ -69,11 +69,11 @@ describe('ownSignIn: an account Sign in with Malafat created sets its first own 
     const step = await read(await exchange(h, (await roundTrip(h)).fragment.get('result') ?? ''));
     const done = await consent(h, { ticket: step.ticket, ...NEW_ACCOUNT });
     const cookie = { cookie: (done.headers.get('set-cookie') ?? '').split(';')[0]!, ...SAME_ORIGIN };
-    expect((await read(done)).me.user.ownSignIn).toBe(false);
+    expect((await read(done)).me.user).toMatchObject({ ownSignIn: false, ownPassword: false });
     const set = await h.app.request('/v1/me/password', json({ newPassword: 'my own long passphrase here' }, cookie));
     expect(set.status).toBe(204);
     const rotated = { cookie: (set.headers.get('set-cookie') ?? '').split(';')[0]!, ...SAME_ORIGIN };
-    expect((await read(await h.app.request('/v1/me', { headers: rotated }))).user.ownSignIn).toBe(true);
+    expect((await read(await h.app.request('/v1/me', { headers: rotated }))).user).toMatchObject({ ownSignIn: true, ownPassword: true });
     // Now it is their own: the next change needs it.
     expect((await h.app.request('/v1/me/password', json({ newPassword: 'another long passphrase' }, rotated))).status).toBe(403);
   });

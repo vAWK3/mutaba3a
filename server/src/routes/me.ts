@@ -126,6 +126,7 @@ export async function buildMe(
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
       // MUT-596: false for an account Sign in with Malafat created, until the person adds a passkey or their own password.
       ownSignIn: user.passwordChosen || passkeyCount > 0,
+      ownPassword: user.passwordChosen,
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
       // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
       passkeyPrompt: passkeyPrompt && passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt!, user.closure !== null),

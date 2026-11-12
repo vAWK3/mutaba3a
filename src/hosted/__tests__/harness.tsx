@@ -71,6 +71,9 @@ export function me(profiles: HostedProfile[] = [profile()], locale: 'en' | 'ar' 
       displayName: 'Nour Haddad',
       locale,
       malafatSuggestions: { off: false, dismissed: [] },
+      // MUT-596: a person with their own password unless a test says Sign in with Malafat made the account.
+      ownSignIn: true,
+      ownPassword: true,
       // MUT-418: a test person has answered the first-run trial step unless a test says otherwise.
       trialPrompt: { welcomedAt: '2026-10-01T09:00:00.000Z', welcomeAnswer: 'skipped', bannerSnoozedUntil: null },
       // MUT-370: no passkey suggestion unless a test asks for one.

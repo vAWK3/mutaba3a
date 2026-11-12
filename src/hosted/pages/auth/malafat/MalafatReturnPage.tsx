@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
+import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useT } from '../../../../lib/i18n/core';
 import { Select } from '../../../../components/ui/Input';
 import { api, ApiError, type MalafatSignInState, type Me } from '../../../api/client';

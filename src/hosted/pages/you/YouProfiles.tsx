@@ -1,4 +1,5 @@
 import { useNavigate } from '@tanstack/react-router';
+import { MalafatMembersSection } from '../../components/MalafatMembersSection';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
@@ -64,6 +65,8 @@ export function YouProfiles({ active, from }: { active: HostedProfile | null; fr
       </RowGroup>
       {/* MUT-561: the open profile's Sharing page, for its owner on a server with accountant access */}
       {active && <SharingEntryRow profile={active} place="you" />}
+      {/* MUT-596: the open firm's members, read-only, when Malafat manages them */}
+      {active?.firm && !local && <MalafatMembersSection profileId={active.id} />}
       <RowGroup>
         <RowButton tone="action" inert={!canCreate} label={t('hosted.shell.switcher.newProfile')} sub={newProfileSub} onClick={drawers.openNew} />
         <RowButton tone="action" label={t('hosted.shell.switcher.manage')} onClick={drawers.openManage} />

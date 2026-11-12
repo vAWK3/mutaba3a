@@ -16,6 +16,7 @@ import { formatDay } from '../../format/dates';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { DeeperLinks } from '../../components/DeeperLinks';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
+import { CaptureSourceBadge } from '../../components/CaptureSourceBadge';
 
 /**
  * Payments (hosted-portal.md §7.3): what was received, read-only; a row opens
@@ -33,6 +34,8 @@ interface PaymentRow {
   amount: string;
   unallocated: string;
   status: string;
+  /** MUT-596: 'malafat' when Malafat recorded it acting for the person (and 'mcp' for their Claude). */
+  captureSource: Payment['captureSource'];
   allocations: Allocation[];
   /** MUT-224: the user's own posted capture on a profile they own: its date can be changed. */
   redatable: boolean;
@@ -49,6 +52,7 @@ function shape(items: Payment[], customers: Map<string, Customer>, language: 'en
     amount: p.amount,
     unallocated: p.unallocated,
     status: p.status,
+    captureSource: p.captureSource,
     allocations: p.allocations,
     redatable: redatable(p),
   }));
@@ -122,7 +126,13 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
       { key: 'method', header: t('hosted.payments.columns.method'), cell: (r) => r.method },
       { key: 'amount', header: t('hosted.payments.columns.amount'), numeric: true, cell: (r) => <DecimalAmount value={r.amount} currency={r.currency} /> },
       { key: 'unallocated', header: t('hosted.payments.columns.unallocated'), numeric: true, cell: (r) => <DecimalAmount value={r.unallocated} currency={r.currency} /> },
-      { key: 'status', header: t('hosted.payments.columns.status'), cell: (r) => <StatusBadge family="payment" status={r.status} /> },
+      { key: 'status', header: t('hosted.payments.columns.status'), cell: (r) => (
+          <span className="hp-badges">
+            <StatusBadge family="payment" status={r.status} />
+            <CaptureSourceBadge source={r.captureSource} />
+          </span>
+        ),
+      },
     ],
     [t, fixedCustomerId, open, toggle],
   );

@@ -4,6 +4,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { api, ApiError } from '../api/client';
 import { passkeysToReview } from '../passkeys/review';
+import { useMe } from '../session/me';
 import { NEW_PASSWORD_POLICY, passwordProblem, type PasswordProblem } from '../pages/auth/setupLink';
 import { AlertIcon } from './Icons';
 import { Drawer } from './Drawer';
@@ -20,6 +21,10 @@ import { useToast } from './Toast';
  *
  * MUT-415: a person with passkeys goes on to the passkey review in this
  * drawer's place, since passkeys survive the change; without any, it closes.
+ *
+ * MUT-596: an account Sign in with Malafat created has no password of its own
+ * (`ownPassword` false): there is no current one to ask for, so this sets the
+ * first one, under its own title.
  */
 
 const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLICY.maxLength };
@@ -34,6 +39,7 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
   const currentRef = useRef<HTMLInputElement>(null);
   const ids = useId();
   const queryClient = useQueryClient();
+  const firstPassword = !useMe().user.ownPassword;
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
@@ -54,7 +60,7 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
     setBanner(null);
     setPending(true);
     try {
-      await api.changePassword({ currentPassword, newPassword });
+      await api.changePassword(firstPassword ? { newPassword } : { currentPassword, newPassword });
       // MUT-262: whatever failed on the old cookie while the change was in flight is read again under the new one.
       void queryClient.invalidateQueries();
       const review = onReviewPasskeys ? await passkeysToReview(queryClient) : false;
@@ -81,7 +87,7 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
 
   return (
     <Drawer
-      title={t('hosted.account.changePassword.title')}
+      title={t(firstPassword ? 'hosted.secondWayIn.setPassword' : 'hosted.account.changePassword.title')}
       onClose={onClose}
       closeLabel={t('common.close')}
       footer={
@@ -103,29 +109,31 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
           </div>
         )}
 
-        <div className="form-group">
-          <label className="form-label" htmlFor={`${ids}-current`}>
-            {t('hosted.account.changePassword.current')}
-          </label>
-          <div className="hp-password">
-            <input
-              ref={currentRef}
-              id={`${ids}-current`}
-              className="input"
-              type={showCurrent ? 'text' : 'password'}
-              autoComplete="current-password"
-              dir="ltr"
-              autoFocus
-              readOnly={pending}
-              value={currentPassword}
-              aria-describedby={banner ? bannerId : undefined}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-            />
-            <button type="button" className="hp-password-toggle press" aria-pressed={showCurrent} aria-controls={`${ids}-current`} onClick={() => setShowCurrent((shown) => !shown)}>
-              {t(showCurrent ? 'hosted.auth.hide' : 'hosted.auth.show')}
-            </button>
+        {!firstPassword && (
+          <div className="form-group">
+            <label className="form-label" htmlFor={`${ids}-current`}>
+              {t('hosted.account.changePassword.current')}
+            </label>
+            <div className="hp-password">
+              <input
+                ref={currentRef}
+                id={`${ids}-current`}
+                className="input"
+                type={showCurrent ? 'text' : 'password'}
+                autoComplete="current-password"
+                dir="ltr"
+                autoFocus
+                readOnly={pending}
+                value={currentPassword}
+                aria-describedby={banner ? bannerId : undefined}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+              />
+              <button type="button" className="hp-password-toggle press" aria-pressed={showCurrent} aria-controls={`${ids}-current`} onClick={() => setShowCurrent((shown) => !shown)}>
+                {t(showCurrent ? 'hosted.auth.hide' : 'hosted.auth.show')}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="form-group">
           <label className="form-label" htmlFor={`${ids}-new`}>
@@ -135,6 +143,7 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
             <input
               id={`${ids}-new`}
               className={`input ${fieldError ? 'input-error' : ''}`}
+              autoFocus={firstPassword}
               type={showNew ? 'text' : 'password'}
               autoComplete="new-password"
               dir="ltr"
