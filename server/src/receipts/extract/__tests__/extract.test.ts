@@ -74,6 +74,8 @@ const ARABIC: Fixture[] = [
 ];
 
 const ENGLISH: Fixture[] = [
+  // MUT-590: an online vendor's invoice dates its day with an ordinal; a billing period on another row is not the date.
+  ['ordinal day before the month name', receipt(['Paddle.com', 'Invoice date: 6th May 2026', 'Total £5.40']), { date: '2026-05-06' }],
   [
     'café: company suffix vendor, ISO date, dollar total',
     receipt(['ACME COFFEE LTD', 'Date: 2026-10-28', 'Latte 4.50', 'Total $4.50']),
@@ -653,6 +655,13 @@ describe('MUT-514: no confidently wrong fields', () => {
     it('a bill-to block heading the receipt leaves the vendor empty, never the row under it', () => {
       expect(value(read(receipt(['לכבוד', 'חברת אלפא בע"מ', 'תאריך 01/11/2026', 'פרויקט שיפוץ', 'סה"כ 10.00'])), 'vendorName')).toBeUndefined();
       expect(value(read(receipt(['Bill to: Beta Corp', 'Item 10.00', 'Consulting services'])), 'vendorName')).toBeUndefined();
+    });
+
+    it("the buyer's number first on a row is passed over for the vendor's labelled one after it (MUT-590, a placed text layer)", () => {
+      const row = (buyer: string) => [{ text: 'ח.פ', x: 360, script: 'hebr' as const }, { text: buyer, x: 290 }, { text: 'ח.פ/ע.מ:', x: 120, script: 'hebr' as const }, { text: REG_VALID_DEALER, x: 20 }];
+      expect(value(readWith(receipt(['חשמל העיר', row(REG_VALID_COMPANY), 'סה"כ 100.00']), { buyerIds: [REG_VALID_COMPANY] }), 'registrationNo')).toBe(REG_VALID_DEALER);
+      // With no registration label after it, a buyer's number still ends the search (MUT-514).
+      expect(value(readWith(receipt(['חשמל העיר', `ח.פ ${REG_VALID_COMPANY} ${REG_VALID_DEALER}`, 'סה"כ 100.00']), { buyerIds: [REG_VALID_COMPANY] }), 'registrationNo')).toBeUndefined();
     });
 
     it("an exempt dealer's own ID (עוסק פטור ת.ז) stays theirs, and is never learned as the buyer's", () => {
