@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-11 — Arabic dates name the Levantine months everywhere (MUT-587, ADR-253)
+
+### Changed
+- **كانون الثاني, not يناير**, on every Arabic date that names a month, portal and website and the mails: `getLocale('ar')` is now `ar-PS-u-nu-latn` (Latin digits kept). Numeric dates, amounts, relative times and country names read as before. Files: `src/lib/i18n/core.tsx`, `src/lib/utils.ts`, `src/hosted/format/reportFormat.ts`, `src/hosted/pages/sharing/sharingRules.ts`, `src/hosted/pages/client-books/clientBooksRules.ts`, `src/hosted/pages/accountant-invite/inviteState.ts`, `src/hosted/operator/time.ts`, `src/hosted/data/periodDownload.ts`, `src/pages/landing/components/mocks/useMockFormat.ts`, `server/src/dates.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/checkout.ts`.
+- Copy: the privacy page's "آخر تحديث: 7 تشرين الثاني 2026" and the web 0.3.4 Arabic release note. Frozen terms versions unchanged (ADR-102).
+
+### Removed
+- `getLocaleFromLanguage` (no caller), the three `latn()` helpers and Reports' `REPORTS_ARABIC_DATES`.
+
+### Technical
+- Lint guard `DATE_LOCALE_SYNTAX` in `eslint.config.js` and `server/eslint.config.js`. Tests: `arabicLocale.test.ts`, `dateLocaleGuard.test.ts` (ESLint run programmatically), `levantineDates.test.ts`; expectations moved in sharing, privacy, checkout, renewal-mail and templates tests. Release-QA `@portal.direction.levantine-months`.
+- Ships with the next API release (mail and pay-page dates) and the next web release.
+
 ## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
 
 ### Fixed

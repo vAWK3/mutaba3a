@@ -263,7 +263,7 @@ describe('planCheckout with the launch offer (MUT-525 D1, R3, R8)', () => {
     const message = (result.params.custom_text?.submit as { message: string } | undefined)?.message ?? '';
     expect(message).toBe(offerSubmitMessage(OFFER, 'ILS', new Date('2027-11-12T09:00:00.000Z')));
     const [arOffer, arNote, enOffer, enNote] = message.split('\n\n');
-    expect(arOffer).toBe('عرض الإطلاق: \u2068₪195\u2069 عن سنتك الأولى، ثم يتجدد بسعر \u2068₪390\u2069 سنويًا ابتداءً من \u206812 نوفمبر 2027\u2069.');
+    expect(arOffer).toBe('عرض الإطلاق: \u2068₪195\u2069 عن سنتك الأولى، ثم يتجدد بسعر \u2068₪390\u2069 سنويًا ابتداءً من \u206812 تشرين الثاني 2027\u2069.');
     expect(enOffer).toBe('Launch offer: \u2068₪195\u2069 for your first year. It then renews at \u2068₪390\u2069 a year from \u2068November 12, 2027\u2069.');
     expect(`${arNote}\n\n${enNote}`).toBe(CHECKOUT_SUBMIT_MESSAGE);
     expect(message.length).toBeLessThanOrEqual(1200);
@@ -278,7 +278,7 @@ describe('planCheckout with the launch offer (MUT-525 D1, R3, R8)', () => {
     // 23:30 UTC on 31 Jan is already 1 February in Jerusalem.
     const late = new Date('2027-01-31T23:30:00.000Z');
     expect(payPageDay(late, 'en')).toBe('February 1, 2027');
-    expect(payPageDay(late, 'ar')).toBe('1 فبراير 2027');
+    expect(payPageDay(late, 'ar')).toBe('1 شباط 2027');
   });
 });
 

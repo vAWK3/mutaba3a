@@ -1,5 +1,6 @@
 import type { UserLocale } from '../../repositories/ports.js';
 import { formatMinor } from '../../billing/money.js';
+import { ARABIC_LOCALE } from '../../dates.js';
 import type { CalendarDay, MailOffer, MailTemplateId, TemplateVars } from '../ports.js';
 import type { CustomerMailBody, Inline, MailBody } from './layout.js';
 import type { CustomerTemplateId } from './look.js';
@@ -359,7 +360,7 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
  * calendar date, read in UTC so no zone moves it to another day.
  */
 export function mailDay(day: CalendarDay, locale: UserLocale): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(day.year, day.month - 1, day.day)));
+  return new Intl.DateTimeFormat(locale === 'ar' ? ARABIC_LOCALE : 'en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(day.year, day.month - 1, day.day)));
 }
 
 const accountClosing: Copy<'account-closing'> = {

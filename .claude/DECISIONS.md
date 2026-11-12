@@ -6532,3 +6532,23 @@ Contract 1.108.0-mut565; migrations `20261108120000_mut565_accountant_tier`, `20
 **Alternatives rejected:** a part of You or the island menu for the desk (layouts A/B, Basel chose C); a consent prompt on public pages (a stranger has no account to hold a choice); storing the link token for a returning browser.
 
 **Consequences:** downloads (MUT-314), the 4th-client card and free counter (MUT-565), and the scenes / scope bullets (MUT-561) are hooks marked in code until those land.
+
+
+## ADR-253: Arabic Dates Name the Levantine Months Everywhere, Through getLocale (MUT-587)
+
+**Status:** Accepted (2026-11-11; plan `.claude/designs/mut-587-levantine-dates.md`, eng review D1–D5 by Basel, R5 by default). Numbered 253 at build (252 is held by a parallel worktree); re-check at merge.
+
+**Context:** the portal and website printed Arabic months the Egyptian/Gregorian way (يناير, نوفمبر) everywhere except Reports, which MUT-448 had switched to the Levantine names on its own constant. The phone app already writes the Levantine names. Our people read كانون الثاني، شباط، آذار.
+
+**Decision:**
+- `getLocale('ar')` returns `ARABIC_LOCALE = 'ar-PS-u-nu-latn'` (`src/lib/i18n/core.tsx`); there is no second date locale. Checked on Node 22 / ICU 78: currency, unit, relative time, list, collation and country names read exactly as under plain `ar`; only month names change. Numeric dates (`dateStyle: 'medium'`) stay numeric (Basel: "keep numbers").
+- The three `latn()` helpers, `inviteEnds`'s template, Reports' own constant and the unused `getLocaleFromLanguage` go: appending `-u-nu-latn` to the new tag throws. `formatDate`/`formatPaymentDate`/`formatDateShort` take a `Language`.
+- The server keeps its own `ARABIC_LOCALE` (`server/src/dates.ts`) for `mailDay` and `payPageDay`; the period pack writes no month names.
+- A lint guard (web + server `no-restricted-syntax`) refuses a hand-written Arabic locale (a literal, or a ternary branch, starting with `ar`) in `Intl.DateTimeFormat` / `RelativeTimeFormat` / `toLocale*String`, and any template with `-u-nu-`. Locale variables are out of its reach; the getLocale and per-formatter tests cover those.
+- Frozen terms versions keep their words (their sha256 is in the manifest, ADR-102); the next version writes the Levantine name. The privacy page's "updated" line and the unreleased web 0.3.4 note change.
+
+**Supersedes:** MUT-448's "only Reports' dates" limit (ADR-189's AC6 note).
+
+**Alternatives rejected:** a separate `dateLocale` beside `getLocale` (two locales, a rule to police forever, D5); spelling out numeric dates.
+
+**Consequences:** Safari is checked by hand once (one date, one amount, one country name in Arabic) at qa-reconcile (D4).

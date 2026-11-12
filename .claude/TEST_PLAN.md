@@ -4529,3 +4529,11 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
 - Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
 
+
+
+## MUT-587 — Levantine Arabic months everywhere (ADR-253)
+
+- Unit: `src/lib/i18n/__tests__/arabicLocale.test.ts` (getLocale, all 12 months, numeric dates and amounts unchanged), `src/hosted/format/__tests__/levantineDates.test.ts` (close-account day, invite end, client-book labels, operator times, formatDay), `utils.test.ts` (formatDate in Arabic).
+- Guard: `src/lib/i18n/__tests__/dateLocaleGuard.test.ts` runs ESLint on probe code for the portal and the website.
+- Server: templates, renewal-mail and checkout tests hold the Levantine names.
+- Release-QA: `@portal.direction.levantine-months` (client book, trip group, closing page). Manual: Safari, one date, one amount, one country name in Arabic (D4).

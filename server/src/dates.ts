@@ -10,6 +10,12 @@ export type IsoMonth = string;
 export const PAYMENT_TERMS = ['IMMEDIATE', 'EOM', 'EOM_15', 'EOM_30', 'EOM_45', 'EOM_60'] as const;
 export type PaymentTerms = (typeof PAYMENT_TERMS)[number];
 
+/**
+ * MUT-587: Arabic dates name months the Levantine way (كانون الثاني, not يناير) with Latin digits, as the portal's
+ * getLocale (src/lib/i18n/core.tsx ARABIC_LOCALE). Never append `-u-nu-…`: the tag carries one already.
+ */
+export const ARABIC_LOCALE = 'ar-PS-u-nu-latn';
+
 const DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const MONTH_RE = /^(\d{4})-(\d{2})$/;
 
