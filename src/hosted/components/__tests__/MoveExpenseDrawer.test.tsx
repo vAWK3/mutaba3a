@@ -4,7 +4,7 @@ import { ORG_A, ORG_B, emptyProfileRoutes, fail, locationOf, me, ok, profile, re
 import type { BillingEntitlement, HostedProfile } from '../../api/client';
 
 /**
- * MUT-589 (ADR-254): moving a saved expense, with its receipts, to another profile from the portal: Move in the
+ * MUT-589 (ADR-255): moving a saved expense, with its receipts, to another profile from the portal: Move in the
  * expense drawer (hidden with one profile or read-only), the drawer's changes list from the preview, the move with
  * the preview's version, the refusals, and both profiles refreshing.
  */

@@ -3,7 +3,7 @@ import { PrismaLedgerStore } from '../prisma.js';
 import type { CreateExpenseInput, LedgerStore, MoveExpenseParams } from '../ports.js';
 
 /**
- * MUT-589 (ADR-254): moving a saved expense with its receipts in Postgres — one transaction re-homes the expense and
+ * MUT-589 (ADR-255): moving a saved expense with its receipts in Postgres — one transaction re-homes the expense and
  * its receipts, drops its group marks and writes both audit rows; the expense lock decides between a move and a
  * filing onto it, or a second move.
  */

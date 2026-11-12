@@ -11,7 +11,7 @@ import { InfoIcon } from './Icons';
 import { MoveToProfileDrawer } from './MoveToProfileDrawer';
 
 /**
- * MUT-589 (ADR-254): move a saved expense, with its receipts, to another of the person's profiles. The shared move
+ * MUT-589 (ADR-255): move a saved expense, with its receipts, to another of the person's profiles. The shared move
  * drawer (`MoveToProfileDrawer`) with a changes list: choosing a profile reads `/move-preview`, which lists every
  * field that changes there (D1) or refuses the way the move would, and Move stays held until it has answered.
  * Opened from the URL (`?moveExpense=<id>`), drawer-first: the expense drawer's Move, a filed receipt's ⋯.

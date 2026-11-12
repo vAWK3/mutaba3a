@@ -4108,7 +4108,7 @@ export const MoveReceiptResponseSchema = z
   .object({ receipt: ExpenseReceiptSchema, fromProfileId: z.string().uuid() })
   .openapi('MoveReceiptResponse', { description: 'The receipt on its new profile (same id), and the profile it left (since 1.91.0-mut503, MUT-503)' });
 
-/** MUT-589 (ADR-254): moving a saved expense, with its receipts, to another profile. Since 1.109.0-mut589. */
+/** MUT-589 (ADR-255): moving a saved expense, with its receipts, to another profile. Since 1.109.0-mut589. */
 export const ExpenseMoveChangeSchema = z
   .object({
     field: z.enum(['category', 'client', 'matter', 'vat', 'allocationNumber', 'groups']),

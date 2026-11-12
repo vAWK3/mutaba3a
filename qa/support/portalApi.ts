@@ -1085,7 +1085,7 @@ export class FakeApi {
   }
 
   /**
-   * MUT-589 (ADR-254): the expense move's preview (`expectedVersion` null) and the move, as the server answers them:
+   * MUT-589 (ADR-255): the expense move's preview (`expectedVersion` null) and the move, as the server answers them:
    * the same profile 422, a profile not the person's 404, a lapsed target 402, a stale version 409; the move takes the
    * expense and its filed library receipts to the target, with the seeded changes.
    */

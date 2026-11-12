@@ -4294,7 +4294,7 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Portal | `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/receiptHooks.test.tsx` | ⋯ menu items and keys; Filed and solo have no Move (DR2, AC3); radio rows, named primary, Idempotency-Key, both profiles refreshed, toast with Open (DR4); read-only/locked disabled with reasons and the none-open note (AC2); reading note (DR9); 402 banner; D8 recovery; focus to the neighbour; review page button and next receipt (DR1); `moveErrorOf` table |
 | Release-QA | `@portal.receipts.move`, `@portal.receipts.move-review`, `@portal.receipts.move-refused`, `@portal.receipts.filed-no-move` | the four portal flows on the FakeApi's per-profile receipts |
 
-## MUT-589 — move a saved expense, with its receipts, to another profile (ADR-254)
+## MUT-589 — move a saved expense, with its receipts, to another profile (ADR-255)
 
 | Level | Where | What it proves |
 |---|---|---|

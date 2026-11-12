@@ -6586,7 +6586,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** Safari is checked by hand once (one date, one amount, one country name in Arabic) at qa-reconcile (D4).
 
-## ADR-254: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
+## ADR-255: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
 
 **Status:** Accepted (2026-11-11, MUT-589; epic MUT-252; Basel's decisions in Jira MUT-589 comment 13297). Plan: `.claude/designs/mut-589-move-saved-receipt.md`. Amends ADR-228 ("filed receipts stay out"): a filed receipt still never moves alone (`POST /v1/receipts/{id}/move` keeps 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`); it moves with its expense.
 

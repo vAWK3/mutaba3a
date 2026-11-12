@@ -3352,7 +3352,7 @@ export interface ExpensePage {
   nextCursor: ExpenseCursor | null;
 }
 
-/** MUT-589 (ADR-254): `expenses.moveToProfile`'s input. */
+/** MUT-589 (ADR-255): `expenses.moveToProfile`'s input. */
 export interface MoveExpenseParams {
   organizationId: string;
   expenseId: string;
@@ -3392,7 +3392,7 @@ export interface ExpenseRepository {
   /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
   totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
   /**
-   * MUT-589 (ADR-254): re-home a live expense and every receipt on it to `targetOrganizationId`, in one transaction.
+   * MUT-589 (ADR-255): re-home a live expense and every receipt on it to `targetOrganizationId`, in one transaction.
    * Locks the expense, then its receipts (the order a delete and a completion take). Refuses, writing nothing, when the
    * expense is gone (`not_found`), its version is not `expectedVersion` (`stale`), a receipt on it is unfinished
    * (`receipt_not_ready`), or its READY receipts are not exactly `receiptKeys`' ids (`receipts_changed`, review R1).

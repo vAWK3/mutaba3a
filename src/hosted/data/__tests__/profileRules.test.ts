@@ -135,7 +135,7 @@ describe('co-owners (MUT-373)', () => {
   });
 });
 
-describe('mayMoveExpensesFrom (MUT-589, ADR-254)', () => {
+describe('mayMoveExpensesFrom (MUT-589, ADR-255)', () => {
   it('offers Move only to an owner of a profile Malafat does not feed', () => {
     expect(mayMoveExpensesFrom(builtIn)).toBe(true);
     expect(mayMoveExpensesFrom(ownedPersonal)).toBe(true);

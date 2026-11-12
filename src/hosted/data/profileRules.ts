@@ -119,7 +119,7 @@ export function coOwnsOthersProfiles(me: Me): boolean {
 }
 
 /**
- * MUT-589 (ADR-254, Basel 2026-11-12): whether the portal offers to move this profile's expenses elsewhere. Only an
+ * MUT-589 (ADR-255, Basel 2026-11-12): whether the portal offers to move this profile's expenses elsewhere. Only an
  * owner (creator or co-owner, `owned`) of a profile Malafat doesn't feed; anyone else sees no Move at all (the server's
  * 403 NOT_OWNER / MALAFAT_PROFILE stay as the backstop). Writability, signed-out mode and "somewhere to move to" are
  * the caller's other conditions.
