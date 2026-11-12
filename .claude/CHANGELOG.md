@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — Malafat's connector forwards MTB3A's tools to /mcp as the person (MUT-598, ADR-254 D11)
+
+### Added
+- **`/mcp` accepts Malafat's delegated grant** (`server/src/auth/agent-auth.ts`, `server/src/oauth/service.ts`): one consent covers every resource the operator registered the confidential client for (`/v1` and `/mcp`; `npm run oauth:client` now registers both), so Malafat's connector forwards MTB3A's tools with the token the person gave. An agent's own grant stays bound to its resource. The same checks as `/v1` run on every call (delegation on, client not disabled, the tenant's firm CONNECTED with its switch on), and the person's `agent_access` still applies.
+- **The tools see the tenant's firm only** (`server/src/mcp/context.ts`): `agentProfile` and the new `agentProfiles` admit, under Malafat, only the tenant's firm and only for a partner (the OWNER role Malafat's sync gives, D3; MUT-594 makes `ownsProfile` say so too). The person's inbox is closed (`personalInboxRefusal`: list_inbox, inbox writes, filing, look-alike search). Writes are audited `via: malafat` as on `/v1`.
+
+### Technical
+- Tests: `mcp-delegated.test.ts` (firm only, own profile and inbox refused, partner only, `agent_access`, an agent's own token unchanged, each §4.7 revocation ends `/mcp`). No contract change.
+
 ## [Unreleased] - 2026-11-12 — Malafat calls /v1 as the person, with a tenant-bound delegated token (MUT-593, ADR-254)
 
 ### Added
