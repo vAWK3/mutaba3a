@@ -62,6 +62,8 @@ export function harness(
     shareLinks?: boolean;
     /** MUT-595: Sign in with Malafat, against a fake Malafat. */
     malafatSignIn?: MalafatSignInConfig;
+    /** MUT-596: OAUTH_CLIENT_LOCAL_HTTP. */
+    oauthClientLocalHttp?: boolean;
   } = {},
 ) {
   const store = new MemoryLedgerStore();
@@ -84,6 +86,7 @@ export function harness(
     ...(options.accountantAccess ? { accountantAccess: true } : {}),
     ...(options.shareLinks ? { shareLinks: true } : {}),
     ...(options.malafatSignIn ? { malafatSignIn: options.malafatSignIn } : {}),
+    ...(options.oauthClientLocalHttp ? { oauthClientLocalHttp: true } : {}),
     ...(options.mcpInboxWrites ? { mcpInboxWrites: true } : {}),
     ...(options.receiptsLibrary ? { receiptsLibrary: true } : {}),
     ...(options.attachments ? { attachments: options.attachments } : {}),

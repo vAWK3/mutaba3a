@@ -10,6 +10,7 @@ import { profileOwnerOf } from '../personal-profile.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
 import { firmActions } from '../operator/actions/firms.js';
+import { malafatDelegationActions } from '../operator/actions/malafatDelegation.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
   AuditListSchema,
@@ -26,6 +27,8 @@ import {
   ApiKeySummarySchema,
   ReceiptEditRatesQuerySchema,
   ReceiptEditRatesSchema,
+  OperatorMalafatDelegationRequestSchema,
+  OperatorMalafatDelegationSchema,
 } from '../schemas.js';
 import { serializeAdminOrganization, serializeApiKey, serializeAuditEvent, serializeIntegration } from '../serializers.js';
 
@@ -78,6 +81,9 @@ const adminErrors = {
   401: { description: 'Missing or invalid admin token', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
 } as const;
 
+/** MUT-596: the admin twin of the operator's Malafat switch; 404 while MALAFAT_DELEGATION is off, like the operator's. */
+export const MALAFAT_DELEGATION_ADMIN_ENDPOINTS: ReadonlySet<string> = new Set(['POST /admin/v1/organizations/:organizationId/malafat-delegation']);
+
 const OrganizationIdParam = z.object({ organizationId: z.string().uuid().openapi({ param: { name: 'organizationId', in: 'path' } }) });
 const ApiKeyIdParam = z.object({ apiKeyId: z.string().uuid().openapi({ param: { name: 'apiKeyId', in: 'path' } }) });
 
@@ -85,6 +91,7 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
   const { store } = options;
   // MUT-462 (ADR-212 D1): the firm switch and requests live in operator/actions/firms.ts, shared with /v1/operator.
   const firms = firmActions({ store });
+  const delegation = malafatDelegationActions({ store });
   /** The admin token's request facts: no identity, so the audit rows keep actorId null. */
   const ctxOf = (c: Context<AppEnv>): ActionContext => ({ actor: TOKEN_ACTOR, at: c.get('now')(), requestId: c.get('requestId'), requestUrl: c.req.url });
   const app = new OpenAPIHono<AppEnv>();
@@ -370,6 +377,25 @@ export function adminRoutes(options: AdminOptions): OpenAPIHono<AppEnv> {
     async (c) => {
       return c.json(await firms.list(c.req.valid('query')), 200);
     },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/admin/v1/organizations/{organizationId}/malafat-delegation',
+      tags: ['Admin'],
+      summary: 'Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)',
+      description: 'The operator console’s switch (POST /v1/operator/organizations/{organizationId}/malafat-delegation), for scripts and local QA (MUT-596). Off ends every member’s Malafat connection for this firm at once. Audited.',
+      security: [{ adminToken: [] }],
+      request: { params: OrganizationIdParam, body: { required: true, content: { 'application/json': { schema: OperatorMalafatDelegationRequestSchema } } } },
+      responses: {
+        200: { description: 'The switch as it now stands', content: { 'application/json': { schema: OperatorMalafatDelegationSchema } } },
+        404: { description: 'Unknown organization, or Malafat delegation is off on this server', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        409: { description: 'CONFLICT with details.reason NOT_MALAFAT_FED', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => c.json(await delegation.set(c.req.valid('param').organizationId, c.req.valid('json').enabled, ctxOf(c)), 200),
   );
 
   return app;

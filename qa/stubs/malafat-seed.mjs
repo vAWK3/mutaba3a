@@ -9,26 +9,34 @@
  *   3. `linked`: signed in with Malafat once, headlessly (start → stub authorize → callback → exchange → consent),
  *      which creates the account and claims the seat.
  * `new` is left as a seat only: their first Sign in with Malafat creates the account.
+ *   4. Connected apps (MUT-593): the stub registered as Malafat's confidential client, the firm's delegation switch
+ *      on, and `linked`'s live delegated grant (authorize → approve as rana → token with the stub's signed
+ *      assertion). Skipped, with a note, when the API runs without MALAFAT_DELEGATION.
  *
- *   node qa/stubs/malafat-seed.mjs [--api http://localhost:8791] [--admin-token …]
+ *   node qa/stubs/malafat-seed.mjs [--api http://localhost:8791] [--portal <portal origin>] [--admin-token …]
  *
  * The stub (malafat-oauth.mjs) must be running and the API started with MALAFAT_SIGN_IN=true and
- * MALAFAT_ORIGIN_TEMPLATE=http://{slug}.lvh.me:3939. Run once per fresh database: a second run finds the tenant
+ * MALAFAT_ORIGIN_TEMPLATE=http://{slug}.lvh.me:3939; for step 4 also MALAFAT_DELEGATION=true,
+ * OAUTH_CLIENT_LOCAL_HTTP=true and OAUTH_DERIVE_KEY. `--portal` is the API's PORTAL_ORIGIN (default: the API's). Run once per fresh database: a second run finds the tenant
  * bound and stops.
  */
+import { createHash } from 'node:crypto';
 import { parseArgs } from 'node:util';
 import { EXISTING_PASSWORD, OFFICE, PEOPLE, TENANT_SLUG } from './malafat-people.mjs';
 
 const { values } = parseArgs({
   options: {
     api: { type: 'string', default: process.env.MALAFAT_SEED_API ?? 'http://localhost:8791' },
+    portal: { type: 'string' },
     'admin-token': { type: 'string', default: process.env.MUTABA3A_ADMIN_TOKEN ?? 'qa-portal-selfservice-admin-token-0123456789' },
   },
 });
 const API = values.api.replace(/\/$/, '');
 const ADMIN = { 'x-admin-token': values['admin-token'] };
-// The API checks a web sign-in comes from its own portal; the QA envs serve the portal from the API's origin.
-const PORTAL = { origin: API };
+/** PORTAL_ORIGIN: web sign-ins must come from it, and it is the OAuth issuer (resource `/v1`, token audience). */
+const PORTAL_ORIGIN = (values.portal ?? API).replace(/\/$/, '');
+const PORTAL = { origin: PORTAL_ORIGIN };
+const STUB = `http://${TENANT_SLUG}.lvh.me:${process.env.MALAFAT_STUB_PORT ?? 3939}`;
 const CURRENCY = 'ILS';
 const TIMEZONE = 'Asia/Jerusalem';
 
@@ -88,10 +96,53 @@ async function linkedAccount() {
   if (!result) throw new Error(`the callback returned no result: ${back}`);
   const exchanged = await call('POST', '/v1/auth/malafat/exchange', { headers: PORTAL, body: { result } });
   if (exchanged.json.state !== 'needs_consent') throw new Error(`expected needs_consent for a new account, got ${exchanged.json.state}`);
-  await call('POST', '/v1/auth/malafat/consent', { headers: PORTAL, body: { ticket: exchanged.json.ticket, defaultCurrency: CURRENCY, timezone: TIMEZONE } });
+  const consent = await call('POST', '/v1/auth/malafat/consent', { headers: PORTAL, body: { ticket: exchanged.json.ticket, defaultCurrency: CURRENCY, timezone: TIMEZONE } });
+  return sessionCookieOf(consent.res);
+}
+
+/** The portal session the sign-in set, as a Cookie header. */
+function sessionCookieOf(res) {
+  const cookie = res.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  if (!cookie) throw new Error('the sign-in set no session cookie');
+  return cookie;
+}
+
+async function connectedApp(organizationId, cookie) {
+  const redirect = `${STUB}/mtb3a/callback`;
+  let client;
+  try {
+    client = await call('POST', '/admin/v1/oauth/confidential-clients', { headers: ADMIN, body: { name: 'Malafat', redirectUris: [redirect], jwksUri: `${STUB}/.well-known/mtb3a-jwks.json` } });
+  } catch (error) {
+    if (error.status === 404 || error.status === 503 || error.status === 422) {
+      console.log(`[malafat-seed] no Connected apps row: the API needs MALAFAT_DELEGATION=true, OAUTH_CLIENT_LOCAL_HTTP=true and OAUTH_DERIVE_KEY (${error.message})`);
+      return false;
+    }
+    throw error;
+  }
+  const clientId = client.json.clientId;
+  await call('POST', `/admin/v1/organizations/${organizationId}/malafat-delegation`, { headers: ADMIN, body: { enabled: true } });
+  const verifier = 'qa-malafat-delegated-verifier-0123456789-abcdefgh';
+  const challenge = createHash('sha256').update(verifier).digest('base64url');
+  const resource = `${PORTAL_ORIGIN}/v1`;
+  const query = new URLSearchParams({ response_type: 'code', client_id: clientId, redirect_uri: redirect, code_challenge: challenge, code_challenge_method: 'S256', state: 'qa-seed', resource, malafat_tenant: OFFICE.tenant_id });
+  const toConsent = await hop(`${API}/oauth/authorize?${query}`, { cookie });
+  const requestId = new URL(toConsent).searchParams.get('request');
+  if (!requestId) throw new Error(`authorize did not ask for consent: ${toConsent}`);
+  const decided = await call('POST', `/v1/oauth/requests/${requestId}/decision`, { headers: { ...PORTAL, cookie }, body: { decision: 'approve' } });
+  const code = new URL(decided.json.redirectTo).searchParams.get('code');
+  const aud = `${PORTAL_ORIGIN}/oauth/token`;
+  const signed = await fetch(`${STUB}/__qa/assertion`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ clientId, aud }) }).then((r) => r.json());
+  const token = await fetch(`${API}/oauth/token`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ grant_type: 'authorization_code', client_id: clientId, code, code_verifier: verifier, redirect_uri: redirect, resource, client_assertion_type: 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer', client_assertion: signed.assertion }),
+  });
+  if (!token.ok) throw new Error(`token: ${token.status} ${await token.text()}`);
+  return true;
 }
 
 const organizationId = await firm();
 await existingAccount();
-await linkedAccount();
-console.log(`[malafat-seed] firm ${organizationId} (${OFFICE.tenant_id}); existing: ${PEOPLE.existing.email} / "${EXISTING_PASSWORD}"; linked: ${PEOPLE.linked.email}; new: ${PEOPLE.new.email} (seat only)`);
+const cookie = await linkedAccount();
+const connected = await connectedApp(organizationId, cookie);
+console.log(`[malafat-seed] firm ${organizationId} (${OFFICE.tenant_id}); existing: ${PEOPLE.existing.email} / "${EXISTING_PASSWORD}"; linked: ${PEOPLE.linked.email}${connected ? ' (Malafat in Connected apps)' : ''}; new: ${PEOPLE.new.email} (seat only)`);

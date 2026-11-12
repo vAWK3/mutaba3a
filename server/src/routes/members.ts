@@ -44,7 +44,7 @@ export function memberRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (!isMalafatFirm(organization)) {
         const memberships = await store.memberships.listByOrganization(organization.id);
         const items: Member[] = await Promise.all(memberships.map(async (m) => ({ name: await nameOf(m.userId), role: m.role, malafatRole: null, pending: false, you: m.userId === user.id })));
-        return c.json({ managedInMalafat: false, items }, 200);
+        return c.json({ managedInMalafat: false, items: inListOrder(items) }, 200);
       }
       const [seats, memberships] = await Promise.all([store.externalIdentities.listByOrganization(organization.id), store.memberships.listByOrganization(organization.id)]);
       const roleOf = new Map<string, MembershipRole>(memberships.map((m) => [m.userId, m.role]));
@@ -57,9 +57,14 @@ export function memberRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           you: s.userId === user.id,
         })),
       );
-      return c.json({ managedInMalafat: true, items }, 200);
+      return c.json({ managedInMalafat: true, items: inListOrder(items) }, 200);
     },
   );
 
   return app;
+}
+
+/** The order the list reads in: who is in MTB3A already, then pending seats; each by name (a store's order is none). */
+function inListOrder(items: Member[]): Member[] {
+  return [...items].sort((a, b) => Number(a.pending) - Number(b.pending) || a.name.localeCompare(b.name));
 }

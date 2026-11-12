@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { OpenAPIHono } from '@hono/zod-openapi';
+import type { MiddlewareHandler } from 'hono';
 import { contextStorage } from 'hono/context-storage';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApiShell } from './app-shell.js';
@@ -19,9 +20,10 @@ import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
 import { SENTRY_INGEST_ORIGIN } from './observability/sentry-ingest.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
 import type { LedgerStore, OAuthClientRecord } from './repositories/ports.js';
+import { remoteKeys } from './oauth/client-assertion.js';
 import type { JWTVerifyGetKey } from 'jose';
 import type { AttachmentStorage } from './attachments/storage.js';
-import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
+import { adminAuth, adminRoutes, jobAuth, MALAFAT_DELEGATION_ADMIN_ENDPOINTS } from './routes/admin.js';
 import { adminOAuthClientRoutes } from './routes/admin-oauth-clients.js';
 import { MALAFAT_SIGN_IN_ENDPOINTS, malafatSignInRoutes } from './routes/malafat-sign-in.js';
 import type { MalafatSignInConfig } from './malafat/sign-in-client.js';
@@ -243,6 +245,8 @@ export interface AppDependencies {
    * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
    */
   malafatDelegation?: boolean;
+  /** MUT-596 (OAUTH_CLIENT_LOCAL_HTTP): a confidential client may publish its keys over http on this machine (local QA). */
+  oauthClientLocalHttp?: boolean;
   /** MUT-595 (MALAFAT_SIGN_IN): Sign in with Malafat; null or absent = its routes answer 404. */
   malafatSignIn?: MalafatSignInConfig | null;
   /** MUT-559: ACCOUNTANTS_PER_PROFILE_MAX. Default ACCOUNTANTS_PER_PROFILE_DEFAULT (5). */
@@ -424,7 +428,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
           captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
           auditFor: agentAuditFor(deps.store),
           delegation: malafatDelegation,
-          ...(deps.oauth.keysFor ? { keysFor: deps.oauth.keysFor } : {}),
+          ...(deps.oauth.keysFor ? { keysFor: deps.oauth.keysFor } : deps.oauthClientLocalHttp ? { keysFor: (client: OAuthClientRecord) => remoteKeys(client.jwksUri ?? '', { localHttp: true }) } : {}),
         })
       : null;
   // Shared by the cookie and device-session sign-in routes (MUT-64): one throttle/IP-budget per email or address, whichever surface it comes from.
@@ -458,16 +462,19 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
-    { endpoints: new Set([...CONNECTED_APPS_ENDPOINTS, ...MALAFAT_DELEGATION_OPERATOR_ENDPOINTS]), on: malafatDelegation, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    { endpoints: new Set([...CONNECTED_APPS_ENDPOINTS, ...MALAFAT_DELEGATION_OPERATOR_ENDPOINTS, ...MALAFAT_DELEGATION_ADMIN_ENDPOINTS]), on: malafatDelegation, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     // MUT-595: Sign in with Malafat.
     { endpoints: MALAFAT_SIGN_IN_ENDPOINTS, on: Boolean(deps.malafatSignIn), refusal: () => new ApiError('NOT_FOUND', 'Not found') },
   ];
-  app.use('/v1/*', async (c, next) => {
+  const darkLaunchGate: MiddlewareHandler<AppEnv> = async (c, next) => {
     const endpoint = endpointKey(c);
     const off = endpoint ? darkLaunches.find((d) => !d.on && d.endpoints.has(endpoint)) : undefined;
     if (off) throw off.refusal();
     await next();
-  });
+  };
+  app.use('/v1/*', darkLaunchGate);
+  // MUT-596: the admin twin of a switched-off feature's operator route is dark too.
+  app.use('/admin/v1/*', darkLaunchGate);
   app.use(
     '/v1/*',
     authenticate({
@@ -668,7 +675,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null }));
+  app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
   app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));

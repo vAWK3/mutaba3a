@@ -179,6 +179,8 @@ const OPERATOR_OPERATIONS = [
 
 /** MUT-593 (ADR-254): You › Connected apps, from the portal or the phone; never a delegated token. */
 const CONNECTED_APP_OPERATIONS = ['GET /v1/me/connected-apps', 'DELETE /v1/me/connected-apps/{grantId}'];
+/** MUT-596: who is on the selected profile, read-only (a Malafat firm's seats); a person's, never a key's. */
+const MEMBER_OPERATIONS = ['GET /v1/members'];
 
 /**
  * MUT-593 (ADR-254 §4.2): what Malafat's delegated token may never reach, by path prefix — the person's own
@@ -236,6 +238,7 @@ const SESSION_OPERATIONS = [
   'GET /v1/customers/{customerId}/statement',
   'GET /v1/fee-proposals',
   'GET /v1/fee-proposals/{proposalId}',
+  ...MEMBER_OPERATIONS,
   'GET /v1/me',
   // MUT-191: the person's Malafat suggestion preferences (organization-independent, like GET /v1/me)
   'PATCH /v1/me/malafat-suggestions',
@@ -473,7 +476,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -483,7 +486,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

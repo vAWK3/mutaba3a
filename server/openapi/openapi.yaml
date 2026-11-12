@@ -6255,7 +6255,18 @@ components:
         origin:
           $ref: "#/components/schemas/PaymentOrigin"
         captureSource:
-          $ref: "#/components/schemas/StoredCaptureSource"
+          type: string
+          nullable: true
+          enum:
+            - app
+            - siri
+            - widget
+            - quick_action
+            - share
+            - mcp
+            - malafat
+            - null
+          description: The capture surface; 'malafat' = recorded by Malafat acting as the person (MUT-596). Null for `integration`.
         capturedBy:
           type: object
           nullable: true
@@ -10949,6 +10960,34 @@ components:
         - requestedByUserId
         - requestedByEmail
         - owned
+    OperatorMalafatDelegation:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        tenantId:
+          type: string
+        delegationEnabledAt:
+          type: string
+          nullable: true
+          format: date-time
+          description: "Null = off: Malafat can’t act for anyone in this firm"
+        grantsRevoked:
+          type: integer
+          description: Members’ Malafat connections this change ended (0 when turning it on)
+      required:
+        - organizationId
+        - tenantId
+        - delegationEnabledAt
+        - grantsRevoked
+    OperatorMalafatDelegationRequest:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+      required:
+        - enabled
     ConfidentialClient:
       type: object
       properties:
@@ -11808,34 +11847,6 @@ components:
             format: uuid
           maxItems: 50
       additionalProperties: false
-    OperatorMalafatDelegation:
-      type: object
-      properties:
-        organizationId:
-          type: string
-          format: uuid
-        tenantId:
-          type: string
-        delegationEnabledAt:
-          type: string
-          nullable: true
-          format: date-time
-          description: "Null = off: Malafat can’t act for anyone in this firm"
-        grantsRevoked:
-          type: integer
-          description: Members’ Malafat connections this change ended (0 when turning it on)
-      required:
-        - organizationId
-        - tenantId
-        - delegationEnabledAt
-        - grantsRevoked
-    OperatorMalafatDelegationRequest:
-      type: object
-      properties:
-        enabled:
-          type: boolean
-      required:
-        - enabled
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -25430,6 +25441,52 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/organizations/{organizationId}/malafat-delegation:
+    post:
+      tags:
+        - Admin
+      summary: Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+      description: The operator console’s switch (POST /v1/operator/organizations/{organizationId}/malafat-delegation), for scripts and local QA (MUT-596). Off ends every member’s Malafat connection for this firm at once. Audited.
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/OperatorMalafatDelegationRequest"
+      responses:
+        "200":
+          description: The switch as it now stands
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OperatorMalafatDelegation"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: Unknown organization, or Malafat delegation is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT with details.reason NOT_MALAFAT_FED
           content:
             application/json:
               schema:

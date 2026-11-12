@@ -3186,7 +3186,8 @@ export const PaymentSchema = z
     /** MUT-61: `capture` for money a person recorded (the phone, the portal); filter on it with `allocationState` to find what still needs allocating. */
     origin: PaymentOriginSchema,
     /** MUT-61: the capture surface, when the client sent one; always null for `integration`. */
-    captureSource: StoredCaptureSourceSchema.nullable(),
+    // Inline, not a $ref: this generator drops `nullable` beside a $ref to StoredCaptureSource (the D1 contract test).
+    captureSource: z.enum(StoredCaptureSourceSchema.options).nullable().openapi({ description: "The capture surface; 'malafat' = recorded by Malafat acting as the person (MUT-596). Null for `integration`." }),
     /** MUT-61: who captured it; null for `integration`, or once that person's account is gone. */
     capturedBy: z.object({ userId: uuid, displayName: z.string() }).nullable().openapi({ description: 'Who captured it: null for payments recorded through the API key, and once that person\'s account is gone.' }),
     currency: CurrencySchema,

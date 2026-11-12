@@ -205,6 +205,13 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
   });
 
+  it('OAUTH_CLIENT_LOCAL_HTTP (MUT-596): off by default; the QA stub\'s http keys only off production and staging', () => {
+    expect(loadConfig(base).OAUTH_CLIENT_LOCAL_HTTP).toBe(false);
+    expect(loadConfig({ ...base, OAUTH_CLIENT_LOCAL_HTTP: 'true' }).OAUTH_CLIENT_LOCAL_HTTP).toBe(true);
+    expect(() => loadConfig({ ...deployed, OAUTH_CLIENT_LOCAL_HTTP: 'true' })).toThrow(/OAUTH_CLIENT_LOCAL_HTTP/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', OAUTH_CLIENT_LOCAL_HTTP: 'true' })).toThrow(/OAUTH_CLIENT_LOCAL_HTTP/);
+  });
+
   it('the read job\'s audience defaults to API_ORIGIN', () => {
     expect(readOidcAudience(loadConfig(deployed))).toBe('https://api.example.test');
     expect(readOidcAudience(loadConfig({ ...deployed, READ_OIDC_AUDIENCE: 'https://other.example.test' }))).toBe('https://other.example.test');

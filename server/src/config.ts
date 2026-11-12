@@ -188,6 +188,11 @@ const envSchema = z.object({
    */
   MALAFAT_DELEGATION: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-596 (local QA): a confidential client's JWKS and redirect URIs may be plain http on a loopback or *.lvh.me
+   * host, so the Malafat QA stub can stand in for Malafat. Refused on production and staging.
+   */
+  OAUTH_CLIENT_LOCAL_HTTP: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-595 (ADR-254 D1): Sign in with Malafat. Off, its routes answer 404 and the doors say so. Only "true" turns it
    * on; Malafat's side must list this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS (MAL-1539).
    */
@@ -441,6 +446,9 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   // MUT-595: a stub Malafat at http://{slug}.lvh.me for local QA (it resolves to 127.0.0.1); never plain http beyond.
   if (!config.MALAFAT_ORIGIN_TEMPLATE.startsWith('https://') && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('MALAFAT_ORIGIN_TEMPLATE', `Malafat is reached over https on ${config.NODE_ENV}`);
+  }
+  if (config.OAUTH_CLIENT_LOCAL_HTTP && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('OAUTH_CLIENT_LOCAL_HTTP', `a client's keys are fetched over https on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

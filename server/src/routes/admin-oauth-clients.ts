@@ -3,6 +3,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
+import { isLocalHttpUrl } from '../oauth/client-assertion.js';
 import { canonicalResource, mcpResourceUrl, v1ResourceUrl } from '../oauth/protocol.js';
 import type { LedgerStore, OAuthClientRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema } from '../schemas.js';
@@ -21,7 +22,7 @@ const httpsUrl = z
   .string()
   .url()
   .max(2048)
-  .refine((u) => u.startsWith('https://'), 'must be https');
+  .refine((u) => u.startsWith('https://') || isLocalHttpUrl(u), 'must be https');
 
 const RegisterConfidentialClientSchema = z
   .object({
@@ -57,7 +58,8 @@ function serialize(client: OAuthClientRecord, grantsRevoked?: number) {
   };
 }
 
-export function adminOAuthClientRoutes(options: { store: LedgerStore; logger: Logger; issuer: string | null }): OpenAPIHono<AppEnv> {
+/** `localHttp` (OAUTH_CLIENT_LOCAL_HTTP, MUT-596): a local QA stub's http URLs are accepted; otherwise https only. */
+export function adminOAuthClientRoutes(options: { store: LedgerStore; logger: Logger; issuer: string | null; localHttp?: boolean }): OpenAPIHono<AppEnv> {
   const { store, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
   /** `/v1` for its own calls, `/mcp` for the tools its connector forwards (MUT-598, D11). */
@@ -85,6 +87,9 @@ export function adminOAuthClientRoutes(options: { store: LedgerStore; logger: Lo
     }),
     async (c) => {
       const body = c.req.valid('json');
+      if (!options.localHttp && [...body.redirectUris, body.jwksUri].some((u) => !u.startsWith('https://'))) {
+        throw new ApiError('VALIDATION_FAILED', 'Redirect URIs and the JWKS URL must be https', { field: 'jwksUri' });
+      }
       const client = await store.oauth.createConfidentialClient({
         id: CONFIDENTIAL_CLIENT_PREFIX + randomBytes(16).toString('hex'),
         clientName: body.name,

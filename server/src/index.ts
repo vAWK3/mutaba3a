@@ -194,6 +194,7 @@ const app = createApp({
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   accountantAccess: config.ACCOUNTANT_ACCESS,
   malafatDelegation: config.MALAFAT_DELEGATION,
+  oauthClientLocalHttp: config.OAUTH_CLIENT_LOCAL_HTTP,
   malafatSignIn: config.MALAFAT_SIGN_IN ? { originTemplate: config.MALAFAT_ORIGIN_TEMPLATE, clientId: config.MALAFAT_SIGN_IN_CLIENT_ID } : null,
   accountantsPerProfileMax: config.ACCOUNTANTS_PER_PROFILE_MAX,
   accountantPlan: { on: config.ACCOUNTANT_PLAN, freeClients: config.ACCOUNTANT_FREE_CLIENTS, maxClients: config.ACCOUNTANT_PLAN_MAX_CLIENTS },

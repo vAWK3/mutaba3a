@@ -75,15 +75,25 @@ const REMOTE_KEY_SETS = new Map<string, JWTVerifyGetKey>();
 /**
  * A client's published keys, fetched over HTTPS and cached ten minutes; an unknown `kid` refetches (at most every
  * 30 s), so a routine key rotation needs nothing from MTB3A (R4: rotation is not a revoke). The URL is set only by the
- * operator script, and only https is fetched.
+ * operator script, and only https is fetched, except a local QA stub's under OAUTH_CLIENT_LOCAL_HTTP (`localHttp`).
  */
-export function remoteKeys(jwksUri: string): JWTVerifyGetKey {
+export function remoteKeys(jwksUri: string, options: { localHttp?: boolean } = {}): JWTVerifyGetKey {
   const url = new URL(jwksUri);
-  if (url.protocol !== 'https:') throw new Error('A client JWKS must be served over https');
+  if (url.protocol !== 'https:' && !(options.localHttp && isLocalHttpUrl(url.href))) throw new Error('A client JWKS must be served over https');
   let keys = REMOTE_KEY_SETS.get(url.href);
   if (!keys) {
     keys = createRemoteJWKSet(url, { timeoutDuration: 5_000, cooldownDuration: 30_000, cacheMaxAge: 600_000 });
     REMOTE_KEY_SETS.set(url.href, keys);
   }
   return keys;
+}
+
+/** MUT-596 (OAUTH_CLIENT_LOCAL_HTTP): plain http on a host that only ever means this machine (lvh.me is 127.0.0.1). */
+export function isLocalHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' && (['localhost', '127.0.0.1', '[::1]'].includes(url.hostname) || url.hostname.endsWith('.lvh.me'));
+  } catch {
+    return false;
+  }
 }

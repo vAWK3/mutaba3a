@@ -176,6 +176,9 @@ async function main() {
       // MUT-596: Sign in with Malafat against the QA stub office (qa/stubs/malafat-oauth.mjs, http://sader.lvh.me:3939).
       MALAFAT_SIGN_IN: 'true',
       MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939',
+      // MUT-593/596: Malafat acting for a person (Connected apps); the stub is its confidential client, keys over http.
+      MALAFAT_DELEGATION: 'true',
+      OAUTH_CLIENT_LOCAL_HTTP: 'true',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });

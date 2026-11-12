@@ -18,10 +18,14 @@
  * `{"person":{…claims}}` sets to anyone). `qa_deny=1` (cookie, header `X-QA-Deny: 1`, or query) answers
  * access_denied, as a person tapping Deny in Malafat. `GET /__qa/people` lists the presets.
  *
+ * As a confidential client of MTB3A (MUT-593, Connected apps) it also publishes its key at
+ * /.well-known/mtb3a-jwks.json and signs client assertions for the seed (`POST /__qa/assertion {clientId, aud}`); the
+ * API must run with OAUTH_CLIENT_LOCAL_HTTP=true to fetch keys over http. The key pair lives only as long as the stub.
+ *
  * Redirects go only to an MTB3A callback (`/v1/auth/malafat/callback`) on a loopback or *.lvh.me host, plus any
  * exact URI in MALAFAT_STUB_REDIRECTS (comma-separated). A QA tool, never deployed: it keeps everything in memory.
  */
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, generateKeyPairSync, randomBytes, randomUUID, sign } from 'node:crypto';
 import http from 'node:http';
 import { assertPortFree } from '../support/port-check.mjs';
 import { OFFICE, PEOPLE, TENANT_SLUG } from './malafat-people.mjs';
@@ -33,6 +37,19 @@ const CALLBACK_PATH = '/v1/auth/malafat/callback';
 const CODE_TTL_MS = 60_000;
 
 let defaultPerson = PEOPLE.linked;
+
+/** The stub's signing key as Malafat's confidential client: ES256, fresh each start. */
+const KID = 'qa-stub';
+const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+const JWKS = { keys: [{ ...publicKey.export({ format: 'jwk' }), kid: KID, alg: 'ES256', use: 'sig' }] };
+
+/** A private_key_jwt client assertion (RFC 7523) for `clientId` at MTB3A's token endpoint `aud`. */
+function clientAssertion(clientId, aud) {
+  const now = Math.floor(Date.now() / 1000);
+  const part = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const signingInput = `${part({ alg: 'ES256', kid: KID, typ: 'JWT' })}.${part({ iss: clientId, sub: clientId, aud, jti: randomUUID(), iat: now, exp: now + 120 })}`;
+  return `${signingInput}.${sign('sha256', Buffer.from(signingInput), { key: privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url')}`;
+}
 /** code → { person, redirectUri, challenge, expiresAt } */
 const codes = new Map();
 /** access token → person */
@@ -152,12 +169,20 @@ const server = http.createServer(async (req, res) => {
     const route = `${req.method} ${url.pathname}`;
     if (route === 'GET /__qa/people') return send(res, 200, { office: OFFICE, people: PEOPLE, default: defaultPerson });
     if (route === 'POST /__qa/person') return await qaPerson(req, res);
+    if (route === 'POST /__qa/assertion') {
+      const { clientId, aud } = await bodyOf(req);
+      if (!clientId || !aud) return send(res, 422, { error: 'clientId and aud are required' });
+      return send(res, 200, { assertion: clientAssertion(clientId, aud) });
+    }
     // Every Malafat call is for one office's host; another slug is no office (the portal's "not found").
     if (slugOf(req) !== TENANT_SLUG) return send(res, 404, { error: 'not_found' });
     if (route === 'GET /.well-known/oauth-authorization-server') {
       const issuer = `http://${req.headers.host}`;
       return send(res, 200, { issuer, authorization_endpoint: `${issuer}/oauth/authorize`, token_endpoint: `${issuer}/api/oauth/token`, userinfo_endpoint: `${issuer}/api/oauth/userinfo`, code_challenge_methods_supported: ['S256'] });
     }
+    if (route === 'GET /.well-known/mtb3a-jwks.json') return send(res, 200, JWKS);
+    // Where MTB3A sends Malafat's own connection back; the seed reads the code before following it.
+    if (route === 'GET /mtb3a/callback') return send(res, 200, { received: Object.fromEntries(url.searchParams) });
     if (route === 'GET /oauth/authorize') return authorize(req, res, url);
     if (route === 'POST /api/oauth/token') return await exchange(req, res);
     if (route === 'GET /api/oauth/userinfo') return userinfo(req, res);

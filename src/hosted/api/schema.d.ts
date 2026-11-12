@@ -17097,6 +17097,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/organizations/{organizationId}/malafat-delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+         * @description The operator console’s switch (POST /v1/operator/organizations/{organizationId}/malafat-delegation), for scripts and local QA (MUT-596). Off ends every member’s Malafat connection for this firm at once. Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OperatorMalafatDelegationRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMalafatDelegation"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown organization, or Malafat delegation is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_MALAFAT_FED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/oauth/confidential-clients": {
         parameters: {
             query?: never;
@@ -24904,7 +24976,11 @@ export interface components {
              */
             projectId: string | null;
             origin: components["schemas"]["PaymentOrigin"];
-            captureSource: components["schemas"]["StoredCaptureSource"];
+            /**
+             * @description The capture surface; 'malafat' = recorded by Malafat acting as the person (MUT-596). Null for `integration`.
+             * @enum {string|null}
+             */
+            captureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | "malafat" | null;
             /** @description Who captured it: null for payments recorded through the API key, and once that person's account is gone. */
             capturedBy: {
                 /** Format: uuid */
@@ -26686,6 +26762,21 @@ export interface components {
             requestedByEmail: string | null;
             owned: boolean;
         };
+        OperatorMalafatDelegation: {
+            /** Format: uuid */
+            organizationId: string;
+            tenantId: string;
+            /**
+             * Format: date-time
+             * @description Null = off: Malafat can’t act for anyone in this firm
+             */
+            delegationEnabledAt: string | null;
+            /** @description Members’ Malafat connections this change ended (0 when turning it on) */
+            grantsRevoked: number;
+        };
+        OperatorMalafatDelegationRequest: {
+            enabled: boolean;
+        };
         ConfidentialClient: {
             clientId: string;
             name: string;
@@ -26998,21 +27089,6 @@ export interface components {
         };
         OperatorEnableFirmRequest: {
             ownerUserIds?: string[];
-        };
-        OperatorMalafatDelegation: {
-            /** Format: uuid */
-            organizationId: string;
-            tenantId: string;
-            /**
-             * Format: date-time
-             * @description Null = off: Malafat can’t act for anyone in this firm
-             */
-            delegationEnabledAt: string | null;
-            /** @description Members’ Malafat connections this change ended (0 when turning it on) */
-            grantsRevoked: number;
-        };
-        OperatorMalafatDelegationRequest: {
-            enabled: boolean;
         };
         CreateEntitlementGrantRequest: {
             /** Format: uuid */
