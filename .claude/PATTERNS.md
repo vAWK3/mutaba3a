@@ -2926,3 +2926,8 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: claim the once-rule in our store before the Stripe write; release only when Stripe definitely didn't act (MUT-532 R3)
 **Where**: `server/src/routes/billing-plan.ts` (`settleClaim`, POST `/v1/billing/pause` and `/v1/billing/stay-offer`), `billing.claimRetentionEvent`.
 **Rule**: a "once per person" or "once a year" promise that ends in a Stripe write is claimed first (a unique index, or a re-check under a row lock), then Stripe is asked. On failure: a refusal Stripe will repeat releases the claim; a timeout re-reads Stripe and releases only if nothing applied (and counts the press as done if it did); if the re-read fails too, the claim stays and is logged for the operator. Never release on "any error": a retry would give the thing twice.
+
+
+## Pattern: Arabic dates go through getLocale(language), as it is (MUT-587, ADR-253)
+**Where**: `src/lib/i18n/core.tsx` `getLocale` / `ARABIC_LOCALE`; server `server/src/dates.ts` `ARABIC_LOCALE`.
+**Rule**: every `Intl` date (and number) formatter takes `getLocale(language)` (server: `ARABIC_LOCALE` for Arabic). Never write `'ar'` by hand (it brings back يناير) and never append `-u-nu-…` (the tag already sets Latin digits; a second one throws). Machine-readable `en-CA` parts are not display and stay. The lint guard `DATE_LOCALE_SYNTAX` catches literals and templates; a variable holding a locale is on you.

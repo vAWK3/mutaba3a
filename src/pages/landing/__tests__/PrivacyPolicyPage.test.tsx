@@ -345,7 +345,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(links).toContain('بعد مرور 30 يومًا على انتهاء الرابط، نحذف سجلات أجهزته');
     expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('رابط مشاركة ورمزه');
     expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('صفحتا روابط المشاركة ودعوات المحاسبين');
-    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 7 نوفمبر 2026');
+    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 7 تشرين الثاني 2026');
   });
 });
 

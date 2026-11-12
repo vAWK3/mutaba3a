@@ -1,15 +1,9 @@
 import type { Language } from './i18n';
+import { getLocale } from './i18n/core';
 import { formatLocalDate, todayLocalISO, daysUntilDue, paymentLocalDay } from './dates';
 
 /** The currencies an amount can be in (ADR-004; the server's SUPPORTED_CURRENCIES are separate). */
 export type Currency = 'USD' | 'ILS' | 'EUR' | 'JOD';
-
-/**
- * Get the locale string for Intl APIs based on language
- */
-export function getLocaleFromLanguage(language: Language): string {
-  return language === 'ar' ? 'ar' : 'en-US';
-}
 
 // Fractional digits each currency carries in minor-unit arithmetic. JOD is
 // 3-decimal; every other one is 2-decimal. Mirrors
@@ -261,9 +255,9 @@ export function formatCurrencyInput(value: string): string {
   return cleaned;
 }
 
-export function formatDate(isoString: string, locale: string = 'en-US'): string {
+export function formatDate(isoString: string, language: Language = 'en'): string {
   const date = new Date(isoString);
-  return date.toLocaleDateString(locale, {
+  return date.toLocaleDateString(getLocale(language), {
     month: 'short',
     day: 'numeric',
     year: 'numeric',
@@ -275,13 +269,13 @@ export function formatDate(isoString: string, locale: string = 'en-US'): string 
  * date-only paidAt as UTC midnight, the evening before west of UTC; this reads
  * it, and a timestamp, as the local calendar day (paymentLocalDay).
  */
-export function formatPaymentDate(paidAt: string, locale: string = 'en-US'): string {
-  return formatDate(`${paymentLocalDay(paidAt)}T00:00:00`, locale);
+export function formatPaymentDate(paidAt: string, language: Language = 'en'): string {
+  return formatDate(`${paymentLocalDay(paidAt)}T00:00:00`, language);
 }
 
-export function formatDateShort(isoString: string, locale: string = 'en-US'): string {
+export function formatDateShort(isoString: string, language: Language = 'en'): string {
   const date = new Date(isoString);
-  return date.toLocaleDateString(locale, {
+  return date.toLocaleDateString(getLocale(language), {
     month: 'short',
     day: 'numeric',
   });

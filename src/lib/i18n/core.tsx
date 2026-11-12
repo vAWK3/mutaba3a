@@ -59,9 +59,16 @@ export function getDirection(lang: Language): Direction {
   return lang === 'ar' ? 'rtl' : 'ltr';
 }
 
-/** The locale string for Intl APIs. */
+/**
+ * MUT-587: Arabic names months the Levantine way (كانون الثاني, not يناير) with Latin digits, like every amount.
+ * Numbers, sizes, relative times and country names read the same as under plain `ar`; only month names change.
+ * The server's copy is `server/src/dates.ts` ARABIC_LOCALE.
+ */
+export const ARABIC_LOCALE = 'ar-PS-u-nu-latn';
+
+/** The locale string for Intl APIs. Never append `-u-nu-…` to it: the tag already carries one, and a second throws. */
 export function getLocale(lang: Language): string {
-  return lang === 'ar' ? 'ar' : 'en-US';
+  return lang === 'ar' ? ARABIC_LOCALE : 'en-US';
 }
 
 /**

@@ -1,6 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
-  getLocaleFromLanguage,
   currencyExponent,
   formatAmount,
   formatAmountShort,
@@ -59,16 +58,6 @@ describe('utils', () => {
       const isolated = isolateAmount(arabicAmount);
       expect(isolated.startsWith('⁨')).toBe(false); // not FSI
       expect(isolated).toBe(`⁦${arabicAmount}⁩`);
-    });
-  });
-
-  describe('getLocaleFromLanguage', () => {
-    it('should return ar for Arabic', () => {
-      expect(getLocaleFromLanguage('ar')).toBe('ar');
-    });
-
-    it('should return en-US for English', () => {
-      expect(getLocaleFromLanguage('en')).toBe('en-US');
     });
   });
 
@@ -358,16 +347,17 @@ describe('utils', () => {
 
   describe('formatDate', () => {
     it('should format date in en-US locale', () => {
-      const result = formatDate('2024-01-15T10:30:00Z', 'en-US');
+      const result = formatDate('2024-01-15T10:30:00Z', 'en');
       expect(result).toMatch(/Jan/);
       expect(result).toMatch(/15/);
       expect(result).toMatch(/2024/);
     });
 
-    it('should format date in Arabic locale', () => {
+    it('names the month the Levantine way in Arabic, with Latin digits (MUT-587)', () => {
       const result = formatDate('2024-01-15T10:30:00Z', 'ar');
-      // Arabic should use different month names
-      expect(result).toBeTruthy();
+      expect(result).toContain('كانون الثاني');
+      expect(result).toContain('2024');
+      expect(result).not.toContain('يناير');
     });
   });
 
@@ -387,20 +377,20 @@ describe('utils', () => {
 
     it('shows a date-only payment on its own day west of UTC', () => {
       inTimeZone('America/New_York', () => {
-        expect(formatPaymentDate('2026-10-13', 'en-US')).toBe('Oct 13, 2026');
+        expect(formatPaymentDate('2026-10-13', 'en')).toBe('Oct 13, 2026');
       });
     });
 
     it("shows a timestamped payment on its local day", () => {
       inTimeZone('Asia/Jerusalem', () => {
-        expect(formatPaymentDate('2026-10-13T22:30:00.000Z', 'en-US')).toBe('Oct 14, 2026');
+        expect(formatPaymentDate('2026-10-13T22:30:00.000Z', 'en')).toBe('Oct 14, 2026');
       });
     });
   });
 
   describe('formatDateShort', () => {
     it('should format without year', () => {
-      const result = formatDateShort('2024-01-15T10:30:00Z', 'en-US');
+      const result = formatDateShort('2024-01-15T10:30:00Z', 'en');
       expect(result).toMatch(/Jan/);
       expect(result).toMatch(/15/);
       expect(result).not.toMatch(/2024/);

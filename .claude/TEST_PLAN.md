@@ -4538,3 +4538,12 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - `extract.test.ts` also: an ordinal day (`6th May 2026`); a buyer's number first on a row gives way to the vendor's labelled one after it, and with no label after it still ends the search.
 - `store-contract-receipt-reading.ts`: F8 pins the skip reason (deleted, filed) for memory and Prisma.
 - Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope on Basel's 17 real invoices: 57/82 (TD-307, MUT-591).
+
+
+
+## MUT-587 — Levantine Arabic months everywhere (ADR-253)
+
+- Unit: `src/lib/i18n/__tests__/arabicLocale.test.ts` (getLocale, all 12 months, numeric dates and amounts unchanged), `src/hosted/format/__tests__/levantineDates.test.ts` (close-account day, invite end, client-book labels, operator times, formatDay), `utils.test.ts` (formatDate in Arabic).
+- Guard: `src/lib/i18n/__tests__/dateLocaleGuard.test.ts` runs ESLint on probe code for the portal and the website.
+- Server: templates, renewal-mail and checkout tests hold the Levantine names.
+- Release-QA: `@portal.direction.levantine-months` (client book, trip group, closing page). Manual: Safari, one date, one amount, one country name in Arabic (D4).
