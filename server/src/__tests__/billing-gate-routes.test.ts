@@ -1,3 +1,4 @@
+import { CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/connected-apps.js';
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/passkeys.js';
 import { OAUTH_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/oauth-consent.js';
 import { randomUUID } from 'node:crypto';
@@ -340,6 +341,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES,
       ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);

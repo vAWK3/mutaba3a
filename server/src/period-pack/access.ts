@@ -1,6 +1,5 @@
 import { delegatedFirm } from '../auth/delegation.js';
 import { assertClientReadable, resolveProfileAccess } from '../auth/middleware.js';
-import { isLive } from '../oauth/service.js';
 import type { AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { ApiError } from '../errors.js';
 import type { LedgerStore, Organization } from '../repositories/ports.js';
@@ -63,7 +62,7 @@ export async function recheckAccess(claims: TicketClaims, ctx: RecheckContext): 
 async function minterStillLive(claims: TicketClaims, ctx: RecheckContext): Promise<boolean> {
   if (claims.gid) {
     const grant = await ctx.store.oauth.findGrant(claims.gid);
-    if (!grant?.tenantId || grant.userId !== claims.sub || !isLive(grant, ctx.now)) return false;
+    if (!grant?.tenantId || grant.userId !== claims.sub || grant.revokedAt !== null || grant.expiresAt <= ctx.now) return false;
     return (await delegatedFirm(ctx.store, grant.tenantId))?.organizationId === claims.org;
   }
   const session = claims.sid ? await ctx.store.sessions.getById(claims.sid) : null;

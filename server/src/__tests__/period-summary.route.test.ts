@@ -244,7 +244,8 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
     expect(doc.info.version).toBe('1.109.0-mut593');
     const op = doc.paths['/v1/summaries/period'].get;
     expect(op.tags).toEqual(['Summaries']);
-    expect(op.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);
+    // MUT-593: Malafat may read it as the person too.
+    expect(op.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }, { delegated: [] }]);
     expect(op.description).toContain('Figures are the ledger as it stands at asOf');
   });
 
