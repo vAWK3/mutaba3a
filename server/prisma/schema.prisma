@@ -2013,8 +2013,9 @@ model ExternalIdentity {
   provider       IntegrationProvider
   tenantId       String              @db.VarChar(255)
   subject        String              @db.VarChar(255)
-  organizationId String              @db.Uuid
-  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  /// The firm the tenant is bound to; null while it isn't bound to MTB3A (a sign-in link with no seat, MUT-595).
+  organizationId String?             @db.Uuid
+  organization   Organization?       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   email          String              @db.VarChar(320)
   /// Malafat's role: PARTNER | OFFICE_ADMIN | ASSOCIATE | INTERN (mapped by D3).
   malafatRole    String              @db.VarChar(32)

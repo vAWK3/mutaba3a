@@ -353,7 +353,8 @@ export interface ExternalIdentityRecord {
   tenantId: string;
   /** The Malafat user id: stable, never the email. */
   subject: string;
-  organizationId: string;
+  /** The tenant's firm; null while the tenant isn't bound to MTB3A (a sign-in link only, MUT-595). */
+  organizationId: string | null;
   email: string;
   malafatRole: MalafatRole;
   /** Null = a pending seat, until the person's first Sign in with Malafat links it (never by email, D4). */

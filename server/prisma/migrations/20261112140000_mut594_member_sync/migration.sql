@@ -11,7 +11,7 @@ CREATE TABLE "external_identities" (
     "provider" "IntegrationProvider" NOT NULL,
     "tenantId" VARCHAR(255) NOT NULL,
     "subject" VARCHAR(255) NOT NULL,
-    "organizationId" UUID NOT NULL,
+    "organizationId" UUID,
     "email" VARCHAR(320) NOT NULL,
     "malafatRole" VARCHAR(32) NOT NULL,
     "userId" UUID,

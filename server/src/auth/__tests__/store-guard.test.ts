@@ -140,6 +140,9 @@ describe('STORE_ACCESS', () => {
       'expenseReceipts.releaseMovedRead',
       'expenseReceipts.releaseRead',
       'expenseReceipts.resetForReread',
+      // MUT-594/595: a seat's claim and lookup run in Sign in with Malafat, unguarded.
+      'externalIdentities.claim',
+      'externalIdentities.findBySubject',
       // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
       'features.grant',
       'features.holders',

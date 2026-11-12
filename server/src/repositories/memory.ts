@@ -1690,7 +1690,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!seat || seat.userId !== null || seat.removedAt) return { claimed: false, identity: cloneSeat(seat) };
       if (!this.people.has(userId)) throw new ForeignKeyViolation('external_identities.userId');
       Object.assign(seat, { userId, linkedAt: at, updatedAt: at });
-      this.seatMembership(userId, seat.organizationId, membershipRoleOf(seat.malafatRole), at);
+      // A link with no firm (the tenant isn't bound to MTB3A) makes no membership.
+      if (seat.organizationId) this.seatMembership(userId, seat.organizationId, membershipRoleOf(seat.malafatRole), at);
       this.pushEvents(audit, at);
       return { claimed: true, identity: { ...seat } };
     },

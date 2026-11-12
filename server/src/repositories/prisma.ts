@@ -1505,7 +1505,8 @@ export class PrismaLedgerStore implements LedgerStore {
           const { count } = await tx.externalIdentity.updateMany({ where: { provider, tenantId, subject, userId: null, removedAt: null }, data: { userId, linkedAt: at, updatedAt: at } });
           const row = await tx.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } });
           if (count === 0 || !row) return { claimed: false, identity: mapNullable(row, toExternalIdentity) };
-          await upsertSeatMembershipInTx(tx, userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), at);
+          // A link with no firm (the tenant isn't bound to MTB3A) makes no membership.
+          if (row.organizationId) await upsertSeatMembershipInTx(tx, userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), at);
           if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
           return { claimed: true, identity: toExternalIdentity(row) };
         }),
