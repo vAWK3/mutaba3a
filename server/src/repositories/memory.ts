@@ -235,8 +235,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 16 (MUT-557): `exps` gained `allocationNumber`.
  * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
+ * 19 (MUT-596): `people` gained `passwordChosen`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 18;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 19;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -576,7 +577,7 @@ export class MemoryLedgerStore implements LedgerStore {
     setPassword: async (id, passwordHash, at) => {
       const u = this.people.get(id);
       if (!u) return null;
-      Object.assign(u, { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
+      Object.assign(u, { passwordHash, passwordChangedAt: at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: at });
       return { ...u };
     },
     setStatus: async (id, status, at) => {
@@ -660,7 +661,7 @@ export class MemoryLedgerStore implements LedgerStore {
       // MUT-262: built and checked before anything changes, so a duplicate digest leaves the store untouched (AC5).
       const rotated = input.rotation ? rotatedSession(kept, input.rotation, input.at) : null;
       if (rotated && [...this.sessionsById.values()].some((s) => s.tokenDigest === rotated.tokenDigest)) throw new UniqueViolation('sessions.tokenDigest');
-      Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
       if (rotated) {
         Object.assign(kept, { revokedAt: input.at, revokedReason: 'password_rotated' });
@@ -1386,6 +1387,7 @@ export class MemoryLedgerStore implements LedgerStore {
       failedSignIns: 0,
       lockedUntil: null,
       passwordChangedAt: input.at,
+      passwordChosen: input.passwordChosen ?? true,
       lastSignInAt: null,
       emailVerifiedAt: input.emailVerifiedAt,
       malafatSuggestions: null,
@@ -1457,7 +1459,7 @@ export class MemoryLedgerStore implements LedgerStore {
       link.usedAt = input.at;
       // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
       this.cancelOpenSetupLinks(person.id, input.at, { except: link.id });
-      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       // MUT-366 (D18): a mailed link reached the person through their mailbox.
       if (link.mailed && person.emailVerifiedAt === null) person.emailVerifiedAt = input.at;
       this.revokeSessionsOf(person.id, 'password_set', input.at);
@@ -1689,6 +1691,8 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     findBySubject: async (provider, tenantId, subject) => cloneSeat(this.seats.get(seatKey(provider, tenantId, subject))),
     listByUser: async (userId) => [...this.seats.values()].filter((s) => s.userId === userId).map((s) => ({ ...s })),
+    listByOrganization: async (organizationId) =>
+      [...this.seats.values()].filter((s) => s.organizationId === organizationId && !s.removedAt).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)).map((s) => ({ ...s })),
     claim: async ({ provider, tenantId, subject, userId, at, audit }) => {
       const seat = this.seats.get(seatKey(provider, tenantId, subject));
       if (!seat || seat.userId !== null || seat.removedAt) return { claimed: false, identity: cloneSeat(seat) };

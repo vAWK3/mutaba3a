@@ -44,6 +44,7 @@ import {
 import { expenseContextOf, serializeExpense, serializeExpenseReceipt } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, requestLanguage, validationResponse, versionMismatch } from './shared.js';
 import { PERSON, PERSON_OR_MALAFAT } from './security.js';
+import { DELEGATED_CAPTURE_SOURCE } from '../auth/delegation.js';
 
 /** MUT-339: how far back a streak is read; past a year it is shown as a year and more. */
 const STREAK_LOOKBACK_DAYS = 400;
@@ -192,10 +193,11 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       responses: { 201: { description: 'Recorded', content: { 'application/json': { schema: ExpenseSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, via } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const prepared = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      // MUT-596: what Malafat records as the person reads "(via Malafat)"; the server says so, never the caller.
+      const prepared = { ...(await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body)), ...(via ? { captureSource: DELEGATED_CAPTURE_SOURCE } : {}) };
       const input = await withResolvedVendor(store, organization.id, prepared, body.vendorDetails, now);
       // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
       const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));

@@ -323,6 +323,21 @@ describe('local snapshot migrations', () => {
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
+  it('18 → 19 (MUT-596): a person gains passwordChosen, true on a device, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'hadi@studio.ps', displayName: 'Hadi', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-hadi', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'passwordChosen'))]));
+    const before: StoredSnapshot = { formatVersion: 18, stateVersion: 4, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.people.values()]).toEqual([...maps.people.values()]);
+    expect([...after.maps.people.values()][0]).toMatchObject({ passwordChosen: true });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
   it("leaves the snapshot it was given untouched", async () => {
     const before = await formatOneSnapshot();
     const orgs = JSON.stringify([...before.maps.orgs.values()]);

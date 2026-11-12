@@ -362,6 +362,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
           email: normalizeEmail(facts.email),
           displayName: facts.name?.trim() || defaultDisplayName(facts.email),
           passwordHash,
+          passwordChosen: false,
           locale,
           personal: personalProfileFor(locale, { defaultCurrency: body.defaultCurrency!, timezone: body.timezone! }),
           at: now,

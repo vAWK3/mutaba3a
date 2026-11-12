@@ -16,6 +16,7 @@ import { meRoutes } from './me.js';
 import { customerRoutes } from './customers.js';
 import { paymentRoutes } from './payments.js';
 import { profileRoutes } from './profiles.js';
+import { memberRoutes } from './members.js';
 import { projectRoutes } from './projects.js';
 import { receivableRoutes } from './receivables.js';
 import { summaryRoutes } from './summaries.js';
@@ -65,5 +66,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => conversionRoutes(deps.store),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
+  // MUT-596: who is on the profile, read-only (a Malafat firm's seats).
+  (deps) => memberRoutes(deps.store),
   (deps) => meRoutes(deps.store, deps.terms, deps.billing),
 ];

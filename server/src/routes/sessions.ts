@@ -307,7 +307,12 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const { user, session } = personSession(c);
       const { currentPassword, newPassword, rotateToken } = c.req.valid('json');
       // MUT-333: the same check closing an account makes (auth/current-password.ts).
-      const verifiedPasswordHash = await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword, c.get('now')(), c.get('requestId'));
+      // MUT-596: an account Sign in with Malafat created has only a random password nobody knows; the signed-in person
+      // sets their first own one without it. Everyone else proves the current one.
+      const verifiedPasswordHash =
+        !user.passwordChosen && user.passwordHash !== null
+          ? user.passwordHash
+          : await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword ?? '', c.get('now')(), c.get('requestId'));
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
       const passwordHash = await passwordHasher.hash(newPassword);
       const at = c.get('now')();

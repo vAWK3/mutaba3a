@@ -16,6 +16,9 @@ export interface DelegatedVia {
 /** What an audit row written on a delegated call carries in `metadata.via` (AC9: "Rana (via Malafat)"). */
 export const DELEGATED_AUDIT_VIA = 'malafat';
 
+/** MUT-596: a record Malafat writes as the person shows "(via Malafat)": its stored capture source, set by the server. */
+export const DELEGATED_CAPTURE_SOURCE = 'malafat';
+
 /**
  * The organization-independent routes a delegated token may call, by endpoint key. Everything else that names no
  * profile (the cross-profile feed and verdict, inbox, billing, sessions…) would reach past the tenant, so it is

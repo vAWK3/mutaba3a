@@ -106,7 +106,7 @@ export async function buildMe(
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow, passkeyPrompt, features, clients] = await Promise.all([
+  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount] = await Promise.all([
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
@@ -114,6 +114,8 @@ export async function buildMe(
     // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`. MUT-575: ended ones too,
     // until removed, so the clients show the tab while any row is left. No stat queries here (GET /v1/clients has them).
     accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
+    // MUT-596: only when it decides ownSignIn (a password the person never chose).
+    user.passwordChosen ? 0 : store.passkeys.listByUser(user.id).then((keys) => keys.length),
   ]);
   return {
     user: {
@@ -122,6 +124,8 @@ export async function buildMe(
       displayName: user.displayName,
       locale: user.locale,
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
+      // MUT-596: false for an account Sign in with Malafat created, until the person adds a passkey or their own password.
+      ownSignIn: user.passwordChosen || passkeyCount > 0,
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
       // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
       passkeyPrompt: passkeyPrompt && passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt!, user.closure !== null),

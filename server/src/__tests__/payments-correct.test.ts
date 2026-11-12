@@ -335,9 +335,9 @@ describe('POST /v1/payments/{id}/correct', () => {
 
   it('AC7: the contract version is bumped and both routes are published', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.112.0-mut595');
+    expect(API_VERSION).toBe('1.113.0-mut596');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.112.0-mut595');
+    expect(doc.info.version).toBe('1.113.0-mut596');
     expect(Object.keys(doc.paths)).toEqual(expect.arrayContaining(['/v1/payments/{paymentId}/correct', '/v1/payments/{paymentId}/correct/preview']));
   });
 

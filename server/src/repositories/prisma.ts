@@ -368,7 +368,7 @@ export class PrismaLedgerStore implements LedgerStore {
     setPassword: async (id, passwordHash, at) => {
       const { count } = await this.prisma.user.updateMany({
         where: { id },
-        data: { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at },
+        data: { passwordHash, passwordChangedAt: at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: at },
       });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
@@ -480,7 +480,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
           const user = await tx.user.update({
             where: { id: input.userId },
-            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
           });
           await tx.session.updateMany({
             where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
@@ -1245,6 +1245,7 @@ export class PrismaLedgerStore implements LedgerStore {
             data: {
               passwordHash: input.passwordHash,
               passwordChangedAt: input.at,
+              passwordChosen: true,
               failedSignIns: 0,
               lockedUntil: null,
               updatedAt: input.at,
@@ -1502,6 +1503,8 @@ export class PrismaLedgerStore implements LedgerStore {
       ),
     findBySubject: async (provider, tenantId, subject) => mapNullable(await this.prisma.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } }), toExternalIdentity),
     listByUser: async (userId) => (await this.prisma.externalIdentity.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExternalIdentity),
+    listByOrganization: async (organizationId) =>
+      (await this.prisma.externalIdentity.findMany({ where: { organizationId, removedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExternalIdentity),
     claim: ({ provider, tenantId, subject, userId, at, audit }) =>
       translate(() =>
         this.prisma.$transaction(async (tx) => {
@@ -4691,6 +4694,7 @@ async function insertPerson(
       locale: input.locale,
       status: input.status,
       passwordChangedAt: input.at,
+      passwordChosen: input.passwordChosen ?? true,
       emailVerifiedAt: input.emailVerifiedAt,
       trialStartedAt: input.trialStartedAt,
       createdAt: input.at,
@@ -4771,6 +4775,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     failedSignIns: row.failedSignIns,
     lockedUntil: row.lockedUntil,
     passwordChangedAt: row.passwordChangedAt,
+    passwordChosen: row.passwordChosen,
     lastSignInAt: row.lastSignInAt,
     emailVerifiedAt: row.emailVerifiedAt,
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),

@@ -15,6 +15,7 @@ import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeCaptureResponseSc
 import { serializeIncomeEntry } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
+import { DELEGATED_CAPTURE_SOURCE } from '../auth/delegation.js';
 
 // MUT-64: a device session is the same 'session' principal, so it reaches every route a cookie session does.
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -45,7 +46,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       responses: { 201: { description: 'Captured', content: { 'application/json': { schema: IncomeCaptureResponseSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user, writerOfRecord } = sessionAuth(c);
+      const { organization, user, writerOfRecord, via } = sessionAuth(c);
       const body = c.req.valid('json');
       const rules = incomeCaptureRulesFor(writerOfRecord);
       // Owed is the payments row's write (a Receivable); where Malafat owns receivables it is refused before anything else.
@@ -72,7 +73,8 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             notes: body.notes ?? null,
             requestId: c.get('requestId'),
             createdByUserId: user.id,
-            captureSource: body.captureSource ?? null,
+            // MUT-596: Malafat acting as the person reads "(via Malafat)".
+            captureSource: via ? DELEGATED_CAPTURE_SOURCE : (body.captureSource ?? null),
           },
           // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
           loggedAtOf(body.capturedAt, now),

@@ -259,6 +259,15 @@ function addMemberSyncAt(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-596, 18 → 19: a person gains `passwordChosen`, false only for an account Sign in with Malafat created. A device
+ * has no Malafat: true.
+ */
+function addPasswordChosen(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'passwordChosen'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, passwordChosen: true }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -282,6 +291,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 15, to: 16, migrate: addAllocationNumber },
   { from: 16, to: 17, migrate: addDelegationSwitch },
   { from: 17, to: 18, migrate: addMemberSyncAt },
+  { from: 18, to: 19, migrate: addPasswordChosen },
 ];
 
 /**

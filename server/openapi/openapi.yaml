@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.112.0-mut595
+  version: 1.113.0-mut596
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -216,6 +216,9 @@ components:
               $ref: "#/components/schemas/UserLocale"
             malafatSuggestions:
               $ref: "#/components/schemas/MalafatSuggestions"
+            ownSignIn:
+              type: boolean
+              description: "MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it."
             trialPrompt:
               $ref: "#/components/schemas/TrialPrompt"
             passkeyPrompt:
@@ -238,6 +241,7 @@ components:
             - displayName
             - locale
             - malafatSuggestions
+            - ownSignIn
             - trialPrompt
             - passkeyPrompt
             - status
@@ -884,6 +888,7 @@ components:
         currentPassword:
           type: string
           maxLength: 1024
+          description: "Required, except for an account Sign in with Malafat created that has no password of its own yet (Me.user.ownSignIn false, MUT-596): it sets its first one."
         newPassword:
           $ref: "#/components/schemas/NewPassword"
         rotateToken:
@@ -892,7 +897,6 @@ components:
             - true
           description: "MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says."
       required:
-        - currentPassword
         - newPassword
     NewPassword:
       type: string
@@ -5046,6 +5050,7 @@ components:
         - quick_action
         - share
         - mcp
+        - malafat
         - null
     InboxCount:
       type: object
@@ -5152,7 +5157,7 @@ components:
         captureSource:
           allOf:
             - $ref: "#/components/schemas/StoredCaptureSource"
-            - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436.
+            - description: Where it was captured; 'mcp' = added by the person's own Claude (MUT-436); 'malafat' = recorded by Malafat acting as the person (MUT-596). Null when unknown. Since 1.75.0-mut436.
         vat:
           $ref: "#/components/schemas/ExpenseVat"
         allocationNumber:
@@ -6250,9 +6255,7 @@ components:
         origin:
           $ref: "#/components/schemas/PaymentOrigin"
         captureSource:
-          allOf:
-            - $ref: "#/components/schemas/CaptureSource"
-            - nullable: true
+          $ref: "#/components/schemas/StoredCaptureSource"
         capturedBy:
           type: object
           nullable: true
@@ -9522,6 +9525,53 @@ components:
             - removed
       required:
         - result
+    ProfileMembers:
+      type: object
+      properties:
+        managedInMalafat:
+          type: boolean
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProfileMember"
+      required:
+        - managedInMalafat
+        - items
+    ProfileMember:
+      type: object
+      properties:
+        name:
+          type: string
+          description: The person’s display name, or a pending seat’s email
+        role:
+          type: string
+          nullable: true
+          enum:
+            - OWNER
+            - BOOKKEEPER
+            - SUBMITTER
+            - null
+          description: The MTB3A role; null for a seat nobody has claimed yet
+        malafatRole:
+          type: string
+          nullable: true
+          enum:
+            - PARTNER
+            - OFFICE_ADMIN
+            - ASSOCIATE
+            - INTERN
+            - null
+        pending:
+          type: boolean
+          description: Malafat lists them, but they have not signed in to MTB3A yet
+        you:
+          type: boolean
+      required:
+        - name
+        - role
+        - malafatRole
+        - pending
+        - you
     RecordsFile:
       type: object
       properties:
@@ -23129,6 +23179,39 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
           description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/members:
+    get:
+      tags:
+        - Profiles
+      summary: Who is on this profile, read-only (MUT-596)
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Members
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProfileMembers"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
           content:
             application/json:
               schema:

@@ -310,6 +310,9 @@ model User {
   failedSignIns      Int        @default(0)
   lockedUntil        DateTime?
   passwordChangedAt  DateTime
+  /// MUT-596: false while the account's only password is the random one Sign in with Malafat gave it (MUT-595) and
+  /// nobody knows; the person's own password (a change, a setup link, recovery) makes it true. Drives Me.ownSignIn.
+  passwordChosen     Boolean    @default(true)
   lastSignInAt       DateTime?
   /// MUT-366 (D18): when the person proved they read this address: a signup, or redeeming a mailed recovery link.
   emailVerifiedAt    DateTime?

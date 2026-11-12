@@ -1246,6 +1246,7 @@ export const MeSchema = z
       locale: UserLocaleSchema,
       /** MUT-191: on, nothing dismissed, until the person changes it. */
       malafatSuggestions: MalafatSuggestionsSchema,
+    ownSignIn: z.boolean().openapi({ description: 'MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it.' }),
       /** MUT-418: the trial's card prompt (all null until the person answers). Additive since 1.59.0-mut418. */
       trialPrompt: TrialPromptSchema,
       /** MUT-370: whether to suggest adding a passkey; null on a server that offers no passkeys. Additive since 1.70.0-mut370. */
@@ -1802,7 +1803,11 @@ export const SignupReviewDecisionSchema = z
  */
 export const ChangePasswordRequestSchema = z
   .object({
-    currentPassword: z.string().max(PRESENTED_PASSWORD_MAX_LENGTH),
+    currentPassword: z
+      .string()
+      .max(PRESENTED_PASSWORD_MAX_LENGTH)
+      .optional()
+      .openapi({ description: 'Required, except for an account Sign in with Malafat created that has no password of its own yet (Me.user.ownSignIn false, MUT-596): it sets its first one.' }),
     newPassword: NewPasswordSchema,
     rotateToken: z
       .literal(true)
@@ -3090,7 +3095,7 @@ export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
  * MUT-436 (ADR-201): a stored capture source, as responses carry it — every input value, plus 'mcp' (the person's own
  * Claude), which only the MCP tools write. Requests keep CaptureSourceSchema, so no client can claim 'mcp'.
  */
-export const StoredCaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share', 'mcp']).openapi('StoredCaptureSource');
+export const StoredCaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share', 'mcp', 'malafat']).openapi('StoredCaptureSource');
 export type StoredCaptureSource = z.infer<typeof StoredCaptureSourceSchema>;
 /** MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed. */
 export const PaymentOriginSchema = z.enum(['integration', 'capture']).openapi('PaymentOrigin');
@@ -3181,7 +3186,7 @@ export const PaymentSchema = z
     /** MUT-61: `capture` for money a person recorded (the phone, the portal); filter on it with `allocationState` to find what still needs allocating. */
     origin: PaymentOriginSchema,
     /** MUT-61: the capture surface, when the client sent one; always null for `integration`. */
-    captureSource: CaptureSourceSchema.nullable(),
+    captureSource: StoredCaptureSourceSchema.nullable(),
     /** MUT-61: who captured it; null for `integration`, or once that person's account is gone. */
     capturedBy: z.object({ userId: uuid, displayName: z.string() }).nullable().openapi({ description: 'Who captured it: null for payments recorded through the API key, and once that person\'s account is gone.' }),
     currency: CurrencySchema,
@@ -3760,7 +3765,9 @@ export const ExpenseSchema = z
     projectId: uuid.nullable(),
     notes: z.string().nullable(),
     createdByUserId: uuid.nullable().openapi({ description: 'Null once that person has deleted their account (MUT-333, a former member); nullable since 1.67.0-mut333.' }),
-    captureSource: StoredCaptureSourceSchema.nullable().openapi({ description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436). Null when unknown. Since 1.75.0-mut436." }),
+    captureSource: StoredCaptureSourceSchema.nullable().openapi({
+      description: "Where it was captured; 'mcp' = added by the person's own Claude (MUT-436); 'malafat' = recorded by Malafat acting as the person (MUT-596). Null when unknown. Since 1.75.0-mut436.",
+    }),
     vat: ExpenseVatSchema.nullable().openapi({ description: 'MUT-302: net, VAT and gross (= amount) at the frozen rate; null = no VAT recorded, never a guessed split. Since 1.92.0-mut302.' }),
     allocationNumber: z.string().regex(/^\d{9}$/).nullable().openapi({ description: 'MUT-557: the supplier invoice\'s Israeli allocation number (מספר הקצאה), nine digits; null = none recorded. Since 1.106.0-mut557.' }),
     allocationNumberMissing: z.boolean().openapi({

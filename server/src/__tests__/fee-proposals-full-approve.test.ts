@@ -179,8 +179,8 @@ describe('AC4: the contract', () => {
   it('publishes 1.108.0-mut565 with the approve preview, the draft and the agreement type', async () => {
     const h = harness();
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(API_VERSION).toBe('1.112.0-mut595');
-    expect(doc.info.version).toBe('1.112.0-mut595');
+    expect(API_VERSION).toBe('1.113.0-mut596');
+    expect(doc.info.version).toBe('1.113.0-mut596');
     expect(doc.paths['/v1/fee-proposals/{proposalId}/approve/preview']).toBeDefined();
     expect(doc.components.schemas.AgreementDraft).toBeDefined();
     expect(doc.components.schemas.FeeProposal.properties).toHaveProperty('draft');

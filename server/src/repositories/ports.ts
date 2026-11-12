@@ -397,6 +397,8 @@ export interface ExternalIdentityRepository {
   syncMembers(input: MemberSyncInput): Promise<MemberSyncResult>;
   findBySubject(provider: IntegrationProvider, tenantId: string, subject: string): Promise<ExternalIdentityRecord | null>;
   listByUser(userId: string): Promise<ExternalIdentityRecord[]>;
+  /** MUT-596: a firm's seats Malafat lists now (removed ones left out), for its read-only members list. */
+  listByOrganization(organizationId: string): Promise<ExternalIdentityRecord[]>;
   /**
    * MUT-594/595 (D7): links an unclaimed, unremoved seat to `userId` and makes their membership (D3 role) in one
    * conditional write, so two first sign-ins claim it once. `claimed: false` = already linked (to anyone), removed,
@@ -1546,6 +1548,8 @@ export interface UserRecord {
   failedSignIns: number;
   lockedUntil: Date | null;
   passwordChangedAt: Date;
+  /** MUT-596: false while the only password is the random one Sign in with Malafat gave the account. */
+  passwordChosen: boolean;
   lastSignInAt: Date | null;
   /** MUT-366 (D18): when the person proved they read this address (a signup or a mailed recovery link); null until then. */
   emailVerifiedAt: Date | null;
@@ -1625,6 +1629,8 @@ export interface CreateUserInput {
   /** The firm this user belongs to, if any. */
   organizationId?: string;
   personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /** MUT-596: false for an account Sign in with Malafat creates with a random password nobody knows. Default true. */
+  passwordChosen?: boolean;
   /**
    * MUT-235 (review fix): the person's first setup link, written in the same transaction as the user, so a
    * create never leaves an account with neither a password nor a link. UniqueViolation on a duplicate digest.

@@ -13646,6 +13646,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who is on this profile, read-only (MUT-596) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Members */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileMembers"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -22561,6 +22624,8 @@ export interface components {
                 displayName: string;
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
+                /** @description MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it. */
+                ownSignIn: boolean;
                 trialPrompt: components["schemas"]["TrialPrompt"];
                 passkeyPrompt: components["schemas"]["PasskeyPrompt"];
                 status: components["schemas"]["UserStatus"];
@@ -22778,7 +22843,8 @@ export interface components {
             token: string;
         };
         ChangePasswordRequest: {
-            currentPassword: string;
+            /** @description Required, except for an account Sign in with Malafat created that has no password of its own yet (Me.user.ownSignIn false, MUT-596): it sets its first one. */
+            currentPassword?: string;
             newPassword: components["schemas"]["NewPassword"];
             /**
              * @description MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says.
@@ -24363,7 +24429,7 @@ export interface components {
         /** @enum {string} */
         InboxEntryKind: "income" | "expense";
         /** @enum {string|null} */
-        StoredCaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | null;
+        StoredCaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | "malafat" | null;
         InboxCount: {
             count: number;
         };
@@ -24838,7 +24904,7 @@ export interface components {
              */
             projectId: string | null;
             origin: components["schemas"]["PaymentOrigin"];
-            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            captureSource: components["schemas"]["StoredCaptureSource"];
             /** @description Who captured it: null for payments recorded through the API key, and once that person's account is gone. */
             capturedBy: {
                 /** Format: uuid */
@@ -26084,6 +26150,24 @@ export interface components {
         RemoveProfileOwnerResponse: {
             /** @enum {string} */
             result: "left" | "removed";
+        };
+        ProfileMembers: {
+            managedInMalafat: boolean;
+            items: components["schemas"]["ProfileMember"][];
+        };
+        ProfileMember: {
+            /** @description The person’s display name, or a pending seat’s email */
+            name: string;
+            /**
+             * @description The MTB3A role; null for a seat nobody has claimed yet
+             * @enum {string|null}
+             */
+            role: "OWNER" | "BOOKKEEPER" | "SUBMITTER" | null;
+            /** @enum {string|null} */
+            malafatRole: "PARTNER" | "OFFICE_ADMIN" | "ASSOCIATE" | "INTERN" | null;
+            /** @description Malafat lists them, but they have not signed in to MTB3A yet */
+            pending: boolean;
+            you: boolean;
         };
         RecordsFile: {
             /** @enum {string} */
