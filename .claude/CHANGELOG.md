@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — The portal's Malafat screens (MUT-596, ADR-254 D2, D5, D8, D9)
+
+### Added
+- **Sign in with Malafat on the portal** (`src/hosted/pages/auth/malafat/`): a button with Malafat's mark on sign-in (when the server opens the door), `/malafat` (the office address, checked before leaving and remembered on this device) and `/malafat/return` (reads and strips the fragment, exchanges the code once, then the link step: the existing account's own password or passkey, never email alone; or the one consent, which names the office and, for a new account, asks its currency and time zone).
+- **You › Account › Connected apps** (`ConnectedAppsDrawer`, `?connectedApps=true`): Malafat per firm, with its mark, disconnected after an in-row confirm. The row shows only where the server has Malafat access on.
+- **A Malafat firm's members** on You › Profiles (`MalafatMembersSection`): read-only, each with their Malafat role and what it lets them do, pending seats included, "managed in Malafat". `GET /v1/members` (session-only, any member of the profile; a fixed order: in MTB3A first, then pending, each by name).
+- **"via Malafat"** on expenses and payments Malafat recorded for the person (`captureSource: 'malafat'`); one `CaptureSourceBadge` with the "Added by Claude" mark.
+- **A second way in** (`SecondWayIn`, Home): an account Sign in with Malafat created is offered a passkey or a password beside Malafat (Basel's copy: a backup way in, never "if Malafat stops"), in the passkey card's place; Not now hides it on the device. Change password then sets a first password with no current one.
+- Malafat's mark vendored to `public/brand/malafat-mark.svg` and `-on-dark.svg` (C2PA metadata stripped; never hotlinked).
+
+### Changed
+- `Me.user.ownSignIn` (a way in of the person's own) and `Me.user.ownPassword` (a password they chose); `users.passwordChosen` (migration `20261112180000_mut596_password_chosen`; snapshot format 19). `POST /v1/me/password` needs no current password while none was chosen.
+- `POST /v1/expenses` and income received under Malafat's delegated token record `captureSource: 'malafat'`; `Payment.captureSource` publishes as a nullable inline enum (the generator dropped `nullable` beside a `$ref`).
+- Contract `1.113.0-mut596`.
+
+### Technical
+- QA: `qa/stubs/malafat-oauth.mjs` stands in for a Malafat firm (discovery, authorize as a chosen person, PKCE token, userinfo, revoke; and as MTB3A's confidential client, a JWKS and signed assertions); `malafat-seed.mjs` makes a firm, its seats, an existing and a linked account and a live grant through the API. The portal-selfservice env starts the stub (`MALAFAT_STUB_PORT`, default 3939). `qa/features/portal-selfservice/malafat-delegation.yaml` (brief §12, nine flows) with `support/malafat.ts`.
+- `OAUTH_CLIENT_LOCAL_HTTP` (off; refused on production and staging) lets a confidential client's JWKS and redirects be http on loopback or `*.lvh.me`; `POST /admin/v1/organizations/{id}/malafat-delegation` is the operator switch's admin twin, dark while `MALAFAT_DELEGATION` is off (the dark-launch gate now covers `/admin/v1/*`).
+- Tests: `MalafatPages.test.tsx`, `MalafatPortal.test.tsx`, `malafatSignIn.test.ts`, `routes-malafat-portal-support.test.ts`, `routes-malafat-qa-plumbing.test.ts`; route-security knows `GET /v1/members`.
+
 ## [Unreleased] - 2026-11-12 — Sign in with Malafat (MUT-595, ADR-254 D1, D4, D5, D8, DF1)
 
 ### Added

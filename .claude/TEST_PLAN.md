@@ -4592,6 +4592,17 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | `ownsProfile` on a Malafat firm | `server/src/__tests__/owns-profile.test.ts` |
 | Local snapshot 17 → 18 | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` |
 
+## MUT-596 — The portal's Malafat screens (ADR-254)
+
+| What | Where |
+|---|---|
+| Office step: slug from any typed form, remembered, checked before leaving, not-found and required | `src/hosted/pages/auth/malafat/__tests__/{malafatSignIn.test.ts,MalafatPages.test.tsx}` |
+| Return: one exchange, fragment stripped, declined/expired, consent with currency, link with password (wrong then right), linked elsewhere | `MalafatPages.test.tsx` |
+| Connected apps (row only where on, confirm, Keep), members (read-only, nothing when not Malafat's), via Malafat, second way in (first password, Not now, not for others) | `src/hosted/components/__tests__/MalafatPortal.test.tsx` |
+| Server: captureSource malafat, `GET /v1/members` (order, stranger 404), ownSignIn/ownPassword and the first password with no current one | `server/src/__tests__/routes-malafat-portal-support.test.ts` |
+| QA plumbing: local-http client only with the flag and only on this machine, the admin switch (on, not fed, dark) | `server/src/__tests__/routes-malafat-qa-plumbing.test.ts`, `config.test.ts` |
+| Recorded flows (brief §12): first sign-in, link existing, declined, partner invites / associate can't, submitter expense, ledger read-only, Connected apps, members, second way in | `qa/specs/portal-selfservice/malafat-delegation.spec.ts` |
+
 ## MUT-595 — Sign in with Malafat (ADR-254)
 
 | What | Where |

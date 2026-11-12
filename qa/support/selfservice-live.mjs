@@ -31,6 +31,11 @@ import { assertPortFree } from './port-check.mjs';
 export const API_PORT = 8791;
 /** MUT-441: the QA sidecar's port (not run_local.sh's default 8090, which a developer's own sidecar may hold). */
 const OCR_PORT = 8792;
+/**
+ * MUT-596: the Malafat stub office (qa/stubs/malafat-oauth.mjs); shared with the phone's QA, booked through the
+ * orchestrator. MALAFAT_STUB_PORT moves it when another run holds 3939 (support/malafat.ts reads the same).
+ */
+const MALAFAT_STUB_PORT = Number(process.env.MALAFAT_STUB_PORT ?? 3939);
 const OCR_URL = `http://127.0.0.1:${OCR_PORT}`;
 /** Loading RapidOCR's and Tesseract's models takes seconds; a first run also builds the venv. */
 const OCR_READY_TIMEOUT_MS = 300_000;
@@ -126,6 +131,9 @@ async function main() {
   buildPortal();
   createDatabase();
   const ocr = await startOcr();
+  // MUT-596: the Malafat stub office the API signs people in with (MALAFAT_ORIGIN_TEMPLATE below).
+  await assertPortFree(MALAFAT_STUB_PORT, 'portal-selfservice malafat-stub');
+  const malafat = spawn('node', [path.join(ROOT, 'qa', 'stubs', 'malafat-oauth.mjs')], { stdio: 'inherit', env: { ...process.env, MALAFAT_STUB_PORT: String(MALAFAT_STUB_PORT) } });
 
   let stopping = false;
   const api = spawn('npx', ['tsx', 'src/index.ts'], {
@@ -175,7 +183,7 @@ async function main() {
       PERIOD_DOWNLOADS: 'true',
       // MUT-596: Sign in with Malafat against the QA stub office (qa/stubs/malafat-oauth.mjs, http://sader.lvh.me:3939).
       MALAFAT_SIGN_IN: 'true',
-      MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939',
+      MALAFAT_ORIGIN_TEMPLATE: `http://{slug}.lvh.me:${MALAFAT_STUB_PORT}`,
       // MUT-593/596: Malafat acting for a person (Connected apps); the stub is its confidential client, keys over http.
       MALAFAT_DELEGATION: 'true',
       OAUTH_CLIENT_LOCAL_HTTP: 'true',
@@ -187,6 +195,7 @@ async function main() {
     stopping = true;
     api.kill('SIGTERM');
     ocr?.kill('SIGTERM');
+    malafat.kill('SIGTERM');
     setTimeout(() => {
       dropDatabase();
       rmSync(STATE, { force: true });
@@ -197,6 +206,12 @@ async function main() {
   ocr?.on('exit', (code) => {
     if (!stopping) {
       console.error(`[portal-selfservice] the receipt-ocr sidecar exited (${code}); stopping the env`);
+      stop(1);
+    }
+  });
+  malafat.on('exit', (code) => {
+    if (!stopping) {
+      console.error(`[portal-selfservice] the Malafat stub exited (${code}); stopping the env`);
       stop(1);
     }
   });

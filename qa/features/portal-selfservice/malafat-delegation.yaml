@@ -1,0 +1,115 @@
+app: portal-selfservice
+area: malafat-delegation
+title: Malafat runs MTB3A through the lawyer's own access (Sign in with Malafat, Connected apps, a Malafat firm)
+tier: secondary
+tickets: [MUT-596, MUT-595, MUT-594, MUT-593]
+# MUT-596 (brief .claude/designs/malafat-delegated-access.md §12). The ticket named qa/features/portal/; these flows
+# need the live API and the Malafat stub office (qa/stubs/malafat-oauth.mjs at http://sader.lvh.me:3939, started by
+# selfservice-live.mjs), so they are the portal-selfservice app's. Each spec makes its own people as seats of the one
+# firm bound to the stub's tenant (support/malafat.ts). The phone's flows (ios.malafat.*) live in the Flutter repo.
+paths:
+  - src/hosted/pages/auth/malafat/**
+  - server/src/routes/malafat-sign-in.ts
+  - server/src/malafat/**
+  - qa/stubs/**
+features:
+  - id: first-sign-in
+    title: A lawyer new to MTB3A signs in with Malafat; the consent creates the account in their office
+    tier: core
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - src/hosted/components/MalafatMark.tsx
+      - public/brand/malafat-mark.svg
+      - public/brand/malafat-mark-on-dark.svg
+      - src/hosted/components/SecondWayIn.tsx
+    steps:
+      - On sign-in press Sign in with Malafat and type the office address
+      - Allow MTB3A in Malafat
+      - Choose the currency and press Create account and continue
+    expect:
+      - The consent names the office and says nothing is saved until you continue
+      - You land signed in with the office's profile beside your personal one
+      - Home offers a second way to sign in, beside Malafat
+  - id: link-existing
+    title: A lawyer who already has MTB3A proves their account once, then Malafat signs them in
+    tier: core
+    steps:
+      - Sign in with Malafat with an email that already has an MTB3A account
+      - Type that account's MTB3A password (a wrong one is said so first)
+      - Press Connect and continue
+    expect:
+      - Asked to sign in to MTB3A once; never linked by email alone
+      - The same account now shows the office's profile beside its own
+  - id: declined
+    title: Declining in Malafat changes nothing and says so
+    tier: secondary
+    steps:
+      - Sign in with Malafat and press Deny in Malafat
+    expect:
+      - '"You didn''t allow MTB3A in Malafat. Nothing was changed." with a way back to sign in'
+  - id: partner-invites-accountant
+    title: A partner invites the office's accountant from the portal; an associate has no invite control
+    tier: secondary
+    paths:
+      - src/hosted/pages/sharing/**
+      - src/hosted/components/SharingEntryRow.tsx
+    steps:
+      - As a partner, open the office's Sharing and invite an accountant
+      - As an associate in the same office, open You › Profiles
+    expect:
+      - The partner's invite is listed as sent
+      - The associate sees no Share with your accountant
+  - id: submitter-expense
+    title: An associate records an expense on the office and sees only their own
+    tier: secondary
+    steps:
+      - As an associate, open the office's Expenses and record an expense
+    expect:
+      - Their expense is listed
+      - Another member's expense on the office is not
+  - id: ledger-read-only
+    title: The office's income is Malafat's to change; the portal says so
+    tier: secondary
+    steps:
+      - As a partner, open the office's Income
+    expect:
+      - '"Malafat records income and payments for this profile. To change them, use Malafat."'
+      - No way to record or edit income there
+  - id: connected-apps
+    title: You › Connected apps lists Malafat per office, and disconnecting removes it
+    tier: core
+    paths:
+      - src/hosted/components/ConnectedAppsDrawer.tsx
+      - src/hosted/pages/you/YouAccount.tsx
+      - src/hosted/shell/AccountDrawers.tsx
+      - server/src/routes/connected-apps.ts
+    steps:
+      - With Malafat connected, open You › Account › Connected apps
+      - Press Disconnect on the office, then Disconnect in the confirm
+    expect:
+      - Malafat is listed with the office's name, its mark and since when
+      - '"Malafat is disconnected from Sader Law Office." and the row is gone'
+  - id: members
+    title: The office's members are managed in Malafat, listed read-only
+    tier: secondary
+    paths:
+      - src/hosted/components/MalafatMembersSection.tsx
+      - src/hosted/pages/you/YouProfiles.tsx
+      - server/src/routes/members.ts
+    steps:
+      - On the office's profile, open You › Profiles
+    expect:
+      - Members with their Malafat roles, "managed in Malafat", and someone who hasn't signed in yet
+      - No control to add, remove or change anyone
+  - id: second-way-in
+    title: An account Malafat made sets its own password with no current one, and the suggestion goes
+    tier: secondary
+    paths:
+      - src/hosted/components/SecondWayIn.tsx
+      - src/hosted/components/ChangePasswordDrawer.tsx
+    steps:
+      - After a first sign-in with Malafat, press Set a password on Home
+      - Type a new password and save
+    expect:
+      - No current password is asked for
+      - The suggestion is gone; signing in with the email and that password works

@@ -60,6 +60,8 @@ export default {
         'netlify.toml',
         // MUT-387: Malafat's OAuth client document; `make release web` checks the live copy (release:oauth-client)
         '!public/.well-known/**',
+        // MUT-596: Malafat's mark is the portal's (Sign in with Malafat, Connected apps): portal-selfservice's.
+        '!public/brand/malafat-mark*.svg',
         '!src/**/__tests__/**',
         '!src/**/*.test.{ts,tsx}',
       ],
@@ -103,7 +105,9 @@ export default {
         // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
         '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts',
         // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
-        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts'],
+        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts',
+        // MUT-596: Sign in with Malafat and its account screens need the live API and the Malafat stub: portal-selfservice's.
+        '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -248,6 +252,14 @@ export default {
         'server/src/routes/summaries.ts',
         // MUT-441: the server reads receipts on its own receipt-ocr sidecar (selfservice-live.mjs starts it).
         'server/src/receipts/**',
+        // MUT-596: Sign in with Malafat, Connected apps, a Malafat firm's members and the second way in, against the
+        // live API and the Malafat stub office (qa/stubs/malafat-oauth.mjs, selfservice-live.mjs starts it).
+        'src/hosted/pages/auth/malafat/**',
+        'public/brand/malafat-mark*.svg',
+        'src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
+        'server/src/routes/{malafat-sign-in,connected-apps,members}.ts',
+        'server/src/malafat/**',
+        'qa/stubs/**',
         'server/src/routes/receipt-reading.ts',
         'server/ocr/app/**',
         '!src/hosted/**/__tests__/**',

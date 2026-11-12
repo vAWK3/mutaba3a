@@ -5,6 +5,7 @@ tier: secondary
 paths:
   - src/hosted/pages/views/ExpensesList.tsx
   - src/hosted/components/ExpenseDrawer.tsx
+  - src/hosted/components/CaptureSourceBadge.tsx
   - src/hosted/components/expenseApiErrors.ts
   - src/hosted/components/ClientPicker.tsx
   - src/hosted/components/ProjectPicker.tsx

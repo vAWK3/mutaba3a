@@ -56,6 +56,11 @@
 - **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".
 - **Fix:** with MUT-596's Connected apps screen, give the confidential client its own actions (`user.app_connected`, `user.app_disconnected`) and copy.
 
+### TD-313: A Malafat-made account can't add a passkey after its sign-in grows old
+**Status**: Accepted (MUT-596, 2026-11-12; ADR-254)
+- **What:** adding a passkey needs a sign-in under 10 minutes old or the current password. An account Sign in with Malafat created has no password of its own, so past 10 minutes the second-way-in card asks the person to sign in with Malafat again.
+- **Fix (if it bites):** let a fresh Malafat round trip stand in as the step-up, or set the password first.
+
 ### TD-312: The `via: malafat` audit stamp is tested on one write
 **Status**: Open (MUT-593, 2026-11-12; ADR-254 AC9)
 - **What:** `stampDelegatedAudit` (store-guard) marks every audit row that reaches the store as an argument, up to three levels deep. A repository that builds its audit row itself from plain inputs would write it without `via`. Only the expense create is tested.
