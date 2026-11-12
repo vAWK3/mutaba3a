@@ -3,7 +3,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
-import { canonicalResource, v1ResourceUrl } from '../oauth/protocol.js';
+import { canonicalResource, mcpResourceUrl, v1ResourceUrl } from '../oauth/protocol.js';
 import type { LedgerStore, OAuthClientRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema } from '../schemas.js';
 
@@ -60,10 +60,12 @@ function serialize(client: OAuthClientRecord, grantsRevoked?: number) {
 export function adminOAuthClientRoutes(options: { store: LedgerStore; logger: Logger; issuer: string | null }): OpenAPIHono<AppEnv> {
   const { store, logger } = options;
   const app = new OpenAPIHono<AppEnv>();
-  const v1Resource = (): string => {
-    const resource = options.issuer ? canonicalResource(v1ResourceUrl(options.issuer)) : null;
-    if (!resource) throw new ApiError('OAUTH_NOT_CONFIGURED', 'This server has no portal origin to issue tokens for');
-    return resource;
+  /** `/v1` for its own calls, `/mcp` for the tools its connector forwards (MUT-598, D11). */
+  const resources = (): string[] => {
+    const issuer = options.issuer;
+    const found = issuer ? [canonicalResource(v1ResourceUrl(issuer)), canonicalResource(mcpResourceUrl(issuer))] : [];
+    if (found.length === 0 || found.some((r) => r === null)) throw new ApiError('OAUTH_NOT_CONFIGURED', 'This server has no portal origin to issue tokens for');
+    return found as string[];
   };
 
   app.openapi(
@@ -88,7 +90,7 @@ export function adminOAuthClientRoutes(options: { store: LedgerStore; logger: Lo
         clientName: body.name,
         redirectUris: body.redirectUris,
         jwksUri: body.jwksUri,
-        allowedResources: [v1Resource()],
+        allowedResources: resources(),
         at: c.get('now')(),
       });
       logger.info({ clientId: client.id, requestId: c.get('requestId') }, 'oauth.confidential_client_registered');

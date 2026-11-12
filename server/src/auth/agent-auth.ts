@@ -8,6 +8,8 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
 import { agentStoreGuard } from './store-guard.js';
+import { delegatedFirm, type DelegatedVia } from './delegation.js';
+import type { OAuthGrantRecord } from '../repositories/ports.js';
 
 /** lastUsedAt is written at most once a minute, as sessions are. */
 const TOUCH_INTERVAL_MS = 60_000;
@@ -26,6 +28,18 @@ export interface AgentAuthOptions {
 function bearerOf(c: Context): string | null {
   const [scheme, token] = (c.req.header('authorization') ?? '').split(' ', 2);
   return scheme?.toLowerCase() === 'bearer' && token ? token.trim() : null;
+}
+
+/**
+ * MUT-598: a delegated grant reaches /mcp while delegation is on, its client is confidential and not disabled, and its
+ * tenant's firm is CONNECTED with the operator's switch on. Undefined = refused (any of §4.7's revocations).
+ */
+async function delegatedVia(store: LedgerStore, service: OAuthService, grant: OAuthGrantRecord): Promise<DelegatedVia | undefined> {
+  if (!service.delegation || !grant.tenantId) return undefined;
+  const client = await store.oauth.findClient(grant.clientId);
+  if (client?.kind !== 'CONFIDENTIAL' || client.disabledAt) return undefined;
+  const firm = await delegatedFirm(store, grant.tenantId);
+  return firm ? { clientId: client.id, grantId: grant.id, tenantId: grant.tenantId, organizationId: firm.organizationId } : undefined;
 }
 
 /**
@@ -51,6 +65,9 @@ export function authenticateAgent(options: AgentAuthOptions): MiddlewareHandler<
     if (!found) throw challenge('invalid_token');
 
     const { grant } = found;
+    // MUT-598 (ADR-254 D11, §4.7): Malafat's connector, as the person on one tenant: the same checks as on /v1.
+    const via = grant.tenantId ? await delegatedVia(options.store, service, grant) : undefined;
+    if (grant.tenantId && !via) throw challenge('invalid_token');
     const user = await options.store.users.getById(grant.userId);
     if (!user || user.status !== 'ACTIVE' || isAccountGone(user.closure, now)) {
       const audit = await agentAuditFor(options.store)({ userId: grant.userId, action: 'user.agent_disconnected', metadata: { reason: 'account_changed' }, actor: { actorType: 'SYSTEM', actorId: null }, requestId: c.get('requestId') });
@@ -70,7 +87,7 @@ export function authenticateAgent(options: AgentAuthOptions): MiddlewareHandler<
     }
     if (!grant.lastUsedAt || now.getTime() - grant.lastUsedAt.getTime() >= TOUCH_INTERVAL_MS) await options.store.oauth.touchGrant(grant.id, now);
 
-    c.set('agent', { user, grant });
+    c.set('agent', { user, grant, ...(via ? { via } : {}) });
     c.set('storeGuard', agentStoreGuard());
     await next();
   };

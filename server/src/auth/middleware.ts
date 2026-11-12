@@ -66,6 +66,8 @@ export type AuthContext = ApiKeyAuth | SessionAuth;
 export interface AgentIdentity {
   user: UserRecord;
   grant: OAuthGrantRecord;
+  /** MUT-598 (ADR-254 D11): set when the agent is Malafat's connector forwarding a tool call as the person, on one tenant. */
+  via?: DelegatedVia;
 }
 
 /** The signed-in person, set for every session request (including the organization-independent identity routes). */

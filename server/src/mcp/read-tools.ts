@@ -8,10 +8,10 @@ import { MATCH_DATE_WINDOW_DAYS, dateWindow, rankMatches, type MatchCandidate, t
 import { decodeInboxCursor, encodeInboxCursor } from '../inbox/cursor.js';
 import { SUPPORTED_CURRENCIES, formatMoney, type Currency } from '../money.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
-import { ownedOrCoOwnedProfilesOf, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
+import { profileOwnerOf, profileTypeOf } from '../personal-profile.js';
 import type { ExpenseCursor, ExpenseRecord, Organization } from '../repositories/ports.js';
 import { serializeInboxEntry } from '../serializers.js';
-import { TOOL_PAGE_DEFAULT, agentProfile, hasScope, inboxReadable, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
+import { TOOL_PAGE_DEFAULT, agentProfile, agentProfiles, hasScope, inboxReadable, pageOf, pagingInput, readableProfiles, runTool, type McpContext } from './context.js';
 
 /**
  * MUT-435: the read tools — where an expense could go (profiles), how to file it (categories, clients, vendors), what
@@ -118,7 +118,7 @@ export async function findLookAlikes(
 ): Promise<{ items: LookAlike[]; truncated: boolean }> {
   const userId = ctx.agent.user.id;
   // One named profile answers its own refusal; across all of them, a LOCKED profile is left out.
-  const profiles = options.profileId ? [await agentProfile(ctx, options.profileId)] : await readableProfiles(ctx, await ownedOrCoOwnedProfilesOf(ctx.store, userId));
+  const profiles = options.profileId ? [await agentProfile(ctx, options.profileId)] : await readableProfiles(ctx, await agentProfiles(ctx));
   // The database narrows to the rule's currency, amount and window (MUT-437); rankMatches still applies the whole rule.
   const filter = { ...dateWindow(probe.occurredOn), currency: probe.currency, amountMinor: probe.amountMinor };
 
@@ -172,7 +172,7 @@ export function registerReadTools(server: McpServer, ctx: McpContext): void {
     },
     ({ limit, cursor }) =>
       runTool(ctx, 'list_profiles', PROFILES_OUTPUT, async () => {
-        const profiles = await ownedOrCoOwnedProfilesOf(ctx.store, userId);
+        const profiles = await agentProfiles(ctx);
         return pageOf(profiles.map((o) => profileView(o, userId)), 'list_profiles', cursor, limit);
       }),
   );
