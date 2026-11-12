@@ -29,6 +29,8 @@ if (!url) {
     // MUT-434: a person's grants and decided requests cascade with them (PURGE_USER_COLUMNS), codes and tokens with the
     // grant; clients are anonymous registrations naming no one.
     'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens',
+    // MUT-593: a confidential client's used assertion ids name only the client; they cascade with it.
+    'oauth_client_assertions',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
     'billing_retention_events',
     // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).
