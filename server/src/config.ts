@@ -16,11 +16,11 @@ function isHttpsOrLocalHttp(value: string): boolean {
   return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
 }
 
-/** MUT-595: a firm's Malafat origin: https, or plain http on a local tenant host (Malafat reads the firm from the Host). */
+/** MUT-595: a firm's Malafat origin, http(s); production and staging must be https (checked with the environment below). */
 function isMalafatOrigin(value: string): boolean {
   if (!URL.canParse(value)) return false;
   const url = new URL(value);
-  return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')));
+  return url.protocol === 'https:' || url.protocol === 'http:';
 }
 
 /** ADR-091 D5: the same EU-region rule as the Sentry module's sentry_key postcondition. */
@@ -196,7 +196,7 @@ const envSchema = z.object({
   MALAFAT_ORIGIN_TEMPLATE: z
     .string()
     .default('https://{slug}.malafat.app')
-    .refine((v) => v.includes('{slug}') && isMalafatOrigin(v.replace('{slug}', 'x')), 'must contain {slug} and be https (plain http only for *.localhost)'),
+    .refine((v) => v.includes('{slug}') && isMalafatOrigin(v.replace('{slug}', 'x')), 'must be an http(s) origin containing {slug}'),
   /** MUT-595 (MAL-1539): MTB3A's client id at every Malafat firm. */
   MALAFAT_SIGN_IN_CLIENT_ID: z.string().min(1).max(64).default('mtb3a'),
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
@@ -437,6 +437,10 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   if (config.SERVER_OCR && !config.OCR_URL) refuse('OCR_URL', 'SERVER_OCR needs the OCR service\'s URL');
   if (config.SERVER_OCR && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.READ_QUEUE) {
     refuse('READ_QUEUE', `SERVER_OCR on ${config.NODE_ENV} reads through Cloud Tasks; in-process reads are for the dev server and local QA only`);
+  }
+  // MUT-595: a stub Malafat at http://{slug}.lvh.me for local QA (it resolves to 127.0.0.1); never plain http beyond.
+  if (!config.MALAFAT_ORIGIN_TEMPLATE.startsWith('https://') && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('MALAFAT_ORIGIN_TEMPLATE', `Malafat is reached over https on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

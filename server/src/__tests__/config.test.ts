@@ -197,6 +197,14 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
   });
 
+  it('MALAFAT_ORIGIN_TEMPLATE (MUT-595): {slug} required; the QA stub’s plain http only off production and staging', () => {
+    expect(loadConfig(base).MALAFAT_ORIGIN_TEMPLATE).toBe('https://{slug}.malafat.app');
+    expect(loadConfig({ ...base, MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' }).MALAFAT_ORIGIN_TEMPLATE).toBe('http://{slug}.lvh.me:3939');
+    expect(() => loadConfig({ ...base, MALAFAT_ORIGIN_TEMPLATE: 'https://malafat.app' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+    expect(() => loadConfig({ ...deployed, MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+  });
+
   it('the read job\'s audience defaults to API_ORIGIN', () => {
     expect(readOidcAudience(loadConfig(deployed))).toBe('https://api.example.test');
     expect(readOidcAudience(loadConfig({ ...deployed, READ_OIDC_AUDIENCE: 'https://other.example.test' }))).toBe('https://other.example.test');

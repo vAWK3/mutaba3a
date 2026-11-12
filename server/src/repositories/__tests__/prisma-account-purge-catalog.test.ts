@@ -31,6 +31,8 @@ if (!url) {
     'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens',
     // MUT-593: a confidential client's used assertion ids name only the client; they cascade with it.
     'oauth_client_assertions',
+    // MUT-595: a Sign in with Malafat attempt; the person's own go with them (PURGE_USER_COLUMNS), the rest name no one.
+    'malafat_sign_ins',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
     'billing_retention_events',
     // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).
