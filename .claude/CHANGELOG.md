@@ -42,6 +42,8 @@
 - Migration `20261112120000_mut593_delegated_access` (additive): `OAuthClientKind.CONFIDENTIAL`, client `jwksUri`/`allowedResources`/`disabledAt`, request and grant `tenantId` (indexed), `oauth_client_assertions`, integration `delegationEnabledAt`/`delegationEnabledBy`. OAuth cleanup never removes a confidential client and drops expired assertion ids.
 - `SessionIdentity.session` and `SessionAuth.session` are nullable; session-only routes read `personSession(c)`, which refuses a call without one.
 - `jose` 6.2.13 is a direct dependency. Contract `1.109.0-mut593`.
+- Local snapshot format 16 → 17 (`ints` gains the two switch fields, off) with its migration (`src/hosted/local/migrations/index.ts`).
+- An agent's `/mcp` token on a route that accepts Malafat's token (`/v1/me`) is now 401 `delegation_ended`; elsewhere it is still 403 PRINCIPAL_NOT_ACCEPTED.
 - Tests: `routes-delegated.test.ts`, `routes-operator-malafat-delegation.test.ts`, `oauth/__tests__/client-assertion.test.ts`, store contract (confidential client, assertion ids, scoped revokes), route-security guards for the delegated surface.
 
 ## [Unreleased] - 2026-11-12 — Design: Malafat runs every MTB3A feature through the lawyer's own access (epic MUT-592, ADR-254)

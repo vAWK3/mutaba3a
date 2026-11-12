@@ -5,9 +5,9 @@ import { pathToFileURL } from 'node:url';
  * MUT-593 (ADR-254): the operator's CLI for confidential OAuth clients (Malafat), through the admin API of a running
  * service like `npm run provision:user`. MUTABA3A_ADMIN_TOKEN comes from the environment, never a flag.
  *
- *   npm run oauth:client -- register --url https://app.mtb3a.com --name Malafat \
+ *   npm run oauth:client -- register --url "$URL" --name Malafat \
  *     --jwks-uri https://office.malafat.app/.well-known/mtb3a-jwks.json --redirect-uri https://office.malafat.app/mtb3a/callback
- *   npm run oauth:client -- disable --url https://app.mtb3a.com --client-id mcc_…   (a compromised key: every token ends)
+ *   npm run oauth:client -- disable --url "$URL" --client-id mcc_…   (a compromised key: every token ends)
  *
  * A routine key rotation needs neither: Malafat publishes the new key at its JWKS URL and MTB3A picks it up.
  */

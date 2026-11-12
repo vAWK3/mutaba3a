@@ -6,8 +6,8 @@ import type { OAuthClientRecord } from '../../repositories/ports.js';
 import { ASSERTION_MAX_LIFETIME_S, verifyClientAssertion } from '../client-assertion.js';
 
 const T0 = new Date('2026-11-12T09:00:00Z');
-const TOKEN_ENDPOINT = 'https://app.mtb3a.com/oauth/token';
-const ISSUER = 'https://app.mtb3a.com';
+const TOKEN_ENDPOINT = 'https://portal.example.test/oauth/token';
+const ISSUER = 'https://portal.example.test';
 const CLIENT_ID = 'mcc_malafat';
 
 const client: OAuthClientRecord = {
