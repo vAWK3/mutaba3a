@@ -6425,6 +6425,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Alternatives considered:** adding the number to `SUGGESTION_FIELDS` (every receipt would read as incomplete); reading any nine-digit number (registration numbers collide); storing the flag (a threshold change would need a backfill).
 
+**Amendment 2026-11-12 (Basel's real tax invoices, receipt-bench `allocation-2026-11-12-*`), overriding D2's "never a bill-to row":** the allocation number is read in a bill-to block too. It is the invoice's number, not a party's, and invoicing software often prints it in the customer box (invoice 01 prints it right under the buyer's ח.פ). The label is what keeps a buyer's ח.פ out, there as anywhere; a blank label's next row must still be the number alone. The labels also gain `הקצאה מספר` (the Tax Authority's own form prints the words in that order), `מ.הקצאה` and `מ. הקצאה`. Bench: allocation 2/6 → 3/6 on the six, 0 filled wrong, `--compare` against main loses 0 fields on all 77 real receipts. What's left on those six is an OCR misread digit (06), handwriting (03), and the Tax Authority confirmation page (04, MUT-599).
+
 ## ADR-247: A Share Link Opens One Period of One Profile Through One Door, With a PIN and No Account (MUT-560, Epic MUT-558)
 
 **Status:** Accepted (2026-11-06; plan and eng review CLEARED, auto-decided A1–A19: `.claude/designs/MUT-560-share-links.md`), amended the same day by Basel's decisions B1–B5, which override the plan. Built 2026-11-06.

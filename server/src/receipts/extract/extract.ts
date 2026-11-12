@@ -67,7 +67,7 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
   const registration = readRegistration(rows, buyer);
   const phone = readPhone(rows, buyer);
   const email = readEmail(rows);
-  const allocationNumber = readAllocationNumber(rows, buyer);
+  const allocationNumber = readAllocationNumber(rows);
 
   const suggestion: ReceiptSuggestion = {
     readerVersion: options.readerVersion,

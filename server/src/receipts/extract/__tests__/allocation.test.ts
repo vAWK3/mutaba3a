@@ -15,6 +15,11 @@ describe('reading the allocation number (D2)', () => {
     ['Hebrew label, same row', [`מספר הקצאה: ${ALLOCATION}`]],
     ['abbreviated with a geresh', [`מס' הקצאה ${ALLOCATION}`]],
     ['abbreviated with a Hebrew geresh', [`מס׳ הקצאה ${ALLOCATION}`]],
+    // Real invoices (receipt-bench allocation-2026-11-12): the Tax Authority's own form and some invoicing software
+    // print the words the other way round, and some shorten מספר to מ.
+    ['the words the other way round', [`הקצאה מספר: ${ALLOCATION}`]],
+    ['shortened to מ.', [`מ.הקצאה - ${ALLOCATION}`]],
+    ['shortened to מ. with a space', [`מ. הקצאה ${ALLOCATION}`]],
     ['English', [`Allocation No. ${ALLOCATION}`]],
     ['English, number spelled out', [`Allocation number: ${ALLOCATION}`]],
     ['Arabic', [`رقم التخصيص ${ALLOCATION}`]],
@@ -38,6 +43,7 @@ describe('reading the allocation number (D2)', () => {
     ['an invoice number further along a blank label\'s row', ['מספר הקצאה:      חשבונית מס 100234567']],
     ['a table: the invoice number under the header row', ['מספר חשבונית    מספר הקצאה', '100234567    304512876']],
     ['a registration number before a blank label', [`ח.פ ${REG_VALID_COMPANY} מספר הקצאה`]],
+    ['an invoice number further along a blank reversed label\'s row', ['הקצאה מספר:      חשבונית מס 100234567']],
   ] as const)('never takes %s', (_label, rows) => {
     expect(allocation(receipt(['ספק בע"מ', ...rows, 'סה"כ 100.00']))).toBeUndefined();
   });
@@ -67,8 +73,15 @@ describe('reading the allocation number (D2)', () => {
     expect(allocation(receipt([`מספר הקצאה ${ALLOCATION}1`]))).toBeUndefined();
   });
 
-  it("never from a bill-to block's rows", () => {
-    expect(allocation(receipt(['ספק בע"מ', `לכבוד משרד עורכי דין מספר הקצאה ${ALLOCATION}`, 'סה"כ 100.00']))).toBeUndefined();
+  // ADR-246 amendment (2026-11-12): the number is the invoice's, not a party's, and invoicing software often prints it
+  // in the customer box. Its label is what keeps a buyer's ח.פ out, there as anywhere.
+  it("reads it in a bill-to block, where invoices often print it", () => {
+    expect(allocation(receipt(['ספק בע"מ', `לכבוד משרד עורכי דין מספר הקצאה ${ALLOCATION}`, 'סה"כ 100.00']))).toBe(ALLOCATION);
+    expect(allocation(receipt(['אמיר גז', 'לכבוד: לקוח בע"מ 07/09/2026', `ח.פ/ת.ז: ${REG_VALID_COMPANY}`, `הקצאה מספר: ${ALLOCATION}`, 'סה"כ 100.00']))).toBe(ALLOCATION);
+  });
+
+  it("never takes the buyer's ח.פ under a blank label in a bill-to block", () => {
+    expect(allocation(receipt(['ספק בע"מ', 'לכבוד: לקוח בע"מ', 'מספר הקצאה:', `ח.פ ${REG_VALID_COMPANY}`, 'סה"כ 100.00']))).toBeUndefined();
   });
 
   it('reads a PDF text layer as pdf-text', () => {

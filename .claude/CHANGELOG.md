@@ -28,6 +28,11 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — The allocation number is read in more places on real tax invoices (MUT-557 follow-up, ADR-246 amendment)
+
+### Fixed
+- **The reader finds the allocation number where real invoices print it** (`server/src/receipts/extract/keywords.ts`, `fields.ts`): the label in either word order (`הקצאה מספר`, as the Tax Authority's own form prints it) and shortened (`מ.הקצאה`), and inside the customer box under "לכבוד", which the bill-to guard used to skip. The label is still required, so a buyer's ח.פ is never taken. Why: Basel's six scanned tax invoices (receipt-bench `allocation-2026-11-12-*`, the first real samples that carry one) read 2/6; now 3/6, 0 wrong, and no field lost on all 77 real receipts.
+
 ## [Unreleased] - 2026-11-12 — Malafat calls /v1 as the person, with a tenant-bound delegated token (MUT-593, ADR-254)
 
 ### Added
