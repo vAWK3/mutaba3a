@@ -45,6 +45,8 @@ export interface Organization {
   firmRequestedAt: Date | null;
   /** MUT-300: set exactly when firmRequestedAt is. */
   firmRequestedByUserId: string | null;
+  /** MUT-594 (ADR-254 D2): members come from Malafat's sync since this instant; null = managed in MTB3A. */
+  memberSyncAt: Date | null;
   createdAt: Date;
 }
 
@@ -338,6 +340,68 @@ export interface IntegrationRepository {
    * ends every live delegated grant for the tenant (reason `delegation_disabled`), so turning it on again revives none.
    */
   setDelegation(input: { id: string; enabled: boolean; by: string | null; at: Date; audit: AuditEventInput[] }): Promise<{ integration: IntegrationRecord; grantsRevoked: number } | null>;
+}
+
+// ---- MUT-594/595: Malafat seats (ADR-254 D2, D3, D4, D7) ------------------------------------------------------
+
+/** A person's role in Malafat, as its member sync and userinfo name it. */
+export type MalafatRole = 'PARTNER' | 'OFFICE_ADMIN' | 'ASSOCIATE' | 'INTERN';
+
+export interface ExternalIdentityRecord {
+  id: string;
+  provider: IntegrationProvider;
+  tenantId: string;
+  /** The Malafat user id: stable, never the email. */
+  subject: string;
+  organizationId: string;
+  email: string;
+  malafatRole: MalafatRole;
+  /** Null = a pending seat, until the person's first Sign in with Malafat links it (never by email, D4). */
+  userId: string | null;
+  linkedAt: Date | null;
+  /** Set when Malafat's sync stops listing the person; cleared if it lists them again. */
+  removedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MemberSyncInput {
+  organizationId: string;
+  tenantId: string;
+  members: ReadonlyArray<{ subject: string; email: string; role: MalafatRole }>;
+  at: Date;
+  /** One summary row, written with the sync. */
+  audit: AuditEventInput[];
+}
+
+export interface MemberSyncResult {
+  /** Seats new to the firm, or listed again after a removal. */
+  added: number;
+  /** Listed seats whose Malafat role changed. */
+  changed: number;
+  /** Seats Malafat no longer lists: their memberships and delegated grants for the tenant end in the same transaction (DF3). */
+  removed: number;
+  /** Listed seats no account has claimed yet (D7). */
+  pending: number;
+}
+
+export interface ExternalIdentityRepository {
+  /**
+   * MUT-594: one transaction. Upserts every listed seat; a linked seat's membership is created or re-roled by D3;
+   * an active seat Malafat no longer lists is marked removed, its membership deleted and its person's delegated grants
+   * for the tenant revoked (`member_removed`). Memberships with no seat (made in MTB3A before the first sync) are left
+   * alone: they can't be matched to a Malafat person without that person's own sign-in (D4). Marks the organization
+   * `memberSyncAt` on the first sync.
+   */
+  syncMembers(input: MemberSyncInput): Promise<MemberSyncResult>;
+  findBySubject(provider: IntegrationProvider, tenantId: string, subject: string): Promise<ExternalIdentityRecord | null>;
+  listByUser(userId: string): Promise<ExternalIdentityRecord[]>;
+  /**
+   * MUT-594/595 (D7): links an unclaimed, unremoved seat to `userId` and makes their membership (D3 role) in one
+   * conditional write, so two first sign-ins claim it once. `claimed: false` = already linked (to anyone), removed,
+   * or unknown; nothing written. `audit` is written only on a claim.
+   */
+  claim(input: { provider: IntegrationProvider; tenantId: string; subject: string; userId: string; at: Date; audit: AuditEventInput[] }): Promise<{ claimed: boolean; identity: ExternalIdentityRecord | null }>;
 }
 
 export interface AuditFilter {
@@ -2544,6 +2608,8 @@ export interface LedgerStore {
   /** MUT-235: one-time setup links. Operator-only below the routes; the two public setup routes run unguarded, like sign-in. */
   accountSetup: AccountSetupRepository;
   integrations: IntegrationRepository;
+  /** MUT-594/595: Malafat seats. */
+  externalIdentities: ExternalIdentityRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;
   customers: CustomerRepository;
@@ -2964,7 +3030,9 @@ export type OAuthGrantRevokedReason =
   // MUT-593 (ADR-254 §4.7): the delegated grant's own endings.
   | 'integration_disconnected'
   | 'delegation_disabled'
-  | 'client_disabled';
+  | 'client_disabled'
+  // MUT-594 (DF3): the person was removed from the firm in Malafat.
+  | 'member_removed';
 
 export interface OAuthGrantRecord {
   id: string;

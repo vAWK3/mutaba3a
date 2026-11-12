@@ -156,11 +156,11 @@ describe('assertNotFuture', () => {
 
 describe('isOwnProfile (MUT-223, MUT-373)', () => {
   it.each([
-    ['an owned profile', { ownerUserId: 'u1', personalOwnerUserId: null, profileType: 'BUSINESS' }, 'OWNER', true],
-    ['a personal profile not yet stamped with ownerUserId (MUT-182 roll window)', { ownerUserId: null, personalOwnerUserId: 'u1', profileType: null }, 'OWNER', true],
-    ["someone else's owned profile", { ownerUserId: 'u2', personalOwnerUserId: null, profileType: 'BUSINESS' }, null, false],
-    ['a firm or Malafat-fed profile (no owner), even as an OWNER-role member', { ownerUserId: null, personalOwnerUserId: null, profileType: null }, 'OWNER', false],
-    ["a Business profile someone else created that u1 co-owns (MUT-373)", { ownerUserId: 'u2', personalOwnerUserId: null, profileType: 'BUSINESS' }, 'OWNER', true],
+    ['an owned profile', { ownerUserId: 'u1', personalOwnerUserId: null, profileType: 'BUSINESS', memberSyncAt: null }, 'OWNER', true],
+    ['a personal profile not yet stamped with ownerUserId (MUT-182 roll window)', { ownerUserId: null, personalOwnerUserId: 'u1', profileType: null, memberSyncAt: null }, 'OWNER', true],
+    ["someone else's owned profile", { ownerUserId: 'u2', personalOwnerUserId: null, profileType: 'BUSINESS', memberSyncAt: null }, null, false],
+    ['a firm or Malafat-fed profile (no owner), even as an OWNER-role member', { ownerUserId: null, personalOwnerUserId: null, profileType: null, memberSyncAt: null }, 'OWNER', false],
+    ["a Business profile someone else created that u1 co-owns (MUT-373)", { ownerUserId: 'u2', personalOwnerUserId: null, profileType: 'BUSINESS', memberSyncAt: null }, 'OWNER', true],
   ] as const)('%s → %s', (_label, organization, role, expected) => {
     expect(isOwnProfile(organization, 'u1', role)).toBe(expected);
   });

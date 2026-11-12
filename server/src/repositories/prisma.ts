@@ -1,3 +1,4 @@
+import { membershipRoleOf } from '../malafat-members.js';
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue, Semaphore } from './keyed-queue.js';
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -128,6 +129,11 @@ import type {
   FeaturesRepository,
   UserFeatureRecord,
   OAuthAuthorizationRequestRecord,
+  ExternalIdentityRecord,
+  ExternalIdentityRepository,
+  MalafatRole,
+  MembershipRole,
+  MemberSyncResult,
   OAuthClientRecord,
   OAuthCodeRecord,
   OAuthGrantRecord,
@@ -1447,9 +1453,63 @@ export class PrismaLedgerStore implements LedgerStore {
           data: enabled ? { delegationEnabledAt: existing.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null },
         });
         const grantsRevoked = enabled ? 0 : await revokeOAuthGrantsWhereInTx(tx, { tenantId: integration.externalTenantId }, 'delegation_disabled', at, []);
+        // MUT-594 (ADR-254 §4.4): turning Malafat access on turns firm features on, so the synced roles mean something.
+        if (enabled) await tx.organization.updateMany({ where: { id: integration.organizationId, firmEnabledAt: null }, data: { firmEnabledAt: at, version: { increment: 1 } } });
         if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
         return { integration, grantsRevoked };
       }),
+  };
+
+  readonly externalIdentities: ExternalIdentityRepository = {
+    syncMembers: ({ organizationId, tenantId, members, at, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // The firm's row lock serializes two syncs of one firm, so a diff is never computed over a half-written one.
+          const [org] = await tx.$queryRaw<Array<{ id: string; memberSyncAt: Date | null }>>`SELECT id, "memberSyncAt" FROM organizations WHERE id = ${organizationId}::uuid FOR NO KEY UPDATE`;
+          if (!org) throw new ForeignKeyViolation('external_identities.organizationId');
+          const existing = new Map((await tx.externalIdentity.findMany({ where: { provider: 'MALAFAT', tenantId } })).map((r) => [r.subject, r]));
+          const listed = new Map(members.map((m) => [m.subject, m]));
+          const result: MemberSyncResult = { added: 0, changed: 0, removed: 0, pending: 0 };
+          for (const m of listed.values()) {
+            const seat = existing.get(m.subject);
+            if (!seat || seat.removedAt) result.added++;
+            else if (seat.malafatRole !== m.role) result.changed++;
+            const row = await tx.externalIdentity.upsert({
+              where: { provider_tenantId_subject: { provider: 'MALAFAT', tenantId, subject: m.subject } },
+              create: { provider: 'MALAFAT', tenantId, subject: m.subject, organizationId, email: m.email, malafatRole: m.role, createdAt: at, updatedAt: at },
+              update: { email: m.email, malafatRole: m.role, organizationId, removedAt: null, updatedAt: at },
+            });
+            if (row.userId) await upsertSeatMembershipInTx(tx, row.userId, organizationId, membershipRoleOf(m.role), at);
+            else result.pending++;
+          }
+          for (const seat of existing.values()) {
+            if (seat.removedAt || listed.has(seat.subject)) continue;
+            await tx.externalIdentity.update({ where: { id: seat.id }, data: { removedAt: at, updatedAt: at } });
+            result.removed++;
+            if (seat.userId) {
+              await tx.membership.deleteMany({ where: { userId: seat.userId, organizationId } });
+              await revokeOAuthGrantsWhereInTx(tx, { userId: seat.userId, tenantId }, 'member_removed', at, []);
+            }
+          }
+          if (!org.memberSyncAt) await tx.organization.update({ where: { id: organizationId }, data: { memberSyncAt: at } });
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return result;
+        }),
+      ),
+    findBySubject: async (provider, tenantId, subject) => mapNullable(await this.prisma.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } }), toExternalIdentity),
+    listByUser: async (userId) => (await this.prisma.externalIdentity.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExternalIdentity),
+    claim: ({ provider, tenantId, subject, userId, at, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // D7: the conditional update is the claim; a second first sign-in finds userId set and changes nothing.
+          const { count } = await tx.externalIdentity.updateMany({ where: { provider, tenantId, subject, userId: null, removedAt: null }, data: { userId, linkedAt: at, updatedAt: at } });
+          const row = await tx.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } });
+          if (count === 0 || !row) return { claimed: false, identity: mapNullable(row, toExternalIdentity) };
+          await upsertSeatMembershipInTx(tx, userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), at);
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return { claimed: true, identity: toExternalIdentity(row) };
+        }),
+      ),
   };
 
   readonly audit: AuditRepository = {
@@ -3775,6 +3835,15 @@ async function revokeOAuthGrantsAuditedInTx(tx: Prisma.TransactionClient, userId
   const audit: AuditEventInput[] = memberships.map((m) => ({ organizationId: m.organizationId, actorType: 'SYSTEM', actorId: null, action: 'user.agent_disconnected', entityType: 'user', entityId: userId, metadata: { reason: 'password_changed' }, requestId }));
   if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
   return count;
+}
+
+/** MUT-594: a seat's membership, created or re-roled by D3. */
+async function upsertSeatMembershipInTx(tx: Prisma.TransactionClient, userId: string, organizationId: string, role: MembershipRole, at: Date): Promise<void> {
+  await tx.membership.upsert({ where: { userId_organizationId: { userId, organizationId } }, create: { userId, organizationId, role, createdAt: at }, update: { role } });
+}
+
+function toExternalIdentity(row: Prisma.ExternalIdentityGetPayload<object>): ExternalIdentityRecord {
+  return { ...row, malafatRole: row.malafatRole as MalafatRole };
 }
 
 function oauthTokenRows(grantId: string, tokens: readonly OAuthTokenInput[], at: Date): Prisma.OAuthTokenCreateManyInput[] {

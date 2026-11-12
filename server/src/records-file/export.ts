@@ -58,7 +58,7 @@ export function localProfileOf(organization: Organization, personId: string): Or
     personalOwnerUserId: own ? organization.personalOwnerUserId : null,
     ownerUserId: own ? organization.ownerUserId : personId,
     profileType: own ? organization.profileType : wasPersonal ? 'PERSONAL' : (organization.profileType ?? 'BUSINESS'),
-    firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null,
+    firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null,
     version: organization.version, createdAt: organization.createdAt,
   };
 }

@@ -3,6 +3,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWK } from
 
 type CryptoKeyLike = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { expect } from 'vitest';
+import type { MalafatRole } from '../../repositories/ports.js';
 import { SCOPES } from '../../auth/scopes.js';
 import { s256Challenge } from '../../oauth/protocol.js';
 import { ADMIN, form, harness, json, ORIGIN, person, read, VERIFIER, type Person } from './oauth-agent.js';
@@ -27,7 +28,7 @@ export async function signingKey(kid = 'k1') {
   return { privateKey: pair.privateKey, jwk };
 }
 
-export async function delegatedHarness(options: { malafatDelegation?: boolean; periodDownloads?: boolean; accountantAccess?: boolean } = {}) {
+export async function delegatedHarness(options: { malafatDelegation?: boolean; periodDownloads?: boolean; accountantAccess?: boolean; shareLinks?: boolean } = {}) {
   const key = await signingKey();
   const published: JWK[] = [key.jwk];
   const h = harness({
@@ -35,6 +36,7 @@ export async function delegatedHarness(options: { malafatDelegation?: boolean; p
     keysFor: () => createLocalJWKSet({ keys: published }),
     ...(options.periodDownloads ? { periodDownloads: true } : {}),
     ...(options.accountantAccess ? { accountantAccess: true } : {}),
+    ...(options.shareLinks ? { shareLinks: true } : {}),
   });
   const res = await h.app.request('/admin/v1/oauth/confidential-clients', json({ name: 'Malafat', redirectUris: [MALAFAT_CB], jwksUri: 'https://office.malafat.app/.well-known/mtb3a-jwks.json' }, ADMIN));
   expect(res.status).toBe(201);
@@ -66,14 +68,21 @@ export async function malafatFirm(h: DelegatedHarness, { enabled = true } = {}) 
   expect(bind.status).toBe(201);
   const integration = await h.store.integrations.findByProviderAndTenant('MALAFAT', tenant);
   if (enabled) await h.store.integrations.setDelegation({ id: integration!.id, enabled: true, by: null, at: h.now(), audit: [] });
-  return { organizationId, tenant, orgKey, integrationId: integration!.id };
+  return { organizationId, tenant, orgKey, integrationId: integration!.id, seats: [] as Array<{ subject: string; email: string; role: MalafatRole }> };
 }
 export type MalafatFirm = Awaited<ReturnType<typeof malafatFirm>>;
 
-/** A person who is a member of `firm` (as Malafat's member sync will make them, MUT-594). */
-export async function lawyer(h: DelegatedHarness, firm: MalafatFirm) {
+/**
+ * A person in `firm` the way they get there: Malafat's member sync lists them (MUT-594), and their first Sign in with
+ * Malafat claims the seat (MUT-595). A partner by default, so they own the firm (D3).
+ */
+export async function lawyer(h: DelegatedHarness, firm: MalafatFirm, role: MalafatRole = 'PARTNER') {
   const p = await person(h, { flag: false });
-  await h.store.memberships.grant(p.userId, firm.organizationId, h.now());
+  const subject = `malafat-${randomUUID()}`;
+  firm.seats.push({ subject, email: `${subject}@sader.law`, role });
+  await h.store.externalIdentities.syncMembers({ organizationId: firm.organizationId, tenantId: firm.tenant, members: firm.seats, at: h.now(), audit: [] });
+  const claimed = await h.store.externalIdentities.claim({ provider: 'MALAFAT', tenantId: firm.tenant, subject, userId: p.userId, at: h.now(), audit: [] });
+  expect(claimed.claimed).toBe(true);
   return p;
 }
 

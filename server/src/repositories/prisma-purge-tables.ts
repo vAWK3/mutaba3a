@@ -42,6 +42,8 @@ export const PURGE_PROFILE_TABLES = [
   'accountant_grants',
   // MUT-560: share links to the deleted profile (their viewers cascade; also ON DELETE CASCADE).
   'share_links',
+  // MUT-594: the firm's Malafat seats (also ON DELETE CASCADE).
+  'external_identities',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */
@@ -72,6 +74,8 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   // MUT-434: the person's agent grants (their codes and tokens cascade) and the consent requests they decided.
   'oauth_grants.userId': 'delete',
   'oauth_authorization_requests.userId': 'delete',
+  // MUT-594/595: the person's links to Malafat; the firm's next member sync adds them back as pending seats.
+  'external_identities.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
   // MUT-559: the person's grants as an accountant go with them; invites they sent as an owner lose their name.

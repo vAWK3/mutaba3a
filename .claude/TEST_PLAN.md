@@ -4580,3 +4580,14 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 |---|---|
 | The tools list and write the tenant's firm only, audited `via: malafat`; the person's own profile and inbox refused; partner (OWNER) only; `agent_access` still applies; an agent's own token unchanged | `server/src/__tests__/mcp-delegated.test.ts` |
 | Each §4.7 revocation ends `/mcp`: Connected apps, disconnect, per-firm switch, client disable, account disable; leaving the firm hides it from the tools | same |
+
+## MUT-594 — Malafat member sync, partners own the firm (ADR-254)
+
+| What | Where |
+|---|---|
+| Sync adds pending seats; a claim makes the D3 membership; re-role; legacy members untouched; NOT_CONNECTED; duplicate subjects; key only | `server/src/__tests__/routes-member-sync.test.ts` |
+| A PARTNER invites an accountant and makes a share link, an ASSOCIATE gets 403; name, type, firm request and members refused `MANAGED_IN_MALAFAT`; a partner's own connector never sees the firm; a role change takes effect | same |
+| A removal ends the membership and the delegated token on the next call; listed again comes back | same |
+| Seats in both stores: claim once, re-role, removal revokes that tenant's grants only, `memberSyncAt` | `server/src/repositories/__tests__/store-contract-oauth.ts` |
+| `ownsProfile` on a Malafat firm | `server/src/__tests__/owns-profile.test.ts` |
+| Local snapshot 17 → 18 | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` |

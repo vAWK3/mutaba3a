@@ -48,11 +48,7 @@ describe('Malafat’s connector on /mcp (AC1)', () => {
   it('acts only for a partner (the OWNER role Malafat’s sync gives, D3)', async () => {
     const h = await delegatedHarness();
     const firm = await malafatFirm(h);
-    const partner = await lawyer(h, firm);
-    // Firm features on with one named owner: everyone who joins after is a BOOKKEEPER (MUT-300).
-    const enabled = await h.store.organizations.setFirm(firm.organizationId, { enabled: true, ownerUserIds: [partner.userId] }, h.now(), { actorId: null, requestId: null });
-    expect(enabled.kind).toBe('updated');
-    const bookkeeper = await lawyer(h, firm);
+    const bookkeeper = await lawyer(h, firm, 'OFFICE_ADMIN');
     expect((await h.store.memberships.find(bookkeeper.userId, firm.organizationId))?.role).toBe('BOOKKEEPER');
     expect((await h.app.request(`/admin/v1/users/${bookkeeper.userId}/features/agent_access`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
     const conn = await connectDelegated(h, bookkeeper, firm);

@@ -58,6 +58,7 @@ export function harness(
     keysFor?: (client: OAuthClientRecord) => JWTVerifyGetKey;
     periodDownloads?: boolean;
     accountantAccess?: boolean;
+    shareLinks?: boolean;
   } = {},
 ) {
   const store = new MemoryLedgerStore();
@@ -78,6 +79,7 @@ export function harness(
     ...(options.malafatDelegation ? { malafatDelegation: true } : {}),
     ...(options.periodDownloads ? { periodDownloads: true } : {}),
     ...(options.accountantAccess ? { accountantAccess: true } : {}),
+    ...(options.shareLinks ? { shareLinks: true } : {}),
     ...(options.mcpInboxWrites ? { mcpInboxWrites: true } : {}),
     ...(options.receiptsLibrary ? { receiptsLibrary: true } : {}),
     ...(options.attachments ? { attachments: options.attachments } : {}),

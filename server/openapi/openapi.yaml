@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.110.0-mut593
+  version: 1.111.0-mut594
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -1721,6 +1721,56 @@ components:
         - status
         - connectedAt
         - disconnectedAt
+    SyncMembersResponse:
+      type: object
+      properties:
+        added:
+          type: integer
+        changed:
+          type: integer
+        removed:
+          type: integer
+          description: Their memberships and Malafat connections for this firm ended with the sync
+        pending:
+          type: integer
+          description: Listed people who have not signed in to MTB3A with Malafat yet
+      required:
+        - added
+        - changed
+        - removed
+        - pending
+    SyncMembersRequest:
+      type: object
+      properties:
+        members:
+          type: array
+          items:
+            type: object
+            properties:
+              subject:
+                type: string
+                minLength: 1
+                maxLength: 255
+                description: "The Malafat user id: stable, never the email"
+              email:
+                type: string
+                maxLength: 320
+                format: email
+              role:
+                type: string
+                enum:
+                  - PARTNER
+                  - OFFICE_ADMIN
+                  - ASSOCIATE
+                  - INTERN
+                description: PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER
+            required:
+              - subject
+              - email
+              - role
+          maxItems: 500
+      required:
+        - members
     BindIntegrationResponse:
       type: object
       properties:
@@ -14734,6 +14784,67 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "403":
           description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/integration/members:
+    put:
+      tags:
+        - Integration
+      summary: Sync the firm’s members and roles from Malafat (MUT-594)
+      description: "The full list, every time: the server adds, re-roles and removes. PARTNER → OWNER (owns the firm: accountants, share links), OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER. A person with no MTB3A account waits as a pending seat until their first Sign in with Malafat; nobody is matched by email. A removal ends that person’s membership and Malafat connections for this firm at once. Members made in MTB3A before the first sync are left alone until they sign in with Malafat. After the first sync the firm’s members are read-only in MTB3A."
+      security:
+        - apiKey: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncMembersRequest"
+      responses:
+        "200":
+          description: Synced
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncMembersResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT with details.reason NOT_CONNECTED: bind the tenant first"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
           content:
             application/json:
               schema:

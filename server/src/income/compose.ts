@@ -174,7 +174,7 @@ export function incomeMoneyDate(raw: string, kind: IncomeKind, today: IsoDate, f
  * MUT-373). A Malafat-fed or firm profile is never theirs: Malafat owns allocations there, and a moved date would
  * change its books.
  */
-export function isOwnProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>, userId: string, role: MembershipRole | null): boolean {
+export function isOwnProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType' | 'memberSyncAt'>, userId: string, role: MembershipRole | null): boolean {
   return ownsProfile(organization, userId, role);
 }
 

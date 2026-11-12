@@ -2356,6 +2356,97 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/integration/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sync the firm’s members and roles from Malafat (MUT-594)
+         * @description The full list, every time: the server adds, re-roles and removes. PARTNER → OWNER (owns the firm: accountants, share links), OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER. A person with no MTB3A account waits as a pending seat until their first Sign in with Malafat; nobody is matched by email. A removal ends that person’s membership and Malafat connections for this firm at once. Members made in MTB3A before the first sync are left alone until they sign in with Malafat. After the first sync the firm’s members are read-only in MTB3A.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SyncMembersRequest"];
+                };
+            };
+            responses: {
+                /** @description Synced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncMembersResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_CONNECTED: bind the tenant first */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/integration/bind": {
         parameters: {
             query?: never;
@@ -22659,6 +22750,27 @@ export interface components {
             /** Format: date-time */
             disconnectedAt: string | null;
         } | null;
+        SyncMembersResponse: {
+            added: number;
+            changed: number;
+            /** @description Their memberships and Malafat connections for this firm ended with the sync */
+            removed: number;
+            /** @description Listed people who have not signed in to MTB3A with Malafat yet */
+            pending: number;
+        };
+        SyncMembersRequest: {
+            members: {
+                /** @description The Malafat user id: stable, never the email */
+                subject: string;
+                /** Format: email */
+                email: string;
+                /**
+                 * @description PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER
+                 * @enum {string}
+                 */
+                role: "PARTNER" | "OFFICE_ADMIN" | "ASSOCIATE" | "INTERN";
+            }[];
+        };
         BindIntegrationResponse: {
             integration: components["schemas"]["Integration"];
             created: boolean;

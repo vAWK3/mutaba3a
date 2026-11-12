@@ -10,7 +10,7 @@ import type { AuditEventInput, GrantOwnerResult, MembershipRole, Organization, P
 /** How many people may own one profile, its creator included (design review DR11). A product limit, not configuration. */
 export const MAX_PROFILE_OWNERS = 3;
 
-type CoOwnable = Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>;
+type CoOwnable = Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType' | 'memberSyncAt'>;
 
 /** The ids that own the profile: its creator, then — where it can be co-owned — its other OWNER members. */
 export function ownerIdsOf(organization: CoOwnable, members: readonly { userId: string; role: MembershipRole }[]): string[] {

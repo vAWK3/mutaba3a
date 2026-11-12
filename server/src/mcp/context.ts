@@ -8,7 +8,7 @@ import type { AgentIdentity } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import type { OAuthScope } from '../oauth/protocol.js';
 import type { ErrorReporter } from '../observability/reporter.js';
-import { ownedOrCoOwnedProfilesOf, ownsProfile } from '../personal-profile.js';
+import { isMalafatFirm, ownedOrCoOwnedProfilesOf, ownsProfile } from '../personal-profile.js';
 import type { LedgerStore, MembershipRole, Organization } from '../repositories/ports.js';
 
 /**
@@ -55,13 +55,14 @@ export async function agentProfile(ctx: McpContext, profileId: string): Promise<
 function mayAct(ctx: McpContext, organization: Organization, role: MembershipRole): boolean {
   const { via } = ctx.agent;
   if (via) return organization.id === via.organizationId && role === 'OWNER';
-  return ownsProfile(organization, ctx.agent.user.id, role);
+  // §4.6: the person's own connector never sees a Malafat firm; that firm is Malafat's connector's to reach.
+  return ownsProfile(organization, ctx.agent.user.id, role) && !isMalafatFirm(organization);
 }
 
 /** The profiles a tool may list or search: owned or co-owned; through Malafat, the tenant's firm when `mayAct` holds. */
 export async function agentProfiles(ctx: McpContext): Promise<Organization[]> {
   const { via } = ctx.agent;
-  if (!via) return ownedOrCoOwnedProfilesOf(ctx.store, ctx.agent.user.id);
+  if (!via) return (await ownedOrCoOwnedProfilesOf(ctx.store, ctx.agent.user.id)).filter((o) => !isMalafatFirm(o));
   const membership = await ctx.store.memberships.find(ctx.agent.user.id, via.organizationId);
   const organization = membership ? await ctx.store.organizations.getById(via.organizationId) : null;
   return organization && membership && mayAct(ctx, organization, membership.role) ? [organization] : [];

@@ -87,6 +87,7 @@ import type {
   CreateUserInput,
   CreateSessionInput,
   MembershipRecord,
+  MembershipRole,
   MembershipRepository,
   SessionRecord,
   PersonSetupLinkPurpose,
@@ -99,6 +100,9 @@ import type {
   PasskeyRepository,
   FeaturesRepository,
   OAuthAuthorizationRequestRecord,
+  ExternalIdentityRecord,
+  ExternalIdentityRepository,
+  MemberSyncResult,
   OAuthClientRecord,
   OAuthCodeRecord,
   OAuthGrantRecord,
@@ -202,6 +206,7 @@ import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
+import { membershipRoleOf } from '../malafat-members.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
@@ -227,8 +232,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 15 (MUT-303): `vendors` gained `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
  * 16 (MUT-557): `exps` gained `allocationNumber`.
  * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
+ * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 17;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 18;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -308,6 +314,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly props = new Map<string, FeeProposalRecord>();
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
+  /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
+  private readonly seats = new Map<string, ExternalIdentityRecord>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
   /**
@@ -381,7 +389,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.personalOwnerUserId && !this.people.has(input.personalOwnerUserId)) {
         throw new ForeignKeyViolation('organizations.personalOwnerUserId');
       }
-      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
+      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: new Date() };
       this.orgs.set(org.id, org);
       return { ...org };
     },
@@ -394,7 +402,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const count = this.ownedCount(ownerUserId);
       if (count >= cap) return { kind: 'limit', count };
       const { at, ...fields } = input;
-      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: at };
+      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: at };
       const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, role: 'OWNER', createdAt: at };
       this.orgs.set(organization.id, organization);
       this.members.set(membershipKey(ownerUserId, organization.id), membership);
@@ -1383,7 +1391,7 @@ export class MemoryLedgerStore implements LedgerStore {
       createdAt: input.at,
       updatedAt: input.at,
     };
-    const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
+    const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: new Date() };
     const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
       userId: user.id,
       organizationId,
@@ -1631,11 +1639,70 @@ export class MemoryLedgerStore implements LedgerStore {
       const i = this.ints.get(id);
       if (!i) return null;
       Object.assign(i, enabled ? { delegationEnabledAt: i.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null });
+      // MUT-594 (ADR-254 §4.4): turning Malafat access on turns firm features on, so the synced roles mean something.
+      const org = this.orgs.get(i.organizationId);
+      if (enabled && org && !org.firmEnabledAt) Object.assign(org, { firmEnabledAt: at, version: org.version + 1 });
       const grantsRevoked = enabled ? 0 : this.revokeOAuthGrantsWhere((g) => g.tenantId === i.externalTenantId, 'delegation_disabled', at);
       this.pushEvents(audit, at);
       return { integration: { ...i }, grantsRevoked };
     },
   };
+
+  readonly externalIdentities: ExternalIdentityRepository = {
+    syncMembers: async ({ organizationId, tenantId, members, at, audit }) => {
+      const org = this.orgs.get(organizationId);
+      if (!org) throw new ForeignKeyViolation('external_identities.organizationId');
+      const listed = new Map(members.map((m) => [m.subject, m]));
+      const result: MemberSyncResult = { added: 0, changed: 0, removed: 0, pending: 0 };
+      for (const m of listed.values()) {
+        const key = seatKey('MALAFAT', tenantId, m.subject);
+        const seat = this.seats.get(key);
+        if (!seat) {
+          this.seats.set(key, { id: randomUUID(), provider: 'MALAFAT', tenantId, subject: m.subject, organizationId, email: m.email, malafatRole: m.role, userId: null, linkedAt: null, removedAt: null, createdAt: at, updatedAt: at });
+          result.added++;
+        } else {
+          if (seat.removedAt) result.added++;
+          else if (seat.malafatRole !== m.role) result.changed++;
+          Object.assign(seat, { email: m.email, malafatRole: m.role, organizationId, removedAt: null, updatedAt: at });
+        }
+        const current = this.seats.get(key)!;
+        if (current.userId) this.seatMembership(current.userId, organizationId, membershipRoleOf(m.role), at);
+        else result.pending++;
+      }
+      for (const seat of this.seats.values()) {
+        if (seat.tenantId !== tenantId || seat.removedAt || listed.has(seat.subject)) continue;
+        Object.assign(seat, { removedAt: at, updatedAt: at });
+        result.removed++;
+        if (seat.userId) {
+          this.members.delete(membershipKey(seat.userId, organizationId));
+          const userId = seat.userId;
+          this.revokeOAuthGrantsWhere((g) => g.userId === userId && g.tenantId === tenantId, 'member_removed', at);
+        }
+      }
+      if (!org.memberSyncAt) org.memberSyncAt = at;
+      this.pushEvents(audit, at);
+      return result;
+    },
+    findBySubject: async (provider, tenantId, subject) => cloneSeat(this.seats.get(seatKey(provider, tenantId, subject))),
+    listByUser: async (userId) => [...this.seats.values()].filter((s) => s.userId === userId).map((s) => ({ ...s })),
+    claim: async ({ provider, tenantId, subject, userId, at, audit }) => {
+      const seat = this.seats.get(seatKey(provider, tenantId, subject));
+      if (!seat || seat.userId !== null || seat.removedAt) return { claimed: false, identity: cloneSeat(seat) };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('external_identities.userId');
+      Object.assign(seat, { userId, linkedAt: at, updatedAt: at });
+      this.seatMembership(userId, seat.organizationId, membershipRoleOf(seat.malafatRole), at);
+      this.pushEvents(audit, at);
+      return { claimed: true, identity: { ...seat } };
+    },
+  };
+
+  /** MUT-594: a seat's membership, created or re-roled (the Prisma store's upsert). */
+  private seatMembership(userId: string, organizationId: string, role: MembershipRole, at: Date): void {
+    const key = membershipKey(userId, organizationId);
+    const existing = this.members.get(key);
+    if (existing) existing.role = role;
+    else this.members.set(key, { userId, organizationId, role, createdAt: at });
+  }
 
   readonly audit: AuditRepository = {
     append: async (event: AuditEventInput) => {
@@ -4306,6 +4373,14 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 }
 
 /** MUT-434: a stored token without its digest, which never leaves the store. */
+function seatKey(provider: string, tenantId: string, subject: string): string {
+  return `${provider}\u0000${tenantId}\u0000${subject}`;
+}
+
+function cloneSeat(seat: ExternalIdentityRecord | undefined): ExternalIdentityRecord | null {
+  return seat ? { ...seat } : null;
+}
+
 /** MUT-593: what a public (DCR or CIMD) client carries of the confidential-client columns. */
 function publicClientColumns(): Pick<OAuthClientRecord, 'jwksUri' | 'allowedResources' | 'disabledAt'> {
   return { jwksUri: null, allowedResources: [], disabledAt: null };

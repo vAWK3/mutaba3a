@@ -39,6 +39,8 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   const integration = await store.integrations.connect({ organizationId: org, provider: 'MALAFAT', externalTenantId: 'tenant-1', displayName: 'Haddad Law', connectedByApiKeyId: 'key-1', at: AT });
   // MUT-593: the per-firm delegation switch, on (a device never sets it; the fixture fills every nullable field once).
   await store.integrations.setDelegation({ id: integration.id, enabled: true, by: user.id, at: AT, audit: [] });
+  // MUT-594: and its members synced from Malafat (memberSyncAt; the fixture fills every nullable field once).
+  await store.externalIdentities.syncMembers({ organizationId: org, tenantId: 'tenant-1', members: [], at: AT, audit: [] });
 
   // custs, projs, refs: a client and a matter, each linked to its Malafat id
   const customer = await store.customers.create({ organizationId: org, name: 'Ramallah Bakery', email: null, phone: null, notes: null }, AT);

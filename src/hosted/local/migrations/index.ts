@@ -250,6 +250,15 @@ function addDelegationSwitch(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-594, 17 → 18: a profile gains `memberSyncAt`, set when Malafat starts syncing its members (ADR-254 D2). A
+ * device has no Malafat: null.
+ */
+function addMemberSyncAt(snapshot: StoredSnapshot): StoredSnapshot {
+  const orgs = snapshot.maps.orgs as Map<string, Omit<Organization, 'memberSyncAt'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, orgs: new Map([...orgs].map(([id, o]) => [id, { ...o, memberSyncAt: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -272,6 +281,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 14, to: 15, migrate: addVendorDefaults },
   { from: 15, to: 16, migrate: addAllocationNumber },
   { from: 16, to: 17, migrate: addDelegationSwitch },
+  { from: 17, to: 18, migrate: addMemberSyncAt },
 ];
 
 /**

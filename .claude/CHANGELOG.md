@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — Malafat syncs a firm's members; partners own the firm (MUT-594, ADR-254 D2, D3, D7, decision 7)
+
+### Added
+- **`PUT /v1/integration/members`** (organization key, `integration:write`, idempotent): Malafat's full member list `{subject, email, role}` for its firm. The server adds, re-roles and removes (`server/src/routes/integration.ts`). Roles map by D3 (`server/src/malafat-members.ts`): PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER.
+- **Seats** (`external_identities`, `ExternalIdentityRepository`): a person with no MTB3A account waits as a pending seat (D7); `externalIdentities.claim` links it to an account and makes the membership in one conditional write, so two first sign-ins claim it once (MUT-595 calls it). Never matched by email (D4). A removal keeps the link, so a member listed again comes back without a new sign-in.
+- **A removal ends access at once (DF3):** the membership and the person's delegated grants for that tenant end in the sync's transaction (reason `member_removed`).
+- **Partners own the Malafat firm** (`ownsProfile`, decision 7, overrides part of ADR-245): on a firm with `memberSyncAt` set, an OWNER member owns it, so a partner invites accountants and makes share links; an associate gets 403 NOT_OWNER. The firm's name, type, firm request and members stay Malafat's: 403 READ_ONLY_PROFILE `MANAGED_IN_MALAFAT` (`server/src/routes/profiles.ts`). A partner's own Claude connector never sees the firm (§4.6).
+- **Turning Malafat access on turns firm features on** (`firmEnabledAt`, ADR-254 §4.4).
+
+### Technical
+- Migration `20261112140000_mut594_member_sync` (additive: `organizations.memberSyncAt`, `external_identities`); local snapshot format 17 → 18 (`orgs.memberSyncAt`, null on a device). Purge catalog knows the seats. Contract `1.111.0-mut594`.
+- Members made in MTB3A before a firm's first sync are left alone until they sign in with Malafat: they can't be matched to a Malafat person by email.
+- Firm roles are stored but not enforced yet (MUT-305); ownership is what this ticket gates.
+- Tests: `routes-member-sync.test.ts`, the seat contract in `store-contract-oauth.ts`, `owns-profile.test.ts` rows, local migration 17 → 18. Test helpers seat lawyers through the sync and a claim.
+
 ## [Unreleased] - 2026-11-12 — Malafat's connector forwards MTB3A's tools to /mcp as the person (MUT-598, ADR-254 D11)
 
 ### Added

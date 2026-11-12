@@ -194,6 +194,9 @@ model Organization {
   firmEnabledAt         DateTime?
   /// MUT-300: the owner asked for firm features (POST /v1/profiles/{id}/firm-request); cleared
   /// when an operator enables or declines. Set together with firmRequestedByUserId (CHECK).
+  /// MUT-594 (ADR-254 D2): this firm's members come from Malafat's sync, since this instant; null = managed here.
+  /// On such a firm an OWNER-role member (a partner) owns the profile (ADR-245 override), and members are read-only.
+  memberSyncAt          DateTime?
   firmRequestedAt       DateTime?
   firmRequestedByUserId String?      @db.Uuid
   /// MUT-333 (D7): SET NULL, so a pending request outlives its requester's account (the pair CHECK allows it).
@@ -203,6 +206,7 @@ model Organization {
 
   apiKeys            ApiKey[]
   integrations       Integration[]
+  externalIdentities ExternalIdentity[]
   auditEvents        AuditEvent[]
   idempotencyKeys    IdempotencyKey[]
   customers          Customer[]
@@ -385,6 +389,7 @@ model User {
   shareLinksCreated     ShareLink[]       @relation("ShareLinksCreated")
 
   @@map("users")
+  externalIdentities ExternalIdentity[]
 }
 
 /// What an unsorted capture becomes once filed: an Expense, or income
@@ -1998,4 +2003,30 @@ model ShareLinkViewer {
 
   @@index([shareLinkId])
   @@map("share_link_viewers")
+}
+
+/// MUT-594/595 (ADR-254 D2, D4, D7): one Malafat person in one Malafat firm, a seat. The member sync writes `role`;
+/// `userId` is set when the person signs in with Malafat (linked), null until then (a pending seat). Never matched to
+/// an account by email. `removedAt` keeps the link when Malafat removes the member, so coming back needs no re-link.
+model ExternalIdentity {
+  id             String              @id @default(uuid()) @db.Uuid
+  provider       IntegrationProvider
+  tenantId       String              @db.VarChar(255)
+  subject        String              @db.VarChar(255)
+  organizationId String              @db.Uuid
+  organization   Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  email          String              @db.VarChar(320)
+  /// Malafat's role: PARTNER | OFFICE_ADMIN | ASSOCIATE | INTERN (mapped by D3).
+  malafatRole    String              @db.VarChar(32)
+  userId         String?             @db.Uuid
+  user           User?               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  linkedAt       DateTime?
+  removedAt      DateTime?
+  createdAt      DateTime
+  updatedAt      DateTime
+
+  @@unique([provider, tenantId, subject])
+  @@index([userId])
+  @@index([organizationId])
+  @@map("external_identities")
 }

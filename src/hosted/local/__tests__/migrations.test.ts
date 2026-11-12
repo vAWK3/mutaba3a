@@ -308,6 +308,21 @@ describe('local snapshot migrations', () => {
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
+  it('17 → 18 (MUT-594): a profile gains a null memberSyncAt, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const orgs = new Map([...maps.orgs].map(([id, o]) => [id, Object.fromEntries(Object.entries(o).filter(([field]) => field !== 'memberSyncAt'))]));
+    const before: StoredSnapshot = { formatVersion: 17, stateVersion: 4, savedAt: AT, maps: { ...maps, orgs } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.orgs.values()]).toEqual([...maps.orgs.values()]);
+    expect([...after.maps.orgs.values()][0]).toMatchObject({ memberSyncAt: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
   it("leaves the snapshot it was given untouched", async () => {
     const before = await formatOneSnapshot();
     const orgs = JSON.stringify([...before.maps.orgs.values()]);

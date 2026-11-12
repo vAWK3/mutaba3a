@@ -233,6 +233,43 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       expect((await bind(`tenant-${unique()}`)).delegationEnabledAt).toBeNull();
     });
 
+    // ---- MUT-594: Malafat seats ----
+
+    async function syncedFirm(store: LedgerStore) {
+      const org = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      const tenantId = `tenant-${unique()}`;
+      return { org, tenantId, sync: (members: Array<{ subject: string; email: string; role: 'PARTNER' | 'OFFICE_ADMIN' | 'ASSOCIATE' | 'INTERN' }>, at: Date) => store.externalIdentities.syncMembers({ organizationId: org.id, tenantId, members, at, audit: [] }) };
+    }
+
+    it('syncs seats: pending until claimed once, re-roled, removed with the membership, and marks the firm', async () => {
+      const store = await makeStore();
+      const { org, tenantId, sync } = await syncedFirm(store);
+      expect(await sync([{ subject: 's-1', email: 'a@firm.ps', role: 'PARTNER' }, { subject: 's-2', email: 'b@firm.ps', role: 'INTERN' }], at(1))).toEqual({ added: 2, changed: 0, removed: 0, pending: 2 });
+      expect((await store.organizations.getById(org.id))?.memberSyncAt).toEqual(at(1));
+      const { user } = await store.users.create(userInput());
+      const claims = await Promise.all([1, 2].map(() => store.externalIdentities.claim({ provider: 'MALAFAT', tenantId, subject: 's-1', userId: user.id, at: at(2), audit: [] })));
+      expect(claims.filter((c) => c.claimed)).toHaveLength(1);
+      expect((await store.memberships.find(user.id, org.id))?.role).toBe('OWNER');
+      expect(await sync([{ subject: 's-1', email: 'a@firm.ps', role: 'ASSOCIATE' }, { subject: 's-2', email: 'b@firm.ps', role: 'INTERN' }], at(3))).toEqual({ added: 0, changed: 1, removed: 0, pending: 1 });
+      expect((await store.memberships.find(user.id, org.id))?.role).toBe('SUBMITTER');
+      expect(await sync([{ subject: 's-2', email: 'b@firm.ps', role: 'INTERN' }], at(4))).toEqual({ added: 0, changed: 0, removed: 1, pending: 1 });
+      expect(await store.memberships.find(user.id, org.id)).toBeNull();
+      expect((await store.externalIdentities.findBySubject('MALAFAT', tenantId, 's-1'))?.removedAt).toEqual(at(4));
+      expect(await store.externalIdentities.claim({ provider: 'MALAFAT', tenantId, subject: 's-1', userId: user.id, at: at(5), audit: [] })).toMatchObject({ claimed: false });
+    });
+
+    it('a removal revokes the person’s delegated grants for that tenant only (DF3)', async () => {
+      const store = await makeStore();
+      const here = await delegatedFixture(store, 'tenant-here');
+      const elsewhere = await delegatedFixture(store, 'tenant-elsewhere');
+      const org = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      await store.externalIdentities.syncMembers({ organizationId: org.id, tenantId: 'tenant-here', members: [{ subject: 's-9', email: 'z@firm.ps', role: 'PARTNER' }], at: at(1), audit: [] });
+      await store.externalIdentities.claim({ provider: 'MALAFAT', tenantId: 'tenant-here', subject: 's-9', userId: here.user.id, at: at(2), audit: [] });
+      await store.externalIdentities.syncMembers({ organizationId: org.id, tenantId: 'tenant-here', members: [], at: at(3), audit: [] });
+      expect(await store.oauth.findGrant(here.grant.id)).toMatchObject({ revokedReason: 'member_removed' });
+      expect((await store.oauth.findGrant(elsewhere.grant.id))?.revokedAt).toBeNull();
+    });
+
     it('cleanup never removes a confidential client, and drops expired assertion ids', async () => {
       const store = await makeStore();
       const clientId = `mcc_${unique()}`;

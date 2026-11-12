@@ -154,6 +154,9 @@ export const STORE_ACCESS: StoreAccess = {
     cleanup: 'operator',
   },
   signupReviews: { list: 'operator', findByUser: 'operator', digestFacts: 'operator', markNotified: 'operator', approve: 'operator', decline: 'operator' },
+  // MUT-594/595: Malafat seats. The sync is Malafat's key writing the integration; a claim and the lookups run in
+  // Sign in with Malafat (MUT-595), outside /v1's guard; a person's own seats list in a session.
+  externalIdentities: { syncMembers: { write: 'integration' }, findBySubject: 'operator', claim: 'operator', listByUser: 'sessionOnly' },
   integrations: {
     findByOrganizationAndProvider: 'read',
     findByProviderAndTenant: 'read',

@@ -4,7 +4,7 @@ import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { presetFor } from '../expenses/presets.js';
-import { canCoOwn, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
+import { canCoOwn, notOwner, ownsProfile, profileOwnerOf, profileTypeOf, isMalafatFirm } from '../personal-profile.js';
 import { identityIdempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import type { LedgerStore, MembershipRecord, Organization, UserRecord } from '../repositories/ports.js';
@@ -65,6 +65,8 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const membership = organization ? await store.memberships.find(user.id, profileId) : null;
     if (!organization || !membership) throw new ApiError('NOT_FOUND', 'Profile not found');
     if (!ownsProfile(organization, user.id, membership.role)) throw notOwner();
+    // MUT-594 (ADR-254 D2): a Malafat firm's partners own it, but its name, type and members are Malafat's.
+    if (isMalafatFirm(organization)) throw managedInMalafat();
     return organization;
   }
 
@@ -245,6 +247,8 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { profileId, userId } = c.req.valid('param');
       // Adversarial review 3: a stranger is answered before the store takes the profile's row lock.
       if (!(await store.memberships.find(user.id, profileId))) throw new ApiError('NOT_FOUND', 'Profile not found');
+      const target = await store.organizations.getById(profileId);
+      if (target && isMalafatFirm(target) && (await store.memberships.find(user.id, profileId))) throw managedInMalafat();
       const result = await store.memberships.removeOwner({ organizationId: profileId, userId, actorId: user.id, at: c.get('now')(), requestId: c.get('requestId') });
       switch (result.kind) {
         case 'removed':
@@ -268,4 +272,9 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 /** MUT-373 (outside voice OV3): a profile with more than one owner stays BUSINESS; PATCH checks this under its row lock too. */
 function coOwned(): ApiError {
   return new ApiError('CONFLICT', 'A profile you share with other owners stays Business', { reason: 'CO_OWNED' });
+}
+
+/** MUT-594 (ADR-254 D2, AC6): what MTB3A says on a Malafat firm's settings and members. */
+function managedInMalafat(): ApiError {
+  return new ApiError('READ_ONLY_PROFILE', 'This firm’s settings and members are managed in Malafat', { reason: 'MANAGED_IN_MALAFAT' });
 }

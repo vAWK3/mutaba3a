@@ -37,11 +37,18 @@ export function canCoOwn(organization: Pick<Organization, 'ownerUserId' | 'perso
 /**
  * MUT-373 (ADR-163, outside voice OV1): whether `userId` owns the profile — its creator (`profileOwnerOf`), or an
  * OWNER member of a profile that can be co-owned. Every membership defaults to OWNER (MUT-300), so the role counts
- * only where `canCoOwn` holds: a member of a firm, a Malafat-fed profile or someone's personal profile never owns it.
+ * only where `canCoOwn` holds: a member of a firm or someone's personal profile never owns it.
+ * MUT-594 (ADR-254 decision 7, overrides part of ADR-245): on a firm whose members come from Malafat (`memberSyncAt`)
+ * an OWNER member owns it, because that role is set only by Malafat's sync, for a partner (D3).
  * Every owner gate reads this; none compares columns or roles itself.
  */
-export function ownsProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>, userId: string, role: MembershipRole | null): boolean {
-  return profileOwnerOf(organization) === userId || (role === 'OWNER' && canCoOwn(organization));
+export function ownsProfile(organization: Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType' | 'memberSyncAt'>, userId: string, role: MembershipRole | null): boolean {
+  return profileOwnerOf(organization) === userId || (role === 'OWNER' && (canCoOwn(organization) || isMalafatFirm(organization)));
+}
+
+/** MUT-594: a firm whose members Malafat syncs: they are read-only in MTB3A, and partners own it. */
+export function isMalafatFirm(organization: Pick<Organization, 'memberSyncAt'>): boolean {
+  return organization.memberSyncAt !== null;
 }
 
 /** What a person is told when `ownsProfile` says no: profile edits (MUT-182/183), and correcting money (MUT-453 D1). */

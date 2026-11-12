@@ -1,3 +1,4 @@
+import { MEMBER_SYNC_MAX } from './malafat-members.js';
 import { z } from '@hono/zod-openapi';
 import { PASSKEY_PROMPT_MAX_OFFERS } from './auth/passkey-prompt.js';
 import { CANCELLATION_COMMENT_MAX, CANCELLATION_REASONS } from './billing/retention.js';
@@ -4780,6 +4781,31 @@ export const OAuthDecisionRequestSchema = z.object({ decision: z.enum(['approve'
 export const OAuthDecisionSchema = z
   .object({ redirectTo: z.string().url().openapi({ description: 'Send the browser here: the client’s redirect with a code, or with error=access_denied' }) })
   .openapi('OAuthDecision');
+
+/** MUT-594 (ADR-254 D2, D3): Malafat's full member list for the firm its key belongs to. */
+export const SyncMembersRequestSchema = z
+  .object({
+    members: z
+      .array(
+        z.object({
+          subject: z.string().trim().min(1).max(255).openapi({ description: 'The Malafat user id: stable, never the email' }),
+          email: z.string().trim().email().max(320),
+          role: z.enum(['PARTNER', 'OFFICE_ADMIN', 'ASSOCIATE', 'INTERN']).openapi({ description: 'PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER' }),
+        }),
+      )
+      .max(MEMBER_SYNC_MAX)
+      .refine((members) => new Set(members.map((m) => m.subject)).size === members.length, { message: 'Each subject may appear once' }),
+  })
+  .openapi('SyncMembersRequest');
+
+export const SyncMembersResponseSchema = z
+  .object({
+    added: z.number().int(),
+    changed: z.number().int(),
+    removed: z.number().int().openapi({ description: 'Their memberships and Malafat connections for this firm ended with the sync' }),
+    pending: z.number().int().openapi({ description: 'Listed people who have not signed in to MTB3A with Malafat yet' }),
+  })
+  .openapi('SyncMembersResponse');
 
 /** MUT-593 (ADR-254 D10): the operator's per-firm Malafat switch. */
 export const OperatorMalafatDelegationRequestSchema = z.object({ enabled: z.boolean() }).openapi('OperatorMalafatDelegationRequest');
