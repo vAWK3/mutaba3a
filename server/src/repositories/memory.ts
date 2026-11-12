@@ -226,8 +226,9 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
  * 15 (MUT-303): `vendors` gained `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
  * 16 (MUT-557): `exps` gained `allocationNumber`.
+ * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 16;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 17;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every

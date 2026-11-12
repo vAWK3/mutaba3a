@@ -286,9 +286,25 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(16);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.exps.values()]).toEqual([...maps.exps.values()]);
     expect([...after.maps.exps.values()][0]).toMatchObject({ amountMinor: 708_000n, allocationNumber: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('16 → 17 (MUT-593): a Malafat integration gains the delegation switch, off, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'nour@studio.ps', displayName: 'Nour', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.integrations.connect({ organizationId: org.id, provider: 'MALAFAT', externalTenantId: 'tenant-1', displayName: 'Haddad Law', connectedByApiKeyId: 'key-1', at: AT });
+    const { maps } = store.snapshot();
+    const ints = new Map([...maps.ints].map(([id, i]) => [id, Object.fromEntries(Object.entries(i).filter(([field]) => !field.startsWith('delegationEnabled')))]));
+    const before: StoredSnapshot = { formatVersion: 16, stateVersion: 4, savedAt: AT, maps: { ...maps, ints } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.ints.values()]).toEqual([...maps.ints.values()]);
+    expect([...after.maps.ints.values()][0]).toMatchObject({ externalTenantId: 'tenant-1', delegationEnabledAt: null, delegationEnabledBy: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

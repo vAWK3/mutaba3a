@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, IntegrationRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -241,6 +241,15 @@ function addAllocationNumber(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-593, 16 → 17: a Malafat integration gains the operator's per-firm delegation switch (ADR-254). A device has no
+ * operator and no Malafat: off.
+ */
+function addDelegationSwitch(snapshot: StoredSnapshot): StoredSnapshot {
+  const ints = snapshot.maps.ints as Map<string, Omit<IntegrationRecord, 'delegationEnabledAt' | 'delegationEnabledBy'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, ints: new Map([...ints].map(([id, i]) => [id, { ...i, delegationEnabledAt: null, delegationEnabledBy: null }])) } };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -262,6 +271,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 13, to: 14, migrate: addExpenseVat },
   { from: 14, to: 15, migrate: addVendorDefaults },
   { from: 15, to: 16, migrate: addAllocationNumber },
+  { from: 16, to: 17, migrate: addDelegationSwitch },
 ];
 
 /**
