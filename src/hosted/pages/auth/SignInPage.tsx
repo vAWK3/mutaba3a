@@ -16,6 +16,7 @@ import { CheckingSession } from './BootScreens';
 import { EMAIL_SHAPE } from './selfService';
 import { UnderReviewNotice } from './UnderReviewNotice';
 import { AlertIcon, InfoIcon, PasskeyIcon } from '../../components/Icons';
+import { MalafatMark } from '../../components/MalafatMark';
 import { PasskeyCeremonyError, usePasskeySignIn } from '../../passkeys/usePasskeySignIn';
 import type { Me } from '../../api/client';
 
@@ -25,7 +26,7 @@ import type { Me } from '../../api/client';
  * Since MUT-368 it offers the self-service doors the server opens
  * (GET /v1/self-service): "Forgot your password?" and "Create an account". The right
  * password on an account waiting for review shows the under-review screen.
- * No invite or third-party door exists anywhere.
+ * No invite door exists; the one other way in is Sign in with Malafat (MUT-596), when the server opens it.
  *
  * Since MUT-286 the page is also the session-expired choice (brief §2.6):
  * sign in again, or continue on this device without an account. Never a
@@ -287,6 +288,17 @@ function SignInForm({ next, reason }: SignInPageProps) {
           <>
             {passkeyDivider}
             {passkeyButton}
+          </>
+        )}
+
+        {/* MUT-596: another way in, when the server opens it (MALAFAT_SIGN_IN); it starts on the office page */}
+        {doors.malafatSignIn && (
+          <>
+            {(!passkey.supported || passkeyFirst) && passkeyDivider}
+            <Link to="/malafat" className="btn btn-secondary btn-md hp-block" aria-disabled={pending || undefined}>
+              <MalafatMark />
+              <span>{t('hosted.malafatSignIn.button')}</span>
+            </Link>
           </>
         )}
       </form>

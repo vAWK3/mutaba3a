@@ -4,6 +4,8 @@ import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNaviga
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
+import { MalafatOfficePage } from './pages/auth/malafat/MalafatOfficePage';
+import { MalafatReturnPage } from './pages/auth/malafat/MalafatReturnPage';
 import { SignupPage } from './pages/auth/SignupPage';
 import { RecoverPage } from './pages/auth/RecoverPage';
 import { CarryOverPage } from './pages/carry-over/CarryOverPage';
@@ -127,6 +129,10 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   /** A setup link's page (MUT-236): public like sign-in; the token is the fragment, which `SetupPage` strips. */
   const setupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/setup', component: SetupPage });
+
+  /** MUT-596: Sign in with Malafat, public like sign-in: the office step, and the return that runs the exchange. */
+  const malafatRoute = createRoute({ getParentRoute: () => rootRoute, path: '/malafat', component: MalafatOfficePage });
+  const malafatReturnRoute = createRoute({ getParentRoute: () => rootRoute, path: '/malafat/return', component: MalafatReturnPage });
 
   /** MUT-368: the two self-service doors, public like sign-in; each asks GET /v1/self-service whether it is open. */
   const signupRoute = createRoute({ getParentRoute: () => rootRoute, path: '/signup', component: SignupPage });
@@ -501,6 +507,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
   const routeTree = rootRoute.addChildren([
     signInRoute,
     setupRoute,
+    malafatRoute,
+    malafatReturnRoute,
     signupRoute,
     recoverRoute,
     carryOverRoute,

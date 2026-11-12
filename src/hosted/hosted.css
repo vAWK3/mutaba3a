@@ -264,6 +264,23 @@
 /* MUT-115 (DR1): the "or" rule between the password form and the passkey button */
 .hp-divider { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); color: var(--muted); font-size: var(--text-label); }
 .hp-divider::before, .hp-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* MUT-596: Malafat's mark (MalafatMark.tsx), light or dark by the same rule as the tokens above */
+.hp-malafat-mark { display: inline-flex; flex: none; }
+.hp-malafat-mark .hp-malafat-mark-light { display: block; }
+.hp-malafat-mark .hp-malafat-mark-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hp-malafat-mark .hp-malafat-mark-light { display: none; }
+  :root:not([data-theme="light"]) .hp-malafat-mark .hp-malafat-mark-dark { display: block; }
+}
+:root[data-theme="dark"] .hp-malafat-mark .hp-malafat-mark-light { display: none; }
+:root[data-theme="dark"] .hp-malafat-mark .hp-malafat-mark-dark { display: block; }
+/* The office address field: the slug typed, Malafat's domain fixed after it (always left to right) */
+.hp-office-field { display: flex; align-items: center; direction: ltr; }
+.hp-office-field:focus-within { box-shadow: var(--focus-ring); }
+.hp-office-field input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
+.hp-office-suffix { padding-inline: var(--space-2); color: var(--muted); white-space: nowrap; }
+.hp-title-with-mark { display: flex; align-items: center; gap: var(--space-2); }
 /* DR9: decorative, never mirrored in RTL */
 .hp-passkey-icon { flex: none; }
 .hp-help { max-width: var(--hp-card-width); text-align: center; font-size: var(--text-label); color: var(--muted); margin: 0; }

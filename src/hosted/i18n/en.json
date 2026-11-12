@@ -2646,6 +2646,92 @@
           "unreachable": "Couldn't reach MTB3A. Check your connection and try again."
         }
       }
+    },
+    "malafatSignIn": {
+      "button": "Sign in with Malafat",
+      "officeTitle": "Your Malafat office",
+      "officeLead": "Type your office's Malafat address, as it shows in your browser when you open Malafat.",
+      "officeLabel": "Your Malafat office address",
+      "officeRemembered": "We remember it on this device.",
+      "officeRequired": "Type your office address.",
+      "officeNotFound": "There's no Malafat office at that address. Check it and try again.",
+      "continue": "Continue to Malafat",
+      "back": "Back",
+      "checking": "Signing you in…",
+      "startAgain": "Back to sign in",
+      "error": {
+        "access_denied": "You didn't allow MTB3A in Malafat. Nothing was changed.",
+        "malafat_unavailable": "Malafat didn't answer. Try again in a moment.",
+        "state_invalid": "This sign-in has expired. Start again.",
+        "office_not_found": "There's no Malafat office at that address.",
+        "identityElsewhere": "This Malafat account is already connected to another MTB3A account.",
+        "emailTaken": "An MTB3A account already has this email. Sign in to it to connect Malafat.",
+        "unreachable": "We couldn't reach MTB3A. Check your connection and try again."
+      },
+      "consent": {
+        "title": "Welcome",
+        "createLead": "We'll create an MTB3A account for {email}. After this, you sign in to it from Malafat.",
+        "linkLead": "We'll connect your MTB3A account to Malafat. Next time, you sign in from Malafat directly.",
+        "firmBooks": "You'll see the office's books in MTB3A, as your role in Malafat allows.",
+        "ownProfile": "Your own personal profile stays yours. Neither the office nor Malafat sees it.",
+        "currency": "Base currency",
+        "timezone": "Time zone",
+        "create": "Create account and continue",
+        "connect": "Connect and continue",
+        "cancel": "Cancel",
+        "nothingYet": "Nothing is saved until you continue. You can disconnect Malafat at any time from You › Connected apps."
+      },
+      "link": {
+        "title": "You already have an MTB3A account",
+        "lead": "{email} has an MTB3A account. Sign in to it once to connect it to Malafat. After that, you sign in from Malafat directly.",
+        "password": "Your MTB3A password",
+        "submit": "Connect the accounts",
+        "passkey": "Connect with a passkey",
+        "notByEmail": "We never connect two accounts by email alone.",
+        "invalid": "That password doesn't match this account."
+      }
+    },
+    "connectedApps": {
+      "title": "Connected apps",
+      "rowSub": "Malafat acting for you in your offices",
+      "lead": "These apps act for you in your offices. They don't see your own profiles.",
+      "since": "Connected {date}",
+      "lastUsed": "last used {date}",
+      "disconnect": "Disconnect",
+      "confirm": "Disconnect Malafat from {firm}? Malafat stops acting for you in this office at once. What it recorded stays.",
+      "keep": "Keep",
+      "disconnected": "Malafat is disconnected from {firm}.",
+      "unknownFirm": "an office no longer connected",
+      "empty": "No apps act for you.",
+      "agentsHint": "AI agents (like Claude) are in Connect Claude.",
+      "loadFailed": "We couldn't load your connected apps."
+    },
+    "members": {
+      "title": "Members",
+      "managed": "This office's name and members are managed in Malafat.",
+      "you": "(you)",
+      "pending": "hasn't signed in yet",
+      "changeHint": "To add a member or change a role, use the office's settings in Malafat.",
+      "role": {
+        "PARTNER": "Partner",
+        "OFFICE_ADMIN": "Office admin",
+        "ASSOCIATE": "Associate",
+        "INTERN": "Intern"
+      },
+      "access": {
+        "OWNER": "owner",
+        "BOOKKEEPER": "keeps the books",
+        "SUBMITTER": "submits expenses"
+      },
+      "loadFailed": "We couldn't load the members."
+    },
+    "viaMalafat": "via Malafat",
+    "secondWayIn": {
+      "title": "Add a second way to sign in",
+      "lead": "Another secure way into MTB3A, next to Malafat: a passkey (your face or fingerprint) or a password.",
+      "addPasskey": "Add a passkey",
+      "setPassword": "Set a password",
+      "notNow": "Not now"
     }
   }
 }

@@ -163,6 +163,13 @@ export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
 /** MUT-368: which self-service doors the server opens. */
 export type SelfServiceDoors = Schemas['SelfServiceDoors'];
+/** MUT-596: Sign in with Malafat's next step, or the person signed in. */
+export type MalafatSignInState = Schemas['MalafatSignInState'];
+export type MalafatConsentRequest = Schemas['MalafatConsentRequest'];
+/** MUT-596: Malafat acting for the person in one firm (You › Connected apps). */
+export type ConnectedApp = Schemas['ConnectedApp'];
+/** MUT-596: who is on a profile, read-only; a Malafat firm's seats. */
+export type ProfileMembers = Schemas['ProfileMembers'];
 export type SignupRequest = Schemas['SignupRequest'];
 export type AccountRecoveryRequest = Schemas['AccountRecoveryRequest'];
 /** MUT-368: the redeem's answer; `status` PENDING_REVIEW is a signup waiting for the operator (MUT-367). */
@@ -670,6 +677,20 @@ export const api = {
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
   redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>
     request<SetupLinkRedeemed>('POST', '/v1/account-setup', { body, signal }),
+  /** MUT-596 (MUT-595): whether an address is a Malafat office (404 when not, or when Sign in with Malafat is off). */
+  malafatOffice: (tenant: string, signal?: AbortSignal) => request<Schemas['MalafatOffice']>('GET', '/v1/auth/malafat/office', { query: { tenant }, signal }),
+  /** MUT-596: the result code Malafat's return carries in the fragment; single use. A signed_in answer sets the session cookie. */
+  malafatExchange: (result: string) => request<MalafatSignInState>('POST', '/v1/auth/malafat/exchange', { body: { result } }),
+  /** MUT-596: prove the MTB3A account that has the email, with its password or a passkey assertion. */
+  malafatLink: (body: Schemas['MalafatLinkRequest']) => request<MalafatSignInState>('POST', '/v1/auth/malafat/link', { body }),
+  /** MUT-596: consent; creates or links the account and signs in. */
+  malafatConsent: (body: MalafatConsentRequest) => request<MalafatSignInState>('POST', '/v1/auth/malafat/consent', { body }),
+  /** MUT-596 (MUT-593): Malafat's connections, one per firm (404 while Malafat access is off on this server). */
+  listConnectedApps: (signal?: AbortSignal) => request<Schemas['ConnectedAppList']>('GET', '/v1/me/connected-apps', { signal }),
+  /** MUT-596: ends every connection of that app in that firm; its next call fails. */
+  revokeConnectedApp: (grantId: string) => request<void>('DELETE', `/v1/me/connected-apps/${encodeURIComponent(grantId)}`),
+  /** MUT-596: who is on the profile, read-only (a Malafat firm's seats, managed in Malafat). */
+  profileMembers: (profileId: string, signal?: AbortSignal) => request<ProfileMembers>('GET', '/v1/members', { profileId, signal }),
   /** MUT-368: which self-service doors this server opens (public; says nothing about any account). */
   selfService: (signal?: AbortSignal) => request<SelfServiceDoors>('GET', '/v1/self-service', { signal }),
   /** MUT-366/368: always 202 {status:"sent"} for an address, whatever exists; 404 while signup is closed. */
