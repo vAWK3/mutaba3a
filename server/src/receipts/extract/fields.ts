@@ -79,16 +79,17 @@ function besideLabel(row: Row): string | null {
 /**
  * MUT-557 (D2): an Israeli tax invoice's allocation number: nine digits beside its label, or alone on the row under a
  * label that has none. Never a bare nine-digit number (a ח.פ or ע.מ looks the same), never one that shares its row with
- * other words or numbers below a blank label, never a bill-to row (MUT-514).
+ * other words or numbers below a blank label. A bill-to row is read like any other (ADR-246 amendment, 2026-11-12): the
+ * number is the invoice's, and invoicing software often prints it in the customer box.
  */
-export function readAllocationNumber(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
+export function readAllocationNumber(rows: readonly Row[]): Reading<string> | null {
   for (let i = 0; i < rows.length; i += 1) {
     const row = rows[i]!;
-    if (!hasKeyword(row.folded, ALLOCATION) || buyer.rows.has(row)) continue;
+    if (!hasKeyword(row.folded, ALLOCATION)) continue;
     const own = besideLabel(row);
     if (own) return { value: own.replace(/\D/g, ''), rule: RULE_ALLOCATION, conf: row.conf };
     const next = rows[i + 1];
-    const under = next && !buyer.rows.has(next) ? ONLY_NUMBER.exec(next.folded) : null;
+    const under = next ? ONLY_NUMBER.exec(next.folded) : null;
     if (under) return { value: under[1]!.replace(/\D/g, ''), rule: RULE_ALLOCATION, conf: next!.conf };
   }
   return null;

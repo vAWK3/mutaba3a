@@ -134,6 +134,8 @@ export const REGISTRATION = keywords(
  */
 export const ALLOCATION = keywords(
   'מספר הקצאה', "מס' הקצאה", 'מס הקצאה', 'מס. הקצאה', 'אישור הקצאה', 'מספר אישור הקצאה',
+  // Real invoices: the Tax Authority's own form prints the words the other way round, and some software shortens to מ.
+  'הקצאה מספר', 'מ.הקצאה', 'מ. הקצאה',
   'allocation no', 'allocation no.', 'allocation number', 'allocation num',
   'رقم التخصيص', 'رقم تخصيص',
 );
