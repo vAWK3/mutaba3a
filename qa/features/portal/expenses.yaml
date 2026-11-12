@@ -319,3 +319,36 @@ features:
     expect:
       - There is no VAT row on the form
       - POST /v1/expenses has no vat
+  - id: move-expense
+    title: Move a saved expense, with its receipts, to another profile from its drawer; the confirm step lists what changes (MUT-589)
+    tier: secondary
+    tickets: [MUT-589]
+    paths:
+      - src/hosted/components/MoveExpenseDrawer.tsx
+      - src/hosted/components/MoveToProfileDrawer.tsx
+      - src/hosted/data/expenseMoveQueries.ts
+      - src/hosted/components/useMovedToast.ts
+    steps:
+      - Open an expense on Nour Studio and press Move beside Delete
+      - Choose Cedar Consulting and read what changes there
+      - Press Move to Cedar Consulting, then Open on the toast
+    expect:
+      - Move is off until a profile is chosen and its changes have loaded; the list names each field that changes (Category Other, was Hobby; Client removed, was Nour Legal) and how many receipts go with it
+      - POST /v1/expenses/{id}/move carries the profile, the preview's version and an Idempotency-Key
+      - The drawer closes, the expense leaves Nour Studio's list, the toast says "Moved to Cedar Consulting", and Open shows the expense on Cedar Consulting
+  - id: move-expense-refused
+    title: A read-only profile is listed but can't take the expense; a person who doesn't own the profile, or has only one, sees no Move (MUT-589)
+    tier: secondary
+    tickets: [MUT-589]
+    paths:
+      - src/hosted/components/MoveExpenseDrawer.tsx
+      - src/hosted/data/profileRules.ts
+    steps:
+      - Open Move on an expense when another profile is read-only
+      - Open an expense on a firm the person belongs to but doesn't own, then open its ?moveExpense link
+      - Open an expense on a person's only profile
+    expect:
+      - The read-only profile says "Read-only until it's paid", can't be chosen, and no preview or move is sent
+      - On a profile the person doesn't own the expense drawer has Delete and no Move, and the ?moveExpense link opens no drawer and sends no preview
+      - With one profile the expense drawer has Delete and no Move
+

@@ -153,8 +153,10 @@ export function accountantScopes(): readonly Scope[] {
  * explicit, keyed as the route-access index keys them (a test fails if one names no route):
  *  - the retainer charges: tagged payments:read (Malafat's key reads them as payments, and the matrix's agreements row
  *    says "except charges"), but they return the retainer's agreement terms and the charges its terms post.
+ *  - MUT-589: an expense's move preview, tagged expenses:read: it is the first half of a move (a write), and it reads
+ *    the person's other profiles.
  */
-export const ACCOUNTANT_EXCLUDED_ROUTES: ReadonlySet<string> = new Set(['GET /v1/retainers/:agreementId/charges']);
+export const ACCOUNTANT_EXCLUDED_ROUTES: ReadonlySet<string> = new Set(['GET /v1/retainers/:agreementId/charges', 'GET /v1/expenses/:expenseId/move-preview']);
 
 /**
  * MUT-559 (D1): whether an accountant may call the GET `endpoint` (`METHOD /hono/:path`) whose `requireScope` tags are

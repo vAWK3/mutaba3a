@@ -4108,6 +4108,37 @@ export const MoveReceiptResponseSchema = z
   .object({ receipt: ExpenseReceiptSchema, fromProfileId: z.string().uuid() })
   .openapi('MoveReceiptResponse', { description: 'The receipt on its new profile (same id), and the profile it left (since 1.91.0-mut503, MUT-503)' });
 
+/** MUT-589 (ADR-255): moving a saved expense, with its receipts, to another profile. Since 1.109.0-mut589. */
+export const ExpenseMoveChangeSchema = z
+  .object({
+    field: z.enum(['category', 'client', 'matter', 'vat', 'allocationNumber', 'groups']),
+    from: z.string().nullable().openapi({ description: 'As the viewer reads it: a seeded category in their language, VAT as an amount in the expense\'s currency, groups joined with ", "' }),
+    to: z.string().nullable().openapi({ description: 'null = cleared (or no category, no group)' }),
+  })
+  .openapi('ExpenseMoveChange', { description: 'One field a move changes. Listed in this order: category, client, matter, vat, allocationNumber, groups. Never the amount, currency, date, title, notes or typed vendor.' });
+
+export const ExpenseMovePreviewQuerySchema = z.object({ profileId: z.string().uuid().openapi({ description: 'The profile to move to', param: { in: 'query', name: 'profileId' } }) });
+
+export const ExpenseMovePreviewSchema = z
+  .object({
+    changes: z.array(ExpenseMoveChangeSchema),
+    receiptCount: z.number().int().openapi({ description: 'READY receipts that move with it' }),
+    expenseVersion: z.number().int().openapi({ description: 'Send as expectedVersion to the move' }),
+  })
+  .openapi('ExpenseMovePreview');
+
+export const MoveExpenseRequestSchema = z
+  .object({
+    profileId: z.string().uuid().openapi({ description: 'Another profile of the person\'s, which they may write now' }),
+    expectedVersion: z.number().int().min(1).openapi({ description: 'The preview\'s expenseVersion' }),
+  })
+  .strict()
+  .openapi('MoveExpenseRequest');
+
+export const MoveExpenseResponseSchema = z
+  .object({ expense: ExpenseDetailSchema, fromProfileId: z.string().uuid(), changes: z.array(ExpenseMoveChangeSchema).openapi({ description: 'The changes applied (they can differ from the preview\'s if the target changed in between)' }) })
+  .openapi('MoveExpenseResponse', { description: 'The expense on its new profile (same id) with its receipts, the profile it left, and what changed' });
+
 const fieldEditRate = z.object({ suggested: z.number().int(), edited: z.number().int() });
 
 export const ReceiptEditRatesQuerySchema = z.object({

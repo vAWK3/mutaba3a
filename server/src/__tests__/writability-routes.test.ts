@@ -180,8 +180,8 @@ describe('every route sits inside the matrix', () => {
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
-    // download's mint (MUT-314).
-    expect(SESSION_READS.length).toBe(41);
+    // download's mint (MUT-314), and an expense's move preview (MUT-589).
+    expect(SESSION_READS.length).toBe(42);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -429,8 +429,9 @@ describe('switching profiles never leaks one profile’s figures into another (a
         h.calls.length = 0;
         const ids = { customerId: mine.customer.id, projectId: mine.project.id, agreementId: op.path.startsWith('/v1/retainers') ? mine.retainer.id : mine.agreement.id };
         const res = await send(h, op, as(mine.org.id), ids);
-        // MUT-339: the streak refuses a firm profile with 409 NOT_PERSONAL, before any store read.
-        expect([200, 404, ...(op.path === '/v1/expenses/streak' ? [409] : [])], op.key).toContain(res.status);
+        // MUT-339: the streak refuses a firm profile with 409 NOT_PERSONAL, before any store read. MUT-589: the move
+        // preview needs ?profileId= (the target, which it reads by design), so sent bare it is a 422 before any read.
+        expect([200, 404, ...(op.path === '/v1/expenses/streak' ? [409] : []), ...(op.path.endsWith('/move-preview') ? [422] : [])], op.key).toContain(res.status);
         const leaked = h.calls.filter((call) => bigintSafe(call.args).includes(theirs.org.id)).map((call) => `${call.repo}.${call.method}`);
         expect(leaked).toEqual([]);
       }

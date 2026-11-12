@@ -47,6 +47,20 @@
 - An agent's `/mcp` token on a route that accepts Malafat's token (`/v1/me`) is now 401 `delegation_ended`; elsewhere it is still 403 PRINCIPAL_NOT_ACCEPTED.
 - Tests: `routes-delegated.test.ts`, `routes-operator-malafat-delegation.test.ts`, `oauth/__tests__/client-assertion.test.ts`, store contract (confidential client, assertion ids, scoped revokes), route-security guards for the delegated surface.
 
+## [Unreleased] - 2026-11-11 — Move a saved expense, with its receipts, to another profile (MUT-589, ADR-255)
+
+**Why:** a receipt saved onto the wrong profile could never leave it (MUT-503 moved To-review receipts only); Basel's D4 widened it to any saved expense.
+
+### Added
+- `GET /v1/expenses/{id}/move-preview?profileId=` and `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (API 1.109.0-mut589): the same gates (SAME_PROFILE, EXPENSE_NOT_FOUND, MALAFAT_PROFILE, NOT_OWNER, PROFILE_NOT_FOUND, lapse 402), fields mapped by name with every change listed, receipts copied then re-homed in one transaction with both audits. Files: `server/src/expenses/{move-plan,expense-move}.ts`, `routes/expenses.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `auth/{store-guard,writability}.ts`.
+- Portal: Move beside Delete in the expense drawer and "Move with its expense…" on a filed receipt card open `MoveExpenseDrawer` (`?moveExpense=`), which lists what changes on the chosen profile before Move. Move shows only to an owner (creator or co-owner) of a profile Malafat doesn't feed; for anyone else, and on a read-only profile, with one profile or signed out, it is hidden entirely (Basel, 2026-11-12; the server's 403 stays as the backstop). i18n `hosted.expenses.move.*`, `hosted.expenses.drawer.move` (ar, en).
+
+### Changed
+- `MoveReceiptDrawer`'s body is now `MoveToProfileDrawer`, shared with the expense move. A Filed receipt card has a ⋯ menu (Open, Move with its expense…) where the person has another profile.
+- `writableTarget` is exported from receipts-compose; `categoryNameIn` added to presets.
+
+### Technical
+- Tests listed under MUT-589 in TEST_PLAN.md. Release-QA: `portal.expenses.move-expense`, `move-expense-refused`, `portal.receipts.move-filed`; `filed-no-move` updated. TD-308, TD-309. No migration.
 ## [Unreleased] - 2026-11-12 — Design: Malafat runs every MTB3A feature through the lawyer's own access (epic MUT-592, ADR-254)
 
 ### Added

@@ -10,12 +10,14 @@ import { ReceiptCard } from '../../components/ReceiptCard';
 import { SectionTabs } from '../../components/SectionTabs';
 import { useToast } from '../../components/Toast';
 import { DEFAULT_RECEIPT_STATUS, type ReceiptStatusFilter, type ReceiptsPageSearch } from '../../data/filters';
+import { mayMoveExpensesFrom } from '../../data/profileRules';
 import { RECEIPT_MIME_TYPES, checkReceiptFile } from '../../data/receiptFileRules';
 import { uploadErrorOf, useReceiptCounts, useReceipts, useReceiptsAvailability, useUploadReceipts, type PendingUpload } from '../../data/receiptQueries';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import type { HostedProfile } from '../../api/client';
+import { MoveExpenseDrawer } from '../../components/MoveExpenseDrawer';
 import { MoveReceiptDrawerHost } from '../../components/MoveReceiptDrawer';
-import { hasOtherProfiles, useMovedToast } from '../../components/useMovedToast';
+import { hasOtherProfiles, useExpenseMovedToast, useMovedToast } from '../../components/useMovedToast';
 import { useExpensesTabs } from './ExpenseGroupsList';
 import { PageHeader, ShowMore } from './shared';
 
@@ -75,6 +77,16 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
   const closeMove = () => setSearch({ ...search, move: undefined });
+  // MUT-589: a filed receipt moves with its expense (the expense's own move drawer), offered only to an owner of a
+  // profile Malafat doesn't feed; anyone else sees no such item.
+  const canMoveExpense = canMove && mayMoveExpensesFrom(profile);
+  const expenseMovedToast = useExpenseMovedToast();
+  const closeExpenseMove = () => setSearch({ ...search, moveExpense: undefined });
+  const onExpenseMoved = (target: HostedProfile) => {
+    const id = search.moveExpense;
+    closeExpenseMove();
+    if (id) expenseMovedToast(target, id);
+  };
   /** DR4: the card leaves, focus goes to its neighbour (or the tabs when it was the last), the toast names where it went. */
   const onMoved = (target: HostedProfile) => {
     const id = search.move;
@@ -181,7 +193,12 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
                           { label: t('hosted.receipts.move.open'), onSelect: () => void navigate({ to: reviewPath(item.id) }) },
                           { label: t('hosted.receipts.move.action'), onSelect: () => setSearch({ ...search, move: item.id }) },
                         ]
-                      : undefined
+                      : canMoveExpense && item.filingStatus === 'FILED' && item.expenseId
+                        ? [
+                            { label: t('hosted.receipts.move.open'), onSelect: () => void navigate({ to: reviewPath(item.id) }) },
+                            { label: t('hosted.expenses.move.withExpense'), onSelect: () => setSearch({ ...search, moveExpense: item.expenseId! }) },
+                          ]
+                        : undefined
                   }
                 />
               ))}
@@ -191,6 +208,7 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
         )}
       </QueryView>
       {search.move && canMove && <MoveReceiptDrawerHost profile={profile} receiptId={search.move} onClose={closeMove} onMoved={onMoved} />}
+      {search.moveExpense && canMoveExpense && <MoveExpenseDrawer profile={profile} expenseId={search.moveExpense} onClose={closeExpenseMove} onMoved={onExpenseMoved} />}
     </>
   );
 }

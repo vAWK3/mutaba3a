@@ -133,13 +133,14 @@ export const parseExpenses = (raw: Raw): ExpenseFilters =>
     anchor: id(raw.anchor),
   });
 
-/** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create. */
+/** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create, `?moveExpense=<id>` to move (MUT-589). */
 export interface ExpenseDrawerSearch {
   expense?: string;
   newExpense?: true;
+  moveExpense?: string;
 }
 export const parseExpenseDrawer = (raw: Raw): ExpenseDrawerSearch =>
-  compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined });
+  compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined, moveExpense: id(raw.moveExpense) });
 
 /** The /expenses route's full search: the list's own filters plus the drawer's open/edit state. */
 export type ExpensesPageSearch = ExpenseFilters & ExpenseDrawerSearch;
@@ -209,8 +210,11 @@ export interface ReceiptsPageSearch {
   status?: Exclude<ReceiptStatusFilter, 'to_review'>;
   /** MUT-503: the receipt whose Move drawer is open. */
   move?: string;
+  /** MUT-589: the expense (a filed receipt's) whose Move drawer is open. */
+  moveExpense?: string;
 }
-export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch => compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined, move: id(raw.move) });
+export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch =>
+  compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined, move: id(raw.move), moveExpense: id(raw.moveExpense) });
 
 /** MUT-503: a receipt's review page; `move` opens its Move drawer. */
 export interface ReceiptReviewSearch {

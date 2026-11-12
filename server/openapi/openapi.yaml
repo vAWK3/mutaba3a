@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.109.0-mut593
+  version: 1.110.0-mut593
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -8485,6 +8485,81 @@ components:
           nullable: true
           maxLength: 40
           description: "MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557."
+      additionalProperties: false
+    ExpenseMovePreview:
+      type: object
+      properties:
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseMoveChange"
+        receiptCount:
+          type: integer
+          description: READY receipts that move with it
+        expenseVersion:
+          type: integer
+          description: Send as expectedVersion to the move
+      required:
+        - changes
+        - receiptCount
+        - expenseVersion
+    ExpenseMoveChange:
+      type: object
+      properties:
+        field:
+          type: string
+          enum:
+            - category
+            - client
+            - matter
+            - vat
+            - allocationNumber
+            - groups
+        from:
+          type: string
+          nullable: true
+          description: "As the viewer reads it: a seeded category in their language, VAT as an amount in the expense's currency, groups joined with \", \""
+        to:
+          type: string
+          nullable: true
+          description: null = cleared (or no category, no group)
+      required:
+        - field
+        - from
+        - to
+      description: "One field a move changes. Listed in this order: category, client, matter, vat, allocationNumber, groups. Never the amount, currency, date, title, notes or typed vendor."
+    MoveExpenseResponse:
+      type: object
+      properties:
+        expense:
+          $ref: "#/components/schemas/ExpenseDetail"
+        fromProfileId:
+          type: string
+          format: uuid
+        changes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExpenseMoveChange"
+          description: The changes applied (they can differ from the preview's if the target changed in between)
+      required:
+        - expense
+        - fromProfileId
+        - changes
+      description: The expense on its new profile (same id) with its receipts, the profile it left, and what changed
+    MoveExpenseRequest:
+      type: object
+      properties:
+        profileId:
+          type: string
+          format: uuid
+          description: Another profile of the person's, which they may write now
+        expectedVersion:
+          type: integer
+          minimum: 1
+          description: The preview's expenseVersion
+      required:
+        - profileId
+        - expectedVersion
       additionalProperties: false
     CreateReceiptUploadResponse:
       type: object
@@ -20566,6 +20641,147 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/move-preview:
+    get:
+      tags:
+        - Expenses
+      summary: What moving an expense to another of your profiles would change (MUT-589)
+      description: The move's own gates, in its order, so a refusal shows before the person confirms. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. Changes are listed in the request's language (Accept-Language, else the user's). Creates nothing.
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            format: uuid
+            description: The profile to move to
+          required: true
+          description: The profile to move to
+          in: query
+          name: profileId
+      responses:
+        "200":
+          description: The preview
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExpenseMovePreview"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/expenses/{expenseId}/move:
+    post:
+      tags:
+        - Expenses
+      summary: Move an expense, with its receipts, to another of your profiles (MUT-589)
+      description: "The expense keeps its id, amount, currency, date, title, notes and typed vendor (ADR-004). Its category is matched by name on the target, then by the same preset in either language, then the target's Other, else none; its vendor is found or created on the target; its client and matter are cleared; its VAT and allocation number are kept only on a firm; its group marks are dropped (membership on the target follows its date). Every receipt on it moves too: same id, its file copied inside the bucket and removed from this profile. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. 409 CONFLICT VERSION_MISMATCH (details.currentVersion) when expectedVersion is stale or a receipt was filed onto it meanwhile: load the preview again. 409 CONFLICT RECEIPT_NOT_READY while an upload on it is unfinished. Answers the changes applied. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: expenseId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MoveExpenseRequest"
+      responses:
+        "200":
+          description: Moved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MoveExpenseResponse"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: No attachments bucket is configured for this deployment
           content:
             application/json:
               schema:

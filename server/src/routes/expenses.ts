@@ -5,6 +5,7 @@ import { todayFor, validationError } from '../agreements/compose.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
+import { moveExpense, previewExpenseMove } from '../expenses/expense-move.js';
 import { completeExpenseReceipt, receiptAudit, startExpenseReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
 import { assertCategoryChoosable, expenseDate, expensePatch, learnedFromNew, learnedFromPatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
@@ -24,6 +25,10 @@ import {
   ErrorEnvelopeSchema,
   ExpenseDetailSchema,
   ExpenseIdParamSchema,
+  ExpenseMovePreviewQuerySchema,
+  ExpenseMovePreviewSchema,
+  MoveExpenseRequestSchema,
+  MoveExpenseResponseSchema,
   ExpensePageSchema,
   ExpenseReceiptParamSchema,
   ReceiptDownloadQuerySchema,
@@ -37,8 +42,8 @@ import {
   UpdateExpenseRequestSchema,
 } from '../schemas.js';
 import { expenseContextOf, serializeExpense, serializeExpenseReceipt } from '../serializers.js';
-import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
-import { PERSON_OR_MALAFAT } from './security.js';
+import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, requestLanguage, validationResponse, versionMismatch } from './shared.js';
+import { PERSON, PERSON_OR_MALAFAT } from './security.js';
 
 /** MUT-339: how far back a streak is read; past a year it is shown as a year and more. */
 const STREAK_LOOKBACK_DAYS = 400;
@@ -266,6 +271,54 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
         await audit(c, 'expense.deleted', 'expense', deleted.record.id, { pendingReceiptsRemoved: deleted.removedReceipts.length });
       }
       return c.body(null, 204);
+    },
+  );
+
+  // ---- MUT-589 (ADR-255): move a saved expense, with its receipts, to another of the person's profiles ----
+
+  const MOVE_REFUSALS =
+    '422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked.';
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/expenses/{expenseId}/move-preview',
+      tags: ['Expenses'],
+      summary: 'What moving an expense to another of your profiles would change (MUT-589)',
+      description: `The move's own gates, in its order, so a refusal shows before the person confirms. ${MOVE_REFUSALS} Changes are listed in the request's language (Accept-Language, else the user's). Creates nothing.`,
+      // MUT-593 (ADR-254 D9): the destination is another profile, outside any Malafat tenant, so never delegated.
+      security: PERSON,
+      middleware: [requireScope('expenses:read')] as const,
+      request: { params: ExpenseIdParamSchema, query: ExpenseMovePreviewQuerySchema },
+      responses: { 200: { description: 'The preview', content: { 'application/json': { schema: ExpenseMovePreviewSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const preview = await previewExpenseMove(receiptDeps, receiptActor(c), c.req.valid('param').expenseId, c.req.valid('query').profileId, { billingGate: c.get('billingGate') === true, lang: requestLanguage(c) });
+      return c.json(preview, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/expenses/{expenseId}/move',
+      tags: ['Expenses'],
+      summary: 'Move an expense, with its receipts, to another of your profiles (MUT-589)',
+      description: `The expense keeps its id, amount, currency, date, title, notes and typed vendor (ADR-004). Its category is matched by name on the target, then by the same preset in either language, then the target's Other, else none; its vendor is found or created on the target; its client and matter are cleared; its VAT and allocation number are kept only on a firm; its group marks are dropped (membership on the target follows its date). Every receipt on it moves too: same id, its file copied inside the bucket and removed from this profile. ${MOVE_REFUSALS} 409 CONFLICT VERSION_MISMATCH (details.currentVersion) when expectedVersion is stale or a receipt was filed onto it meanwhile: load the preview again. 409 CONFLICT RECEIPT_NOT_READY while an upload on it is unfinished. Answers the changes applied. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.`,
+      // MUT-593 (ADR-254 D9): the destination is another profile, outside any Malafat tenant, so never delegated.
+      security: PERSON,
+      middleware: [requireScope('expenses:write'), idempotent(store, 'expenses.move')] as const,
+      request: { params: ExpenseIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(MoveExpenseRequestSchema) },
+      responses: { 200: { description: 'Moved', content: { 'application/json': { schema: MoveExpenseResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+    }),
+    async (c) => {
+      const body = c.req.valid('json');
+      const moved = await moveExpense(receiptDeps, receiptActor(c), c.req.valid('param').expenseId, body.profileId, body.expectedVersion, {
+        billingGate: c.get('billingGate') === true,
+        reportError: c.get('reportError'),
+        lang: requestLanguage(c),
+      });
+      return c.json({ expense: { ...serializeExpense(moved.expense, expenseContextOf(moved.target)), receipts: moved.receipts.map(serializeExpenseReceipt) }, fromProfileId: moved.fromProfileId, changes: moved.changes }, 200);
     },
   );
 

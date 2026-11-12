@@ -258,6 +258,8 @@ export const STORE_ACCESS: StoreAccess = {
     update: { write: 'expenses' },
     softDelete: { write: 'expenses' },
     totalsByCurrency: { read: 'expenses' },
+    // MUT-589: to another of the person's profiles (the route checks they may write it).
+    moveToProfile: { write: 'expenses' },
   },
   // MUT-267 (ADR-094): groups are part of the expenses domain — same session-only scopes, nothing an API key may read.
   expenseGroups: {

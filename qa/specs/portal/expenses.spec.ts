@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect, type Step } from '../../support/qa';
-import { OFFICE_A, customer, office, type StubProfile } from '../../support/portal';
+import { OFFICE_A, OFFICE_B, customer, office, type StubProfile } from '../../support/portal';
 import { traceIconScale, readIconScale } from '../../support/motion';
 import { switchLanguage } from '../../support/you';
 import { FakeApi, STORAGE, apiError, category, ceilingOf, daysAfter, expense, project, todayInJerusalem } from '../../support/portalApi';
@@ -799,5 +799,99 @@ test('On a firm, picking a vendor fills its last currency and VAT; a typed amoun
     await pick('Bezeq');
     await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
     await expect(drawer.getByLabel(/^Currency/)).toHaveValue(before);
+  });
+});
+
+/** MUT-589: Nour's expense on Nour Studio; Cedar Consulting takes it, Olive Translations is read-only. */
+const OFFICE_C = '33333333-3333-4333-8333-333333333333';
+function moveExpenseWorld(opts: { profiles?: StubProfile[] } = {}) {
+  const lapsed = { state: 'READ_ONLY' as const, source: 'TRIAL' as const, tier: 'FREELANCER' as const, until: null };
+  const hobby = category(3, 'Hobby');
+  const lunch = { ...expense(1, { amount: '117.00', title: 'Laptop stand', vendor: 'Office Depot', occurredOn: '2026-11-02', categoryId: hobby.id, customerId: C1 }), profileId: OFFICE_A };
+  return {
+    lunch,
+    api: new FakeApi({
+      profiles: opts.profiles ?? [office(OFFICE_A, 'Nour Studio'), office(OFFICE_B, 'Cedar Consulting'), { ...office(OFFICE_C, 'Olive Translations'), billing: lapsed }],
+      billingStanding: 'open',
+      clients: 1,
+      categories: [office_, hobby],
+      expenses: [lunch],
+      expenseMoveChanges: [
+        { field: 'category', from: 'Hobby', to: 'Other' },
+        { field: 'client', from: 'Nour Legal', to: null },
+      ],
+    }),
+  };
+}
+
+test('Move a saved expense to another profile from its drawer; the confirm step lists what changes', { tag: '@portal.expenses.move-expense' }, async ({ page, step }) => {
+  const { api, lunch } = moveExpenseWorld();
+  const BASE = `/p/${OFFICE_A}/expenses`;
+  const dialog = page.getByRole('dialog', { name: 'Move expense' });
+
+  await step('Open the Laptop stand expense on Nour Studio and press Move beside Delete', async () => {
+    await api.open(page, `${BASE}?expense=${lunch.id}`);
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(drawer.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await drawer.getByRole('button', { name: 'Move', exact: true }).click();
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByRole('button', { name: 'Move', exact: true })).toBeDisabled();
+  });
+
+  await step('Choose Cedar Consulting and read what changes there', async () => {
+    await dialog.getByRole('radio', { name: /Cedar Consulting/ }).click();
+    await expect(dialog.getByText('What changes on Cedar Consulting')).toBeVisible();
+    await expect(dialog.getByRole('listitem')).toHaveText([/Category\s*Other\s*was Hobby/, /Client\s*Removed\s*was Nour Legal/]);
+    expect(api.last('GET', /^\/v1\/expenses\/[^/]+\/move-preview$/)?.query.get('profileId')).toBe(OFFICE_B);
+  });
+
+  await step('Press Move to Cedar Consulting: the expense leaves Nour Studio and the toast names Cedar Consulting', async () => {
+    await dialog.getByRole('button', { name: 'Move to Cedar Consulting' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(page.getByText('Moved to Cedar Consulting')).toBeVisible();
+    const move = api.last('POST', /^\/v1\/expenses\/[^/]+\/move$/);
+    expect(move?.body).toEqual({ profileId: OFFICE_B, expectedVersion: 1 });
+    expect(move?.headers['idempotency-key']).toBeTruthy();
+    await expect(page.getByRole('row', { name: /Laptop stand/ })).toHaveCount(0);
+  });
+
+  await step('Open on the toast shows the expense on Cedar Consulting', async () => {
+    await page.getByRole('button', { name: 'Open', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/expenses\\?expense=${lunch.id}$`));
+    await expect(page.getByRole('dialog', { name: 'Edit expense' })).toBeVisible();
+  });
+});
+
+test('A read-only profile can\'t take the expense; a non-owner, or a person with one profile, sees no Move', { tag: '@portal.expenses.move-expense-refused' }, async ({ page, step }) => {
+  await step('Open Move: Olive Translations is listed read-only and can\'t be chosen; nothing is sent', async () => {
+    const { api, lunch } = moveExpenseWorld();
+    await api.open(page, `/p/${OFFICE_A}/expenses?moveExpense=${lunch.id}`);
+    const dialog = page.getByRole('dialog', { name: 'Move expense' });
+    const olive = dialog.getByRole('radio', { name: /Olive Translations/ });
+    await expect(olive).toHaveAttribute('aria-disabled', 'true');
+    await expect(olive).toContainText("Read-only until it's paid");
+    await olive.click({ force: true });
+    await expect(olive).toHaveAttribute('aria-checked', 'false');
+    expect(api.calls('GET', /^\/v1\/expenses\/[^/]+\/move-preview$/)).toHaveLength(0);
+  });
+
+  await step('On a firm Nour belongs to but doesn\'t own, the expense drawer has Delete and no Move, and ?moveExpense opens nothing', async () => {
+    const { api, lunch } = moveExpenseWorld({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), owned: false }, office(OFFICE_B, 'Cedar Consulting')] });
+    await api.open(page, `/p/${OFFICE_A}/expenses?expense=${lunch.id}`);
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(drawer.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Move', exact: true })).toHaveCount(0);
+    await page.goto(`/p/${OFFICE_A}/expenses?moveExpense=${lunch.id}`);
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Move expense' })).toHaveCount(0);
+    expect(api.calls('GET', /^\/v1\/expenses\/[^/]+\/move-preview$/)).toHaveLength(0);
+  });
+
+  await step('On a person\'s only profile the expense drawer has Delete and no Move', async () => {
+    const { api, lunch } = moveExpenseWorld({ profiles: [office(OFFICE_A, 'Nour Studio')] });
+    await api.open(page, `/p/${OFFICE_A}/expenses?expense=${lunch.id}`);
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(drawer.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Move', exact: true })).toHaveCount(0);
   });
 });

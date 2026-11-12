@@ -82,8 +82,19 @@ describe('the card ⋯ menu (MUT-503 DR5)', () => {
     expect(button).toHaveFocus();
   });
 
-  it('a Filed card has no ⋯ (AC3)', async () => {
-    portal(`${gallery}?status=filed`, { items: [item(FILED, 'FILED')] });
+  it('a Filed card\'s ⋯ offers its expense\'s move, never the receipt\'s own (AC3; MUT-589)', async () => {
+    const { user, router } = portal(`${gallery}?status=filed`, { items: [item(FILED, 'FILED')] });
+    const card = (await screen.findAllByRole('listitem')).find((li) => li.getAttribute('data-receipt-id') === FILED)!;
+    await user.click(within(card).getByRole('button', { name: /More actions/ }));
+    const menu = screen.getByRole('menu');
+    expect(within(menu).getAllByRole('menuitem').map((m) => m.textContent)).toEqual(['Open', 'Move with its expense…']);
+    await user.click(within(menu).getByRole('menuitem', { name: 'Move with its expense…' }));
+    expect(locationOf(router)).toBe(`${gallery}?status=filed&moveExpense=e0000000-0000-4000-8000-000000000001`);
+  });
+
+  it('on a profile the person doesn\'t own, a Filed card offers no Move with its expense (MUT-589, Basel 2026-11-12)', async () => {
+    const firm = profile({ id: ORG_B, name: 'Firm', type: 'BUSINESS', writerOfRecord: null, owned: false, access: own.access });
+    portal(`${gallery}?status=filed`, { items: [item(FILED, 'FILED')], profiles: [firm, studio()] });
     const card = (await screen.findAllByRole('listitem')).find((li) => li.getAttribute('data-receipt-id') === FILED)!;
     expect(within(card).queryByRole('button', { name: /More actions/ })).toBeNull();
   });

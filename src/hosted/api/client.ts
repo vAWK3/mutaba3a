@@ -128,6 +128,10 @@ export type ReceiptDisposition = 'attachment' | 'inline';
 export type ApproveReceiptRequest = Schemas['ApproveReceiptRequest'];
 export type ApproveReceiptResponse = Schemas['ApproveReceiptResponse'];
 export type MoveReceiptResponse = Schemas['MoveReceiptResponse'];
+/** MUT-589 (ADR-255): moving a saved expense, with its receipts. */
+export type ExpenseMovePreview = Schemas['ExpenseMovePreview'];
+export type ExpenseMoveChange = Schemas['ExpenseMoveChange'];
+export type MoveExpenseResponse = Schemas['MoveExpenseResponse'];
 export type CreateLibraryReceiptUploadRequest = Schemas['CreateLibraryReceiptUploadRequest'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
@@ -740,6 +744,12 @@ export const api = {
     request<Expense>('PATCH', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId, body, ifMatchVersion: version }),
   deleteExpense: (profileId: string, expenseId: string) =>
     request<void>('DELETE', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
+  /** MUT-589 (ADR-255): what moving the expense to `targetProfileId` would change; the move's own gates. */
+  expenseMovePreview: (profileId: string, expenseId: string, targetProfileId: string, signal?: AbortSignal) =>
+    request<ExpenseMovePreview>('GET', `/v1/expenses/${encodeURIComponent(expenseId)}/move-preview`, { profileId, query: { profileId: targetProfileId }, signal }),
+  /** MUT-589: the expense with its receipts to another profile; the attempt's Idempotency-Key, as the receipt move. */
+  moveExpense: (profileId: string, expenseId: string, targetProfileId: string, expectedVersion: number, idempotencyKey: string) =>
+    request<MoveExpenseResponse>('POST', `/v1/expenses/${encodeURIComponent(expenseId)}/move`, { profileId, body: { profileId: targetProfileId, expectedVersion }, idempotencyKey }),
 
   // MUT-175: Reports names archived categories too (`includeArchived: 'true'`)
   expenseCategories: (profileId: string, query: Query<'/v1/expense-categories'> = {}) =>

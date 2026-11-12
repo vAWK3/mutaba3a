@@ -2756,6 +2756,32 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       return { record: { ...e }, changed: true, removedReceipts };
     },
+    moveToProfile: async (params) => {
+      // No await between the checks and the writes: the memory store's stand-in for the expense and receipt locks.
+      const e = this.exps.get(params.expenseId);
+      if (!e || e.organizationId !== params.organizationId || e.deletedAt) return { kind: 'not_found' };
+      if (e.version !== params.expectedVersion) return { kind: 'stale', currentVersion: e.version };
+      const onExpense = [...this.expReceipts.values()].filter((r) => r.organizationId === params.organizationId && r.expenseId === e.id && !r.deletedAt);
+      if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' };
+      const wanted = Object.keys(params.receiptKeys).sort();
+      if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed', currentVersion: e.version };
+      if (params.patch.categoryId && !this.expCats.has(params.patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
+      if (params.patch.vendorId && !this.vendorMap.has(params.patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
+      assertExpenseVatColumns({ ...e, ...definedOnly(params.patch) });
+      Object.assign(e, definedOnly(params.patch), { organizationId: params.targetOrganizationId, updatedAt: params.at });
+      e.version += 1;
+      const previousStorageKeys: string[] = [];
+      for (const r of onExpense) {
+        previousStorageKeys.push(r.storageKey);
+        r.organizationId = params.targetOrganizationId;
+        r.storageKey = params.receiptKeys[r.id]!;
+        if (r.approved) r.approved = { ...r.approved, categoryId: params.approvedCategoryId };
+        r.version += 1;
+      }
+      for (const [key, mark] of this.groupMarks) if (mark.expenseId === e.id) this.groupMarks.delete(key);
+      for (const event of params.audit) await this.audit.append(event);
+      return { kind: 'moved', expense: { ...e }, receipts: onExpense.map((r) => ({ ...r })), previousStorageKeys };
+    },
     totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
       const totals = new Map<string, ExpenseCurrencyTotal>();
       for (const e of this.exps.values()) {

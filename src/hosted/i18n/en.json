@@ -546,7 +546,8 @@
         },
         "addedByClaude": "Added by {claude}",
         "deleteConfirm": "Delete this expense ({amount})? This can't be undone.",
-        "deleteConfirmNamed": "Delete “{name}” ({amount})? This can't be undone."
+        "deleteConfirmNamed": "Delete “{name}” ({amount})? This can't be undone.",
+        "move": "Move"
       },
       "errors": {
         "categoryArchived": "This category is no longer available — pick another",
@@ -591,6 +592,41 @@
         "needed": "This invoice needs an allocation number. You may not be able to claim back the VAT without it.",
         "missing": "No allocation number. You may not be able to claim back the VAT without it.",
         "badge": "No allocation number"
+      },
+      "move": {
+        "title": "Move expense",
+        "action": "Move to profile…",
+        "withExpense": "Move with its expense…",
+        "onProfile": "now on {profile}",
+        "checking": "Checking what changes there…",
+        "changesTitle": "What changes on {name}",
+        "noChanges": "Nothing else changes. The amount, currency, date, title and notes stay as they are.",
+        "was": "was",
+        "removed": "Removed",
+        "keeps": "The amount, currency, date, title and notes never change.",
+        "receipts": {
+          "one": "Its receipt moves with it.",
+          "other": "Its {count} receipts move with it."
+        },
+        "field": {
+          "category": "Category",
+          "client": "Client",
+          "matter": "Matter",
+          "vat": "VAT",
+          "allocationNumber": "Allocation number",
+          "groups": "Groups"
+        },
+        "moved": "Moved to {name}",
+        "errors": {
+          "lapsed": "{name} can't take expenses right now: it's read-only until it's paid. The expense stays here.",
+          "noAccess": "You're no longer on {name}. The expense stays here.",
+          "notOwner": "Only an owner of this profile can move its expenses.",
+          "malafat": "Malafat keeps the books of one of these profiles, so the expense can't move between them.",
+          "changed": "This expense or {name} changed meanwhile. Check what changes now, then move it again.",
+          "notReady": "A receipt on this expense hasn't finished uploading. Try again once it has.",
+          "gone": "This expense isn't here any more. It may have been moved or deleted.",
+          "failed": "The expense couldn't be moved. Check your connection and try again."
+        }
       }
     },
     "conversions": {

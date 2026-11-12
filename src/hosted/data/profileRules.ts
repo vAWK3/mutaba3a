@@ -117,3 +117,13 @@ export function ownersSectionVisible(profile: HostedProfile): boolean {
 export function coOwnsOthersProfiles(me: Me): boolean {
   return me.profiles.some((profile) => profile.owned && !createdBy(profile, me.user.id));
 }
+
+/**
+ * MUT-589 (ADR-255, Basel 2026-11-12): whether the portal offers to move this profile's expenses elsewhere. Only an
+ * owner (creator or co-owner, `owned`) of a profile Malafat doesn't feed; anyone else sees no Move at all (the server's
+ * 403 NOT_OWNER / MALAFAT_PROFILE stay as the backstop). Writability, signed-out mode and "somewhere to move to" are
+ * the caller's other conditions.
+ */
+export function mayMoveExpensesFrom(profile: Pick<HostedProfile, 'owned' | 'writerOfRecord'>): boolean {
+  return profile.owned && profile.writerOfRecord !== 'MALAFAT';
+}
