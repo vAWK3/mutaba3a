@@ -214,6 +214,8 @@ describe('each revocation ends access on the next call (ADR-254 §4.7)', () => {
     const integration = await h.store.integrations.findByProviderAndTenant('MALAFAT', firm.tenant);
     await h.store.integrations.connect({ organizationId: firm.organizationId, provider: 'MALAFAT', externalTenantId: firm.tenant, displayName: 'again', connectedByApiKeyId: integration!.connectedByApiKeyId ?? '', at: h.now() });
     expect((await addExpense(h, conn.headers())).status).toBe(401);
+    // Coming back starts with Malafat access off, until the operator turns it on again (review finding 3).
+    expect((await h.store.integrations.findByProviderAndTenant('MALAFAT', firm.tenant))?.delegationEnabledAt).toBeNull();
   });
 
   it('a password change ends it (DF2)', async () => {

@@ -24238,7 +24238,6 @@ paths:
       security:
         - session: []
         - deviceSession: []
-        - delegated: []
       parameters:
         - schema:
             type: string

@@ -38,7 +38,7 @@ import { expectsAllocationNumber } from '../receipts/extract/merge.js';
 import { expenseContextOf, serializeExpense, serializeExpenseReceipt, serializeReceiptLibraryItem } from '../serializers.js';
 import { receiptVendorDefaults } from '../vendors/receipt-defaults.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
-import { PERSON_OR_MALAFAT } from './security.js';
+import { PERSON, PERSON_OR_MALAFAT } from './security.js';
 
 /** MUT-255 decision P3: unfinished library uploads one profile may hold from the last day, before a new one is refused. */
 export { MAX_PENDING_LIBRARY_UPLOADS } from '../expenses/receipts-compose.js';
@@ -357,7 +357,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
       summary: 'Move a To-review receipt to another of your profiles (MUT-503)',
       description:
         'The receipt keeps its id, upload day, suggestion and reading state; its file is copied inside the bucket to the other profile and removed from this one. An approval left by a deleted expense is cleared, since its category belongs to this profile. 422 SAME_PROFILE for this profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when that profile is read-only or locked; 404 RECEIPT_NOT_FOUND; 409 CONFLICT RECEIPT_ALREADY_FILED (details.expenseId) for a filed receipt; 409 CONFLICT RECEIPT_FILE_MISSING when its file is gone; 422 ATTACHMENT_NOT_READY before the upload completes. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.',
-      security: PERSON_OR_MALAFAT,
+      // MUT-593 (ADR-254 D9): its destination is another profile, outside any Malafat tenant, so never delegated.
+      security: PERSON,
       middleware: [requireScope('expenses:write'), idempotent(store, 'receipts.move')] as const,
       request: { params: ReceiptIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(MoveReceiptRequestSchema) },
       responses: { 200: { description: 'Moved', content: { 'application/json': { schema: MoveReceiptResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },

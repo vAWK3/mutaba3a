@@ -218,6 +218,21 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       expect((await store.oauth.findGrant(other.grant.id))?.revokedAt).toBeNull();
     });
 
+    it('the Malafat switch turns off with a reconnect or a new tenant, and survives a plain re-bind', async () => {
+      const store = await makeStore();
+      const org = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      const bind = (tenant: string) => store.integrations.connect({ organizationId: org.id, provider: 'MALAFAT', externalTenantId: tenant, displayName: 'Firm', connectedByApiKeyId: randomUUID(), at: at(1) });
+      const tenant = `tenant-${unique()}`;
+      const integration = await bind(tenant);
+      const enable = () => store.integrations.setDelegation({ id: integration.id, enabled: true, by: null, at: at(2), audit: [] });
+      await enable();
+      expect((await bind(tenant)).delegationEnabledAt).toEqual(at(2));
+      expect((await bind(`tenant-${unique()}`)).delegationEnabledAt).toBeNull();
+      await enable();
+      await store.integrations.disconnect(integration.id, at(3));
+      expect((await bind(`tenant-${unique()}`)).delegationEnabledAt).toBeNull();
+    });
+
     it('cleanup never removes a confidential client, and drops expired assertion ids', async () => {
       const store = await makeStore();
       const clientId = `mcc_${unique()}`;

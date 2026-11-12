@@ -1404,8 +1404,11 @@ export class PrismaLedgerStore implements LedgerStore {
       this.prisma.integration.findUnique({ where: { provider_externalTenantId: { provider, externalTenantId } } }),
     listByOrganization: (organizationId) => this.prisma.integration.findMany({ where: { organizationId } }),
     connect: (input) =>
-      translate(() =>
-        this.prisma.integration.upsert({
+      translate(async () => {
+        // MUT-593 (ADR-254 D10): a new tenant, or coming back after a disconnect, starts with Malafat access off.
+        const existing = await this.prisma.integration.findUnique({ where: { organizationId_provider: { organizationId: input.organizationId, provider: input.provider } } });
+        const resetDelegation = existing !== null && (existing.externalTenantId !== input.externalTenantId || existing.status === 'DISCONNECTED');
+        return this.prisma.integration.upsert({
           where: { organizationId_provider: { organizationId: input.organizationId, provider: input.provider } },
           create: {
             organizationId: input.organizationId,
@@ -1423,9 +1426,10 @@ export class PrismaLedgerStore implements LedgerStore {
             connectedByApiKeyId: input.connectedByApiKeyId,
             connectedAt: input.at,
             disconnectedAt: null,
+            ...(resetDelegation ? { delegationEnabledAt: null, delegationEnabledBy: null } : {}),
           },
-        }),
-      ),
+        });
+      }),
     disconnect: (id, at) =>
       this.prisma.$transaction(async (tx) => {
         await tx.integration.updateMany({ where: { id }, data: { status: 'DISCONNECTED', disconnectedAt: at } });

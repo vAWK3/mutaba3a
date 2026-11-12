@@ -1592,6 +1592,9 @@ export class MemoryLedgerStore implements LedgerStore {
       );
       if (tenantTaken) throw new UniqueViolation('integrations.provider_externalTenantId');
       if (existing) {
+        // MUT-593 (ADR-254 D10): the operator approved one tenant on a live connection; another tenant, or coming back
+        // after a disconnect, starts with Malafat access off until the operator turns it on again.
+        if (existing.externalTenantId !== input.externalTenantId || existing.status === 'DISCONNECTED') Object.assign(existing, { delegationEnabledAt: null, delegationEnabledBy: null });
         existing.externalTenantId = input.externalTenantId;
         existing.displayName = input.displayName;
         existing.status = 'CONNECTED';

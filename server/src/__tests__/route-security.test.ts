@@ -305,6 +305,8 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 
 let app: ReturnType<typeof createApp>;
 let operations: Operation[];
+/** MUT-593: the published document, for the delegated routes' request shapes. */
+let openapiDoc: Loose;
 let routeAccess: RouteAccessIndex;
 let sessionCookie: string;
 let deviceToken: string;
@@ -331,6 +333,7 @@ beforeAll(async () => {
     periodDownloads: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
+  openapiDoc = doc;
   operations = Object.entries(doc.paths)
     .filter(([path]) => path.startsWith('/v1/'))
     .flatMap(([path, item]) =>
@@ -401,6 +404,19 @@ describe('Malafat’s delegated token (MUT-593, ADR-254)', () => {
   it('never reaches a credential, session, account, billing, agent, operator or cross-profile route', () => {
     const leaked = delegated().filter((op) => NEVER_DELEGATED_PREFIXES.some((prefix) => op.path.startsWith(prefix))).map((op) => op.key);
     expect(leaked).toEqual([]);
+  });
+
+  it('takes no profile id in a body or query, so the tenant check in the header is the only door (review finding 1)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolve = (schema: any): any => (schema?.$ref ? openapiDoc.components.schemas[schema.$ref.split('/').pop()] : schema);
+    const PROFILE_FIELDS = ['profileId', 'organizationId', 'profileIds'];
+    const offenders = delegated().filter((op) => {
+      const spec = openapiDoc.paths[op.path][op.method.toLowerCase()];
+      const query = (spec.parameters ?? []).some((p: Loose) => p.in === 'query' && PROFILE_FIELDS.includes(p.name));
+      const body = resolve(spec.requestBody?.content?.['application/json']?.schema);
+      return query || PROFILE_FIELDS.some((f) => f in (body?.properties ?? {}));
+    });
+    expect(offenders.map((op) => op.key)).toEqual([]);
   });
 
   it('reaches a route that names no profile in the header only when the tenant check covers it', () => {

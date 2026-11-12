@@ -46,6 +46,11 @@
 - **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".
 - **Fix:** with MUT-596's Connected apps screen, give the confidential client its own actions (`user.app_connected`, `user.app_disconnected`) and copy.
 
+### TD-312: The `via: malafat` audit stamp is tested on one write
+**Status**: Open (MUT-593, 2026-11-12; ADR-254 AC9)
+- **What:** `stampDelegatedAudit` (store-guard) marks every audit row that reaches the store as an argument, up to three levels deep. A repository that builds its audit row itself from plain inputs would write it without `via`. Only the expense create is tested.
+- **Fix:** a test that runs each opted-in write route under a delegated token and checks every audit row it writes carries `via`.
+
 ### TD-311: A confidential client's JWKS fetch trusts the operator's URL
 **Status**: Accepted (MUT-593, 2026-11-12; ADR-254 R7)
 - **What:** `remoteKeys` fetches only https and only the URL the operator registered, but doesn't run the CIMD fetch's private-address guard.
