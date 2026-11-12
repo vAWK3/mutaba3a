@@ -55,6 +55,29 @@ describe('Move in the expense drawer (MUT-589)', () => {
     expect(within(drawer).queryByRole('button', { name: 'Move' })).toBeNull();
   });
 
+  it('a profile the person belongs to but doesn\'t own offers no Move, and ?moveExpense opens nothing (Basel, 2026-11-12)', async () => {
+    const firm = profile({ id: ORG_B, name: 'Firm', type: 'BUSINESS', writerOfRecord: null, owned: false, access: own.access });
+    portal(`${expenses}?expense=${E1}`, { profiles: [firm, studio()] });
+    const drawer = await screen.findByRole('dialog', { name: /Edit expense/ });
+    await within(drawer).findByRole('button', { name: 'Delete' });
+    expect(within(drawer).queryByRole('button', { name: 'Move' })).toBeNull();
+  });
+
+  it('?moveExpense on a profile the person doesn\'t own opens nothing', async () => {
+    const firm = profile({ id: ORG_B, name: 'Firm', type: 'BUSINESS', writerOfRecord: null, owned: false, access: own.access });
+    const { api } = portal(`${expenses}?moveExpense=${E1}`, { profiles: [firm, studio()] });
+    await waitFor(() => expect(api.count('GET /v1/expenses')).toBeGreaterThan(0));
+    expect(screen.queryByRole('dialog', { name: 'Move expense' })).toBeNull();
+  });
+
+  it('a Malafat-fed profile offers no Move, even to its owner', async () => {
+    const fed = profile({ id: ORG_B, name: 'Firm', type: 'BUSINESS', writerOfRecord: 'MALAFAT', owned: true, access: own.access });
+    portal(`${expenses}?expense=${E1}`, { profiles: [fed, studio()] });
+    const drawer = await screen.findByRole('dialog', { name: /expense/i });
+    await within(drawer).findByRole('button', { name: 'Delete' });
+    expect(within(drawer).queryByRole('button', { name: 'Move' })).toBeNull();
+  });
+
   it('a read-only profile offers no Move', async () => {
     portal(`${expenses}?expense=${E1}`, { profiles: [personal(readOnly), studio(open)], standing: 'read-only' });
     const drawer = await screen.findByRole('dialog', { name: /expense/i });

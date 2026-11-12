@@ -862,7 +862,7 @@ test('Move a saved expense to another profile from its drawer; the confirm step 
   });
 });
 
-test('A read-only profile can\'t take the expense, and with one profile there is no Move', { tag: '@portal.expenses.move-expense-refused' }, async ({ page, step }) => {
+test('A read-only profile can\'t take the expense; a non-owner, or a person with one profile, sees no Move', { tag: '@portal.expenses.move-expense-refused' }, async ({ page, step }) => {
   await step('Open Move: Olive Translations is listed read-only and can\'t be chosen; nothing is sent', async () => {
     const { api, lunch } = moveExpenseWorld();
     await api.open(page, `/p/${OFFICE_A}/expenses?moveExpense=${lunch.id}`);
@@ -872,6 +872,18 @@ test('A read-only profile can\'t take the expense, and with one profile there is
     await expect(olive).toContainText("Read-only until it's paid");
     await olive.click({ force: true });
     await expect(olive).toHaveAttribute('aria-checked', 'false');
+    expect(api.calls('GET', /^\/v1\/expenses\/[^/]+\/move-preview$/)).toHaveLength(0);
+  });
+
+  await step('On a firm Nour belongs to but doesn\'t own, the expense drawer has Delete and no Move, and ?moveExpense opens nothing', async () => {
+    const { api, lunch } = moveExpenseWorld({ profiles: [{ ...office(OFFICE_A, 'Nour Studio'), owned: false }, office(OFFICE_B, 'Cedar Consulting')] });
+    await api.open(page, `/p/${OFFICE_A}/expenses?expense=${lunch.id}`);
+    const drawer = page.getByRole('dialog', { name: 'Edit expense' });
+    await expect(drawer.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Move', exact: true })).toHaveCount(0);
+    await page.goto(`/p/${OFFICE_A}/expenses?moveExpense=${lunch.id}`);
+    await expect(page.getByRole('table')).toBeVisible();
+    await expect(page.getByRole('dialog', { name: 'Move expense' })).toHaveCount(0);
     expect(api.calls('GET', /^\/v1\/expenses\/[^/]+\/move-preview$/)).toHaveLength(0);
   });
 

@@ -112,8 +112,10 @@ features:
     tickets: [MUT-503, MUT-589]
     steps:
       - Open Receipts › Filed, open a card's ⋯, then open a Filed receipt
+      - Open Receipts › Filed on a firm the person belongs to but doesn't own
     expect:
       - A Filed card's ⋯ offers Open and Move with its expense…, never Move to profile…; the Filed receipt's page has no Move to profile…
+      - On a profile the person doesn't own, a Filed card has no Move with its expense… (and no ⋯)
   - id: move-filed
     title: Move a Filed receipt with its expense from its card's ⋯ menu (MUT-589)
     tier: secondary

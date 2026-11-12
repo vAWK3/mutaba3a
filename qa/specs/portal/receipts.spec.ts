@@ -201,12 +201,12 @@ test('With the receipts library off there is no Receipts tab, and its link says 
 });
 
 /** MUT-503: two profiles of Nour's, a third that is read-only; three receipts on Nour Studio (MUT-589: the filed one on an expense). */
-function moveWorld(opts: { othersLapsed?: boolean } = {}) {
+function moveWorld(opts: { othersLapsed?: boolean; ownsHere?: boolean } = {}) {
   const spinneys = { ...expense(7, { amount: '212.00', vendor: 'Spinneys', occurredOn: '2026-10-20', categoryId: groceries.id }), profileId: OFFICE_A };
   const lapsed = { state: 'READ_ONLY' as const, source: 'TRIAL' as const, tier: 'FREELANCER' as const, until: null };
   return new FakeApi({
     profiles: [
-      office(OFFICE_A, 'Nour Studio'),
+      { ...office(OFFICE_A, 'Nour Studio'), owned: opts.ownsHere ?? true },
       { ...office(OFFICE_B, 'Cedar Consulting'), ...(opts.othersLapsed ? { billing: lapsed } : {}) },
       { ...office(OFFICE_C, 'Olive Translations'), billing: lapsed },
     ],
@@ -321,6 +321,14 @@ test('A Filed receipt never moves alone, on its card or its page', { tag: '@port
     await page.goto(`${BASE}/receipts/${libraryReceipt(3).id}`);
     await expect(page.getByRole('heading', { level: 1, name: 'Filed receipt' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Move to profile…' })).toHaveCount(0);
+  });
+
+  await step("On a profile Nour doesn't own, a Filed card has no Move with its expense…", async () => {
+    const notMine = moveWorld({ ownsHere: false });
+    await notMine.open(page, `${BASE}/receipts?status=filed`);
+    const grid = page.getByRole('list', { name: 'Receipts' });
+    await expect(grid.getByRole('listitem')).toHaveCount(1);
+    await expect(grid.getByRole('button', { name: /More actions/ })).toHaveCount(0);
   });
 });
 

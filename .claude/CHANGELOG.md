@@ -34,7 +34,7 @@
 
 ### Added
 - `GET /v1/expenses/{id}/move-preview?profileId=` and `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (API 1.109.0-mut589): the same gates (SAME_PROFILE, EXPENSE_NOT_FOUND, MALAFAT_PROFILE, NOT_OWNER, PROFILE_NOT_FOUND, lapse 402), fields mapped by name with every change listed, receipts copied then re-homed in one transaction with both audits. Files: `server/src/expenses/{move-plan,expense-move}.ts`, `routes/expenses.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `auth/{store-guard,writability}.ts`.
-- Portal: Move beside Delete in the expense drawer and "Move with its expense…" on a filed receipt card open `MoveExpenseDrawer` (`?moveExpense=`), which lists what changes on the chosen profile before Move. i18n `hosted.expenses.move.*`, `hosted.expenses.drawer.move` (ar, en).
+- Portal: Move beside Delete in the expense drawer and "Move with its expense…" on a filed receipt card open `MoveExpenseDrawer` (`?moveExpense=`), which lists what changes on the chosen profile before Move. Move shows only to an owner (creator or co-owner) of a profile Malafat doesn't feed; for anyone else, and on a read-only profile, with one profile or signed out, it is hidden entirely (Basel, 2026-11-12; the server's 403 stays as the backstop). i18n `hosted.expenses.move.*`, `hosted.expenses.drawer.move` (ar, en).
 
 ### Changed
 - `MoveReceiptDrawer`'s body is now `MoveToProfileDrawer`, shared with the expense move. A Filed receipt card has a ⋯ menu (Open, Move with its expense…) where the person has another profile.

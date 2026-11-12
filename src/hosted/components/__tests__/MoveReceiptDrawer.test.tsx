@@ -92,6 +92,13 @@ describe('the card ⋯ menu (MUT-503 DR5)', () => {
     expect(locationOf(router)).toBe(`${gallery}?status=filed&moveExpense=e0000000-0000-4000-8000-000000000001`);
   });
 
+  it('on a profile the person doesn\'t own, a Filed card offers no Move with its expense (MUT-589, Basel 2026-11-12)', async () => {
+    const firm = profile({ id: ORG_B, name: 'Firm', type: 'BUSINESS', writerOfRecord: null, owned: false, access: own.access });
+    portal(`${gallery}?status=filed`, { items: [item(FILED, 'FILED')], profiles: [firm, studio()] });
+    const card = (await screen.findAllByRole('listitem')).find((li) => li.getAttribute('data-receipt-id') === FILED)!;
+    expect(within(card).queryByRole('button', { name: /More actions/ })).toBeNull();
+  });
+
   it('with no other profile there is no ⋯ anywhere, and ?move opens nothing (DR2)', async () => {
     portal(`${gallery}?move=${R1}`, { profiles: [personal()] });
     await screen.findAllByRole('listitem');

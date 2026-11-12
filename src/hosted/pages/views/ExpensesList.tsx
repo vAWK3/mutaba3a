@@ -22,6 +22,7 @@ import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { canAddClient } from '../../data/incomeAffordances';
+import { mayMoveExpensesFrom } from '../../data/profileRules';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 import { SectionTabs } from '../../components/SectionTabs';
 import { useExpensesTabs } from './ExpenseGroupsList';
@@ -79,8 +80,9 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const me = useMe();
   const local = useIsLocalMode();
   const movedToast = useExpenseMovedToast();
-  // MUT-589: Move where there is somewhere to move to and this profile may be written; never signed out (no library).
-  const canMove = writable && !local && hasOtherProfiles(me, profile.id);
+  // MUT-589: Move only for an owner of a profile Malafat doesn't feed, where there is somewhere to move to and this
+  // profile may be written; never signed out (no library). Anyone else sees no Move at all.
+  const canMove = writable && !local && mayMoveExpensesFrom(profile) && hasOtherProfiles(me, profile.id);
 
   const categoriesById = useMemo(
     () => new Map((categoriesQuery.data ?? []).map((c) => [c.id, c])),

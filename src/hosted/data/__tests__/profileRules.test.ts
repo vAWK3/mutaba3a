@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, ownerActions, ownersSectionVisible, profileEditability, profileKindKey, sharedWith } from '../profileRules';
+import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, mayMoveExpensesFrom, ownerActions, ownersSectionVisible, profileEditability, profileKindKey, sharedWith } from '../profileRules';
 import { me, profile } from '../../__tests__/harness';
 
 const firm = profile();
@@ -132,5 +132,15 @@ describe('co-owners (MUT-373)', () => {
     expect(createdBy(iCoOwn, ME)).toBe(false);
     expect(createdBy({ ...ownedBusiness, owners: null }, ME)).toBe(true);
     expect(createdBy(firm, ME)).toBe(false);
+  });
+});
+
+describe('mayMoveExpensesFrom (MUT-589, ADR-254)', () => {
+  it('offers Move only to an owner of a profile Malafat does not feed', () => {
+    expect(mayMoveExpensesFrom(builtIn)).toBe(true);
+    expect(mayMoveExpensesFrom(ownedPersonal)).toBe(true);
+    expect(mayMoveExpensesFrom(writerNullFirm)).toBe(false);
+    expect(mayMoveExpensesFrom(firm)).toBe(false);
+    expect(mayMoveExpensesFrom(profile({ writerOfRecord: 'MALAFAT', owned: true }))).toBe(false);
   });
 });
