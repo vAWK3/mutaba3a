@@ -18,10 +18,11 @@
 
 ## Open Debt
 
-### TD-307: AC2 of MUT-590 is unmeasured until real vendor-made PDFs are in the bench
-**Status**: Open (MUT-590, 2026-11-11; ADR-252)
-- **What:** the bench now scores `kind: "vendor-pdf"` on its own, but `receipt-bench` has no vendor-made invoice PDFs (its PDFs are Adobe Scan output), so "≥95% of present fields, 0 wrong-and-confident" is shown only on synthetic cases.
-- **Fix:** Basel adds ≥10 vendor PDFs from email (he/ar/en, the shubak ₪200 one first) with truth in `manifest.json`; run the bench with `--compare` against main before the release.
+### TD-307: Vendor-made invoice PDFs read 70% of their printed fields, against a 95% bar
+**Status**: Open (MUT-590, 2026-11-12; ADR-252; the work is MUT-591)
+- **What:** on Basel's 14 vendor-made invoices in receipt-bench, 57/82 printed fields are read right (total/date/currency 34/40, 0 confidently wrong; vendor, VAT, registration, allocation 23/42, 4 confidently wrong). One field reads worse than main: a registration number when the bill-to's ח.פ/ת.ז and the vendor's ח.פ/ע.מ share one printed line and the buyer's number isn't learned yet. The bench truth has no phone or email for these invoices, so a filled phone or email scores as wrong.
+- **Why it's acceptable:** Basel chose to land MUT-590 (2026-11-12): it reads more than main on every field group, with no new confidently wrong total, date or currency.
+- **Fix:** MUT-591: rank date labels (invoice date over the others), vendor name on invoices, a signal for the two-column registration row, phone/email truth.
 
 ### TD-306: The same allocation number on two expenses is not flagged
 **Status**: Accepted (MUT-557, 2026-11-06; ADR-246, Basel's R2)

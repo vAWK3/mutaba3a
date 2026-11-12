@@ -6559,4 +6559,9 @@ order Hebrew layers came reversed. Separately, receipt 27e28e05's read ended `sk
 
 **Consequences:** conf-1 rows clear every rule weight, so more label/value pairs mean more chances of a confident wrong
 field; the bench's vendor-pdf scope (0 wrong-and-confident, ≥95% of present fields) and `--compare` against main are the
-guard, and AC2 waits for Basel's vendor PDFs (TD-307). Mixed-version rollout is safe both ways.
+guard. Mixed-version rollout is safe both ways.
+
+**Measured (2026-11-12, Basel's 17 real invoices, 14 vendor-made):** total/date/currency 34/40 with 0 confidently wrong
+(main 32/40); the secondary fields 23/42 (main 16/42); 57/82 overall against the ticket's 95%. One field reads worse
+than main: the two-column registration row (a known buyer number is now passed over for the vendor's labelled one
+after it, but an unlearned one still wins). Basel landed it as is; the rest is MUT-591 (TD-307).

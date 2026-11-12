@@ -214,6 +214,6 @@ NO UNRESOLVED DECISIONS
   lost; the defect was only that the log said `skipped` with no reason. Not the Discard hypothesis. The skip now logs
   `code: deleted | filed | complete | ungranted`, and a read logs `engine` and, for a text PDF, `chars` (cf123fe4).
 - **Hebrew repair:** reordered per line (whole visual lines through `get_display`), decided on the generated cases.
-- **Bench:** `vendor-pdf` scope added; AC2 stays unmeasured until Basel's vendor PDFs are in receipt-bench (TD-307).
+- **Bench (2026-11-12):** Basel's 17 real invoices (14 vendor-made; 3 scans with no text layer), truth checked by Basel in a local review page. Vendor-made: total/date/currency 34/40, 0 confidently wrong (main 32/40); secondary 23/42 (main 16/42); 57/82 overall. `--compare` vs main 9fa835d0: 10 fields gained, 1 lost (the two-column registration row on one invoice). Basel: land now; the 95% bar moves to MUT-591.
 - **Release-QA:** `portal-selfservice.receipts.vendor-pdf`, a synthetic invoice (`syn-vendor-invoice-en.pdf`, label and
   amount drawn as separate objects on one line).

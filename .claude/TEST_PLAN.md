@@ -4535,4 +4535,6 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - `server/src/receipts/extract/__tests__/extract.test.ts`: placed text layer → total/currency/date (Hebrew label and amount apart), label over amount in a column, registration label and number in neighbouring runs; `pdfText` without lines → line-by-line (back-compat).
 - `server/src/receipts/__tests__/reader-skip-reason.test.ts`: deleted, filed (mid-read), complete and ungranted skips log their `code`; a text-PDF read logs `engine` and `chars`, no text.
 - `server/src/scripts/__tests__/receipts-reread.test.ts`: `--mime application/pdf` picks PDFs only; a generation above the current reader is refused.
-- Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope awaits real PDFs (TD-307).
+- `extract.test.ts` also: an ordinal day (`6th May 2026`); a buyer's number first on a row gives way to the vendor's labelled one after it, and with no label after it still ends the search.
+- `store-contract-receipt-reading.ts`: F8 pins the skip reason (deleted, filed) for memory and Prisma.
+- Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope on Basel's 17 real invoices: 57/82 (TD-307, MUT-591).
