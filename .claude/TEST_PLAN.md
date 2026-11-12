@@ -4547,3 +4547,18 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - Guard: `src/lib/i18n/__tests__/dateLocaleGuard.test.ts` runs ESLint on probe code for the portal and the website.
 - Server: templates, renewal-mail and checkout tests hold the Levantine names.
 - Release-QA: `@portal.direction.levantine-months` (client book, trip group, closing page). Manual: Safari, one date, one amount, one country name in Arabic (D4).
+
+## MUT-593 — Malafat's delegated token on /v1 (ADR-254)
+
+| What | Where |
+|---|---|
+| Assertion verification: ES256/RS256 accepted; wrong key, iss, sub, aud, no jti, expired, too long, replay, HS256, `none`, an org key refused | `server/src/oauth/__tests__/client-assertion.test.ts` |
+| AC1: opted-in route reached as the person, audited `via: malafat`; 404 on own and other profiles; 403 on undeclared and cross-profile routes; `/v1/me` filtered; firm role unchanged | `server/src/__tests__/routes-delegated.test.ts` |
+| AC2: an org key mints nothing and opens no person route; `/v1` tokens never open `/mcp`, agents' tokens never open `/v1` | same |
+| ADR-197 §5: assertion on code and every refresh, rotation, reuse revokes; JWKS rotation keeps connections (R4); public client can't ask for `/v1` | same |
+| Consent: tenant must name a firm the person is in with the switch on (R6) | same |
+| §4.7, one test per row: Connected apps, membership removal, disconnect (and reconnect revives nothing), password change, operator disable, operator sign-out, per-firm switch (and back on revives nothing), client disable; `agent_access` revoke leaves Malafat | same |
+| Global switch off; agents and Connected apps lists kept apart; delegated period download dies with its grant | same |
+| Operator per-firm switch: on/off audited ADMIN, NOT_MALAFAT_FED, dark when off | `server/src/__tests__/routes-operator-malafat-delegation.test.ts` |
+| Contract: every delegated route also takes a session; none under a never prefix; organization-independent ones only through the tenant allowlist | `server/src/__tests__/route-security.test.ts` |
+| Store: confidential client, tenant on grants, `claimAssertion`, `disableClient`, `revokeForUserTenant`, cleanup keeps confidential clients | `server/src/repositories/__tests__/store-contract-oauth.ts` (memory; Prisma in `test:db`) |

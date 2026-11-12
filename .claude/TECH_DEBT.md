@@ -41,6 +41,17 @@
 - **What:** `min_confident_chars` 80, `turn_gain` 1.25, `min_turn_gain_chars` 20, `sideways_keep` 0.8, and the 6°/2° torn-edge rule were set on the synthetic photos turned four ways and one real sideways photo (Maxi), the same receipts the bench then checks: nothing held out. An upside-down page whose first read still scores 80 confident characters or more is never turned.
 - **Fix:** recheck them on MUT-541's approved receipts once there are some, and on any new sideways or upside-down production photo.
 
+### TD-310: Malafat's connect and revoke are audited as an agent's
+**Status**: Open (MUT-593, 2026-11-12; ADR-254)
+- **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".
+- **Fix:** with MUT-596's Connected apps screen, give the confidential client its own actions (`user.app_connected`, `user.app_disconnected`) and copy.
+
+### TD-311: A confidential client's JWKS fetch trusts the operator's URL
+**Status**: Accepted (MUT-593, 2026-11-12; ADR-254 R7)
+- **What:** `remoteKeys` fetches only https and only the URL the operator registered, but doesn't run the CIMD fetch's private-address guard.
+- **Why it's acceptable:** only the admin token registers a confidential client, and there is one (Malafat).
+- **Fix:** route `createRemoteJWKSet` through `trust.ts`'s guarded fetch before a second confidential client is registered.
+
 ### TD-305: A turned photo pays two full reads
 **Status**: Open (MUT-540, 2026-11-03; ADR-244)
 - **What:** a sideways photo is read once as it is, then turned, prepared again and read again: about 9 s for the 4032×3024 Maxi photo on this Mac, against about 2 s for an upright one. The deadline guard skips the retry rather than time out, so the worst case is the first read.

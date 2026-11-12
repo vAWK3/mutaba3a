@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — Malafat calls /v1 as the person, with a tenant-bound delegated token (MUT-593, ADR-254)
+
+### Added
+- **A third principal, `delegated`** (`server/src/auth/middleware.ts`, `server/src/auth/delegation.ts`): an OAuth access token issued to a confidential client for `<origin>/v1` resolves to the person, with `via { clientId, grantId, tenantId, organizationId }`, and runs the session path unchanged (selectProfile, scopes, store guard, billing gate). It reaches only the profile its Malafat tenant names; any other, the person's own included, is 404 PROFILE_NOT_FOUND. Organization-independent routes are refused except `/v1/me` (filtered to that profile, no client books, billing standing or operator flag) and the owner routes that name the tenant's profile in the path (accountants, share links).
+- **Malafat as MTB3A's first confidential OAuth client** (`server/src/oauth/client-assertion.ts`, `service.ts`): `private_key_jwt` against its JWKS (RS256, PS256, ES256 only; `aud` the token endpoint or issuer; at most 5 minutes; each `jti` once), on the code exchange and every refresh. It names its tenant at authorize (`malafat_tenant`); consent checks the person is a member of that tenant's firm with Malafat access on. `/v1` tokens never open `/mcp` and agents' tokens never open `/v1`. Registered and disabled by the operator only: `POST /admin/v1/oauth/confidential-clients` and `.../{clientId}/disable`, `npm run oauth:client`.
+- **Opt-in routes** (`server/src/routes/security.ts`, `PERSON_OR_MALAFAT`): expenses, receipts, expense groups, vendors, categories, conversions, income, the profile feed, summaries (not the cross-profile verdict), period-download tickets, and the owner routes for accountants and share links. A delegated period-download ticket is bound to its grant (`gid` claim).
+- **Audit:** every row written as the person on a delegated call carries `metadata.via = 'malafat'`, stamped where every store call passes (`server/src/auth/store-guard.ts`).
+- **Revocation (ADR-254 §4.7):** Connected apps (`GET/DELETE /v1/me/connected-apps`, session only), membership removal, integration disconnect (in its transaction), password change and operator disable or sign-out, the per-firm switch, and the operator's client disable each end access on the next call. A routine key rotation does not (R4). Revoking `agent_access` no longer ends a Malafat grant (agents only).
+- **Switches:** `MALAFAT_DELEGATION` (default off; on in `.env.example`) and the operator's audited per-firm switch `POST /v1/operator/organizations/{id}/malafat-delegation`.
+
+### Technical
+- Migration `20261112120000_mut593_delegated_access` (additive): `OAuthClientKind.CONFIDENTIAL`, client `jwksUri`/`allowedResources`/`disabledAt`, request and grant `tenantId` (indexed), `oauth_client_assertions`, integration `delegationEnabledAt`/`delegationEnabledBy`. OAuth cleanup never removes a confidential client and drops expired assertion ids.
+- `SessionIdentity.session` and `SessionAuth.session` are nullable; session-only routes read `personSession(c)`, which refuses a call without one.
+- `jose` 6.2.13 is a direct dependency. Contract `1.109.0-mut593`.
+- Tests: `routes-delegated.test.ts`, `routes-operator-malafat-delegation.test.ts`, `oauth/__tests__/client-assertion.test.ts`, store contract (confidential client, assertion ids, scoped revokes), route-security guards for the delegated surface.
+
 ## [Unreleased] - 2026-11-12 — Design: Malafat runs every MTB3A feature through the lawyer's own access (epic MUT-592, ADR-254)
 
 ### Added
