@@ -173,6 +173,9 @@ async function main() {
       SHARE_LINKS: 'true',
       // MUT-314: period downloads (the Excel report and receipts zip buttons, MUT-561..564).
       PERIOD_DOWNLOADS: 'true',
+      // MUT-596: Sign in with Malafat against the QA stub office (qa/stubs/malafat-oauth.mjs, http://sader.lvh.me:3939).
+      MALAFAT_SIGN_IN: 'true',
+      MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939',
       ...(ocr ? { SERVER_OCR: 'true', OCR_URL, QA_READ_DELAY_MS: String(READ_DELAY_MS) } : {}),
     },
   });
