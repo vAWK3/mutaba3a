@@ -270,6 +270,49 @@ export function describeLedgerStoreOAuthContract(name: string, makeStore: () => 
       expect((await store.oauth.findGrant(elsewhere.grant.id))?.revokedAt).toBeNull();
     });
 
+    // ---- MUT-595: Sign in with Malafat ----
+
+    it('a sign-in attempt: each step single use, and gone once expired', async () => {
+      const store = await makeStore();
+      const flow = await store.malafatSignIns.create({ stateDigest: digest(), codeVerifier: 'v'.repeat(43), tenantSlug: 'sader', client: 'app', appChallenge: 'c'.repeat(43), at: at(0), expiresAt: at(10) });
+      expect(flow).toMatchObject({ client: 'app', outcome: null, facts: null });
+      const stateDigest = digest();
+      const other = await store.malafatSignIns.create({ stateDigest, codeVerifier: 'v'.repeat(43), tenantSlug: 'sader', client: 'web', appChallenge: null, at: at(0), expiresAt: at(10) });
+      expect(await store.malafatSignIns.claimCallback(stateDigest, at(11))).toBeNull();
+      const s2 = digest();
+      const live = await store.malafatSignIns.create({ stateDigest: s2, codeVerifier: 'v'.repeat(43), tenantSlug: 'sader', client: 'web', appChallenge: null, at: at(0), expiresAt: at(10) });
+      expect((await store.malafatSignIns.claimCallback(s2, at(1)))?.id).toBe(live.id);
+      expect(await store.malafatSignIns.claimCallback(s2, at(2))).toBeNull();
+      const facts = { subject: 's', tenantId: 't', tenantSlug: 'sader', tenantName: 'Sader', role: 'PARTNER' as const, email: 'r@sader.law', name: null, locale: 'ar' };
+      const resultDigest = digest();
+      await store.malafatSignIns.recordResult({ id: live.id, facts, outcome: 'needs_consent', userId: null, resultDigest, resultExpiresAt: at(4) });
+      expect((await store.malafatSignIns.claimResult(resultDigest, at(3)))?.facts).toEqual(facts);
+      expect(await store.malafatSignIns.claimResult(resultDigest, at(3))).toBeNull();
+      const ticketDigest = digest();
+      await store.malafatSignIns.issueTicket({ id: live.id, ticketDigest, ticketExpiresAt: at(20) });
+      expect((await store.malafatSignIns.findByTicket(ticketDigest, at(5)))?.outcome).toBe('needs_consent');
+      const completions = await Promise.all([1, 2].map(() => store.malafatSignIns.claimCompletion(ticketDigest, at(6))));
+      expect(completions.filter(Boolean)).toHaveLength(1);
+      expect(await store.malafatSignIns.findByTicket(ticketDigest, at(7))).toBeNull();
+      void other;
+    });
+
+    it('links a Malafat person once: a new link, a pending seat with its membership, never another account’s', async () => {
+      const store = await makeStore();
+      const { org, tenantId, sync } = await syncedFirm(store);
+      await sync([{ subject: 'seat-1', email: 'a@firm.ps', role: 'OFFICE_ADMIN' }], at(1));
+      const { user: a } = await store.users.create(userInput());
+      const { user: b } = await store.users.create(userInput());
+      const link = (subject: string, userId: string) => store.externalIdentities.link({ provider: 'MALAFAT', tenantId, subject, userId, email: 'x@firm.ps', malafatRole: 'PARTNER', organizationId: org.id, at: at(2), audit: [] });
+      expect(await link('seat-1', a.id)).toMatchObject({ kind: 'linked', identity: { userId: a.id } });
+      expect((await store.memberships.find(a.id, org.id))?.role).toBe('BOOKKEEPER');
+      expect(await link('seat-1', a.id)).toMatchObject({ kind: 'linked' });
+      expect(await link('seat-1', b.id)).toEqual({ kind: 'elsewhere' });
+      // A person the sync never listed: a link, but no membership.
+      expect(await link('not-listed', b.id)).toMatchObject({ kind: 'linked', identity: { userId: b.id } });
+      expect(await store.memberships.find(b.id, org.id)).toBeNull();
+    });
+
     it('cleanup never removes a confidential client, and drops expired assertion ids', async () => {
       const store = await makeStore();
       const clientId = `mcc_${unique()}`;

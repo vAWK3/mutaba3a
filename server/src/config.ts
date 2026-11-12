@@ -16,6 +16,13 @@ function isHttpsOrLocalHttp(value: string): boolean {
   return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
 }
 
+/** MUT-595: a firm's Malafat origin: https, or plain http on a local tenant host (Malafat reads the firm from the Host). */
+function isMalafatOrigin(value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname.endsWith('.localhost')));
+}
+
 /** ADR-091 D5: the same EU-region rule as the Sentry module's sentry_key postcondition. */
 export const SENTRY_EU_DSN =/^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
 
@@ -180,6 +187,18 @@ const envSchema = z.object({
    * answer 404, so the server deploys dark. Only "true" turns it on; dev and the QA live API do.
    */
   MALAFAT_DELEGATION: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-595 (ADR-254 D1): Sign in with Malafat. Off, its routes answer 404 and the doors say so. Only "true" turns it
+   * on; Malafat's side must list this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS (MAL-1539).
+   */
+  MALAFAT_SIGN_IN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-595: a firm's own Malafat origin, `{slug}` for its address. A local tenant host in dev. */
+  MALAFAT_ORIGIN_TEMPLATE: z
+    .string()
+    .default('https://{slug}.malafat.app')
+    .refine((v) => v.includes('{slug}') && isMalafatOrigin(v.replace('{slug}', 'x')), 'must contain {slug} and be https (plain http only for *.localhost)'),
+  /** MUT-595 (MAL-1539): MTB3A's client id at every Malafat firm. */
+  MALAFAT_SIGN_IN_CLIENT_ID: z.string().min(1).max(64).default('mtb3a'),
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   /**

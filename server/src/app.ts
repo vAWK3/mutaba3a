@@ -23,6 +23,8 @@ import type { JWTVerifyGetKey } from 'jose';
 import type { AttachmentStorage } from './attachments/storage.js';
 import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
 import { adminOAuthClientRoutes } from './routes/admin-oauth-clients.js';
+import { MALAFAT_SIGN_IN_ENDPOINTS, malafatSignInRoutes } from './routes/malafat-sign-in.js';
+import type { MalafatSignInConfig } from './malafat/sign-in-client.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
 import { EMAIL_WEBHOOK_POLICY, emailWebhookRoutes } from './routes/email-webhook.js';
 import { devOutboxRoutes } from './routes/dev-outbox.js';
@@ -241,6 +243,8 @@ export interface AppDependencies {
    * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
    */
   malafatDelegation?: boolean;
+  /** MUT-595 (MALAFAT_SIGN_IN): Sign in with Malafat; null or absent = its routes answer 404. */
+  malafatSignIn?: MalafatSignInConfig | null;
   /** MUT-559: ACCOUNTANTS_PER_PROFILE_MAX. Default ACCOUNTANTS_PER_PROFILE_DEFAULT (5). */
   accountantsPerProfileMax?: number;
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
@@ -361,7 +365,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.111.0-mut594';
+export const API_VERSION = '1.112.0-mut595';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -455,6 +459,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
     { endpoints: new Set([...CONNECTED_APPS_ENDPOINTS, ...MALAFAT_DELEGATION_OPERATOR_ENDPOINTS]), on: malafatDelegation, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    // MUT-595: Sign in with Malafat.
+    { endpoints: MALAFAT_SIGN_IN_ENDPOINTS, on: Boolean(deps.malafatSignIn), refusal: () => new ApiError('NOT_FOUND', 'Not found') },
   ];
   app.use('/v1/*', async (c, next) => {
     const endpoint = endpointKey(c);
@@ -536,8 +542,13 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
   app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
-  const selfService = deps.selfService ?? defaultSelfServiceOptions();
+  const selfService = { ...(deps.selfService ?? defaultSelfServiceOptions()), malafatSignIn: Boolean(deps.malafatSignIn) };
   app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
+  // MUT-595: Sign in with Malafat, on the raw store like sign-in, sharing its throttle and IP limiter.
+  app.route(
+    '/',
+    malafatSignInRoutes({ store: deps.store, passwordHasher, settings: sessions, throttle: signInThrottle, ipLimiter: signInIpLimiter, terms, webauthn: deps.webauthn ?? null, config: deps.malafatSignIn ?? null }),
+  );
   // MUT-559 (ADR-245): an owner's accountants, and the invite an accountant accepts or signs up from. The public pair
   // shares the sign-in IP limiter under its own key, and signup's Turnstile check.
   app.route(

@@ -1618,6 +1618,8 @@ export const SelfServiceDoorsSchema = z
     signup: z.boolean(),
     /** POST /v1/account-recovery can mail a link: a mailer other than noop and a Turnstile secret. */
     recovery: z.boolean(),
+    /** MUT-595: Sign in with Malafat is open (MALAFAT_SIGN_IN), so the sign-in doors show it. */
+    malafatSignIn: z.boolean(),
   })
   .openapi('SelfServiceDoors');
 

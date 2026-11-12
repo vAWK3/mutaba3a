@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-12 — Sign in with Malafat (MUT-595, ADR-254 D1, D4, D5, D8, DF1)
+
+### Added
+- **Sign in with Malafat** (`server/src/routes/malafat-sign-in.ts`, `server/src/malafat/sign-in-client.ts`): MTB3A as a public OAuth client of the person's own Malafat firm (MAL-1539: PKCE S256, `state`, the firm's own origin built from its slug, never a caller's host). Malafat's token is used once for userinfo and revoked straight after.
+  - `GET /v1/auth/malafat/start?tenant=&client=web|app[&app_challenge=]` → Malafat → `GET /v1/auth/malafat/callback` → the client's return with `#result=` (2 minutes, single use) or `#error=office_not_found|access_denied|malafat_unavailable|state_invalid`. The phone's return is the fixed `mutaba3a://auth/malafat` (R1); the portal's is `/malafat/return` (MUT-596).
+  - `POST /v1/auth/malafat/exchange {result, app_verifier?}` → `signed_in` (a cookie, or a device token for the phone) | `needs_link` | `needs_consent {creates}`. The phone must present the verifier of the S256 challenge it sent (R3), so another app catching the scheme can't use the code; the code burns on the first try.
+  - `POST /v1/auth/malafat/link {ticket, password | passkey}` proves the account that has the email (D4: never by email alone), through the same checks, throttle and lockout as sign-in (`verifyPassword`, `verifyPasskey`).
+  - `POST /v1/auth/malafat/consent {ticket, acceptedTermsVersion?, defaultCurrency?, timezone?}` writes everything (R8): a new account (ACTIVE, no review DF1, the normal trial D5, a random password nobody holds so every session rule holds), the link (`externalIdentities.link`, claiming a synced seat and its membership), and the session. 409 `IDENTITY_LINKED_ELSEWHERE` when the Malafat person is another account's.
+  - `GET /v1/auth/malafat/office?tenant=` (preflight) and `GET /v1/self-service` `malafatSignIn`.
+- Works with the firm's Malafat access switch off, and for a firm not bound to MTB3A (a link with no seat).
+
+### Technical
+- Migration `20261112160000_mut595_malafat_sign_in` (`malafat_sign_ins`: digests only; additive). Config `MALAFAT_SIGN_IN` (off), `MALAFAT_ORIGIN_TEMPLATE` (`https://{slug}.malafat.app`; `http://{slug}.localhost` in dev), `MALAFAT_SIGN_IN_CLIENT_ID` (`mtb3a`). Contract `1.112.0-mut595`. Sign-in method `malafat` in audits; `user.malafat_linked`.
+- `signIn` / `signInWithPasskey` now share `verifyPassword` / `verifyPasskey` with the link step.
+- Tests: `routes-malafat-sign-in.test.ts` (a fake Malafat: the three first sign-ins, the phone's verifier and single use, refusals, the switch), sign-in and link store contract.
+
 ## [Unreleased] - 2026-11-12 — Malafat syncs a firm's members; partners own the firm (MUT-594, ADR-254 D2, D3, D7, decision 7)
 
 ### Added

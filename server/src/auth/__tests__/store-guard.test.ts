@@ -143,12 +143,22 @@ describe('STORE_ACCESS', () => {
       // MUT-594/595: a seat's claim and lookup run in Sign in with Malafat, unguarded.
       'externalIdentities.claim',
       'externalIdentities.findBySubject',
+      'externalIdentities.link',
       // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
       'features.grant',
       'features.holders',
       'features.revoke',
       // MUT-593: the operator's per-firm Malafat switch.
       'integrations.setDelegation',
+      // MUT-595: Sign in with Malafat runs on public routes, unguarded.
+      'malafatSignIns.claimCallback',
+      'malafatSignIns.claimCompletion',
+      'malafatSignIns.claimResult',
+      'malafatSignIns.create',
+      'malafatSignIns.findByTicket',
+      'malafatSignIns.issueTicket',
+      'malafatSignIns.proveLink',
+      'malafatSignIns.recordResult',
       'memberships.grant',
       // MUT-373: co-owners are added by the operator only (the pilot path; invites are MUT-306).
       'memberships.grantOwner',

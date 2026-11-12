@@ -1760,6 +1760,366 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/auth/malafat/office": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether an address is a Malafat office (MUT-595) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The firm’s Malafat address, e.g. sader for sader.malafat.app */
+                    tenant: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description It is */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatOffice"];
+                    };
+                };
+                /** @description No such office, or Sign in with Malafat is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start Sign in with Malafat: redirects to the firm’s Malafat (MUT-595)
+         * @description Open in the browser (the phone: an in-app browser). 302 to Malafat; a refusal 302s to the client’s return with #error= (R7).
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The firm’s Malafat address, e.g. sader for sader.malafat.app */
+                    tenant: string;
+                    client?: "web" | "app";
+                    /** @description client=app: the S256 challenge of a verifier the app keeps; /exchange must present it (R3) */
+                    app_challenge?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description To Malafat, or back with #error= */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sign in with Malafat is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Malafat sends the person back here (MUT-595)
+         * @description Malafat’s redirect target. 302 to the client’s return with #result=<code> (2 minutes, single use) or #error=.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    code?: string;
+                    state?: string;
+                    error?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description To the client’s return */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange the result code (MUT-595)
+         * @description Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatExchangeRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in, or the next step */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS: the linked account can no longer sign in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prove the MTB3A account that has this email, to link it (MUT-595, D4)
+         * @description With its password, or a passkey assertion from POST /v1/passkey-challenges. Writes nothing (R8): consent links.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Proven: consent next */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS (counts toward the account’s lockout) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consent: create or link the account, claim the firm seat, sign in (MUT-595, D8)
+         * @description Everything is written here and nowhere before (R8). A new account (creates) needs defaultCurrency and timezone; it is ACTIVE with no review (DF1) and starts the normal trial (D5). acceptedTermsVersion records the terms now; without it, GET /v1/me asks as for anyone.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatConsentRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason IDENTITY_LINKED_ELSEWHERE (this Malafat person is another account’s) or EMAIL_TAKEN; TERMS_VERSION_STALE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a new account without defaultCurrency or timezone */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/profiles/{profileId}/accountants": {
         parameters: {
             query?: never;
@@ -22599,6 +22959,7 @@ export interface components {
         SelfServiceDoors: {
             signup: boolean;
             recovery: boolean;
+            malafatSignIn: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */
@@ -22615,6 +22976,46 @@ export interface components {
             email: string;
             locale?: components["schemas"]["UserLocale"];
             turnstileToken: string;
+        };
+        MalafatOffice: {
+            host: string;
+        };
+        MalafatSignInState: {
+            /** @enum {string} */
+            state: "signed_in" | "needs_consent" | "needs_link";
+            me?: components["schemas"]["Me"] & unknown;
+            /** @description signed_in with client=app: a device session token, as POST /v1/device-sessions */
+            token?: string;
+            /** @description needs_link / needs_consent: for /link and /consent, 15 minutes */
+            ticket?: string;
+            /** @description needs_consent: true when consent creates a new account (send defaultCurrency and timezone) */
+            creates?: boolean;
+            office?: {
+                name: string;
+            };
+            /** @description The Malafat account’s verified email */
+            email?: string;
+        };
+        MalafatExchangeRequest: {
+            result: string;
+            app_verifier?: string;
+        };
+        MalafatLinkRequest: {
+            ticket: string;
+            password?: string;
+            passkey?: {
+                /** Format: uuid */
+                challengeId: string;
+                response: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        MalafatConsentRequest: {
+            ticket: string;
+            acceptedTermsVersion?: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            timezone?: string;
         };
         AccountantGrant: {
             /** Format: uuid */

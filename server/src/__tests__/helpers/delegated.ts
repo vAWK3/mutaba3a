@@ -4,6 +4,7 @@ import { createLocalJWKSet, exportJWK, generateKeyPair, SignJWT, type JWK } from
 type CryptoKeyLike = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { expect } from 'vitest';
 import type { MalafatRole } from '../../repositories/ports.js';
+import type { MalafatSignInConfig } from '../../malafat/sign-in-client.js';
 import { SCOPES } from '../../auth/scopes.js';
 import { s256Challenge } from '../../oauth/protocol.js';
 import { ADMIN, form, harness, json, ORIGIN, person, read, VERIFIER, type Person } from './oauth-agent.js';
@@ -28,7 +29,7 @@ export async function signingKey(kid = 'k1') {
   return { privateKey: pair.privateKey, jwk };
 }
 
-export async function delegatedHarness(options: { malafatDelegation?: boolean; periodDownloads?: boolean; accountantAccess?: boolean; shareLinks?: boolean } = {}) {
+export async function delegatedHarness(options: { malafatDelegation?: boolean; periodDownloads?: boolean; accountantAccess?: boolean; shareLinks?: boolean; malafatSignIn?: MalafatSignInConfig } = {}) {
   const key = await signingKey();
   const published: JWK[] = [key.jwk];
   const h = harness({
@@ -37,6 +38,7 @@ export async function delegatedHarness(options: { malafatDelegation?: boolean; p
     ...(options.periodDownloads ? { periodDownloads: true } : {}),
     ...(options.accountantAccess ? { accountantAccess: true } : {}),
     ...(options.shareLinks ? { shareLinks: true } : {}),
+    ...(options.malafatSignIn ? { malafatSignIn: options.malafatSignIn } : {}),
   });
   const res = await h.app.request('/admin/v1/oauth/confidential-clients', json({ name: 'Malafat', redirectUris: [MALAFAT_CB], jwksUri: 'https://office.malafat.app/.well-known/mtb3a-jwks.json' }, ADMIN));
   expect(res.status).toBe(201);

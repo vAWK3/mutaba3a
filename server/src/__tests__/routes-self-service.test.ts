@@ -454,18 +454,18 @@ describe('GET /v1/self-service (MUT-368, D1)', () => {
   };
 
   it('names which doors this server really opens: signup by its switch, recovery only when it mails links', async () => {
-    expect(await doors(harness({ signupEnabled: true, mailsLinks: true }))).toEqual({ status: 200, body: { signup: true, recovery: true } });
-    expect(await doors(harness({ signupEnabled: false, mailsLinks: true }))).toEqual({ status: 200, body: { signup: false, recovery: true } });
-    expect(await doors(harness({ signupEnabled: false, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false } });
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: true }))).toEqual({ status: 200, body: { signup: true, recovery: true, malafatSignIn: false } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: true }))).toEqual({ status: 200, body: { signup: false, recovery: true, malafatSignIn: false } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false } });
   });
 
   it('a server that mails no links offers neither door, whatever the switch says', async () => {
-    expect(await doors(harness({ signupEnabled: true, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false } });
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false } });
   });
 
   it('defaults to both doors closed (absent options are a server with mail off)', async () => {
     const h = harness({ signupEnabled: false });
-    expect((await doors(h)).body).toEqual({ signup: false, recovery: false });
+    expect((await doors(h)).body).toEqual({ signup: false, recovery: false, malafatSignIn: false });
   });
 
   it('needs no credential and no origin, and is never cached', async () => {

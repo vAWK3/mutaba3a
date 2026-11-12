@@ -8,6 +8,7 @@ import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { OAuthClientRecord } from '../../repositories/ports.js';
 import type { JWTVerifyGetKey } from 'jose';
+import type { MalafatSignInConfig } from '../../malafat/sign-in-client.js';
 import { provisionUser } from './provision.js';
 
 /**
@@ -59,6 +60,8 @@ export function harness(
     periodDownloads?: boolean;
     accountantAccess?: boolean;
     shareLinks?: boolean;
+    /** MUT-595: Sign in with Malafat, against a fake Malafat. */
+    malafatSignIn?: MalafatSignInConfig;
   } = {},
 ) {
   const store = new MemoryLedgerStore();
@@ -80,6 +83,7 @@ export function harness(
     ...(options.periodDownloads ? { periodDownloads: true } : {}),
     ...(options.accountantAccess ? { accountantAccess: true } : {}),
     ...(options.shareLinks ? { shareLinks: true } : {}),
+    ...(options.malafatSignIn ? { malafatSignIn: options.malafatSignIn } : {}),
     ...(options.mcpInboxWrites ? { mcpInboxWrites: true } : {}),
     ...(options.receiptsLibrary ? { receiptsLibrary: true } : {}),
     ...(options.attachments ? { attachments: options.attachments } : {}),

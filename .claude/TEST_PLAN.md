@@ -4591,3 +4591,13 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | Seats in both stores: claim once, re-role, removal revokes that tenant's grants only, `memberSyncAt` | `server/src/repositories/__tests__/store-contract-oauth.ts` |
 | `ownsProfile` on a Malafat firm | `server/src/__tests__/owns-profile.test.ts` |
 | Local snapshot 17 → 18 | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` |
+
+## MUT-595 — Sign in with Malafat (ADR-254)
+
+| What | Where |
+|---|---|
+| Round trip: PKCE + state to the firm's own origin, token revoked; refusals as `#error=`; a state once; office preflight | `server/src/__tests__/routes-malafat-sign-in.test.ts` |
+| The three first sign-ins: new (ACTIVE, trial, no review, seat claimed), existing account (password proof only, never by email), linked (straight in) | same |
+| Phone: fixed return, S256 verifier required, code burns on first try, device token | same |
+| Switch off for the firm, firm not bound, IDENTITY_LINKED_ELSEWHERE, currency/timezone/terms, Malafat down, MALAFAT_SIGN_IN off | same |
+| Sign-in attempt and link in both stores | `server/src/repositories/__tests__/store-contract-oauth.ts` |

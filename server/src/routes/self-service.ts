@@ -34,6 +34,8 @@ import { signInLinkOf } from './account-setup.js';
 export interface SelfServiceOptions {
   /** SELF_SIGNUP_ENABLED. Off: POST /v1/signups answers 404 (recovery is never behind it). */
   signupEnabled: boolean;
+  /** MUT-595: MALAFAT_SIGN_IN, published on the doors. */
+  malafatSignIn?: boolean;
   /**
    * MUT-368 (D1): this server really mails links: a mailer other than noop and a Turnstile secret. GET /v1/self-service
    * reports it, so the portal shows no door that can only fail. Absent = false. Recovery itself stays on either way.
@@ -122,7 +124,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     (c) => {
       const mails = options.mailsLinks ?? false;
       c.header('Access-Control-Allow-Origin', '*');
-      return c.json({ signup: mails && options.signupEnabled, recovery: mails }, 200);
+      return c.json({ signup: mails && options.signupEnabled, recovery: mails, malafatSignIn: options.malafatSignIn ?? false }, 200);
     },
   );
 

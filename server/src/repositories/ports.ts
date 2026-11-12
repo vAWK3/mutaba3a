@@ -403,7 +403,67 @@ export interface ExternalIdentityRepository {
    * or unknown; nothing written. `audit` is written only on a claim.
    */
   claim(input: { provider: IntegrationProvider; tenantId: string; subject: string; userId: string; at: Date; audit: AuditEventInput[] }): Promise<{ claimed: boolean; identity: ExternalIdentityRecord | null }>;
+  /**
+   * MUT-595 (D4): links the Malafat person to `userId` at consent: claims their pending seat (and its membership), or
+   * records a link for a tenant whose members MTB3A doesn't hold yet (`organizationId` null, or the bound firm's). Already
+   * this account's: `linked`, nothing changed. Another account's: `elsewhere` (409 IDENTITY_LINKED_ELSEWHERE).
+   */
+  link(input: { provider: IntegrationProvider; tenantId: string; subject: string; userId: string; email: string; malafatRole: MalafatRole; organizationId: string | null; at: Date; audit: AuditEventInput[] }): Promise<LinkIdentityResult>;
 }
+
+// ---- MUT-595: Sign in with Malafat (ADR-254 D1, D4, D8) ------------------------------------------------------
+
+/** What Malafat's userinfo says about the person signing in. */
+export interface MalafatSignInFacts {
+  subject: string;
+  tenantId: string;
+  tenantSlug: string;
+  tenantName: string;
+  role: MalafatRole;
+  email: string;
+  name: string | null;
+  locale: string | null;
+}
+
+export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';
+
+export interface MalafatSignInRecord {
+  id: string;
+  tenantSlug: string;
+  client: 'web' | 'app';
+  codeVerifier: string;
+  appChallenge: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  callbackAt: Date | null;
+  facts: MalafatSignInFacts | null;
+  outcome: MalafatSignInOutcome | null;
+  userId: string | null;
+  resultExpiresAt: Date | null;
+  resultUsedAt: Date | null;
+  ticketExpiresAt: Date | null;
+  linkProvenAt: Date | null;
+  completedAt: Date | null;
+}
+
+/** Each step is a conditional claim on one row, so a state, a result code or a ticket works once. */
+export interface MalafatSignInRepository {
+  create(input: { stateDigest: string; codeVerifier: string; tenantSlug: string; client: 'web' | 'app'; appChallenge: string | null; at: Date; expiresAt: Date }): Promise<MalafatSignInRecord>;
+  /** The callback's claim: an unexpired attempt whose state was not used yet. Null otherwise. */
+  claimCallback(stateDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  recordResult(input: { id: string; facts: MalafatSignInFacts; outcome: MalafatSignInOutcome; userId: string | null; resultDigest: string; resultExpiresAt: Date }): Promise<void>;
+  /** The exchange's claim: the result code burns on the first attempt (R9), right or wrong. Null when used, expired or unknown. */
+  claimResult(resultDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  issueTicket(input: { id: string; ticketDigest: string; ticketExpiresAt: Date }): Promise<void>;
+  /** An unexpired, uncompleted attempt by its ticket. */
+  findByTicket(ticketDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  /** D4: the person proved the existing account (password or passkey) — `userId` is that account. */
+  proveLink(input: { id: string; userId: string; at: Date }): Promise<void>;
+  /** Consent's claim: completes the attempt once. Null when already completed, expired or unknown. */
+  claimCompletion(ticketDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+}
+
+export type LinkIdentityResult = { kind: 'linked'; identity: ExternalIdentityRecord } | { kind: 'elsewhere' };
 
 export interface AuditFilter {
   entityType?: string;
@@ -2611,6 +2671,8 @@ export interface LedgerStore {
   integrations: IntegrationRepository;
   /** MUT-594/595: Malafat seats. */
   externalIdentities: ExternalIdentityRepository;
+  /** MUT-595: Sign in with Malafat round trips. */
+  malafatSignIns: MalafatSignInRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;
   customers: CustomerRepository;

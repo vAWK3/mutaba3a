@@ -82,6 +82,11 @@ describe('no self-registration route exists (MUT-37)', () => {
       .map((op) => op.key)
       .sort();
     expect(publicOperations).toEqual([
+      // MUT-595 (ADR-254 D1, DF1): Sign in with Malafat. It creates an account only from a Malafat-verified person, at
+      // consent, and links an existing one only after that account's own password or passkey (D4).
+      'GET /v1/auth/malafat/callback',
+      'GET /v1/auth/malafat/office',
+      'GET /v1/auth/malafat/start',
       'GET /v1/public/fx-rates',
       'GET /v1/self-service',
       'POST /v1/account-recovery',
@@ -90,6 +95,9 @@ describe('no self-registration route exists (MUT-37)', () => {
       // MUT-559 (ADR-245): the accountant invite's check, and signing up from it.
       'POST /v1/accountant-invites/check',
       'POST /v1/accountant-invites/signup',
+      'POST /v1/auth/malafat/consent',
+      'POST /v1/auth/malafat/exchange',
+      'POST /v1/auth/malafat/link',
       'POST /v1/billing/stripe/webhook',
       'POST /v1/device-sessions',
       'POST /v1/device-sessions/passkey',

@@ -59,7 +59,8 @@ export interface SignInResult {
   session: SessionRecord;
 }
 
-export type SignInMethod = 'password' | 'passkey';
+/** MUT-595: `malafat` = Sign in with Malafat (ADR-254 D1). */
+export type SignInMethod = 'password' | 'passkey' | 'malafat';
 
 export async function signIn(
   c: Context<AppEnv>,
@@ -68,6 +69,15 @@ export async function signIn(
   sessionKind: SessionKind,
   lifetime: SignInLifetime,
 ): Promise<SignInResult> {
+  const user = await verifyPassword(c, deps, credentials, sessionKind);
+  return issueSession(c, deps, user, { sessionKind, method: 'password' }, lifetime);
+}
+
+/**
+ * The password sign-in's checks, without the session: the account, the throttle and lockout, review and closure.
+ * MUT-595: Sign in with Malafat's link step proves the existing account this way (D4) and issues nothing yet (R8).
+ */
+export async function verifyPassword(c: Context<AppEnv>, deps: SignInDeps, credentials: { email: string; password: string }, sessionKind: SessionKind): Promise<UserRecord> {
   const { store, passwordHasher, throttle } = deps;
   const now = c.get('now')();
   const key = normalizeEmail(credentials.email);
@@ -86,7 +96,7 @@ export async function signIn(
   }
 
   throttle.clear(key);
-  return issueSession(c, deps, user, { sessionKind, method: 'password' }, lifetime);
+  return user;
 }
 
 export interface PasskeySignInDeps extends SignInDeps {
@@ -108,6 +118,17 @@ export async function signInWithPasskey(
   sessionKind: SessionKind,
   lifetime: SignInLifetime,
 ): Promise<SignInResult> {
+  const { user, audit } = await verifyPasskey(c, deps, presented, sessionKind);
+  return issueSession(c, deps, user, audit, lifetime);
+}
+
+/** The passkey sign-in's checks, without the session (MUT-595's link step, as `verifyPassword`). */
+export async function verifyPasskey(
+  c: Context<AppEnv>,
+  deps: PasskeySignInDeps,
+  presented: { challengeId: string; response: AuthenticationResponseJSON },
+  sessionKind: SessionKind,
+): Promise<{ user: UserRecord; audit: SignInAudit }> {
   const { store, throttle, webauthn } = deps;
   const now = c.get('now')();
   const challenge = await store.passkeys.consumeChallenge(presented.challengeId, 'authentication', null, now);
@@ -132,7 +153,7 @@ export async function signInWithPasskey(
 
   throttle.clear(key);
   await store.passkeys.recordUse(passkey.id, outcome.signCount, now);
-  return issueSession(c, deps, user, audit, lifetime);
+  return { user, audit };
 }
 
 /** The one refusal every sign-in answers, whatever went wrong (ADR-037 decision 4). */
@@ -149,7 +170,7 @@ export function isLocked(throttle: SignInThrottle, key: string, user: UserRecord
   return throttle.isLocked(key, now) || (user?.lockedUntil ? user.lockedUntil.getTime() > now.getTime() : false);
 }
 
-interface SignInAudit {
+export interface SignInAudit {
   sessionKind: SessionKind;
   method: SignInMethod;
   /** MUT-115: the passkey that signed in, on a passkey sign-in. */
@@ -206,18 +227,18 @@ export async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: U
  * and `method` (+ `passkeyId`) so they can tell a passkey from a password (MUT-115). Actors are pinned (R1): a
  * sign-in is the USER's act, a lockout the SYSTEM's.
  */
-async function auditToMembers(
+export async function auditToMembers(
   c: Context<AppEnv>,
   store: LedgerStore,
   user: UserRecord,
-  action: 'user.signed_in' | 'user.locked_out' | 'user.passkey_counter_regressed',
+  action: 'user.signed_in' | 'user.locked_out' | 'user.passkey_counter_regressed' | 'user.malafat_linked',
   audit: SignInAudit,
 ): Promise<void> {
   for (const m of await store.memberships.listByUser(user.id)) {
     await store.audit.append({
       organizationId: m.organizationId,
-      actorType: action === 'user.signed_in' ? 'USER' : 'SYSTEM',
-      actorId: action === 'user.signed_in' ? user.id : null,
+      actorType: action === 'user.signed_in' || action === 'user.malafat_linked' ? 'USER' : 'SYSTEM',
+      actorId: action === 'user.signed_in' || action === 'user.malafat_linked' ? user.id : null,
       action,
       entityType: 'user',
       entityId: user.id,

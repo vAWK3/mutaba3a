@@ -130,6 +130,10 @@ import type {
   UserFeatureRecord,
   OAuthAuthorizationRequestRecord,
   ExternalIdentityRecord,
+  MalafatSignInFacts,
+  MalafatSignInOutcome,
+  MalafatSignInRecord,
+  MalafatSignInRepository,
   ExternalIdentityRepository,
   MalafatRole,
   MembershipRole,
@@ -1511,6 +1515,64 @@ export class PrismaLedgerStore implements LedgerStore {
           return { claimed: true, identity: toExternalIdentity(row) };
         }),
       ),
+    link: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const where = { provider_tenantId_subject: { provider: input.provider, tenantId: input.tenantId, subject: input.subject } };
+        const seat = await tx.externalIdentity.findUnique({ where });
+        if (seat?.userId && seat.userId !== input.userId) return { kind: 'elsewhere' as const };
+        if (seat?.userId === input.userId) return { kind: 'linked' as const, identity: toExternalIdentity(seat) };
+        let row;
+        if (seat) {
+          // The claim is conditional, so a second consent racing this one finds it linked and reads 'elsewhere' or 'linked'.
+          const { count } = await tx.externalIdentity.updateMany({ where: { id: seat.id, userId: null }, data: { userId: input.userId, linkedAt: input.at, updatedAt: input.at } });
+          row = await tx.externalIdentity.findUniqueOrThrow({ where });
+          if (count === 0) return row.userId === input.userId ? { kind: 'linked' as const, identity: toExternalIdentity(row) } : { kind: 'elsewhere' as const };
+          if (row.organizationId && !row.removedAt) await upsertSeatMembershipInTx(tx, input.userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), input.at);
+        } else {
+          try {
+            row = await tx.externalIdentity.create({
+              data: { provider: input.provider, tenantId: input.tenantId, subject: input.subject, organizationId: input.organizationId, email: input.email, malafatRole: input.malafatRole, userId: input.userId, linkedAt: input.at, createdAt: input.at, updatedAt: input.at },
+            });
+          } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return { kind: 'elsewhere' as const };
+            throw err;
+          }
+        }
+        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return { kind: 'linked' as const, identity: toExternalIdentity(row) };
+      }),
+  };
+
+  readonly malafatSignIns: MalafatSignInRepository = {
+    create: async (input) =>
+      toMalafatSignIn(
+        await this.prisma.malafatSignIn.create({
+          data: { stateDigest: input.stateDigest, codeVerifier: input.codeVerifier, tenantSlug: input.tenantSlug, client: input.client, appChallenge: input.appChallenge, createdAt: input.at, expiresAt: input.expiresAt },
+        }),
+      ),
+    claimCallback: async (stateDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { stateDigest, callbackAt: null, expiresAt: { gt: at } }, data: { callbackAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { stateDigest } }), toMalafatSignIn);
+    },
+    recordResult: async ({ id, facts, outcome, userId, resultDigest, resultExpiresAt }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { facts: facts as unknown as Prisma.InputJsonValue, outcome, userId, resultDigest, resultExpiresAt } });
+    },
+    claimResult: async (resultDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { resultDigest, resultUsedAt: null, resultExpiresAt: { gt: at } }, data: { resultUsedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { resultDigest } }), toMalafatSignIn);
+    },
+    issueTicket: async ({ id, ticketDigest, ticketExpiresAt }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { ticketDigest, ticketExpiresAt } });
+    },
+    findByTicket: async (ticketDigest, at) =>
+      mapNullable(await this.prisma.malafatSignIn.findFirst({ where: { ticketDigest, completedAt: null, ticketExpiresAt: { gt: at } } }), toMalafatSignIn),
+    proveLink: async ({ id, userId, at }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { userId, linkProvenAt: at } });
+    },
+    claimCompletion: async (ticketDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { ticketDigest, completedAt: null, ticketExpiresAt: { gt: at } }, data: { completedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { ticketDigest } }), toMalafatSignIn);
+    },
   };
 
   readonly audit: AuditRepository = {
@@ -3841,6 +3903,14 @@ async function revokeOAuthGrantsAuditedInTx(tx: Prisma.TransactionClient, userId
 /** MUT-594: a seat's membership, created or re-roled by D3. */
 async function upsertSeatMembershipInTx(tx: Prisma.TransactionClient, userId: string, organizationId: string, role: MembershipRole, at: Date): Promise<void> {
   await tx.membership.upsert({ where: { userId_organizationId: { userId, organizationId } }, create: { userId, organizationId, role, createdAt: at }, update: { role } });
+}
+
+function toMalafatSignIn(row: Prisma.MalafatSignInGetPayload<object>): MalafatSignInRecord {
+  const { stateDigest: _s, resultDigest: _r, ticketDigest: _t, ...record } = row;
+  void _s;
+  void _r;
+  void _t;
+  return { ...record, client: record.client as 'web' | 'app', outcome: record.outcome as MalafatSignInOutcome | null, facts: record.facts as unknown as MalafatSignInFacts | null };
 }
 
 function toExternalIdentity(row: Prisma.ExternalIdentityGetPayload<object>): ExternalIdentityRecord {

@@ -101,6 +101,8 @@ import type {
   FeaturesRepository,
   OAuthAuthorizationRequestRecord,
   ExternalIdentityRecord,
+  MalafatSignInRecord,
+  MalafatSignInRepository,
   ExternalIdentityRepository,
   MemberSyncResult,
   OAuthClientRecord,
@@ -316,6 +318,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly members = new Map<string, MembershipRecord>();
   /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
   private readonly seats = new Map<string, ExternalIdentityRecord>();
+  /** MUT-595: Sign in with Malafat round trips, with their digests (state, result, ticket). Outside the snapshot. */
+  private readonly malafatFlows = new Map<string, MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
   /**
@@ -1694,6 +1698,63 @@ export class MemoryLedgerStore implements LedgerStore {
       if (seat.organizationId) this.seatMembership(userId, seat.organizationId, membershipRoleOf(seat.malafatRole), at);
       this.pushEvents(audit, at);
       return { claimed: true, identity: { ...seat } };
+    },
+    link: async ({ provider, tenantId, subject, userId, email, malafatRole, organizationId, at, audit }) => {
+      const key = seatKey(provider, tenantId, subject);
+      const seat = this.seats.get(key);
+      if (seat?.userId && seat.userId !== userId) return { kind: 'elsewhere' };
+      if (seat?.userId === userId) return { kind: 'linked', identity: { ...seat } };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('external_identities.userId');
+      const linked: ExternalIdentityRecord = seat
+        ? Object.assign(seat, { userId, linkedAt: at, updatedAt: at })
+        : { id: randomUUID(), provider, tenantId, subject, organizationId, email, malafatRole, userId, linkedAt: at, removedAt: null, createdAt: at, updatedAt: at };
+      this.seats.set(key, linked);
+      // A pending seat's membership comes with the link (D7); a removed seat or a bare link makes none.
+      if (linked.organizationId && !linked.removedAt && seat) this.seatMembership(userId, linked.organizationId, membershipRoleOf(linked.malafatRole), at);
+      this.pushEvents(audit, at);
+      return { kind: 'linked', identity: { ...linked } };
+    },
+  };
+
+  readonly malafatSignIns: MalafatSignInRepository = {
+    create: async ({ stateDigest, codeVerifier, tenantSlug, client, appChallenge, at, expiresAt }) => {
+      const row = { id: randomUUID(), stateDigest, codeVerifier, tenantSlug, client, appChallenge, createdAt: at, expiresAt, callbackAt: null, facts: null, outcome: null, userId: null, resultDigest: null, resultExpiresAt: null, resultUsedAt: null, ticketDigest: null, ticketExpiresAt: null, linkProvenAt: null, completedAt: null };
+      this.malafatFlows.set(row.id, row);
+      return flowRecordOf(row);
+    },
+    claimCallback: async (stateDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.stateDigest === stateDigest);
+      if (!row || row.callbackAt || row.expiresAt <= at) return null;
+      row.callbackAt = at;
+      return flowRecordOf(row);
+    },
+    recordResult: async ({ id, facts, outcome, userId, resultDigest, resultExpiresAt }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { facts: { ...facts }, outcome, userId, resultDigest, resultExpiresAt });
+    },
+    claimResult: async (resultDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.resultDigest === resultDigest);
+      if (!row || row.resultUsedAt || !row.resultExpiresAt || row.resultExpiresAt <= at) return null;
+      row.resultUsedAt = at;
+      return flowRecordOf(row);
+    },
+    issueTicket: async ({ id, ticketDigest, ticketExpiresAt }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { ticketDigest, ticketExpiresAt });
+    },
+    findByTicket: async (ticketDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.ticketDigest === ticketDigest);
+      return row && !row.completedAt && row.ticketExpiresAt && row.ticketExpiresAt > at ? flowRecordOf(row) : null;
+    },
+    proveLink: async ({ id, userId, at }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { userId, linkProvenAt: at });
+    },
+    claimCompletion: async (ticketDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.ticketDigest === ticketDigest);
+      if (!row || row.completedAt || !row.ticketExpiresAt || row.ticketExpiresAt <= at) return null;
+      row.completedAt = at;
+      return flowRecordOf(row);
     },
   };
 
@@ -4374,6 +4435,14 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 }
 
 /** MUT-434: a stored token without its digest, which never leaves the store. */
+function flowRecordOf(row: MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }): MalafatSignInRecord {
+  const { stateDigest: _s, resultDigest: _r, ticketDigest: _t, ...record } = row;
+  void _s;
+  void _r;
+  void _t;
+  return { ...record, facts: record.facts ? { ...record.facts } : null };
+}
+
 function seatKey(provider: string, tenantId: string, subject: string): string {
   return `${provider}\u0000${tenantId}\u0000${subject}`;
 }

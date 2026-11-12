@@ -390,6 +390,7 @@ model User {
 
   @@map("users")
   externalIdentities ExternalIdentity[]
+  malafatSignIns     MalafatSignIn[]
 }
 
 /// What an unsorted capture becomes once filed: an Expense, or income
@@ -2030,4 +2031,39 @@ model ExternalIdentity {
   @@index([userId])
   @@index([organizationId])
   @@map("external_identities")
+}
+
+/// MUT-595 (ADR-254 D1, D4, D8): one Sign in with Malafat, from /start to a session, each step single use. Only
+/// digests of the state, the result code and the ticket are kept; the PKCE verifier lives here only for the 10 minutes
+/// the round trip to Malafat may take. Nothing about a person is written until consent (`completedAt`).
+model MalafatSignIn {
+  id              String    @id @default(uuid()) @db.Uuid
+  stateDigest     String    @unique @db.VarChar(64)
+  codeVerifier    String    @db.VarChar(128)
+  tenantSlug      String    @db.VarChar(63)
+  /// web | app: where the result goes (the portal page, or mutaba3a://auth/malafat).
+  client          String    @db.VarChar(8)
+  /// The phone's S256 challenge (R3): the exchange must present its verifier.
+  appChallenge    String?   @db.VarChar(64)
+  createdAt       DateTime
+  expiresAt       DateTime
+  callbackAt      DateTime?
+  /// What Malafat's userinfo said: { subject, tenantId, tenantSlug, tenantName, role, email, name, locale }.
+  facts           Json?
+  /// signed_in | needs_consent | needs_link
+  outcome         String?   @db.VarChar(16)
+  /// The account signed in, or the one to link to once proven.
+  userId          String?   @db.Uuid
+  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  resultDigest    String?   @unique @db.VarChar(64)
+  resultExpiresAt DateTime?
+  resultUsedAt    DateTime?
+  ticketDigest    String?   @unique @db.VarChar(64)
+  ticketExpiresAt DateTime?
+  linkProvenAt    DateTime?
+  completedAt     DateTime?
+
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("malafat_sign_ins")
 }

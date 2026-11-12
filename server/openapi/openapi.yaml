@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.111.0-mut594
+  version: 1.112.0-mut595
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -1325,9 +1325,12 @@ components:
           type: boolean
         recovery:
           type: boolean
+        malafatSignIn:
+          type: boolean
       required:
         - signup
         - recovery
+        - malafatSignIn
     SelfServiceAccepted:
       type: object
       properties:
@@ -1369,6 +1372,102 @@ components:
       required:
         - email
         - turnstileToken
+    MalafatOffice:
+      type: object
+      properties:
+        host:
+          type: string
+      required:
+        - host
+    MalafatSignInState:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - signed_in
+            - needs_consent
+            - needs_link
+        me:
+          allOf:
+            - $ref: "#/components/schemas/Me"
+            - description: "signed_in: the person, as GET /v1/me"
+        token:
+          type: string
+          description: "signed_in with client=app: a device session token, as POST /v1/device-sessions"
+        ticket:
+          type: string
+          description: "needs_link / needs_consent: for /link and /consent, 15 minutes"
+        creates:
+          type: boolean
+          description: "needs_consent: true when consent creates a new account (send defaultCurrency and timezone)"
+        office:
+          type: object
+          properties:
+            name:
+              type: string
+          required:
+            - name
+        email:
+          type: string
+          description: The Malafat account’s verified email
+      required:
+        - state
+    MalafatExchangeRequest:
+      type: object
+      properties:
+        result:
+          type: string
+          minLength: 1
+          maxLength: 128
+        app_verifier:
+          type: string
+          minLength: 43
+          maxLength: 128
+      required:
+        - result
+    MalafatLinkRequest:
+      type: object
+      properties:
+        ticket:
+          type: string
+          minLength: 1
+          maxLength: 128
+        password:
+          type: string
+          maxLength: 1024
+        passkey:
+          type: object
+          properties:
+            challengeId:
+              type: string
+              format: uuid
+            response:
+              type: object
+              additionalProperties:
+                nullable: true
+          required:
+            - challengeId
+            - response
+      required:
+        - ticket
+    MalafatConsentRequest:
+      type: object
+      properties:
+        ticket:
+          type: string
+          minLength: 1
+          maxLength: 128
+        acceptedTermsVersion:
+          type: string
+          maxLength: 32
+        defaultCurrency:
+          $ref: "#/components/schemas/Currency"
+        timezone:
+          type: string
+          maxLength: 64
+      required:
+        - ticket
     AccountantGrant:
       type: object
       properties:
@@ -14438,6 +14537,227 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: "RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/auth/malafat/office:
+    get:
+      tags:
+        - Sign in with Malafat
+      summary: Whether an address is a Malafat office (MUT-595)
+      security: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 63
+            description: The firm’s Malafat address, e.g. sader for sader.malafat.app
+          required: true
+          description: The firm’s Malafat address, e.g. sader for sader.malafat.app
+          name: tenant
+          in: query
+      responses:
+        "200":
+          description: It is
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MalafatOffice"
+        "404":
+          description: No such office, or Sign in with Malafat is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/auth/malafat/start:
+    get:
+      tags:
+        - Sign in with Malafat
+      summary: "Start Sign in with Malafat: redirects to the firm’s Malafat (MUT-595)"
+      description: "Open in the browser (the phone: an in-app browser). 302 to Malafat; a refusal 302s to the client’s return with #error= (R7)."
+      security: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 63
+            description: The firm’s Malafat address, e.g. sader for sader.malafat.app
+          required: true
+          description: The firm’s Malafat address, e.g. sader for sader.malafat.app
+          name: tenant
+          in: query
+        - schema:
+            type: string
+            enum:
+              - web
+              - app
+            default: web
+          required: false
+          name: client
+          in: query
+        - schema:
+            type: string
+            pattern: ^[A-Za-z0-9_-]{43}$
+            description: "client=app: the S256 challenge of a verifier the app keeps; /exchange must present it (R3)"
+          required: false
+          description: "client=app: the S256 challenge of a verifier the app keeps; /exchange must present it (R3)"
+          name: app_challenge
+          in: query
+      responses:
+        "302":
+          description: "To Malafat, or back with #error="
+        "404":
+          description: Sign in with Malafat is off on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/auth/malafat/callback:
+    get:
+      tags:
+        - Sign in with Malafat
+      summary: Malafat sends the person back here (MUT-595)
+      description: "Malafat’s redirect target. 302 to the client’s return with #result=<code> (2 minutes, single use) or #error=."
+      security: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 2048
+          required: false
+          name: code
+          in: query
+        - schema:
+            type: string
+            maxLength: 256
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: string
+            maxLength: 64
+          required: false
+          name: error
+          in: query
+      responses:
+        "302":
+          description: To the client’s return
+  /v1/auth/malafat/exchange:
+    post:
+      tags:
+        - Sign in with Malafat
+      summary: Exchange the result code (MUT-595)
+      description: "Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3)."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MalafatExchangeRequest"
+      responses:
+        "200":
+          description: Signed in, or the next step
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MalafatSignInState"
+        "401":
+          description: "INVALID_CREDENTIALS: the linked account can no longer sign in"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/auth/malafat/link:
+    post:
+      tags:
+        - Sign in with Malafat
+      summary: Prove the MTB3A account that has this email, to link it (MUT-595, D4)
+      description: "With its password, or a passkey assertion from POST /v1/passkey-challenges. Writes nothing (R8): consent links."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MalafatLinkRequest"
+      responses:
+        "200":
+          description: "Proven: consent next"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MalafatSignInState"
+        "401":
+          description: INVALID_CREDENTIALS (counts toward the account’s lockout)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: NOT_FOUND reason MALAFAT_TICKET_INVALID
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: RATE_LIMITED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/auth/malafat/consent:
+    post:
+      tags:
+        - Sign in with Malafat
+      summary: "Consent: create or link the account, claim the firm seat, sign in (MUT-595, D8)"
+      description: Everything is written here and nowhere before (R8). A new account (creates) needs defaultCurrency and timezone; it is ACTIVE with no review (DF1) and starts the normal trial (D5). acceptedTermsVersion records the terms now; without it, GET /v1/me asks as for anyone.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MalafatConsentRequest"
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MalafatSignInState"
+        "404":
+          description: "NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT reason IDENTITY_LINKED_ELSEWHERE (this Malafat person is another account’s) or EMAIL_TAKEN; TERMS_VERSION_STALE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: "VALIDATION_FAILED: a new account without defaultCurrency or timezone"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: RATE_LIMITED
           content:
             application/json:
               schema:
