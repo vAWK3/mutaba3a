@@ -128,7 +128,7 @@ export type ReceiptDisposition = 'attachment' | 'inline';
 export type ApproveReceiptRequest = Schemas['ApproveReceiptRequest'];
 export type ApproveReceiptResponse = Schemas['ApproveReceiptResponse'];
 export type MoveReceiptResponse = Schemas['MoveReceiptResponse'];
-/** MUT-589 (ADR-252): moving a saved expense, with its receipts. */
+/** MUT-589 (ADR-254): moving a saved expense, with its receipts. */
 export type ExpenseMovePreview = Schemas['ExpenseMovePreview'];
 export type ExpenseMoveChange = Schemas['ExpenseMoveChange'];
 export type MoveExpenseResponse = Schemas['MoveExpenseResponse'];
@@ -744,7 +744,7 @@ export const api = {
     request<Expense>('PATCH', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId, body, ifMatchVersion: version }),
   deleteExpense: (profileId: string, expenseId: string) =>
     request<void>('DELETE', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
-  /** MUT-589 (ADR-252): what moving the expense to `targetProfileId` would change; the move's own gates. */
+  /** MUT-589 (ADR-254): what moving the expense to `targetProfileId` would change; the move's own gates. */
   expenseMovePreview: (profileId: string, expenseId: string, targetProfileId: string, signal?: AbortSignal) =>
     request<ExpenseMovePreview>('GET', `/v1/expenses/${encodeURIComponent(expenseId)}/move-preview`, { profileId, query: { profileId: targetProfileId }, signal }),
   /** MUT-589: the expense with its receipts to another profile; the attempt's Idempotency-Key, as the receipt move. */

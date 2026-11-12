@@ -12,7 +12,7 @@ import { planExpenseMove, type ExpenseMoveChange, type ExpenseMovePlan } from '.
 import { requireStorage, writableTarget, type MoveReceiptOptions, type ReceiptActor, type ReceiptDeps } from './receipts-compose.js';
 
 /**
- * MUT-589 (ADR-252): move a saved expense, with every receipt on it, to another of the person's profiles. The preview
+ * MUT-589 (ADR-254): move a saved expense, with every receipt on it, to another of the person's profiles. The preview
  * and the move run the same gates in the same order and build the changes with the same planner (move-plan.ts), so
  * what the confirm step lists is what the move applies, unless the target changed in between (review R2): the move
  * answers the changes it applied. Receipt files move as MUT-503 moves them (ADR-228): copied inside the bucket to a key

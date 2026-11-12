@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-11 — Move a saved expense, with its receipts, to another profile (MUT-589, ADR-252)
+## [Unreleased] - 2026-11-11 — Move a saved expense, with its receipts, to another profile (MUT-589, ADR-254)
 
 **Why:** a receipt saved onto the wrong profile could never leave it (MUT-503 moved To-review receipts only); Basel's D4 widened it to any saved expense.
 

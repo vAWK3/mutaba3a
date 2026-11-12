@@ -5,7 +5,7 @@ import { categoryNameIn, presetKeyForName } from './presets.js';
 import { NO_EXPENSE_VAT } from './vat.js';
 
 /**
- * MUT-589 (ADR-252, D1): what a saved expense becomes when it moves to another of the person's profiles, and the list
+ * MUT-589 (ADR-254, D1): what a saved expense becomes when it moves to another of the person's profiles, and the list
  * of what a person sees change. Pure: the caller reads everything it needs. The preview and the move both run it (the
  * move again, right before its transaction, with the target as it is then: review R2), and the move answers the list it
  * applied.

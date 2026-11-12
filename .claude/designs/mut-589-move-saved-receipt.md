@@ -1,7 +1,7 @@
 # MUT-589 — Choose a shared receipt's profile; move a saved expense (with its receipts) to another profile
 
 Epic MUT-252 · Story · Jira Backlog · relates MUT-257 (In Review), MUT-503 (Done, ADR-228), MUT-590, MUT-537 (In Review, same phone screens)
-Copy to `.claude/designs/mut-589-move-saved-receipt.md` at build. Next numbers: **ADR-252**, **API 1.109.0-mut589** (current `1.108.0-mut565`, `server/src/app.ts:348`); confirm both are still free at build.
+Copy to `.claude/designs/mut-589-move-saved-receipt.md` at build. Next numbers: **ADR-254**, **API 1.109.0-mut589** (current `1.108.0-mut565`, `server/src/app.ts:348`); confirm both are still free at build.
 
 ## Decisions (Basel, 2026-11-11)
 - **D1 Fields: map by name, and show what changes.** The confirm step lists every field that changes:
@@ -46,7 +46,7 @@ Copy to `.claude/designs/mut-589-move-saved-receipt.md` at build. Next numbers: 
    - The same id is kept, so links and receipt FKs survive.
    - Answers 200 `{ expense, fromProfileId, changes }`.
 4. **`POST /v1/receipts/{id}/move` on a FILED receipt** stays 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`. Clients route to the expense move. No change to MUT-503.
-5. Schemas go in `schemas.ts`, then `openapi:generate`. `API_VERSION` goes to 1.109.0-mut589. Add ADR-252, which amends ADR-228 ("filed receipts stay out").
+5. Schemas go in `schemas.ts`, then `openapi:generate`. `API_VERSION` goes to 1.109.0-mut589. Add ADR-254, which amends ADR-228 ("filed receipts stay out").
 6. **Reading race:** a filed receipt has finished reading, and the MUT-503 `releaseMovedRead` path already covers a key that changed.
 
 ## Portal (`src/hosted/`)

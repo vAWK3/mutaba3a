@@ -5,7 +5,7 @@ import { expenseKey, invalidateExpenses } from './expenseQueries';
 import { invalidateReceipts } from './receiptQueries';
 
 /**
- * MUT-589 (ADR-252): moving a saved expense, with its receipts, to another of the person's profiles. The preview is
+ * MUT-589 (ADR-254): moving a saved expense, with its receipts, to another of the person's profiles. The preview is
  * read when a profile is chosen (the move's own gates, so a refusal shows before Move); the move refreshes both
  * profiles' expenses, summaries, groups and receipts.
  */

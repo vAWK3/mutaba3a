@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { ExpenseRecord } from '../../repositories/ports.js';
 import { planExpenseMove, type ExpenseMoveContext } from '../move-plan.js';
 
-/** MUT-589 (ADR-252, D1): what a saved expense becomes on another profile, and the list of what changes. */
+/** MUT-589 (ADR-254, D1): what a saved expense becomes on another profile, and the list of what changes. */
 const AT = new Date('2026-11-11T09:00:00Z');
 
 function expense(over: Partial<ExpenseRecord> = {}): ExpenseRecord {

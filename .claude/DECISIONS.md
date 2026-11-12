@@ -6492,7 +6492,7 @@ Contract 1.104.0-mut575, merged with MUT-557 under the higher literal 1.106.0-mu
 **Alternatives rejected:** a stored ENDED status; REVOKED → LEFT on dismissal; `/v1/entries?profileId=` for grants; stats on `/v1/me`; claiming `/share*` in the AASA.
 
 
-## ADR-252: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
+## ADR-254: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
 
 **Status:** Accepted (2026-11-11, MUT-589; epic MUT-252; Basel's decisions in Jira MUT-589 comment 13297). Plan: `.claude/designs/mut-589-move-saved-receipt.md`. Amends ADR-228 ("filed receipts stay out"): a filed receipt still never moves alone (`POST /v1/receipts/{id}/move` keeps 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`); it moves with its expense.
 

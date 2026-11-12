@@ -9,7 +9,7 @@ import { expenseKey } from '../expenseQueries';
 import { expenseMoveErrorOf, useMoveExpense } from '../expenseMoveQueries';
 import { receiptsKey } from '../receiptQueries';
 
-/** MUT-589 (ADR-252): the expense move's data layer. */
+/** MUT-589 (ADR-254): the expense move's data layer. */
 afterEach(() => vi.unstubAllGlobals());
 
 const P = '11111111-1111-4111-8111-111111111111';

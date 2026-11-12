@@ -274,7 +274,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     },
   );
 
-  // ---- MUT-589 (ADR-252): move a saved expense, with its receipts, to another of the person's profiles ----
+  // ---- MUT-589 (ADR-254): move a saved expense, with its receipts, to another of the person's profiles ----
 
   const MOVE_REFUSALS =
     '422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked.';

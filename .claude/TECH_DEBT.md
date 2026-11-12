@@ -19,13 +19,13 @@
 ## Open Debt
 
 ### TD-307: A vendor made on the target for an expense move that then fails stays behind
-**Status**: Accepted (MUT-589, 2026-11-11; ADR-252, review R3)
+**Status**: Accepted (MUT-589, 2026-11-11; ADR-254, review R3)
 - **What:** the move resolves (finds or creates) the vendor on the target before its transaction; if the transaction refuses, a new vendor is left with no expense.
 - **Why it's acceptable:** approving a receipt does the same (MUT-254 A2), the vendor is still right, and the next expense at that vendor uses it.
 - **Fix:** if it ever matters, resolve the vendor inside the move's transaction (a store-level resolve on the `tx`).
 
 ### TD-308: An abandoned upload on an expense blocks moving it
-**Status**: Open (MUT-589, 2026-11-11; ADR-252)
+**Status**: Open (MUT-589, 2026-11-11; ADR-254)
 - **What:** a MUT-44 upload started on an expense and never completed leaves a PENDING_UPLOAD receipt on it; the move answers 409 `RECEIPT_NOT_READY` until that receipt is deleted, and the preview can't see it.
 - **Fix:** let the move soft-delete PENDING_UPLOAD receipts older than the pending window, or sweep them.
 

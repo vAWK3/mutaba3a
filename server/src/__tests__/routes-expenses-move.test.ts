@@ -7,7 +7,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import type { CreateExpenseInput } from '../repositories/ports.js';
 import { provisionUser } from './helpers/provision.js';
 
-/** MUT-589 (ADR-252): moving a saved expense, with its receipts, to another of the person's profiles. */
+/** MUT-589 (ADR-254): moving a saved expense, with its receipts, to another of the person's profiles. */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Loose = any;
 const read = (res: Response): Promise<Loose> => res.json() as Promise<Loose>;
