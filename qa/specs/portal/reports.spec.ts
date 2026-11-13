@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { OFFICE_A, OFFICE_B, customer, office } from '../../support/portal';
+import { MODE_KEY, OFFICE_A, OFFICE_B, customer, office } from '../../support/portal';
 import { switchLanguage } from '../../support/you';
 import { FakeApi, category, expense, payment, todayInJerusalem, type FakeApiSeed, type StubReportRecords } from '../../support/portalApi';
 
@@ -281,6 +281,8 @@ test('Signed out on this device, Reports runs on the records kept in the browser
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  // A device that has used the portal signed out says so; a first visit would get the welcome (MUT-513) instead.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MODE_KEY, 'local'] as const);
 
   await step('Signed out, open Reports', async () => {
     await page.goto('/');

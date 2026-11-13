@@ -701,6 +701,21 @@ export interface StubSetupLink {
   purpose?: 'SETUP' | 'RESET';
 }
 
+/** GET /v1/billing on a server with Stripe off and a person with no trial or plan (every field the schema requires). */
+const BILLING_OFF: Json = {
+  configured: false,
+  subscription: null,
+  canManage: false,
+  trial: null,
+  catalog: { ILS: null, USD: null },
+  countries: { consumer: [], consumerEverywhere: true, customTaxId: [] },
+  coveredProfileIds: [],
+  offer: null,
+  yearlySwitch: null,
+  comeback: null,
+  accountantPlan: null,
+};
+
 export class FakeApi {
   readonly log: Logged[] = [];
   /** Requests that reached the storage bucket (receipt PUTs, signed-URL downloads). */
@@ -959,7 +974,9 @@ export class FakeApi {
       return json({ error: { code: 'ACCOUNT_CLOSING', message: 'closing', details: { deleteAfter: this.closure.deleteAfter } } }, 403);
     }
     if (resource === 'me' && id === 'closure' && method === 'POST') return this.closeAnswer(e.body as { password?: string } | null);
-    if (resource === 'billing' && method === 'GET' && !id && this.billingOverview) return json(this.billingOverview);
+    // Unseeded, the real API's shape with Stripe off: no subscription, no trial, nothing sellable. (Falling through
+    // answered something without `subscription`, which Billing reads as a plan and crashed on, MUT-532.)
+    if (resource === 'billing' && method === 'GET' && !id) return json(this.billingOverview ?? BILLING_OFF);
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
       if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
