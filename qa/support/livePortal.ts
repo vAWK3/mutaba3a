@@ -184,13 +184,16 @@ export async function advanceClock(clockId: string, toUnix: number): Promise<voi
  * go by their ids (the page isn't ours); our custom field goes by the bilingual label we gave it. `taxNumber` fills
  * that field; `taxId` Stripe's tax ID.
  */
-/** The frame holding Stripe's Checkout form (card and billing details), or null on the older in-page form. */
-async function stripeFormFrame(page: Page) {
+/**
+ * The frame holding Stripe's Checkout form (contact, card and billing details), or null on the older in-page form. Found
+ * by its Full name field: Card number only appears once Card is picked where Stripe offers another method too.
+ */
+export async function stripeFormFrame(page: Page) {
   const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
     for (const frame of page.frames()) {
       if (frame === page.mainFrame()) continue;
-      if (await frame.getByRole('textbox', { name: 'Card number' }).count().catch(() => 0)) return frame;
+      if (await frame.getByRole('textbox', { name: 'Full name' }).count().catch(() => 0)) return frame;
     }
     if (await page.locator('#cardNumber').count()) return null;
     await page.waitForTimeout(250);

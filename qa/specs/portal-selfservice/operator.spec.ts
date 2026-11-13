@@ -171,7 +171,8 @@ test('A stale step-up asks for the passkey on the same tap; cancelling it change
     // The sheet was asked for (options fetched, the one-shot dismissal used up) and nothing else was sent.
     await expect.poll(() => page.evaluate(() => (navigator.credentials.get as unknown as { dismissed?: boolean }).dismissed !== false)).toBe(true);
     await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeEnabled();
-    expect(posts).toEqual(['/v1/operator/step-up/options']);
+    // Waited for, not read at once: the poll above passes before the options request leaves (dismissed is unset).
+    await expect.poll(() => posts).toEqual(['/v1/operator/step-up/options']);
     await expect(signupRow(page, waiting).getByRole('alert')).toHaveCount(0);
     expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(false);
   });

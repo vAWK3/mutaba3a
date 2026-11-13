@@ -6,6 +6,7 @@ import {
   declinedRenewal,
   deleteOfferCoupon,
   fillStripeCheckout,
+  stripeFormFrame,
   finishSignupInPage,
   invoicesOf,
   liveState,
@@ -66,8 +67,8 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
   });
   await step('Fill in the test card, an Israeli address and the business tax number', async () => {
     await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL', taxNumber: '516000000' });
-    await expect(page.getByRole('textbox', { name: 'Business tax number · الرقم الضريبي' })).toHaveValue('516000000');
-    await expect(page.getByText(/Prices exclude VAT; VAT is added where the law requires it\./)).toBeVisible();
+    await expect(((await stripeFormFrame(page)) ?? page).getByRole('textbox', { name: 'Business tax number · الرقم الضريبي' })).toHaveValue('516000000');
+    await expect(((await stripeFormFrame(page)) ?? page).getByText(/Prices exclude VAT; VAT is added where the law requires it\./)).toBeVisible();
   });
   await step('Pay (through Stripe’s API: its page blocks automated payment, TD-201)', async () => {
     await payCheckoutByApi(page, person, 'freelancer_list_monthly_ils');
@@ -127,7 +128,7 @@ test('A person in any country goes straight on to the card; a business still giv
     await page.getByRole('button', { name: 'Continue to payment' }).click();
     await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
     await expect(page.getByText(/\$9\.00/).first()).toBeVisible();
-    await expect(page.getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
+    await expect(((await stripeFormFrame(page)) ?? page).getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
   });
 });
 
@@ -249,7 +250,7 @@ test('A new signup lands on the trial step; adding a card keeps the trial and th
   });
   await step('Fill in the test card and an Israeli address (no business tax number for a person)', async () => {
     await fillStripeCheckout(page, { name: 'Rana Saleh', country: 'IL' });
-    await expect(page.getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
+    await expect(((await stripeFormFrame(page)) ?? page).getByRole('textbox', { name: /^Business tax number/ })).toHaveCount(0);
   });
   await step('Add the card (through Stripe’s API on this Checkout’s customer and price, with the trial: TD-201)', async () => {
     await payCheckoutByApi(page, person, 'freelancer_list_monthly_ils', { trialEnd });
