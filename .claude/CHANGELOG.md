@@ -28,6 +28,13 @@
 
 ---
 
+## [Unreleased] - 2026-11-13 — The landing bar fits a 375px phone in English (release QA web.landing.375)
+
+### Fixed
+- **The wordmark is no longer clipped at 375px in English** (`LandingHeader.tsx`, `LandingPage.css`): the bar's button kept its full label ("Create an account" / "Request an account") up to 360px, and beside the wordmark and the EN|AR switch it squeezed the wordmark (105px in 90px). Up to 400px the button now says a short label (`landing.header.ctaCreateShort` / `ctaRequestShort`: "Sign up" / "Request"; Arabic keeps its full label, which fits).
+- **320px no longer shows an empty button**: the old rule hid the label for an icon the button no longer has. The full label is now visually hidden, not `display: none`, so it stays the button's accessible name.
+- Tests: `LandingHeader.test.tsx` (short label, accessible name), `landingCss.test.ts` (the 400px rule); the QA flow `web.landing.375` asserts the fit at 375 and 320, both languages.
+
 ## [Unreleased] - 2026-11-12 — The portal's Malafat screens (MUT-596, ADR-254 D2, D5, D8, D9)
 
 ### Added
