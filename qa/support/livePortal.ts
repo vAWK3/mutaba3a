@@ -184,29 +184,49 @@ export async function advanceClock(clockId: string, toUnix: number): Promise<voi
  * go by their ids (the page isn't ours); our custom field goes by the bilingual label we gave it. `taxNumber` fills
  * that field; `taxId` Stripe's tax ID.
  */
+/** The frame holding Stripe's Checkout form (card and billing details), or null on the older in-page form. */
+async function stripeFormFrame(page: Page) {
+  const deadline = Date.now() + 15_000;
+  while (Date.now() < deadline) {
+    for (const frame of page.frames()) {
+      if (frame === page.mainFrame()) continue;
+      if (await frame.getByRole('textbox', { name: 'Card number' }).count().catch(() => 0)) return frame;
+    }
+    if (await page.locator('#cardNumber').count()) return null;
+    await page.waitForTimeout(250);
+  }
+  return null;
+}
+
 export async function fillStripeCheckout(page: Page, opts: { name: string; country: string; taxNumber?: string; taxId?: { type: string; value: string } }): Promise<void> {
   await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
-  // Where Stripe offers another method too (Amazon Pay in USD), the card form opens only once Card is picked: the
-  // whole row is the click area.
-  const card = page.locator('[data-testid="card-accordion-item"]');
+  // Since 2026-11 Stripe draws the whole form (contact, card, billing details) inside an iframe, labelled by role; the
+  // older page had it in the document with ids. Fill whichever this Checkout serves.
+  const framed = await stripeFormFrame(page);
+  const inFrame = framed !== null;
+  const form = framed ?? page;
+  // Where Stripe offers another method too (Amazon Pay in USD), the card form opens only once Card is picked.
+  const card = inFrame ? form.getByRole('button', { name: 'Card', exact: true }) : page.locator('[data-testid="card-accordion-item"]');
   if (await card.waitFor({ timeout: 5_000 }).then(() => true, () => false)) await card.click();
-  await page.locator('#cardNumber').fill('4242 4242 4242 4242');
-  await page.locator('#cardExpiry').fill('12 / 34');
-  await page.locator('#cardCvc').fill('123');
-  await page.locator('#billingName').fill(opts.name);
-  await page.locator('#billingCountry').selectOption(opts.country);
-  const address = page.locator('#billingAddressLine1');
+  const field = (id: string, name: string | RegExp) => (inFrame ? form.getByRole('textbox', { name }) : page.locator(`#${id}`));
+  await field('cardNumber', 'Card number').fill('4242 4242 4242 4242');
+  await field('cardExpiry', /^Expiration/).fill('12 / 34');
+  await field('cardCvc', 'Security code').fill('123');
+  await field('billingName', 'Full name').fill(opts.name);
+  await (inFrame ? form.getByRole('combobox', { name: 'Country or region' }) : page.locator('#billingCountry')).selectOption(opts.country);
+  const address = field('billingAddressLine1', 'Address line 1');
   if (await address.isVisible().catch(() => false)) await address.fill('1 Test Street');
-  const city = page.locator('#billingLocality');
+  const city = field('billingLocality', 'City');
   if (await city.isVisible().catch(() => false)) await city.fill('Haifa');
-  const postal = page.locator('#billingPostalCode');
+  const postal = field('billingPostalCode', 'Postal code');
   if (await postal.isVisible().catch(() => false)) await postal.fill('3100001');
-  if (opts.taxNumber) await page.getByRole('textbox', { name: /^Business tax number/ }).fill(opts.taxNumber);
+  if (opts.taxNumber) await form.getByRole('textbox', { name: /^Business tax number/ }).fill(opts.taxNumber);
   if (opts.taxId) {
-    const business = page.getByRole('checkbox', { name: /business/i });
+    const business = form.getByRole('checkbox', { name: /business/i });
     if (await business.isVisible().catch(() => false)) await business.check();
-    await page.locator('#taxIdType').selectOption({ value: opts.taxId.type }).catch(() => undefined);
-    await page.locator('#taxId').fill(opts.taxId.value);
+    const type = inFrame ? form.getByRole('combobox', { name: /tax id/i }) : page.locator('#taxIdType');
+    await type.selectOption({ value: opts.taxId.type }).catch(() => undefined);
+    await (inFrame ? form.getByRole('textbox', { name: /tax id/i }) : page.locator('#taxId')).fill(opts.taxId.value);
   }
 }
 

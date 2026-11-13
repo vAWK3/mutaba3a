@@ -23,6 +23,14 @@ async function call(method: string, path: string, headers: Record<string, string
   return text ? (JSON.parse(text) as Json) : {};
 }
 
+/** A pinned contract version goes stale with every later ticket; what matters is that this one is in (major.minor.patch). */
+function contractAtLeast(version: string, floor: string): boolean {
+  const parts = (v: string) => v.split('-')[0]!.split('.').map(Number);
+  const [a, b] = [parts(version), parts(floor)];
+  for (let i = 0; i < 3; i += 1) if (a[i]! !== b[i]!) return a[i]! > b[i]!;
+  return true;
+}
+
 test('Malafat reads a client\'s ledger card, with CHG numbers, a running balance and a reversed payment', { tag: '@portal-selfservice.malafat-money-api.statement' }, async ({ step }) => {
   const admin = { 'x-admin-token': liveState().adminToken };
   let key: Record<string, string> = {};
@@ -560,7 +568,7 @@ test("Malafat corrects a billed and paid fee's amount, VAT basis and treatment i
     expect(audit).toHaveLength(3);
     expect(audit.map((e: Json) => [e.metadata.before.pricingBasis, e.metadata.after.pricingBasis]).sort()).toEqual([['VAT_EXCLUSIVE', 'VAT_INCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_EXCLUSIVE'], ['VAT_INCLUSIVE', 'VAT_INCLUSIVE']]);
     const doc = await call('GET', '/openapi.json', {});
-    expect(doc.info.version).toBe('1.90.0-mut483');
+    expect(contractAtLeast(doc.info.version, '1.90.0')).toBe(true);
   });
 });
 
@@ -692,9 +700,9 @@ test('Malafat reads a month\'s billed, received and credited, and they add up to
     expect(inverted.body.error.details).toMatchObject({ reason: 'END_BEFORE_START', field: 'to' });
   });
 
-  await step('AC4: the contract version reads 1.90.0-mut483', async () => {
+  await step('AC4: the contract is 1.90.0-mut483 or later', async () => {
     const doc = await call('GET', '/openapi.json', {});
-    expect(doc.info.version).toBe('1.90.0-mut483');
+    expect(contractAtLeast(doc.info.version, '1.90.0')).toBe(true);
     expect(doc.paths['/v1/summaries/period'].get.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);
   });
 });
