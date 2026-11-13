@@ -57,6 +57,39 @@ test('I upload a receipt photo and the server reads it; the review page fills in
   });
 });
 
+/** MUT-540 (ADR-244): the same bookshop photo turned 90° (`sips -r 90`), lying on its side. */
+const SIDEWAYS = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', 'fixtures', 'receipts', 'syn-025-en-photo-sideways.jpg');
+const SIDEWAYS_NAME = 'bookshop-receipt-sideways.jpg';
+
+test('A receipt photographed on its side is turned and read; the review page fills in the amount and date', { tag: '@portal-selfservice.receipts.sideways-photo' }, async ({ page, step }) => {
+  expect(liveState().ocr, 'the env runs the receipt-ocr sidecar (Tesseract on PATH: brew install tesseract)').toBe(true);
+  const me = await person(page, { agentAccess: false });
+  await grantCoverage(me.id);
+  await grantFeature(me.id, 'receipt_reading');
+  const card = page.getByRole('list', { name: 'Receipts' }).getByRole('link', { name: `Open ${SIDEWAYS_NAME}` });
+
+  await step('Open Expenses › Receipts', async () => {
+    await page.goto(`/p/${me.profileId}/expenses/receipts`);
+    await expect(page.getByTestId('receipts-upload-input')).toBeAttached();
+  });
+  await step('Upload the bookshop receipt photo lying on its side', async () => {
+    await page.getByTestId('receipts-upload-input').setInputFiles({ name: SIDEWAYS_NAME, mimeType: 'image/jpeg', buffer: fs.readFileSync(SIDEWAYS) });
+    await expect(card).toBeVisible();
+  });
+  await step('Open the receipt and wait for the reading to finish', async () => {
+    await card.click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Review receipt' })).toBeVisible();
+  });
+  await step('The amount and date fill in from the receipt, as for the upright photo', async () => {
+    await expect(page.getByLabel('Amount')).toHaveValue('52.470', { timeout: READ_TIMEOUT_MS });
+    await expect(page.getByLabel('Currency')).toHaveValue('JOD');
+    await expect(page.getByLabel('Date')).toHaveValue('2026-06-25');
+    await expect(page.getByLabel('Amount')).toHaveAttribute('data-suggested', 'true');
+    await expect(page.getByLabel('Date')).toHaveAttribute('data-suggested', 'true');
+    await expect(page.getByText('Reading the receipt…')).toHaveCount(0);
+  });
+});
+
 /** MUT-590: a vendor-made invoice PDF (synthetic; its label and amount drawn apart on one line), read from its text layer. */
 const VENDOR_PDF = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', 'server', 'ocr', 'tests', 'fixtures', 'syn-vendor-invoice-en.pdf');
 const VENDOR_PDF_NAME = 'studio-invoice.pdf';
