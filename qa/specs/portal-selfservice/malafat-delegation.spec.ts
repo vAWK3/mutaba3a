@@ -143,19 +143,8 @@ test('A partner invites the office’s accountant from the portal; an associate 
   });
 });
 
-test('An associate records an expense on the office and sees only their own', { tag: '@portal-selfservice.malafat-delegation.submitter-expense' }, async ({ page, browser, step }) => {
-  const partner = await malafatSeat('PARTNER', 'layla');
-  const partnerContext = await browser.newContext();
-  const partnerPage = await partnerContext.newPage();
-  await chooseLanguage(partnerPage, 'en');
-  await firstSignIn(partnerPage, partner);
-  const theirs = await partnerPage.request.post('/v1/expenses', {
-    headers: { origin: new URL(partnerPage.url()).origin, 'x-mutaba3a-profile': partner.organizationId, 'idempotency-key': `qa-${Date.now()}-partner-expense` },
-    data: { amount: '40.00', currency: 'ILS', occurredOn: new Date().toISOString().slice(0, 10), title: 'Partner court fees' },
-  });
-  expect(theirs.ok(), `partner expense ${theirs.status()} ${await theirs.text()}`).toBe(true);
-  await partnerContext.close();
-
+// Basel, 2026-11-13: "own list only" and "no firm totals" are MUT-305's (firm roles are inert until it lands, ADR-099).
+test('An associate records an expense on the office', { tag: '@portal-selfservice.malafat-delegation.submitter-expense' }, async ({ page, step }) => {
   const associate = await malafatSeat('ASSOCIATE', 'hadi');
   await firstSignIn(page, associate);
   await step("As an associate, open the office's Expenses and record an expense", async () => {
@@ -166,10 +155,10 @@ test('An associate records an expense on the office and sees only their own', { 
     await drawer.getByLabel('Category').selectOption({ index: 1 });
     await drawer.getByLabel('Title').fill('Associate filing stamp');
     await drawer.getByRole('button', { name: 'Save' }).click();
+    await expect(drawer).toHaveCount(0);
   });
-  await step('Their expense is listed; the partner’s is not', async () => {
-    await expect(page.getByText('Associate filing stamp')).toBeVisible();
-    await expect(page.getByText('Partner court fees')).toHaveCount(0);
+  await step('Their expense is listed on the office', async () => {
+    await expect(page.getByRole('row', { name: /Associate filing stamp/ })).toBeVisible();
   });
 });
 
@@ -198,7 +187,7 @@ test('You › Connected apps lists Malafat per office, and disconnecting removes
   await step('Malafat is listed with the office, its mark and since when', async () => {
     await expect(drawer.getByText(OFFICE.name)).toBeVisible();
     await expect(drawer.locator('.hp-malafat-mark')).toBeVisible();
-    await expect(drawer.getByText(/^Connected /)).toBeVisible();
+    await expect(drawer.getByRole('listitem').getByText(/^Connected /)).toBeVisible();
   });
   await step('Press Disconnect on the office, then Disconnect in the confirm', async () => {
     await drawer.getByRole('button', { name: `Disconnect: ${OFFICE.name}` }).click();

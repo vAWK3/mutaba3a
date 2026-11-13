@@ -60,13 +60,15 @@ features:
       - The partner's invite is listed as sent
       - The associate sees no Share with your accountant
   - id: submitter-expense
-    title: An associate records an expense on the office and sees only their own
+    title: An associate records an expense on the office
     tier: secondary
+    # Basel, 2026-11-13: brief §12.4's "own list only" and "no firm totals" moved to MUT-305 (firm roles enforced);
+    # until it lands roles are inert on every firm (ADR-099), so every member sees the office's expenses.
+    tickets: [MUT-305]
     steps:
       - As an associate, open the office's Expenses and record an expense
     expect:
-      - Their expense is listed
-      - Another member's expense on the office is not
+      - Their expense is listed on the office
   - id: ledger-read-only
     title: The office's income is Malafat's to change; the portal says so
     tier: secondary
