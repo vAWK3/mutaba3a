@@ -23135,6 +23135,8 @@ export interface components {
             };
             /** @description The Malafat account’s verified email */
             email?: string;
+            /** @description needs_link / needs_consent: the current terms version; a new account agrees to it on consent (acceptedTermsVersion), so it isn’t asked again after (MUT-596) */
+            termsVersion?: string;
         };
         MalafatExchangeRequest: {
             result: string;

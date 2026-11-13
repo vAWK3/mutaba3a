@@ -91,16 +91,41 @@ describe('the return', () => {
     expect(await screen.findByText('This sign-in has expired. Start again.')).toBeInTheDocument();
   });
 
-  it('a new person consents, naming the currency, and is signed in', async () => {
-    const ticket = { state: 'needs_consent', ticket: 't-1', email: 'nadia@sader.law', creates: true, office };
+  it('a new person consents, naming the currency and agreeing to the terms, and is signed in', async () => {
+    const ticket = { state: 'needs_consent', ticket: 't-1', email: 'nadia@sader.law', creates: true, office, termsVersion: '2026-10-19' };
     const api = stubApi(routes({ [EXCHANGE]: () => ok(ticket), [CONSENT]: () => ok({ state: 'signed_in', me: me() }), 'GET /v1/me': () => ok(me()) }));
     const { user, router } = renderPortal('/malafat/return#result=code-2');
     expect(await screen.findByText(/We'll create an MTB3A account for nadia@sader.law/)).toBeInTheDocument();
     expect(screen.getByText('Sader & Partners')).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Base currency'), 'USD');
     await user.click(screen.getByRole('button', { name: 'Create account and continue' }));
+    expect(await screen.findByText('Tick to agree to the terms before you continue.')).toBeInTheDocument();
+    expect(callsTo(api, CONSENT)).toHaveLength(0);
+    await user.click(screen.getByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'Create account and continue' }));
     await waitFor(() => expect(locationOf(router)).not.toMatch(/^\/malafat/));
-    expect(callsTo(api, CONSENT)[0]?.body).toMatchObject({ ticket: 't-1', defaultCurrency: 'USD' });
+    expect(callsTo(api, CONSENT)[0]?.body).toMatchObject({ ticket: 't-1', defaultCurrency: 'USD', acceptedTermsVersion: '2026-10-19' });
+  });
+
+  it('terms that changed while the consent was open: the new version, to tick again', async () => {
+    let calls = 0;
+    const ticket = { state: 'needs_consent', ticket: 't-5', email: 'nadia@sader.law', creates: true, office, termsVersion: '2026-10-19' };
+    const api = stubApi(
+      routes({
+        [EXCHANGE]: () => ok(ticket),
+        [CONSENT]: () => (++calls === 1 ? fail(409, 'TERMS_VERSION_STALE', { current: '2026-11-01' }) : ok({ state: 'signed_in', me: me() })),
+        'GET /v1/me': () => ok(me()),
+      }),
+    );
+    const { user } = renderPortal('/malafat/return#result=code-5');
+    await user.click(await screen.findByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'Create account and continue' }));
+    expect(await screen.findByText(/The terms changed while this page was open/)).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: /terms of service/ })).not.toBeChecked();
+    await user.click(screen.getByRole('checkbox', { name: /terms of service/ }));
+    await user.click(screen.getByRole('button', { name: 'Create account and continue' }));
+    await waitFor(() => expect(callsTo(api, CONSENT)).toHaveLength(2));
+    expect(callsTo(api, CONSENT)[1]?.body).toMatchObject({ acceptedTermsVersion: '2026-11-01' });
   });
 
   it('linking proves the existing account with its password; a wrong one asks again', async () => {

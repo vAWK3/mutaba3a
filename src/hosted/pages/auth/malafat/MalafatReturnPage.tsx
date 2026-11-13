@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
-import { useT } from '../../../../lib/i18n/core';
+import { useLanguage, useT } from '../../../../lib/i18n/core';
 import { Select } from '../../../../components/ui/Input';
 import { api, ApiError, type MalafatSignInState, type Me } from '../../../api/client';
 import { AlertIcon } from '../../../components/Icons';
@@ -15,6 +15,7 @@ import { assertPasskey, passkeySupport } from '../../../passkeys/webauthn';
 import { firstRunPath } from '../../../session/firstRun';
 import { ME_KEY } from '../../../session/me';
 import { setMode } from '../../../session/mode';
+import { termsHref } from '../../../terms';
 import { AuthLayout } from '../AuthLayout';
 import { CheckingSession } from '../BootScreens';
 import { malafatReturnOf, type MalafatReturnError } from './malafatSignIn';
@@ -200,7 +201,10 @@ function MalafatLink({ state, onLinked, onFailed }: StepProps & { onLinked: (sta
   );
 }
 
-/** D8: the one consent, at the first link. A new account also names its currency and time zone (D5). */
+/**
+ * D8: the one consent, at the first link. A new account also names its currency and time zone (D5) and agrees to the
+ * terms here (the version the exchange named), so the terms gate doesn't greet it with "we've updated our terms".
+ */
 function MalafatConsent({ state, onDone, onFailed }: StepProps & { onDone: (state: MalafatSignInState) => void }) {
   const t = useT();
   const ids = useId();
@@ -211,15 +215,35 @@ function MalafatConsent({ state, onDone, onFailed }: StepProps & { onDone: (stat
   const [zoneOpen, setZoneOpen] = useState(false);
   const [pending, setPending] = useState(false);
   const creates = state.creates === true;
+  const { language } = useLanguage();
+  const termsRef = useRef<HTMLInputElement>(null);
+  const [termsVersion, setTermsVersion] = useState(state.termsVersion);
+  const [agreed, setAgreed] = useState(false);
+  const [termsProblem, setTermsProblem] = useState<'required' | 'changed' | null>(null);
+  const asksTerms = creates && termsVersion !== undefined;
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     if (pending) return;
+    if (asksTerms && !agreed) {
+      setTermsProblem('required');
+      termsRef.current?.focus();
+      return;
+    }
     setPending(true);
     try {
-      onDone(await api.malafatConsent({ ticket: state.ticket ?? '', ...(creates ? { defaultCurrency: currency, timezone } : {}) }));
+      onDone(await api.malafatConsent({ ticket: state.ticket ?? '', ...(creates ? { defaultCurrency: currency, timezone } : {}), ...(asksTerms ? { acceptedTermsVersion: termsVersion } : {}) }));
     } catch (error) {
       setPending(false);
+      // The terms changed while the page was open: the new version, to read and tick again (the ticket stays good).
+      const current = error instanceof ApiError && error.code === 'TERMS_VERSION_STALE' ? (error.details as { current?: string } | null)?.current : undefined;
+      if (current) {
+        setTermsVersion(current);
+        setAgreed(false);
+        setTermsProblem('changed');
+        termsRef.current?.focus();
+        return;
+      }
       onFailed(failureOf(error));
     }
   }
@@ -252,6 +276,39 @@ function MalafatConsent({ state, onDone, onFailed }: StepProps & { onDone: (stat
               <TimezoneChoice id={`${ids}-timezone`} browserZone={zone} value={timezone} onChange={setTimezone} open={zoneOpen} onOpen={() => setZoneOpen(true)} />
             </div>
           </>
+        )}
+        {asksTerms && (
+          <div className="hp-field">
+            <label className="hp-check-row">
+              <input
+                ref={termsRef}
+                type="checkbox"
+                checked={agreed}
+                disabled={pending}
+                aria-invalid={termsProblem !== null}
+                aria-describedby={termsProblem ? `${ids}-terms-error` : undefined}
+                onChange={(e) => {
+                  setAgreed(e.target.checked);
+                  if (e.target.checked) setTermsProblem(null);
+                }}
+              />
+              <span>
+                {t('hosted.setup.terms.agree')}{' '}
+                {termsHref(language, termsVersion) ? (
+                  <a href={termsHref(language, termsVersion)} target="_blank" rel="noopener">
+                    {t('hosted.setup.terms.link')}
+                  </a>
+                ) : (
+                  t('hosted.setup.terms.link')
+                )}
+              </span>
+            </label>
+            {termsProblem && (
+              <p className="hp-field-error" id={`${ids}-terms-error`}>
+                {t(`hosted.setup.terms.${termsProblem}`)}
+              </p>
+            )}
+          </div>
         )}
         <div className="hp-consent-actions">
           <button type="button" className="btn btn-secondary btn-md" disabled={pending} onClick={() => void navigate({ to: '/sign-in', replace: true })}>

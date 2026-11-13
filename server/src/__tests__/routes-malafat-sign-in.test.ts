@@ -72,6 +72,17 @@ describe('the three first sign-ins (AC1)', () => {
     expect((await h.store.externalIdentities.findBySubject('MALAFAT', firm!.tenant, 'mal-user-1'))?.userId).toBe(user.id);
   });
 
+  it('MUT-596: the consent names the current terms; agreeing there means the terms aren’t asked again after', async () => {
+    const { h, firm, malafat, who } = await malafatSetup();
+    await seat(h, firm!, 'mal-user-1');
+    malafat.state.who = who();
+    const { fragment } = await roundTrip(h);
+    const step = await read(await exchange(h, fragment.get('result') ?? ''));
+    expect(step.termsVersion).toEqual(expect.any(String));
+    const done = await read(await consent(h, { ticket: step.ticket, ...NEW_ACCOUNT, acceptedTermsVersion: step.termsVersion }));
+    expect(done.me.terms).toEqual({ version: step.termsVersion, accepted: true });
+  });
+
   it('an existing account on that email: linked only after its own password, never by email alone (D4)', async () => {
     const { h, firm, malafat, who } = await malafatSetup();
     const existing = await person(h, { flag: false });

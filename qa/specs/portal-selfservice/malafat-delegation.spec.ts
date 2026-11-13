@@ -16,6 +16,7 @@ async function firstSignIn(page: Page, person: MalafatPerson) {
   await malafatAs(page, person);
   await startMalafatSignIn(page);
   await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
+  await page.getByRole('checkbox', { name: /terms of service/ }).check();
   await page.getByRole('button', { name: 'Create account and continue' }).click();
   await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}/);
 }
@@ -47,8 +48,9 @@ test('A lawyer new to MTB3A signs in with Malafat; the consent creates the accou
     await expect(page.getByText(/Nothing is saved until you continue/)).toBeVisible();
     await expect(page).not.toHaveURL(/result=/);
   });
-  await step('Choose the currency and press Create account and continue', async () => {
+  await step('Choose the currency, agree to the terms and press Create account and continue', async () => {
     await page.getByLabel('Base currency').selectOption('USD');
+    await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Create account and continue' }).click();
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}/);
   });
@@ -139,7 +141,7 @@ test('An associate records an expense on the office and sees only their own', { 
   await firstSignIn(partnerPage, partner);
   const theirs = await partnerPage.request.post('/v1/expenses', {
     headers: { origin: new URL(partnerPage.url()).origin, 'x-mutaba3a-profile': partner.organizationId, 'idempotency-key': `qa-${Date.now()}-partner-expense` },
-    data: { amount: '40.00', currency: 'ILS', date: new Date().toISOString().slice(0, 10), title: 'Partner court fees' },
+    data: { amount: '40.00', currency: 'ILS', occurredOn: new Date().toISOString().slice(0, 10), title: 'Partner court fees' },
   });
   expect(theirs.ok(), `partner expense ${theirs.status()} ${await theirs.text()}`).toBe(true);
   await partnerContext.close();

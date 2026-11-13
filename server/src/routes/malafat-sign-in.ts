@@ -108,6 +108,7 @@ const SignInStateSchema = z
     creates: z.boolean().optional().openapi({ description: 'needs_consent: true when consent creates a new account (send defaultCurrency and timezone)' }),
     office: z.object({ name: z.string() }).optional(),
     email: z.string().optional().openapi({ description: 'The Malafat account’s verified email' }),
+    termsVersion: z.string().optional().openapi({ description: 'needs_link / needs_consent: the current terms version; a new account agrees to it on consent (acceptedTermsVersion), so it isn’t asked again after (MUT-596)' }),
   })
   .openapi('MalafatSignInState');
 
@@ -161,6 +162,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
     ...(state === 'needs_consent' ? { creates: flow.outcome === 'needs_consent' } : {}),
     office: { name: flow.facts?.tenantName ?? '' },
     email: flow.facts?.email ?? '',
+    termsVersion: terms.version,
   });
 
   const usable = (user: UserRecord | null): user is UserRecord => user !== null && user.status === 'ACTIVE' && user.passwordHash !== null;
