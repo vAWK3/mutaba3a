@@ -66,6 +66,11 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // MUT-434: the MCP address and the Claude Code command read left to right; agents' self-declared names are auto
   'src/hosted/components/CopyField.tsx': { ltr: 1 },
   'src/hosted/components/ConnectClaudeDrawer.tsx': { ltr: 1, auto: 2 },
+  // MUT-596: the office address and the MTB3A password (B); the office's name, a firm's name, a member's name (D)
+  'src/hosted/pages/auth/malafat/MalafatOfficePage.tsx': { ltr: 1 },
+  'src/hosted/pages/auth/malafat/MalafatReturnPage.tsx': { ltr: 1, auto: 1 },
+  'src/hosted/components/ConnectedAppsDrawer.tsx': { auto: 1 },
+  'src/hosted/components/MalafatMembersSection.tsx': { auto: 1 },
   'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
   'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 1, auto: 2 }, // MUT-527: each row's address; the search field (an address or a name) and each row's name
   'src/hosted/pages/operator/OperatorAccountPage.tsx': { ltr: 1, auto: 2 }, // MUT-461: the account's address; its name and each profile's name
