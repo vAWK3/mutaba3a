@@ -90,10 +90,10 @@ test('Sign-in leads with the Brand v2 mark and name lockup, and the tab icons ar
       await openSignIn(page, 'en');
       const lockup = page.locator('.hp-wordmark').first();
       await expect(lockup).toBeVisible();
-      await expect(lockup).toContainText('MTB3A');
+      await expect(lockup.getByRole('img', { name: 'MTB3A' }), 'the logotype, named MTB3A').toBeVisible();
       const mark = lockup.locator('img.wordmark-mark');
       await expect(mark).toBeVisible();
-      await expect(mark).toHaveAttribute('src', scheme === 'dark' ? /\/assets\/mark-dark[^/]*\.svg$/ : /\/assets\/mark-(?!dark)[^/]*\.svg$/);
+      await expect(mark).toHaveAttribute('src', scheme === 'dark' ? /\/mark-dark[^/]*\.svg$/ : /\/mark(?!-dark)[^/]*\.svg$/);
     });
   }
 
