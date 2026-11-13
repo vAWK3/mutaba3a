@@ -1,0 +1,33 @@
+# App-wide portal code that most flows use but no single area owns: the router, the API client and
+# its types, the string files, the stylesheet and the generic building blocks (drawer, toast, saved
+# notice, retry keys, currencies). A change here is an indirect impact on every recorded portal
+# flow: read the diff (`release-qa impact --diff`), re-record the flows it can change and carry the
+# rest with a reason. A feature that is about one of these files lists it in its own `paths`.
+app: portal
+area: shared
+title: Portal-wide code (router, API client, strings, styles, building blocks)
+shared: true
+paths:
+  - src/hosted/router.tsx
+  - src/hosted/queryClient.ts
+  - src/hosted/api/client.ts
+  - src/hosted/api/schema.d.ts
+  - src/hosted/i18n/en.json
+  - src/hosted/i18n/ar.json
+  - src/hosted/hosted.css
+  - src/hosted/format/dates.ts
+  - src/hosted/format/currencies.ts
+  - src/hosted/shell/AccountDrawers.tsx
+  - src/hosted/components/Drawer.tsx
+  - src/hosted/components/Toast.tsx
+  - src/hosted/components/SavedNotice.tsx
+  - src/hosted/components/SectionTabs.tsx
+  - src/hosted/components/Icons.tsx
+  - src/hosted/data/anchoredList.ts
+  - src/hosted/data/attemptKey.ts
+  - src/styles/**
+  - src/assets/fonts/**
+  # Shared UI outside src/hosted that only the portal renders now: the free web app that shared it is retired (MUT-445)
+  - src/components/{expenses,filters,icons,ui}/**
+  - src/lib/{dom,forms,motion,whatsNew}/**
+  - src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts

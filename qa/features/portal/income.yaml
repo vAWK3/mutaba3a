@@ -10,11 +10,8 @@ paths:
   - src/hosted/components/incomeApiErrors.ts
   - src/hosted/components/ClientPicker.tsx
   - src/hosted/components/ProjectPicker.tsx
-  - src/hosted/components/Drawer.tsx
-  - src/hosted/components/Toast.tsx
   - src/hosted/data/incomeAffordances.ts
   - src/hosted/data/incomeQueries.ts
-  - src/hosted/data/attemptKey.ts
 features:
   - id: add-received
     title: Add income, Received, from Payments sends the canonical amount, client and method with an Idempotency-Key, says Saved, and lists the payment

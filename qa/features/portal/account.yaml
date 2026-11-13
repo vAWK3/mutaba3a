@@ -4,7 +4,6 @@ title: Change your own password
 tier: secondary
 # Change password (MUT-237), You › Account's drawer (MUT-425; was the account menu).
 paths:
-  - src/hosted/shell/AccountDrawers.tsx
   - src/hosted/pages/you/YouAccount.tsx
   - src/hosted/components/ChangePasswordDrawer.tsx
   - src/hosted/pages/auth/setupLink.ts

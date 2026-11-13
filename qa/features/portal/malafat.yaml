@@ -6,7 +6,6 @@ paths:
   - src/hosted/components/MalafatPortal.tsx
   - src/hosted/data/malafatSuggestions.ts
   - src/hosted/session/malafatMoments.ts
-  - src/hosted/pages/you/YouApp.tsx
   - src/hosted/pages/views/ClientsPage.tsx
   - src/hosted/pages/views/OverviewPage.tsx
   - src/hosted/components/ProfileCreateDrawer.tsx

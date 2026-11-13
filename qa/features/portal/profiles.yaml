@@ -12,10 +12,8 @@ paths:
   - src/hosted/components/ProfileBanner.tsx
   - src/hosted/components/profileApiErrors.ts
   - src/hosted/components/profileFormSchema.ts
-  - src/hosted/components/Drawer.tsx
   - src/hosted/data/profileQueries.ts
   - src/hosted/data/profileRules.ts
-  - src/hosted/format/currencies.ts
   - src/hosted/data/useProfileKind.ts
 features:
   - id: edit
