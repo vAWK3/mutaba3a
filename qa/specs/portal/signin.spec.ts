@@ -83,6 +83,30 @@ for (const scheme of SCHEMES) {
   });
 }
 
+test('Sign-in leads with the Brand v2 mark and name lockup, and the tab icons are the bundled copies (MUT-104)', { tag: '@portal.signin.brand-chrome' }, async ({ page, request, step }) => {
+  for (const scheme of SCHEMES) {
+    await step(`${scheme} OS: the lockup shows the ${scheme === 'dark' ? 'dark ' : ''}mark beside the product name`, async () => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await openSignIn(page, 'en');
+      const lockup = page.locator('.hp-wordmark').first();
+      await expect(lockup).toBeVisible();
+      await expect(lockup).toContainText('MTB3A');
+      const mark = lockup.locator('img.wordmark-mark');
+      await expect(mark).toBeVisible();
+      await expect(mark).toHaveAttribute('src', scheme === 'dark' ? /\/assets\/mark-dark[^/]*\.svg$/ : /\/assets\/mark-(?!dark)[^/]*\.svg$/);
+    });
+  }
+
+  await step('Every icon link in the head points at a bundled /assets/ copy, and each answers 200', async () => {
+    const hrefs = await page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]').evaluateAll((links) => links.map((l) => l.getAttribute('href')));
+    expect(hrefs.length).toBeGreaterThanOrEqual(4);
+    for (const href of hrefs) {
+      expect(href, 'icon link').toMatch(/^\/assets\//);
+      expect((await request.get(href!)).status(), href!).toBe(200);
+    }
+  });
+});
+
 for (const language of ['en', 'ar'] as const) {
   test(
     `${language === 'en' ? 'English' : 'Arabic'}: sign-in offers one outward "Request one" link to /hosted (MUT-188)`,
