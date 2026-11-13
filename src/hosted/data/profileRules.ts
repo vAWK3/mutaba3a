@@ -34,7 +34,7 @@ export function ownsItsRecords(profile: Pick<HostedProfile, 'owned' | 'managedIn
 }
 
 export function profileEditability(profile: HostedProfile): ProfileEditability {
-  if (!ownsItsRecords(profile)) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
+  if (!ownsItsRecords(profile)) return { editable: false, reason: profile.managedInMalafat || profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
   return { editable: true, typeLocked: profile.isPersonalDefault };
 }
 

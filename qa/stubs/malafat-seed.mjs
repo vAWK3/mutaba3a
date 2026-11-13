@@ -89,12 +89,15 @@ async function existingAccount() {
 }
 
 async function linkedAccount() {
-  const toStub = await hop(`${API}/v1/auth/malafat/start?tenant=${TENANT_SLUG}&client=web`);
+  // The browser binding (MUT-596): /start's flow cookie goes back with the exchange, as a browser's would.
+  const started = await fetch(`${API}/v1/auth/malafat/start?tenant=${TENANT_SLUG}&client=web`, { redirect: 'manual' });
+  const flowCookie = started.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  const toStub = new URL(started.headers.get('location') ?? '', API).toString();
   const toCallback = await hop(toStub, { 'x-qa-person': 'linked' });
   const back = await hop(toCallback);
   const result = new URLSearchParams(new URL(back).hash.slice(1)).get('result');
   if (!result) throw new Error(`the callback returned no result: ${back}`);
-  const exchanged = await call('POST', '/v1/auth/malafat/exchange', { headers: PORTAL, body: { result } });
+  const exchanged = await call('POST', '/v1/auth/malafat/exchange', { headers: { ...PORTAL, cookie: flowCookie }, body: { result } });
   if (exchanged.json.state !== 'needs_consent') throw new Error(`expected needs_consent for a new account, got ${exchanged.json.state}`);
   const consent = await call('POST', '/v1/auth/malafat/consent', { headers: PORTAL, body: { ticket: exchanged.json.ticket, defaultCurrency: CURRENCY, timezone: TIMEZONE } });
   return sessionCookieOf(consent.res);

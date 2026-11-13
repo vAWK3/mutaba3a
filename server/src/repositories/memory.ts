@@ -4440,8 +4440,7 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 
 /** MUT-434: a stored token without its digest, which never leaves the store. */
 function flowRecordOf(row: MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }): MalafatSignInRecord {
-  const { stateDigest: _s, resultDigest: _r, ticketDigest: _t, ...record } = row;
-  void _s;
+  const { resultDigest: _r, ticketDigest: _t, ...record } = row;
   void _r;
   void _t;
   return { ...record, facts: record.facts ? { ...record.facts } : null };

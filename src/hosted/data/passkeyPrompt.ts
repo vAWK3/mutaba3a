@@ -28,7 +28,7 @@ export interface SuggestionContext {
 export function passkeySuggestionShows(me: Me, { supported, local, now }: SuggestionContext): boolean {
   const prompt = me.user.passkeyPrompt;
   // MUT-596: an account with no way in of its own gets the second-way-in card instead (its password note would be untrue).
-  if (!supported || local || !prompt?.due || me.user.closure || !me.user.ownSignIn) return false;
+  if (!supported || local || !prompt?.due || me.user.closure || me.user.ownSignIn === false) return false;
   return !trialWelcomeDue(me, now);
 }
 

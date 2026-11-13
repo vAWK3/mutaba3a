@@ -31,7 +31,7 @@ const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLI
 const FORM_ID = 'hosted-change-password-form';
 
 type FieldError = PasswordProblem;
-type Banner = { kind: 'wrongCurrent' } | { kind: 'unreachable' };
+type Banner = { kind: 'wrongCurrent' } | { kind: 'unreachable' } | { kind: 'signInAgain' };
 
 export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: () => void; onReviewPasskeys?: () => void }) {
   const t = useT();
@@ -39,7 +39,8 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
   const currentRef = useRef<HTMLInputElement>(null);
   const ids = useId();
   const queryClient = useQueryClient();
-  const firstPassword = !useMe().user.ownPassword;
+  // `=== false`: an API older than 1.113.0 sends no ownPassword; every account there has its own.
+  const firstPassword = useMe().user.ownPassword === false;
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [showCurrent, setShowCurrent] = useState(false);
@@ -68,7 +69,13 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
       if (review) onReviewPasskeys?.();
       else onClose();
     } catch (error) {
-      if (error instanceof ApiError && error.code === 'CURRENT_PASSWORD_WRONG') {
+      // MUT-596: a first password needs a recent sign-in (the passkey rule); this session's is too old.
+      if (firstPassword && error instanceof ApiError && error.code === 'RECENT_SIGN_IN_REQUIRED') {
+        setBanner({ kind: 'signInAgain' });
+        return;
+      }
+      // A first password set meanwhile in another tab: there is no current field here to blame, so it reads as "try again".
+      if (error instanceof ApiError && error.code === 'CURRENT_PASSWORD_WRONG' && !firstPassword) {
         setBanner({ kind: 'wrongCurrent' });
         currentRef.current?.focus();
       } else if (error instanceof ApiError && error.status === 422) {
@@ -105,7 +112,7 @@ export function ChangePasswordDrawer({ onClose, onReviewPasskeys }: { onClose: (
         {banner && (
           <div className="hp-banner hp-banner-error" role="alert" id={bannerId}>
             <AlertIcon />
-            <span>{t(banner.kind === 'wrongCurrent' ? 'hosted.account.changePassword.wrongCurrent' : 'hosted.auth.unreachable')}</span>
+            <span>{t(banner.kind === 'wrongCurrent' ? 'hosted.account.changePassword.wrongCurrent' : banner.kind === 'signInAgain' ? 'hosted.secondWayIn.signInAgainPassword' : 'hosted.auth.unreachable')}</span>
           </div>
         )}
 

@@ -134,7 +134,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
   const reload = async () => {
     const me = await queryClient.fetchQuery({ ...meQuery, staleTime: 0 });
     const fresh = me.profiles.find((candidate) => candidate.id === profile.id);
-    if (!fresh || !fresh.owned) {
+    if (!fresh || !profileEditability(fresh).editable) {
       onLeave({ tone: 'error', key: 'hosted.profiles.errors.gone' });
       return;
     }

@@ -34,7 +34,8 @@ export function SecondWayIn() {
   const local = useIsLocalMode();
   const [dismissed, setDismissed] = useState(() => dismissedHere(me.user.id));
   // After the trial's first-run step, like the passkey card (MUT-370 D4).
-  if (local || me.user.ownSignIn || me.user.closure || dismissed || trialWelcomeDue(me, new Date())) return null;
+  // `=== false`: an API older than 1.113.0 sends no ownSignIn, which must never read as "none of their own".
+  if (local || me.user.ownSignIn !== false || me.user.closure || dismissed || trialWelcomeDue(me, new Date())) return null;
   return (
     <SecondWayInCard
       onNotNow={() => {

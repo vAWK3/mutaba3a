@@ -562,7 +562,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), RECENT_SIGN_IN_REQUIRED (a first password, MUT-596, needs a sign-in under 10 minutes old), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -1912,7 +1912,7 @@ export interface paths {
         put?: never;
         /**
          * Exchange the result code (MUT-595)
-         * @description Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3).
+         * @description Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3); client=web must come from the browser that called /start (its flow cookie, MUT-596).
          */
         post: {
             parameters: {

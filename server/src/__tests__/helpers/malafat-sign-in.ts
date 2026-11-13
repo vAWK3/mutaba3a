@@ -60,11 +60,16 @@ export const APP_VERIFIER = 'b'.repeat(43);
 export const fragmentOf = (location: string) => new URLSearchParams(location.split('#')[1] ?? '');
 
 /** /start → Malafat → /callback; the result code (or error) the client's return carries. */
+/** MUT-596: the web flow's cookie each harness's last /start set, sent by `exchange` as the browser would. */
+const flowCookies = new WeakMap<DelegatedHarness, string>();
+
 export async function roundTrip(h: DelegatedHarness, options: { client?: 'web' | 'app'; tenant?: string; code?: string; malafatError?: string } = {}) {
   const client = options.client ?? 'web';
   const query = new URLSearchParams({ tenant: options.tenant ?? 'sader', client, ...(client === 'app' ? { app_challenge: s256Challenge(APP_VERIFIER) } : {}) });
   const start = await h.app.request(`/v1/auth/malafat/start?${query.toString()}`);
   expect(start.status).toBe(302);
+  const flowCookie = (start.headers.get('set-cookie') ?? '').match(/mtb3a_malafat_flow=[^;]+/)?.[0];
+  if (flowCookie) flowCookies.set(h, flowCookie);
   const authorize = new URL(start.headers.get('location') ?? '');
   if (authorize.protocol !== 'https:' || !authorize.pathname.endsWith('/oauth/authorize')) return { start: authorize.toString(), fragment: fragmentOf(start.headers.get('location') ?? '') };
   const state = authorize.searchParams.get('state') ?? '';
@@ -75,7 +80,11 @@ export async function roundTrip(h: DelegatedHarness, options: { client?: 'web' |
   return { start: authorize.toString(), location, fragment: fragmentOf(location) };
 }
 
-export const exchange = (h: DelegatedHarness, result: string, extra: Record<string, string> = {}, headers: Record<string, string> = SAME_ORIGIN) => h.app.request('/v1/auth/malafat/exchange', json({ result, ...extra }, headers));
+export const exchange = (h: DelegatedHarness, result: string, extra: Record<string, string> = {}, headers: Record<string, string> = SAME_ORIGIN) => {
+  const flowCookie = flowCookies.get(h);
+  const withFlow = flowCookie && !headers.cookie ? { ...headers, cookie: flowCookie } : headers;
+  return h.app.request('/v1/auth/malafat/exchange', json({ result, ...extra }, withFlow));
+};
 export const consent = (h: DelegatedHarness, body: Record<string, unknown>, headers: Record<string, string> = SAME_ORIGIN) => h.app.request('/v1/auth/malafat/consent', json(body, headers));
 export const NEW_ACCOUNT = { defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' };
 

@@ -72,6 +72,23 @@ describe('the three first sign-ins (AC1)', () => {
     expect((await h.store.externalIdentities.findBySubject('MALAFAT', firm!.tenant, 'mal-user-1'))?.userId).toBe(user.id);
   });
 
+  it('MUT-596: a web result code works only in the browser that started the sign-in (login CSRF)', async () => {
+    const { h, firm, malafat, who } = await malafatSetup();
+    await seat(h, firm!, 'mal-user-1');
+    malafat.state.who = who();
+    const { fragment } = await roundTrip(h);
+    // Someone else's browser (another flow's cookie, or none) opening the link: refused, and the code is spent.
+    const elsewhere = await exchange(h, fragment.get('result') ?? '', {}, { ...SAME_ORIGIN, cookie: 'mtb3a_malafat_flow=someone-elses-state' });
+    expect(elsewhere.status).toBe(404);
+    expect((await read(elsewhere)).error.details).toMatchObject({ reason: 'MALAFAT_RESULT_INVALID' });
+    expect((await exchange(h, fragment.get('result') ?? '')).status).toBe(404);
+    // The starting browser, on a fresh round trip: it goes through, and the cookie is cleared.
+    const again = await roundTrip(h);
+    const ok = await exchange(h, again.fragment.get('result') ?? '');
+    expect(ok.status).toBe(200);
+    expect(ok.headers.get('set-cookie')).toMatch(/mtb3a_malafat_flow=;/);
+  });
+
   it('MUT-596: the consent names the current terms; agreeing there means the terms aren’t asked again after', async () => {
     const { h, firm, malafat, who } = await malafatSetup();
     await seat(h, firm!, 'mal-user-1');

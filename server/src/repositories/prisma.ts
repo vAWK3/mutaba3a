@@ -3909,8 +3909,7 @@ async function upsertSeatMembershipInTx(tx: Prisma.TransactionClient, userId: st
 }
 
 function toMalafatSignIn(row: Prisma.MalafatSignInGetPayload<object>): MalafatSignInRecord {
-  const { stateDigest: _s, resultDigest: _r, ticketDigest: _t, ...record } = row;
-  void _s;
+  const { resultDigest: _r, ticketDigest: _t, ...record } = row;
   void _r;
   void _t;
   return { ...record, client: record.client as 'web' | 'app', outcome: record.outcome as MalafatSignInOutcome | null, facts: record.facts as unknown as MalafatSignInFacts | null };

@@ -2657,7 +2657,6 @@
       "officeNotFound": "There's no Malafat office at that address. Check it and try again.",
       "continue": "Continue to Malafat",
       "back": "Back",
-      "checking": "Signing you in…",
       "startAgain": "Back to sign in",
       "error": {
         "access_denied": "You didn't allow MTB3A in Malafat. Nothing was changed.",
@@ -2675,7 +2674,6 @@
         "firmBooks": "You'll see the office's books in MTB3A, as your role in Malafat allows.",
         "ownProfile": "Your own personal profile stays yours. Neither the office nor Malafat sees it.",
         "currency": "Base currency",
-        "timezone": "Time zone",
         "create": "Create account and continue",
         "connect": "Connect and continue",
         "cancel": "Cancel",
@@ -2688,7 +2686,8 @@
         "submit": "Connect the accounts",
         "passkey": "Connect with a passkey",
         "notByEmail": "We never connect two accounts by email alone.",
-        "invalid": "That password doesn't match this account."
+        "invalid": "That password doesn't match this account.",
+        "passkeyRefused": "That passkey isn't this account's. Try another one, or your password."
       }
     },
     "connectedApps": {
@@ -2703,8 +2702,7 @@
       "disconnected": "Malafat is disconnected from {firm}.",
       "unknownFirm": "an office no longer connected",
       "empty": "No apps act for you.",
-      "agentsHint": "AI agents (like Claude) are in Connect Claude.",
-      "loadFailed": "We couldn't load your connected apps."
+      "agentsHint": "AI agents (like Claude) are in Connect Claude."
     },
     "members": {
       "title": "Members",
@@ -2722,8 +2720,7 @@
         "OWNER": "owner",
         "BOOKKEEPER": "keeps the books",
         "SUBMITTER": "submits expenses"
-      },
-      "loadFailed": "We couldn't load the members."
+      }
     },
     "viaMalafat": "via {malafat}",
     "secondWayIn": {
@@ -2732,7 +2729,8 @@
       "addPasskey": "Add a passkey",
       "setPassword": "Set a password",
       "notNow": "Not now",
-      "signInAgain": "For your security, sign in with Malafat again, then add your passkey."
+      "signInAgain": "For your security, sign in with Malafat again, then add your passkey.",
+      "signInAgainPassword": "For your security, sign in with Malafat again, then set your password."
     }
   }
 }

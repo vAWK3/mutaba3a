@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import { STEP_UP_WINDOW_MS } from '../auth/webauthn.js';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
@@ -296,7 +297,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         204: { description: 'Password changed; a cookie session continues under the new cookie set here, a device session that did not ask keeps its token' },
         // Not 401: the session is still valid, and a 401 here would trip the portal's generic session-expired handler.
         403: errorResponse(
-          'CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED',
+          'CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), RECENT_SIGN_IN_REQUIRED (a first password, MUT-596, needs a sign-in under 10 minutes old), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED',
         ),
         422: errorResponse('Validation failed (the new password is 12 to 128 characters; the current one at most 1024)'),
       },
@@ -308,11 +309,15 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const { currentPassword, newPassword, rotateToken } = c.req.valid('json');
       // MUT-333: the same check closing an account makes (auth/current-password.ts).
       // MUT-596: an account Sign in with Malafat created has only a random password nobody knows; the signed-in person
-      // sets their first own one without it. Everyone else proves the current one.
-      const verifiedPasswordHash =
-        !user.passwordChosen && user.passwordHash !== null
-          ? user.passwordHash
-          : await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword ?? '', c.get('now')(), c.get('requestId'));
+      // sets their first own one without it, but only on a recent sign-in (the passkey rule, STEP_UP_WINDOW_MS), so a
+      // lifted session can't add a lasting credential. Everyone else proves the current one.
+      const firstPassword = !user.passwordChosen && user.passwordHash !== null;
+      if (firstPassword && c.get('now')().getTime() - session.credentialsVerifiedAt.getTime() > STEP_UP_WINDOW_MS) {
+        throw new ApiError('RECENT_SIGN_IN_REQUIRED', 'Sign in with Malafat again to set your first password', { windowMinutes: STEP_UP_WINDOW_MS / 60_000 });
+      }
+      const verifiedPasswordHash = firstPassword
+        ? user.passwordHash!
+        : await verifyCurrentPassword({ store, passwordHasher, throttle }, user, currentPassword ?? '', c.get('now')(), c.get('requestId'));
       // Hash before the transaction, same reasoning as redeem (account-setup.ts): the slow part never runs inside the lock.
       const passwordHash = await passwordHasher.hash(newPassword);
       const at = c.get('now')();

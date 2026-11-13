@@ -431,6 +431,8 @@ export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';
 
 export interface MalafatSignInRecord {
   id: string;
+  /** MUT-596: the state's digest; a web exchange must come from the browser holding that state (login-CSRF binding). */
+  stateDigest: string;
   tenantSlug: string;
   client: 'web' | 'app';
   codeVerifier: string;

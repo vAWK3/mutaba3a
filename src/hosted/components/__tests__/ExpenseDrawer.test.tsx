@@ -670,6 +670,18 @@ describe('ExpenseDrawer: added by Claude (MUT-436 AC5)', () => {
     expect(screen.getByText('Claude').tagName).toBe('BDI');
   });
 
+  it('MUT-596: marks an expense Malafat recorded for the person, in both languages, Malafat kept left-to-right', async () => {
+    route(routesWith('malafat'));
+    const { unmount } = renderDrawerUnmountable();
+    expect(await screen.findByText(en.hosted.viaMalafat.replace('{malafat}', '').trim(), { exact: false })).toBeInTheDocument();
+    expect(screen.getByText('Malafat').tagName).toBe('BDI');
+    unmount();
+    localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
+    route(routesWith('malafat'));
+    renderDrawerUnmountable();
+    expect(await screen.findByText(ar.hosted.viaMalafat.replace('{malafat}', '').trim(), { exact: false })).toBeInTheDocument();
+  });
+
   it('shows nothing for an expense from the phone or the portal', async () => {
     for (const source of ['siri', null]) {
       route(routesWith(source));

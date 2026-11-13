@@ -1,9 +1,15 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
+import { ORG_A, emptyProfileRoutes, fail, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
 import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import type { Me } from '../../api/client';
 import { payment } from '../../pages/__tests__/fixtures';
+import { addPasskeyFlow } from '../../passkeys/addPasskey';
+import { passkeySupport } from '../../passkeys/webauthn';
+
+// The card's passkey button only shows where this browser can make one; the ceremony itself is the device's.
+vi.mock('../../passkeys/webauthn', async (importOriginal) => ({ ...(await importOriginal<object>()), passkeySupport: vi.fn(() => false) }));
+vi.mock('../../passkeys/addPasskey', async (importOriginal) => ({ ...(await importOriginal<object>()), addPasskeyFlow: vi.fn() }));
 
 /**
  * MUT-596: what a Malafat lawyer sees in the portal besides signing in: You › Account › Connected apps, a Malafat
@@ -70,7 +76,8 @@ describe('Connected apps', () => {
 
 describe("a Malafat firm's members", () => {
   const FIRM = 'f1111111-1111-4111-8111-111111111111';
-  const firm = profile({ id: FIRM, name: 'Sader Law Office', firm: true, role: 'OWNER', owned: false, type: 'BUSINESS', writerOfRecord: null });
+  // Malafat manages it even before firm features or delegation are on (`firm` false): the list keys on managedInMalafat.
+  const firm = profile({ id: FIRM, name: 'Sader Law Office', firm: false, managedInMalafat: true, role: null, owned: true, type: 'BUSINESS', writerOfRecord: 'MALAFAT' });
 
   it('lists the seats read-only, with their Malafat role, on You › Profiles under the open firm', async () => {
     portal(
@@ -96,15 +103,14 @@ describe("a Malafat firm's members", () => {
     expect(within(section).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('shows nothing on a firm Malafat does not manage', async () => {
-    const { api } = portal(
-      `/p/${FIRM}/you`,
-      { 'GET /v1/members': () => ok({ managedInMalafat: false, items: [] }), 'GET /v1/expense-categories': () => ok([]), 'GET /v1/expenses': () => ok({ items: [], nextCursor: null }) },
-      me([firm, profile()]),
-    );
-    await waitFor(() => expect(calls(api.calls, 'GET', '/v1/members')).toHaveLength(1));
+  it('asks nothing for a firm Malafat does not manage', async () => {
+    const other = profile({ id: FIRM, name: 'Khatib Accounting', firm: true, managedInMalafat: false, role: 'OWNER', owned: false, type: 'BUSINESS', writerOfRecord: null });
+    const { api } = portal(`/p/${FIRM}/you`, { 'GET /v1/expense-categories': () => ok([]), 'GET /v1/expenses': () => ok({ items: [], nextCursor: null }) }, me([other, profile()]));
+    await screen.findByRole('heading', { level: 1 });
+    expect(calls(api.calls, 'GET', '/v1/members')).toHaveLength(0);
     expect(screen.queryByRole('heading', { name: 'Members' })).not.toBeInTheDocument();
   });
+
 });
 
 describe('via Malafat', () => {
@@ -139,6 +145,24 @@ describe('the second way in', () => {
     await user.click(within(drawer).getByRole('button', { name: /Save|Change/ }));
     await waitFor(() => expect(calls(api.calls, 'POST', '/v1/me/password')).toHaveLength(1));
     expect(calls(api.calls, 'POST', '/v1/me/password')[0]?.body).toEqual({ newPassword: 'a long enough passphrase' });
+  });
+
+  it('a passkey past the recent sign-in asks to sign in with Malafat again', async () => {
+    vi.mocked(passkeySupport).mockReturnValue(true);
+    vi.mocked(addPasskeyFlow).mockResolvedValue({ kind: 'stepUp' });
+    const { user } = portal(`/p/${ORG_A}`, {}, malafatMade());
+    await user.click(await screen.findByRole('button', { name: 'Add a passkey' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('For your security, sign in with Malafat again, then add your passkey.');
+    vi.mocked(passkeySupport).mockReturnValue(false);
+  });
+
+  it('a first password on an old sign-in asks to sign in with Malafat again', async () => {
+    const { user } = portal(`/p/${ORG_A}`, { 'POST /v1/me/password': () => fail(403, 'RECENT_SIGN_IN_REQUIRED', { windowMinutes: 10 }) }, malafatMade());
+    await user.click(await screen.findByRole('button', { name: 'Set a password' }));
+    const drawer = await screen.findByRole('dialog', { name: 'Set a password' });
+    await user.type(within(drawer).getByLabelText('New password'), 'a long enough passphrase');
+    await user.click(within(drawer).getByRole('button', { name: 'Save' }));
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent('For your security, sign in with Malafat again, then set your password.');
   });
 
   it('Not now hides it on this device', async () => {

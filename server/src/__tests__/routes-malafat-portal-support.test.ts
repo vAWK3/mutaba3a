@@ -80,4 +80,17 @@ describe('ownSignIn: an account Sign in with Malafat created sets its first own 
     // Now it is their own: the next change needs it.
     expect((await h.app.request('/v1/me/password', json({ newPassword: 'another long passphrase' }, rotated))).status).toBe(403);
   });
+
+  it('a first password needs a recent sign-in, as a passkey does: a lifted old session cannot add one', async () => {
+    const { h, malafat, who } = await malafatSetup();
+    malafat.state.who = who();
+    const step = await read(await exchange(h, (await roundTrip(h)).fragment.get('result') ?? ''));
+    const done = await consent(h, { ticket: step.ticket, ...NEW_ACCOUNT });
+    const cookie = { cookie: (done.headers.get('set-cookie') ?? '').split(';')[0]!, ...SAME_ORIGIN };
+    h.setNow(new Date(h.now().getTime() + 11 * 60_000));
+    const late = await h.app.request('/v1/me/password', json({ newPassword: 'my own long passphrase here' }, cookie));
+    expect(late.status).toBe(403);
+    expect((await read(late)).error.code).toBe('RECENT_SIGN_IN_REQUIRED');
+    expect((await read(await h.app.request('/v1/me', { headers: cookie }))).user.ownPassword).toBe(false);
+  });
 });

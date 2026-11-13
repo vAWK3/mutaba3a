@@ -53,7 +53,7 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   const navigate = useNavigate();
   const forgetOpen = useLostAccess((s) => s.forget);
 
-  const editing = me.profiles.find((profile) => profile.id === editId && profile.owned) ?? null;
+  const editing = me.profiles.find((profile) => profile.id === editId && profileEditability(profile).editable) ?? null;
   const canCreate = canCreateProfile(me);
 
   const leaveEdit = (next: Banner | null) => {

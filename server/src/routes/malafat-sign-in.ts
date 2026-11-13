@@ -2,7 +2,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import type { Context } from 'hono';
-import { setCookie } from 'hono/cookie';
+import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { defaultDisplayName } from '../auth/self-service.js';
 import { isSamePortalOrigin, requestClientIp, sessionCookieName, sessionDigest, sessionLifetime, type SignInThrottle } from '../auth/sessions.js';
@@ -51,6 +51,9 @@ export const MALAFAT_APP_RETURN = 'mutaba3a://auth/malafat';
 /** The portal page that reads the result from the fragment (MUT-596). */
 export const MALAFAT_WEB_RETURN_PATH = '/malafat/return';
 export const MALAFAT_CALLBACK_PATH = '/v1/auth/malafat/callback';
+/** MUT-596: the web flow's browser binding, sent only to the sign-in routes. */
+const MALAFAT_AUTH_PATH = '/v1/auth/malafat';
+const FLOW_COOKIE = 'mtb3a_malafat_flow';
 
 const FLOW_TTL_MS = 10 * 60_000;
 const RESULT_TTL_MS = 2 * 60_000;
@@ -207,6 +210,9 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       const state = secret();
       const codeVerifier = secret();
       await store.malafatSignIns.create({ stateDigest: digest('state', state), codeVerifier, tenantSlug: query.tenant, client: kind, appChallenge: query.app_challenge ?? null, at: now, expiresAt: new Date(now.getTime() + FLOW_TTL_MS) });
+      // MUT-596 (login CSRF): the browser that starts a web sign-in holds its state, so a result code finished by
+      // someone else and sent as a link can't sign this browser in. Lax: it rides Malafat's top-level redirect back.
+      if (kind === 'web') setCookie(c, FLOW_COOKIE, state, { path: MALAFAT_AUTH_PATH, httpOnly: true, secure: settings.secureCookie, sameSite: 'Lax', maxAge: Math.floor(FLOW_TTL_MS / 1000) });
       return c.redirect(malafat.authorizeUrl(origin, { redirectUri: redirectUri(), state, codeChallenge: s256Challenge(codeVerifier) }), 302);
     },
   );
@@ -250,7 +256,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       path: '/v1/auth/malafat/exchange',
       tags: ['Sign in with Malafat'],
       summary: 'Exchange the result code (MUT-595)',
-      description: 'Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3).',
+      description: 'Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3); client=web must come from the browser that called /start (its flow cookie, MUT-596).',
       security: [],
       request: { body: { required: true, content: { 'application/json': { schema: ExchangeRequestSchema } } } },
       responses: {
@@ -268,6 +274,11 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       if (!flow?.outcome) throw resultInvalid();
       await guard(c, flow.client);
       if (flow.client === 'app' && !(flow.appChallenge && body.app_verifier && verifiesChallenge(body.app_verifier, flow.appChallenge))) throw resultInvalid();
+      if (flow.client === 'web') {
+        const held = getCookie(c, FLOW_COOKIE);
+        deleteCookie(c, FLOW_COOKIE, { path: MALAFAT_AUTH_PATH });
+        if (!held || !sameDigest(digest('state', held), flow.stateDigest)) throw resultInvalid();
+      }
       if (flow.outcome === 'signed_in') {
         const user = flow.userId ? await store.users.getById(flow.userId) : null;
         if (!usable(user)) throw invalidCredentials();
@@ -419,4 +430,11 @@ function ticketInvalid(): ApiError {
 
 function linkedElsewhere(): ApiError {
   return new ApiError('CONFLICT', 'This Malafat account is already connected to another MTB3A account', { reason: 'IDENTITY_LINKED_ELSEWHERE' });
+}
+
+/** Constant-time digest comparison (both hex of the same length). */
+function sameDigest(a: string, b: string): boolean {
+  const left = Buffer.from(a);
+  const right = Buffer.from(b);
+  return left.length === right.length && timingSafeEqual(left, right);
 }

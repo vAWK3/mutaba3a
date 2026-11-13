@@ -114,16 +114,19 @@ function MalafatLink({ state, onLinked, onFailed }: StepProps & { onLinked: (sta
   const passwordRef = useRef<HTMLInputElement>(null);
   const [password, setPassword] = useState('');
   const [invalid, setInvalid] = useState(false);
+  const [passkeyRefused, setPasskeyRefused] = useState(false);
   const [pending, setPending] = useState(false);
   const ticket = state.ticket ?? '';
 
   async function prove(body: Parameters<typeof api.malafatLink>[0]) {
     setPending(true);
     setInvalid(false);
+    setPasskeyRefused(false);
     try {
       onLinked(await api.malafatLink(body));
     } catch (error) {
       setPending(false);
+      if (error instanceof ApiError && error.status === 401 && 'passkey' in body) return void setPasskeyRefused(true);
       if (error instanceof ApiError && error.status === 401) {
         setInvalid(true);
         setPassword('');
@@ -193,6 +196,11 @@ function MalafatLink({ state, onLinked, onFailed }: StepProps & { onLinked: (sta
             <button type="button" className="btn btn-secondary btn-md hp-block" disabled={pending} onClick={() => void withPasskey()}>
               {t('hosted.malafatSignIn.link.passkey')}
             </button>
+            {passkeyRefused && (
+              <p className="hp-field-error" role="alert">
+                {t('hosted.malafatSignIn.link.passkeyRefused')}
+              </p>
+            )}
           </>
         )}
         <p className="hp-help">{t('hosted.malafatSignIn.link.notByEmail')}</p>
