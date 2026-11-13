@@ -22783,6 +22783,7 @@ export interface components {
             type: "PERSONAL" | "BUSINESS" | null;
             version: number;
             firm: boolean;
+            managedInMalafat: boolean;
             role: components["schemas"]["MembershipRole"];
             /** Format: date-time */
             firmRequestedAt: string | null;

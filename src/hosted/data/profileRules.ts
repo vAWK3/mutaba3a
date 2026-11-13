@@ -23,8 +23,18 @@ export function atProfileCap(me: Me): boolean {
 /** OPERATOR: set up for the user by an operator (MUT-300 D5: "firm" now means firm features are on, owned or not). */
 export type ProfileEditability = { editable: false; reason: 'MALAFAT' | 'OPERATOR' } | { editable: true; typeLocked: boolean };
 
+/**
+ * MUT-596: whether the person's ownership extends to the profile's own records and settings. A partner owns a firm
+ * whose members Malafat syncs (MUT-594: accountants, share links, billing), but its name, members, clients and income
+ * are Malafat's to change, so the portal offers none of those there, as before MUT-594. A person's own profile they
+ * connected to Malafat stays theirs (its MUT-61 captures included).
+ */
+export function ownsItsRecords(profile: Pick<HostedProfile, 'owned' | 'managedInMalafat'>): boolean {
+  return profile.owned && !profile.managedInMalafat;
+}
+
 export function profileEditability(profile: HostedProfile): ProfileEditability {
-  if (!profile.owned) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
+  if (!ownsItsRecords(profile)) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
   return { editable: true, typeLocked: profile.isPersonalDefault };
 }
 
@@ -38,7 +48,7 @@ export type FirmRequestState = 'hidden' | 'offer' | 'requested';
  */
 export function firmRequestState(profile: HostedProfile): FirmRequestState {
   if (profile.firm !== false) return 'hidden';
-  if (!profile.owned || profile.isPersonalDefault || profile.type !== 'BUSINESS') return 'hidden';
+  if (!ownsItsRecords(profile) || profile.isPersonalDefault || profile.type !== 'BUSINESS') return 'hidden';
   return profile.firmRequestedAt ? 'requested' : 'offer';
 }
 
@@ -103,14 +113,14 @@ export function createdBy(profile: HostedProfile, viewerId: string): boolean {
 
 /** The creator removes co-owners; a co-owner leaves; the creator never leaves (eng review D3). */
 export function ownerActions(profile: HostedProfile, viewerId: string): { canRemove: boolean; canLeave: boolean } {
-  if (!profile.owned) return { canRemove: false, canLeave: false };
+  if (!ownsItsRecords(profile)) return { canRemove: false, canLeave: false };
   const creator = createdBy(profile, viewerId);
   return { canRemove: creator, canLeave: !creator };
 }
 
 /** The Owners section belongs to owned Business profiles (AD5): never the built-in one, an owned Personal one or a firm. */
 export function ownersSectionVisible(profile: HostedProfile): boolean {
-  return profile.owned && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
+  return ownsItsRecords(profile) && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
 }
 
 /** The cap hint (DR2): only for someone who co-owns a profile they didn't create, which their count leaves out. */
@@ -124,6 +134,6 @@ export function coOwnsOthersProfiles(me: Me): boolean {
  * 403 NOT_OWNER / MALAFAT_PROFILE stay as the backstop). Writability, signed-out mode and "somewhere to move to" are
  * the caller's other conditions.
  */
-export function mayMoveExpensesFrom(profile: Pick<HostedProfile, 'owned' | 'writerOfRecord'>): boolean {
-  return profile.owned && profile.writerOfRecord !== 'MALAFAT';
+export function mayMoveExpensesFrom(profile: Pick<HostedProfile, 'owned' | 'writerOfRecord' | 'managedInMalafat'>): boolean {
+  return ownsItsRecords(profile) && profile.writerOfRecord !== 'MALAFAT';
 }

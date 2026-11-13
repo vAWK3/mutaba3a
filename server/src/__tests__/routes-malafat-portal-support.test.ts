@@ -38,6 +38,9 @@ describe('GET /v1/members', () => {
     const { firm, partner } = await firmWithSeats(h);
     const res = await read(await h.app.request('/v1/members', { headers: on(partner.cookie, firm.organizationId) }));
     expect(res.managedInMalafat).toBe(true);
+    // The profile says so too, so the portal offers none of Malafat's records to edit, even to the partner who owns it.
+    const listed = (await read(await h.app.request('/v1/me', { headers: partner.cookie }))).profiles.find((p: { id: string }) => p.id === firm.organizationId);
+    expect(listed).toMatchObject({ owned: true, managedInMalafat: true });
     expect(res.items).toEqual([
       { name: 'Rana Saleh', role: 'OWNER', malafatRole: 'PARTNER', pending: false, you: true },
       { name: 'sami@sader.law', role: null, malafatRole: 'INTERN', pending: true, you: false },

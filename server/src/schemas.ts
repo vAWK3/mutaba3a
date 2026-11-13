@@ -1047,6 +1047,8 @@ export const HostedProfileSchema = z
     version: z.number().int().min(1),
     /** MUT-300 (ADR-099): true while an operator has firm features on for this profile, owned or not. Additive since 1.41.0-mut300. */
     firm: z.boolean(),
+    /** MUT-596: true for a firm whose members Malafat syncs (MUT-594): its name, members, clients and income are Malafat's, even for a partner who owns it. Additive since 1.113.0-mut596. */
+    managedInMalafat: z.boolean(),
     /** MUT-300: the caller's role while `firm` is true; null otherwise. Additive since 1.41.0-mut300. */
     role: MembershipRoleSchema.nullable(),
     /** MUT-300: the owner's pending request for firm features; null when none is pending, and always null for anyone but the owner. Additive since 1.41.0-mut300. */

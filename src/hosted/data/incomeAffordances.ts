@@ -1,4 +1,5 @@
 import { parseAmountInput } from '../../lib/utils';
+import { ownsItsRecords } from './profileRules';
 import type { HostedProfile, Payment, Receivable, Schemas } from '../api/client';
 
 /**
@@ -35,7 +36,7 @@ const CLOSED_STATUSES: ReadonlySet<Receivable['status']> = new Set(['PAID', 'VOI
  */
 export function incomeAffordancesFor(profile: HostedProfile, writable = true): IncomeAffordances {
   const rules = profile.income;
-  const owned = profile.owned && writable;
+  const owned = ownsItsRecords(profile) && writable;
   const kinds: IncomeKind[] =
     owned && profile.access.capture === 'read-write'
       ? (['received', 'owed'] as const).filter((kind) => rules[kind])
@@ -52,7 +53,7 @@ export function incomeAffordancesFor(profile: HostedProfile, writable = true): I
  * Every local profile is owned.
  */
 export function canAddClient(profile: HostedProfile, writable = true): boolean {
-  return writable && profile.owned && profile.writerOfRecord === null;
+  return writable && ownsItsRecords(profile) && profile.writerOfRecord === null;
 }
 
 /**
@@ -79,8 +80,8 @@ export function canRedateOwed(profile: HostedProfile, receivable: Receivable, us
  */
 export function redateAffordancesFor(profile: HostedProfile, writable = true): { owed: boolean; payments: boolean } {
   return {
-    owed: writable && profile.owned && profile.access.capture === 'read-write',
-    payments: writable && profile.owned && profile.access.payments === 'read-write',
+    owed: writable && ownsItsRecords(profile) && profile.access.capture === 'read-write',
+    payments: writable && ownsItsRecords(profile) && profile.access.payments === 'read-write',
   };
 }
 
@@ -100,7 +101,7 @@ export function canRedatePayment(profile: HostedProfile, payment: Payment, userI
  * partner's row on a shared profile counts too (D2): the history and the audit say who corrected it.
  */
 function correctable(profile: HostedProfile, writable: boolean): boolean {
-  return writable && profile.owned && profile.access.payments === 'read-write';
+  return writable && ownsItsRecords(profile) && profile.access.payments === 'read-write';
 }
 
 /** Whether a payment offers Reverse payment: one a person recorded, still posted (a reversal is whole and final). */

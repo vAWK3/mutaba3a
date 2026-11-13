@@ -436,6 +436,8 @@ components:
           minimum: 1
         firm:
           type: boolean
+        managedInMalafat:
+          type: boolean
         role:
           $ref: "#/components/schemas/MembershipRole"
         firmRequestedAt:
@@ -507,6 +509,7 @@ components:
         - type
         - version
         - firm
+        - managedInMalafat
         - role
         - firmRequestedAt
         - firmRequestedBy

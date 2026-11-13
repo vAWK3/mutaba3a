@@ -117,6 +117,7 @@ export function hostedProfileFor(
     // MUT-300: firm features are on in place (eng review D4), so an owned profile can be a firm too. The role only
     // means something while they are; the request is the owner's to see.
     firm,
+    managedInMalafat: organization.memberSyncAt !== null,
     role: firm ? (membership?.role ?? null) : null,
     firmRequestedAt: owned ? iso(organization.firmRequestedAt) : null,
     firmRequestedBy: requester ? { userId: requester, name: owners?.find((o) => o.userId === requester)?.name ?? null } : null,

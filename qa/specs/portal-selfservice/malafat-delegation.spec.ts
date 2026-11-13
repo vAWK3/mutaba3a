@@ -11,6 +11,13 @@ import { openYou, youRow } from '../../support/you';
 
 const PASSWORD = 'the lawyer’s own long passphrase';
 
+/** A new account's first-run trial step (MUT-418): Continue, as everyone does. */
+async function passTrialWelcome(page: Page) {
+  const trial = page.getByRole('dialog', { name: 'Your free trial' });
+  await trial.getByRole('button', { name: 'Continue' }).click();
+  await expect(trial).toHaveCount(0);
+}
+
 /** The stub signs the page in as `person`, a first time: consent with a currency, landing signed in. */
 async function firstSignIn(page: Page, person: MalafatPerson) {
   await malafatAs(page, person);
@@ -19,6 +26,7 @@ async function firstSignIn(page: Page, person: MalafatPerson) {
   await page.getByRole('checkbox', { name: /terms of service/ }).check();
   await page.getByRole('button', { name: 'Create account and continue' }).click();
   await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}/);
+  await passTrialWelcome(page);
 }
 
 async function meOf(page: Page): Promise<{ user: { id: string }; profiles: Array<{ id: string; name: string }> }> {
@@ -53,6 +61,8 @@ test('A lawyer new to MTB3A signs in with Malafat; the consent creates the accou
     await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Create account and continue' }).click();
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}/);
+    await expect(page.getByRole('heading', { name: "We've updated our terms" })).toHaveCount(0);
+    await passTrialWelcome(page);
   });
   await step('Signed in, with the office beside the personal profile', async () => {
     const me = await meOf(page);

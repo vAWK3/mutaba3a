@@ -1,3 +1,4 @@
+import { ownsItsRecords } from '../data/profileRules';
 import { useT } from '../../lib/i18n/core';
 import type { HostedProfile } from '../api/client';
 import { incomeAffordancesFor } from '../data/incomeAffordances';
@@ -17,7 +18,7 @@ import { LockIcon } from './Icons';
  */
 export function ReadOnlyNotice({ profile }: { profile: HostedProfile }) {
   const t = useT();
-  if (profile.owned) {
+  if (ownsItsRecords(profile)) {
     if (incomeAffordancesFor(profile).kinds.length > 0) return null;
     return (
       <p className="hp-readonly" role="note">
