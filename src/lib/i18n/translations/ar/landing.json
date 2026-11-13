@@ -5,7 +5,9 @@
       "title": "متابعة — سجّله من هاتفك، تابعه من كل مكان"
     },
     "header": {
-      "signIn": "سجّل الدخول"
+      "signIn": "سجّل الدخول",
+      "ctaCreateShort": "أنشئ حسابًا",
+      "ctaRequestShort": "اطلب حسابًا"
     },
     "langToggle": {
       "en": "EN",

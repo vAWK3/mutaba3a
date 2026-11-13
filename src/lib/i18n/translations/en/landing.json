@@ -5,7 +5,9 @@
       "title": "MTB3A — Log it before you forget it"
     },
     "header": {
-      "signIn": "Sign in"
+      "signIn": "Sign in",
+      "ctaCreateShort": "Sign up",
+      "ctaRequestShort": "Request"
     },
     "langToggle": {
       "en": "EN",

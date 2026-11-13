@@ -175,6 +175,15 @@ describe('landing CSS', () => {
     });
   });
 
+  it('swaps the bar\'s button to its short label on narrow phones, and never leaves it without one (MUT-231)', () => {
+    expect(baseDeclarations(landingPageCss, '.landing-header-cta-short')).toMatchObject({ display: 'none' });
+    const narrow = (selector: string) =>
+      Object.assign({}, ...rulesFor(landingPageCss, selector).filter((r) => r.atRules.includes('@media (max-width: 400px)')).map((r) => declarations(r.rule)));
+    expect(narrow('.landing-header-cta-label')).toMatchObject({ position: 'absolute', 'clip-path': 'inset(50%)' });
+    expect(narrow('.landing-header-cta-label')).not.toHaveProperty('display');
+    expect(narrow('.landing-header-cta-short')).toMatchObject({ display: 'inline' });
+  });
+
   it('never tightens Arabic headline tracking', () => {
     const root = landingRoots.find(({ file }) => file.endsWith('/HeroSection.css'))!.root;
     expect(baseDeclarations(root, ':lang(ar) .landing-headline-large')).toMatchObject({ 'letter-spacing': '0' });
