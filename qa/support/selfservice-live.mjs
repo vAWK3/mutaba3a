@@ -28,9 +28,10 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertPortFree } from './port-check.mjs';
 
-export const API_PORT = 8791;
+/** QA_SELFSERVICE_API_PORT / QA_SELFSERVICE_OCR_PORT move them off another session's ports (qa.config.mjs reads the same). */
+export const API_PORT = Number(process.env.QA_SELFSERVICE_API_PORT ?? 8791);
 /** MUT-441: the QA sidecar's port (not run_local.sh's default 8090, which a developer's own sidecar may hold). */
-const OCR_PORT = 8792;
+const OCR_PORT = Number(process.env.QA_SELFSERVICE_OCR_PORT ?? 8792);
 /**
  * MUT-596: the Malafat stub office (qa/stubs/malafat-oauth.mjs); shared with the phone's QA, booked through the
  * orchestrator. MALAFAT_STUB_PORT moves it when another run holds 3939 (support/malafat.ts reads the same).

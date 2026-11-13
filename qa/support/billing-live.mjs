@@ -33,7 +33,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { assertPortFree } from './port-check.mjs';
 
-export const API_PORT = 8790;
+/** QA_LIVE_API_PORT moves it when another session's dev API holds 8790 (release QA, 2026-11-13). */
+export const API_PORT = Number(process.env.QA_LIVE_API_PORT ?? 8790);
 export const PORTAL_PORT = 5176;
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 const API_ORIGIN = `http://127.0.0.1:${API_PORT}`;

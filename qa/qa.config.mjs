@@ -7,6 +7,8 @@
  * and the desktop apps are retired (MUT-445).
  */
 /** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
+/** support/selfservice-live.mjs's API port; QA_SELFSERVICE_API_PORT moves both off another session's 8791. */
+const SELFSERVICE_API_PORT = Number(process.env.QA_SELFSERVICE_API_PORT ?? 8791);
 export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
 /**
  * MUT-149: a dummy key on the org's real ingest host (the build refuses any other host): the portal's crash
@@ -269,11 +271,11 @@ export default {
       // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both,
       // reading receipts on the receipt-ocr sidecar on :8792 (MUT-441; server/ocr/run_local.sh, needs Tesseract).
       // `localhost`, not 127.0.0.1: the passkey flows (MUT-115) need it as their WebAuthn RP ID.
-      baseURL: 'http://localhost:8791',
-      attachURL: 'http://localhost:8791',
+      baseURL: `http://localhost:${SELFSERVICE_API_PORT}`,
+      attachURL: `http://localhost:${SELFSERVICE_API_PORT}`,
       start: { cmd: `${HEAP_CAPPED} node qa/support/selfservice-live.mjs` },
       // Answers only once the API is up with signup open (not just once something listens).
-      ready: 'http://localhost:8791/v1/self-service',
+      ready: `http://localhost:${SELFSERVICE_API_PORT}/v1/self-service`,
       personas: {},
     },
     'carry-over': {
