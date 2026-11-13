@@ -10,7 +10,6 @@ paths:
   - src/hosted/pages/you/YouAccount.tsx
   - src/hosted/pages/you/YouApp.tsx
   - src/hosted/components/YouRows.tsx
-  - src/hosted/components/SectionTabs.tsx
   - src/hosted/components/ProfileKindLine.tsx
   - src/hosted/shell/YouIsland.tsx
   - src/hosted/shell/youRoutes.ts

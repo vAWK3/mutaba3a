@@ -9,12 +9,7 @@ paths:
   - src/hosted/components/expenseApiErrors.ts
   - src/hosted/components/ClientPicker.tsx
   - src/hosted/components/ProjectPicker.tsx
-  - src/hosted/components/Drawer.tsx
-  - src/hosted/components/SavedNotice.tsx
   - src/hosted/data/expenseQueries.ts
-  - src/hosted/data/anchoredList.ts
-  - src/hosted/data/attemptKey.ts
-  - src/hosted/format/currencies.ts
 features:
   - id: vendor-typeahead
     title: The vendor field suggests the profile's saved vendors; a new one is kept as typed, and picking one prefills its last category (MUT-254)

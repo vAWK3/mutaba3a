@@ -7,12 +7,6 @@ paths:
   - src/content/download-config.ts
   - src/content/malafatLinks.ts
   - src/lib/goHosted.ts
-  - src/hooks/**
-  # The website's own shell (MUT-445: the free web app that shared it is retired)
-  - src/lib/i18n/**
-  - src/lib/theme/**
-  - src/lib/{appVersion,dates,utils}.ts
-  - src/components/ui/{ErrorBoundary,Input}.*
 features:
   - id: header-cta
     title: The header button appears only once the hero button has scrolled away, and goes to the same place (MUT-77)

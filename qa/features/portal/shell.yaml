@@ -8,28 +8,10 @@ tier: secondary
 paths:
   - src/hosted/main.tsx
   - src/hosted/HostedApp.tsx
-  - src/hosted/router.tsx
-  - src/hosted/queryClient.ts
-  - src/hosted/api/client.ts
-  - src/hosted/api/schema.d.ts
-  - src/hosted/i18n/en.json
-  - src/hosted/i18n/ar.json
   - src/hosted/format/DecimalAmount.tsx
-  - src/hosted/format/dates.ts
   - src/hosted/shell/HostedShell.tsx
   - src/hosted/shell/YouIsland.tsx
   - src/hosted/shell/usePopover.ts
-  - src/hosted/pages/views/shared.tsx
-  - src/hosted/components/HostedTable.tsx
-  - src/hosted/components/QueryView.tsx
-  - src/hosted/components/Icons.tsx
-  - src/hosted/components/Toast.tsx
-  # Shared UI outside src/hosted that only the portal renders now: the free web app that shared it is retired (MUT-445)
-  - src/components/{expenses,filters,icons,ui}/**
-  - src/lib/{dom,forms,motion,whatsNew}/**
-  - src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts
-  - src/hosted/data/queries.ts
-  - src/hosted/data/filters.ts
 features:
   - id: navigate
     title: Signed in, the portal opens on Owed for the first profile (owed, overdue, proposed, overdue clients first, per currency), the four destinations Owed, Paid, Spent and Clients are one click away, and عربي turns it right to left

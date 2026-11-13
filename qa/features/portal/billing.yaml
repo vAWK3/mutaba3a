@@ -10,7 +10,6 @@ paths:
   - src/hosted/data/billingQueries.ts
   - src/hosted/data/countries.ts
   - src/hosted/components/RadioCards.tsx
-  - src/hosted/shell/AccountDrawers.tsx
   # MUT-531: the drawer's shared parts and its switch step (the switch itself runs in portal-live).
   - src/hosted/components/billingParts.tsx
   - src/hosted/components/billingText.tsx

@@ -7,12 +7,7 @@ paths:
   - src/hosted/components/ConversionDrawer.tsx
   - src/hosted/components/conversionFormSchema.ts
   - src/hosted/components/conversionApiErrors.ts
-  - src/hosted/components/Drawer.tsx
-  - src/hosted/components/SavedNotice.tsx
   - src/hosted/data/conversionQueries.ts
-  - src/hosted/data/anchoredList.ts
-  - src/hosted/data/attemptKey.ts
-  - src/hosted/format/currencies.ts
 features:
   - id: log
     title: Log a conversion; the drawer shows the implied rate, refuses a currency to itself, and the conversion is listed and filterable (MUT-161)

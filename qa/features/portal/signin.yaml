@@ -4,11 +4,8 @@ title: Portal sign-in
 tier: core
 paths:
   - src/hosted/pages/auth/**
-  - src/hosted/hosted.css
   - src/hosted/components/Brand.tsx
   - hosted.html
-  - src/styles/**
-  - src/assets/fonts/**
 features:
   - id: type
     title: Sign-in is Thmanyah Sans with a Serif Display 700 heading, in English and Arabic, and loads no font from another origin (MUT-102)
