@@ -423,7 +423,8 @@ test.describe('the launch offer (MUT-525)', () => {
       await page.getByRole('button', { name: 'Continue to payment' }).click();
       await page.waitForURL(/checkout\.stripe\.com/, { timeout: 60_000 });
       await expect(page.getByText(/Launch offer/).first()).toBeVisible({ timeout: 30_000 });
-      await expect(page.getByText(/عرض الإطلاق: .*145.* عن سنتك الأولى/)).toBeVisible();
+      // Stripe's custom text sits inside its form frame since 2026-11.
+      await expect(((await stripeFormFrame(page)) ?? page).getByText(/عرض الإطلاق: .*145.* عن سنتك الأولى/)).toBeVisible();
       const session = await stripeApi('GET', `checkout/sessions/${checkoutSessionOf(page)}`);
       expect(session.discounts?.[0]?.coupon).toBeTruthy();
     });

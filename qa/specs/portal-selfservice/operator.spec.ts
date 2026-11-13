@@ -158,21 +158,23 @@ test('A stale step-up asks for the passkey on the same tap; cancelling it change
   await chooseLanguage(page, 'en');
   await operator(page);
   const waiting = await pendingSignup('stepup');
+  // The challenge is fetched when the confirm opens, before the tap (e316f50a, so Safari's sheet follows the tap): count
+  // every POST from Approve on.
+  const posts: string[] = [];
+  page.on('request', (request) => void (request.method() === 'POST' && posts.push(new URL(request.url()).pathname)));
   await step('Press Approve: the confirm button reads Approve with passkey', async () => {
     await page.goto('/operator/signups');
     await signupRow(page, waiting).getByRole('button', { name: 'Approve' }).click();
     await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeVisible();
   });
   await step('Dismiss the passkey sheet: the confirm stays, with no message and nothing approved', async () => {
-    const posts: string[] = [];
-    page.on('request', (request) => void (request.method() === 'POST' && posts.push(new URL(request.url()).pathname)));
     await dismissNextPasskeySheet(page);
     await signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' }).click();
     // The sheet was asked for (options fetched, the one-shot dismissal used up) and nothing else was sent.
     await expect.poll(() => page.evaluate(() => (navigator.credentials.get as unknown as { dismissed?: boolean }).dismissed !== false)).toBe(true);
     await expect(signupRow(page, waiting).getByRole('button', { name: 'Approve with passkey' })).toBeEnabled();
-    // Waited for, not read at once: the poll above passes before the options request leaves (dismissed is unset).
-    await expect.poll(() => posts).toEqual(['/v1/operator/step-up/options']);
+    // One challenge, fetched ahead of the tap, and nothing else sent: no approval.
+    expect(posts).toEqual(['/v1/operator/step-up/options']);
     await expect(signupRow(page, waiting).getByRole('alert')).toHaveCount(0);
     expect(await signsIn(waiting, SIGNUP_PASSWORD)).toBe(false);
   });

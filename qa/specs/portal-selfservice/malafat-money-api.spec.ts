@@ -703,6 +703,7 @@ test('Malafat reads a month\'s billed, received and credited, and they add up to
   await step('AC4: the contract is 1.90.0-mut483 or later', async () => {
     const doc = await call('GET', '/openapi.json', {});
     expect(contractAtLeast(doc.info.version, '1.90.0')).toBe(true);
-    expect(doc.paths['/v1/summaries/period'].get.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }]);
+    // MUT-593 (ADR-254): Malafat acting as the person reads it too.
+    expect(doc.paths['/v1/summaries/period'].get.security).toEqual([{ apiKey: [] }, { session: [] }, { deviceSession: [] }, { delegated: [] }]);
   });
 });
