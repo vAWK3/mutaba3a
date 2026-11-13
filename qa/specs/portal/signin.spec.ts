@@ -83,7 +83,7 @@ for (const scheme of SCHEMES) {
   });
 }
 
-test('Sign-in leads with the Brand v2 mark and name lockup, and the tab icons are the bundled copies (MUT-104)', { tag: '@portal.signin.brand-chrome' }, async ({ page, request, step }) => {
+test('Sign-in leads with the Brand v2 mark and name lockup, and the tab icons load (MUT-104)', { tag: '@portal.signin.brand-chrome' }, async ({ page, request, step }) => {
   for (const scheme of SCHEMES) {
     await step(`${scheme} OS: the lockup shows the ${scheme === 'dark' ? 'dark ' : ''}mark beside the product name`, async () => {
       await page.emulateMedia({ colorScheme: scheme });
@@ -97,12 +97,14 @@ test('Sign-in leads with the Brand v2 mark and name lockup, and the tab icons ar
     });
   }
 
-  await step('Every icon link in the head points at a bundled /assets/ copy, and each answers 200', async () => {
-    const hrefs = await page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]').evaluateAll((links) => links.map((l) => l.getAttribute('href')));
+  // The QA portal is Vite's dev server, so the head keeps hosted.html's own hrefs; the production build hashes them into /assets/.
+  await step('The head links the SVG icon, the PNG fallbacks and the apple-touch icon, and each answers 200 with an image', async () => {
+    const hrefs = await page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]').evaluateAll((links) => links.map((l) => (l as HTMLLinkElement).href));
     expect(hrefs.length).toBeGreaterThanOrEqual(4);
     for (const href of hrefs) {
-      expect(href, 'icon link').toMatch(/^\/assets\//);
-      expect((await request.get(href!)).status(), href!).toBe(200);
+      const response = await request.get(href);
+      expect(response.status(), href).toBe(200);
+      expect(response.headers()['content-type'], href).toMatch(/^image\//);
     }
   });
 });

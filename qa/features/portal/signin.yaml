@@ -24,14 +24,14 @@ features:
     expect:
       - No axe violation, colour-contrast included
   - id: brand-chrome
-    title: Sign-in leads with the Brand v2 mark + name lockup, and the tab icons are the bundled hashed copies (MUT-104)
+    title: Sign-in leads with the Brand v2 mark + name lockup, and the tab icons load (MUT-104)
     tier: secondary
     legacy: [MUT-104]
     steps:
       - Stub /v1 to 401 and open /sign-in, under OS light then OS dark
     expect:
       - The Wordmark shows the mark (mark-dark.svg on the dark canvas) beside the product name
-      - Every icon link in the head points at /assets/*, and each returns 200
+      - The head links the SVG icon, the PNG fallbacks and the apple-touch icon, and each returns 200 with an image (the production build serves them hashed from /assets/)
   - id: request-link
     title: Sign-in offers one outward "No account? Request one" link to the landing's /hosted page, in English and Arabic (MUT-188)
     tier: core
