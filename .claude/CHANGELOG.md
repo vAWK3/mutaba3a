@@ -46,7 +46,7 @@
 ### Technical
 - QA: `qa/stubs/malafat-oauth.mjs` stands in for a Malafat firm (discovery, authorize as a chosen person, PKCE token, userinfo, revoke; and as MTB3A's confidential client, a JWKS and signed assertions); `malafat-seed.mjs` makes a firm, its seats, an existing and a linked account and a live grant through the API. The portal-selfservice env starts the stub (`MALAFAT_STUB_PORT`, default 3939). `qa/features/portal-selfservice/malafat-delegation.yaml` (brief §12, nine flows) with `support/malafat.ts`.
 - `OAUTH_CLIENT_LOCAL_HTTP` (off; refused on production and staging) lets a confidential client's JWKS and redirects be http on loopback or `*.lvh.me`; `POST /admin/v1/organizations/{id}/malafat-delegation` is the operator switch's admin twin, dark while `MALAFAT_DELEGATION` is off (the dark-launch gate now covers `/admin/v1/*`).
-- Tests: `MalafatPages.test.tsx`, `MalafatPortal.test.tsx`, `malafatSignIn.test.ts`, `routes-malafat-portal-support.test.ts`, `routes-malafat-qa-plumbing.test.ts`; route-security knows `GET /v1/members`.
+- Tests: `MalafatPages.test.tsx`, `MalafatAccountScreens.test.tsx`, `malafatSignIn.test.ts`, `routes-malafat-portal-support.test.ts`, `routes-malafat-qa-plumbing.test.ts`; route-security knows `GET /v1/members`.
 
 ## [Unreleased] - 2026-11-12 — Sign in with Malafat (MUT-595, ADR-254 D1, D4, D5, D8, DF1)
 

@@ -1,159 +1,202 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { screen, waitFor, within } from '@testing-library/react';
-import { ORG_A, emptyProfileRoutes, locationOf, me, ok, profile, renderPortal, stubApi, type Handler, type StubRequest } from '../../__tests__/harness';
-import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
-import type { Me } from '../../api/client';
-import { payment } from '../../pages/__tests__/fixtures';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { StrictMode, type ReactNode } from 'react';
+import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
+import { MeProvider, ME_KEY, ProfileProvider } from '../../session/me';
+import { me, profile } from '../../__tests__/harness';
+import { customer } from '../../pages/__tests__/fixtures';
+import { useMalafatPortalMoments } from '../../session/malafatMoments';
+import { MalafatClientsCard, MalafatCreatedNote, MalafatRows } from '../MalafatPortal';
+import type { Me, HostedProfile } from '../../api/client';
 
-/**
- * MUT-596: what a Malafat lawyer sees in the portal besides signing in: You › Account › Connected apps, a Malafat
- * firm's members (read-only), "via Malafat" on what Malafat recorded, and the second way in for an account Sign in
- * with Malafat created.
- */
+const api = vi.hoisted(() => ({ change: vi.fn() }));
+vi.mock('../../api/client', async (importOriginal) => {
+  const real = await importOriginal<typeof import('../../api/client')>();
+  return { ...real, api: { ...real.api, changeMalafatSuggestions: api.change } };
+});
 
-const GRANT = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
-const CONNECTION = { grantId: GRANT, clientName: 'Malafat', tenantId: 'tenant-sader', firmName: 'Sader Law Office', scopes: ['read', 'write'], connectedAt: '2026-11-10T09:00:00.000Z', lastUsedAt: null };
+const business = (id: string) => profile({ id, name: `Office ${id}`, writerOfRecord: null, owned: true, type: 'BUSINESS', isPersonalDefault: false });
 
-function portal(path: string, routes: Record<string, Handler> = {}, person: Me = me([profile()])) {
-  const api = stubApi({ 'GET /v1/me': () => ok(person), ...emptyProfileRoutes(), ...routes });
-  return { ...renderPortal(path), api };
+function wrap(account: Me, active: HostedProfile, children: ReactNode, language: 'en' | 'ar' = 'en') {
+  localStorage.setItem(PORTAL_LANGUAGE_KEY, language);
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
+  queryClient.setQueryData(ME_KEY, account);
+  render(
+    <QueryClientProvider client={queryClient}>
+      <HostedLanguageProvider>
+        <MeProvider me={account}>
+          <ProfileProvider profile={active}>{children}</ProfileProvider>
+        </MeProvider>
+      </HostedLanguageProvider>
+    </QueryClientProvider>,
+  );
+  return queryClient;
 }
-const calls = (all: StubRequest[], method: string, path: string) => all.filter((c) => c.method === method && c.url.pathname === path);
 
-function malafatMade(): Me {
-  const person = me([profile()]);
-  person.user.ownSignIn = false;
-  person.user.ownPassword = false;
-  return person;
-}
+const customers = (n: number, status: 'ACTIVE' | 'ARCHIVED' = 'ACTIVE') =>
+  new Map(Array.from({ length: n }, (_, i) => [`c${i}`, { ...customer(`0000000${i}-0000-4000-8000-000000000000`, `Client ${i}`), status }]));
 
-beforeEach(() => localStorage.setItem(PORTAL_LANGUAGE_KEY, 'en'));
-afterEach(() => localStorage.clear());
+beforeEach(() => {
+  localStorage.clear();
+  api.change.mockReset();
+  api.change.mockImplementation(async (change: { off?: boolean; dismiss?: string[] }) => ({ off: change.off ?? false, dismissed: change.dismiss ?? [] }));
+  useMalafatPortalMoments.getState().reset();
+});
 
-describe('Connected apps', () => {
-  it('has no row where the server has Malafat access off (the list answers 404)', async () => {
-    portal(`/p/${ORG_A}/you/account`);
-    expect(await screen.findByRole('button', { name: /^Change password/ })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /^Connected apps/ })).not.toBeInTheDocument();
+/** Malafat suggestions in the portal (MUT-191). */
+describe('MalafatRows (S1, on You › App, MUT-425)', () => {
+  it('offers Malafat and the switch on an eligible business profile', async () => {
+    wrap(me([business('a')]), business('a'), <MalafatRows profile={business('a')} />);
+    const link = screen.getByRole('link', { name: /Malafat, for law firms and accounting offices/ });
+    expect(link.getAttribute('href')).toContain('/en/contact?topic=mutaba3a&utm_source=mutaba3a&utm_medium=portal&utm_campaign=malafat-upsell&utm_content=settings');
+    const toggle = screen.getByRole('switch', { name: 'Show Malafat suggestions' });
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    await userEvent.click(toggle);
+    expect(api.change).toHaveBeenCalledWith({ off: true });
   });
 
-  it('lists Malafat per firm and disconnects it after an in-row confirm', async () => {
-    let items = [CONNECTION];
-    const { user, api, router } = portal(`/p/${ORG_A}/you/account`, {
-      'GET /v1/me/connected-apps': () => ok({ items }),
-      [`DELETE /v1/me/connected-apps/${GRANT}`]: () => {
-        items = [];
-        return new Response(null, { status: 204 });
-      },
-    });
-    await user.click(await screen.findByRole('button', { name: /^Connected apps/ }));
-    const drawer = await screen.findByRole('dialog', { name: 'Connected apps' });
-    expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?connectedApps=true`);
-    expect(within(drawer).getByText('Sader Law Office')).toBeInTheDocument();
-    await user.click(within(drawer).getByRole('button', { name: 'Disconnect: Sader Law Office' }));
-    expect(within(drawer).getByText(/Disconnect Malafat from Sader Law Office\?/)).toBeInTheDocument();
-    expect(calls(api.calls, 'DELETE', `/v1/me/connected-apps/${GRANT}`)).toHaveLength(0);
-    await user.click(within(drawer).getByRole('button', { name: 'Disconnect' }));
-    expect(await screen.findByText('Malafat is disconnected from Sader Law Office.')).toBeInTheDocument();
-    expect(calls(api.calls, 'DELETE', `/v1/me/connected-apps/${GRANT}`)).toHaveLength(1);
-    expect(await within(drawer).findByText('No apps act for you.')).toBeInTheDocument();
+  it('says so inline when the switch could not be saved, and keeps its state', async () => {
+    api.change.mockRejectedValueOnce(new TypeError('offline'));
+    wrap(me([business('a')]), business('a'), <MalafatRows profile={business('a')} />);
+    const toggle = screen.getByRole('switch', { name: 'Show Malafat suggestions' });
+    await userEvent.click(toggle);
+    expect(await screen.findByRole('status')).toHaveTextContent("Couldn't save. Try again.");
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
   });
 
-  it('Keep leaves the connection alone', async () => {
-    const { user, api } = portal(`/p/${ORG_A}/you/account?connectedApps=true`, { 'GET /v1/me/connected-apps': () => ok({ items: [CONNECTION] }) });
-    await user.click(await screen.findByRole('button', { name: 'Disconnect: Sader Law Office' }));
-    await user.click(screen.getByRole('button', { name: 'Keep' }));
-    expect(screen.getByRole('button', { name: 'Disconnect: Sader Law Office' })).toBeInTheDocument();
-    expect(calls(api.calls, 'DELETE', `/v1/me/connected-apps/${GRANT}`)).toHaveLength(0);
+  it('shows nothing on a personal profile, on a firm, or to someone already on Malafat', () => {
+    const personal = profile({ id: 'p', writerOfRecord: null, owned: true, isPersonalDefault: true, type: 'PERSONAL' });
+    wrap(me([personal]), personal, <MalafatRows profile={personal} />);
+    expect(screen.queryByRole('switch')).toBeNull();
+    document.body.innerHTML = '';
+    wrap(me([business('a'), profile()]), business('a'), <MalafatRows profile={business('a')} />);
+    expect(screen.queryByRole('switch')).toBeNull();
   });
 });
 
-describe("a Malafat firm's members", () => {
-  const FIRM = 'f1111111-1111-4111-8111-111111111111';
-  const firm = profile({ id: FIRM, name: 'Sader Law Office', firm: true, role: 'OWNER', owned: false, type: 'BUSINESS', writerOfRecord: null });
+describe('MalafatClientsCard (C2/C3)', () => {
+  const card = () => screen.queryByRole('group', { name: 'A suggestion for law firms and accounting offices' });
 
-  it('lists the seats read-only, with their Malafat role, on You › Profiles under the open firm', async () => {
-    portal(
-      `/p/${FIRM}/you`,
-      {
-        'GET /v1/members': () =>
-          ok({
-            managedInMalafat: true,
-            items: [
-              { name: 'Rana Sader', role: 'OWNER', malafatRole: 'PARTNER', pending: false, you: true },
-              { name: 'nadia@sader.law', role: null, malafatRole: 'ASSOCIATE', pending: true, you: false },
-            ],
-          }),
-        'GET /v1/expense-categories': () => ok([]),
-        'GET /v1/expenses': () => ok({ items: [], nextCursor: null }),
-      },
-      me([firm, profile()]),
+  it('suggests Malafat at ten active clients, tagged for the portal', () => {
+    wrap(me([business('a')]), business('a'), <MalafatClientsCard customers={customers(10)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toHaveTextContent('Lots of clients to keep track of?');
+    expect(within(card()!).getByRole('link').getAttribute('href')).toContain('utm_medium=portal&utm_campaign=malafat-upsell&utm_content=client-threshold');
+  });
+
+  it('counts active clients only, and stays away while searching', () => {
+    const mixed = new Map([...customers(9), ...[...customers(3, 'ARCHIVED')].map(([k, v]) => [`x${k}`, v] as const)]);
+    wrap(me([business('a')]), business('a'), <MalafatClientsCard customers={mixed} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+    document.body.innerHTML = '';
+    wrap(me([business('a')]), business('a'), <MalafatClientsCard customers={customers(10)} query="Nour" onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+  });
+
+  it('suggests it for a second business profile, but not while the created note is due', () => {
+    wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(2)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toHaveTextContent('Running more than one office?');
+    document.body.innerHTML = '';
+    useMalafatPortalMoments.getState().markBusinessCreated('b');
+    wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(2)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+  });
+
+  it('stays quiet for the rest of the visit once the created note has spoken for that business (one event, one suggestion)', () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('b');
+    wrap(me([business('a'), business('b')]), business('b'), <MalafatCreatedNote />);
+    expect(card()).not.toBeNull();
+    expect(useMalafatPortalMoments.getState().businessCreatedId).toBeNull();
+    document.body.innerHTML = '';
+    wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(2)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+  });
+
+  it('does not break against a server older than 1.25.0-mut191, which sends no malafatSuggestions', () => {
+    const old = me([business('a')]);
+    delete (old.user as Partial<typeof old.user>).malafatSuggestions;
+    wrap(old, business('a'), <MalafatClientsCard customers={customers(10)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toHaveTextContent('Lots of clients to keep track of?');
+  });
+
+  it('never on a personal or Malafat-fed profile', () => {
+    const personal = profile({ id: 'p', writerOfRecord: null, owned: true, isPersonalDefault: true, type: 'PERSONAL' });
+    wrap(me([personal]), personal, <MalafatClientsCard customers={customers(20)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+    document.body.innerHTML = '';
+    wrap(me([profile()]), profile(), <MalafatClientsCard customers={customers(20)} query={undefined} onGone={vi.fn()} />);
+    expect(card()).toBeNull();
+  });
+
+  it('retires the moment on the account and shows nothing more this visit', async () => {
+    const onGone = vi.fn();
+    const queryClient = wrap(me([business('a'), business('b')]), business('a'), <MalafatClientsCard customers={customers(10)} query={undefined} onGone={onGone} />);
+    await userEvent.click(screen.getByRole('button', { name: "Don't show this again" }));
+    expect(api.change).toHaveBeenCalledWith({ dismiss: ['client-threshold'] });
+    expect(onGone).toHaveBeenCalled();
+    expect(useMalafatPortalMoments.getState().clientsRetiredThisVisit).toBe(true);
+    await vi.waitFor(() => expect((queryClient.getQueryData(ME_KEY) as Me).user.malafatSuggestions.dismissed).toEqual(['client-threshold']));
+  });
+
+  it('reads in Arabic', () => {
+    wrap(me([business('a')]), business('a'), <MalafatClientsCard customers={customers(10)} query={undefined} onGone={vi.fn()} />, 'ar');
+    expect(screen.getByRole('group', { name: 'اقتراح لمكاتب المحاماة والمحاسبة' })).toHaveTextContent('عملاء كثيرون تتابعهم؟');
+  });
+});
+
+describe('MalafatCreatedNote (C1)', () => {
+  it('shows on the business profile just created, tagged business-profile', () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('a');
+    wrap(me([business('a')]), business('a'), <MalafatCreatedNote />);
+    const note = screen.getByRole('group', { name: 'A suggestion for law firms and accounting offices' });
+    expect(note).toHaveTextContent('Is this business a law firm or an accounting office?');
+    expect(within(note).getByRole('link').getAttribute('href')).toContain('utm_content=business-profile');
+  });
+
+  it('not on another profile, and not once retired', () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('b');
+    wrap(me([business('a'), business('b')]), business('a'), <MalafatCreatedNote />);
+    expect(screen.queryByRole('group')).toBeNull();
+    document.body.innerHTML = '';
+    useMalafatPortalMoments.getState().markBusinessCreated('a');
+    const retired = me([business('a')]);
+    retired.user.malafatSuggestions = { off: false, dismissed: ['business-profile', 'second-business'] };
+    wrap(retired, business('a'), <MalafatCreatedNote />);
+    expect(screen.queryByRole('group')).toBeNull();
+  });
+
+  it("survives React's StrictMode double mount, consumes the mark, and is gone once the page is left", () => {
+    useMalafatPortalMoments.getState().markBusinessCreated('a');
+    const queryClient = new QueryClient();
+    const account = me([business('a')]);
+    queryClient.setQueryData(ME_KEY, account);
+    const page = (note: boolean) => (
+      <StrictMode>
+        <QueryClientProvider client={queryClient}>
+          <HostedLanguageProvider>
+            <MeProvider me={account}>
+              <ProfileProvider profile={business('a')}>{note ? <MalafatCreatedNote /> : null}</ProfileProvider>
+            </MeProvider>
+          </HostedLanguageProvider>
+        </QueryClientProvider>
+      </StrictMode>
     );
-    const section = (await screen.findByRole('heading', { name: 'Members' })).closest('section')!;
-    expect(within(section).getByText("This office's name and members are managed in Malafat.")).toBeInTheDocument();
-    expect(within(section).getByText('Partner · owner')).toBeInTheDocument();
-    expect(within(section).getByText('Associate · hasn\'t signed in yet')).toBeInTheDocument();
-    expect(within(section).queryByRole('button')).not.toBeInTheDocument();
-  });
-
-  it('shows nothing on a firm Malafat does not manage', async () => {
-    const { api } = portal(
-      `/p/${FIRM}/you`,
-      { 'GET /v1/members': () => ok({ managedInMalafat: false, items: [] }), 'GET /v1/expense-categories': () => ok([]), 'GET /v1/expenses': () => ok({ items: [], nextCursor: null }) },
-      me([firm, profile()]),
-    );
-    await waitFor(() => expect(calls(api.calls, 'GET', '/v1/members')).toHaveLength(1));
-    expect(screen.queryByRole('heading', { name: 'Members' })).not.toBeInTheDocument();
+    const view = render(page(true));
+    expect(screen.getByRole('group')).toBeInTheDocument();
+    expect(useMalafatPortalMoments.getState().businessCreatedId).toBeNull();
+    view.rerender(page(false));
+    view.rerender(page(true));
+    expect(screen.queryByRole('group')).toBeNull();
   });
 });
 
-describe('via Malafat', () => {
-  it('marks a payment Malafat recorded for the person', async () => {
-    const recorded = { ...payment('p1', 'PAY-2026-0001'), origin: 'capture', captureSource: 'malafat' };
-    const own = { ...payment('p2', 'PAY-2026-0002'), origin: 'capture', captureSource: 'app' };
-    portal(`/p/${ORG_A}/payments`, { 'GET /v1/payments': () => ok({ items: [recorded, own], nextCursor: null }) });
-    const row = (await screen.findByText('PAY-2026-0001')).closest('tr')!;
-    expect(within(row).getByText('Malafat')).toBeInTheDocument();
-    expect(within(row).getByText('Malafat').closest('.badge, [class*="badge"]')).toHaveTextContent('via Malafat');
-    const other = screen.getByText('PAY-2026-0002').closest('tr')!;
-    expect(within(other).queryByText(/via/)).not.toBeInTheDocument();
-  });
-});
-
-describe('the second way in', () => {
-  it('offers a passkey or a password to an account Sign in with Malafat made, never "if Malafat stops"', async () => {
-    portal(`/p/${ORG_A}`, {}, malafatMade());
-    const card = (await screen.findByText('Add a second way to sign in')).closest('section')!;
-    expect(card).toHaveTextContent('next to Malafat');
-    expect(card).not.toHaveTextContent(/stops|down|unavailable/i);
-    // MUT-370's card, whose note promises a password, stays away.
-    expect(screen.queryByText('Your password still works.')).not.toBeInTheDocument();
-  });
-
-  it('Set a password opens Change password with no current password to give', async () => {
-    const { user, api } = portal(`/p/${ORG_A}`, { 'POST /v1/me/password': () => ok({}) }, malafatMade());
-    await user.click(await screen.findByRole('button', { name: 'Set a password' }));
-    const drawer = await screen.findByRole('dialog', { name: 'Set a password' });
-    expect(within(drawer).queryByLabelText('Current password')).not.toBeInTheDocument();
-    await user.type(within(drawer).getByLabelText('New password'), 'a long enough passphrase');
-    await user.click(within(drawer).getByRole('button', { name: /Save|Change/ }));
-    await waitFor(() => expect(calls(api.calls, 'POST', '/v1/me/password')).toHaveLength(1));
-    expect(calls(api.calls, 'POST', '/v1/me/password')[0]?.body).toEqual({ newPassword: 'a long enough passphrase' });
-  });
-
-  it('Not now hides it on this device', async () => {
-    const view = portal(`/p/${ORG_A}`, {}, malafatMade());
-    await view.user.click(await screen.findByRole('button', { name: 'Not now' }));
-    expect(screen.queryByText('Add a second way to sign in')).not.toBeInTheDocument();
-    view.unmount();
-    portal(`/p/${ORG_A}`, {}, malafatMade());
-    await screen.findByRole('heading', { level: 1 });
-    expect(screen.queryByText('Add a second way to sign in')).not.toBeInTheDocument();
-  });
-
-  it('is not shown to a person with a way in of their own', async () => {
-    portal(`/p/${ORG_A}`);
-    await screen.findByRole('heading', { level: 1 });
-    expect(screen.queryByText('Add a second way to sign in')).not.toBeInTheDocument();
+describe('the portal moment store', () => {
+  it('forgets everything on reset (sign-out)', () => {
+    const store = useMalafatPortalMoments.getState();
+    store.markBusinessCreated('a');
+    store.markClientsRetired();
+    store.reset();
+    expect(useMalafatPortalMoments.getState()).toMatchObject({ businessCreatedId: null, businessCreatedThisVisit: false, clientsRetiredThisVisit: false });
   });
 });
