@@ -36,11 +36,21 @@
 - **Mail `sign-in-code`** (en, ar): the code in the subject and in a large left-to-right block (new `MailBody.code` slot in the layout), "If you didn't ask for this, ignore it; your password hasn't changed."
 - **Portal** (`SignInCodeStep.tsx`, `signInCode.ts`): "Email me a sign-in code" beside "Forgot your password?" on /sign-in; the code step with `autocomplete="one-time-code"`, Arabic-Indic digits accepted, Resend after 60 s, Use my password instead; wrong / expired / too many tries / wait / offline / under review.
 - `GET /v1/self-service` gains `signInCode`. Errors `SIGN_IN_CODE_WRONG` (`details.triesLeft`), `SIGN_IN_CODE_EXPIRED`, `SIGN_IN_CODE_TOO_MANY_TRIES` (all 401). API 1.114.0-mut618.
-- **Analytics contract 2.9.0**: `sign_in_code_requested` (resend), `sign_in_code_signed_in`, `sign_in_code_refused` (reason); cookieless on the portal (they come before sign-in).
+- **Analytics contract 2.10.0** (the union with MUT-619's 2.9.0): `sign_in_code_requested` (resend), `sign_in_code_signed_in`, `sign_in_code_refused` (reason); cookieless on the portal (they come before sign-in).
 
 ### Technical
 - Release-QA: `portal.signin.email-code` (stubbed API, en + ar) and `portal-selfservice.signin.email-code` (live API and outbox, en + ar).
 - Files: `server/src/{auth/sign-in-code.ts,auth/sign-in.ts,routes/self-service.ts,routes/sessions.ts,routes/device-sessions.ts,email/**,repositories/**,schemas.ts,errors.ts,index.ts}`, `src/hosted/pages/auth/{SignInPage,SignInCodeStep}.tsx`, `signInCode.ts`, `api/client.ts`, `i18n/{en,ar}.json`, `docs/analytics/events.json`.
+## [Unreleased] - 2026-11-14 — /setup offers a passkey right after the password is set (MUT-619, ADR-257)
+
+### Added
+- **The passkey step** (`src/hosted/pages/auth/SetupPasskeyStep.tsx`): once a setup, reset or signup link has set the password and signed the person in, `/setup` shows "Create a passkey" ("Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.") with **Create a passkey** (MUT-115's ceremony, no password: the sign-in is seconds old; past 10 minutes it sends the password just set once) and **Not now** (spends one of MUT-370's three offers through `PATCH /v1/me/passkey-prompt`, waited for at most 15 s). A cancelled or failed ceremony says so and keeps both buttons. Shown only when `passkeyOfferable` (a device that can make one, `passkeyPrompt.due`, not closing, a sign-in of its own); a recovery on an account with passkeys still lands on the MUT-415 review. en/ar.
+- **Analytics 2.9.0:** `setup_passkey_offered`, `_created`, `_not_now`, `_not_created` (`link`: setup | reset | signup; `reason`: cancelled | offline | other). Opt-in, release-only.
+
+### Changed
+- `data/passkeyPrompt.ts`: `passkeyOfferable` holds the rules the Home card and the setup step share; `passkeySuggestionShows` adds MUT-418's first-run order on top (unchanged behaviour).
+- Release-QA: new `portal-selfservice.setup.passkey-create` (core), `-not-now`, `-cancelled`, `-arabic-phone`; `passkeys.suggest-first-sign-in` now proves a setup Not now keeps Home from asking again for 30 days; signup and recover flows answer the step with Not now (`skipSetupPasskey`).
+- Files: `SetupPage.tsx`, `SetupPasskeyStep.tsx`, `data/passkeyPrompt.ts`, `analytics/portalAnalytics.ts`, `docs/analytics/events.json`, hosted `en.json`/`ar.json`, `qa/qa.config.mjs`, `qa/features/portal-selfservice/{setup,passkeys}.yaml`, `qa/specs/portal-selfservice/{setup,passkeys,signup,recover}.spec.ts`, `qa/support/selfService.ts`.
 
 ## [Unreleased] - 2026-11-13 — The landing bar fits a 375px phone in English (release QA web.landing.375)
 

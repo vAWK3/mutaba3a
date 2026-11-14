@@ -49,7 +49,7 @@ export function codeFailure(error: unknown): CodeFailure {
 }
 
 /**
- * The reason PostHog records for a refused code (MUT-618 D9, contract 2.9.0: an enum, nothing about the person). Null for
+ * The reason PostHog records for a refused code (MUT-618 D9, contract 2.10.0: an enum, nothing about the person). Null for
  * an unreachable server: that is an error, and errors go to Sentry, never PostHog (MUT-146).
  */
 export function refusalReason(failure: CodeFailure): 'wrong' | 'expired' | 'too_many_tries' | 'rate_limited' | 'under_review' | null {

@@ -12,6 +12,7 @@ import {
   accountantHarness,
   businessOf,
   expenseOn,
+  receiptedExpenseOn,
   idem,
   inviteAccountant,
   inviteTokenFor,
@@ -361,7 +362,7 @@ describe('isolation (MUT-559)', () => {
     const h = accountantHarness();
     const { owner, profileId } = await ownerWithProfile(h);
     const other = await businessOf(h, owner, 'Other Studio');
-    await expenseOn(h, owner, profileId, 'Shared paper');
+    await receiptedExpenseOn(h, owner, profileId, 'Shared paper');
     await expenseOn(h, owner, other, 'Private rent');
     const acc = await shared(h, owner, profileId);
     await expenseOn(h, acc, acc.personalId, 'My own lunch');

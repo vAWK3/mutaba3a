@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { address, chooseLanguage, lapsePasskeyPromptHide, mailTo, operatorAccount, setupLinkIn, signInThroughForm } from '../../support/selfService';
+import { address, chooseLanguage, lapsePasskeyPromptHide, mailTo, operatorAccount, setupLinkIn, signInThroughForm, skipSetupPasskey } from '../../support/selfService';
 import { stubTurnstile } from '../../support/turnstile';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from '../../support/passkeys';
 import { openYou, youRow } from '../../support/you';
@@ -203,11 +203,12 @@ test('After a recovery, your passkeys are listed', { tag: '@portal-selfservice.p
     await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Save and sign in' }).click();
   });
-  await step('Signed in, the passkey review lists the passkey', async () => {
+  await step('Signed in, the passkey review lists the passkey (no MUT-619 offer: the account holds one)', async () => {
     const review = page.getByRole('dialog', { name: 'Passkeys' });
     await expect(review.getByText('Your new password is set. These passkeys still sign in to your account. Remove any you don’t recognise.')).toBeVisible();
     await expect(review.getByRole('listitem')).toHaveCount(1);
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}\?passkeys=true&review=recovery$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Create a passkey' })).toHaveCount(0);
   });
 });
 
@@ -266,7 +267,7 @@ test('Passkeys in Arabic on a phone: مفاتيح المرور, right to left, t
 const SUGGESTION = 'Add a passkey: the more secure way to sign in.';
 const suggestion = (page: Page, title = SUGGESTION) => page.getByRole('region', { name: title });
 
-test('The first sign-in after signup suggests a passkey, after the free trial’s first-run step', { tag: '@portal-selfservice.passkeys.suggest-first-sign-in' }, async ({ page, step }) => {
+test('After signup, a Not now on the setup step means Home does not ask again right away', { tag: '@portal-selfservice.passkeys.suggest-first-sign-in' }, async ({ page, step }) => {
   await stubTurnstile(page, 'pass');
   const email = address('suggest-signup');
   await step('Sign up: ask for a link, open the mail, choose a password and create the account', async () => {
@@ -279,20 +280,23 @@ test('The first sign-in after signup suggests a passkey, after the free trial’
     await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Create account' }).click();
   });
-  await step('The free trial’s first-run step comes first; no passkey card yet', async () => {
+  await step('MUT-619: the setup page offers a passkey first; press Not now', async () => {
+    await skipSetupPasskey(page);
+  });
+  await step('The free trial’s first-run step, then Home: no passkey card, the offer was just answered', async () => {
     const trial = page.getByRole('dialog', { name: 'Your free trial' });
     await expect(trial.getByRole('heading', { name: 'Your 14-day free trial has started' })).toBeVisible();
-    await expect(page.getByText(SUGGESTION)).toHaveCount(0);
     await trial.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
-  });
-  await step('Home suggests a passkey: the more secure way to sign in; the password still works', async () => {
     await expect(page).toHaveURL(HOME);
-    const card = suggestion(page);
-    await expect(card).toBeVisible();
-    await expect(card.getByText('Your password still works.')).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Add a passkey' })).toBeVisible();
-    await expect(card.getByRole('button', { name: 'Not now' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByText(SUGGESTION)).toHaveCount(0);
+  });
+  await step('30 days later, Home suggests a passkey (the second of three offers)', async () => {
+    lapsePasskeyPromptHide(email);
+    await page.reload();
+    await expect(suggestion(page)).toBeVisible();
+    await expect(suggestion(page).getByText('Your password still works.')).toBeVisible();
   });
 });
 

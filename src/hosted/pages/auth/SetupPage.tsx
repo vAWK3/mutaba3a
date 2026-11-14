@@ -10,7 +10,9 @@ import { AlertIcon } from '../../components/Icons';
 import { TimezoneChoice } from '../../components/TimezoneChoice';
 import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES, type HostedCurrency } from '../../format/currencies';
 import { browserTimezone } from '../../format/timezones';
+import { passkeyOfferable } from '../../data/passkeyPrompt';
 import { passkeysToReview } from '../../passkeys/review';
+import { passkeySupport } from '../../passkeys/webauthn';
 import { firstRunPath } from '../../session/firstRun';
 import { CLOSED_DOORS, selfServiceQuery } from '../../session/selfServiceDoors';
 import { useAdoptAccountLocale } from '../../i18n/HostedLanguageProvider';
@@ -20,6 +22,7 @@ import { TERMS_CLIENT_RELEASE, termsHref } from '../../terms';
 import { AuthLayout } from './AuthLayout';
 import { CheckingSession } from './BootScreens';
 import { UnderReviewNotice } from './UnderReviewNotice';
+import { SetupPasskeyStep, type SetupLinkKind } from './SetupPasskeyStep';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
 
 /**
@@ -31,7 +34,8 @@ import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tok
  * A SIGNUP link also takes the new account's name, currency and time zone; an
  * account the operator must review first shows the under-review screen instead
  * of signing in (MUT-367). A link that can't be used says so, and offers a new
- * one where the server can mail it.
+ * one where the server can mail it. Once signed in, a device that can make a
+ * passkey is offered one before Home (MUT-619, SetupPasskeyStep).
  */
 
 const SETUP_CHECK_KEY = ['setup-link-check'] as const;
@@ -171,6 +175,9 @@ interface NewAccount {
   timezone: string;
 }
 type Banner = { kind: 'rateLimited'; minutes: number } | { kind: 'unreachable' };
+/** Where the page goes once signed in (and, MUT-619, once the passkey step is answered). */
+type NextPlace = Parameters<ReturnType<typeof useNavigate>>[0];
+const LINK_KIND: Record<Purpose, SetupLinkKind> = { SETUP: 'setup', RESET: 'reset', SIGNUP: 'signup' };
 type Phase = 'idle' | 'saving' | 'signingIn';
 
 interface SetupFormProps {
@@ -224,6 +231,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const [account, setAccount] = useState<NewAccount>({ name: '', currency: DEFAULT_HOSTED_CURRENCY, timezone: zone });
   const [zoneOpen, setZoneOpen] = useState(false);
   const [zoneRefused, setZoneRefused] = useState(false);
+  /** MUT-619: signed in, the passkey step is showing; where it goes next. */
+  const [afterPasskey, setAfterPasskey] = useState<NextPlace | null>(null);
   if (language !== tickedIn) {
     setTickedIn(language);
     setAgreed(false);
@@ -245,7 +254,10 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       queryClient.setQueryData(ME_KEY, me);
       adoptAccountLocale(me.user.locale);
       // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
-      if (signup) return void navigate({ ...firstRunPath(me), replace: true } as never);
+      const home = { ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as NextPlace;
+      // MUT-619: offer a passkey first, on the MUT-370 rules. `due` means no passkey yet, so there is nothing to review.
+      if (passkeyOfferable(me, { supported: passkeySupport(), local: false })) return setAfterPasskey(home);
+      if (signup) return void navigate(home);
       // MUT-415: a recovery lands on the passkey review when the account has passkeys; they survive the new password.
       const review = await passkeysToReview(queryClient);
       void navigate({ to: '/', ...(review ? { search: { passkeys: true, review: 'recovery' } } : {}), replace: true } as never);
@@ -319,6 +331,14 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const termsErrorId = `${ids}-terms-error`;
   const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : signup ? 'signup' : 'setup';
+
+  if (afterPasskey) {
+    return (
+      <SetupLayout>
+        <SetupPasskeyStep link={LINK_KIND[purpose]} password={password} onDone={() => void navigate(afterPasskey)} />
+      </SetupLayout>
+    );
+  }
 
   return (
     <SetupLayout>

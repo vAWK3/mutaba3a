@@ -33,6 +33,19 @@ export function ownsItsRecords(profile: Pick<HostedProfile, 'owned' | 'managedIn
   return profile.owned && !profile.managedInMalafat;
 }
 
+/**
+ * A firm whose members Malafat syncs, as one of the partners who own it: Manage profiles still opens it, read-only,
+ * so its Sharing row (accountants, links) is reachable there too. Its name, type and members stay Malafat's.
+ */
+export function opensReadOnly(profile: Pick<HostedProfile, 'owned' | 'managedInMalafat'>): boolean {
+  return profile.owned && profile.managedInMalafat === true;
+}
+
+/** Manage profiles opens a profile's pane: to edit it, or read-only for a Malafat-synced firm the person owns. */
+export function opensInManage(profile: HostedProfile): boolean {
+  return profileEditability(profile).editable || opensReadOnly(profile);
+}
+
 export function profileEditability(profile: HostedProfile): ProfileEditability {
   if (!ownsItsRecords(profile)) return { editable: false, reason: profile.managedInMalafat || profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
   return { editable: true, typeLocked: profile.isPersonalDefault };

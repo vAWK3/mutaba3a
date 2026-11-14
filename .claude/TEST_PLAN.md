@@ -3813,6 +3813,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `PasskeysDrawer.test.tsx` (12), `SignInPasskey.test.tsx` (8), `passkeys/__tests__/webauthn.test.ts` | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.add` (core), `.sign-in` (core), `.remove`, `.password-change-keeps`, `.autofill`, `.arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys` |
 
+## MUT-619 — the passkey step at the end of /setup (2026-11-14, ADR-257)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `data/__tests__/passkeyPrompt.test.ts` › passkeyOfferable (2: offered even with the trial step open; never unsupported, local, not due, null, closing, no own sign-in) | `npx vitest run src/hosted/data` |
+| Portal | `pages/auth/__tests__/SetupPasskeyStep.test.tsx` (16: offered on /setup with focus and the offered event; Create adds with no password, toast, Home, no card, Me cache not due; step-up past 10 min sends the password once; Not now spends one offer; a failed Not now save still lands; cancelled and failed notes keep both choices, retry works; buttons held while the sheet is open; Arabic RTL; lost-answer retry offers it; unsupported, not due and passkey-holding recovery skip it; signup goes on to the personal profile) | `npx vitest run src/hosted/pages/auth` |
+| Contract | `scripts/__tests__/analytics-taxonomy.test.ts` (events 2.9.0 pin) | `npx vitest run scripts/__tests__/analytics-taxonomy.test.ts` |
+| Release-QA | `portal-selfservice.setup.passkey-create` (core), `.passkey-not-now`, `.passkey-cancelled`, `.passkey-arabic-phone`; changed: `passkeys.suggest-first-sign-in`, `passkeys.review-after-recovery`, `signup.create`, `signup.business-instant`, `recover.reset`, `recover.pending-account`; `portal.setup.set-password` is the no-passkey device | `release-qa run --attach --only portal-selfservice.setup` |
+
 ## MUT-370 — passkey suggestion, portal half (2026-10-25, ADR-191)
 
 | Layer | Tests | Command |

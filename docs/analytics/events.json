@@ -1,5 +1,5 @@
 {
-  "version": "2.9.0",
+  "version": "2.10.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -106,6 +106,35 @@
       "description": "MUT-418: the person declined the trial's card prompt: Not now (or closing) on the first-run step, or hiding the Home banner for 3 days.",
       "properties": {
         "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
+      }
+    },
+    "setup_passkey_offered": {
+      "emitters": ["portal"],
+      "description": "MUT-619: right after a setup link set the password and signed in, /setup offered Create a passkey (a device that can make one, an account with no passkey and a MUT-370 offer left). Opt-in only (ADR-090), so counts from brand-new accounts are partial; users.passkeyPrompt holds every Not now.",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_created": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Create a passkey on the setup step registered one (the server answered 201).",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_not_now": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Not now on the setup step; it spends one of MUT-370's three offers and hides the Home card for 30 days.",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_not_created": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Create a passkey on the setup step ended without one; the step stays, with Try again and Not now. Errors themselves go to Sentry (MUT-146).",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." },
+        "reason": { "type": "enum", "values": ["cancelled", "offline", "other"], "description": "cancelled = the person closed the system sheet (or it timed out); offline = MTB3A couldn't be reached; other = the device or the server refused." }
       }
     },
     "report_viewed": {

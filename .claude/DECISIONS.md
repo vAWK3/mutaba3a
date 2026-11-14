@@ -6644,7 +6644,38 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 6. **D7: a code session is never step-up stamped** (no passkey, so `stepUpAt` stays null; MUT-459). Changing the password or closing the account still needs the current password.
 7. **D8: mail `sign-in-code`:** the code in the subject (iOS Mail's one-time-code detection, notifications) and in a large left-to-right block. No link: magic links stay out of scope.
 
-**Consequences:** API 1.114.0-mut618 and migration `20261114120000_mut618_sign_in_codes`, additive. Analytics contract 2.9.0. A stranger who knows someone's address can cancel their live code by asking for a new one, capped at 5 a day; the password still works. The in-process limiters keep TD-017's single-instance assumption.
+**Consequences:** API 1.114.0-mut618 and migration `20261114120000_mut618_sign_in_codes`, additive. Analytics contract 2.10.0 (the union with MUT-619's 2.9.0). A stranger who knows someone's address can cancel their live code by asking for a new one, capped at 5 a day; the password still works. The in-process limiters keep TD-017's single-instance assumption.
 
 **Alternatives rejected:** App Attest / Play Integrity now (D1). Magic links, SMS and passwordless accounts (out of scope). One uniform 401 for every refused code (it hides whether to retype or resend; D3 makes the distinction safe). Counting misses only per code (the shared lockout keeps the password and the code from adding up to more guesses).
 
+## ADR-257: /setup Offers a Passkey Before Home, on MUT-370's Offer Budget (MUT-619)
+
+**Status:** Accepted (2026-11-14, MUT-619; epic MUT-322; Basel's decision 2026-11-14). Plan: `.claude/designs/mut-619-setup-passkey.md`. Extends ADR-191 (MUT-370); ADR-159 d9 (every account keeps a password) stands.
+
+**Context:** users find the password hard to type on the phone; the first passkey offer came only on Home after a later sign-in, so the first phone sign-in still meant typing a long, often browser-generated password.
+
+**Decision:**
+1. Once a setup, reset or signup link has set the password and signed the person in, `/setup` shows one more step before Home: Create a passkey (MUT-115's ceremony) or Not now. No route of its own; the URL stays `/setup`.
+2. It is shown on the Home card's rules (`passkeyOfferable`: device check, `passkeyPrompt.due`, not closing, a sign-in of its own), without MUT-418's first-run order, which comes after it. `due` is false whenever the account holds a passkey, so a recovery with passkeys keeps the MUT-415 review.
+3. Not now is one of MUT-370's three offers (the same `PATCH /v1/me/passkey-prompt`), so Home does not ask again for 30 days. Setup never waits on it for more than a session check's 15 s, nor on a failed or cancelled ceremony.
+4. No server change.
+
+**Alternatives rejected:** a separate setup-only offer budget (the person would be asked twice in a row); a passkey-only account (ADR-159 d9); offering it on `/accountant-invite` in the same change (accountants work at a computer, and its QA needs a live-API invite flow; `SetupPasskeyStep` takes only `onDone`, so a follow-up can adopt it).
+
+**Consequences:** every portal-selfservice flow that sets a password through `/setup` now meets the step (`skipSetupPasskey`). Analytics 2.9.0. A reload while the step is open shows the "incomplete link" notice although the person is signed in (the token was already stripped); Home is one click away.
+
+## ADR-258: An Accountant Sees Only the Expenses That Have a Receipt (amends ADR-245)
+
+**Status:** Accepted (2026-11-14, Basel: "for accountant, they should only see expenses who have an attachment, without it they don't make much sense").
+
+**Context:** an accountant reads a client's books to file them (MUT-559, ADR-245). An expense with no receipt or invoice behind it is not a document they can book; listing it beside the documented ones only adds noise and questions for the owner.
+
+**Decision:**
+1. For an accountant, an expense exists only when it has at least one READY, live receipt (`expense_receipts.status = READY`, `deletedAt` null). An unfinished upload or a deleted receipt does not count; adding a receipt later makes the expense appear, deleting the last one hides it again.
+2. Enforced once, in the store guard, not per route: `accountantStoreGuard` (and `periodDownloadStoreGuard('accountant')`) narrows every expense read with `accountantExpenseView` (`server/src/auth/store-guard.ts`): `expenses.list` / `totalsByCurrency` get `withReceipt`, `expenses.getById` gets `{ withReceipt }` (so `GET /v1/expenses/{id}` answers 404 for a receipt-less one), `entries.list` gets `expensesWithReceipt` (the profile feed and the period download's rows), and `periodPack.estimate` gets `expensesWithReceipt`. Lists, single reads, the expenses and period summaries, groups, `/v1/profile-entries` and the period downloads therefore agree on one set, whatever route asks, including routes added later.
+3. `entries.clientActivity` (the accountant's `/v1/clients` monthly count and last activity, read from their own session) counts only receipted expenses too; it has no other caller.
+4. Owners, members, API keys, Malafat and share links are unchanged: a share link is the owner's own export of a period, not the accountant's desk.
+
+**Consequences:** no migration, no API shape change. An accountant's totals can be lower than the owner's for the same period, by exactly the receipt-less expenses; that is the point. `GET /v1/expenses/streak` still reads logged days (dates only, no amounts).
+
+**Alternatives rejected:** a per-route `hasReceipt` query flag (every new route would have to remember it); showing receipt-less expenses greyed out (the accountant can do nothing with them).

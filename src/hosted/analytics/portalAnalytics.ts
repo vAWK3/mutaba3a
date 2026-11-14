@@ -22,7 +22,7 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | 'accountant_plan_offer_shown';
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown';
 /**
  * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
  * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
@@ -31,6 +31,8 @@ type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' |
 export type AccountantEvent = 'accountant_invited' | 'accountant_revoked' | 'share_link_created' | 'share_link_revoked' | 'period_downloaded';
 /** MUT-418: the trial's card prompt, from the first-run step (`prompt: first_run`) or the Home banner (`prompt: banner`). */
 export type TrialCardPromptEvent = 'trial_card_prompt_shown' | 'trial_card_prompt_accepted' | 'trial_card_prompt_skipped';
+/** MUT-619: the setup page's passkey step, offered and answered (`link`: setup | reset | signup; `_not_created` adds `reason`). */
+export type SetupPasskeyEvent = 'setup_passkey_offered' | 'setup_passkey_created' | 'setup_passkey_not_now' | 'setup_passkey_not_created';
 /** MUT-525 (D10): the launch offer seen (`billing_offer_shown`), and Continue opening a Stripe Checkout (`billing_checkout_started`). */
 export type BillingOfferEvent = 'billing_offer_shown' | 'billing_checkout_started';
 /** Where the launch offer was shown. The contract calls it `place`: `surface` is a shared property. */
@@ -131,7 +133,7 @@ export type PublicPageEvent =
   // MUT-565 (contract 2.8.0): the accept-invite page's 4th-client card, and the Accountant plan's Checkout started from it
   | { event: 'accountant_plan_offer_shown'; properties: { place: 'invite' } }
   | { event: 'billing_checkout_started'; properties: { plan: 'accountant'; interval: 'month'; currency: 'ILS' | 'USD' } }
-  // MUT-618 (contract 2.9.0): "Email me a sign-in code" on /sign-in, before anyone is signed in
+  // MUT-618 (contract 2.10.0): "Email me a sign-in code" on /sign-in, before anyone is signed in
   | { event: 'sign_in_code_requested'; properties: { resend: boolean } }
   | { event: 'sign_in_code_signed_in'; properties: Record<string, never> }
   | { event: 'sign_in_code_refused'; properties: { reason: 'wrong' | 'expired' | 'too_many_tries' | 'rate_limited' | 'under_review' } };

@@ -3,7 +3,7 @@ import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { ACCOUNTANT_EXCLUDED_ROUTES, accountantMayRead } from '../auth/writability.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
-import { accountantHarness, businessOf, expenseOn, idem, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
+import { accountantHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 
 /**
  * MUT-559 (ADR-245): every profile-scoped route a session can call, enumerated from the published contract and the
@@ -99,7 +99,7 @@ beforeAll(async () => {
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');
-  await expenseOn(h, owner, profileId, 'Shared paper');
+  await receiptedExpenseOn(h, owner, profileId, 'Shared paper');
   await expenseOn(h, owner, other, 'Private rent');
   const customer = await read(await h.app.request('/v1/customers', json({ name: 'Haddad Trading' }, { ...owner.on(profileId), ...idem() })));
   await h.app.request('/v1/customers', json({ name: 'Hidden Client' }, { ...owner.on(other), ...idem() }));

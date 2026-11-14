@@ -8,7 +8,7 @@ import { Select } from '../../components/ui/Input';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, ProfileType, ProfileTypeChange, UpdateProfileRequest, UpdateProfileResponse } from '../api/client';
-import { changedFields, isShared, profileEditability } from '../data/profileRules';
+import { changedFields, isShared, ownsItsRecords, profileEditability } from '../data/profileRules';
 import { fetchTypeChangePreview, useUpdateProfile } from '../data/profileQueries';
 import { HOSTED_CURRENCIES } from '../format/currencies';
 import { ME_KEY, meQuery, useMe } from '../session/me';
@@ -75,7 +75,10 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
   const me = useMe();
   const live = me.profiles.find((p) => p.id === profile.id) ?? opened;
   // MUT-361: a profile the lapse gate holds can't be renamed or changed (the server refuses the PATCH, D4).
-  const readOnly = billingGateOf(me, live) !== 'open';
+  const lapsed = billingGateOf(me, live) !== 'open';
+  // A Malafat-synced firm opens here only for its Sharing row: Malafat changes its name and type.
+  const malafatManaged = !ownsItsRecords(live);
+  const readOnly = lapsed || malafatManaged;
   const shared = isShared(live);
   const confirmHeading = useRef<HTMLHeadingElement>(null);
   const saveButton = useRef<HTMLButtonElement>(null);
@@ -208,7 +211,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
         {readOnly && (
           <p className="hp-readonly" role="note">
             <LockIcon />
-            <span>{t('hosted.billing.gate.drawerNote')}</span>
+            <span>{t(malafatManaged ? 'hosted.profiles.readOnly.malafat' : 'hosted.billing.gate.drawerNote')}</span>
           </p>
         )}
         <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>

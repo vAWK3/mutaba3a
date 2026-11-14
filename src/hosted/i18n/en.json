@@ -219,7 +219,15 @@
       "nameHint": "How MTB3A greets you. Leave it empty to use your email's name.",
       "currency": "Main currency",
       "currencyHint": "Your personal profile's currency. You can record other currencies too.",
-      "sendNew": "Send a new link"
+      "sendNew": "Send a new link",
+      "passkey": {
+        "title": "Create a passkey",
+        "lead": "Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.",
+        "create": "Create a passkey",
+        "notNow": "Not now",
+        "cancelled": "No passkey was created. You can try again, or add one later in You › Account › Passkeys.",
+        "failed": "Couldn’t create a passkey. You can try again, or add one later in You › Account › Passkeys."
+      }
     },
     "terms": {
       "title": "We've updated our terms",

@@ -470,6 +470,32 @@ export const STORE_ACCESS: StoreAccess = {
 export interface StoreGuard {
   /** Throws the matrix's refusal when this request may not call `repo.method`. */
   assertCanCall(repo: string, method: string): void;
+  /** The arguments `repo.method` is called with on this request, when the guard narrows what it reads (absent: as given). */
+  narrow?(repo: string, method: string, args: readonly unknown[]): unknown[];
+}
+
+/**
+ * An accountant sees only the expenses with a READY receipt on them: an expense with no document behind it is not a
+ * book entry they can work from. Every expense read the accountant's request reaches is narrowed here, in the store,
+ * so the list, a single expense (404), the totals and summaries, a group, the profile feed and a period download agree
+ * on one set of expenses, whatever route asks. The owner's own reads are untouched. (The client list's activity counts,
+ * read from the accountant's own session, apply the same rule in the store: `entries.clientActivity`.)
+ */
+export function accountantExpenseView(repo: string, method: string, args: readonly unknown[]): unknown[] {
+  const withArg = (index: number, extra: Record<string, unknown>) => args.map((arg, i) => (i === index ? { ...(arg as object | undefined), ...extra } : arg));
+  switch (`${repo}.${method}`) {
+    case 'expenses.list':
+    case 'expenses.totalsByCurrency':
+      return withArg(1, { withReceipt: true });
+    case 'expenses.getById':
+      return [args[0], args[1], { ...(args[2] as object | undefined), withReceipt: true }];
+    case 'entries.list':
+      return withArg(1, { expensesWithReceipt: true });
+    case 'periodPack.estimate':
+      return withArg(1, { expensesWithReceipt: true });
+    default:
+      return [...args];
+  }
 }
 
 /** The decision for one classified method, for a principal on a profile whose writer of record is `profileWriter`. */
@@ -574,7 +600,7 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * (`unguarded`), as for every session.
  */
 export function accountantStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly);
+  return { ...readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly), narrow: accountantExpenseView };
 }
 
 /**
@@ -594,7 +620,10 @@ export function shareLinkStoreGuard(): StoreGuard {
 export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list']);
 
 export function periodDownloadStoreGuard(kind: 'member' | 'accountant' | 'link'): StoreGuard {
-  return kind === 'link' ? shareLinkStoreGuard() : readOnlyStoreGuard(PERIOD_DOWNLOAD_SESSION_READS, accountantReadOnly);
+  if (kind === 'link') return shareLinkStoreGuard();
+  const guard = readOnlyStoreGuard(PERIOD_DOWNLOAD_SESSION_READS, accountantReadOnly);
+  // An accountant's download holds what they see: only the expenses with a receipt (accountantExpenseView).
+  return kind === 'accountant' ? { ...guard, narrow: accountantExpenseView } : guard;
 }
 
 function readOnlyStoreGuard(alsoReads: ReadonlySet<string>, refusal: () => ApiError): StoreGuard {
@@ -654,6 +683,8 @@ function guardRepository(name: string, repository: Record<string, unknown>): Rec
         } catch (err) {
           return Promise.reject(err);
         }
+        const narrow = vars?.storeGuard?.narrow;
+        if (narrow) args = narrow(name, method, args);
         // MUT-593/598: a delegated call, on /v1 (identity) or Malafat's connector on /mcp (agent).
         const delegatedUser = vars?.identity?.via ? vars.identity.user : vars?.agent?.via ? vars.agent.user : null;
         if (delegatedUser) stampDelegatedAudit(args, delegatedUser.id);

@@ -13,7 +13,7 @@ import {
   acceptInvite,
   accountantHarness,
   businessOf,
-  expenseOn,
+  receiptedExpenseOn,
   inviteAccountant,
   inviteTokenFor,
   json,
@@ -57,7 +57,7 @@ async function client(h: AccountantHarness, accountant: Person, name: string): P
   later(h);
   const owner = await person(h, { displayName: `Owner ${name}` });
   const profileId = await businessOf(h, owner, name);
-  await expenseOn(h, owner, profileId, `${name} paper`);
+  await receiptedExpenseOn(h, owner, profileId, `${name} paper`);
   await shared(h, owner, profileId, accountant);
   return { owner, profileId };
 }

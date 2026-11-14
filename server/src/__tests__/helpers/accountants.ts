@@ -97,6 +97,24 @@ export async function expenseOn(h: AccountantHarness, p: Person, profileId: stri
   return (await read(res)).id as string;
 }
 
+/**
+ * A READY receipt on the expense, made on the store (no object in a bucket). An accountant sees only the expenses
+ * with one (store-guard.ts accountantExpenseView), so a test that shows them an expense gives it a receipt.
+ */
+export async function receiptOnExpense(h: AccountantHarness, p: Person, profileId: string, expenseId: string): Promise<string> {
+  const r = await h.store.expenseReceipts.create({ organizationId: profileId, expenseId, filename: 'receipt.pdf', mimeType: 'application/pdf', sizeBytes: 2048, receivedOn: '2026-11-01', uploadedByUserId: p.userId, requestId: null }, h.now());
+  await h.store.expenseReceipts.setKey(profileId, r.id, `org/${profileId}/receipts/${r.id}`);
+  if (!(await h.store.expenseReceipts.complete(profileId, r.id, h.now()))) throw new Error('receipt did not complete');
+  return r.id;
+}
+
+/** An expense with a READY receipt: one an accountant sees. */
+export async function receiptedExpenseOn(h: AccountantHarness, p: Person, profileId: string, title: string): Promise<string> {
+  const id = await expenseOn(h, p, profileId, title);
+  await receiptOnExpense(h, p, profileId, id);
+  return id;
+}
+
 export const inviteAccountant = (h: AccountantHarness, owner: Person, profileId: string, email: string, locale?: 'en' | 'ar') =>
   h.app.request(`/v1/profiles/${profileId}/accountants`, json({ email, ...(locale ? { locale } : {}) }, owner.auth));
 

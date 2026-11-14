@@ -38,3 +38,19 @@ export async function addVirtualAuthenticator(page: Page): Promise<VirtualAuthen
     },
   };
 }
+
+/**
+ * MUT-619: the person closes the system sheet. Chromium's virtual authenticator can only stop answering, which ends in
+ * the ceremony's full timeout, so the page's next `navigator.credentials.create` rejects at once with the error a
+ * browser gives for a dismissed sheet (NotAllowedError). Later calls reach the authenticator again.
+ */
+export async function dismissNextPasskeySheet(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    const credentials = navigator.credentials;
+    const create = credentials.create.bind(credentials);
+    credentials.create = () => {
+      credentials.create = create;
+      return Promise.reject(new DOMException('The operation either timed out or was not allowed.', 'NotAllowedError'));
+    };
+  });
+}
