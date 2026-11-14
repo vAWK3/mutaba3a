@@ -30,6 +30,19 @@ function arHours(n: number): string {
   return `${n} ساعة`;
 }
 
+/** "1 minute", "10 minutes". */
+function enMinutes(n: number): string {
+  return n === 1 ? '1 minute' : `${n} minutes`;
+}
+
+/** Arabic counted noun: دقيقة واحدة / دقيقتين / 3–10 دقائق / 11+ دقيقة. */
+function arMinutes(n: number): string {
+  if (n === 1) return 'دقيقة واحدة';
+  if (n === 2) return 'دقيقتين';
+  if (n >= 3 && n <= 10) return `${n} دقائق`;
+  return `${n} دقيقة`;
+}
+
 /** "1 day", "3 days". */
 function enDays(n: number): string {
   return n === 1 ? '1 day' : `${n} days`;
@@ -427,6 +440,29 @@ const accountantInvite: Copy<'accountant-invite'> = {
   }),
 };
 
+/**
+ * MUT-618 (ADR-256 D8): the code in the subject too, where iOS Mail's one-time-code detection and a phone's
+ * notification find it. No link: a code is typed, never tapped (magic links are out of scope).
+ */
+const signInCode: Copy<'sign-in-code'> = {
+  en: ({ code, validMinutes }) => ({
+    subject: `${code} is your MTB3A sign-in code`,
+    preheader: `It works once, for ${enMinutes(validMinutes)}.`,
+    headline: 'Your sign-in code',
+    intro: [[`Enter this code to sign in to MTB3A. It works once and expires in ${enMinutes(validMinutes)}.`]],
+    code,
+    outro: [["If you didn't ask for this, ignore it; your password hasn't changed."], ['Never share this code. MTB3A will never ask you for it.']],
+  }),
+  ar: ({ code, validMinutes }) => ({
+    subject: `رمز تسجيل الدخول إلى متابعة: ${code}`,
+    preheader: `يعمل مرة واحدة، لمدة ${arMinutes(validMinutes)}.`,
+    headline: 'رمز تسجيل الدخول',
+    intro: [[`أدخل هذا الرمز لتسجيل الدخول إلى متابعة. يعمل مرة واحدة وتنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
+    code,
+    outro: [['إذا لم تطلب ذلك، فتجاهل هذه الرسالة؛ لم تتغيّر كلمة مرورك.'], ['لا تشارك هذا الرمز مع أحد. لن تطلبه منك متابعة أبدًا.']],
+  }),
+};
+
 const passkeyAdded: Copy<'passkey-added'> = {
   en: ({ passkeyName, signInLink }) => ({
     subject: 'A passkey was added to your MTB3A account',
@@ -640,4 +676,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'card-failed-reminder': cardFailedReminder,
   'comeback-offer': comebackOffer,
   'accountant-invite': accountantInvite,
+  'sign-in-code': signInCode,
 };

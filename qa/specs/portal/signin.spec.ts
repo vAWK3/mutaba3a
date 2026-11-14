@@ -5,7 +5,8 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 import { CANVAS_HEX, SCHEMES, bootMarkBox, computedFont, hexToRgb, loadedFaces, watchFontRequests } from '../../support/brand';
-import { MODE_KEY } from '../../support/portal';
+import { MODE_KEY, OFFICE_A, meBody, office, openSignedInPortal } from '../../support/portal';
+import { stubTurnstile } from '../../support/turnstile';
 
 /**
  * The hosted portal's sign-in page in Brand v2 (MUT-102). Every /v1 call is
@@ -316,3 +317,61 @@ test(
     });
   },
 );
+
+/** MUT-618: the copy the code step shows, from the portal's own translation files. */
+type CodeCopy = { hosted: { auth: { email: string; forgot: string }; signInCode: { link: string; title: string; code: string; submit: string; resend: string; wrong: Record<string, string> } } };
+const codeCopy = (language: 'en' | 'ar') => JSON.parse(fs.readFileSync(path.join(portalI18n, `${language}.json`), 'utf8')) as CodeCopy;
+
+for (const language of ['en', 'ar'] as const) {
+  test(`${language === 'en' ? 'English' : 'Arabic'}: Email me a sign-in code opens the code step and signs in with the mailed code`, { tag: '@portal.signin.email-code' }, async ({ page, step }) => {
+    const copy = codeCopy(language).hosted;
+    let signedIn = false;
+    const codes: unknown[] = [];
+    await stubTurnstile(page, 'pass');
+    const json = (body: unknown, status = 200) => ({ status, contentType: 'application/json', body: JSON.stringify(body) });
+    await openSignedInPortal(page, {
+      profiles: [office(OFFICE_A, 'Haddad Studio')],
+      language,
+      path: '/sign-in',
+      handle: async (route, request, url) => {
+        const call = `${request.method()} ${url.pathname}`;
+        if (call === 'GET /v1/me' && !signedIn) return (await route.fulfill(json({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }, 401)), true);
+        if (call === 'GET /v1/self-service') return (await route.fulfill(json({ signup: false, recovery: true, malafatSignIn: false, signInCode: true })), true);
+        if (call === 'POST /v1/sign-in-codes') return (await route.fulfill(json({ status: 'sent' }, 202)), true);
+        if (call === 'POST /v1/sessions/code') {
+          codes.push(request.postDataJSON());
+          if (codes.length === 1) return (await route.fulfill(json({ error: { code: 'SIGN_IN_CODE_WRONG', message: 'wrong', details: { triesLeft: 4 } } }, 401)), true);
+          signedIn = true;
+          return (await route.fulfill(json(meBody([office(OFFICE_A, 'Haddad Studio')], language), 201)), true);
+        }
+        return false;
+      },
+    });
+
+    await step('Type your email and press Email me a sign-in code, beside Forgot your password?', async () => {
+      await page.getByLabel(copy.auth.email).fill('nour@office.ps');
+      const link = page.getByRole('button', { name: copy.signInCode.link });
+      await expect(page.getByRole('link', { name: copy.auth.forgot }).locator('..')).toContainText(copy.signInCode.link);
+      await link.click();
+    });
+    await step('The code step: a one-time-code field read left to right, and Resend waits its minute', async () => {
+      await expect(page.getByRole('heading', { level: 1, name: copy.signInCode.title })).toBeVisible();
+      await expect(page.getByText('nour@office.ps')).toBeVisible();
+      const field = page.getByLabel(copy.signInCode.code);
+      await expect(field).toHaveAttribute('autocomplete', 'one-time-code');
+      await expect(field).toHaveAttribute('dir', 'ltr');
+      await expect(page.getByRole('button', { name: copy.signInCode.resend, exact: true })).toHaveCount(0);
+    });
+    await step('A wrong code says how many tries are left', async () => {
+      await page.getByLabel(copy.signInCode.code).fill('000000');
+      await page.getByRole('button', { name: copy.signInCode.submit, exact: true }).click();
+      await expect(page.getByRole('alert')).toContainText(language === 'en' ? '4 tries left' : 'بقيت 4 محاولات');
+    });
+    await step('The right code lands on Home', async () => {
+      await page.getByLabel(copy.signInCode.code).fill('482913');
+      await page.getByRole('button', { name: copy.signInCode.submit, exact: true }).click();
+      await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
+      expect(codes.at(-1)).toEqual({ email: 'nour@office.ps', code: '482913' });
+    });
+  });
+}

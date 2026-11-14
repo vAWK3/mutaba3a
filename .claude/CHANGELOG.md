@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-14 — "Email me a sign-in code" (MUT-618, ADR-256)
+
+### Added
+- **Sign in with a code sent by email** (`server/src/auth/sign-in-code.ts`, `auth/sign-in.ts` `signInWithCode`): `POST /v1/sign-in-codes` (portal: same origin + Turnstile action `sign-in-code`) and `POST /v1/device-sign-in-codes` (phone: budgets only, ADR-256 D1) answer 202 for every address no earlier than the recovery floor, and mail a 6-digit code (10 minutes, single use, 5 tries) only to an account that could sign in. `POST /v1/sessions/code` and `POST /v1/device-sessions/code` sign in through the password's throttle, lockout, review and closure checks; audit `method: 'email-code'`; the session is never step-up stamped.
+- **Table `sign_in_codes`** (migration `20261114120000_mut618_sign_in_codes`): one row per ask for every address, real or not (D3), HMAC digest only, a new code cancels the live one, deleted a day after expiry (hourly prune). `SignInCodeRepository` in memory and Prisma, store contract `store-contract-sign-in-codes.ts`; purge catalog entry.
+- **Mail `sign-in-code`** (en, ar): the code in the subject and in a large left-to-right block (new `MailBody.code` slot in the layout), "If you didn't ask for this, ignore it; your password hasn't changed."
+- **Portal** (`SignInCodeStep.tsx`, `signInCode.ts`): "Email me a sign-in code" beside "Forgot your password?" on /sign-in; the code step with `autocomplete="one-time-code"`, Arabic-Indic digits accepted, Resend after 60 s, Use my password instead; wrong / expired / too many tries / wait / offline / under review.
+- `GET /v1/self-service` gains `signInCode`. Errors `SIGN_IN_CODE_WRONG` (`details.triesLeft`), `SIGN_IN_CODE_EXPIRED`, `SIGN_IN_CODE_TOO_MANY_TRIES` (all 401). API 1.114.0-mut618.
+- **Analytics contract 2.9.0**: `sign_in_code_requested` (resend), `sign_in_code_signed_in`, `sign_in_code_refused` (reason); cookieless on the portal (they come before sign-in).
+
+### Technical
+- Release-QA: `portal.signin.email-code` (stubbed API, en + ar) and `portal-selfservice.signin.email-code` (live API and outbox, en + ar).
+- Files: `server/src/{auth/sign-in-code.ts,auth/sign-in.ts,routes/self-service.ts,routes/sessions.ts,routes/device-sessions.ts,email/**,repositories/**,schemas.ts,errors.ts,index.ts}`, `src/hosted/pages/auth/{SignInPage,SignInCodeStep}.tsx`, `signInCode.ts`, `api/client.ts`, `i18n/{en,ar}.json`, `docs/analytics/events.json`.
+
 ## [Unreleased] - 2026-11-13 — The landing bar fits a 375px phone in English (release QA web.landing.375)
 
 ### Fixed

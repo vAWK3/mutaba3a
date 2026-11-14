@@ -249,6 +249,85 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/sessions/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with an emailed code (sets the session cookie) (MUT-618)
+         * @description Send the address and the 6-digit code from POST /v1/sign-in-codes. The same same-origin check, IP budget, throttle and lockout as the password sign-in: a wrong code counts toward the address's lockout. The session is not step-up stamped and can't change the password or close the account without it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CodeSignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/sessions/current": {
         parameters: {
             query?: never;
@@ -736,6 +815,85 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sessions/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in from a native app with an emailed code (returns a bearer token) (MUT-618)
+         * @description Send the address and the 6-digit code from POST /v1/device-sign-in-codes. The same IP budget, throttle and lockout as the password sign-in; the session is not step-up stamped.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CodeSignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the email is locked out for now */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -1732,6 +1890,137 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sign-in-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email me a sign-in code: mails a 6-digit code that works once for 10 minutes (same answer for every address) (MUT-618)
+         * @description Sign in with it through POST /v1/sessions/code. A new code cancels the older one. Budgets: 10 an hour per client address, 1 a minute and 5 a day per email address.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SignInCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted. The same answer for every address, whether or not it has an account */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfServiceAccepted"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "sign-in-code") */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sign-in-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email me a sign-in code, from the phone app (same answer for every address) (MUT-618)
+         * @description As POST /v1/sign-in-codes without the Turnstile token or the origin check; the same address and IP budgets, shared with it. Sign in through POST /v1/device-sessions/code.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceSignInCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted. The same answer for every address, whether or not it has an account */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfServiceAccepted"];
                     };
                 };
                 /** @description Validation failed */
@@ -22861,7 +23150,7 @@ export interface components {
         ErrorEnvelope: {
             error: {
                 /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "ACCOUNTANT_PLAN_REQUIRED" | "INVITE_EMAIL_MISMATCH" | "SHARE_LINK_REFUSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
+                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SIGN_IN_CODE_WRONG" | "SIGN_IN_CODE_EXPIRED" | "SIGN_IN_CODE_TOO_MANY_TRIES" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "ACCOUNTANT_PLAN_REQUIRED" | "INVITE_EMAIL_MISMATCH" | "SHARE_LINK_REFUSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -22895,6 +23184,10 @@ export interface components {
             authenticatorAttachment?: string;
         } & {
             [key: string]: unknown;
+        };
+        CodeSignInRequest: {
+            email: string;
+            code: string;
         };
         MalafatSuggestionsChange: {
             off?: boolean;
@@ -23101,6 +23394,7 @@ export interface components {
             signup: boolean;
             recovery: boolean;
             malafatSignIn: boolean;
+            signInCode: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */
@@ -23117,6 +23411,17 @@ export interface components {
             email: string;
             locale?: components["schemas"]["UserLocale"];
             turnstileToken: string;
+        };
+        SignInCodeRequest: {
+            /** @description Normalised (trim, NFKC, lower-case) before use. */
+            email: string;
+            locale?: components["schemas"]["UserLocale"];
+            turnstileToken: string;
+        };
+        DeviceSignInCodeRequest: {
+            /** @description Normalised (trim, NFKC, lower-case) before use. */
+            email: string;
+            locale?: components["schemas"]["UserLocale"];
         };
         MalafatOffice: {
             host: string;

@@ -157,6 +157,8 @@ export const STORE_ACCESS: StoreAccess = {
   // MUT-594/595: Malafat seats. The sync is Malafat's key writing the integration; a claim and the lookups run in
   // Sign in with Malafat (MUT-595), outside /v1's guard; a person's own seats list in a session.
   externalIdentities: { syncMembers: { write: 'integration' }, findBySubject: 'operator', claim: 'operator', listByUser: 'sessionOnly', listByOrganization: 'sessionOnly', link: 'operator' },
+  // MUT-618: emailed sign-in codes, on public routes, unguarded, like sign-in.
+  signInCodes: { issue: 'operator', attempt: 'operator', prune: 'operator' },
   // MUT-595: Sign in with Malafat runs on public routes, unguarded, like sign-in.
   malafatSignIns: { create: 'operator', claimCallback: 'operator', recordResult: 'operator', claimResult: 'operator', issueTicket: 'operator', findByTicket: 'operator', proveLink: 'operator', claimCompletion: 'operator' },
   integrations: {

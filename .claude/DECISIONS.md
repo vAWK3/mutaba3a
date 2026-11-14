@@ -6628,3 +6628,23 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** API 1.109.0-mut589, no migration. A vendor created on the target for a move that then fails stays (R3, TD-308). An abandoned upload on an expense blocks its move until it is deleted (TD-309). The plan's "recompute under the lock" (R2) is done just before the transaction instead, since category and vendor lookups would otherwise run inside the store layer.
 
 **Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).
+
+## ADR-256: An Emailed Six-Digit Code Is a Sign-In Method Beside the Password; the Phone's Ask Has No Bot Check, Only Budgets (MUT-618)
+
+**Status:** Accepted (2026-11-14, MUT-618; epic MUT-322). Basel decided the placement (beside "Forgot password?"), that every account keeps a password (ADR-159 d9) and the code's shape (6 digits, 10 minutes, single use). D1 was left to planning and is recorded here. Plan: `.claude/designs/mut-618-email-sign-in-code.md`.
+
+**Context:** people set the password on the portal, often a browser-generated one saved on a computer, then have to type it on the phone. Android has no passkeys (MUT-115 is iOS-only), and a passkey can only be added after the first sign-in.
+
+**Decision:**
+1. **D1, the phone's bot check: rate limits alone, no App Attest / Play Integrity.** Mail only ever goes to an account that could sign in, so spraying made-up addresses sends nothing and costs no sender reputation. Aiming it at real people is capped at 1 a minute and 5 a day per address, plus the 500/day global mail cap. Guessing is capped by the code itself: 5 tries per code, the password's 5-in-15-minutes lockout on the same email key, and at most 5 codes a day, so about 1 in 40,000 per account per day. App Attest doesn't run on the Simulator (a QA bypass would be the hole), and Play Integrity needs a Google Cloud project and server-side verification. Revisit if the `sign_in_code.requested` log (client, mailed) shows a spread of IPs on the app route. The portal keeps Turnstile.
+2. **Routes:** `POST /v1/sign-in-codes` (portal: same origin and Turnstile, as /recover) and `POST /v1/device-sign-in-codes` (phone) answer 202 for every address, no earlier than the 1.5 s recovery floor. They share the self-service IP limiter (10/h) and the address limiters (1/min, 5/day) under `sign-in-code:` keys, so asking for a code never spends /recover's budget. `POST /v1/sessions/code` and `/v1/device-sessions/code` spend the sign-in IP budget.
+3. **D3: a code row for every address asked for, real or not.** An unknown, disabled or password-less address gets a row with a random code nobody is sent. So wrong (`triesLeft`), expired and too-many-tries answer identically whatever exists, and the clients can say which without revealing an account (ADR-037 §4). Stored as HMAC(pepper, email, code). A new code cancels the live one. Rows are deleted a day after expiry.
+4. **D4: who gets mail:** ACTIVE or PENDING_REVIEW, with a password set that the person chose (not an account Sign in with Malafat created, MUT-596), not closed past its deadline, address not suppressed.
+5. **Checks:** `signInWithCode` (`auth/sign-in.ts`) runs the password's checks. A wrong code counts as a failed sign-in on the email key. A locked key answers 429 without spending a try. The right code on PENDING_REVIEW answers 403 ACCOUNT_UNDER_REVIEW. A code for an account that can no longer sign in answers the usual 401 INVALID_CREDENTIALS.
+6. **D7: a code session is never step-up stamped** (no passkey, so `stepUpAt` stays null; MUT-459). Changing the password or closing the account still needs the current password.
+7. **D8: mail `sign-in-code`:** the code in the subject (iOS Mail's one-time-code detection, notifications) and in a large left-to-right block. No link: magic links stay out of scope.
+
+**Consequences:** API 1.114.0-mut618 and migration `20261114120000_mut618_sign_in_codes`, additive. Analytics contract 2.9.0. A stranger who knows someone's address can cancel their live code by asking for a new one, capped at 5 a day; the password still works. The in-process limiters keep TD-017's single-instance assumption.
+
+**Alternatives rejected:** App Attest / Play Integrity now (D1). Magic links, SMS and passwordless accounts (out of scope). One uniform 401 for every refused code (it hides whether to retype or resend; D3 makes the distinction safe). Counting misses only per code (the shared lockout keeps the password and the code from adding up to more guesses).
+

@@ -130,7 +130,11 @@ export type PublicPageEvent =
   | { event: 'period_downloaded'; properties: { place: 'link_page'; file: 'report' | 'receipts'; months?: number } }
   // MUT-565 (contract 2.8.0): the accept-invite page's 4th-client card, and the Accountant plan's Checkout started from it
   | { event: 'accountant_plan_offer_shown'; properties: { place: 'invite' } }
-  | { event: 'billing_checkout_started'; properties: { plan: 'accountant'; interval: 'month'; currency: 'ILS' | 'USD' } };
+  | { event: 'billing_checkout_started'; properties: { plan: 'accountant'; interval: 'month'; currency: 'ILS' | 'USD' } }
+  // MUT-618 (contract 2.9.0): "Email me a sign-in code" on /sign-in, before anyone is signed in
+  | { event: 'sign_in_code_requested'; properties: { resend: boolean } }
+  | { event: 'sign_in_code_signed_in'; properties: Record<string, never> }
+  | { event: 'sign_in_code_refused'; properties: { reason: 'wrong' | 'expired' | 'too_many_tries' | 'rate_limited' | 'under_review' } };
 
 export function countPublicPage({ event, properties }: PublicPageEvent): void {
   if (!POSTHOG_KEY) return;

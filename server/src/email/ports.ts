@@ -33,6 +33,7 @@ export const TEMPLATE_IDS = [
   'card-failed-reminder',
   'comeback-offer',
   'accountant-invite',
+  'sign-in-code',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -107,6 +108,8 @@ export interface TemplateVars {
    * the passkey is added and says so (ADR-159 §5, no dates in mail).
    */
   'passkey-added': { passkeyName: string; signInLink: string };
+  /** MUT-618: an emailed sign-in code (six digits) and how long it works. A code, never a link (no magic links). */
+  'sign-in-code': { code: string; validMinutes: number };
   /**
    * MUT-525 (DD8): ~30 days before a launch-offer subscription's first renewal. `listAmount` is the subscription's own
    * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.

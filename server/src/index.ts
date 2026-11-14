@@ -35,6 +35,7 @@ import { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { SELF_SERVICE_POLICY } from './auth/self-service.js';
 import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
+import { SIGN_IN_CODE_POLICY } from './auth/sign-in-code.js';
 import { defaultSelfServiceOptions } from './routes/self-service.js';
 import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.js';
 import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/dns-checker.js';
@@ -314,6 +315,8 @@ pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {
   void store.email.pruneDeliveries(new Date(Date.now() - MAIL_LOG_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'mail send log prune failed'));
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
+  // MUT-618 (D3): sign-in codes live 10 minutes; rows go a day after they expire.
+  void store.signInCodes.prune(new Date(Date.now() - SIGN_IN_CODE_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'sign-in code prune failed'));
   // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);

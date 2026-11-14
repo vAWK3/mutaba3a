@@ -38,6 +38,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.7.0': '0e17eb9dd8191519e1a168a7c7d1812a314b2e3e23b2f82a06493c6cfe779667',
   // MUT-565: accountant_plan_offer_shown (place: invite | client_books | billing) and billing_checkout_started gains plan.
   '2.8.0': '02646797f8cacab52b6000e1912bbaad2b4a4801b62fbe843bc76b61cab5c996',
+  // MUT-618: sign_in_code_requested (resend), sign_in_code_signed_in and sign_in_code_refused (reason); portal, ios, android.
+  '2.9.0': '129e27038244a150a7c62e06ed855c1ec1e5233925ff93c6bab8738d2a82ffef',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;

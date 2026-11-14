@@ -4,7 +4,8 @@ import { ApiError } from '../errors.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
-import { generateDeviceSessionToken, generateSessionToken, sessionDigest, type SessionKind, type SignInThrottle } from './sessions.js';
+import { generateDeviceSessionToken, generateSessionToken, sessionDigest, SIGN_IN_POLICY, type SessionKind, type SignInThrottle } from './sessions.js';
+import { SIGN_IN_CODE_POLICY, signInCodeDigest } from './sign-in-code.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from './users.js';
 import { verifyAssertion, type WebauthnConfig } from './webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -59,8 +60,8 @@ export interface SignInResult {
   session: SessionRecord;
 }
 
-/** MUT-595: `malafat` = Sign in with Malafat (ADR-254 D1). */
-export type SignInMethod = 'password' | 'passkey' | 'malafat';
+/** MUT-595: `malafat` = Sign in with Malafat (ADR-254 D1). MUT-618: `email-code` = a code mailed to the address. */
+export type SignInMethod = 'password' | 'passkey' | 'malafat' | 'email-code';
 
 export async function signIn(
   c: Context<AppEnv>,
@@ -154,6 +155,66 @@ export async function verifyPasskey(
   throttle.clear(key);
   await store.passkeys.recordUse(passkey.id, outcome.signCount, now);
   return { user, audit };
+}
+
+/**
+ * MUT-618 (ADR-256): sign in with a code mailed to the address, cookie or device. The same core as the password: the
+ * email key's throttle and lockout (a wrong code counts as a failed sign-in, like a wrong passkey, MUT-115 A3), the
+ * PENDING_REVIEW 403, the closed-account rule, and a session bound to the person's current password hash. No passkey,
+ * so the session starts without the operator's step-up stamp (MUT-459, D7).
+ *
+ * Every address asked for has a code row, real or not (D3), so wrong / expired / too many tries read the same for an
+ * address with no account. A locked key answers 429 without spending a try.
+ */
+export async function signInWithCode(
+  c: Context<AppEnv>,
+  deps: SignInDeps,
+  presented: { email: string; code: string },
+  sessionKind: SessionKind,
+  lifetime: SignInLifetime,
+): Promise<SignInResult> {
+  const user = await verifySignInCode(c, deps, presented, sessionKind);
+  return issueSession(c, deps, user, { sessionKind, method: 'email-code' }, lifetime);
+}
+
+export async function verifySignInCode(c: Context<AppEnv>, deps: SignInDeps, presented: { email: string; code: string }, sessionKind: SessionKind): Promise<UserRecord> {
+  const { store, throttle, pepper } = deps;
+  const now = c.get('now')();
+  const key = normalizeEmail(presented.email);
+  const user = await store.users.findByEmail(key);
+  if (isLocked(throttle, key, user, now)) {
+    const refusal = lockedOut(user, now);
+    c.header('Retry-After', String((refusal.details as { retryAfterSeconds: number }).retryAfterSeconds));
+    throw refusal;
+  }
+
+  const audit: SignInAudit = { sessionKind, method: 'email-code' };
+  const attempt = await store.signInCodes.attempt({ email: key, codeDigest: signInCodeDigest(pepper, key, presented.code), at: now, maxAttempts: SIGN_IN_CODE_POLICY.maxAttempts });
+  switch (attempt.kind) {
+    case 'none':
+      throw new ApiError('SIGN_IN_CODE_EXPIRED', 'That code has expired or was already used; send a new one');
+    case 'wrong':
+      await recordSignInFailure(c, deps, key, user, audit);
+      throw new ApiError('SIGN_IN_CODE_WRONG', 'That code isn’t right', { triesLeft: attempt.triesLeft });
+    case 'exhausted':
+      await recordSignInFailure(c, deps, key, user, audit);
+      throw new ApiError('SIGN_IN_CODE_TOO_MANY_TRIES', 'Too many wrong tries; send a new code');
+    case 'matched':
+      break;
+  }
+  // The code was mailed to this account (D4); anything that changed since is the usual refusal.
+  if (!user || attempt.userId !== user.id) throw invalidCredentials();
+  if (user.status === 'PENDING_REVIEW') throw underReview();
+  if (isAccountGone(user.closure, now) || user.status !== 'ACTIVE') throw invalidCredentials();
+  throttle.clear(key);
+  return user;
+}
+
+/** 429 while the email key is locked: the stored lockout's end when there is one, else the throttle's lock length. */
+function lockedOut(user: UserRecord | null, now: Date): ApiError {
+  const until = user?.lockedUntil?.getTime() ?? 0;
+  const retryAfterSeconds = Math.max(1, Math.ceil((until > now.getTime() ? until - now.getTime() : SIGN_IN_POLICY.lockMs) / 1000));
+  return new ApiError('RATE_LIMITED', 'Too many tries; try again later', { retryAfterSeconds });
 }
 
 /** The one refusal every sign-in answers, whatever went wrong (ADR-037 decision 4). */

@@ -172,6 +172,7 @@ export type ConnectedApp = Schemas['ConnectedApp'];
 export type ProfileMembers = Schemas['ProfileMembers'];
 export type SignupRequest = Schemas['SignupRequest'];
 export type AccountRecoveryRequest = Schemas['AccountRecoveryRequest'];
+export type SignInCodeRequest = Schemas['SignInCodeRequest'];
 /** MUT-368: the redeem's answer; `status` PENDING_REVIEW is a signup waiting for the operator (MUT-367). */
 export type SetupLinkRedeemed = Schemas['SetupLinkRedeemResponse'];
 export type BillingOverview = Schemas['BillingOverview'];
@@ -368,11 +369,13 @@ interface RequestOptions {
 const SIGN_IN_PATH = '/v1/sessions';
 /** MUT-115: passkey sign-in; like the password sign-in, its 401 is a refused credential, never an ended session. */
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
+/** MUT-618: sign-in with an emailed code; its 401s (wrong, expired, too many tries) are refused codes, never an ended session. */
+const CODE_SIGN_IN_PATH = '/v1/sessions/code';
 /** MUT-460: the server's largest page (server/src/pagination.ts MAX_LIMIT). */
 const OPERATOR_LIST_LIMIT = 200;
 /** MUT-527: the account list's page (the server's default; at most 100). */
 const OPERATOR_ACCOUNTS_PAGE = 50;
-const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
+const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH, CODE_SIGN_IN_PATH]);
 const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
  * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
@@ -382,7 +385,8 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
 // MUT-434: connecting an agent (/v1/oauth) is the server's alone: the agent talks to the hosted service, never this page.
 // MUT-562: an accountant invite and a share link are the server's too: public pages a stranger opens, signed in or not.
 // MUT-596: Sign in with Malafat (office, exchange, link, consent) is the server's: the page is signed out while it runs.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat)(\/|\?|$)/;
+// MUT-618: asking for an emailed sign-in code is the server's: the in-page backend has no mailer.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat)(\/|\?|$)/;
 /**
  * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
  * link page's own PIN-again state, never the end of whoever is signed in on this browser.
@@ -699,6 +703,10 @@ export const api = {
   /** MUT-366/368: always 202 {status:"sent"}; mails a link only to an account that can use one. */
   recoverAccount: (body: AccountRecoveryRequest, signal?: AbortSignal) =>
     request<Schemas['SelfServiceAccepted']>('POST', '/v1/account-recovery', { body, signal }),
+  /** MUT-618: always 202 {status:"sent"}; mails a code only to an account that could sign in. */
+  requestSignInCode: (body: SignInCodeRequest, signal?: AbortSignal) => request<Schemas['SelfServiceAccepted']>('POST', '/v1/sign-in-codes', { body, signal }),
+  /** MUT-618: 401 SIGN_IN_CODE_WRONG / _EXPIRED / _TOO_MANY_TRIES, 403 ACCOUNT_UNDER_REVIEW, 429. */
+  signInWithCode: (body: Schemas['CodeSignInRequest']) => request<OkJson<'/v1/sessions/code', 'post'>>('POST', CODE_SIGN_IN_PATH, { body }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
   /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */

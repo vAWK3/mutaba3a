@@ -1,6 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
-import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
+import { signIn, signInWithCode, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import { requestClientIp, sessionLifetime, type SignInThrottle } from '../auth/sessions.js';
@@ -9,7 +9,7 @@ import { ApiError } from '../errors.js';
 import type { CurrentTerms } from '../legal.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore } from '../repositories/ports.js';
-import { DeviceSessionSchema, ErrorEnvelopeSchema, PasskeySignInRequestSchema, SignInRequestSchema } from '../schemas.js';
+import { CodeSignInRequestSchema, DeviceSessionSchema, ErrorEnvelopeSchema, PasskeySignInRequestSchema, SignInRequestSchema } from '../schemas.js';
 import { buildMe, passkeysClockOf } from './me.js';
 import { ownedProfileCap } from './profiles.js';
 
@@ -111,6 +111,38 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         'device',
         deviceLifetime(),
       );
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
+      return c.json({ ...me, token }, 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/device-sessions/code',
+      tags: ['Device sessions'],
+      summary: 'Sign in from a native app with an emailed code (returns a bearer token) (MUT-618)',
+      description:
+        'Send the address and the 6-digit code from POST /v1/device-sign-in-codes. The same IP budget, throttle and lockout as the password sign-in; the session is not step-up stamped.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: CodeSignInRequestSchema } } } },
+      responses: {
+        201: { description: 'Signed in; the token is shown once', content: { 'application/json': { schema: DeviceSessionSchema } } },
+        401: errorResponse('SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS'),
+        403: errorResponse('ACCOUNT_UNDER_REVIEW (as the password sign-in)'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address, or the email is locked out for now'),
+      },
+    }),
+    async (c) => {
+      const now = c.get('now')();
+      const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
+      if (!ip.allowed) {
+        c.header('Retry-After', String(ip.retryAfterSeconds));
+        throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+      }
+      const { email, code } = c.req.valid('json');
+      const { user, token } = await signInWithCode(c, { store, passwordHasher, throttle, pepper: settings.pepper }, { email, code }, 'device', deviceLifetime());
       const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
       return c.json({ ...me, token }, 201);
     },

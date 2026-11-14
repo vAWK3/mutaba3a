@@ -2731,6 +2731,33 @@
       "notNow": "Not now",
       "signInAgain": "For your security, sign in with Malafat again, then add your passkey.",
       "signInAgainPassword": "For your security, sign in with Malafat again, then set your password."
+    },
+    "signInCode": {
+      "link": "Email me a sign-in code",
+      "title": "Check your email",
+      "lead": "If {email} has an MTB3A account, we’ve sent it a 6-digit code. It works once, for 10 minutes.",
+      "sending": "Sending a code to",
+      "code": "Sign-in code",
+      "codeRequired": "Enter the 6-digit code from the email.",
+      "submit": "Sign in",
+      "send": "Send code",
+      "resend": "Resend code",
+      "resendIn": {
+        "one": "Resend code in {count} second",
+        "other": "Resend code in {count} seconds"
+      },
+      "resent": "We’ve sent a new code. The older one no longer works.",
+      "usePassword": "Use my password instead",
+      "wrong": {
+        "one": "That code isn’t right. {count} try left.",
+        "other": "That code isn’t right. {count} tries left."
+      },
+      "expired": "That code has expired or was already used. Send a new one.",
+      "tooMany": "Too many wrong tries. That code no longer works; send a new one.",
+      "wait": {
+        "one": "Too many tries. Try again in {count} minute.",
+        "other": "Too many tries. Try again in {count} minutes."
+      }
     }
   }
 }

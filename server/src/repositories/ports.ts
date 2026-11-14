@@ -427,6 +427,39 @@ export interface MalafatSignInFacts {
   locale: string | null;
 }
 
+/**
+ * MUT-618 (ADR-256 D3): an emailed sign-in code. One row per ask, for every address asked for, real or not, so the
+ * verify answers (wrong / expired / too many tries) are the same whether or not an account exists. Only the digest is
+ * kept. `userId` is the account the code was issued for (null for an address with none, or one that gets no mail).
+ */
+export interface SignInCodeRecord {
+  id: string;
+  email: string;
+  userId: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  attempts: number;
+}
+
+/** What one try at a code did. `wrong` spent a try; `exhausted` was the last one and the code is dead. */
+export type SignInCodeAttempt =
+  | { kind: 'none' }
+  | { kind: 'matched'; userId: string | null }
+  | { kind: 'wrong'; triesLeft: number }
+  | { kind: 'exhausted' };
+
+export interface SignInCodeRepository {
+  /** Issues a code for `email`, cancelling any live one for it first (a resend replaces the older code, AC3). */
+  issue(input: { email: string; userId: string | null; codeDigest: string; at: Date; expiresAt: Date }): Promise<SignInCodeRecord>;
+  /**
+   * One try at the newest live code for `email`: unused, uncancelled, unexpired. A match uses it (once, under races);
+   * a miss spends a try, and the try that reaches `maxAttempts` cancels it.
+   */
+  attempt(input: { email: string; codeDigest: string; at: Date; maxAttempts: number }): Promise<SignInCodeAttempt>;
+  /** Deletes codes that expired before `before`; returns how many. */
+  prune(before: Date): Promise<number>;
+}
+
 export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';
 
 export interface MalafatSignInRecord {
@@ -2724,6 +2757,8 @@ export interface LedgerStore {
   accountPurge: AccountPurgeRepository;
   /** MUT-115: passkeys and their challenges; the person's own (sessionOnly), sign-in reads them unguarded. */
   passkeys: PasskeyRepository;
+  /** MUT-618: emailed sign-in codes; sign-in reads and writes them unguarded (operator-only below the routes). */
+  signInCodes: SignInCodeRepository;
   /** MUT-433: per-user feature flags; `/v1/me` reads the person's own (sessionOnly), only the operator writes them. */
   features: FeaturesRepository;
   /** MUT-434: the OAuth authorization server's clients, requests, grants, codes and tokens. */

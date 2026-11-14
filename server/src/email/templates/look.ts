@@ -76,6 +76,7 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'reset-password': { mood: 'safety', header: 'spot-lock', chip: 'password' },
   'password-changed': { mood: 'safety', header: 'spot-lock', chip: 'lock' },
   'passkey-added': { mood: 'safety', header: 'spot-badge', chip: 'badge' },
+  'sign-in-code': { mood: 'safety', header: 'spot-email', chip: 'password' },
   'account-exists': { mood: 'safety', header: 'spot-person', chip: 'person' },
   'trial-ending-soon': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   'trial-ended': { mood: 'trial', header: 'spot-schedule', chip: 'schedule' },

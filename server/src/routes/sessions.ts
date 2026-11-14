@@ -3,7 +3,7 @@ import { STEP_UP_WINDOW_MS } from '../auth/webauthn.js';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
-import { signIn, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
+import { signIn, signInWithCode, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import {
@@ -26,6 +26,7 @@ import { StateConflict } from '../repositories/memory.js';
 import type { AuditEventInput, LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import {
   ChangePasswordRequestSchema,
+  CodeSignInRequestSchema,
   ErrorEnvelopeSchema,
   PasskeySignInRequestSchema,
   PasswordChangedTokenSchema,
@@ -171,6 +172,41 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         'cookie',
         sessionLifetime('cookie', settings),
       );
+      setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/sessions/code',
+      tags: ['Sessions'],
+      summary: 'Sign in with an emailed code (sets the session cookie) (MUT-618)',
+      description:
+        'Send the address and the 6-digit code from POST /v1/sign-in-codes. The same same-origin check, IP budget, throttle and lockout as the password sign-in: a wrong code counts toward the address\'s lockout. The session is not step-up stamped and can\'t change the password or close the account without it.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: CodeSignInRequestSchema } } } },
+      responses: {
+        201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
+        401: errorResponse('SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS'),
+        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in)'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address, or the email is locked out for now'),
+      },
+    }),
+    async (c) => {
+      if (!isSamePortalOrigin(c.req, settings)) {
+        throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the MTB3A portal itself');
+      }
+      const now = c.get('now')();
+      const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, now);
+      if (!ip.allowed) {
+        c.header('Retry-After', String(ip.retryAfterSeconds));
+        throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+      }
+      const { email, code } = c.req.valid('json');
+      const { user, token } = await signInWithCode(c, { store, passwordHasher, throttle, pepper: settings.pepper }, { email, code }, 'cookie', sessionLifetime('cookie', settings));
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
       return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 201);
     },

@@ -238,6 +238,9 @@
 /* Addresses and passwords are left-to-right strings, aligned with the label's side. */
 .hp-ltr-input { text-align: left; }
 [dir="rtl"] .hp-ltr-input { text-align: right; }
+/* MUT-618: the emailed code, six digits read left to right in either language, spaced so a slip is easy to see. */
+.hp-code-input,
+[dir="rtl"] .hp-code-input { text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.4em; font-size: var(--text-xl, 1.25rem); }
 
 .hp-password { position: relative; }
 .hp-password .input { padding-right: var(--space-16); }

@@ -134,6 +134,8 @@ import type {
   MalafatSignInOutcome,
   MalafatSignInRecord,
   MalafatSignInRepository,
+  SignInCodeRecord,
+  SignInCodeRepository,
   ExternalIdentityRepository,
   MalafatRole,
   MembershipRole,
@@ -1103,6 +1105,34 @@ export class PrismaLedgerStore implements LedgerStore {
         const assertions = (await tx.oAuthClientAssertion.deleteMany({ where: { expiresAt: { lte: at } } })).count;
         return { requests, codes, tokens, clients, assertions };
       }),
+  };
+
+  readonly signInCodes: SignInCodeRepository = {
+    issue: async (input) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.signInCode.updateMany({ where: { email: input.email, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+        return toSignInCode(
+          await tx.signInCode.create({ data: { email: input.email, userId: input.userId, codeDigest: input.codeDigest, createdAt: input.at, expiresAt: input.expiresAt } }),
+        );
+      }),
+    attempt: async ({ email, codeDigest, at, maxAttempts }) => {
+      const live = await this.prisma.signInCode.findFirst({ where: { email, usedAt: null, cancelledAt: null, expiresAt: { gt: at } }, orderBy: { createdAt: 'desc' } });
+      if (!live) return { kind: 'none' };
+      const open = { id: live.id, usedAt: null, cancelledAt: null };
+      if (live.codeDigest === codeDigest) {
+        // Single use under races: only the claim that changes the row signs in.
+        const { count } = await this.prisma.signInCode.updateMany({ where: open, data: { usedAt: at } });
+        return count === 1 ? { kind: 'matched', userId: live.userId } : { kind: 'none' };
+      }
+      const { count } = await this.prisma.signInCode.updateMany({ where: { ...open, attempts: { lt: maxAttempts } }, data: { attempts: { increment: 1 } } });
+      if (count === 0) return { kind: 'none' };
+      const after = await this.prisma.signInCode.findUnique({ where: { id: live.id }, select: { attempts: true } });
+      const attempts = after?.attempts ?? maxAttempts;
+      if (attempts < maxAttempts) return { kind: 'wrong', triesLeft: maxAttempts - attempts };
+      await this.prisma.signInCode.updateMany({ where: { id: live.id, cancelledAt: null }, data: { cancelledAt: at } });
+      return { kind: 'exhausted' };
+    },
+    prune: async (before) => (await this.prisma.signInCode.deleteMany({ where: { expiresAt: { lt: before } } })).count,
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -3906,6 +3936,10 @@ async function revokeOAuthGrantsAuditedInTx(tx: Prisma.TransactionClient, userId
 /** MUT-594: a seat's membership, created or re-roled by D3. */
 async function upsertSeatMembershipInTx(tx: Prisma.TransactionClient, userId: string, organizationId: string, role: MembershipRole, at: Date): Promise<void> {
   await tx.membership.upsert({ where: { userId_organizationId: { userId, organizationId } }, create: { userId, organizationId, role, createdAt: at }, update: { role } });
+}
+
+function toSignInCode(row: Prisma.SignInCodeGetPayload<object>): SignInCodeRecord {
+  return { id: row.id, email: row.email, userId: row.userId, createdAt: row.createdAt, expiresAt: row.expiresAt, attempts: row.attempts };
 }
 
 function toMalafatSignIn(row: Prisma.MalafatSignInGetPayload<object>): MalafatSignInRecord {

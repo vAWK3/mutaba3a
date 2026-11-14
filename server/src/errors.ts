@@ -27,6 +27,12 @@ export const ERROR_CODES = {
   /** MUT-360 D2: /jobs/* without the Scheduler's X-Job-Token. */
   JOB_UNAUTHORIZED: 401,
   INVALID_CREDENTIALS: 401,
+  /** MUT-618 (ADR-256 D6): the emailed code is wrong; `details.triesLeft`. The same for every address. */
+  SIGN_IN_CODE_WRONG: 401,
+  /** MUT-618: no live code for the address: expired, used, replaced by a newer one, killed, or never sent. */
+  SIGN_IN_CODE_EXPIRED: 401,
+  /** MUT-618: that was the code's last allowed wrong try; it no longer works. */
+  SIGN_IN_CODE_TOO_MANY_TRIES: 401,
   SESSION_EXPIRED: 401,
   INSUFFICIENT_SCOPE: 403,
   PRINCIPAL_NOT_ACCEPTED: 403,

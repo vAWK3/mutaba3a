@@ -15,6 +15,7 @@ import { AuthLayout } from './AuthLayout';
 import { CheckingSession } from './BootScreens';
 import { EMAIL_SHAPE } from './selfService';
 import { UnderReviewNotice } from './UnderReviewNotice';
+import { SignInCodeStep } from './SignInCodeStep';
 import { AlertIcon, InfoIcon, PasskeyIcon } from '../../components/Icons';
 import { MalafatMark } from '../../components/MalafatMark';
 import { PasskeyCeremonyError, usePasskeySignIn } from '../../passkeys/usePasskeySignIn';
@@ -91,6 +92,8 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const [fieldErrors, setFieldErrors] = useState<{ email?: FieldError; password?: FieldError }>({});
   const [banner, setBanner] = useState<Banner | null>(null);
   const [underReview, setUnderReview] = useState(false);
+  /** MUT-618: the emailed-code step, in place of the form, for the address typed here. */
+  const [codeFor, setCodeFor] = useState<string | null>(null);
   const doors = useSelfServiceDoors();
   const continueOnThisDevice = useContinueOnThisDevice();
 
@@ -150,6 +153,27 @@ function SignInForm({ next, reason }: SignInPageProps) {
     signIn.mutate({ email: email.trim(), password });
   }
 
+  /** MUT-618 (D9): "Email me a sign-in code" uses the email already typed; an empty or malformed one gets the field's own error. */
+  function startCode() {
+    if (signIn.isPending || passkey.pending) return;
+    const trimmed = email.trim();
+    const error: FieldError | undefined = !trimmed ? 'emailRequired' : !EMAIL_SHAPE.test(trimmed) ? 'emailInvalid' : undefined;
+    setFieldErrors(error ? { email: error } : {});
+    if (error) {
+      emailRef.current?.focus();
+      return;
+    }
+    setBanner(null);
+    passkey.pause();
+    setCodeFor(trimmed);
+  }
+
+  /** Back to the password, the email kept. */
+  function leaveCode() {
+    setCodeFor(null);
+    passkey.resume();
+  }
+
   /** Leaving the under-review screen: nobody is signed in, so an empty form is a fresh start (D16). */
   function leaveReview() {
     setUnderReview(false);
@@ -158,6 +182,21 @@ function SignInForm({ next, reason }: SignInPageProps) {
   }
 
   if (underReview) return <UnderReviewNotice onLeave={leaveReview} />;
+  if (codeFor !== null) {
+    return (
+      <AuthLayout>
+        <SignInCodeStep
+          email={codeFor}
+          onSignedIn={onSignedIn}
+          onUnderReview={() => {
+            setCodeFor(null);
+            setUnderReview(true);
+          }}
+          onUsePassword={leaveCode}
+        />
+      </AuthLayout>
+    );
+  }
 
   const pending = signIn.isPending || passkey.pending;
   // MUT-460 (design 2A): an operator arriving from the digest signs in with the passkey first; it also opens their step-up.
@@ -303,9 +342,16 @@ function SignInForm({ next, reason }: SignInPageProps) {
         )}
       </form>
       {/* D14: the door shows once the server can really mail a link; until then, who to ask */}
-      {doors.recovery ? (
+      {/* MUT-618 (Basel, 2026-11-14): "Email me a sign-in code" sits beside "Forgot your password?" */}
+      {doors.recovery || doors.signInCode ? (
         <p className="hp-help">
-          <Link to="/recover">{t('hosted.auth.forgot')}</Link>
+          {doors.recovery && <Link to="/recover">{t('hosted.auth.forgot')}</Link>}
+          {doors.recovery && doors.signInCode && <span aria-hidden="true"> · </span>}
+          {doors.signInCode && (
+            <button type="button" className="hp-link-button press" disabled={pending} onClick={startCode}>
+              {t('hosted.signInCode.link')}
+            </button>
+          )}
         </p>
       ) : (
         <p className="hp-help">{t('hosted.auth.help')}</p>

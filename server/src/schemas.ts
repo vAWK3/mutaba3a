@@ -1609,6 +1609,33 @@ export const AccountRecoveryRequestSchema = z
   })
   .openapi('AccountRecoveryRequest');
 
+/** MUT-618 (ADR-256 D2): the portal asks for an emailed sign-in code. */
+export const SignInCodeRequestSchema = z
+  .object({
+    email: SelfServiceEmailSchema,
+    /** The mail's language; the account's when omitted. */
+    locale: UserLocaleSchema.optional(),
+    /** Rendered with action "sign-in-code". */
+    turnstileToken: TurnstileTokenSchema,
+  })
+  .openapi('SignInCodeRequest');
+
+/** MUT-618 (ADR-256 D1): the phone asks for an emailed sign-in code. No bot check: the budgets are the control. */
+export const DeviceSignInCodeRequestSchema = z
+  .object({
+    email: SelfServiceEmailSchema,
+    locale: UserLocaleSchema.optional(),
+  })
+  .openapi('DeviceSignInCodeRequest');
+
+/** MUT-618: sign in with the emailed code. Six digits; the clients strip spaces first. */
+export const CodeSignInRequestSchema = z
+  .object({
+    email: z.string().min(1).max(320),
+    code: z.string().regex(/^\d{6}$/),
+  })
+  .openapi('CodeSignInRequest');
+
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');
 
@@ -1624,6 +1651,8 @@ export const SelfServiceDoorsSchema = z
     recovery: z.boolean(),
     /** MUT-595: Sign in with Malafat is open (MALAFAT_SIGN_IN), so the sign-in doors show it. */
     malafatSignIn: z.boolean(),
+    /** MUT-618: "Email me a sign-in code" can mail a code (the same condition as `recovery`). Additive since 1.114.0-mut618. */
+    signInCode: z.boolean(),
   })
   .openapi('SelfServiceDoors');
 

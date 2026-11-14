@@ -18,7 +18,8 @@ export const TURNSTILE_TEST_SECRETS = {
 /** A token is at most 2048 characters (Cloudflare's documented limit). */
 export const TURNSTILE_TOKEN_MAX_LENGTH = 2048;
 
-export type TurnstileAction = 'signup' | 'recover';
+/** MUT-618: `sign-in-code`, the portal's "Email me a sign-in code". */
+export type TurnstileAction = 'signup' | 'recover' | 'sign-in-code';
 
 export interface TurnstileContext {
   /** The client address the front door reported; null when unknown. */

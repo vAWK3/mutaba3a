@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
+  "version": "2.9.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -198,6 +198,24 @@
         "place": { "type": "enum", "values": ["owner", "client_books", "link_page"], "description": "owner = the owner's own profile; client_books = an accountant's client; link_page = a share link's visitor. Named place because surface is a shared property." },
         "file": { "type": "enum", "values": ["report", "receipts"], "description": "report = the period's report; receipts = its receipts archive." },
         "months": { "type": "integer", "description": "How many calendar months the period spans, 1 to 24." }
+      }
+    },
+    "sign_in_code_requested": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: \"Email me a sign-in code\" sent its ask and the server answered (the answer says nothing about whether the address has an account). Sent before anyone signs in: cookieless on the portal, like portal_welcome_choice; on the phone only with the usage choice on.",
+      "properties": {
+        "resend": { "type": "boolean", "description": "true when it was \"Resend code\" on the code step." }
+      }
+    },
+    "sign_in_code_signed_in": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: a person signed in with an emailed code. Cookieless on the portal, as sign_in_code_requested."
+    },
+    "sign_in_code_refused": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: the server refused a typed code. Not an error: what the person does next. Network and server failures go to Sentry instead.",
+      "properties": {
+        "reason": { "type": "enum", "values": ["wrong", "expired", "too_many_tries", "rate_limited", "under_review"], "description": "wrong = a try was spent; expired = no live code (expired, used or replaced); too_many_tries = the fifth wrong try killed it; rate_limited = the address or network must wait; under_review = the right code on an account waiting for review." }
       }
     }
   }

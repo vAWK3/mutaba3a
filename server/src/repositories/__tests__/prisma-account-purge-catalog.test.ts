@@ -33,6 +33,8 @@ if (!url) {
     'oauth_client_assertions',
     // MUT-595: a Sign in with Malafat attempt; the person's own go with them (PURGE_USER_COLUMNS), the rest name no one.
     'malafat_sign_ins',
+    // MUT-618: emailed sign-in codes; the person's own go with them (PURGE_USER_COLUMNS), the rest name an address for a day.
+    'sign_in_codes',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
     'billing_retention_events',
     // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).

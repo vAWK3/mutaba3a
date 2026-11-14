@@ -41,7 +41,18 @@ export interface GuardContext {
  * Accountant plan card shown and its Checkout started. Each carries enums, a currency code and a month count only;
  * never a token, PIN, email, name, amount or id.
  */
-export const COOKIELESS_PORTAL_EVENTS: ReadonlySet<string> = new Set(['portal_welcome_choice', 'share_link_opened', 'accountant_accepted', 'period_downloaded', 'accountant_plan_offer_shown', 'billing_checkout_started']);
+export const COOKIELESS_PORTAL_EVENTS: ReadonlySet<string> = new Set([
+  'portal_welcome_choice',
+  'share_link_opened',
+  'accountant_accepted',
+  'period_downloaded',
+  'accountant_plan_offer_shown',
+  'billing_checkout_started',
+  // MUT-618: the sign-in code, before anyone is signed in.
+  'sign_in_code_requested',
+  'sign_in_code_signed_in',
+  'sign_in_code_refused',
+]);
 /** What PostHog's cookieless hash reads (README rule 9), and nothing that tells one browser or visit from another. */
 const COOKIELESS_FIELDS = ['$cookieless_mode', '$raw_user_agent', '$host', '$current_url'];
 

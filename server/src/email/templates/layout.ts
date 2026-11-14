@@ -68,6 +68,8 @@ export interface MailBody {
    * are plain text, isolated in a `<bdi>` so a name in either script reads right inside the other (no links on a tint).
    */
   details?: { label: string; value: string }[];
+  /** MUT-618: a one-time code, shown large, left to right and spaced, on a tinted panel (and on its own line in the text part). */
+  code?: string;
   action?: { label: string; href: string };
   /** A second, quieter link under the button. */
   secondary?: { label: string; href: string };
@@ -185,6 +187,16 @@ function details(rows: NonNullable<MailBody['details']>, look: Look | undefined,
   ].join('');
 }
 
+/** MUT-618: the code in large spaced digits, left to right in either language, on the mood's panel (INK on panel, TEXT_PAIRS). */
+function codeBlock(code: string, look: Look | undefined): string {
+  const panel = look ? MOODS[look.mood].panel : CANVAS;
+  return [
+    `<table data-code role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" bgcolor="${panel}" style="background:${panel};border-radius:12px;margin:4px 0 24px;">`,
+    `<tr><td align="center" dir="ltr" style="padding:20px 16px;font-family:Menlo,Consolas,'Courier New',monospace;font-size:34px;line-height:40px;font-weight:700;letter-spacing:8px;color:${INK};text-align:center;"><bdi dir="ltr">${escapeHtml(code)}</bdi></td></tr>`,
+    '</table>',
+  ].join('');
+}
+
 function footer(locale: UserLocale, frame: MailFrame): string {
   const service = frame.to ? `${escapeHtml(SERVICE[locale])}${SENT_TO[locale]}<bdi dir="ltr">${escapeHtml(frame.to)}</bdi>.` : `${escapeHtml(SERVICE[locale])}.`;
   const privacy = frame.websiteOrigin ? `${originOf(frame.websiteOrigin)}/privacy?lang=${locale}` : null;
@@ -225,6 +237,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     `<tr><td dir="${dir}" bgcolor="${SURFACE}" style="background:${SURFACE};border:1px solid ${LINE};${cardTop};font-size:16px;line-height:1.6;color:${INK};text-align:${align};">`,
     ...body.intro.map((p) => paragraphHtml(p)),
     ...(body.details && body.details.length > 0 ? [details(body.details, look, align)] : []),
+    ...(body.code ? [codeBlock(body.code, look)] : []),
     ...(action
       ? [
           `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:8px 0 16px;"><tr><td align="center" bgcolor="${LINK}" style="background:${LINK};border-radius:10px;"><a href="${escapeHtml(action.href)}" style="display:inline-block;padding:14px 28px;font-size:16px;line-height:20px;font-weight:700;color:${ON_LINK};text-decoration:none;">${escapeHtml(action.label)}</a></td></tr></table>`,
@@ -252,6 +265,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     ...(body.headline ? [body.headline, ''] : []),
     ...body.intro.map((p) => p.map(inlineText).join('')).flatMap((p) => [p, '']),
     ...(body.details && body.details.length > 0 ? [...body.details.map((row) => `${row.label}: ${row.value}`), ''] : []),
+    ...(body.code ? [body.code, ''] : []),
     ...(action ? [`${action.label}:`, action.href, ''] : []),
     ...(secondary ? [`${secondary.label}:`, secondary.href, ''] : []),
     ...(body.outro ?? []).map((p) => p.map(inlineText).join('')).flatMap((p) => [p, '']),

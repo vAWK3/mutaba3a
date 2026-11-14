@@ -394,6 +394,7 @@ model User {
   @@map("users")
   externalIdentities ExternalIdentity[]
   malafatSignIns     MalafatSignIn[]
+  signInCodes        SignInCode[]
 }
 
 /// What an unsorted capture becomes once filed: an Expense, or income
@@ -2069,4 +2070,27 @@ model MalafatSignIn {
   @@index([expiresAt])
   @@index([userId])
   @@map("malafat_sign_ins")
+}
+
+/// MUT-618 (ADR-256 D3): an emailed sign-in code, one row per ask, for every address asked for (an address with no
+/// account gets a row and no mail, so the verify answers can't tell them apart). Only the digest is kept. A new code
+/// cancels the live one; rows are deleted a day after they expire.
+model SignInCode {
+  id          String    @id @default(uuid()) @db.Uuid
+  /// Normalised, as users.email.
+  email       String    @db.VarChar(320)
+  userId      String?   @db.Uuid
+  user        User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// HMAC(pepper, email + code), hex.
+  codeDigest  String    @db.VarChar(64)
+  createdAt   DateTime
+  expiresAt   DateTime
+  attempts    Int       @default(0)
+  usedAt      DateTime?
+  cancelledAt DateTime?
+
+  @@index([email, createdAt])
+  @@index([expiresAt])
+  @@index([userId])
+  @@map("sign_in_codes")
 }

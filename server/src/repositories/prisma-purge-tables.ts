@@ -78,6 +78,8 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'external_identities.userId': 'delete',
   // MUT-595: the person's Sign in with Malafat attempts (also ON DELETE CASCADE).
   'malafat_sign_ins.userId': 'delete',
+  // MUT-618: the person's emailed sign-in codes (also ON DELETE CASCADE).
+  'sign_in_codes.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
   // MUT-559: the person's grants as an accountant go with them; invites they sent as an owner lose their name.

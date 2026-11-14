@@ -103,6 +103,8 @@ import type {
   ExternalIdentityRecord,
   MalafatSignInRecord,
   MalafatSignInRepository,
+  SignInCodeRecord,
+  SignInCodeRepository,
   ExternalIdentityRepository,
   MemberSyncResult,
   OAuthClientRecord,
@@ -320,6 +322,8 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
   private readonly seats = new Map<string, ExternalIdentityRecord>();
   /** MUT-595: Sign in with Malafat round trips, with their digests (state, result, ticket). Outside the snapshot. */
+  /** MUT-618: emailed sign-in codes, with their digest and use. */
+  private readonly signInCodeRows = new Map<string, SignInCodeRecord & { codeDigest: string; usedAt: Date | null; cancelledAt: Date | null }>();
   private readonly malafatFlows = new Map<string, MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
@@ -1035,6 +1039,41 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((g) => g.feature === feature && g.revokedAt === null && isFeature(g.feature))
         .sort((a, b) => a.grantedAt.getTime() - b.grantedAt.getTime() || a.userId.localeCompare(b.userId))
         .map((g) => ({ userId: g.userId, email: this.people.get(g.userId)?.email ?? '', grantedAt: g.grantedAt })),
+  };
+
+  readonly signInCodes: SignInCodeRepository = {
+    issue: async (input) => {
+      for (const row of this.signInCodeRows.values()) {
+        if (row.email === input.email && row.usedAt === null && row.cancelledAt === null) row.cancelledAt = input.at;
+      }
+      const row = { id: randomUUID(), email: input.email, userId: input.userId, codeDigest: input.codeDigest, createdAt: input.at, expiresAt: input.expiresAt, attempts: 0, usedAt: null, cancelledAt: null };
+      this.signInCodeRows.set(row.id, row);
+      return signInCodeOf(row);
+    },
+    attempt: async ({ email, codeDigest, at, maxAttempts }) => {
+      const live = [...this.signInCodeRows.values()]
+        .filter((r) => r.email === email && r.usedAt === null && r.cancelledAt === null && r.expiresAt.getTime() > at.getTime())
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if (!live) return { kind: 'none' };
+      if (live.codeDigest === codeDigest) {
+        live.usedAt = at;
+        return { kind: 'matched', userId: live.userId };
+      }
+      live.attempts += 1;
+      if (live.attempts < maxAttempts) return { kind: 'wrong', triesLeft: maxAttempts - live.attempts };
+      live.cancelledAt = at;
+      return { kind: 'exhausted' };
+    },
+    prune: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.signInCodeRows) {
+        if (row.expiresAt.getTime() < before.getTime()) {
+          this.signInCodeRows.delete(id);
+          count += 1;
+        }
+      }
+      return count;
+    },
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -4484,4 +4523,8 @@ function cloneReview(review: SignupReviewRecord): SignupReviewRecord {
 function mentions(value: unknown, id: string): boolean {
   if (value === null || value === undefined) return false;
   return JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)).includes(id);
+}
+
+function signInCodeOf(row: SignInCodeRecord): SignInCodeRecord {
+  return { id: row.id, email: row.email, userId: row.userId, createdAt: row.createdAt, expiresAt: row.expiresAt, attempts: row.attempts };
 }

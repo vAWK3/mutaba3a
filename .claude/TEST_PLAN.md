@@ -4612,3 +4612,14 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | Phone: fixed return, S256 verifier required, code burns on first try, device token | same |
 | Switch off for the firm, firm not bound, IDENTITY_LINKED_ELSEWHERE, currency/timezone/terms, Malafat down, MALAFAT_SIGN_IN off | same |
 | Sign-in attempt and link in both stores | `server/src/repositories/__tests__/store-contract-oauth.ts` |
+
+## MUT-618 — "Email me a sign-in code" (2026-11-14, ADR-256)
+
+| Layer | Tests | AC |
+|---|---|---|
+| Pure | `server/src/auth/__tests__/sign-in-code.test.ts` (policy, generator, digest, who gets mail); `src/hosted/pages/auth/__tests__/signInCode.test.ts` (digits, refusal mapping, PostHog reasons) | AC2, AC3 |
+| Store | `store-contract-sign-in-codes.ts` on memory and Postgres (single use, expiry, resend cancels, fifth miss kills, prune) | AC3 |
+| Routes | `server/src/__tests__/routes-sign-in-code.test.ts`: same answer and floor for real / unknown / disabled / password-less; mail only for real, not for a Malafat-made account; Turnstile and origin on the portal ask only; budgets per address (shared by both asks, not /recover's) and IP; cookie and device sessions audited `email-code`; once, 10 minutes, resend, 4-3-2-1 then too many tries then 429; unknown answers like real; under review 403; no step-up stamp; change password and close account still need the password | AC1–AC5 |
+| Portal | `SignInCode.test.tsx`: link beside Forgot, email first, the full step, Arabic-Indic digits, each refusal, under review, resend after 60 s, back to password, RTL | AC1, AC6 |
+| Release-QA | `portal.signin.email-code` (stubbed, en + ar), `portal-selfservice.signin.email-code` (live outbox, en + ar) | AC1, AC6, AC7 |
+
