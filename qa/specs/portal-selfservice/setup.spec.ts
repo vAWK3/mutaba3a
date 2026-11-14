@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { SETUP_PASSKEY, address, chooseLanguage, operatorAccount } from '../../support/selfService';
-import { addVirtualAuthenticator, type VirtualAuthenticator } from '../../support/passkeys';
+import { addVirtualAuthenticator, dismissNextPasskeySheet, type VirtualAuthenticator } from '../../support/passkeys';
 import { openYou, youRow } from '../../support/you';
 
 /**
@@ -59,7 +59,7 @@ test('After setting a password, Create a passkey registers one, lands on Home, a
   });
   await step('Press Create a passkey; the device confirms: "Passkey added", Home, and no passkey card', async () => {
     await page.getByRole('button', { name: SETUP_PASSKEY.en.create }).click();
-    await expect(page.getByText('Passkey added')).toBeVisible();
+    await expect(page.getByTestId('toast-live').getByText('Passkey added')).toBeVisible();
     await expectHome(page);
     await expect(page.getByText(SUGGESTION)).toHaveCount(0);
     expect(await authenticator.count()).toBe(1);
@@ -104,9 +104,9 @@ test('A cancelled passkey sheet says no passkey was created and still lets the p
     await expect(stepHeading(page)).toBeVisible();
   });
   await step('Press Create a passkey and dismiss the system sheet: "No passkey was created.", both buttons still there', async () => {
-    await authenticator.setPresence(false);
+    await dismissNextPasskeySheet(page);
     await page.getByRole('button', { name: SETUP_PASSKEY.en.create }).click();
-    await expect(page.getByRole('alert')).toContainText('No passkey was created.', { timeout: 90_000 });
+    await expect(page.getByRole('alert')).toContainText('No passkey was created.');
     await expect(page.getByRole('button', { name: SETUP_PASSKEY.en.create })).toBeEnabled();
     await expect(page.getByRole('button', { name: SETUP_PASSKEY.en.notNow })).toBeEnabled();
     expect(await authenticator.count()).toBe(0);
