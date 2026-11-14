@@ -2742,6 +2742,8 @@ export interface LedgerStore {
 export interface PeriodBounds {
   occurredFrom?: IsoDate;
   occurredBefore: IsoDate;
+  /** Count only expenses with a READY receipt (ExpenseFilter `withReceipt`): an accountant's download. */
+  expensesWithReceipt?: boolean;
 }
 
 /**
@@ -3496,7 +3498,15 @@ export interface ExpenseFilter {
   group?: ExpenseGroupFilter;
   /** MUT-437: exactly this amount (minor units): the look-alike pre-filter, with `currency` and a date window. */
   amountMinor?: bigint;
+  /**
+   * Only expenses with at least one READY, live receipt (`hasReadyReceipt`). An accountant's reads always set it
+   * (store-guard.ts `accountantExpenseView`): an expense with no receipt is not a book entry they can use.
+   */
+  withReceipt?: boolean;
 }
+
+/** What `withReceipt` reads as a receipted expense: one READY receipt on it, not deleted. */
+export const READY_RECEIPT = { status: 'READY', deletedAt: null } as const;
 
 /**
  * MUT-267: membership as a ledger filter. The caller resolves the group and its
@@ -3555,8 +3565,8 @@ export type MoveExpenseResult =
 
 export interface ExpenseRepository {
   create(input: CreateExpenseInput, at: Date): Promise<ExpenseRecord>;
-  /** Live expenses only; a deleted one reads null. */
-  getById(organizationId: string, id: string): Promise<ExpenseRecord | null>;
+  /** Live expenses only; a deleted one reads null, and so does one without a READY receipt under `withReceipt`. */
+  getById(organizationId: string, id: string, options?: { withReceipt?: boolean }): Promise<ExpenseRecord | null>;
   list(organizationId: string, filter: ExpenseFilter, page: { limit: number; cursor: ExpenseCursor | null }): Promise<ExpensePage>;
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
   /**
@@ -4113,6 +4123,8 @@ export interface FeedPageRequest {
   loggedSince?: Date;
   /** MUT-560: only these kinds (all four when absent); the others' branches are never read. */
   kinds?: ReadonlyArray<EntryRow['kind']>;
+  /** Only expenses with a READY receipt (ExpenseFilter `withReceipt`); the other kinds are unaffected. An accountant's feed. */
+  expensesWithReceipt?: boolean;
 }
 
 export interface FeedPage<T> {
@@ -4141,8 +4153,8 @@ export interface EntriesRepository {
   settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
   /**
    * MUT-575 (ADR-249): an accountant's client-list stats, two queries whatever the number of windows. Per window: the
-   * live expenses and received payments (the feed's own rules: not deleted, not a capture undo) whose money date is
-   * in [from, before), and the newest `createdAt` of any live expense or received payment. Owed entries and
+   * live expenses with a READY receipt (what an accountant sees of a profile) and received payments (the feed's own rules: not deleted, not a capture undo) whose money date is
+   * in [from, before), and the newest `createdAt` of any such expense or received payment. Owed entries and
    * conversions never count. Every window's organization is in the answer (0 and null when nothing).
    */
   clientActivity(windows: readonly ClientActivityWindow[]): Promise<Map<string, ClientActivity>>;

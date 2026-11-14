@@ -6628,3 +6628,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** API 1.109.0-mut589, no migration. A vendor created on the target for a move that then fails stays (R3, TD-308). An abandoned upload on an expense blocks its move until it is deleted (TD-309). The plan's "recompute under the lock" (R2) is done just before the transaction instead, since category and vendor lookups would otherwise run inside the store layer.
 
 **Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).
+
+## ADR-258: An Accountant Sees Only the Expenses That Have a Receipt (amends ADR-245)
+
+**Status:** Accepted (2026-11-14, Basel: "for accountant, they should only see expenses who have an attachment, without it they don't make much sense").
+
+**Context:** an accountant reads a client's books to file them (MUT-559, ADR-245). An expense with no receipt or invoice behind it is not a document they can book; listing it beside the documented ones only adds noise and questions for the owner.
+
+**Decision:**
+1. For an accountant, an expense exists only when it has at least one READY, live receipt (`expense_receipts.status = READY`, `deletedAt` null). An unfinished upload or a deleted receipt does not count; adding a receipt later makes the expense appear, deleting the last one hides it again.
+2. Enforced once, in the store guard, not per route: `accountantStoreGuard` (and `periodDownloadStoreGuard('accountant')`) narrows every expense read with `accountantExpenseView` (`server/src/auth/store-guard.ts`): `expenses.list` / `totalsByCurrency` get `withReceipt`, `expenses.getById` gets `{ withReceipt }` (so `GET /v1/expenses/{id}` answers 404 for a receipt-less one), `entries.list` gets `expensesWithReceipt` (the profile feed and the period download's rows), and `periodPack.estimate` gets `expensesWithReceipt`. Lists, single reads, the expenses and period summaries, groups, `/v1/profile-entries` and the period downloads therefore agree on one set, whatever route asks, including routes added later.
+3. `entries.clientActivity` (the accountant's `/v1/clients` monthly count and last activity, read from their own session) counts only receipted expenses too; it has no other caller.
+4. Owners, members, API keys, Malafat and share links are unchanged: a share link is the owner's own export of a period, not the accountant's desk.
+
+**Consequences:** no migration, no API shape change. An accountant's totals can be lower than the owner's for the same period, by exactly the receipt-less expenses; that is the point. `GET /v1/expenses/streak` still reads logged days (dates only, no amounts).
+
+**Alternatives rejected:** a per-route `hasReceipt` query flag (every new route would have to remember it); showing receipt-less expenses greyed out (the accountant can do nothing with them).

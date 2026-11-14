@@ -10,6 +10,7 @@ import {
   accountantHarness,
   businessOf,
   expenseOn,
+  receiptOnExpense,
   idem,
   inviteAccountant,
   inviteTokenFor,
@@ -55,7 +56,10 @@ async function received(h: AccountantHarness, p: Person, profileId: string, occu
 async function expenseDated(h: AccountantHarness, p: Person, profileId: string, occurredOn: string, title = 'Paper'): Promise<string> {
   const res = await h.app.request('/v1/expenses', json({ amount: '12.00', currency: 'ILS', occurredOn, title }, { ...p.on(profileId), ...idem() }));
   if (res.status !== 201) throw new Error(`expense failed: ${res.status} ${await res.text()}`);
-  return (await read(res)).id as string;
+  const id = (await read(res)).id as string;
+  // An accountant counts only the expenses with a receipt (accountantExpenseView); these are all receipted.
+  await receiptOnExpense(h, p, profileId, id);
+  return id;
 }
 
 describe('2. /v1/me clients (MUT-575)', () => {
@@ -358,7 +362,7 @@ describe('8. never mixes (MUT-575)', () => {
   it('the accountant’s own /v1/entries has none of the client’s rows, and naming the client there is 404', async () => {
     const h = accountantHarness();
     const { owner, profileId } = await ownerWithProfile(h);
-    await expenseOn(h, owner, profileId, 'Shared paper');
+    await receiptOnExpense(h, owner, profileId, await expenseOn(h, owner, profileId, 'Shared paper'));
     const acc = await shared(h, owner, profileId);
     await expenseOn(h, acc, acc.personalId, 'My own lunch');
     const feed = JSON.stringify(await read(await h.app.request('/v1/entries', { headers: acc.auth })));

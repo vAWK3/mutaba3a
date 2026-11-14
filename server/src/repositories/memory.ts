@@ -199,7 +199,7 @@ import type {
   PeriodReceiptRecord,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
-import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { isFeature } from '../features.js';
 import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
 import { todayIn, type IsoDate } from '../dates.js';
@@ -888,7 +888,11 @@ export class MemoryLedgerStore implements LedgerStore {
     estimate: async (organizationId, bounds, asOf) => {
       const inBounds = (day: string) => (bounds.occurredFrom === undefined || day >= bounds.occurredFrom) && day < bounds.occurredBefore;
       const logged = (at: Date) => at.getTime() <= asOf.getTime();
-      const expenses = new Set([...this.exps.values()].filter((e) => e.organizationId === organizationId && !e.deletedAt && inBounds(e.occurredOn) && logged(e.createdAt)).map((e) => e.id));
+      const expenses = new Set(
+        [...this.exps.values()]
+          .filter((e) => e.organizationId === organizationId && !e.deletedAt && inBounds(e.occurredOn) && logged(e.createdAt) && (!bounds.expensesWithReceipt || this.hasReadyReceipt(e.id)))
+          .map((e) => e.id),
+      );
       const income = [...this.pays.values()].filter((p) => p.organizationId === organizationId && p.status === 'POSTED' && inBounds(p.receivedOn) && logged(p.createdAt)).length;
       const receipts = [...this.expReceipts.values()].filter((r) => r.expenseId !== null && expenses.has(r.expenseId) && r.status === 'READY' && !r.deletedAt && logged(r.createdAt));
       return { expenses: expenses.size, income, receipts: receipts.length, receiptBytes: receipts.reduce((sum, r) => sum + r.sizeBytes, 0) };
@@ -2843,13 +2847,13 @@ export class MemoryLedgerStore implements LedgerStore {
       this.exps.set(record.id, record);
       return { ...record };
     },
-    getById: async (organizationId, id) => {
+    getById: async (organizationId, id, options) => {
       const e = this.exps.get(id);
-      return e && e.organizationId === organizationId && !e.deletedAt ? { ...e } : null;
+      return e && e.organizationId === organizationId && !e.deletedAt && (!options?.withReceipt || this.hasReadyReceipt(e.id)) ? { ...e } : null;
     },
     list: async (organizationId, filter: ExpenseFilter, page) => {
       const rows = [...this.exps.values()]
-        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && this.inGroupFilter(e, filter.group) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
+        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && this.inGroupFilter(e, filter.group) && this.inReceiptFilter(e, filter) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
         .sort(newestFirst)
         .slice(0, page.limit + 1);
       const items = rows.slice(0, page.limit).map((e) => ({ ...e }));
@@ -2918,7 +2922,7 @@ export class MemoryLedgerStore implements LedgerStore {
     totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
       const totals = new Map<string, ExpenseCurrencyTotal>();
       for (const e of this.exps.values()) {
-        if (e.organizationId !== organizationId || e.deletedAt || !matchesExpense(e, filter) || !this.inGroupFilter(e, filter.group)) continue;
+        if (e.organizationId !== organizationId || e.deletedAt || !matchesExpense(e, filter) || !this.inGroupFilter(e, filter.group) || !this.inReceiptFilter(e, filter)) continue;
         const t = totals.get(e.currency) ?? { currency: e.currency, totalMinor: 0n, count: 0 };
         totals.set(e.currency, { ...t, totalMinor: t.totalMinor + e.amountMinor, count: t.count + 1 });
       }
@@ -3951,7 +3955,7 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly entries: EntriesRepository = {
     list: async (organizationIds, page) => {
       const rows: EntryRow[] = [
-        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e): EntryRow => ({ kind: 'expense', record: { ...e } })),
+        ...[...this.exps.values()].filter((e) => !e.deletedAt && (!page.expensesWithReceipt || this.hasReadyReceipt(e.id))).map((e): EntryRow => ({ kind: 'expense', record: { ...e } })),
         ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p): EntryRow => ({ kind: 'payment', record: { ...p } })),
         ...[...this.recs.values()].filter((r) => r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r): EntryRow => ({ kind: 'receivable', record: { ...r } })),
         ...[...this.convs.values()].filter((c) => !c.deletedAt).map((c): EntryRow => ({ kind: 'conversion', record: { ...c } })),
@@ -3997,7 +4001,8 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     clientActivity: async (windows) => {
       const live = [
-        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e) => ({ org: e.organizationId, day: e.occurredOn, createdAt: e.createdAt })),
+        // An expense counts only with a READY, live receipt: what the accountant sees of the profile.
+        ...[...this.exps.values()].filter((e) => !e.deletedAt && this.hasReadyReceipt(e.id)).map((e) => ({ org: e.organizationId, day: e.occurredOn, createdAt: e.createdAt })),
         ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ org: p.organizationId, day: p.receivedOn, createdAt: p.createdAt })),
       ];
       return new Map(
@@ -4009,6 +4014,16 @@ export class MemoryLedgerStore implements LedgerStore {
       );
     },
   };
+
+  /** ExpenseFilter `withReceipt` (Prisma: `receipts: { some: READY_RECEIPT }`): a READY receipt on the expense, not deleted. */
+  private hasReadyReceipt(expenseId: string): boolean {
+    for (const r of this.expReceipts.values()) if (r.expenseId === expenseId && r.status === READY_RECEIPT.status && r.deletedAt === READY_RECEIPT.deletedAt) return true;
+    return false;
+  }
+
+  private inReceiptFilter(e: ExpenseRecord, filter: ExpenseFilter): boolean {
+    return !filter.withReceipt || this.hasReadyReceipt(e.id);
+  }
 
   /** MUT-464: another category that is the same preset entry as `name`, in either language (Prisma's refusePresetTwin). */
   private presetTwin(organizationId: string, name: string, renamed: ExpenseCategoryRecord | null): boolean {

@@ -183,7 +183,7 @@ import type {
   AcceptAccountantResult,
   PeriodPackRepository,
 } from './ports.js';
-import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -774,7 +774,7 @@ export class PrismaLedgerStore implements LedgerStore {
   readonly periodPack: PeriodPackRepository = {
     estimate: async (organizationId, bounds, asOf) => {
       const days = { ...(bounds.occurredFrom !== undefined && { gte: bounds.occurredFrom }), lt: bounds.occurredBefore };
-      const expenseWhere = { organizationId, deletedAt: null, occurredOn: days, createdAt: { lte: asOf } };
+      const expenseWhere = { organizationId, deletedAt: null, occurredOn: days, createdAt: { lte: asOf }, ...(bounds.expensesWithReceipt ? { receipts: { some: READY_RECEIPT } } : {}) };
       const [expenses, income, receipts] = await Promise.all([
         this.prisma.expense.count({ where: expenseWhere }),
         this.prisma.payment.count({ where: { organizationId, status: 'POSTED', receivedOn: days, createdAt: { lte: asOf } } }),
@@ -2499,7 +2499,8 @@ export class PrismaLedgerStore implements LedgerStore {
   readonly expenses: ExpenseRepository = {
     // The row insert itself lives in createExpenseRow so MUT-66's filing can run it inside its own transaction.
     create: (input, at) => createExpenseRow(this.prisma, input, at),
-    getById: (organizationId, id) => this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    getById: (organizationId, id, options) =>
+      this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null, ...(options?.withReceipt ? { receipts: { some: READY_RECEIPT } } : {}) } }),
     list: async (organizationId, filter, page) => {
       const rows: ExpenseRecord[] = await this.prisma.expense.findMany({
         // One AND array (MUT-267 Q1): the group clause and the cursor each need their own OR, and spread keys would overwrite each other.
@@ -3621,7 +3622,11 @@ export class PrismaLedgerStore implements LedgerStore {
       const branchesOf = (organizationId: string): Array<Promise<EntryRow[]>> => [
         wanted('expense')
           ? this.prisma.expense
-              .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
+              .findMany({
+                where: { organizationId, deletedAt: null, ...(page.expensesWithReceipt ? { receipts: { some: READY_RECEIPT } } : {}), ...bounds('occurredOn') },
+                orderBy: orderBy('occurredOn'),
+                take,
+              })
               .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record })))
           : Promise.resolve([]),
         wanted('payment')
@@ -3656,7 +3661,8 @@ export class PrismaLedgerStore implements LedgerStore {
       for (const a of allocations) count.set(a.paymentId, (count.get(a.paymentId) ?? 0) + 1);
       return new Map(allocations.filter((a) => count.get(a.paymentId) === 1 && a.receivable.origin === 'ADJUSTMENT').map((a) => [a.paymentId, a.receivableId]));
     },
-    // MUT-575: two queries whatever the number of clients. The counts read each kind's money-date index
+    // MUT-575: two queries whatever the number of clients. An expense counts only with a READY, live receipt: what the
+    // accountant sees of the profile. The counts read each kind's money-date index
     // ((organizationId, occurredOn | receivedOn, …)), bounded by the month; the newest logged reads the createdAt
     // indexes, one row per kind per client. GREATEST ignores a NULL (a kind with no live row).
     clientActivity: async (windows) => {
@@ -3666,14 +3672,17 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$queryRaw<Array<{ organizationId: string; count: bigint }>>`
           SELECT w.org::text AS "organizationId",
             (SELECT count(*) FROM "expenses" e
-               WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL AND e."occurredOn" >= w.f AND e."occurredOn" < w.b)
+               WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL AND e."occurredOn" >= w.f AND e."occurredOn" < w.b
+                 AND EXISTS (SELECT 1 FROM "expense_receipts" r WHERE r."organizationId" = e."organizationId" AND r."expenseId" = e."id" AND r."status" = 'READY' AND r."deletedAt" IS NULL))
             + (SELECT count(*) FROM "payments" p
                WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
                  AND p."receivedOn" >= w.f AND p."receivedOn" < w.b) AS count
           FROM unnest(${ids}::uuid[], ${windows.map((w) => w.from)}::text[], ${windows.map((w) => w.before)}::text[]) AS w(org, f, b)`,
         this.prisma.$queryRaw<Array<{ organizationId: string; last: Date | null }>>`
           SELECT w.org::text AS "organizationId", GREATEST(
-            (SELECT e."createdAt" FROM "expenses" e WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL ORDER BY e."createdAt" DESC LIMIT 1),
+            (SELECT e."createdAt" FROM "expenses" e WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL
+               AND EXISTS (SELECT 1 FROM "expense_receipts" r WHERE r."organizationId" = e."organizationId" AND r."expenseId" = e."id" AND r."status" = 'READY' AND r."deletedAt" IS NULL)
+               ORDER BY e."createdAt" DESC LIMIT 1),
             (SELECT p."createdAt" FROM "payments" p WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
                ORDER BY p."createdAt" DESC LIMIT 1)
           ) AS last
@@ -4142,6 +4151,7 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
     ...(f.projectId ? { projectId: f.projectId } : {}),
     ...(f.unlinked ? { customerId: null } : {}),
     ...(f.group ? { AND: [expenseGroupWhere(f.group)] } : {}),
+    ...(f.withReceipt ? { receipts: { some: READY_RECEIPT } } : {}),
   };
 }
 
