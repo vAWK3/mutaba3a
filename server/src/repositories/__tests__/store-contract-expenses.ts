@@ -299,6 +299,46 @@ export function describeLedgerStoreExpensesContract(name: string, makeStore: () 
     // MUT-302 (ADR-231): the four CHECKs on Postgres; the memory store mirrors them (the portal's local mode).
     const VAT17 = { amountMinor: 11_700n, vatTreatment: 'STANDARD_RATED' as const, vatRateBasisPoints: 1700, netMinor: 10_000n, vatMinor: 1_700n };
 
+    it('withReceipt: only expenses with a READY, live receipt, in list, totals, getById, the feed, the period estimate and client activity', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const receipted = await store.expenses.create(w.expense({ title: 'Ink', amountMinor: 1_000n }), at(1));
+      const bare = await store.expenses.create(w.expense({ title: 'Paper', amountMinor: 2_000n }), at(2));
+      const pending = await store.expenses.create(w.expense({ title: 'Toner', amountMinor: 4_000n }), at(3));
+      const removed = await store.expenses.create(w.expense({ title: 'Stamps', amountMinor: 8_000n }), at(4));
+      const receipt = async (expenseId: string, complete: boolean) => {
+        const r = await store.expenseReceipts.create({ organizationId: w.a.id, expenseId, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-05', uploadedByUserId: w.user.id, requestId: null }, at(5));
+        await store.expenseReceipts.setKey(w.a.id, r.id, `org/${w.a.id}/receipts/${r.id}`);
+        if (complete) await store.expenseReceipts.complete(w.a.id, r.id, at(5));
+        return r.id;
+      };
+      await receipt(receipted.id, true);
+      await receipt(pending.id, false);
+      await store.expenseReceipts.softDelete(w.a.id, await receipt(removed.id, true), at(6));
+
+      const titles = async (withReceipt = false) => (await store.expenses.list(w.a.id, { withReceipt }, { limit: 50, cursor: null })).items.map((e) => e.title).sort();
+      expect(await titles()).toEqual(['Ink', 'Paper', 'Stamps', 'Toner']);
+      expect(await titles(true)).toEqual(['Ink']);
+      expect(await store.expenses.totalsByCurrency(w.a.id, { withReceipt: true })).toEqual([{ currency: 'ILS', totalMinor: 1_000n, count: 1 }]);
+      expect(await store.expenses.getById(w.a.id, receipted.id, { withReceipt: true })).toMatchObject({ id: receipted.id });
+      for (const e of [bare, pending, removed]) {
+        expect(await store.expenses.getById(w.a.id, e.id, { withReceipt: true })).toBeNull();
+        expect(await store.expenses.getById(w.a.id, e.id)).not.toBeNull();
+      }
+
+      const feed = async (expensesWithReceipt = false) =>
+        (await store.entries.list([w.a.id], { limit: 50, cursor: null, kinds: ['expense'], expensesWithReceipt })).items.map((row) => row.record.id);
+      expect(await feed()).toHaveLength(4);
+      expect(await feed(true)).toEqual([receipted.id]);
+
+      const bounds = { occurredFrom: '2026-10-01', occurredBefore: '2026-11-01' };
+      expect(await store.periodPack.estimate(w.a.id, bounds, at(9))).toMatchObject({ expenses: 4, receipts: 1 });
+      expect(await store.periodPack.estimate(w.a.id, { ...bounds, expensesWithReceipt: true }, at(9))).toMatchObject({ expenses: 1, receipts: 1 });
+
+      const activity = await store.entries.clientActivity([{ organizationId: w.a.id, from: '2026-10-01', before: '2026-11-01' }]);
+      expect(activity.get(w.a.id)).toEqual({ entriesThisMonth: 1, lastActivityAt: at(1) });
+    });
+
     it('MUT-302: stores and reads back a VAT split, and a row with none', async () => {
       const store = await makeStore();
       const w = await world(store);
