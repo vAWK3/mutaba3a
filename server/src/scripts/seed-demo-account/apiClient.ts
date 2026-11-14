@@ -74,6 +74,12 @@ export interface SeedApiClient {
   createIncome(body: CreateIncomeBody, idempotencyKey: string): Promise<{ id: string }>;
   createExpense(body: CreateExpenseBody, idempotencyKey: string): Promise<{ id: string }>;
   settleReceivable(receivableId: string, body: SettleReceivableBody, idempotencyKey: string): Promise<void>;
+  /** Pruning an earlier batch: a settle's payment reversed, every allocation undone. A repeat with the same key replays. */
+  reversePayment(paymentId: string, reason: string, idempotencyKey: string): Promise<void>;
+  /** DELETE /v1/income/{id}: an unpaid Owed voided, a Received capture undone. 204 again once done; 404 counts as gone. */
+  undoIncome(incomeId: string): Promise<void>;
+  /** DELETE /v1/expenses/{id} (soft). 204 again once done; 404 counts as gone. */
+  deleteExpense(expenseId: string): Promise<void>;
 }
 
 export async function signIn(deps: ApiClientDeps, email: string, password: string): Promise<SignInResult> {
@@ -99,6 +105,7 @@ export async function redeemSetupLink(deps: ApiClientDeps, setupLinkUrl: string,
 }
 
 export function clientFor(deps: ApiClientDeps, session: SignInResult): SeedApiClient {
+  const bearer = { authorization: `Bearer ${session.token}`, 'x-mutaba3a-profile': session.organizationId };
   const authed = (method: string, path: string, body: unknown, idempotencyKey: string) =>
     request(deps, method, path, body, {
       authorization: `Bearer ${session.token}`,
@@ -114,7 +121,36 @@ export function clientFor(deps: ApiClientDeps, session: SignInResult): SeedApiCl
     settleReceivable: async (receivableId, body, key) => {
       await authed('POST', `/v1/receivables/${receivableId}/settle`, body, key);
     },
+    reversePayment: async (paymentId, reason, key) => {
+      try {
+        await authed('POST', `/v1/payments/${paymentId}/reverse`, { reason }, key);
+      } catch (e) {
+        if (!isGone(e, 'ALREADY_REVERSED')) throw e;
+      }
+    },
+    undoIncome: async (incomeId) => {
+      try {
+        await request(deps, 'DELETE', `/v1/income/${incomeId}`, undefined, bearer);
+      } catch (e) {
+        if (!isGone(e, 'ALREADY_REVERSED')) throw e;
+      }
+    },
+    deleteExpense: async (expenseId) => {
+      try {
+        await request(deps, 'DELETE', `/v1/expenses/${expenseId}`, undefined, bearer);
+      } catch (e) {
+        if (!isGone(e)) throw e;
+      }
+    },
   };
+}
+
+/** A 404, or a 409 whose reason says the thing is already undone: either way there is nothing left to remove. */
+function isGone(e: unknown, conflictReason?: string): boolean {
+  if (!(e instanceof ApiClientError)) return false;
+  if (e.status === 404) return true;
+  const details = (e.body as { error?: { details?: { reason?: string } } }).error?.details;
+  return e.status === 409 && conflictReason !== undefined && details?.reason === conflictReason;
 }
 
 interface Reply {
@@ -125,8 +161,8 @@ interface Reply {
 async function request(deps: ApiClientDeps, method: string, path: string, body: unknown, headers: Record<string, string> = {}): Promise<Reply> {
   const res = await deps.fetch(`${deps.baseUrl}${path}`, {
     method,
-    headers: { 'content-type': 'application/json', ...headers },
-    body: JSON.stringify(body),
+    headers: body === undefined ? headers : { 'content-type': 'application/json', ...headers },
+    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
   });
   const text = await res.text();
   let parsed: Record<string, unknown>;
