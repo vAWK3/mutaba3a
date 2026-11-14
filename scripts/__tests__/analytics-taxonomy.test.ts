@@ -38,6 +38,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.7.0': '0e17eb9dd8191519e1a168a7c7d1812a314b2e3e23b2f82a06493c6cfe779667',
   // MUT-565: accountant_plan_offer_shown (place: invite | client_books | billing) and billing_checkout_started gains plan.
   '2.8.0': '02646797f8cacab52b6000e1912bbaad2b4a4801b62fbe843bc76b61cab5c996',
+  // MUT-619: the setup page's passkey step (setup_passkey_offered, _created, _not_now, _not_created; link, reason).
+  '2.9.0': 'f3fd4d202c3777e717c37f50f3f31086c281adef52a2d12d9ada4d02b0a4b71c',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;

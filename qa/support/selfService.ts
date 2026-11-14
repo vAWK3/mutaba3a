@@ -301,3 +301,18 @@ export async function signInThroughForm(page: Page, email: string, password: str
 export async function chooseLanguage(page: Page, language: 'en' | 'ar'): Promise<void> {
   await page.addInitScript((lang) => localStorage.setItem('mutaba3a-portal-language', lang), language);
 }
+
+/** MUT-619's setup step, in each language: shown after /setup sets a password on a device that can make a passkey. */
+export const SETUP_PASSKEY = {
+  en: { title: 'Create a passkey', create: 'Create a passkey', notNow: 'Not now' },
+  ar: { title: 'أنشئ مفتاح مرور', create: 'أنشئ مفتاح مرور', notNow: 'ليس الآن' },
+} as const;
+
+/**
+ * MUT-619: this app's portal can make passkeys (WEBAUTHN_RP_ID=localhost), so setting a password on /setup now ends on
+ * the passkey step. Flows about something else answer it with Not now, as most people who skip it would.
+ */
+export async function skipSetupPasskey(page: Page, language: 'en' | 'ar' = 'en'): Promise<void> {
+  await expect(page.getByRole('heading', { level: 1, name: SETUP_PASSKEY[language].title })).toBeVisible();
+  await page.getByRole('button', { name: SETUP_PASSKEY[language].notNow }).click();
+}

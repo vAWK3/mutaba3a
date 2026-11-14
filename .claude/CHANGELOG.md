@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-14 — /setup offers a passkey right after the password is set (MUT-619, ADR-257)
+
+### Added
+- **The passkey step** (`src/hosted/pages/auth/SetupPasskeyStep.tsx`): once a setup, reset or signup link has set the password and signed the person in, `/setup` shows "Create a passkey" ("Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.") with **Create a passkey** (MUT-115's ceremony, no password: the sign-in is seconds old; past 10 minutes it sends the password just set once) and **Not now** (spends one of MUT-370's three offers through `PATCH /v1/me/passkey-prompt`, waited for at most 15 s). A cancelled or failed ceremony says so and keeps both buttons. Shown only when `passkeyOfferable` (a device that can make one, `passkeyPrompt.due`, not closing, a sign-in of its own); a recovery on an account with passkeys still lands on the MUT-415 review. en/ar.
+- **Analytics 2.9.0:** `setup_passkey_offered`, `_created`, `_not_now`, `_not_created` (`link`: setup | reset | signup; `reason`: cancelled | offline | other). Opt-in, release-only.
+
+### Changed
+- `data/passkeyPrompt.ts`: `passkeyOfferable` holds the rules the Home card and the setup step share; `passkeySuggestionShows` adds MUT-418's first-run order on top (unchanged behaviour).
+- Release-QA: new `portal-selfservice.setup.passkey-create` (core), `-not-now`, `-cancelled`, `-arabic-phone`; `passkeys.suggest-first-sign-in` now proves a setup Not now keeps Home from asking again for 30 days; signup and recover flows answer the step with Not now (`skipSetupPasskey`).
+- Files: `SetupPage.tsx`, `SetupPasskeyStep.tsx`, `data/passkeyPrompt.ts`, `analytics/portalAnalytics.ts`, `docs/analytics/events.json`, hosted `en.json`/`ar.json`, `qa/qa.config.mjs`, `qa/features/portal-selfservice/{setup,passkeys}.yaml`, `qa/specs/portal-selfservice/{setup,passkeys,signup,recover}.spec.ts`, `qa/support/selfService.ts`.
+
 ## [Unreleased] - 2026-11-13 — The landing bar fits a 375px phone in English (release QA web.landing.375)
 
 ### Fixed

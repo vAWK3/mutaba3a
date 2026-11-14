@@ -30,7 +30,7 @@ features:
       - Open /signup with no language chosen
       - Type a new address on a business domain and press Continue
       - Open the link in the mail
-      - Type a password, tick the terms and press Create account
+      - Type a password, tick the terms and press Create account; on the passkey step (MUT-619) press Not now
       - Again in English
     expect:
       - The page is Arabic, right to left, and says the terms come with the password
@@ -93,7 +93,7 @@ features:
   - id: business-instant
     title: An address on a domain that passes the business checks signs up at once and lands on Home
     steps:
-      - Sign up with an @studio.example address and finish /setup
+      - Sign up with an @studio.example address and finish /setup; Not now on the passkey step (MUT-619)
     expect:
       - Signed in straight away on Home, with no review
   - id: review-webmail

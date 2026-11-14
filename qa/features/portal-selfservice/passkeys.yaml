@@ -89,11 +89,13 @@ features:
     paths:
       - src/hosted/pages/auth/SetupPage.tsx
       - src/hosted/passkeys/review.ts
+      - src/hosted/pages/auth/SetupPasskeyStep.tsx
     steps:
       - Add a passkey and sign out
       - Forgot your password?, open the mail’s link and choose a new password
     expect:
       - Signed in, the passkey review says "Your new password is set. These passkeys still sign in to your account." and lists the passkey
+      - No "Create a passkey" setup step on the way (MUT-619 offers one only to accounts without a passkey)
   - id: autofill
     title: The email field on sign-in offers your passkey (autofill)
     paths:
@@ -114,8 +116,9 @@ features:
       - Sign-in offers تسجيل الدخول بمفتاح المرور
   # MUT-370 (ADR-191): Home suggests a passkey after a sign-in: "Add a passkey: the more secure way to sign in. Your
   # password still works." Not now hides it for 30 days; three offers in all; never with a passkey.
+  # MUT-619: a signup now meets the setup page's passkey step first, and its Not now is one of these three offers.
   - id: suggest-first-sign-in
-    title: The first sign-in after signup suggests a passkey, after the free trial's first-run step
+    title: After signup, a Not now on the setup step means Home does not ask again until 30 days later
     tier: core
     paths:
       - src/hosted/components/PasskeySuggestion.tsx
@@ -125,10 +128,11 @@ features:
       - server/src/routes/me.ts
     steps:
       - Sign up, open the mail's link, choose a password and create the account
-      - Answer the free trial's first-run step with Continue
+      - On the setup page's passkey step press Not now; answer the free trial's first-run step with Continue
+      - 30 days later (the QA database's clock), reload Home
     expect:
-      - The card is not shown while the trial step is open
-      - 'On Home: "Add a passkey: the more secure way to sign in." and "Your password still works.", with Add a passkey and Not now'
+      - Home shows no passkey card right after setup
+      - 'After 30 days: "Add a passkey: the more secure way to sign in." and "Your password still works."'
   - id: suggest-not-now
     title: Not now hides the passkey suggestion for 30 days; after the third Not now it never comes back
     paths:

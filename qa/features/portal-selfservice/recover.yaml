@@ -23,6 +23,7 @@ features:
       - Sign in on another browser first
       - On sign-in press Forgot your password?, type your email, pass the check and press Send link
       - Open the mail's link, type a new password, tick the terms and save
+      - On the passkey step (MUT-619) press Not now
     expect:
       - '"Check your email" says a link went to the address if it has an account'
       - You land signed in with the new password
@@ -41,7 +42,7 @@ features:
       - src/hosted/pages/auth/SetupPage.tsx
     steps:
       - Ask for a reset link for an account the operator created whose setup link was never used
-      - Open the mail's link and set a password
+      - Open the mail's link and set a password; Not now on the passkey step (MUT-619)
     expect:
       - A finish-setup mail arrives, and its page says "Set your password"
       - Saving signs the person in

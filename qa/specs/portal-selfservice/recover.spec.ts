@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { address, chooseLanguage, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm } from '../../support/selfService';
+import { address, chooseLanguage, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm, skipSetupPasskey } from '../../support/selfService';
 import { stubTurnstile } from '../../support/turnstile';
 
 /**
@@ -48,6 +48,9 @@ test('Forgot your password? resets it, signs you in, signs out another browser, 
     await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Save and sign in' }).click();
   });
+  await step('Signed in, MTB3A offers a passkey (MUT-619); press Not now', async () => {
+    await skipSetupPasskey(page);
+  });
   await step('Signed in with the new password, on Home', async () => {
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
@@ -87,6 +90,7 @@ test('Recovering an operator-created account that never set a password mails a s
     await page.getByLabel('New password').fill(NEW_PASSWORD);
     await page.getByRole('checkbox', { name: /terms of service/ }).check();
     await page.getByRole('button', { name: 'Save and sign in' }).click();
+    await skipSetupPasskey(page);
     await expect(page).toHaveURL(/\/p\/[0-9a-f-]{36}$/);
   });
 });
