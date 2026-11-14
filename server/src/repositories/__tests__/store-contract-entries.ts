@@ -319,32 +319,47 @@ export function describeLedgerStoreEntriesContract(name: string, makeStore: () =
       }
       expect(rest).toEqual([middle.id, moved.id, oldest.id]);
     });
-    it('MUT-575: clientActivity — live expenses and received payments in each window, and the newest logged; Owed and conversions never count', async () => {
+    it('MUT-575 (ADR-258): clientActivity — live receipted expenses and received payments in each window, and the newest logged; receipt-less expenses, Owed and conversions never count', async () => {
       const store = await makeStore();
       const w = await world(store);
       const exp = (organizationId: string, occurredOn: string, s: number) =>
         store.expenses.create({ organizationId, occurredOn, amountMinor: 100n, currency: 'ILS', title: null, vendor: null, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: w.user.id }, at(s));
+      // ADR-258: an expense counts only with a READY, live receipt (what the accountant sees of the profile).
+      const receipt = async (organizationId: string, expenseId: string, ready: boolean, s: number) => {
+        const r = await store.expenseReceipts.create({ organizationId, expenseId, filename: 'r.pdf', mimeType: 'application/pdf', sizeBytes: 10, receivedOn: '2026-10-05', uploadedByUserId: w.user.id, requestId: null }, at(s));
+        await store.expenseReceipts.setKey(organizationId, r.id, `org/${organizationId}/receipts/${r.id}`);
+        if (ready) await store.expenseReceipts.complete(organizationId, r.id, at(s));
+      };
+      const receipted = async (organizationId: string, occurredOn: string, s: number) => {
+        const e = await exp(organizationId, occurredOn, s);
+        await receipt(organizationId, e.id, true, s);
+        return e;
+      };
       const cap = (organizationId: string, receivedOn: string, s: number) =>
         store.payments.capture({ organizationId, customerId: null, projectId: null, currency: 'ILS', amountMinor: 100n, receivedOn, method: 'CASH', notes: null, requestId: null, createdByUserId: w.user.id, captureSource: 'app' }, at(s)).then((r) => r.payment);
 
-      await exp(w.a.id, '2026-10-01', 1);
-      await exp(w.a.id, '2026-10-31', 2);
-      await exp(w.a.id, '2026-11-01', 3); // the next month
-      await exp(w.a.id, '2026-09-30', 4); // the month before
+      await receipted(w.a.id, '2026-10-01', 1);
+      await receipted(w.a.id, '2026-10-31', 2);
+      await receipted(w.a.id, '2026-11-01', 3); // the next month
+      await receipted(w.a.id, '2026-09-30', 4); // the month before
       await cap(w.a.id, '2026-10-15', 5);
-      const deleted = await exp(w.a.id, '2026-10-10', 6);
+      const deleted = await receipted(w.a.id, '2026-10-10', 6);
       await store.expenses.softDelete(w.a.id, deleted.id, at(7), 'unlink');
       const undone = await cap(w.a.id, '2026-10-11', 8);
       await store.payments.undoCapture(w.a.id, undone.id, w.user.id, at(9));
       await w.conversion(w.a.id, 10);
       await w.owed(11);
       await w.expense(w.other.id, 12);
+      await exp(w.a.id, '2026-10-20', 13); // in the window, no receipt
+      const unfinished = await exp(w.a.id, '2026-10-21', 14); // in the window, only a pending (not READY) receipt
+      await receipt(w.a.id, unfinished.id, false, 14);
 
       const activity = await store.entries.clientActivity([
         { organizationId: w.a.id, from: '2026-10-01', before: '2026-11-01' },
         { organizationId: w.b.id, from: '2026-10-01', before: '2026-11-01' },
       ]);
-      // a: 10-01, 10-31 and the 10-15 payment. The newest live row logged is the capture (s=5): later ones were deleted, undone or are a conversion.
+      // a: the receipted 10-01 and 10-31 expenses and the 10-15 payment. The newest live row logged is the capture (s=5):
+      // later ones were deleted, undone, a conversion, or an expense with no READY receipt (none, or only a pending one).
       expect(activity.get(w.a.id)).toEqual({ entriesThisMonth: 3, lastActivityAt: at(5) });
       // b holds only an Owed: nothing counts and nothing was logged that counts.
       expect(activity.get(w.b.id)).toEqual({ entriesThisMonth: 0, lastActivityAt: null });
