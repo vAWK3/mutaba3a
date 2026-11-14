@@ -227,6 +227,11 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       trial_card_prompt_accepted: ['portal'],
       trial_card_prompt_skipped: ['portal'],
       report_viewed: ['portal'],
+      // MUT-619: the setup page's passkey step.
+      setup_passkey_offered: ['portal'],
+      setup_passkey_created: ['portal'],
+      setup_passkey_not_now: ['portal'],
+      setup_passkey_not_created: ['portal'],
       portal_welcome_choice: ['portal'],
       billing_offer_shown: ['portal'],
       billing_checkout_started: ['portal'],
