@@ -104,6 +104,8 @@ export default {
         '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx',
         // MUT-370: the passkey suggestion is the portal-selfservice app's too.
         '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts',
+        // MUT-619: the setup page's passkey step too (the rest of /setup stays here: portal.setup is the no-passkey device).
+        '!src/hosted/pages/auth/SetupPasskeyStep.tsx',
         // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
         '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts',
         // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
@@ -220,6 +222,9 @@ export default {
         'src/hosted/data/passkeyPrompt.ts',
         'src/hosted/data/passkeyPromptQueries.ts',
         'server/src/auth/passkey-prompt.ts',
+        // MUT-619: the passkey step at the end of /setup, offered on the same relying party.
+        'src/hosted/pages/auth/SetupPage.tsx',
+        'src/hosted/pages/auth/SetupPasskeyStep.tsx',
         // MUT-434: OAuth for MCP agents needs the live API (its issuer, tokens and /mcp).
         'server/src/oauth/**',
         'server/src/routes/oauth.ts',

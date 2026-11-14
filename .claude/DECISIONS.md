@@ -6629,6 +6629,22 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).
 
+## ADR-257: /setup Offers a Passkey Before Home, on MUT-370's Offer Budget (MUT-619)
+
+**Status:** Accepted (2026-11-14, MUT-619; epic MUT-322; Basel's decision 2026-11-14). Plan: `.claude/designs/mut-619-setup-passkey.md`. Extends ADR-191 (MUT-370); ADR-159 d9 (every account keeps a password) stands.
+
+**Context:** users find the password hard to type on the phone; the first passkey offer came only on Home after a later sign-in, so the first phone sign-in still meant typing a long, often browser-generated password.
+
+**Decision:**
+1. Once a setup, reset or signup link has set the password and signed the person in, `/setup` shows one more step before Home: Create a passkey (MUT-115's ceremony) or Not now. No route of its own; the URL stays `/setup`.
+2. It is shown on the Home card's rules (`passkeyOfferable`: device check, `passkeyPrompt.due`, not closing, a sign-in of its own), without MUT-418's first-run order, which comes after it. `due` is false whenever the account holds a passkey, so a recovery with passkeys keeps the MUT-415 review.
+3. Not now is one of MUT-370's three offers (the same `PATCH /v1/me/passkey-prompt`), so Home does not ask again for 30 days. Setup never waits on it for more than a session check's 15 s, nor on a failed or cancelled ceremony.
+4. No server change.
+
+**Alternatives rejected:** a separate setup-only offer budget (the person would be asked twice in a row); a passkey-only account (ADR-159 d9); offering it on `/accountant-invite` in the same change (accountants work at a computer, and its QA needs a live-API invite flow; `SetupPasskeyStep` takes only `onDone`, so a follow-up can adopt it).
+
+**Consequences:** every portal-selfservice flow that sets a password through `/setup` now meets the step (`skipSetupPasskey`). Analytics 2.9.0. A reload while the step is open shows the "incomplete link" notice although the person is signed in (the token was already stripped); Home is one click away.
+
 ## ADR-258: An Accountant Sees Only the Expenses That Have a Receipt (amends ADR-245)
 
 **Status:** Accepted (2026-11-14, Basel: "for accountant, they should only see expenses who have an attachment, without it they don't make much sense").

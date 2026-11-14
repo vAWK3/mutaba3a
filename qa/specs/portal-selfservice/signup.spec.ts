@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { address, chooseLanguage, decideReview, expireSignupLinks, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm } from '../../support/selfService';
+import { address, chooseLanguage, decideReview, expireSignupLinks, mailTo, operatorAccount, outbox, setupLinkIn, signInThroughForm, skipSetupPasskey } from '../../support/selfService';
 import { stubTurnstile } from '../../support/turnstile';
 
 /**
@@ -70,6 +70,12 @@ async function finishSetup(page: Page, email: string, language: Language) {
   return mail;
 }
 
+/** MUT-619: a new account signed in by /setup is offered a passkey first; these flows press Not now, then reach Home. */
+async function expectHomeAfterSetup(page: Page, language: Language) {
+  await skipSetupPasskey(page, language);
+  await expectHome(page, language);
+}
+
 /**
  * MUT-418: a new trial's first sign-in opens on "Your 14-day free trial has started". This API has no Stripe, so it
  * is the honest variant (subscriptions open soon, Continue only, no card). Continue lands on Home, once.
@@ -121,7 +127,7 @@ test('A new person signs up in Arabic and lands signed in on their personal prof
     await page.getByLabel(COPY.ar.password).fill(PASSWORD);
     await page.getByRole('checkbox', { name: COPY.ar.terms }).check();
     await page.getByRole('button', { name: COPY.ar.create }).click();
-    await expectHome(page, 'ar');
+    await expectHomeAfterSetup(page, 'ar');
   });
 });
 
@@ -134,7 +140,7 @@ test('The same in English: the page, the mail and Home are in English', { tag: '
   await step('The mail is in English; finish /setup and land on Home', async () => {
     const mail = await finishSetup(page, english, 'en');
     expect(mail.locale).toBe('en');
-    await expectHome(page, 'en');
+    await expectHomeAfterSetup(page, 'en');
   });
 });
 
@@ -261,8 +267,8 @@ test('An address on a domain that passes the business checks signs up at once', 
     await askForLink(page, email, 'en');
     await finishSetup(page, email, 'en');
   });
-  await step('Signed in straight away on Home, with no review', async () => {
-    await expectHome(page, 'en');
+  await step('Signed in straight away (a passkey offered: Not now), on Home, with no review', async () => {
+    await expectHomeAfterSetup(page, 'en');
   });
 });
 

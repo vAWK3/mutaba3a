@@ -21,15 +21,22 @@ export interface SuggestionContext {
 }
 
 /**
- * Show the card: the server says due, this device can make a passkey, the account isn't closing, and MUT-418's
- * first-run trial step has been answered (D4: the trial step comes first; the card then sits under the trial banner).
- * A Not now written a moment ago (optimistic, `due: false`) hides it before the server's answer arrives.
+ * Whether a passkey may be offered at all: the server says due, this device can make one, the account isn't closing
+ * and has a sign-in of its own. MUT-370's Home card and MUT-619's setup step both ask this. A Not now written a moment
+ * ago (optimistic, `due: false`) answers no before the server's answer arrives.
  */
-export function passkeySuggestionShows(me: Me, { supported, local, now }: SuggestionContext): boolean {
+export function passkeyOfferable(me: Me, { supported, local }: Pick<SuggestionContext, 'supported' | 'local'>): boolean {
   const prompt = me.user.passkeyPrompt;
   // MUT-596: an account with no way in of its own gets the second-way-in card instead (its password note would be untrue).
-  if (!supported || local || !prompt?.due || me.user.closure || me.user.ownSignIn === false) return false;
-  return !trialWelcomeDue(me, now);
+  return supported && !local && Boolean(prompt?.due) && !me.user.closure && me.user.ownSignIn !== false;
+}
+
+/**
+ * Show the card: a passkey is offerable, and MUT-418's first-run trial step has been answered (D4: the trial step
+ * comes first; the card then sits under the trial banner).
+ */
+export function passkeySuggestionShows(me: Me, { supported, local, now }: SuggestionContext): boolean {
+  return passkeyOfferable(me, { supported, local }) && !trialWelcomeDue(me, now);
 }
 
 /**

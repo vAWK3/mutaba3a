@@ -1,0 +1,57 @@
+app: portal-selfservice
+area: setup
+title: The passkey step at the end of /setup
+tier: secondary
+# MUT-619: once a setup link has set the password and signed the person in, /setup offers "Create a passkey" before
+# Home, so the next sign-in (here, or on a phone the passkey syncs to) needs no typing. The password stays required
+# (ADR-159 d9). Not now is one of MUT-370's three offers. Needs a real WebAuthn relying party (WEBAUTHN_RP_ID=localhost);
+# Chromium's virtual authenticator (support/passkeys.ts) answers the system sheet. The stubbed portal app has no relying
+# party, so portal.setup is the device that can't make a passkey and never sees this step.
+paths:
+  - src/hosted/pages/auth/SetupPasskeyStep.tsx
+  - src/hosted/pages/auth/SetupPage.tsx
+  - src/hosted/data/passkeyPrompt.ts
+  - src/hosted/data/passkeyPromptQueries.ts
+  - src/hosted/passkeys/addPasskey.ts
+features:
+  - id: passkey-create
+    title: After setting a password, Create a passkey registers one, lands on Home, and the passkey signs in next time
+    tier: core
+    paths:
+      - server/src/routes/passkeys.ts
+      - server/src/auth/webauthn.ts
+    steps:
+      - Open an operator-created account's setup link, type a password, tick the terms and press Save and sign in
+      - On "Create a passkey" press Create a passkey; the device confirms
+      - Sign out, then Sign in with a passkey
+    expect:
+      - The step says the passkey saves typing the password and syncs through iCloud Keychain or Google Password Manager, with Create a passkey and Not now
+      - '"Passkey added", Home, and no "Add a passkey" card'
+      - The passkey signs in to Home
+  - id: passkey-not-now
+    title: Not now lands on Home and spends one of the three passkey offers
+    paths:
+      - server/src/auth/passkey-prompt.ts
+    steps:
+      - Open a setup link, set a password, and press Not now on the passkey step
+      - Reload Home
+    expect:
+      - Home with no "Add a passkey" card, then and after a reload
+      - The account's passkey offer shows one Not now, hidden for 30 days
+  - id: passkey-cancelled
+    title: A cancelled passkey sheet says no passkey was created and still lets the person go on
+    steps:
+      - Open a setup link and set a password
+      - Press Create a passkey and dismiss the system sheet
+      - Press Not now
+    expect:
+      - '"No passkey was created." with both buttons still there'
+      - Not now lands on Home
+  - id: passkey-arabic-phone
+    title: The passkey step in Arabic on a 375 px phone (أنشئ مفتاح مرور, right to left)
+    steps:
+      - In Arabic at phone width, open an Arabic account's setup link and set a password
+      - Press أنشئ مفتاح مرور; the device confirms
+    expect:
+      - The step reads right to left and fits the phone with nothing scrolling sideways
+      - The passkey is added and the person lands on Home
