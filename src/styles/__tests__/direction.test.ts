@@ -62,6 +62,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/auth/SignInPage.tsx': { ltr: 2 }, // email, password
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)
   'src/hosted/pages/auth/EmailLinkForm.tsx': { ltr: 1 }, // the email on /signup and /recover (MUT-368)
+  'src/hosted/pages/auth/SignInCodeStep.tsx': { ltr: 1 }, // the emailed sign-in code's digits (MUT-618)
   'src/hosted/components/ChangePasswordDrawer.tsx': { ltr: 2 }, // passwords
   // MUT-434: the MCP address and the Claude Code command read left to right; agents' self-declared names are auto
   'src/hosted/components/CopyField.tsx': { ltr: 1 },

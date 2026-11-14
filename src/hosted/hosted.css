@@ -240,7 +240,7 @@
 [dir="rtl"] .hp-ltr-input { text-align: right; }
 /* MUT-618: the emailed code, six digits read left to right in either language, spaced so a slip is easy to see. */
 .hp-code-input,
-[dir="rtl"] .hp-code-input { text-align: center; font-variant-numeric: tabular-nums; letter-spacing: 0.4em; font-size: var(--text-xl, 1.25rem); }
+[dir="rtl"] .hp-code-input { text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-wide); font-size: var(--text-headline); }
 
 .hp-password { position: relative; }
 .hp-password .input { padding-right: var(--space-16); }

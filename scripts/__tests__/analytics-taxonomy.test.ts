@@ -236,6 +236,10 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       accountant_left: ['ios', 'android'],
       share_link_created: ['portal', 'ios', 'android'],
       share_link_revoked: ['portal', 'ios', 'android'],
+      // MUT-618: the emailed sign-in code.
+      sign_in_code_refused: ['portal', 'ios', 'android'],
+      sign_in_code_requested: ['portal', 'ios', 'android'],
+      sign_in_code_signed_in: ['portal', 'ios', 'android'],
       share_link_opened: ['portal'],
       period_downloaded: ['portal', 'ios', 'android'],
       accountant_plan_offer_shown: ['portal', 'ios', 'android'],

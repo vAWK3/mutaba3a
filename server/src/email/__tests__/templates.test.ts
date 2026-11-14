@@ -32,6 +32,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
   'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
+  // MUT-618: a sign-in code, typed, never a link.
+  'sign-in-code': { code: '482913', validMinutes: 10 },
 };
 /** MUT-525: the launch offer line the trial mails carry while it runs (ADR-237). */
 const OFFER = { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } };
@@ -52,6 +54,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'offer-renewing-soon': ['₪290', mailDay({ year: 2027, month: 11, day: 12 }, 'en'), mailDay({ year: 2027, month: 11, day: 12 }, 'ar')],
   // MUT-559 (ADR-245): the last day an accountant invite works, a calendar day, never a money date.
   'accountant-invite': [mailDay({ year: 2026, month: 11, day: 20 }, 'en'), mailDay({ year: 2026, month: 11, day: 20 }, 'ar')],
+  // MUT-618 (ADR-256 D8): the code itself and its ten minutes; a code, never an amount or a date.
+  'sign-in-code': ['482913', '10'],
 };
 const LINKS_OF = (vars: object): string[] => Object.values(vars).filter((v): v is string => typeof v === 'string' && /^https?:\/\//.test(v));
 const CURRENCY = /\b(USD|ILS|NIS|EUR|GBP|JOD|AED|SAR|QAR|KWD|BHD|OMR|EGP)\b|[₪$€£]|شيكل|دولار|دينار|درهم|ريال/;
@@ -268,6 +272,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'card-failed-reminder': { en: 'Your card still isn’t going through', ar: 'ما زالت عملية الدفع ببطاقتك لا تنجح' },
   'comeback-offer': { en: 'Come back to MTB3A for ₪9 your first month', ar: 'عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
   'accountant-invite': { en: 'Basel Sader shared “Sader Studio” with you on MTB3A', ar: 'Basel Sader يشاركك ملف «Sader Studio» في متابعة' },
+  'sign-in-code': { en: '482913 is your MTB3A sign-in code', ar: 'رمز تسجيل الدخول إلى متابعة: 482913' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];

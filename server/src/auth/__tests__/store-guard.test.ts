@@ -203,6 +203,10 @@ describe('STORE_ACCESS', () => {
       'shareLinks.recordFailedPin',
       'shareLinks.touchOpened',
       'shareLinks.touchViewer',
+      // MUT-618: emailed sign-in codes, issued and tried on the public routes (unguarded); pruned by the server's timer.
+      'signInCodes.attempt',
+      'signInCodes.issue',
+      'signInCodes.prune',
       // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
       'signupReviews.approve',
       'signupReviews.decline',
