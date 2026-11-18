@@ -13,6 +13,7 @@ import { LandingShell } from "./pages/landing/LandingShell";
 import { landingRoute, marketingPath } from "./pages/landing/marketingPath";
 import { ErrorBoundary } from "./components/ui/ErrorBoundary";
 import { telemetryOn } from "./lib/telemetry/pageTelemetry";
+import { installStaleChunkReload } from "./pages/landing/staleChunkReload";
 import "./components/ui/ErrorBoundary.css";
 
 const LandingPage = lazy(() => import("./pages/landing/LandingPage").then((m) => ({ default: m.LandingPage })));
@@ -23,6 +24,9 @@ const TermsPage = lazy(() => import("./pages/landing/TermsPage").then((m) => ({ 
 // so a crash at start-up is kept (eng O5). Only on the production host (ADR-236): the same
 // build answers on the legacy Netlify host and on localhost previews, which send nothing.
 startLandingErrorReporting({ enabled: LANDING_SENTRY_ENABLED && telemetryOn("sentry") });
+
+// MUTABA3A-LANDING-3: a page or section file that won't load (a deploy replaced it) reloads the website once
+installStaleChunkReload();
 
 /**
  * The website is the landing page, the privacy policy and the terms. The free
