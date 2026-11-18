@@ -218,6 +218,15 @@ test('The All profiles switch is off by default; on, it combines every profile a
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪2,000');
   });
+
+  // MUTABA3A-WEB-9: switching back off once crashed the page (the render that dropped Studio still had its report)
+  await step('Turn All profiles off again: Personal alone, no error', async () => {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await expect(page).not.toHaveURL(/scope=all/);
+    await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪1,500');
+    await expect(page.getByRole('region', { name: 'Who paid' }).getByText('Studio')).toHaveCount(0);
+  });
 });
 
 test('In All profiles a profile that fails is named with its own Retry, and the rest still renders', { tag: '@portal.reports.profile-fails' }, async ({ page, step }) => {
