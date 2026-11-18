@@ -14,6 +14,12 @@
  *      assertion). Skipped, with a note, when the API runs without MALAFAT_DELEGATION.
  *
  *   node qa/stubs/malafat-seed.mjs [--api http://localhost:8791] [--portal <portal origin>] [--admin-token …]
+ *   node qa/stubs/malafat-seed.mjs --grant [--api …] [--admin-token …]
+ *
+ * `--grant` (MUT-597, for the Flutter repo's qa-malafat-grant-state.sh): on an already seeded database, signs
+ * `linked` in with Malafat again and makes step 4 again: a live delegated grant for ios.settings.connected-apps,
+ * which disconnects it every run. The stub's key pair lives only as long as the stub, so the confidential client
+ * is registered again each time.
  *
  * The stub (malafat-oauth.mjs) must be running and the API started with MALAFAT_SIGN_IN=true and
  * MALAFAT_ORIGIN_TEMPLATE=http://{slug}.lvh.me:3939; for step 4 also MALAFAT_DELEGATION=true,
@@ -29,6 +35,7 @@ const { values } = parseArgs({
     api: { type: 'string', default: process.env.MALAFAT_SEED_API ?? 'http://localhost:8791' },
     portal: { type: 'string' },
     'admin-token': { type: 'string', default: process.env.MUTABA3A_ADMIN_TOKEN ?? 'qa-portal-selfservice-admin-token-0123456789' },
+    grant: { type: 'boolean', default: false },
   },
 });
 const API = values.api.replace(/\/$/, '');
@@ -143,6 +150,27 @@ async function connectedApp(organizationId, cookie) {
   if (!token.ok) throw new Error(`token: ${token.status} ${await token.text()}`);
   return true;
 }
+
+/** `--grant`: `linked`, already an account, signs in with Malafat (no consent step) and gets a live grant again. */
+async function grantAgain() {
+  const started = await fetch(`${API}/v1/auth/malafat/start?tenant=${TENANT_SLUG}&client=web`, { redirect: 'manual' });
+  const flowCookie = started.headers.getSetCookie().map((c) => c.split(';')[0]).join('; ');
+  const toStub = new URL(started.headers.get('location') ?? '', API).toString();
+  const back = await hop(await hop(toStub, { 'x-qa-person': 'linked' }));
+  const result = new URLSearchParams(new URL(back).hash.slice(1)).get('result');
+  if (!result) throw new Error(`the callback returned no result: ${back}`);
+  const exchanged = await call('POST', '/v1/auth/malafat/exchange', { headers: { ...PORTAL, cookie: flowCookie }, body: { result } });
+  if (exchanged.json.state !== 'signed_in') {
+    throw new Error(`${PEOPLE.linked.email} is not a linked account here (got ${exchanged.json.state}); seed the database without --grant first`);
+  }
+  const firmProfile = exchanged.json.me.profiles.find((p) => p.managedInMalafat);
+  if (!firmProfile) throw new Error(`${PEOPLE.linked.email} has no Malafat-managed firm profile`);
+  if (!(await connectedApp(firmProfile.id, sessionCookieOf(exchanged.res)))) process.exit(1);
+  console.log(`[malafat-seed] ${PEOPLE.linked.email}: a live Malafat grant on firm ${firmProfile.id} (Connected apps)`);
+  process.exit(0);
+}
+
+if (values.grant) await grantAgain();
 
 const organizationId = await firm();
 await existingAccount();
