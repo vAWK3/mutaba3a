@@ -1,5 +1,6 @@
 import type { components, paths } from './schema';
 import type { LocalBackend } from '../session/localBackendContract';
+import type { ErrorCode } from '../../../server/src/errors.js';
 import { currentMode, setMode, setUnhintedMode } from '../session/mode';
 
 /**
@@ -216,7 +217,8 @@ export type FirmRequest = Schemas['FirmRequest'];
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
-type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
+/** The server's own codes. The spec's ErrorEnvelope.code is an extensible enum (a plain string on the wire), so the union comes from the server source. */
+type ServerErrorCode = ErrorCode;
 /**
  * Signed out (MUT-286), the local backend's own failures, never dressed up as NETWORK:
  * - `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; reload (D1);

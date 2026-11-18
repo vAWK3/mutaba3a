@@ -685,7 +685,7 @@ components:
           properties:
             code:
               type: string
-              enum:
+              x-extensible-enum:
                 - INVALID_SIGNATURE
                 - EMAIL_NOT_ACCEPTED
                 - UNAUTHENTICATED
@@ -742,6 +742,7 @@ components:
                 - FX_RATES_UNAVAILABLE
                 - APP_UPDATE_REQUIRED
                 - MAINTENANCE
+              description: One of x-extensible-enum. New codes are added without notice; treat an unknown code as a generic error for its HTTP status.
             message:
               type: string
             details:

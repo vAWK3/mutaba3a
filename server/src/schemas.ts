@@ -33,7 +33,13 @@ import { OPERATOR_LIST_DEFAULT_LIMIT, OPERATOR_LIST_MAX_LIMIT } from './operator
 export const ErrorEnvelopeSchema = z
   .object({
     error: z.object({
-      code: z.enum(Object.keys(ERROR_CODES) as [string, ...string[]]),
+      // An extensible enum (release-gate BC-2, Nov 18): new codes are additive and
+      // clients must treat an unknown one as a generic error, so the spec lists
+      // today's codes in x-extensible-enum instead of a closed `enum`.
+      code: z.string().openapi({
+        'x-extensible-enum': Object.keys(ERROR_CODES),
+        description: 'One of x-extensible-enum. New codes are added without notice; treat an unknown code as a generic error for its HTTP status.',
+      }),
       message: z.string(),
       details: z.unknown().optional(),
       requestId: z.string(),
