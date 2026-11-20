@@ -2937,7 +2937,9 @@ export class MemoryLedgerStore implements LedgerStore {
       const e = this.exps.get(params.expenseId);
       if (!e || e.organizationId !== params.organizationId || e.deletedAt) return { kind: 'not_found' };
       if (e.version !== params.expectedVersion) return { kind: 'stale', currentVersion: e.version };
-      const onExpense = [...this.expReceipts.values()].filter((r) => r.organizationId === params.organizationId && r.expenseId === e.id && !r.deletedAt);
+      const live = [...this.expReceipts.values()].filter((r) => r.organizationId === params.organizationId && r.expenseId === e.id && !r.deletedAt);
+      const abandoned = live.filter((r) => r.status === 'PENDING_UPLOAD' && r.createdAt < params.abandonedBefore);
+      const onExpense = live.filter((r) => !abandoned.includes(r));
       if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' };
       const wanted = Object.keys(params.receiptKeys).sort();
       if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed', currentVersion: e.version };
@@ -2954,9 +2956,11 @@ export class MemoryLedgerStore implements LedgerStore {
         if (r.approved) r.approved = { ...r.approved, categoryId: params.approvedCategoryId };
         r.version += 1;
       }
+      for (const r of abandoned) Object.assign(r, { deletedAt: params.at, version: r.version + 1 });
       for (const [key, mark] of this.groupMarks) if (mark.expenseId === e.id) this.groupMarks.delete(key);
       for (const event of params.audit) await this.audit.append(event);
-      return { kind: 'moved', expense: { ...e }, receipts: onExpense.map((r) => ({ ...r })), previousStorageKeys };
+      const abandonedStorageKeys = abandoned.map((r) => r.storageKey).filter((k) => k !== '');
+      return { kind: 'moved', expense: { ...e }, receipts: onExpense.map((r) => ({ ...r })), previousStorageKeys, abandonedStorageKeys };
     },
     totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
       const totals = new Map<string, ExpenseCurrencyTotal>();
@@ -3206,6 +3210,14 @@ export class MemoryLedgerStore implements LedgerStore {
       const owner = nameKey ? [...this.vendorNames.values()].find((n) => n.organizationId === organizationId && n.nameKey === nameKey) : undefined;
       const v = owner ? this.vendorMap.get(owner.vendorId) : undefined;
       return v ? { ...v } : null;
+    },
+    removeIfUnused: async (organizationId, id) => {
+      const v = this.vendorMap.get(id);
+      if (!v || v.organizationId !== organizationId) return false;
+      if ([...this.exps.values()].some((e) => e.vendorId === id)) return false;
+      this.vendorMap.delete(id);
+      for (const [key, n] of this.vendorNames) if (n.vendorId === id) this.vendorNames.delete(key);
+      return true;
     },
   };
 

@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-11-20 — Moving an expense: an abandoned upload no longer blocks it, a failed move takes its vendor back (MUT-589, TD-308, TD-309)
+
+### Fixed
+- **TD-309:** `POST /v1/expenses/{id}/move` no longer answers 409 `RECEIPT_NOT_READY` for an upload left PENDING_UPLOAD on the expense past the pending window (24 h, `PENDING_WINDOW_MS`): the move soft-deletes it in its transaction (`MoveExpenseParams.abandonedBefore`) and removes its object, if any, after the commit. A newer unfinished upload still refuses.
+- **TD-308:** a vendor the move created on the target is deleted again when the move then fails, unless an expense took it up meanwhile (`VendorRepository.removeIfUnused`, one guarded statement). A vendor the target already had is never touched.
+
+### Technical
+- Tests: route (memory) for both, Prisma store for the abandoned upload and `removeIfUnused`.
+
 ## [Unreleased] - 2026-11-14 — "Email me a sign-in code" (MUT-618, ADR-256)
 
 ### Added

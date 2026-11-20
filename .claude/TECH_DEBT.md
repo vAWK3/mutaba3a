@@ -18,16 +18,6 @@
 
 ## Open Debt
 
-### TD-308: A vendor made on the target for an expense move that then fails stays behind
-**Status**: Accepted (MUT-589, 2026-11-11; ADR-255, review R3)
-- **What:** the move resolves (finds or creates) the vendor on the target before its transaction; if the transaction refuses, a new vendor is left with no expense.
-- **Why it's acceptable:** approving a receipt does the same (MUT-254 A2), the vendor is still right, and the next expense at that vendor uses it.
-- **Fix:** if it ever matters, resolve the vendor inside the move's transaction (a store-level resolve on the `tx`).
-
-### TD-309: An abandoned upload on an expense blocks moving it
-**Status**: Open (MUT-589, 2026-11-11; ADR-255)
-- **What:** a MUT-44 upload started on an expense and never completed leaves a PENDING_UPLOAD receipt on it; the move answers 409 `RECEIPT_NOT_READY` until that receipt is deleted, and the preview can't see it.
-- **Fix:** let the move soft-delete PENDING_UPLOAD receipts older than the pending window, or sweep them.
 ### TD-307: Vendor-made invoice PDFs read 70% of their printed fields, against a 95% bar
 **Status**: Open (MUT-590, 2026-11-12; ADR-252; the work is MUT-591)
 - **What:** on Basel's 14 vendor-made invoices in receipt-bench, 57/82 printed fields are read right (total/date/currency 34/40, 0 confidently wrong; vendor, VAT, registration, allocation 23/42, 4 confidently wrong). One field reads worse than main: a registration number when the bill-to's ח.פ/ת.ז and the vendor's ח.פ/ע.מ share one printed line and the buyer's number isn't learned yet. The bench truth has no phone or email for these invoices, so a filled phone or email scores as wrong.
@@ -2852,6 +2842,14 @@ empty option and list the profiles only), with a drawer test for each.
 ---
 
 ## Resolved Debt
+
+### TD-309: An abandoned upload on an expense blocks moving it
+**Status**: Resolved (2026-11-20, MUT-589: the move soft-deletes an upload left PENDING_UPLOAD past the 24 h pending window, in its transaction; a newer one still answers 409 RECEIPT_NOT_READY)
+- **What:** a MUT-44 upload started on an expense and never completed left a PENDING_UPLOAD receipt on it; the move answered 409 `RECEIPT_NOT_READY` until that receipt was deleted.
+
+### TD-308: A vendor made on the target for an expense move that then fails stays behind
+**Status**: Resolved (2026-11-20, MUT-589: a failed move deletes the vendor it created, through `VendorRepository.removeIfUnused`, unless an expense took it up meanwhile)
+- **What:** the move resolves (finds or creates) the vendor on the target before its transaction; if the transaction refused, a new vendor was left with no expense.
 
 ### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
 **Status**: Resolved (2026-10-25, MUT-426: the You island replaced both links; `YouLinks.tsx` and its CSS are deleted, ADR-195)

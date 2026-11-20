@@ -2574,7 +2574,10 @@ export class PrismaLedgerStore implements LedgerStore {
           if (!(await lockLiveExpense(tx, organizationId, expenseId))) return { kind: 'not_found' as const };
           const { version } = await tx.expense.findUniqueOrThrow({ where: { id: expenseId }, select: { version: true } });
           if (version !== params.expectedVersion) return { kind: 'stale' as const, currentVersion: version };
-          const onExpense = await tx.$queryRaw<Array<{ id: string; status: string; storageKey: string }>>`SELECT "id", "status", "storageKey" FROM "expense_receipts" WHERE "organizationId" = ${organizationId}::uuid AND "expenseId" = ${expenseId}::uuid AND "deletedAt" IS NULL ORDER BY "id" FOR NO KEY UPDATE`;
+          const live = await tx.$queryRaw<Array<{ id: string; status: string; storageKey: string; createdAt: Date }>>`SELECT "id", "status", "storageKey", "createdAt" FROM "expense_receipts" WHERE "organizationId" = ${organizationId}::uuid AND "expenseId" = ${expenseId}::uuid AND "deletedAt" IS NULL ORDER BY "id" FOR NO KEY UPDATE`;
+          // TD-309: an upload left unfinished past the pending window goes with the move instead of blocking it.
+          const abandoned = live.filter((r) => r.status === 'PENDING_UPLOAD' && r.createdAt < params.abandonedBefore);
+          const onExpense = live.filter((r) => !abandoned.includes(r));
           if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' as const };
           const wanted = Object.keys(params.receiptKeys).sort();
           if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed' as const, currentVersion: version };
@@ -2596,9 +2599,18 @@ export class PrismaLedgerStore implements LedgerStore {
             });
             receipts.push(toExpenseReceipt(moved));
           }
+          if (abandoned.length > 0) {
+            await tx.expenseReceipt.updateMany({ where: { id: { in: abandoned.map((r) => r.id) } }, data: { deletedAt: params.at, version: { increment: 1 } } });
+          }
           await tx.expenseGroupOverride.deleteMany({ where: { expenseId } });
           if (params.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(params.audit, params.at) });
-          return { kind: 'moved' as const, expense, receipts, previousStorageKeys: onExpense.map((r) => r.storageKey) };
+          return {
+            kind: 'moved' as const,
+            expense,
+            receipts,
+            previousStorageKeys: onExpense.map((r) => r.storageKey),
+            abandonedStorageKeys: abandoned.map((r) => r.storageKey).filter((k) => k !== ''),
+          };
         }, RECEIPT_TX_OPTIONS),
       ),
     totalsByCurrency: async (organizationId, filter) => {
@@ -2857,6 +2869,13 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId, nameKey } }, include: { vendor: true } });
       return row ? toVendor(row.vendor) : null;
     },
+    // One statement: an expense linked to it meanwhile keeps it (expenses.vendorId would otherwise be SET NULL). Its
+    // names go by ON DELETE CASCADE.
+    removeIfUnused: (organizationId, id) =>
+      translate(async () => {
+        const deleted = await this.prisma.$executeRaw`DELETE FROM "vendors" v WHERE v."id" = ${id}::uuid AND v."organizationId" = ${organizationId}::uuid AND NOT EXISTS (SELECT 1 FROM "expenses" e WHERE e."vendorId" = v."id")`;
+        return deleted > 0;
+      }),
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {

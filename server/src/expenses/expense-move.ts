@@ -6,10 +6,10 @@ import { profileWriterOf } from '../auth/writability.js';
 import { ApiError } from '../errors.js';
 import { notOwner, ownsProfile } from '../personal-profile.js';
 import type { AuditEventInput, ExpenseReceiptRecord, ExpenseRecord, JsonObject, Organization, UserLocale } from '../repositories/ports.js';
-import { learnedFromNew, touchExpenseVendor, withResolvedVendor } from './compose.js';
+import { learnedFromNew, touchExpenseVendor } from './compose.js';
 import { isGroupMember } from './groups.js';
 import { planExpenseMove, type ExpenseMoveChange, type ExpenseMovePlan } from './move-plan.js';
-import { requireStorage, writableTarget, type MoveReceiptOptions, type ReceiptActor, type ReceiptDeps } from './receipts-compose.js';
+import { PENDING_WINDOW_MS, requireStorage, writableTarget, type MoveReceiptOptions, type ReceiptActor, type ReceiptDeps } from './receipts-compose.js';
 
 /**
  * MUT-589 (ADR-255): move a saved expense, with every receipt on it, to another of the person's profiles. The preview
@@ -99,12 +99,18 @@ export async function previewExpenseMove(deps: ReceiptDeps, actor: ReceiptActor,
   return { changes: plan.changes, receiptCount: receipts.length, expenseVersion: expense.version };
 }
 
-/** The target's vendor for the typed vendor: by the source vendor's registration number first, then by name. */
-async function targetVendorIdOf(deps: ReceiptDeps, expense: ExpenseRecord, target: Organization, at: Date): Promise<string | null> {
-  if (!expense.vendor) return null;
+/**
+ * The target's vendor for the typed vendor: by the source vendor's registration number first, then by name. `created`
+ * when this call made it (stamped `at`), so a move that then fails can take it back (TD-308).
+ */
+async function targetVendorOf(deps: ReceiptDeps, expense: ExpenseRecord, target: Organization, at: Date): Promise<{ id: string | null; created: boolean }> {
+  if (!expense.vendor) return { id: null, created: false };
   const source = expense.vendorId ? await deps.store.vendors.getById(expense.organizationId, expense.vendorId) : null;
-  const details = source ? { ...(source.registrationNo ? { registrationNo: source.registrationNo } : {}), ...(source.phone ? { phone: source.phone } : {}), ...(source.email ? { email: source.email } : {}) } : undefined;
-  return (await withResolvedVendor(deps.store, target.id, { vendor: expense.vendor }, details, at)).vendorId ?? null;
+  const vendor = await deps.store.vendors.resolve(
+    { organizationId: target.id, name: expense.vendor, registrationNo: source?.registrationNo ?? null, phone: source?.phone ?? null, email: source?.email ?? null },
+    at,
+  );
+  return { id: vendor?.id ?? null, created: vendor !== null && vendor.createdAt.getTime() === at.getTime() };
 }
 
 export async function moveExpense(deps: ReceiptDeps, actor: ReceiptActor, expenseId: string, targetProfileId: string, expectedVersion: number, options: ExpenseMoveOptions): Promise<ExpenseMoved> {
@@ -129,9 +135,17 @@ export async function moveExpense(deps: ReceiptDeps, actor: ReceiptActor, expens
     throw err;
   }
 
-  // R3: a vendor made here for a move that then fails stays, as approve's does (TD).
-  const plan = await planFor(deps, expense, target, options.lang, await targetVendorIdOf(deps, expense, target, actor.now)).catch(async (err: unknown) => {
+  // R3 / TD-308: a vendor made here goes again if the move fails, unless an expense took it up meanwhile.
+  let vendor: { id: string | null; created: boolean } = { id: null, created: false };
+  const undo = async () => {
     await removeCopies();
+    if (vendor.created && vendor.id) await deps.store.vendors.removeIfUnused(target.id, vendor.id).catch(options.reportError);
+  };
+  const plan = await (async () => {
+    vendor = await targetVendorOf(deps, expense, target, actor.now);
+    return planFor(deps, expense, target, options.lang, vendor.id);
+  })().catch(async (err: unknown) => {
+    await undo();
     throw err;
   });
   const changes = plan.changes as unknown as JsonObject[];
@@ -140,13 +154,24 @@ export async function moveExpense(deps: ReceiptDeps, actor: ReceiptActor, expens
     { organizationId: target.id, actorType: 'USER', actorId: actor.userId, action: 'expense.moved_in', entityType: 'expense', entityId: expense.id, metadata: { fromProfileId: organization.id, receiptCount: receipts.length, changes }, requestId: actor.requestId },
   ];
   const result = await deps.store.expenses
-    .moveToProfile({ organizationId: organization.id, expenseId: expense.id, targetOrganizationId: target.id, expectedVersion, patch: plan.patch, receiptKeys, approvedCategoryId: plan.patch.categoryId ?? null, audit, at: actor.now })
+    .moveToProfile({
+      organizationId: organization.id,
+      expenseId: expense.id,
+      targetOrganizationId: target.id,
+      expectedVersion,
+      patch: plan.patch,
+      receiptKeys,
+      approvedCategoryId: plan.patch.categoryId ?? null,
+      abandonedBefore: new Date(actor.now.getTime() - PENDING_WINDOW_MS),
+      audit,
+      at: actor.now,
+    })
     .catch(async (err: unknown) => {
-      await removeCopies();
+      await undo();
       throw err;
     });
   if (result.kind !== 'moved') {
-    await removeCopies();
+    await undo();
     if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such expense', { reason: 'EXPENSE_NOT_FOUND' });
     if (result.kind === 'receipt_not_ready') throw new ApiError('CONFLICT', 'A receipt on this expense has not finished uploading', { reason: 'RECEIPT_NOT_READY' });
     // Stale, or a receipt filed onto it since the copies (R1): the client reloads the preview.
@@ -155,6 +180,8 @@ export async function moveExpense(deps: ReceiptDeps, actor: ReceiptActor, expens
 
   // After the commit, never a throw (ADR-228 D8): the expense is on the target whatever happens below.
   if (storage) for (const key of result.previousStorageKeys) await storage.remove(key).catch(options.reportError);
+  // TD-309: an abandoned upload's object may never have been written; a missing one is not worth a report.
+  for (const key of result.abandonedStorageKeys) await deps.storage?.remove(key).catch(() => undefined);
   await touchExpenseVendor(deps.store, result.expense, actor.now, learnedFromNew(result.expense));
   return { expense: result.expense, receipts: result.receipts.filter((r) => r.status === 'READY'), fromProfileId: organization.id, target, changes: plan.changes };
 }

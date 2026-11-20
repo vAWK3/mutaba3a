@@ -42,6 +42,7 @@ if (!url) {
       patch: { vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null },
       receiptKeys: {},
       approvedCategoryId: null,
+      abandonedBefore: at(0),
       audit: [
         { organizationId: a.id, actorType: 'USER', actorId: user.id, action: 'expense.moved_out', entityType: 'expense', entityId: expense.id, metadata: { toProfileId: b.id }, requestId: null },
         { organizationId: b.id, actorType: 'USER', actorId: user.id, action: 'expense.moved_in', entityType: 'expense', entityId: expense.id, metadata: { fromProfileId: a.id }, requestId: null },
@@ -78,6 +79,29 @@ if (!url) {
       await receipt(false);
       expect((await store.expenses.moveToProfile(params({ receiptKeys: { [r.id]: 'k' } }))).kind).toBe('receipt_not_ready');
       expect(await store.expenses.getById(a.id, expense.id)).toMatchObject({ version: expense.version });
+    });
+
+    it('soft-deletes an upload abandoned before abandonedBefore and moves the rest (TD-309)', async () => {
+      const { a, receipt, params } = await seed(store);
+      const r = await receipt();
+      const pending = await receipt(false);
+      const result = await store.expenses.moveToProfile(params({ receiptKeys: { [r.id]: 'k' }, abandonedBefore: at(5) }));
+      expect(result.kind).toBe('moved');
+      if (result.kind !== 'moved') return;
+      expect(result.receipts.map((x) => x.id)).toEqual([r.id]);
+      expect(result.abandonedStorageKeys).toEqual([pending.storageKey]);
+      expect(await store.expenseReceipts.getById(a.id, pending.id)).toBeNull();
+    });
+
+    it('removeIfUnused deletes a vendor no expense points at, and keeps one that an expense does (TD-308)', async () => {
+      const { b, user } = await seed(store);
+      const unused = (await store.vendors.resolve({ organizationId: b.id, name: `Unused ${unique()}`, registrationNo: null, phone: null, email: null }, at(4)))!;
+      const used = (await store.vendors.resolve({ organizationId: b.id, name: `Used ${unique()}`, registrationNo: null, phone: null, email: null }, at(4)))!;
+      await store.expenses.create({ organizationId: b.id, occurredOn: '2026-11-02', amountMinor: 900n, currency: 'ILS', title: null, vendor: used.canonicalName, vendorId: used.id, categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: user.id }, at(5));
+      expect(await store.vendors.removeIfUnused(b.id, unused.id)).toBe(true);
+      expect(await store.vendors.getById(b.id, unused.id)).toBeNull();
+      expect(await store.vendors.removeIfUnused(b.id, used.id)).toBe(false);
+      expect(await store.vendors.getById(b.id, used.id)).not.toBeNull();
     });
 
     it('two moves at once: exactly one wins', async () => {

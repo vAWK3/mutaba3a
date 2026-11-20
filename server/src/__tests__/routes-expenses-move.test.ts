@@ -332,6 +332,39 @@ describe('POST /v1/expenses/{id}/move (MUT-589)', () => {
       for (const [, to] of s.h.storage.copied) expect(s.h.storage.objects.has(to)).toBe(false);
       expect(await s.h.store.expenses.getById(s.a, e.id)).not.toBeNull();
     });
+
+    it('an upload abandoned past the pending window goes with the move instead of blocking it (TD-309)', async () => {
+      const s = await setup();
+      const e = await expense(s, s.a);
+      const ready = await attach(s, s.a, e.id);
+      const abandoned = await s.h.store.expenseReceipts.create(
+        { organizationId: s.a, expenseId: e.id, ...FILE, receivedOn: '2026-11-09', uploadedByUserId: s.userId, requestId: null },
+        new Date(NOW.getTime() - 2 * DAY),
+      );
+      const res = await move(s, s.a, e.id, s.o, e.version);
+      expect(res.status).toBe(200);
+      expect((await s.h.store.expenseReceipts.getById(s.o, ready.id))?.expenseId).toBe(e.id);
+      expect(await s.h.store.expenseReceipts.getById(s.a, abandoned.id)).toBeNull();
+    });
+
+    it('a vendor the move made on the target is taken back when the move then fails (TD-308)', async () => {
+      const s = await setup();
+      const e = await expense(s, s.a, { vendor: 'Office Depot' });
+      await attach(s, s.a, e.id);
+      await s.h.app.request(`/v1/expenses/${e.id}/receipts`, json(FILE, s.as()));
+      expect((await move(s, s.a, e.id, s.o, e.version)).status).toBe(409);
+      expect(await s.h.store.vendors.findByName(s.o, 'Office Depot')).toBeNull();
+    });
+
+    it('a vendor the target already had stays when the move fails (TD-308)', async () => {
+      const s = await setup();
+      const kept = await s.h.store.vendors.resolve({ organizationId: s.o, name: 'Office Depot', registrationNo: null, phone: null, email: null }, new Date(NOW.getTime() - DAY));
+      const e = await expense(s, s.a, { vendor: 'Office Depot' });
+      await attach(s, s.a, e.id);
+      await s.h.app.request(`/v1/expenses/${e.id}/receipts`, json(FILE, s.as()));
+      expect((await move(s, s.a, e.id, s.o, e.version)).status).toBe(409);
+      expect((await s.h.store.vendors.findByName(s.o, 'Office Depot'))?.id).toBe(kept!.id);
+    });
   });
 
   describe('failures around the copies (ADR-228 D5, D8)', () => {

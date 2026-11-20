@@ -3515,6 +3515,11 @@ export interface VendorRepository {
   findByRegistration(organizationId: string, registrationNo: string): Promise<VendorRecord | null>;
   /** MUT-303 (review): the profile's vendor one of whose names is exactly this name (by `nameKey`), or null. One indexed lookup. */
   findByName(organizationId: string, name: string): Promise<VendorRecord | null>;
+  /**
+   * MUT-589 TD-308: delete the vendor (and its names) only while no expense row, live or deleted, points at it, in one
+   * statement, so an expense linked meanwhile keeps it. True when it was deleted. For a vendor a failed write just made.
+   */
+  removeIfUnused(organizationId: string, id: string): Promise<boolean>;
 }
 
 
@@ -3587,12 +3592,17 @@ export interface MoveExpenseParams {
   receiptKeys: Readonly<Record<string, string>>;
   /** The category a receipt's approval names on the target (the expense's mapped one). */
   approvedCategoryId: string | null;
+  /**
+   * TD-309: an upload on the expense still PENDING_UPLOAD and created before this is abandoned: the move soft-deletes it
+   * instead of refusing. A newer one may still finish, and still answers `receipt_not_ready`.
+   */
+  abandonedBefore: Date;
   audit: AuditEventInput[];
   at: Date;
 }
 
 export type MoveExpenseResult =
-  | { kind: 'moved'; expense: ExpenseRecord; receipts: ExpenseReceiptRecord[]; previousStorageKeys: string[] }
+  | { kind: 'moved'; expense: ExpenseRecord; receipts: ExpenseReceiptRecord[]; previousStorageKeys: string[]; abandonedStorageKeys: string[] }
   | { kind: 'not_found' }
   | { kind: 'stale'; currentVersion: number }
   | { kind: 'receipts_changed'; currentVersion: number }
@@ -3619,7 +3629,8 @@ export interface ExpenseRepository {
    * MUT-589 (ADR-255): re-home a live expense and every receipt on it to `targetOrganizationId`, in one transaction.
    * Locks the expense, then its receipts (the order a delete and a completion take). Refuses, writing nothing, when the
    * expense is gone (`not_found`), its version is not `expectedVersion` (`stale`), a receipt on it is unfinished
-   * (`receipt_not_ready`), or its READY receipts are not exactly `receiptKeys`' ids (`receipts_changed`, review R1).
+   * (`receipt_not_ready`; an abandoned one, see `abandonedBefore`, is soft-deleted instead, its key in
+   * `abandonedStorageKeys`), or its READY receipts are not exactly `receiptKeys`' ids (`receipts_changed`, review R1).
    * Otherwise: the expense takes the target, `patch` and version + 1; each receipt the target and its new key, its
    * approval naming `approvedCategoryId` (the rest kept as history) and version + 1; its group marks are deleted; and
    * `audit` is appended.

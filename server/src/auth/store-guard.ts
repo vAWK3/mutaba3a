@@ -294,6 +294,8 @@ export const STORE_ACCESS: StoreAccess = {
     search: { read: 'expenses' },
     // MUT-441: the read job fills a receipt's vendor by registration no. (it runs unguarded; a session may read it too).
     findByRegistration: { read: 'expenses' }, findByName: { read: 'expenses' },
+    // MUT-589 TD-308: a failed move takes back the vendor it just made.
+    removeIfUnused: { write: 'expenses' },
   },
   expenseReceipts: {
     create: { write: 'expenses' },
