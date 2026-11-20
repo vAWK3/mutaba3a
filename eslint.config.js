@@ -268,7 +268,8 @@ export default defineConfig([
           ],
           patterns: [
             ...PORTAL_RESTRICTED_PATTERNS,
-            { regex: '(^|/)server/src(/|$)', message: 'Only src/hosted/local runs server code in the page (ADR-097).' },
+            // Types only (allowTypeImports): they are erased at build, so no server code reaches the page.
+            { regex: '(^|/)server/src(/|$)', allowTypeImports: true, message: 'Only src/hosted/local runs server code in the page (ADR-097).' },
           ],
         },
       ],
