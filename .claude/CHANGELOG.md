@@ -37,6 +37,11 @@
 ### Technical
 - Tests: route (memory) for both, Prisma store for the abandoned upload and `removeIfUnused`.
 
+## [Unreleased] - 2026-11-19 — Analytics contract 2.11.0: the phone's save moment (MUT-627)
+
+### Added
+- **Analytics contract 2.11.0**: `save_moment_closed` (`kind`: expense | income | conversion; `outcome`: confirmed | auto_confirmed | undone | backgrounded; `entry_point`: keypad | details | quick_action | convert | share | receipt_review), ios and android only. The phone's full-screen save moment (Flutter MUT-627) sends it once per save; an undone entry is no longer counted as `expense_recorded`/`income_recorded`. Pinned in `scripts/__tests__/analytics-taxonomy.test.ts`.
+
 ## [Unreleased] - 2026-11-14 — "Email me a sign-in code" (MUT-618, ADR-256)
 
 ### Added

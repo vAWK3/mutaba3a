@@ -43,6 +43,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   // MUT-618: the union with MUT-619's 2.9.0: sign_in_code_requested (resend), sign_in_code_signed_in and
   // sign_in_code_refused (reason), portal, ios, android.
   '2.10.0': '1d80cbd6d894887dc9297358a7a16beba84f65a8f62ea5b3220e1644d212b77d',
+  // MUT-627: save_moment_closed (kind, outcome, entry_point), ios and android: the phone's full-screen save moment.
+  '2.11.0': '49edf9ea7495dabe5e05a73da23cc4a17ccfb754b1e726d5f0dbeb0e56dd1b61',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -246,6 +248,8 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       share_link_revoked: ['portal', 'ios', 'android'],
       // MUT-618: the emailed sign-in code.
       sign_in_code_refused: ['portal', 'ios', 'android'],
+      // MUT-627: the phone's full-screen save moment.
+      save_moment_closed: ['ios', 'android'],
       sign_in_code_requested: ['portal', 'ios', 'android'],
       sign_in_code_signed_in: ['portal', 'ios', 'android'],
       share_link_opened: ['portal'],
