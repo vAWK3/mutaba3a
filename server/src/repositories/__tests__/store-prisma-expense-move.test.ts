@@ -89,7 +89,7 @@ if (!url) {
       expect(result.kind).toBe('moved');
       if (result.kind !== 'moved') return;
       expect(result.receipts.map((x) => x.id)).toEqual([r.id]);
-      expect(result.abandonedStorageKeys).toEqual([pending.storageKey]);
+      expect(result.abandonedStorageKeys).toEqual([`org/${a.id}/expense-receipts/${pending.id}`]);
       expect(await store.expenseReceipts.getById(a.id, pending.id)).toBeNull();
     });
 
