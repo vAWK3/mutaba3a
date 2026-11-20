@@ -1,7 +1,7 @@
 {
   "name": "mutaba3a",
   "private": true,
-  "version": "0.3.4",
+  "version": "0.3.5",
   "type": "module",
   "scripts": {
     "dev": "SENTRY_ENABLED=${SENTRY_ENABLED:-false} POSTHOG_ENABLED=${POSTHOG_ENABLED:-false} vite",

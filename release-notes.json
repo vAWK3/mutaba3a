@@ -1,4 +1,12 @@
 {
+  "0.3.5": {
+    "en": [
+      "After we update the website, a page you already had open no longer shows an error screen: it reloads once and carries on."
+    ],
+    "ar": [
+      "بعد تحديثنا للموقع، لن تظهر شاشة خطأ في صفحة كانت مفتوحة لديك، بل يُعاد تحميلها مرة واحدة وتعمل كالمعتاد."
+    ]
+  },
   "0.3.4": {
     "en": [
       "Our privacy policy is updated (November 7, 2026) for sharing your books: inviting your accountant to read a profile, share links protected by a PIN, and downloading whole months as a report and a zip of receipts. It says what each person can see, how long access lasts, and what we keep."
