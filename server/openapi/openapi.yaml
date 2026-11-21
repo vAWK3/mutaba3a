@@ -12766,8 +12766,6 @@ components:
         skipped:
           type: object
           properties:
-            unverified:
-              type: integer
             optedOut:
               type: integer
             suppressed:
@@ -12782,7 +12780,6 @@ components:
               type: integer
               description: No profile had an entry dated in the month with something to show
           required:
-            - unverified
             - optedOut
             - suppressed
             - nothingCovered
@@ -12839,7 +12836,6 @@ components:
           type: string
           nullable: true
           enum:
-            - unverified
             - opted-out
             - suppressed
             - nothing-covered

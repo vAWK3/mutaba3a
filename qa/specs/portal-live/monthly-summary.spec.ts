@@ -1,6 +1,6 @@
 import { test, expect } from '../../support/qa';
 import type { Page } from '@playwright/test';
-import { advanceClock, customerOnClock, finishSignupInPage, invoicesOf, liveState, outboxOf, provisionPerson, requestSignup, runMailJob, setEmailVerified, signIn, subscribeByApi } from '../../support/livePortal';
+import { advanceClock, customerOnClock, finishSignupInPage, invoicesOf, liveState, outboxOf, provisionPerson, requestSignup, runMailJob, signIn, subscribeByApi } from '../../support/livePortal';
 import { openYou } from '../../support/you';
 
 /**
@@ -136,8 +136,8 @@ test('You › Account’s Monthly summary email switch - off, then on, kept afte
 
 test('After a monthly payer’s 2nd payment the summary carries Switch to yearly', { tag: '@portal-live.monthly-summary.monthly-summary-yearly-line' }, async ({ page, step }) => {
   const month = lastMonth();
+  // An operator-made account (its setup link handed over, never mailed): mailed all the same (Basel, 2026-11-22, TD-315).
   const person = await provisionPerson('en', 'summaryyearly');
-  setEmailVerified(person.userId);
   await step('A monthly subscriber in shekels has paid two months and recorded ₪400 received last month', async () => {
     const { customerId, clockId } = await customerOnClock(person, Math.floor(Date.now() / 1000) - 31 * DAY_S - 3 * 60 * 60);
     await subscribeByApi(customerId);

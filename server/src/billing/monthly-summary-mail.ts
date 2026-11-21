@@ -31,7 +31,7 @@ export const MONTHLY_SUMMARY_DAILY_SENDS = 40;
 const PAGE = 100;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type MonthlySummarySkip = 'unverified' | 'opted-out' | 'suppressed' | 'nothing-covered' | 'month-not-over' | 'nothing-to-show';
+export type MonthlySummarySkip = 'opted-out' | 'suppressed' | 'nothing-covered' | 'month-not-over' | 'nothing-to-show';
 
 export interface MonthlySummaryRow {
   userId: string;
@@ -53,7 +53,7 @@ export interface MonthlySummarySummary {
   duplicate: number;
   notSent: number;
   failed: number;
-  skipped: Record<'unverified' | 'optedOut' | 'suppressed' | 'nothingCovered' | 'monthNotOver' | 'nothingToShow', number>;
+  skipped: Record<'optedOut' | 'suppressed' | 'nothingCovered' | 'monthNotOver' | 'nothingToShow', number>;
   /** The time or send budget ran out, or the mail cap was met: the next run continues. */
   incomplete: boolean;
 }
@@ -170,7 +170,6 @@ async function personRow(options: MonthlySummaryRunOptions, candidate: MonthlySu
 
 async function blocksFor(options: MonthlySummaryRunOptions, candidate: MonthlySummaryCandidate, month: SummaryMonth): Promise<{ blocks: ProfileBlock[] } | { skip: MonthlySummarySkip }> {
   const { store, now } = options;
-  if (!candidate.emailVerified) return { skip: 'unverified' };
   if (candidate.choice === 'OFF') return { skip: 'opted-out' };
   if (await store.email.isSuppressed(normalizeEmail(candidate.email))) return { skip: 'suppressed' };
   const profiles = mailProfilesOf(candidate.choice, await coveredProfilesOf(store, candidate.userId, now));
@@ -230,7 +229,6 @@ function summarize(rows: readonly MonthlySummaryRow[], month: SummaryMonth, dryR
     notSent: count((r) => r.outcome !== null && r.outcome !== 'sent' && r.outcome !== 'duplicate' && r.outcome !== 'failed'),
     failed: count((r) => r.outcome === 'failed'),
     skipped: {
-      unverified: skipped('unverified'),
       optedOut: skipped('opted-out'),
       suppressed: skipped('suppressed'),
       nothingCovered: skipped('nothing-covered'),

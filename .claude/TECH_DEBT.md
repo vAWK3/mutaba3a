@@ -2849,8 +2849,8 @@ empty option and list the profiles only), with a drawer test for each.
 - **What:** each run walks every candidate from the start; someone mailed on the 1st is read again on days 2-7 (their profiles' figures and billing), and the mailer answers `duplicate`. Fine at tens to a few hundred people; past that, ask the send log which `monthly-summary:<id>:<month>` keys are SENT before reading (an `email.sentKeys` read, counting UNCERTAIN as sent).
 
 ### TD-315: Operator-made accounts get no monthly summary until they prove their address
-**Status**: Open (2026-11-22, MUT-535 D2 / R7)
-- **What:** the summary mails only `emailVerifiedAt` addresses, and an account the operator made (setup link handed over, not mailed) stays unverified until it redeems a mailed link (recovery, a code). Those people are skipped (`skip (unverified)` in the dry run). Fix when it matters: a way to verify from You › Account, or count the operator's own check as proof.
+**Status**: Resolved (2026-11-22, Basel: "include them". The summary no longer looks at `emailVerifiedAt`; ADR-259 decision 3)
+- **What:** the summary first mailed only `emailVerifiedAt` addresses, and an account the operator made (setup link handed over, not mailed) stays unverified until it redeems a mailed link, so pilot people were skipped.
 
 ### TD-309: An abandoned upload on an expense blocks moving it
 **Status**: Resolved (2026-11-20, MUT-589: the move soft-deletes an upload left PENDING_UPLOAD past the 24 h pending window, in its transaction; a newer one still answers 409 RECEIPT_NOT_READY)
