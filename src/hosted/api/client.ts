@@ -386,7 +386,8 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
 // MUT-562: an accountant invite and a share link are the server's too: public pages a stranger opens, signed in or not.
 // MUT-596: Sign in with Malafat (office, exchange, link, consent) is the server's: the page is signed out while it runs.
 // MUT-618: asking for an emailed sign-in code is the server's: the in-page backend has no mailer.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat)(\/|\?|$)/;
+// MUT-535: the monthly summary's opt-out page is the server's: it changes an account's mail, signed in here or not.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat|mail-preferences)(\/|\?|$)/;
 /**
  * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
  * link page's own PIN-again state, never the end of whoever is signed in on this browser.
@@ -709,6 +710,11 @@ export const api = {
   signInWithCode: (body: Schemas['CodeSignInRequest']) => request<OkJson<'/v1/sessions/code', 'post'>>('POST', CODE_SIGN_IN_PATH, { body }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-535 (D7): whether the monthly summary mail reaches the signed-in person (You › Account's switch). */
+  monthlySummaryMail: (signal?: AbortSignal) => request<Schemas['MonthlySummaryMail']>('GET', '/v1/me/monthly-summary-mail', { signal }),
+  setMonthlySummaryMail: (on: boolean) => request<Schemas['MonthlySummaryMail']>('PATCH', '/v1/me/monthly-summary-mail', { body: { on } }),
+  /** MUT-535 (D8): the mail's opt-out page; the token from the link's fragment, in the body. 404: the link no longer works. */
+  mailPreference: (token: string, on: boolean) => request<Schemas['MonthlySummaryMail']>('POST', '/v1/mail-preferences/monthly-summary', { body: { token, on } }),
   /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */
   changeTrialPrompt: (action: TrialPromptAction) => request<TrialPrompt>('PATCH', '/v1/me/trial-prompt', { body: { action } }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */

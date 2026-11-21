@@ -6,6 +6,7 @@ import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
 import { RowButton, RowGroup, RowNavLink } from '../../components/YouRows';
+import { MonthlySummarySwitchRow } from '../../components/MonthlySummarySwitchRow';
 import { billingRowOf, type BillingRow } from '../../data/trialPrompt';
 import { useMe } from '../../session/me';
 import { useHasFeature, useIsOperator } from '../../session/features';
@@ -53,6 +54,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         {agentAccess && <RowButton label={t('hosted.connect.title')} sub={t('hosted.connect.rowSub')} onClick={drawers.openConnectClaude} />}
         {connectedApps.data && <RowButton label={t('hosted.connectedApps.title')} sub={t('hosted.connectedApps.rowSub')} onClick={drawers.openConnectedApps} />}
       </RowGroup>
+      {/* MUT-535: the monthly summary mail, in a group of its own (shown once the server answers) */}
+      <MonthlySummarySwitchRow />
       {/* MUT-460 (6A): the operator console's way in, for operators only */}
       {operator && (
         <RowGroup>
