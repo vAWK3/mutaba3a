@@ -6,6 +6,7 @@ import { CachedFxRates, type EcbSnapshot, type FxRateSource } from '../fx-rates.
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
+import { readProfileFigures } from '../summaries/profile-figures.js';
 
 /** MUT-447: GET /v1/summaries/verdict — the Reports verdict across a person's profiles (eng review D2–D12). */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -253,5 +254,34 @@ describe('GET /v1/summaries/verdict — review fixes (qa-reconcile 2026-10-26)',
     (s.store as Loose).members.set(`${s.userId}:${staffed.id}`, { ...member, role: 'SUBMITTER' });
     expect((await s.store.memberships.find(s.userId, staffed.id))?.role).toBe('SUBMITTER');
     expect(line(await read(await s.verdict()), staffed.id)).toBeUndefined();
+  });
+});
+
+describe('MUT-535 (D5): readProfileFigures, the verdict route\'s own read', () => {
+  it('gives the same came-in and owed figures the verdict answers, so the monthly mail never disagrees with Reports', async () => {
+    const s = await setup();
+    const client = await read(await s.app.request('/v1/customers', json({ name: 'Haddad' }, { ...s.on(s.firm), ...idem() })));
+    expect((await s.income(s.firm, { kind: 'received', amount: '4200.00', occurredOn: '2026-09-05' })).status).toBe(201);
+    expect((await s.income(s.firm, { kind: 'received', amount: '90.00', currency: 'USD', occurredOn: '2026-09-07' })).status).toBe(201);
+    expect((await s.income(s.firm, { kind: 'owed', amount: '300.00', occurredOn: '2026-09-02', dueDate: '2026-09-10', customerId: client.id, title: 'Work' })).status).toBe(201);
+    const body = await read(await s.verdict('from=2026-09-01&to=2026-09-30'));
+    const organization = (await s.store.organizations.getById(s.firm))!;
+    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null);
+    expect(figures.activity.currencies.map(({ currency, received }) => ({ currency, received }))).toEqual(line(body, s.firm).currencies.map(({ currency, received }: Loose) => ({ currency, received })));
+    expect(figures.owed).toEqual(line(body, s.firm).owed);
+    expect(figures.owed.overdueCount).toBe(1);
+    expect(figures.entriesInRange).toBe(true);
+    expect(figures.today).toBe('2026-10-20');
+  });
+
+  it('says a month had no entries when nothing is dated in it, though money is still owed', async () => {
+    const s = await setup();
+    const client = await read(await s.app.request('/v1/customers', json({ name: 'Haddad' }, { ...s.on(s.firm), ...idem() })));
+    expect((await s.income(s.firm, { kind: 'owed', amount: '300.00', occurredOn: '2026-08-02', customerId: client.id, title: 'Work' })).status).toBe(201);
+    const organization = (await s.store.organizations.getById(s.firm))!;
+    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null);
+    expect(figures.entriesInRange).toBe(false);
+    // Its due date defaults to 15 September (EOM_15), so on 20 October it is overdue.
+    expect(figures.owed.currencies).toEqual([{ currency: 'ILS', outstanding: '300.00', overdue: '300.00' }]);
   });
 });

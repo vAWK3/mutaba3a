@@ -498,6 +498,51 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(found.some((c) => c.stripeSubscriptionId === orphan.stripeSubscriptionId)).toBe(false);
     });
 
+    it('monthlySummaryCandidates: people whose own facts may cover a profile, keyset by id, with their choice (MUT-535 D2)', async () => {
+      const store = await makeStore();
+      const now = at(30);
+      const person = async () => (await store.users.create(userInput())).user;
+      const payer = await person();
+      const customer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(customer, payer.id));
+      await store.billing.saveSubscription(subscription(customer));
+      const trialist = await person();
+      await store.billing.setTrialStart(trialist.id, at(20));
+      const granted = await person();
+      await store.billing.createGrant({ id: randomUUID(), userId: granted.id, organizationId: null, tier: 'FREELANCER', reason: 'pilot', expiresAt: null, grantedBy: 'admin', at: at(2), audit: [] });
+      const lapsed = await person();
+      const lapsedCustomer = `cus_${unique()}`;
+      await store.billing.saveAccount(account(lapsedCustomer, lapsed.id));
+      await store.billing.saveSubscription({ ...subscription(lapsedCustomer), status: 'canceled' });
+      const oldTrial = await person();
+      await store.billing.setTrialStart(oldTrial.id, at(0));
+      const expired = await person();
+      await store.billing.createGrant({ id: randomUUID(), userId: expired.id, organizationId: null, tier: 'FREELANCER', reason: 'pilot', expiresAt: at(10), grantedBy: 'admin', at: at(2), audit: [] });
+      await store.users.setMonthlySummaryMail(payer.id, 'OFF', now);
+
+      const all = await store.billing.monthlySummaryCandidates({ trialStartedAfter: at(5), now, after: null, limit: 1000 });
+      const ids = all.map((c) => c.userId);
+      for (const p of [payer, trialist, granted]) expect(ids).toContain(p.id);
+      for (const p of [lapsed, oldTrial, expired]) expect(ids).not.toContain(p.id);
+      expect([...ids].sort()).toEqual(ids);
+      expect(all.find((c) => c.userId === payer.id)).toEqual({ userId: payer.id, email: payer.email, locale: 'en', emailVerified: false, choice: 'OFF' });
+      expect(all.find((c) => c.userId === trialist.id)?.choice).toBeNull();
+
+      const first = await store.billing.monthlySummaryCandidates({ trialStartedAfter: at(5), now, after: null, limit: 1 });
+      const rest = await store.billing.monthlySummaryCandidates({ trialStartedAfter: at(5), now, after: first[0]!.userId, limit: 1000 });
+      expect([...first, ...rest].map((c) => c.userId)).toEqual(ids);
+    });
+
+    it('setMonthlySummaryMail stores the choice and back to the default (MUT-535 D6)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      expect(user.monthlySummaryMail).toBeNull();
+      expect((await store.users.setMonthlySummaryMail(user.id, 'ON_ALL', at(3)))?.monthlySummaryMail).toBe('ON_ALL');
+      expect((await store.users.getById(user.id))?.monthlySummaryMail).toBe('ON_ALL');
+      expect((await store.users.setMonthlySummaryMail(user.id, null, at(4)))?.monthlySummaryMail).toBeNull();
+      expect(await store.users.setMonthlySummaryMail(randomUUID(), 'OFF', at(5))).toBeNull();
+    });
+
     it('MUT-534 (D10): keeps when Stripe ended a subscription; absent is null', async () => {
       const store = await makeStore();
       const customer = `cus_${unique()}`;

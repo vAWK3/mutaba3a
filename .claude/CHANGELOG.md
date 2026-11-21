@@ -28,6 +28,23 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — The monthly summary mail: last month per profile and per currency, ar + en (MUT-535, ADR-259)
+
+### Added
+- **The monthly summary job** (`server/src/billing/monthly-summary-mail.ts`, rules in `monthly-summary.ts`): on days 1-7 at 14:00 Jerusalem (`POST /jobs/v1/billing/monthly-summary-mail`; operator `POST /admin/v1/billing/monthly-summary-mail`, `npm --prefix server run billing:monthly-summary-mail [-- --dry-run]`) each person whose own subscription, trial, grant or Malafat link covers a profile gets one mail for last month: a panel per covered profile with what came in, what is still owed and what is overdue, per currency, linking to its overview. Skips unverified, suppressed, opted-out and closing addresses, profiles with no entry in the month, and profiles still inside the month west of UTC. At most `MONTHLY_SUMMARY_DAILY_SENDS` (40) per run, stopping at the first capped mail; the send log keeps one per person per month.
+- **Mail `monthly-summary`** (en, ar; ADR-259 overrides ADR-159 §5 for it): Levantine months, amounts and names isolated in Arabic, MUT-531's "Switch to yearly and save ₪58 a year" after a monthly payer's 2nd payment, and a footer opt-out line. Layout gains `sections` (one titled panel per profile) and `optOut`.
+- **The switch:** `User.monthlySummaryMail` (`OFF` | `ON_ALL`, NULL = default without Malafat-covered profiles; migration `20261121120000_mut535_monthly_summary_mail`, local snapshot 19 → 20); `GET|PATCH /v1/me/monthly-summary-mail`; You › Account's "Monthly summary email" switch (`MonthlySummarySwitchRow`).
+- **One link off:** `/mail-off#<token>` (public portal page; asks for a press first) and `POST /v1/mail-preferences/monthly-summary` (same origin, IP budget); the token is HMAC-SHA256 keyed from `SESSION_TOKEN_PEPPER` (`email/mail-off-token.ts`).
+- **Terraform:** `monthly_summary_mail_enabled` (default false) creates the Scheduler job; `monthly_summary_daily_sends` sets `MONTHLY_SUMMARY_DAILY_SENDS` when it isn't 40. tftest `monthly_summary_mail.tftest.hcl`.
+
+### Changed
+- **The privacy policy names the monthly summary** (en + ar, "Emails we send"; Last updated November 21, 2026).
+- `summaries/profile-figures.ts › readProfileFigures` is the verdict route's per-profile read, now shared with the mail; `listAll` moved to `repositories/list-all.ts`. `billing/yearly-switch-line.ts` holds MUT-531's line and the catalog read, moved from `routes/billing.ts`. No behaviour change in either route.
+
+### Technical
+- Tests: parity of `readProfileFigures` with the verdict route; rules, job (memory store, memory mailer), routes, token, templates (ADR-159 pin), route-security and public-route pins, portal switch and page, local migration and fingerprint, privacy page. Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link`, `monthly-summary-account-switch`, `monthly-summary-yearly-line`.
+- Operator steps in `docs/operations/before-release.md` (server and web).
+
 ## [Unreleased] - 2026-11-21 — Receipt reading: no buyer email, billed line, item line or garbled name as the vendor's (MUT-630, MUT-631, reader generation 5)
 
 ### Fixed

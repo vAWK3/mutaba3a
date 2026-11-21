@@ -11,7 +11,9 @@ import type { UserLocale } from '../repositories/ports.js';
  * mails may name the launch offer's percent and last day, and `offer-renewing-soon` names the subscription's own
  * yearly price and renewal day, because a renewal notice must state them. MUT-534 (ADR-243 override log):
  * `comeback-offer` names the come-back prices. MUT-559 (ADR-245 override log): `accountant-invite` names the last day
- * its link works, a calendar day and never a money date. Money records still never appear.
+ * its link works, a calendar day and never a money date. MUT-535 (ADR-259 override log): `monthly-summary` names the
+ * person's own amounts, per profile and per currency (what came in last month, what is still owed and overdue) and the
+ * yearly saving; never a client's name or a single entry. Money records still never appear in any other mail.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -34,6 +36,7 @@ export const TEMPLATE_IDS = [
   'comeback-offer',
   'accountant-invite',
   'sign-in-code',
+  'monthly-summary',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -72,6 +75,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'card-failed-reminder',
   // MUT-534: the daily run sends each stage once per person, ever.
   'comeback-offer',
+  // MUT-535: only the monthly run sends it, once a month per person.
+  'monthly-summary',
 ]);
 
 export interface TemplateVars {
@@ -137,6 +142,29 @@ export interface TemplateVars {
    * from the per-recipient cap: anyone with a profile can send it to any address.
    */
   'accountant-invite': { ownerName: string; profileName: string; link: string; expiresOn: CalendarDay };
+  /**
+   * MUT-535 (ADR-259): the monthly summary. `month` is the month reported; `asOf` the day owed and overdue are read on;
+   * one panel per profile (never empty); `yearly` (MUT-531's line) the saving in minor units of the subscription's
+   * currency and the Switch link, or null; `offLink` the opt-out page, `{portal}/mail-off#{token}`.
+   */
+  'monthly-summary': { month: { year: number; month: number }; asOf: CalendarDay; profiles: MailSummaryProfile[]; yearly: { savings: number; currency: string; link: string } | null; offLink: string };
+}
+
+/** MUT-535: an amount in one currency, as the API writes it (a canonical decimal); the template formats it. */
+export interface MailMoney {
+  currency: string;
+  amount: string;
+}
+
+/** MUT-535: one profile's panel in the monthly summary. */
+export interface MailSummaryProfile {
+  name: string;
+  /** The profile's overview, `{portal}/p/{id}`. */
+  link: string;
+  cameIn: MailMoney[];
+  owed: MailMoney[];
+  overdue: MailMoney[];
+  overdueCount: number;
 }
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */

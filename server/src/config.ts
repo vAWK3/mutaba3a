@@ -265,6 +265,8 @@ const envSchema = z.object({
    * The failed-card reminder goes at its midpoint; 28 keeps every mail key inside the 30-day send log.
    */
   BILLING_RETRY_WINDOW_DAYS: z.enum(['7', '14', '21', '28']).default('14').transform((v) => Number(v)),
+  /** MUT-535 (D12): monthly summary mails per run; keep it well under MAIL_DAILY_CAP, which every other mail shares. */
+  MONTHLY_SUMMARY_DAILY_SENDS: z.coerce.number().int().min(1).max(10_000).default(40),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**

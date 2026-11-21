@@ -1,7 +1,7 @@
 import type { UserLocale } from '../../repositories/ports.js';
 import { formatMinor } from '../../billing/money.js';
 import { ARABIC_LOCALE } from '../../dates.js';
-import type { CalendarDay, MailOffer, MailTemplateId, TemplateVars } from '../ports.js';
+import type { CalendarDay, MailMoney, MailOffer, MailSummaryProfile, MailTemplateId, TemplateVars } from '../ports.js';
 import type { CustomerMailBody, Inline, MailBody } from './layout.js';
 import type { CustomerTemplateId } from './look.js';
 
@@ -656,6 +656,88 @@ const comebackOffer: Copy<'comeback-offer'> = {
   },
 };
 
+/**
+ * MUT-535: a canonical decimal in its currency, as Intl writes it in English (₪12,400, $1,234.50, JOD 1,234.500):
+ * whole amounts without a fraction, otherwise the currency's own digits. Arabic mails isolate it (ADR-101).
+ */
+function summaryMoney(m: MailMoney): string {
+  const digits = new Intl.NumberFormat('en-US', { style: 'currency', currency: m.currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const whole = /^-?\d+(\.0+)?$/.test(m.amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: m.currency, minimumFractionDigits: whole ? 0 : digits, maximumFractionDigits: digits }).format(Number(m.amount));
+}
+
+const isolate = (text: string) => `⁨${text}⁩`;
+
+/** The month's name (Levantine in Arabic, ADR-253), with the year when asked. */
+function monthName(month: { year: number; month: number }, locale: UserLocale, withYear: boolean): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? ARABIC_LOCALE : 'en-US', { month: 'long', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(new Date(Date.UTC(month.year, month.month - 1, 1)));
+}
+
+function enEntries(n: number): string {
+  return n === 1 ? '1 entry' : `${n} entries`;
+}
+
+/** Arabic counted noun: قيد واحد، قيدان، 3–10 قيود، 11+ قيدًا. */
+function arEntries(n: number): string {
+  if (n === 1) return 'قيد واحد';
+  if (n === 2) return 'قيدان';
+  return n <= 10 ? `${n} قيود` : `${n} قيدًا`;
+}
+
+/**
+ * MUT-535 (plan §7a, copy approved by Basel 2026-11-21; ADR-259 overrides ADR-159 §5 for this mail): last month in
+ * the person's books, one panel per profile, per currency and never converted.
+ */
+const monthlySummary: Copy<'monthly-summary'> = {
+  en: ({ month, asOf, profiles, yearly, offLink }) => {
+    const amounts = (rows: MailMoney[]) => rows.map(summaryMoney).join(' · ');
+    const name = monthName(month, 'en', false);
+    const panel = (p: MailSummaryProfile) => ({
+      title: p.name,
+      rows: [
+        { label: `Came in during ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'Nothing recorded' },
+        { label: 'Still owed', value: p.owed.length > 0 ? amounts(p.owed) : 'Nothing owed' },
+        { label: 'Overdue', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${enEntries(p.overdueCount)})` : 'Nothing overdue' },
+      ],
+      link: { label: `Open ${p.name}`, href: p.link },
+    });
+    return {
+      subject: `Your ${name} in MTB3A`,
+      preheader: "What came in, what's still owed, and what's overdue.",
+      headline: `${monthName(month, 'en', true)} at a glance`,
+      intro: [["Here's last month in your books, as MTB3A shows it today."]],
+      sections: profiles.map(panel),
+      ...(yearly ? { secondary: { label: `Switch to yearly and save ${summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) })} a year`, href: yearly.link } } : {}),
+      outro: [[`Amounts stay in the currency you recorded them in; nothing is converted. Still owed and overdue are as of ${mailDay(asOf, 'en')}.`]],
+      optOut: { text: "Don't want this monthly email?", label: 'Turn it off.', href: offLink, after: 'You can turn it back on in You › Account.' },
+    };
+  },
+  ar: ({ month, asOf, profiles, yearly, offLink }) => {
+    // Isolated so each amount and each profile's name reads in its own direction inside Arabic (ADR-101).
+    const amounts = (rows: MailMoney[]) => rows.map((m) => isolate(summaryMoney(m))).join(' · ');
+    const name = monthName(month, 'ar', false);
+    const panel = (p: MailSummaryProfile) => ({
+      title: p.name,
+      rows: [
+        { label: `المستلَم في ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'لا شيء مسجّل' },
+        { label: 'المستحق', value: p.owed.length > 0 ? amounts(p.owed) : 'لا شيء مستحق' },
+        { label: 'المتأخر', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${arEntries(p.overdueCount)})` : 'لا شيء متأخر' },
+      ],
+      link: { label: `افتح ${isolate(p.name)}`, href: p.link },
+    });
+    return {
+      subject: `${name} في متابعة`,
+      preheader: 'ما وصلك، وما زال مستحقًا لك، وما تأخّر.',
+      headline: `${monthName(month, 'ar', true)} باختصار`,
+      intro: [['هذا ما جرى في دفاترك الشهر الماضي، كما تعرضه متابعة اليوم.']],
+      sections: profiles.map(panel),
+      ...(yearly ? { secondary: { label: `انتقل إلى الاشتراك السنوي ووفّر ${isolate(summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) }))} في السنة`, href: yearly.link } } : {}),
+      outro: [[`تبقى المبالغ بالعملة التي سجّلتها بها، دون أي تحويل. المستحق والمتأخر كما هما في ${mailDay(asOf, 'ar')}.`]],
+      optOut: { text: 'لا تريد هذه الرسالة الشهرية؟', label: 'أوقفها.', href: offLink, after: 'ويمكنك إعادتها من أنت › الحساب.' },
+    };
+  },
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -677,4 +759,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'comeback-offer': comebackOffer,
   'accountant-invite': accountantInvite,
   'sign-in-code': signInCode,
+  'monthly-summary': monthlySummary,
 };

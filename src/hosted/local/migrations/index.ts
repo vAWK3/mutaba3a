@@ -267,6 +267,12 @@ function addPasswordChosen(snapshot: StoredSnapshot): StoredSnapshot {
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, passwordChosen: true }])) } };
 }
 
+/** MUT-535, 19 → 20: a person gains `monthlySummaryMail`. The mail is the hosted account's; a device keeps the default: null. */
+function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'monthlySummaryMail'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
+}
+
 /**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
@@ -292,6 +298,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 16, to: 17, migrate: addDelegationSwitch },
   { from: 17, to: 18, migrate: addMemberSyncAt },
   { from: 18, to: 19, migrate: addPasswordChosen },
+  { from: 19, to: 20, migrate: addMonthlySummaryMail },
 ];
 
 /**

@@ -114,6 +114,8 @@ describe('STORE_ACCESS', () => {
       'billing.linkAccount',
       'billing.listAccounts',
       'billing.listGrants',
+      // MUT-535: the monthly summary run, on the unguarded store.
+      'billing.monthlySummaryCandidates',
       'billing.offerRenewalCandidates',
       'billing.pastDueCandidates',
       'billing.pruneStripeEvents',

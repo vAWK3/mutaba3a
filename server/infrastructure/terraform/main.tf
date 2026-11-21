@@ -57,6 +57,8 @@ locals {
   card_failed_mail_enabled = var.mailer == "resend" && var.stripe_enabled
   # MUT-534: the daily come-back mails need mail and Stripe, and the operator's go-ahead after a reviewed dry run.
   comeback_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.comeback_mail_enabled
+  # MUT-535: the monthly summary needs mail and the operator's go-ahead; without Stripe it mails without the yearly line.
+  monthly_summary_mail_enabled = var.mailer == "resend" && var.monthly_summary_mail_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -685,6 +687,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-535 (D12): the monthly summary's sends per run; 40 (the API's default) stays unset.
+        dynamic "env" {
+          for_each = var.monthly_summary_daily_sends == 40 ? {} : { MONTHLY_SUMMARY_DAILY_SENDS = tostring(var.monthly_summary_daily_sends) }
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-533 (D3): the Smart Retries window the failed-card reminder is timed in; 14 (Stripe's default) stays unset.
         dynamic "env" {
           for_each = var.billing_retry_window_days == 14 ? {} : { BILLING_RETRY_WINDOW_DAYS = tostring(var.billing_retry_window_days) }
@@ -1120,6 +1131,38 @@ resource "google_cloud_scheduler_job" "comeback_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/comeback-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-535 (ADR-259, D12, D13): the monthly summary mails, on days 1-7 of each month at 14:00 Jerusalem (12:00 UTC, when
+# the 1st has begun in every zone down to UTC-12). Each run sends at most monthly_summary_daily_sends and stops at the
+# first mail the daily cap refuses; the next day continues, and each person is mailed once a month (the send log).
+# Only with mail on and once monthly_summary_mail_enabled says the operator read a dry run. Retries are safe.
+resource "google_cloud_scheduler_job" "monthly_summary_mail" {
+  count = local.monthly_summary_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-monthly-summary-mail${local.suffix}"
+  region           = var.region
+  description      = "Monthly summary mails, days 1-7 (MUT-535)."
+  schedule         = "0 14 1-7 * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/monthly-summary-mail"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

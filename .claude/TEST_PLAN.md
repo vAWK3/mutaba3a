@@ -4632,6 +4632,17 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | Portal | `SignInCode.test.tsx`: link beside Forgot, email first, the full step, Arabic-Indic digits, each refusal, under review, resend after 60 s, back to password, RTL | AC1, AC6 |
 | Release-QA | `portal.signin.email-code` (stubbed, en + ar), `portal-selfservice.signin.email-code` (live outbox, en + ar) | AC1, AC6, AC7 |
 
+## MUT-535 — the monthly summary mail (ADR-259)
+
+- `routes-verdict.test.ts` (MUT-535 block): `readProfileFigures` gives the verdict's came-in and owed figures; no entries in a month though money is owed.
+- `billing/__tests__/monthly-summary.test.ts`: the month in Jerusalem (and across the year), a western profile still in the month, panels per currency without zero rows or retired currencies, no entries → no panel, the D7 default / OFF / ON_ALL and what turning the switch stores.
+- `monthly-summary-mail.test.ts` (memory store + memory mailer, people made through the API): one mail per payer with the overview and opt-out links, Arabic, the yearly line after 2 paid invoices and not without Stripe, trialists, AC5, unverified / opted-out / nobody paying, Malafat default and ON_ALL, month-not-over, dry run and duplicates, the send budget and the cap, a read failure waits.
+- `routes-monthly-summary-mail.test.ts`: job token and counts, no Stripe, operator dry run, the switch (default, Malafat-only → ON_ALL, session needed), the opt-out door (on/off, other pepper or garbage → 404, another site → 403). `mail-off-token.test.ts`.
+- `templates.test.ts` (monthly-summary: panels, Arabic isolation and Levantine months, empty rows, yearly line, opt-out footer, Arabic counts; ADR-159 pin with the allowed amounts), `mailer.test.ts`, route-security and no-self-registration pins.
+- Portal: `MonthlySummarySwitchRow.test.tsx`, `MailOffPage.test.tsx`; local `migrations.test.ts` 19 → 20 and the fingerprint; `PrivacyPolicyPage.test.tsx`.
+- Terraform: `monthly_summary_mail.tftest.hcl` (off by default, on with mail and the switch, never without mail).
+- Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link` (Arabic), `monthly-summary-account-switch`, `monthly-summary-yearly-line` (Stripe sandbox).
+
 ## MUT-630/631 — no buyer email, billed line, item line or garbled name as the vendor's (2026-11-21, ADR-241 addendum)
 
 | Layer | File | Covers |
