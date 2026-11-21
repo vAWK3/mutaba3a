@@ -1,5 +1,5 @@
 import { type Buyer, EMAIL, isTableHeader, PHONE_NUMBER, REGISTRATION_NUMBER, startsBody } from './buyer.js';
-import { ALLOCATION, COMPANY, CUSTOMER_NUMBER, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
+import { ALLOCATION, COMPANY, CUSTOMER_NUMBER, DATE_LABEL, EMAIL_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
 import { countMatches, foldForMatch, hasEmbeddedLatin } from './normalize.js';
 import type { Row } from './types.js';
 
@@ -101,19 +101,17 @@ const RULE_PHONE_BARE = 0.65;
 
 /**
  * MUT-630: the item body, where a phone is a billed line, never the vendor's: every row that starts a body (a money
- * row, an item table's header), and the rows from a table header to the first total row under it, or, when no total
- * row was read, to the last money row under it. The header area above it and the footer below are not in it.
+ * row, an item table's header), and the rows from a table header to the first total row under it (a count line,
+ * `סה"כ פריטים`, is none), or to the end when no total row was read: a footer phone is then left out with it (empty,
+ * never a billed line printed under the last amount).
  */
 function itemBody(rows: readonly Row[]): Set<Row> {
-  const body = new Set(rows.filter(startsBody));
-  for (let start = 0; start < rows.length; start += 1) {
-    if (!isTableHeader(rows[start]!)) continue;
-    const under = rows.slice(start + 1);
-    const total = under.findIndex((row) => hasKeyword(row.folded, TOTAL));
-    const lastMoney = under.findLastIndex(startsBody);
-    const end = start + 1 + (total >= 0 ? total : lastMoney);
-    for (const row of rows.slice(start, end)) body.add(row);
-    start = Math.max(start, end - 1);
+  const body = new Set<Row>();
+  let inTable = false;
+  for (const row of rows) {
+    if (isTableHeader(row)) inTable = true;
+    else if (inTable && hasKeyword(row.folded, TOTAL) && !hasKeyword(row.folded, NOT_TOTAL)) inTable = false;
+    if (inTable || startsBody(row)) body.add(row);
   }
   return body;
 }
@@ -148,16 +146,17 @@ const EMAIL_MAX_LENGTH = 254;
 
 /**
  * The first email on the receipt, lower-cased. MUT-630: never on a bill-to row, never one known as the buyer's; and
- * once the buyer's showed outside a block, none after it (a platform's or an accountant's footer address: it could be
- * anyone's, as for phones).
+ * once the buyer's showed outside a block, only a labelled one after it (`Email:`): a bare footer address (a
+ * platform's, an accountant's) could be anyone's, as `readPhone` treats bare phones after the buyer's.
  */
 export function readEmail(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
+  let buyerSeen = false;
   for (const row of rows) {
     if (buyer.rows.has(row)) continue;
     for (const match of row.text.matchAll(EMAILS)) {
       const value = match[0].toLowerCase();
-      if (buyer.has(value)) return null;
-      if (value.length <= EMAIL_MAX_LENGTH) return { value, rule: RULE_EMAIL, conf: row.conf };
+      if (buyer.has(value)) buyerSeen = true;
+      else if (value.length <= EMAIL_MAX_LENGTH && (!buyerSeen || hasKeyword(foldForMatch(row.text.replace(EMAILS, ' ')), EMAIL_LABEL))) return { value, rule: RULE_EMAIL, conf: row.conf };
     }
   }
   return null;

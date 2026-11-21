@@ -906,13 +906,20 @@ describe('MUT-630/631: no wrong vendor contact details or names', () => {
       expect(value(read(receipt(['Phone Co', '03-5551234', "מס' חשבון: 052-9876543", 'סה"כ 59.90'])), 'phone')).toBe('03-5551234');
     });
 
-    it('an item table with no total row read ends at its last money row: the footer phone is still read (review)', () => {
-      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'קו 055-1234567', 'פריט 10.00', 'Tel 03-5551234'])), 'phone')).toBe('03-5551234');
+    it('an item table with no total row read runs to the end: a billed line after the last amount is never the vendor\'s phone (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 59.90', 'נייד 055-1234567', 'Tel 03-5551234'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 60', 'קו 055-1234567'])), 'phone')).toBeUndefined();
     });
 
-    it("once the buyer's email shows outside a block, no later email is offered: it could be anyone's (review)", () => {
+    it('a count line (סה"כ פריטים) does not end the item table; the total does (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'סה"כ פריטים 2', 'קו 055-1234567', 'סה"כ 59.90', '03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
+    it("once the buyer's email shows outside a block, only a labelled email after it is offered: a bare one could be anyone's (review)", () => {
       expect(value(readWith(receipt(['Phone Co', 'Total 10.00', EMAIL, 'support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
       expect(value(readWith(receipt(['Phone Co', 'info@phoneco.example', 'Total 10.00', EMAIL]), { buyerIds: [EMAIL] }), 'email')).toBe('info@phoneco.example');
+      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'Email: billing@phoneco.example']), { buyerIds: [EMAIL] }), 'email')).toBe('billing@phoneco.example');
+      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'info@mail.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
     });
 
     it('a bill-to email is kept for the buyer memory; an email is never reported as the vendor\'s (it is never unlearned)', () => {

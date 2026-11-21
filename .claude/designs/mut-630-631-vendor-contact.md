@@ -135,8 +135,8 @@ Bench (rescore over the saved reads, main's extractor vs the branch's, 78 real r
 
 ## Pre-landing review fixes (2026-11-21, /review: 6 specialists + adversarial)
 
-- `itemBody` ends at the first total row under an item table's header, or at its last money row when no total was read (a missed total label no longer swallows the footer phone).
-- `readEmail`: once the buyer's email shows outside a block, no later email is offered (as `readPhone` does for a buyer's labelled phone).
+- `itemBody` stays "table header to the first total, else to the end" (a second adversarial pass showed that ending at the last money row lets a billed line printed under the last amount, or a whole-number table, fill the vendor's phone). A count line (`סה"כ פריטים`, `NOT_TOTAL`) no longer ends the table. A missed total label leaves the footer phone empty, never wrong.
+- `readEmail`: once the buyer's email shows outside a block, only a labelled email after it (`Email:`, label checked with the addresses removed) is offered; a bare one could be anyone's (as `readPhone` treats bare phones).
 - Tests: a phone-shaped customer/account number is never the vendor's phone; the report's no-value assertion no longer matches random UUIDs (a ~2% flake).
 - Report wording: "matches a learned buyer identifier", not "is the buyer's".
 - Open for Basel: a weak bill-to label (`עבור`, `customer`, `to:`) can teach a vendor's own footer email as the buyer's, and emails are never unlearned (P1/revision 2). Not changed without his say.
