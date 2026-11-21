@@ -2931,3 +2931,9 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: Arabic dates go through getLocale(language), as it is (MUT-587, ADR-253)
 **Where**: `src/lib/i18n/core.tsx` `getLocale` / `ARABIC_LOCALE`; server `server/src/dates.ts` `ARABIC_LOCALE`.
 **Rule**: every `Intl` date (and number) formatter takes `getLocale(language)` (server: `ARABIC_LOCALE` for Arabic). Never write `'ar'` by hand (it brings back يناير) and never append `-u-nu-…` (the tag already sets Latin digits; a second one throws). Machine-readable `en-CA` parts are not display and stay. The lint guard `DATE_LOCALE_SYNTAX` catches literals and templates; a variable holding a locale is on you.
+
+### Pattern: A legal record is INSERT-only in the database, not just in code (MUT-568)
+Issued documents get a row trigger that refuses UPDATE and DELETE and a statement trigger that refuses TRUNCATE (row triggers don't fire on TRUNCATE). The only bypass is a transaction-local setting (`SET LOCAL mutaba3a.issuing_bypass = 'on'`) that one named job sets. Such tables hold no foreign keys to rows that can be deleted, keep JSON snapshots of what they print, and are listed as kept in the purge catalog. A row lock (`SELECT … FOR UPDATE`) still works: it doesn't fire the trigger.
+
+### Pattern: A gap-free counter is one upsert statement, and refusals throw inside the transaction (MUT-568)
+`INSERT … ON CONFLICT DO UPDATE SET next = next + 1 RETURNING next - 1` as the transaction's first statement: the row lock serialises, the very first row can't race (Prisma's upsert can raise P2002 there), and checks that need the latest committed state run after it (READ COMMITTED). A refusal found after the increment throws a typed error caught outside `$transaction`, so the increment rolls back and no number is wasted; the memory store gets the same by checking everything before it writes.

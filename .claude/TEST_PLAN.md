@@ -4644,3 +4644,14 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 
 Not run: `test:db` (no store change: the report only reads through existing repository methods).
 
+## MUT-568 — the issuing core (2026-11-22, ADR-259)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/issuing/__tests__/compose.test.ts` | type codes; dated VAT rate; quantity parsing; line math, both discounts, half-up rounding, VAT spread that always adds up; receipts carry no VAT; exempt dealer receipts only; ILS only; line and total refusals; copy labels |
+| Store contract (memory + Postgres) | `server/src/repositories/__tests__/store-contract-issuing.ts` | number 1 + lines + Owed; per-type numbering from a starting number; **25 concurrent issues → 1..25, no gaps** (AC2); refusals take no number; same request key → same document; 320 paid in full; 400 pays a 305 up to what's owed; **credit note credits up to what's owed** (AC3); refused originals; **copies 0..3 under concurrency** (AC4); list paging and filters; issuer If-Match; reads are copies |
+| Postgres only | `store-prisma-issuing.test.ts` | **UPDATE/DELETE/TRUNCATE refused by the database** on documents, lines, copies, counters (AC1); counter never moves back; documents survive a profile delete (R-D1) |
+| Routes (memory store) | `server/src/__tests__/routes-issuing.test.ts` | feature and personal-profile gate; preview writes nothing; issue totals and Owed; idempotent replay; **no PATCH/PUT/DELETE route, the Owed out of the person's routes** (AC1); type-field, future and before-last date refusals; credit note and ORIGINAL_PAID; 320 and exempt-dealer receipts; copies and retried first copy; starting numbers and **gaps** (AC5); co-owner issues on the creator's feature; accountant reads, never writes; session-only audit |
+| Matrix / guards | `accountant-route-matrix.test.ts` (5 issuing GETs seeded), `accountant-store-guard.test.ts`, `store-guard.test.ts`, `api-key.test.ts`, `writability-drift.test.ts`, `prisma-account-purge-catalog.test.ts`, `rollback-check.test.ts` | the new domain, scopes, the owner-flag read, purge exemptions, rollback hazard |
+
+No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.

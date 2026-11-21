@@ -6686,3 +6686,23 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** no migration, no API shape change. An accountant's totals can be lower than the owner's for the same period, by exactly the receipt-less expenses; that is the point. `GET /v1/expenses/streak` still reads logged days (dates only, no amounts).
 
 **Alternatives rejected:** a per-route `hasReceipt` query flag (every new route would have to remember it); showing receipt-less expenses greyed out (the accountant can do nothing with them).
+
+## ADR-259: MTB3A Issues Invoices: an Immutable Issuing Core (supersedes ADR-067 for issuing)
+
+**Status:** Accepted (2026-11-22, Basel; MUT-568 under epic MUT-566). Plan `.claude/designs/MUT-568-issuing-core.md` (D1–D7, R-D1–R-D3 and the eng review's fixes).
+
+**Context:** Basel, 2026-11-06: Israel first; issue tax invoices with allocation numbers ourselves, as registered software (Instruction 36, Appendix E), no partner APIs. ADR-067 (MUT-145) retired document generation and made the app ledger-only; it stays true for everything except issuing. Registered software must keep issued documents permanently, number them gap-free per type, and correct them only with new documents, while our ledger rows are editable (ADR-075, ADR-083).
+
+**Decision:**
+1. **A separate, append-only record.** `issued_documents`, `issued_document_lines` and `issued_document_copies` are INSERT-only: a row trigger refuses UPDATE and DELETE, a statement trigger refuses TRUNCATE. `issued_document_counters` never moves back once a document of its type exists and is never deleted. The only bypass is `SET LOCAL mutaba3a.issuing_bypass = 'on'`, for the MUT-644 retention sweep. No route or store method changes or removes a document; a credit note corrects a tax invoice.
+2. **Kept 7 years after the account closes** (R-D1). The issuing tables hold no foreign keys (customer and issuer are JSON snapshots); the account purge leaves them (`PURGE_PROFILE_TABLES_EXEMPT`); MUT-644 deletes them after retention.
+3. **Gap-free numbers per profile and type, never per year** (D2), from a starting number settable until the first document (D3). The number is taken by one `INSERT … ON CONFLICT DO UPDATE … RETURNING` as the issue transaction's first statement; every refusal throws inside the transaction so the increment rolls back with it.
+4. **One transaction posts the money** (D5): 305 an Owed, 320 an Owed paid in full by a Received, 400 a Received (optionally paying an open 305), 330 a credit on its 305 up to what's still owed (R-D2; paid invoices: MUT-643). The ledger rows carry the new origin `ISSUED_DOCUMENT` (wire: `issued_document`); the person-side edit, undo, settle, credit and reversal routes already refuse non-ADJUSTMENT/CAPTURE rows, so a document's money can't be edited from the ledger.
+5. **Idempotent by design:** the issue request's Idempotency-Key is stored on the document (`@@unique(organizationId, requestKey)`); a retry returns the same document even when the idempotency record was lost.
+6. **The issuing core is versioned on its own** (`server/src/issuing/`, `ISSUING_CORE_VERSION`, stamped on every document; its own tests in `server/src/issuing/__tests__`). VAT comes from the statutory table in `issuing/vat-rate.ts`, not the editable firm rates: the registered version decides the national rate.
+7. **Gating** (D1): session-only domain `issuing`; a business profile whose owner holds the operator feature `invoicing`; Malafat firms, Malafat-connected profiles and delegated calls get the switched-off 404. Writes need an owner (creator or co-owner); an accountant reads under their grant (the owner's flag is read under the accountant guard). ILS only (D4); no stored drafts, a stateless preview (D7).
+8. Records export and restore leave issued documents out (the unified file is MUT-569); the signed-out portal has no issuing.
+
+**Consequences:** a rollback past MUT-568 is harmless until the first document is issued, then roll-forward only (rollback hazard). Document-owned Owed rows stay out of the entries feed until MUT-570 gives them their own rows; their Received rows appear as `origin: 'issued_document'`. Customer VAT numbers and addresses come with MUT-642.
+
+**Alternatives rejected:** partner APIs (Basel, 2026-11-06); issued documents as locked ledger rows (every ledger edit path would need a lock, and the record would not be INSERT-only); per-year numbering; a refund on a paid invoice in v1 (MUT-643).
