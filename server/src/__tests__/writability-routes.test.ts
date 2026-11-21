@@ -180,8 +180,8 @@ describe('every route sits inside the matrix', () => {
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
-    // download's mint (MUT-314), and an expense's move preview (MUT-589).
-    expect(SESSION_READS.length).toBe(42);
+    // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568).
+    expect(SESSION_READS.length).toBe(47);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -237,7 +237,8 @@ describe('a session on a key-only operation (hosted-portal.md §5 layer 2)', () 
   });
 
   /** MUT-339: the streak is personal-profile only, so on this firm it is 409 NOT_PERSONAL (its 200: streak-routes.test.ts). */
-  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : 200);
+  // MUT-568: issuing is switched off (404) on a profile whose owner lacks `invoicing`, as on this operator firm (its 200: routes-issuing.test.ts).
+  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : /^\/v1\/(issuer|issuing|issued-documents)/.test(op.path) ? 404 : 200);
 
   it.each(SESSION_READS.filter((op) => !op.path.includes(':')).map((op) => [op.key, op] as const))('%s answers 200 to a session (a read row)', async (_key, op) => {
     expect((await send(h, op, as(a.org.id))).status).toBe(okOn(op));

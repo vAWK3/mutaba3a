@@ -78,6 +78,19 @@ const CORRECTION_OPERATIONS = ['POST /v1/payments/{paymentId}/reverse', 'POST /v
 
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];
+/** MUT-568 (ADR-259): issuing — session-only. */
+const ISSUING_OPERATIONS = [
+  'GET /v1/issuer',
+  'PUT /v1/issuer',
+  'GET /v1/issuing/settings',
+  'PUT /v1/issuing/starting-numbers/{docType}',
+  'GET /v1/issuing/gaps',
+  'POST /v1/issued-documents/preview',
+  'POST /v1/issued-documents',
+  'GET /v1/issued-documents',
+  'GET /v1/issued-documents/{documentId}',
+  'POST /v1/issued-documents/{documentId}/copies',
+];
 
 /**
  * MUT-66: the unsorted inbox — session-only throughout. The four CRUD
@@ -219,6 +232,7 @@ const SESSION_OPERATIONS = [
   ...INCOME_OPERATIONS,
   ...CORRECTION_OPERATIONS,
   ...CONVERSION_OPERATIONS,
+  ...ISSUING_OPERATIONS,
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
   ...ACCOUNTANT_OPERATIONS,
@@ -478,7 +492,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -488,7 +502,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

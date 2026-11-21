@@ -5063,7 +5063,7 @@ function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRec
     issuer: row.issuer as JsonObject,
     customer: row.customer as JsonObject,
     paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
-    lines: lines.map(({ documentId: _d, organizationId: _o, ...line }) => line),
+    lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
   };
 }
 
