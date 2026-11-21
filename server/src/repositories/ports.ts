@@ -1596,6 +1596,8 @@ export interface UserRecord {
   closure: AccountClosureRecord | null;
   /** MUT-459 (ADR-212): when the CLI made this person an operator; null when they are not one. */
   operatorAt: Date | null;
+  /** MUT-535 (D6): the monthly summary mail; null = the default (on, without Malafat-covered profiles). */
+  monthlySummaryMail: MonthlySummaryChoice | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -1637,6 +1639,10 @@ export type TrialPromptAction = 'welcome-accepted' | 'welcome-skipped' | 'banner
 
 /** A contextual Malafat suggestion a person can retire (MUT-189). */
 export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
+
+/** MUT-535 (D6, D7): `OFF`, or `ON_ALL` (also the profiles Malafat covers). The default is stored as null. */
+export const MONTHLY_SUMMARY_CHOICES = ['OFF', 'ON_ALL'] as const;
+export type MonthlySummaryChoice = (typeof MONTHLY_SUMMARY_CHOICES)[number];
 
 export interface MalafatSuggestionsRecord {
   off: boolean;
@@ -1708,6 +1714,8 @@ export interface UserRepository {
    * devices or tabs never undo each other's dismissals. Null for an unknown user.
    */
   updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
+  /** MUT-535 (D6): stores the monthly summary choice (null = the default). Null for an unknown user. */
+  setMonthlySummaryMail(id: string, choice: MonthlySummaryChoice | null, at: Date): Promise<UserRecord | null>;
   /** MUT-418: applies one trial-prompt action under a row lock (billing/trial-prompt.ts). Null for an unknown user. */
   updateTrialPrompt(id: string, action: TrialPromptAction, at: Date): Promise<UserRecord | null>;
   /**

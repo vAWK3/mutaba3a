@@ -28,6 +28,7 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   AccountPurgeRepository,
+  MonthlySummaryChoice,
   OperatorAccountCursor,
   VendorRecord,
   VendorNameRecord,
@@ -185,7 +186,7 @@ import type {
   AcceptAccountantResult,
   PeriodPackRepository,
 } from './ports.js';
-import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -414,6 +415,10 @@ export class PrismaLedgerStore implements LedgerStore {
         return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
       }),
     // MUT-418: the same row-lock discipline, so a welcome answered on two devices keeps the first
+    setMonthlySummaryMail: async (id, choice, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { monthlySummaryMail: choice, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
     updateTrialPrompt: async (id, action, at) =>
       this.prisma.$transaction(async (tx) => {
         const [locked] = await tx.$queryRaw<Array<{ trialPrompt: unknown }>>`SELECT "trialPrompt" FROM "users" WHERE "id" = ${id}::uuid FOR UPDATE`;
@@ -4844,12 +4849,18 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     trialPrompt: row.trialPrompt === null ? null : resolveTrialPrompt(row.trialPrompt),
     closure: closureOf(row),
     operatorAt: row.operatorAt,
+    monthlySummaryMail: monthlySummaryChoiceOf(row.monthlySummaryMail),
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 /** MUT-333: the CHECK keeps closeRequestedAt and deleteAfter together. */
+/** MUT-535: an unknown stored value reads as the default rather than failing every read of the person. */
+function monthlySummaryChoiceOf(value: string | null): MonthlySummaryChoice | null {
+  return value !== null && (MONTHLY_SUMMARY_CHOICES as readonly string[]).includes(value) ? (value as MonthlySummaryChoice) : null;
+}
+
 function closureOf(row: Prisma.UserGetPayload<object>): UserRecord['closure'] {
   if (row.closeRequestedAt === null || row.deleteAfter === null) return null;
   return {

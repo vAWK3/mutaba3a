@@ -255,6 +255,7 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   await store.users.requestClosure({ userId: other.id, at: LATER, deleteAfter: new Date(LATER.getTime() + 30 * 86_400_000), endedSubscriptionIds: [], exceptSessionId: closing.id, audit: [] });
   // MUT-459: and an operator (a hosted person's; the export writes null for a device)
   await store.users.setOperator({ userId: other.id, operator: true, at: LATER, audit: [] });
+  await store.users.setMonthlySummaryMail(other.id, 'OFF', LATER);
 
   // ints: a connection that was later disconnected (on the other person's profile: one connection per profile and provider)
   const [otherMembership] = await store.memberships.listByUser(other.id);

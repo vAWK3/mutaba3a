@@ -33,7 +33,9 @@ export function localPersonOf(person: UserRecord): UserRecord {
     // MUT-333: closing is the hosted account's; a device's records file never carries it.
     closure: null,
     // MUT-459: operators are hosted accounts only.
-    operatorAt: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    operatorAt: null,
+    // MUT-535: the monthly summary mail is the hosted account's.
+    monthlySummaryMail: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 

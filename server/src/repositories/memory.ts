@@ -239,7 +239,7 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  * 19 (MUT-596): `people` gained `passwordChosen`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 19;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 20;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -617,6 +617,12 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
+    },
+    setMonthlySummaryMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { monthlySummaryMail: choice, updatedAt: at });
+      return { ...u };
     },
     updateTrialPrompt: async (id, action, at) => {
       const u = this.people.get(id);
@@ -1437,6 +1443,7 @@ export class MemoryLedgerStore implements LedgerStore {
       trialPrompt: null,
       closure: null,
       operatorAt: null,
+      monthlySummaryMail: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
