@@ -155,6 +155,22 @@ variable "comeback_mail_enabled" {
   default     = false
 }
 
+variable "monthly_summary_mail_enabled" {
+  description = "MUT-535 (ADR-259): creates the monthly summary mail job (days 1-7 of each month, 14:00 Jerusalem). Off (default) until the operator has read `npm run billing:monthly-summary-mail -- --dry-run` after the release, the privacy policy that names the mail is live, and the paying + trialling count fits the mail budget (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "monthly_summary_daily_sends" {
+  description = "MUT-535 (D12): monthly summary mails per run (MONTHLY_SUMMARY_DAILY_SENDS). Every other mail shares mail_daily_cap with it, so keep it well under the cap: 40 of 90 leaves room for signups, trial and card mails. Seven runs a month carry 7x this many people. 40 (the API's default) leaves the variable unset."
+  type        = number
+  default     = 40
+  validation {
+    condition     = var.monthly_summary_daily_sends >= 1 && floor(var.monthly_summary_daily_sends) == var.monthly_summary_daily_sends
+    error_message = "monthly_summary_daily_sends must be a whole number of at least 1."
+  }
+}
+
 variable "billing_retry_window_days" {
   description = "MUT-533 (D3): the length of Stripe's Smart Retries window in days, as set in the Stripe dashboard (Settings › Billing › Revenue recovery): 7, 14, 21 or 28. The failed-card reminder goes at its midpoint. 14 (Stripe's default, 8 tries within 2 weeks) leaves BILLING_RETRY_WINDOW_DAYS unset."
   type        = number
