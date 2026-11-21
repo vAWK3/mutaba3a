@@ -1,6 +1,6 @@
 import type { ExpenseSummaryBlock } from '../expenses/summary.js';
 import type { EntryRow } from '../repositories/ports.js';
-import { serializeExpense, serializeIncomeEntry } from '../serializers.js';
+import { paymentOriginWire, serializeExpense, serializeIncomeEntry } from '../serializers.js';
 
 /**
  * MUT-560 review (ADR-247): what a visitor sees of an entry. Names, never ids: the client, project and category by name
@@ -57,7 +57,7 @@ export function visitorEntry(row: VisitorRow, ctx: VisitorContext) {
       return {
         kind: 'received' as const,
         createdAt,
-        origin: row.record.origin === 'CAPTURE' ? ('capture' as const) : ('integration' as const),
+        origin: paymentOriginWire(row.record.origin),
         settlesOwed: ctx.settledOwed.has(row.record.id),
         replacesPayment: row.record.replacesPaymentId !== null,
         income: visitorIncome(serializeIncomeEntry({ kind: 'received', payment: row.record }), ctx),

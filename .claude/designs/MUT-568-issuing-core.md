@@ -206,3 +206,5 @@ Screens, PDF, allocation numbers (MUT-572), unified-file export (MUT-569), forei
 13. Gaps: from the starting number to `next − 1`.
 
 **Build order:** (1) compose ✔ · (2) enum migration · (3) issuing tables + triggers + purge catalog · (4) origin touchpoints + `createReceivableTx` · (5) store issue transaction, Prisma + memory, with test:db concurrency/rollback/trigger tests · (6) credit note + copies · (7) routes, gating, scopes, matrix, audit, idempotency, API 1.115.0-mut568, OpenAPI · (8) gaps + ADR-259 + knowledge files.
+
+**Build note (2026-11-22):** document-owned Owed rows stay out of the entries feed in 568: the feed's income rows carry no origin, so the portal and phone would offer edit/delete that 404. Received rows from 320/400 do appear, as `origin: 'issued_document'` (the phone already treats an unknown origin as not editable). MUT-570 adds document rows to the feed with their own UI.

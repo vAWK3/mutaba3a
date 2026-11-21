@@ -132,6 +132,8 @@ enum ReceivableOrigin {
   INSTALLMENT
   RETAINER_CHARGE
   ADJUSTMENT
+  /// MUT-568: posted by an issued tax invoice or invoice-receipt; its money is owned by the document.
+  ISSUED_DOCUMENT
 }
 
 enum ReceivableStatus {
@@ -343,9 +345,9 @@ model User {
   firmRequests     Organization[]      @relation("FirmRequests")
 
   expenses            Expense[]
-  expenseReceipts     ExpenseReceipt[]     @relation("ReceiptUploadedBy")
+  expenseReceipts     ExpenseReceipt[]            @relation("ReceiptUploadedBy")
   /// MUT-255: receipts this person approved into an expense.
-  approvedReceipts    ExpenseReceipt[]     @relation("ReceiptApprovedBy")
+  approvedReceipts    ExpenseReceipt[]            @relation("ReceiptApprovedBy")
   conversions         Conversion[]
   /// MUT-267: groups this person created.
   expenseGroups       ExpenseGroup[]
@@ -382,19 +384,19 @@ model User {
   purgeLastTriedAt          DateTime?
 
   /// MUT-115 (ADR-190): this person's passkeys, and the creation challenges they asked for.
-  passkeys            Passkey[]
-  webauthnChallenges  WebauthnChallenge[]
+  passkeys           Passkey[]
+  webauthnChallenges WebauthnChallenge[]
 
   /// MUT-559 (ADR-245): the profiles this person reads as an accountant, and the invites they sent as an owner.
-  accountantGrants      AccountantGrant[] @relation("AccountantGrants")
-  accountantInvitesSent AccountantGrant[] @relation("AccountantInvitesSent")
+  accountantGrants      AccountantGrant[]  @relation("AccountantGrants")
+  accountantInvitesSent AccountantGrant[]  @relation("AccountantInvitesSent")
   /// MUT-560 (ADR-247): the share links this person created as an owner.
-  shareLinksCreated     ShareLink[]       @relation("ShareLinksCreated")
+  shareLinksCreated     ShareLink[]        @relation("ShareLinksCreated")
+  externalIdentities    ExternalIdentity[]
+  malafatSignIns        MalafatSignIn[]
+  signInCodes           SignInCode[]
 
   @@map("users")
-  externalIdentities ExternalIdentity[]
-  malafatSignIns     MalafatSignIn[]
-  signInCodes        SignInCode[]
 }
 
 /// What an unsorted capture becomes once filed: an Expense, or income
@@ -1031,46 +1033,46 @@ model AgreementSupplement {
 /// Money received from a customer (M4). Immutable once posted except through
 /// `reverse` (status, reversedAt, reason) and `allocations` (new rows).
 model Payment {
-  id                String        @id @default(uuid()) @db.Uuid
-  organizationId    String        @db.Uuid
-  organization      Organization  @relation(fields: [organizationId], references: [id])
+  id                 String        @id @default(uuid()) @db.Uuid
+  organizationId     String        @db.Uuid
+  organization       Organization  @relation(fields: [organizationId], references: [id])
   /// Null for "Received" captured with no client (MUT-65); always set for a Malafat-fed payment.
-  customerId        String?       @db.Uuid
+  customerId         String?       @db.Uuid
   /// onDelete: Restrict, unchanged from the M4 migration — the nullability change here is the column, not this constraint's delete behavior.
-  customer          Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: Restrict)
   /// Optional matter the money is for (MUT-65). Never set by a Malafat-fed payment, which carries the link through its allocations instead.
-  projectId         String?       @db.Uuid
-  project           Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  projectId          String?       @db.Uuid
+  project            Project?      @relation(fields: [projectId], references: [id], onDelete: SetNull)
   /// PAY-YYYY-NNNN, gap-free per organization and year (payment_counters).
-  number            String
-  currency          String        @db.VarChar(3)
-  amountMinor       BigInt
+  number             String
+  currency           String        @db.VarChar(3)
+  amountMinor        BigInt
   /// Σ allocations; unallocated = amount − allocated. 0 once reversed.
-  allocatedMinor    BigInt        @default(0)
-  receivedOn        String        @db.VarChar(10)
-  method            PaymentMethod
-  reference         String?
+  allocatedMinor     BigInt        @default(0)
+  receivedOn         String        @db.VarChar(10)
+  method             PaymentMethod
+  reference          String?
   /// MUT-481: the legal receipt the firm issued in its invoicing app (a label, not unique; a correction keeps it).
-  receiptNumber     String?       @db.VarChar(64)
-  notes             String?
-  status            PaymentStatus @default(POSTED)
-  reversedAt        DateTime?
-  reversalReason    String?
+  receiptNumber      String?       @db.VarChar(64)
+  notes              String?
+  status             PaymentStatus @default(POSTED)
+  reversedAt         DateTime?
+  reversalReason     String?
   /// MUT-443 (ADR-225): why a correction reversed it (CREDIT_REASON_CODES); null on any other reversal and while POSTED.
-  reversalReasonCode String?      @db.VarChar(32)
-  replacesPaymentId String?       @db.Uuid
-  requestId         String?
+  reversalReasonCode String?       @db.VarChar(32)
+  replacesPaymentId  String?       @db.Uuid
+  requestId          String?
   /// Who captured it (MUT-65); null for a Malafat-fed payment, which has no session actor.
-  createdByUserId   String?       @db.Uuid
+  createdByUserId    String?       @db.Uuid
   /// MUT-61: INTEGRATION when Malafat's key recorded it, CAPTURE when a person did (POST /v1/income, inbox filing).
   /// Durable where createdByUserId is not: that column is SetNull when the user goes.
-  origin            PaymentOrigin @default(INTEGRATION)
+  origin             PaymentOrigin @default(INTEGRATION)
   /// MUT-61: the surface a capture came from (CaptureSourceSchema: app, siri, …); null when not sent, and always for INTEGRATION.
-  captureSource     String?       @db.VarChar(20)
-  createdBy         User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
-  version           Int           @default(1)
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @default(now())
+  captureSource      String?       @db.VarChar(20)
+  createdBy          User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  version            Int           @default(1)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @default(now())
 
   allocations PaymentAllocation[]
 
@@ -1089,6 +1091,8 @@ model Payment {
 enum PaymentOrigin {
   INTEGRATION
   CAPTURE
+  /// MUT-568: posted by an issued invoice-receipt or receipt; its money is owned by the document.
+  ISSUED_DOCUMENT
 }
 
 model PaymentAllocation {
@@ -1246,30 +1250,30 @@ model FeeProposal {
 
 /// One expense in its original amount and currency — never converted. Soft-deleted.
 model Expense {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @db.Uuid
-  organization    Organization     @relation(fields: [organizationId], references: [id])
+  id                 String           @id @default(uuid()) @db.Uuid
+  organizationId     String           @db.Uuid
+  organization       Organization     @relation(fields: [organizationId], references: [id])
   /// Calendar date in the organization timezone, YYYY-MM-DD.
-  occurredOn      String           @db.VarChar(10)
-  amountMinor     BigInt
-  currency        String           @db.VarChar(3)
-  title           String?
+  occurredOn         String           @db.VarChar(10)
+  amountMinor        BigInt
+  currency           String           @db.VarChar(3)
+  title              String?
   /// The vendor as typed (history and display). MUT-254 links it to `vendorId`.
-  vendor          String?
-  vendorId        String?          @db.Uuid
-  vendorRef       Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
-  categoryId      String?          @db.Uuid
-  category        ExpenseCategory? @relation(fields: [categoryId], references: [id])
-  customerId      String?          @db.Uuid
-  customer        Customer?        @relation(fields: [customerId], references: [id])
-  projectId       String?          @db.Uuid
-  project         Project?         @relation(fields: [projectId], references: [id])
-  notes           String?
+  vendor             String?
+  vendorId           String?          @db.Uuid
+  vendorRef          Vendor?          @relation(fields: [vendorId], references: [id], onDelete: SetNull)
+  categoryId         String?          @db.Uuid
+  category           ExpenseCategory? @relation(fields: [categoryId], references: [id])
+  customerId         String?          @db.Uuid
+  customer           Customer?        @relation(fields: [customerId], references: [id])
+  projectId          String?          @db.Uuid
+  project            Project?         @relation(fields: [projectId], references: [id])
+  notes              String?
   /// MUT-333 (D7): null once the person who entered it has deleted their account ("former member").
-  createdByUserId String?          @db.Uuid
-  createdBy       User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
+  createdByUserId    String?          @db.Uuid
+  createdBy          User?            @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   /// MUT-436 (ADR-201): where it was captured (app, siri, widget, quick_action, share; mcp = the person's own Claude).
-  captureSource   String?          @db.VarChar(20)
+  captureSource      String?          @db.VarChar(20)
   /// MUT-302 (ADR-231): the VAT inside amountMinor (the gross). All four null = "No VAT recorded", never a guessed
   /// split. CHECKs (raw SQL): all or none, net + vat = amount, 0/0 unless STANDARD_RATED, a standard rate is 1..10000.
   vatTreatment       VatTreatment?
@@ -1279,10 +1283,10 @@ model Expense {
   vatMinor           BigInt?
   /// MUT-557 (ADR-246): the supplier invoice's Israeli allocation number (מספר הקצאה), nine digits; CHECK (raw SQL).
   allocationNumber   String?          @db.VarChar(9)
-  version         Int              @default(1)
-  createdAt       DateTime
-  updatedAt       DateTime
-  deletedAt       DateTime?
+  version            Int              @default(1)
+  createdAt          DateTime
+  updatedAt          DateTime
+  deletedAt          DateTime?
 
   receipts       ExpenseReceipt[]
   /// MUT-267: keep/leave-out marks on this expense, one per group at most.
@@ -1332,29 +1336,29 @@ model ExpenseCategory {
 /// MUT-254: a vendor of a profile, saved automatically from any typed vendor (ADR-183). Matched exactly: registration
 /// number first, then the normalised name or an alias (`VendorName`). Session-only: Malafat's API key never reads it.
 model Vendor {
-  id              String           @id @default(uuid()) @db.Uuid
-  organizationId  String           @db.Uuid
-  organization    Organization     @relation(fields: [organizationId], references: [id])
+  id                     String           @id @default(uuid()) @db.Uuid
+  organizationId         String           @db.Uuid
+  organization           Organization     @relation(fields: [organizationId], references: [id])
   /// The first spelling typed, trimmed.
-  canonicalName   String
-  registrationNo  String?
+  canonicalName          String
+  registrationNo         String?
   /// Digits only (vendors/keys.ts registrationKey); NULLs are distinct, so the unique index allows many unset.
-  registrationKey String?
-  phone           String?
-  email           String?
+  registrationKey        String?
+  phone                  String?
+  email                  String?
   /// The category of the last expense saved with this vendor (never the automatic Other): the typeahead's prefill.
-  lastCategoryId  String?          @db.Uuid
-  lastCategory    ExpenseCategory? @relation(fields: [lastCategoryId], references: [id], onDelete: SetNull)
+  lastCategoryId         String?          @db.Uuid
+  lastCategory           ExpenseCategory? @relation(fields: [lastCategoryId], references: [id], onDelete: SetNull)
   /// MUT-303: the currency of the last new expense saved with this vendor; prefills the next one.
-  lastCurrency           String?       @db.VarChar(3)
+  lastCurrency           String?          @db.VarChar(3)
   /// MUT-303: the VAT of the last expense with this vendor that carried VAT (CHECK: both set or both null).
   lastVatTreatment       VatTreatment?
   lastVatRateBasisPoints Int?
   /// Set on every successful link; the typeahead's "recent".
-  lastUsedAt      DateTime
-  version         Int              @default(1)
-  createdAt       DateTime
-  updatedAt       DateTime
+  lastUsedAt             DateTime
+  version                Int              @default(1)
+  createdAt              DateTime
+  updatedAt              DateTime
 
   names    VendorName[]
   expenses Expense[]
@@ -1413,55 +1417,55 @@ enum ReceiptCaptureHint {
 /// A receipt file in the attachments bucket under org/{organizationId}/expense-receipts/{id}. Kept apart from `attachments`, which Malafat reads.
 /// MUT-255: a receipt belongs to its profile; its expense is optional (a To-review receipt has none yet).
 model ExpenseReceipt {
-  id               String              @id @default(uuid()) @db.Uuid
-  organizationId   String              @db.Uuid
-  organization     Organization        @relation(fields: [organizationId], references: [id])
-  expenseId        String?             @db.Uuid
+  id                 String              @id @default(uuid()) @db.Uuid
+  organizationId     String              @db.Uuid
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  expenseId          String?             @db.Uuid
   /// RESTRICT, as before MUT-255: expenses are only soft-deleted, and SET NULL would break the filing CHECK.
-  expense          Expense?            @relation(fields: [expenseId], references: [id], onDelete: Restrict)
-  filename         String
-  mimeType         String
-  sizeBytes        Int
-  status           AttachmentStatus    @default(PENDING_UPLOAD)
+  expense            Expense?            @relation(fields: [expenseId], references: [id], onDelete: Restrict)
+  filename           String
+  mimeType           String
+  sizeBytes          Int
+  status             AttachmentStatus    @default(PENDING_UPLOAD)
   /// Defaults to FILED, not TO_REVIEW: a revision that predates MUT-255 inserts with an expense and no filing status,
   /// and must pass the CHECK during a rolling deploy. The library route sets TO_REVIEW itself.
-  filingStatus     ReceiptFilingStatus @default(FILED)
+  filingStatus       ReceiptFilingStatus @default(FILED)
   /// The upload day in the profile's timezone (YYYY-MM-DD), like every other `…On` date; the library's date filter.
   /// The UTC-day default only serves inserts from a revision that predates MUT-255 (rolling deploy); this one always sets it.
-  receivedOn       String              @default(dbgenerated("to_char((now() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD'::text)")) @db.VarChar(10)
-  storageKey       String
+  receivedOn         String              @default(dbgenerated("to_char((now() AT TIME ZONE 'UTC'::text), 'YYYY-MM-DD'::text)")) @db.VarChar(10)
+  storageKey         String
   /// MUT-333 (D7): null once the uploader has deleted their account.
-  uploadedByUserId String?             @db.Uuid
-  uploadedBy       User?               @relation("ReceiptUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+  uploadedByUserId   String?             @db.Uuid
+  uploadedBy         User?               @relation("ReceiptUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
   /// What the device's reader suggested (firm-books brief §6.1 `ReceiptSuggestion`); null when nothing was read.
-  suggested        Json?
+  suggested          Json?
   /// What approval wrote into the expense; kept after an unlink, for the edit-rate figure.
-  approved         Json?
-  approvedAt       DateTime?
-  approvedByUserId String?             @db.Uuid
-  approvedBy       User?               @relation("ReceiptApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
-  version          Int                 @default(1)
-  requestId        String?
-  createdAt        DateTime
-  completedAt      DateTime?
-  deletedAt        DateTime?
+  approved           Json?
+  approvedAt         DateTime?
+  approvedByUserId   String?             @db.Uuid
+  approvedBy         User?               @relation("ReceiptApprovedBy", fields: [approvedByUserId], references: [id], onDelete: SetNull)
+  version            Int                 @default(1)
+  requestId          String?
+  createdAt          DateTime
+  completedAt        DateTime?
+  deletedAt          DateTime?
   /// MUT-441: the server's reading of the receipt. The partial index on (readStatus, readLeaseUntil) WHERE PENDING,
   /// which the read sweep scans, is raw SQL in the migration (Prisma can't express a partial index).
-  readStatus       ReceiptReadStatus   @default(NONE)
-  readAttempts     Int                 @default(0)
+  readStatus         ReceiptReadStatus   @default(NONE)
+  readAttempts       Int                 @default(0)
   /// A reader's claim: no other reader takes the receipt before this passes.
-  readLeaseUntil   DateTime?
+  readLeaseUntil     DateTime?
   /// When reading was (last) asked for; the sweep takes the oldest first.
-  readRequestedAt  DateTime?
+  readRequestedAt    DateTime?
   /// The first reader's claim; the give-up clock (FAILED 30 minutes after it). Null until a reader claims the receipt,
   /// so a backlog that waits for a reader is never given up on before it was tried.
   readFirstClaimedAt DateTime?
   /// A code only (`unreadable`, `timeout`, `exhausted`), never receipt text.
-  readFailReason   String?             @db.VarChar(40)
-  captureHint      ReceiptCaptureHint  @default(PHOTO)
+  readFailReason     String?             @db.VarChar(40)
+  captureHint        ReceiptCaptureHint  @default(PHOTO)
   /// MUT-514 (D6, D10): the last server read's phone and ID numbers, digits only, `{ buyer: [], vendor: [] }`: the
   /// receipt's bill-to blocks and what it filled as the vendor's. The organization's buyer memory. Never in the API.
-  readIdentifiers  Json?
+  readIdentifiers    Json?
 
   /// The receipts of one expense.
   @@index([organizationId, expenseId, createdAt])
@@ -2093,4 +2097,139 @@ model SignInCode {
   @@index([expiresAt])
   @@index([userId])
   @@map("sign_in_codes")
+}
+
+// ─── MUT-568 (ADR-259): the issuing core ─────────────────────────────────────────────────────────────────────────
+// Issued documents are legal records: kept 7 years even after the account closes (MUT-644), so these tables hold no
+// foreign keys (the purge leaves them; the customer and issuer are snapshots). Documents, lines and copies are
+// INSERT-only: a trigger refuses UPDATE, DELETE and TRUNCATE (migration 20261122120100_mut568_issuing_core).
+
+enum IssuedDocType {
+  TAX_INVOICE
+  TAX_INVOICE_RECEIPT
+  CREDIT_NOTE
+  RECEIPT
+}
+
+enum DealerType {
+  LICENSED
+  EXEMPT
+  COMPANY
+  NONPROFIT
+}
+
+/// The business details printed on a profile's documents; snapshotted onto each document at issue.
+model IssuerDetails {
+  organizationId   String     @id @db.Uuid
+  legalName        String
+  vatId            String     @db.VarChar(9)
+  dealerType       DealerType
+  address          String?
+  city             String?
+  phone            String?
+  email            String?
+  website          String?
+  /// MUT-570/640: the business's logo, printed on its documents.
+  logoAttachmentId String?    @db.Uuid
+  /// BLACK | BLUE: the only print colours (Basel, 2026-11-22).
+  ink              String     @default("BLACK") @db.VarChar(5)
+  /// A key in issuing/styles (PROFESSIONAL | MODERN | MINIMAL); a string so a new style needs no migration.
+  documentStyle    String     @default("PROFESSIONAL") @db.VarChar(32)
+  version          Int        @default(1)
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  @@map("issuer_details")
+}
+
+/// Next number per profile and document type, never per year. `start` is the first number (D3), kept for the gap report.
+model IssuedDocumentCounter {
+  organizationId String        @db.Uuid
+  docType        IssuedDocType
+  start          Int
+  next           Int
+
+  @@id([organizationId, docType])
+  @@map("issued_document_counters")
+}
+
+model IssuedDocument {
+  id                 String        @id @default(uuid()) @db.Uuid
+  organizationId     String        @db.Uuid
+  docType            IssuedDocType
+  number             Int
+  /// YYYY-MM-DD, the document's own date (the allocation API's Invoice_Date).
+  documentDate       String        @db.VarChar(10)
+  issuedAt           DateTime      @default(now())
+  currency           String        @db.VarChar(3)
+  subtotalMinor      BigInt
+  discountMinor      BigInt
+  netMinor           BigInt
+  vatRateBasisPoints Int
+  vatMinor           BigInt
+  grossMinor         BigInt
+  /// Snapshot of IssuerDetails at issue.
+  issuer             Json
+  customerId         String?       @db.Uuid
+  /// Snapshot of the customer at issue (name; VAT number and address from MUT-642).
+  customer           Json
+  /// he | ar | en: the language the document is printed in.
+  language           String        @db.VarChar(2)
+  style              String        @db.VarChar(32)
+  ink                String        @db.VarChar(5)
+  notes              String?
+  /// A credit note's original.
+  originalId         String?       @db.Uuid
+  /// 320/400: how the money came in.
+  paymentDetails     Json?
+  /// MUT-572 fills it before the document is written.
+  allocationNumber   String?       @db.VarChar(9)
+  receivableId       String?       @db.Uuid
+  paymentId          String?       @db.Uuid
+  creditId           String?       @db.Uuid
+  coreVersion        String        @db.VarChar(16)
+  createdByUserId    String        @db.Uuid
+  /// The issue request's idempotency key: a retry returns this document instead of issuing another.
+  requestKey         String        @db.VarChar(128)
+
+  @@unique([organizationId, docType, number])
+  @@unique([organizationId, requestKey])
+  @@index([organizationId, customerId, documentDate])
+  @@index([organizationId, documentDate])
+  @@index([originalId])
+  @@map("issued_documents")
+}
+
+model IssuedDocumentLine {
+  documentId         String @db.Uuid
+  index              Int
+  organizationId     String @db.Uuid
+  description        String
+  /// GOODS | SERVICE
+  kind               String @db.VarChar(7)
+  quantityMilli      BigInt
+  unitPriceMinor     BigInt
+  discountMinor      BigInt
+  netMinor           BigInt
+  vatRateBasisPoints Int
+  vatMinor           BigInt
+
+  @@id([documentId, index])
+  @@index([organizationId])
+  @@map("issued_document_lines")
+}
+
+/// One row per copy produced (download, email, share): copy 0 reads "מקור", every later one "העתק".
+model IssuedDocumentCopy {
+  documentId       String   @db.Uuid
+  copyIndex        Int
+  organizationId   String   @db.Uuid
+  producedAt       DateTime @default(now())
+  producedByUserId String   @db.Uuid
+  /// DOWNLOAD | EMAIL | SHARE
+  channel          String   @db.VarChar(8)
+
+  @@id([documentId, copyIndex])
+  @@index([organizationId])
+  @@map("issued_document_copies")
 }

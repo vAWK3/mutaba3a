@@ -2846,7 +2846,7 @@ export const ReceivableSchema = z
     /** Null for an "Owed" capture with no matter (MUT-65); always set for INSTALLMENT/RETAINER_CHARGE. */
     projectId: uuid.nullable(),
     agreementId: uuid.nullable(),
-    origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']),
+    origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']),
     originId: uuid.nullable(),
     currency: CurrencySchema,
     net: AmountSchema,
@@ -3136,7 +3136,7 @@ export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
 export const StoredCaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share', 'mcp', 'malafat']).openapi('StoredCaptureSource');
 export type StoredCaptureSource = z.infer<typeof StoredCaptureSourceSchema>;
 /** MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed. */
-export const PaymentOriginSchema = z.enum(['integration', 'capture']).openapi('PaymentOrigin');
+export const PaymentOriginSchema = z.enum(['integration', 'capture', 'issued_document']).openapi('PaymentOrigin');
 /** MUT-61: how much of a payment has been applied; a REVERSED payment reads `unallocated` (see status). */
 export const AllocationStateSchema = z.enum(['unallocated', 'partial', 'allocated']).openapi('AllocationState');
 export const AllocationStrategySchema = z.enum(['OLDEST_FIRST', 'SETTLE_MATTERS']).openapi('AllocationStrategy');
@@ -3164,7 +3164,7 @@ export const AllocationPreviewRequestSchema = z
 export const BalanceSchema = z.object({ outstanding: AmountSchema, overdue: AmountSchema }).openapi('Balance');
 
 export const EligibleReceivableSchema = z
-  .object({ receivableId: uuid, projectId: uuid, agreementId: uuid.nullable(), origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), dueDate: IsoDateSchema, gross: AmountSchema, outstanding: AmountSchema, status: ItemStatusSchema })
+  .object({ receivableId: uuid, projectId: uuid, agreementId: uuid.nullable(), origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']), dueDate: IsoDateSchema, gross: AmountSchema, outstanding: AmountSchema, status: ItemStatusSchema })
   .openapi('EligibleReceivable');
 
 export const AllocationPreviewResponseSchema = z
@@ -3210,7 +3210,7 @@ export const CreatePaymentRequestSchema = z
   .openapi('CreatePaymentRequest');
 
 export const AllocationSchema = z
-  .object({ id: uuid, receivableId: uuid, projectId: uuid, origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), amount: AmountSchema, receivableOutstanding: AmountSchema, receivableStatus: ItemStatusSchema, createdAt: z.string().datetime() })
+  .object({ id: uuid, receivableId: uuid, projectId: uuid, origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']), amount: AmountSchema, receivableOutstanding: AmountSchema, receivableStatus: ItemStatusSchema, createdAt: z.string().datetime() })
   .openapi('Allocation');
 
 export const PaymentSchema = z
@@ -4603,7 +4603,7 @@ export const EntrySchema = z
       /** Null for a payment Malafat recorded: no person logged it. */
       createdByUserId: uuid.nullable(),
       /** capture: a person recorded it (POST /v1/income, inbox filing or a settle); integration: Malafat did. */
-      origin: z.enum(['capture', 'integration']),
+      origin: z.enum(['capture', 'integration', 'issued_document']),
       /** The one Owed entry this payment paid toward (a settle, full or partial), or null. The Owed reads `settled` once paid in full, `open` before. */
       settlesOwedId: uuid.nullable(),
       /** The payment Malafat reversed and replaced with this one, or null. The replaced one reads `reversed`. */
@@ -4758,7 +4758,7 @@ export const ShareLinkEntrySchema = z
     z.object({
       kind: z.literal('received'),
       createdAt: z.string().datetime(),
-      origin: z.enum(['capture', 'integration']),
+      origin: z.enum(['capture', 'integration', 'issued_document']),
       settlesOwed: z.boolean().openapi({ description: 'It paid toward one Owed entry (a settle).' }),
       replacesPayment: z.boolean().openapi({ description: 'It replaced a payment Malafat reversed.' }),
       income: ShareLinkIncomeSchema,

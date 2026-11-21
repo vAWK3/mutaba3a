@@ -392,13 +392,20 @@ export interface CapturedBy {
   displayName: string;
 }
 
+export type PaymentOriginWire = 'capture' | 'integration' | 'issued_document';
+
+/** A payment's origin on the wire. MUT-568: a document's Received is 'issued_document' (no edit, undo or reversal). */
+export function paymentOriginWire(origin: PaymentOrigin): PaymentOriginWire {
+  return origin === 'CAPTURE' ? 'capture' : origin === 'ISSUED_DOCUMENT' ? 'issued_document' : 'integration';
+}
+
 export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null, capturedBy: CapturedBy | null) {
   return {
     id: p.id,
     number: p.number,
     customerId: p.customerId,
     projectId: p.projectId,
-    origin: p.origin === 'CAPTURE' ? ('capture' as const) : ('integration' as const),
+    origin: paymentOriginWire(p.origin),
     captureSource: p.captureSource as CaptureSource | null,
     capturedBy,
     currency: p.currency as Currency,
@@ -716,7 +723,7 @@ export function serializeIncomeEntry(entry: { kind: 'received'; payment: Payment
 // ---- MUT-270: the entries feed ----------------------------------------------
 
 /** A new PaymentOrigin fails to compile here until the feed says what it is. */
-const FEED_PAYMENT_ORIGIN: Record<PaymentOrigin, 'capture' | 'integration'> = { CAPTURE: 'capture', INTEGRATION: 'integration' };
+const FEED_PAYMENT_ORIGIN: Record<PaymentOrigin, PaymentOriginWire> = { CAPTURE: 'capture', INTEGRATION: 'integration', ISSUED_DOCUMENT: 'issued_document' };
 
 /** One feed item: the existing Expense / IncomeResponse / Conversion shape inside a small envelope. */
 export interface EntryContext {

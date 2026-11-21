@@ -772,7 +772,7 @@ export interface VatRateRepository {
 export type AgreementType = 'FIXED' | 'RECURRING' | 'CONTINGENCY';
 export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
-export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
+export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT' | 'ISSUED_DOCUMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
 export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION' | 'CORRECTION';
@@ -1328,7 +1328,7 @@ export interface ReceivableRepository {
 export type PaymentMethod = 'CASH' | 'BANK';
 export type PaymentStatus = 'POSTED' | 'REVERSED';
 /** MUT-61: who put a payment on the ledger. */
-export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE';
+export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE' | 'ISSUED_DOCUMENT';
 
 export interface PaymentRecord {
   id: string;

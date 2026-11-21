@@ -107,6 +107,7 @@ export const PAYMENT_METHOD_LABELS: Readonly<Record<string, Words>> = {
 export const SOURCE_LABELS = {
   CAPTURE: { en: 'MTB3A', ar: 'متابعة' },
   INTEGRATION: { en: 'Malafat', ar: 'ملفات' },
+  ISSUED_DOCUMENT: { en: 'Issued document', ar: 'مستند صادر' },
 } as const satisfies Record<string, Words>;
 
 export const headersOf = (columns: readonly Column[], lang: Lang): string[] => columns.map((c) => c.label[lang]);
