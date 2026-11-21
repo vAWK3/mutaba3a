@@ -69,10 +69,21 @@ export interface ReceiptReaderOptions {
 /**
  * MUT-514: the server reader's generation. 2: no confidently wrong VAT, totals, bill-to numbers or dates. 3 (MUT-540):
  * pages turned upright, PDF pages sized by area, card slips under their label. 4 (MUT-590): a PDF's text layer read by
- * position, visual-order Hebrew put in logical order. One constant for the stamp and for
+ * position, visual-order Hebrew put in logical order. 5 (MUT-630/631): no buyer email or billed line as the vendor's
+ * contact, no item line or garbled name as the vendor. One constant for the stamp and for
  * `receipts:reread --reader-below`, so they can't drift.
  */
-export const SERVER_READER_GENERATION = 4;
+export const SERVER_READER_GENERATION = 5;
+
+/**
+ * MUT-514 (D6, D10): the organization's learned buyer numbers (MUT-630: and emails), from the reads of its latest
+ * BUYER_MEMORY_RECEIPTS receipts, less `except` (a re-read never feeds on its own earlier read). The read job and
+ * `receipts:reread --buyer-contacts` share it.
+ */
+export async function organizationBuyerIds(store: LedgerStore, organizationId: string, except?: string): Promise<string[]> {
+  const page = await store.expenseReceipts.list(organizationId, {}, { limit: BUYER_MEMORY_RECEIPTS, cursor: null });
+  return learnedBuyerIds(page.items.flatMap((r) => (r.id !== except && r.readIdentifiers ? [r.readIdentifiers] : [])));
+}
 
 /** The reader version a server read stamps when it added a field (MUT-441 plan, "Merge rule"). */
 export function serverReaderVersion(engine: string): string {
@@ -171,13 +182,12 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   }
 
   /**
-   * MUT-514 (D6, D10): the organization's own phone and ID numbers, from the bill-to blocks its latest receipts' reads
-   * found, less any number one of them read as the vendor's. Learned from reads, not approvals; this receipt's own
+   * MUT-514 (D6, D10): the organization's own phone and ID numbers (MUT-630: and emails), from the bill-to blocks its
+   * latest receipts' reads found, less any number one of them read as the vendor's (`organizationBuyerIds`). Learned from reads, not approvals; this receipt's own
    * earlier read is left out, so a re-read never feeds on itself.
    */
   async function buyerIds(receipt: ExpenseReceiptRecord): Promise<string[]> {
-    const page = await scrubbed('store_failed', () => receipts.list(receipt.organizationId, {}, { limit: BUYER_MEMORY_RECEIPTS, cursor: null }));
-    return learnedBuyerIds(page.items.flatMap((r) => (r.id !== receipt.id && r.readIdentifiers ? [r.readIdentifiers] : [])));
+    return scrubbed('store_failed', () => organizationBuyerIds(store, receipt.organizationId, receipt.id));
   }
 
   /** What the log says of the file read: its engine, and its line count, or a text PDF's text length (MUT-590). Never a word. */

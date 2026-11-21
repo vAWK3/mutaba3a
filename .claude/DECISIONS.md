@@ -6320,6 +6320,13 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The buyer as a number seen with three or more vendors (the plan's first D-Q1 B). Rejected (R3): a chain's head office qualifies at once.
 - Re-queue by nulling the whole suggestion (D4). Rejected (R1, OV-4): it drops phone-sent fields, and a receipt first claimed over 30 minutes ago would FAIL 'exhausted' on its next claim.
 - A total − subtotal VAT under 20% with no rate check. Rejected (R2): it fills service charges and deposits as VAT.
+**Addendum (2026-11-21, MUT-630/631, reader generation 5):** the production check by eye of 15 reads found 0 wrong money, dates or VAT but 5 wrong vendor and contact fields, and the bill-to rules gain four parts (plan `.claude/designs/mut-630-631-vendor-contact.md`, Basel approved 2026-11-21):
+1. **One primitive for where the body starts:** `startsBody(row)` = a money row (never a customer-number row, `CUSTOMER_NUMBER`) or an item table's header. A bill-to block ends at it, or at a total or date label. After its 5-row cap a block keeps up to 2 contact rows (email, phone, or their labelled row); those exclude on this receipt only and are never learned.
+2. **Emails are the buyer's too:** an email inside a block is learned like the block's phone and ID numbers (lower-cased by `normalizeIdentifier`) and is never unlearned (an email is never reported as the vendor's, so an e-receipt printing the buyer's email unlabelled can't unteach it; a vendor's email hidden that way is empty, not wrong). `readEmail` never reads a bill-to row or a buyer email.
+3. **No phone from the item body,** labelled or not: a money row, or a row between an item table's header and the total. Header and footer phones are unchanged (P2 of the plan, "unlabelled phones only from the header", was dropped by the review).
+4. **The vendor name stops at the body and at garbled OCR:** no name from or under a money row or table header, and a row with a short or lowercase Latin run between two right-to-left words ends the search with no name (dropped, not repaired, P3). A saved vendor's name by registration no. still wins (MUT-254 `withVendor`).
+`receipts:reread --buyer-contacts` reports vendors and To-review receipts that already carry a learned buyer phone or email; nothing is cleared without Basel's OK.
+
 ## ADR-242: MTB3A Sends Its Own Failed-Card Mail, ar + en, From an Hourly Job; Stripe's Goes Off (MUT-533, Pricing Program MUT-528)
 
 **Status:** Accepted (Basel, 2026-11-02: plan `.claude/designs/mut-533-534-card-failed-comeback-plan.md` D1–D7 and the §6 copy; eng review R1–R15). Built 2026-11-02. Part of MUT-528 (D10).

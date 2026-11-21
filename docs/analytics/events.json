@@ -1,5 +1,5 @@
 {
-  "version": "2.10.0",
+  "version": "2.11.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -245,6 +245,15 @@
       "description": "MUT-618: the server refused a typed code. Not an error: what the person does next. Network and server failures go to Sentry instead.",
       "properties": {
         "reason": { "type": "enum", "values": ["wrong", "expired", "too_many_tries", "rate_limited", "under_review"], "description": "wrong = a try was spent; expired = no live code (expired, used or replaced); too_many_tries = the fifth wrong try killed it; rate_limited = the address or network must wait; under_review = the right code on an account waiting for review." }
+      }
+    },
+    "save_moment_closed": {
+      "emitters": ["ios", "android"],
+      "description": "MUT-627: the full-screen save moment after a save in the app closed. Shown = the sum of every outcome. An undone entry is never counted as income_recorded or expense_recorded.",
+      "properties": {
+        "kind": { "type": "enum", "values": ["expense", "income", "conversion"], "description": "What was saved." },
+        "outcome": { "type": "enum", "values": ["confirmed", "auto_confirmed", "undone", "backgrounded"], "description": "confirmed = Confirm or back; auto_confirmed = the 6-second countdown ran out; undone = Undo (nothing was sent); backgrounded = the app left the foreground mid-countdown (kept)." },
+        "entry_point": { "type": "enum", "values": ["keypad", "details", "quick_action", "convert", "share", "receipt_review"], "description": "Where it was saved. receipt_review shows a Done-only moment, so its outcome is always confirmed." }
       }
     }
   }

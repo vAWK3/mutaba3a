@@ -6,7 +6,7 @@ import type { OcrClient, OcrResult } from '../../receipts/ocr-client.js';
 import { createReceiptReader, READ_GIVE_UP_MS, SERVER_READER_GENERATION, serverReaderVersion } from '../../receipts/reading/reader.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
-import { rereadReceipts, withoutServerFields } from '../receipts-reread.js';
+import { buyerContactReport, rereadReceipts, withoutServerFields } from '../receipts-reread.js';
 
 /**
  * MUT-514 (D11 reversed, 2026-11-03): the re-read command. A receipt an older server reader filled is reset so the
@@ -109,13 +109,13 @@ describe('receipts:reread (MUT-514)', () => {
 
   it('drops only the server-read fields; nothing left is no suggestion', () => {
     expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), currency: f('ILS', 'pdf-text') })).toBeNull();
-    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-4', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ readerVersion: 'server-ocr-x-1', totalMinor: f('1'), date: f('2026-10-01', 'qr') })).toEqual({ readerVersion: 'server-ocr-x-5', date: f('2026-10-01', 'qr') });
   });
 
   it('a vendor-list name goes with the registration number it was looked up by (qa-reconcile review)', () => {
     const named = { readerVersion: 'server-ocr-x-1', registrationNo: f('123456782'), vendorName: { value: 'Old Vendor', source: 'vendor' as const, confidence: 1 }, date: f('2026-10-01', 'qr') };
-    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-4', date: f('2026-10-01', 'qr') });
-    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-4', registrationNo: f('123456782', 'qr') });
+    expect(withoutServerFields(named)).toEqual({ readerVersion: 'server-ocr-x-5', date: f('2026-10-01', 'qr') });
+    expect(withoutServerFields({ ...named, registrationNo: f('123456782', 'qr') })).toEqual({ ...named, readerVersion: 'server-ocr-x-5', registrationNo: f('123456782', 'qr') });
   });
 
   it('a re-read that adds nothing is not picked again, and a generation above the current reader is refused (qa-reconcile review)', async () => {
@@ -129,3 +129,43 @@ describe('receipts:reread (MUT-514)', () => {
     await expect(rereadReceipts(w.store, { readerBelow: SERVER_READER_GENERATION + 1, apply: false, now: LATER })).rejects.toThrow(/reader-below/);
   });
 });
+
+/** MUT-630 (plan item 11): the report of vendors and To-review receipts carrying the buyer's phone or email. Reads only. */
+describe('receipts:reread --buyer-contacts (MUT-630)', () => {
+  const BILL = receipt(['חברת הסלולר', 'לכבוד: דנה', 'Dana@Example.com', 'טל 052-9876543', 'סה"כ ₪59.90']);
+
+  async function seeded(holders = true) {
+    const w = await world(true, BILL);
+    vi.spyOn(w.store.features, 'holders').mockResolvedValue(holders ? [{ userId: USER, email: 'pilot@example.com', grantedAt: FIRST_READ }] : []);
+    vi.spyOn(w.store.memberships, 'listByUser').mockResolvedValue([{ organizationId: w.ORG } as Awaited<ReturnType<typeof w.store.memberships.listByUser>>[number]]);
+    // The bill's read teaches the profile the buyer's email and phone.
+    const bill = await w.oldRead({ readerVersion: serverReaderVersion('rapid-tess') });
+    await w.store.expenseReceipts.resetForReread(bill.id, bill.version, null, FIRST_READ);
+    expect(await w.reader.readOne(bill.id)).toBe('done');
+    return w;
+  }
+
+  it("lists a vendor and a To-review receipt whose phone or email is the buyer's, by id and field name only, and writes nothing", async () => {
+    const w = await seeded();
+    const own = await w.store.vendors.resolve({ organizationId: w.ORG, name: 'חברת הסלולר', phone: '052 987 6543', email: 'DANA@example.com' }, FIRST_READ);
+    await w.store.vendors.resolve({ organizationId: w.ORG, name: 'ספק אחר', phone: '03-5551234', email: 'info@other.example' }, FIRST_READ);
+    const carrying = await w.oldRead({ readerVersion: 'server-ocr-rapid-tess-4', email: f('dana@example.com'), totalMinor: f('5990') });
+    await w.oldRead({ readerVersion: 'server-ocr-rapid-tess-4', email: f('info@other.example') });
+    const before = await w.store.vendors.getById(w.ORG, own!.id);
+    const items = await buyerContactReport(w.store);
+    expect(items).toEqual([
+      { kind: 'vendor', id: own!.id, organizationId: w.ORG, fields: ['phone', 'email'] },
+      { kind: 'receipt', id: carrying.id, organizationId: w.ORG, fields: ['email'] },
+    ]);
+    expect(await w.store.vendors.getById(w.ORG, own!.id)).toEqual(before);
+    // Ids are random UUIDs: only the rest of the report may not carry a value.
+    expect(JSON.stringify(items.map(({ kind, fields }) => ({ kind, fields })))).not.toMatch(/dana|052/i);
+  });
+
+  it('looks only at profiles a receipt_reading holder belongs to', async () => {
+    const w = await seeded(false);
+    await w.store.vendors.resolve({ organizationId: w.ORG, name: 'חברת הסלולר', phone: '052-9876543' }, FIRST_READ);
+    expect(await buyerContactReport(w.store)).toEqual([]);
+  });
+});
+

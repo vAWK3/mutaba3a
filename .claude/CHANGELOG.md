@@ -45,6 +45,20 @@
 - Tests: parity of `readProfileFigures` with the verdict route; rules, job (memory store, memory mailer), routes, token, templates (ADR-159 pin), route-security and public-route pins, portal switch and page, local migration and fingerprint, privacy page. Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link`, `monthly-summary-account-switch`, `monthly-summary-yearly-line`.
 - Operator steps in `docs/operations/before-release.md` (server and web).
 
+## [Unreleased] - 2026-11-21 — Receipt reading: no buyer email, billed line, item line or garbled name as the vendor's (MUT-630, MUT-631, reader generation 5)
+
+### Fixed
+- **MUT-630:** on a bill with a text layer (a Partner mobile bill), the account holder's own email and the billed line `055-…` were offered as the vendor's. A bill-to block now keeps up to 2 contact rows past its 5-row cap (an email, a phone, or a labelled `דוא"ל:`/`טל:` row); they exclude on this receipt only and are never learned. A customer-number row (`מספר לקוח`, new `CUSTOMER_NUMBER` set) is never money and never the vendor's phone. Emails inside a block are learned into the buyer memory (lower-cased) and never unlearned; `readEmail(rows, buyer)` skips bill-to rows and the buyer's emails. No phone, labelled or not, is taken from the item body (a money row, or between an item table's header and the total); header and footer phones are read as before.
+- **MUT-631:** `readVendor` stops at the receipt body (`startsBody`: a money row or an item table's header), so a scan whose header was cut off gives no vendor instead of an item line; and a garbled name (a lowercase or ≤3-letter Latin run between two Hebrew/Arabic words, `hasEmbeddedLatin`) ends the search with no name. A saved vendor's name by registration no. (`withVendor`) is pinned by a reader test.
+
+### Added
+- `npm run receipts:reread -- --buyer-contacts`: a report (ids and field names only, writes nothing) of vendors on reading-granted profiles, and their To-review receipts, whose phone or email is a learned buyer identifier. `--apply` is refused with it.
+
+### Technical
+- `SERVER_READER_GENERATION` 5 (`receipts:reread --reader-below 5` re-reads the To-review receipts after the release). `organizationBuyerIds` (reader.ts) is shared by the read job and the report. `EMAIL` moved to buyer.ts (no import cycle). `ReadIdentifiers.buyer` may hold emails (JSON column, no migration).
+- Bench (main vs branch over the saved reads, 78 real receipts with `prod-8285ca9d.pdf` added): 0 fields lost; confidently wrong vendor 8 → 5, phone 10 → 7, email 6 → 3.
+- Files: `server/src/receipts/extract/{buyer,fields,extract,keywords,normalize}.ts`, `server/src/receipts/reading/reader.ts`, `server/src/scripts/receipts-reread.ts`, `server/src/repositories/ports.ts` (comment), tests `extract/__tests__/{buyer,extract}.test.ts`, `receipts/__tests__/reader-buyer-memory.test.ts`, `scripts/__tests__/receipts-reread.test.ts`; plan `.claude/designs/mut-630-631-vendor-contact.md`.
+
 ## [Unreleased] - 2026-11-20 — Moving an expense: an abandoned upload no longer blocks it, a failed move takes its vendor back (MUT-589, TD-308, TD-309)
 
 ### Fixed
@@ -53,6 +67,11 @@
 
 ### Technical
 - Tests: route (memory) for both, Prisma store for the abandoned upload and `removeIfUnused`.
+
+## [Unreleased] - 2026-11-19 — Analytics contract 2.11.0: the phone's save moment (MUT-627)
+
+### Added
+- **Analytics contract 2.11.0**: `save_moment_closed` (`kind`: expense | income | conversion; `outcome`: confirmed | auto_confirmed | undone | backgrounded; `entry_point`: keypad | details | quick_action | convert | share | receipt_review), ios and android only. The phone's full-screen save moment (Flutter MUT-627) sends it once per save; an undone entry is no longer counted as `expense_recorded`/`income_recorded`. Pinned in `scripts/__tests__/analytics-taxonomy.test.ts`.
 
 ## [Unreleased] - 2026-11-14 — "Email me a sign-in code" (MUT-618, ADR-256)
 

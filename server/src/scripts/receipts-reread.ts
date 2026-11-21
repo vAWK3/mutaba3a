@@ -1,6 +1,7 @@
 import { hasFeature } from '../features.js';
+import { normalizeIdentifier } from '../receipts/extract/buyer.js';
 import { READ_FIELDS, type SuggestionField } from '../receipts/extract/merge.js';
-import { SERVER_READER_GENERATION, serverReaderGeneration } from '../receipts/reading/reader.js';
+import { BUYER_MEMORY_RECEIPTS, organizationBuyerIds, SERVER_READER_GENERATION, serverReaderGeneration } from '../receipts/reading/reader.js';
 import type { LedgerStore, ReceiptSuggestion, SuggestionSource } from '../repositories/ports.js';
 
 /**
@@ -20,6 +21,14 @@ import type { LedgerStore, ReceiptSuggestion, SuggestionSource } from '../reposi
  * the 30-minute give-up clock of the first read can't fail it. Run it only once every instance runs the new reader:
  * an old one would read it again with the old rules (before-release.md). Output: ids, field names and sources, never
  * a value a receipt says.
+ *
+ *   DATABASE_URL=… npm run receipts:reread -- --buyer-contacts            # MUT-630: report only, writes nothing
+ *
+ * MUT-630 (plan item 11): filing a receipt copies the reader's phone and email onto a vendor that has none, so an
+ * older reader's buyer contact may sit on vendors. `--buyer-contacts` lists the vendors on reading-granted profiles,
+ * and their To-review receipts, whose phone or email is one of the profile's learned buyer identifiers: ids and field
+ * names only. It clears nothing: run it after the `--reader-below 5 --apply` re-read (which re-reads those receipts
+ * and teaches the buyer emails), and a listed vendor's detail is changed only with Basel's OK.
  */
 
 /** What a server read fills: the fields a re-read drops and reads again. */
@@ -100,6 +109,51 @@ export async function rereadReceipts(store: LedgerStore, options: { readerBelow:
   return result;
 }
 
+/** MUT-630: a vendor or a To-review receipt carrying a buyer's phone or email. Ids and field names, never a value. */
+export interface BuyerContactItem {
+  kind: 'vendor' | 'receipt';
+  id: string;
+  organizationId: string;
+  fields: Array<'phone' | 'email'>;
+}
+
+/** How many vendors per profile the report reads (a pilot profile has dozens). */
+const VENDORS_PER_PROFILE = 10_000;
+
+function buyerFields(learned: ReadonlySet<string>, contact: { phone: string | null | undefined; email: string | null | undefined }): BuyerContactItem['fields'] {
+  const fields: BuyerContactItem['fields'] = [];
+  if (contact.phone && learned.has(normalizeIdentifier(contact.phone))) fields.push('phone');
+  if (contact.email && learned.has(normalizeIdentifier(contact.email))) fields.push('email');
+  return fields;
+}
+
+/**
+ * MUT-630 (plan item 11): every vendor, and every To-review receipt among the latest BUYER_MEMORY_RECEIPTS, on a
+ * profile a `receipt_reading` holder belongs to, whose phone or email is one of that profile's learned buyer
+ * identifiers (what the read job would never fill now). Reads only.
+ */
+export async function buyerContactReport(store: LedgerStore): Promise<BuyerContactItem[]> {
+  const organizations = new Set<string>();
+  for (const holder of await store.features.holders('receipt_reading')) {
+    for (const membership of await store.memberships.listByUser(holder.userId)) organizations.add(membership.organizationId);
+  }
+  const items: BuyerContactItem[] = [];
+  for (const organizationId of [...organizations].sort()) {
+    const learned = new Set(await organizationBuyerIds(store, organizationId));
+    if (learned.size === 0) continue;
+    for (const { vendor } of await store.vendors.search(organizationId, '', VENDORS_PER_PROFILE)) {
+      const fields = buyerFields(learned, vendor);
+      if (fields.length) items.push({ kind: 'vendor', id: vendor.id, organizationId, fields });
+    }
+    const toReview = await store.expenseReceipts.list(organizationId, { filingStatus: 'TO_REVIEW' }, { limit: BUYER_MEMORY_RECEIPTS, cursor: null });
+    for (const receipt of toReview.items) {
+      const fields = buyerFields(learned, { phone: receipt.suggested?.phone?.value, email: receipt.suggested?.email?.value });
+      if (fields.length) items.push({ kind: 'receipt', id: receipt.id, organizationId, fields });
+    }
+  }
+  return items;
+}
+
 function parseArgs(argv: readonly string[]): { readerBelow: number; mimeType?: string; apply: boolean } | null {
   const at = argv.indexOf('--reader-below');
   const readerBelow = at >= 0 ? Number(argv[at + 1]) : Number.NaN;
@@ -113,11 +167,14 @@ function parseArgs(argv: readonly string[]): { readerBelow: number; mimeType?: s
 const isMain = process.argv[1]?.endsWith('receipts-reread.ts') || process.argv[1]?.endsWith('receipts-reread.js');
 if (isMain) {
   const url = process.env.DATABASE_URL;
-  const args = parseArgs(process.argv.slice(2));
-  if (!url || !args) {
+  const argv = process.argv.slice(2);
+  const contacts = argv.includes('--buyer-contacts');
+  const args = contacts ? null : parseArgs(argv);
+  if (!url || (contacts && argv.includes('--apply')) || (!contacts && !args)) {
     console.error(
       [
         `usage: DATABASE_URL=… npm run receipts:reread -- --reader-below <2..${SERVER_READER_GENERATION}> [--mime <type>] [--apply]`,
+        '       DATABASE_URL=… npm run receipts:reread -- --buyer-contacts   (MUT-630: report only; it never clears)',
         'Re-reads To-review, unapproved receipts a server reader older than the generation filled (dry run without --apply).',
         'Only receipts whose suggestion still carries the server reader version are picked; one a client filled last is not.',
         'Run it only once every API instance runs the new reader.',
@@ -128,13 +185,19 @@ if (isMain) {
   const { PrismaLedgerStore } = await import('../repositories/prisma.js');
   const store = PrismaLedgerStore.connect(url);
   try {
-    const r = await rereadReceipts(store, { ...args, now: new Date() });
-    for (const item of r.planned) {
-      const fields = item.fields.map((f) => `${f.field}(${f.source})`).join(' ');
-      console.log(`${item.id} org ${item.organizationId} ${item.readerVersion}: ${fields || '—'}; drops ${item.cleared.join(' ') || '—'}`);
+    if (contacts) {
+      const items = await buyerContactReport(store);
+      for (const item of items) console.log(`${item.kind} ${item.id} org ${item.organizationId}: ${item.fields.join(' ')} matches a learned buyer identifier`);
+      console.log(`receipts-reread --buyer-contacts: ${items.length} found; nothing written (a vendor's detail changes only with Basel's OK)`);
+    } else if (args) {
+      const r = await rereadReceipts(store, { ...args, now: new Date() });
+      for (const item of r.planned) {
+        const fields = item.fields.map((f) => `${f.field}(${f.source})`).join(' ');
+        console.log(`${item.id} org ${item.organizationId} ${item.readerVersion}: ${fields || '—'}; drops ${item.cleared.join(' ') || '—'}`);
+      }
+      for (const id of r.noGrant) console.log(`${id}: skipped, its uploader no longer holds receipt_reading`);
+      console.log(args.apply ? `receipts-reread: ${r.reset.length} of ${r.planned.length} reset for the sweep to read` : `receipts-reread (dry run): ${r.planned.length} would be read again; nothing written`);
     }
-    for (const id of r.noGrant) console.log(`${id}: skipped, its uploader no longer holds receipt_reading`);
-    console.log(args.apply ? `receipts-reread: ${r.reset.length} of ${r.planned.length} reset for the sweep to read` : `receipts-reread (dry run): ${r.planned.length} would be read again; nothing written`);
   } finally {
     await store.disconnect();
   }

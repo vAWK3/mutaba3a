@@ -1,6 +1,6 @@
-import { type Buyer, PHONE_NUMBER, REGISTRATION_NUMBER } from './buyer.js';
-import { ALLOCATION, COMPANY, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
-import { countMatches, foldForMatch } from './normalize.js';
+import { type Buyer, EMAIL, isTableHeader, PHONE_NUMBER, REGISTRATION_NUMBER, startsBody } from './buyer.js';
+import { ALLOCATION, COMPANY, CUSTOMER_NUMBER, DATE_LABEL, hasKeyword, NOT_TOTAL, NOT_VENDOR, PHONE, REGISTRATION, STREET, TOTAL } from './keywords.js';
+import { countMatches, foldForMatch, hasEmbeddedLatin } from './normalize.js';
 import type { Row } from './types.js';
 
 /**
@@ -99,16 +99,41 @@ const PHONE_NUMBERS = new RegExp(PHONE_NUMBER.source, 'g');
 const RULE_PHONE_LABELLED = 0.85;
 const RULE_PHONE_BARE = 0.65;
 
+/** The grand total under an item table: a total row with an amount, not a count line (`סה"כ פריטים`). */
+function isTotalRow(row: Row): boolean {
+  return hasKeyword(row.folded, TOTAL) && !hasKeyword(row.folded, NOT_TOTAL) && startsBody(row);
+}
+
+/**
+ * MUT-630: the item body, where a phone is a billed line, never the vendor's: every row that starts a body (a money
+ * row, an item table's header), and the rows from a table header to the last total row with an amount under it (a
+ * wrapped header, a line's subtotal or an item named "Total" stay inside), or to the end when there is none. A footer
+ * phone then goes with it: empty, never a billed line.
+ */
+function itemBody(rows: readonly Row[]): Set<Row> {
+  const body = new Set(rows.filter(startsBody));
+  for (let start = 0; start < rows.length; start += 1) {
+    if (!isTableHeader(rows[start]!)) continue;
+    const lastTotal = rows.slice(start + 1).findLastIndex(isTotalRow);
+    const end = lastTotal >= 0 ? start + 1 + lastTotal : rows.length;
+    for (const row of rows.slice(start, end)) body.add(row);
+    start = Math.max(start, end - 1);
+  }
+  return body;
+}
+
 /**
  * A phone number: one after a phone label first; else the first that looks like one, less sure. Never on a
  * registration row. MUT-514: once a labelled phone was the buyer's (in a bill-to block, or a number known as
- * theirs), no unlabelled one is offered: it could be anyone's.
+ * theirs), no unlabelled one is offered: it could be anyone's. MUT-630: never from the item body (a billed line,
+ * labelled `נייד` or not) or a customer-number row.
  */
 export function readPhone(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
+  const body = itemBody(rows);
   let bare: Reading<string> | null = null;
   let buyerLabelled = false;
   for (const row of rows) {
-    if (hasKeyword(row.folded, REGISTRATION)) continue;
+    if (hasKeyword(row.folded, REGISTRATION) || hasKeyword(row.folded, CUSTOMER_NUMBER) || body.has(row)) continue;
     const labelled = hasKeyword(row.folded, PHONE);
     const matches = [...row.text.matchAll(PHONE_NUMBERS)];
     const match = buyer.rows.has(row) ? undefined : matches.find((m) => !buyer.has(m[0]));
@@ -121,13 +146,23 @@ export function readPhone(rows: readonly Row[], buyer: Buyer): Reading<string> |
   return buyerLabelled ? null : bare;
 }
 
-const EMAIL = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/;
+const EMAILS = new RegExp(EMAIL.source, 'g');
 const RULE_EMAIL = 0.9;
+const EMAIL_MAX_LENGTH = 254;
 
-export function readEmail(rows: readonly Row[]): Reading<string> | null {
+/**
+ * The first email on the receipt, lower-cased. MUT-630: never on a bill-to row, never one known as the buyer's; and
+ * once the buyer's showed outside a block, none after it, labelled or not: a platform's, an accountant's or the
+ * buyer's own second address is printed the same way.
+ */
+export function readEmail(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
   for (const row of rows) {
-    const match = EMAIL.exec(row.text);
-    if (match && match[0].length <= 254) return { value: match[0].toLowerCase(), rule: RULE_EMAIL, conf: row.conf };
+    if (buyer.rows.has(row)) continue;
+    for (const match of row.text.matchAll(EMAILS)) {
+      const value = match[0].toLowerCase();
+      if (buyer.has(value)) return null;
+      if (value.length <= EMAIL_MAX_LENGTH) return { value, rule: RULE_EMAIL, conf: row.conf };
+    }
   }
   return null;
 }
@@ -157,16 +192,19 @@ function looksLikeName(row: Row): boolean {
 
 /**
  * The first of the top rows that reads as a name (not a title, a number, a date or a contact line); surer with a
- * company form. Never a bill-to row (MUT-514).
+ * company form. Never a bill-to row (MUT-514). MUT-631: never from the body (a money row or an item table's header
+ * before any name: the shop's header was not read), and never a garbled name, nor a row under one.
  */
 export function readVendor(rows: readonly Row[], buyer: Buyer): Reading<string> | null {
   for (const [i, row] of rows.slice(0, VENDOR_ROWS).entries()) {
     // MUT-504: a top row longer than a name is two columns OCR joined; the rows under it are its address, not a name.
-    if (row.text.length > VENDOR_MAX_LENGTH) return null;
+    if (row.text.length > VENDOR_MAX_LENGTH || startsBody(row)) return null;
     // MUT-514 (OV-8): a bill-to block or an address before any name: the name was not read, and a row under it would
     // be a guess (the customer's name, a project's).
     if (buyer.rows.has(row) || looksLikeAddress(row, i === 0)) return null;
     if (!looksLikeName(row)) continue;
+    // MUT-631: OCR mixed Latin junk into the name (`נפט בעמ MAN אלדור`); a row under it (a branch, a slogan) is a guess.
+    if (hasEmbeddedLatin(row.text)) return null;
     const value = row.text.replace(/^[\s*=\-_#.:|]+|[\s*=\-_#:|]+$/g, '').trim();
     if (!value) continue;
     const company = hasKeyword(row.folded, COMPANY);

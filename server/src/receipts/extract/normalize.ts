@@ -84,3 +84,34 @@ export const LATIN_LETTER = /[A-Za-z]/g;
 export function countMatches(text: string, pattern: RegExp): number {
   return text.match(pattern)?.length ?? 0;
 }
+
+const RTL_WORD = /[֐-׿؀-ۿ]/;
+const LATIN_WORD = /[A-Za-z]/;
+const UPPER_LATIN = /[A-Z]/;
+/** MUT-631: a Latin run this short between two right-to-left words is OCR junk (`MAN`, `Aya`), not a brand. */
+const EMBEDDED_LATIN_MAX_LETTERS = 3;
+
+/**
+ * MUT-631: whether OCR mixed Latin junk into a right-to-left line: a run of Latin words between two Hebrew or Arabic
+ * words that is lowercase or at most three letters (`נפט בעמ MAN אלדור`, `בן dina קומפנ' בע"מ`). A Latin brand at
+ * either end (`Partner פרטנר`) or a capitalised word inside (`שופרסל Deal רמת גן`) is a name. Non-global regexes: no
+ * `lastIndex` carries between calls.
+ */
+export function hasEmbeddedLatin(text: string): boolean {
+  const kinds = text.split(/\s+/).map((word) => {
+    const rtl = RTL_WORD.test(word);
+    const latin = LATIN_WORD.test(word);
+    return { word, kind: rtl && !latin ? 'rtl' : latin && !rtl ? 'latin' : 'other' };
+  }).filter((w) => w.kind !== 'other');
+  for (let i = 1; i < kinds.length - 1; i += 1) {
+    if (kinds[i]!.kind !== 'latin' || kinds[i - 1]!.kind !== 'rtl') continue;
+    let end = i;
+    while (end < kinds.length && kinds[end]!.kind === 'latin') end += 1;
+    if (end >= kinds.length) return false;
+    const run = kinds.slice(i, end).map((w) => w.word).join('');
+    const letters = run.replace(/[^A-Za-z]/g, '');
+    if (!UPPER_LATIN.test(run) || letters.length <= EMBEDDED_LATIN_MAX_LETTERS) return true;
+    i = end;
+  }
+  return false;
+}
