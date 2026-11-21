@@ -182,3 +182,27 @@ Screens, PDF, allocation numbers (MUT-572), unified-file export (MUT-569), forei
 - **MUT-333 close account** must not delete issued documents (retention) — note on MUT-333.
 - **Allocation needs the registration number**: `Accounting_Software_Number` is required by the API ⇒ real numbers wait for MUT-567. Note on MUT-572/MUT-639.
 - Web guard `noDeadDocumentModules.test.ts` (ADR-067) — new code lives in `server/src/issuing/`, outside the retired paths; check the guard doesn't match.
+
+## Eng review and Basel's decisions (2026-11-22) — these override the sections above
+
+**Decisions (Basel):**
+- **R-D1 Close account → keep 7 years.** The account purge skips the issuing tables: issued documents, lines, copies, counters and the issuer details stay; everything else is deleted. The issuing tables therefore hold **no foreign keys** to `Organization`, `Customer`, `Receivable`, `Payment` or `User` (plain uuid columns + indexes); the customer and issuer are JSON snapshots. Deletion after 7 years and owner copies: **MUT-644**.
+- **R-D2 Credit notes v1:** only against a 305, up to what's still owed on it (`ReceivableCredit` refuses more); otherwise 422 `ORIGINAL_PAID`. Paid invoices and 320s: **MUT-643**.
+- **R-D3 Customer VAT number/address** move to **MUT-642**; 568 snapshots the customer's name only.
+
+**Review fixes folded in:**
+1. **Trigger:** `BEFORE UPDATE OR DELETE` per row plus a statement-level `BEFORE TRUNCATE`, on all issuing tables; bypass only when `current_setting('mutaba3a.issuing_bypass', true) = 'on'` (set with `SET LOCAL` by the MUT-644 sweep only). Purge catalog test updated: issuing tables are listed as *retained*, not purged; user columns (`createdByUserId`, `producedByUserId`) are kept (no FK).
+2. **Idempotent by design:** `requestKey` on `IssuedDocument`, `@@unique([organizationId, requestKey])`; inside the transaction an existing key returns the existing document. The `idempotent()` middleware stays on top. Copies get `idempotent(store,'issued_document.copy')`.
+3. **Counter:** one raw `INSERT … ON CONFLICT (organizationId, docType) DO UPDATE SET next = next + 1 RETURNING next` as the transaction's first statement; default READ COMMITTED; the D6 "not before the last date" read happens after that lock.
+4. **Gate on the owner:** `hasFeature(store, organization.ownerUserId, 'invoicing')`; accountants read under a grant (`issuing` in `ACCOUNTANT_DOMAINS`, matrix seed). Profiles connected to Malafat are refused in v1 (no delegated security on issuing routes). Scopes go in `SESSION_ONLY_SCOPES`; `Domain` gains `issuing`; writability row also in `hosted-portal.md`.
+5. **New origin `ISSUED_DOCUMENT`** on `ReceivableOrigin` and `PaymentOrigin` (own migration, rollback hazard + DEPLOYMENT row) and every touchpoint: ports, schemas, serializers (`'integration'` labelling, `FEED_PAYMENT_ORIGIN`), share-link visitor, period-pack labels, payments origin filter, statements (falls to adjustment wording for v1), memory filters, the Income feed (**issued tax invoices appear in Income**), regenerated portal types. `createAdjustmentTx` generalised to `createReceivableTx(origin, originId)`.
+6. **Ledger lock:** the person-side edit/delete/settle/credit/reverse/correct routes already refuse rows that aren't ADJUSTMENT/CAPTURE (404); tests assert 404, and the store refuses document-owned rows in `undoCapture`/`softDeleteAdjustment`/`credit` as defence in depth.
+7. **Credit reason:** `reasonCode 'OTHER'`, reason "חשבונית זיכוי <n>", linked by `IssuedDocument.creditId` (the published enum is unchanged).
+8. **Customer required** for 305/320/330; only a 400 may have none.
+9. **VAT source:** the statutory table in `issuing/vat-rate.ts` is deliberate: the issuing core is the registered version and a business can't edit the national rate (ADR-259).
+10. **Memory store** implements every new port method; issuing maps stay out of `snapshot()` (like `featureGrants`); local profiles have no grants, so they 404 without special code.
+11. **Style/ink/language** columns on `IssuedDocument` with defaults now (immutable rows can't be backfilled); `IssuerDetails` keeps `documentStyle`/`ink`/`logoAttachmentId` columns but no editing UI until MUT-570/640.
+12. Records export and restore leave issued documents out (the unified file is MUT-569).
+13. Gaps: from the starting number to `next − 1`.
+
+**Build order:** (1) compose ✔ · (2) enum migration · (3) issuing tables + triggers + purge catalog · (4) origin touchpoints + `createReceivableTx` · (5) store issue transaction, Prisma + memory, with test:db concurrency/rollback/trigger tests · (6) credit note + copies · (7) routes, gating, scopes, matrix, audit, idempotency, API 1.115.0-mut568, OpenAPI · (8) gaps + ADR-259 + knowledge files.
