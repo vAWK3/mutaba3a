@@ -27,8 +27,8 @@ Plan written 2026-11-21 on branch `claude/interesting-swirles-03d6c9` (from main
   their membership is OWNER) whose entitlement today is ACTIVE or GRACE. READ_ONLY, LOCKED and paused profiles are left
   out. So: a co-owner who doesn't pay gets no mail of their own (the payer's mail shows the shared profile); two
   paying co-owners each see the same block. An Accountant-plan-only payer gets nothing (their client books aren't
-  their profiles). Also skipped: closing accounts, suppressed addresses, and **unverified addresses** (R7:
-  `emailVerifiedAt` null), since this is the first mail that carries someone's amounts.
+  their profiles). Also skipped: closing accounts and suppressed addresses. (Built first skipping unverified
+  addresses, R7; Basel dropped that on 2026-11-22, TD-315: operator-made pilot accounts are mailed too.)
 - **D3 The month (R6).** The calendar month before the run's month in Asia/Jerusalem. Dates in MTB3A are calendar dates,
   so the month's range is the same for every profile; the profile's timezone only decides its *today*. The run is at
   **14:00 Jerusalem (12:00 UTC)**, when the 1st has begun in every zone down to UTC−12; a profile whose today is still

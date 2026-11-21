@@ -877,7 +877,6 @@ export const MonthlySummaryMailSummarySchema = z
     notSent: z.number().int().openapi({ description: 'Due but the mailer did not send it: mail off, capped, refused or suppressed' }),
     failed: z.number().int().openapi({ description: 'A read or the mailer threw; the next run tries again' }),
     skipped: z.object({
-      unverified: z.number().int(),
       optedOut: z.number().int(),
       suppressed: z.number().int(),
       nothingCovered: z.number().int().openapi({ description: 'No profile their plan covers today, or only Malafat-covered ones by default' }),
@@ -895,7 +894,7 @@ export const MonthlySummaryMailRowSchema = z
     locale: z.enum(['en', 'ar']),
     profiles: z.number().int().openapi({ description: 'Panels in the mail' }),
     action: z.enum(['send', 'skip']),
-    skip: z.enum(['unverified', 'opted-out', 'suppressed', 'nothing-covered', 'month-not-over', 'nothing-to-show']).nullable(),
+    skip: z.enum(['opted-out', 'suppressed', 'nothing-covered', 'month-not-over', 'nothing-to-show']).nullable(),
     outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
   })
   .openapi('MonthlySummaryMailRow');

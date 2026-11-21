@@ -2489,7 +2489,6 @@ export interface MonthlySummaryCandidate {
   userId: string;
   email: string;
   locale: UserLocale;
-  emailVerified: boolean;
   choice: MonthlySummaryChoice | null;
 }
 

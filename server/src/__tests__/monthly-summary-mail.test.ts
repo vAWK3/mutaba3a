@@ -175,18 +175,25 @@ describe('MUT-535: the monthly summary run', () => {
     expect(h.mailsTo(p.email)).toHaveLength(0);
   });
 
-  it('skips with a reason: unverified address, turned off, nobody paying', async () => {
+  it('skips with a reason: turned off, nobody paying', async () => {
     const h = await harness();
-    const unverified = await h.person({ verified: false });
     const off = await h.person();
     await h.store.users.setMonthlySummaryMail(off.userId, 'OFF', NOW);
     const lapsed = await h.person({ plan: 'none' });
-    for (const p of [unverified, off, lapsed]) await p.income({ kind: 'received', amount: '400.00', occurredOn: '2026-11-05' });
+    for (const p of [off, lapsed]) await p.income({ kind: 'received', amount: '400.00', occurredOn: '2026-11-05' });
     const { rows } = await h.run();
-    expect(rows.find((r) => r.userId === unverified.userId)?.skip).toBe('unverified');
     expect(rows.find((r) => r.userId === off.userId)?.skip).toBe('opted-out');
     expect(rows.find((r) => r.userId === lapsed.userId)).toBeUndefined();
     expect(h.outbox.list().filter((m) => m.template === 'monthly-summary')).toHaveLength(0);
+  });
+
+  it('mails an operator-made account whose address was never confirmed by a mailed link (Basel, 2026-11-22, TD-315)', async () => {
+    const h = await harness();
+    const p = await h.person({ verified: false });
+    await p.income({ kind: 'received', amount: '400.00', occurredOn: '2026-11-05' });
+    const { rows } = await h.run();
+    expect(rows.find((r) => r.userId === p.userId)).toMatchObject({ action: 'send', skip: null, outcome: 'sent' });
+    expect(h.mailsTo(p.email)).toHaveLength(1);
   });
 
   it('leaves Malafat-covered profiles out by default, and in when the person chose ON_ALL (AC3)', async () => {

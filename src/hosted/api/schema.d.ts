@@ -28035,7 +28035,6 @@ export interface components {
             /** @description A read or the mailer threw; the next run tries again */
             failed: number;
             skipped: {
-                unverified: number;
                 optedOut: number;
                 suppressed: number;
                 /** @description No profile their plan covers today, or only Malafat-covered ones by default */
@@ -28063,7 +28062,7 @@ export interface components {
             /** @enum {string} */
             action: "send" | "skip";
             /** @enum {string|null} */
-            skip: "unverified" | "opted-out" | "suppressed" | "nothing-covered" | "month-not-over" | "nothing-to-show" | null;
+            skip: "opted-out" | "suppressed" | "nothing-covered" | "month-not-over" | "nothing-to-show" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}

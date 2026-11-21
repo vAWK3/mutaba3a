@@ -525,7 +525,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       for (const p of [payer, trialist, granted]) expect(ids).toContain(p.id);
       for (const p of [lapsed, oldTrial, expired]) expect(ids).not.toContain(p.id);
       expect([...ids].sort()).toEqual(ids);
-      expect(all.find((c) => c.userId === payer.id)).toEqual({ userId: payer.id, email: payer.email, locale: 'en', emailVerified: false, choice: 'OFF' });
+      expect(all.find((c) => c.userId === payer.id)).toEqual({ userId: payer.id, email: payer.email, locale: 'en', choice: 'OFF' });
       expect(all.find((c) => c.userId === trialist.id)?.choice).toBeNull();
 
       const first = await store.billing.monthlySummaryCandidates({ trialStartedAfter: at(5), now, after: null, limit: 1 });

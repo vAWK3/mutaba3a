@@ -319,15 +319,6 @@ export function setTrialStartedDaysAgo(userId: string, daysAgo: number): void {
   execFileSync('docker', ['exec', DB.container, 'psql', '-U', 'mutaba3a', '-d', DB.database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
 }
 
-/**
- * MUT-535: marks an operator-made person's address as proven in the QA database, as redeeming a mailed link would
- * (the monthly summary mails only proven addresses; provisionPerson's setup link is handed over, not mailed).
- */
-export function setEmailVerified(userId: string): void {
-  const sql = `UPDATE users SET "emailVerifiedAt" = now() WHERE id = '${userId.replace(/[^0-9a-f-]/g, '')}'`;
-  execFileSync('docker', ['exec', DB.container, 'psql', '-U', 'mutaba3a', '-d', DB.database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
-}
-
 /** MUT-533: what the memory mailer "sent" to an address, oldest first. */
 export async function outboxOf(email: string): Promise<Array<{ template: string; locale: string; subject: string; text: string; html: string }>> {
   const { apiOrigin, adminToken } = liveState();

@@ -3237,11 +3237,11 @@ export class PrismaLedgerStore implements LedgerStore {
             { memberships: { some: { role: 'OWNER', organization: { integrations: { some: { provider: 'MALAFAT', status: 'CONNECTED' } } } } } },
           ],
         },
-        select: { id: true, email: true, locale: true, emailVerifiedAt: true, monthlySummaryMail: true },
+        select: { id: true, email: true, locale: true, monthlySummaryMail: true },
         orderBy: { id: 'asc' },
         take: limit,
       });
-      return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, emailVerified: p.emailVerifiedAt !== null, choice: monthlySummaryChoiceOf(p.monthlySummaryMail) }));
+      return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, choice: monthlySummaryChoiceOf(p.monthlySummaryMail) }));
     },
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({

@@ -3842,7 +3842,7 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((p) => payers.has(p.id) || granted.has(p.id) || malafatOwners.has(p.id) || (this.trialStarts.get(p.id) ?? new Date(0)) > trialStartedAfter)
         .sort((a, b) => a.id.localeCompare(b.id))
         .slice(0, limit)
-        .map((p) => ({ userId: p.id, email: p.email, locale: p.locale, emailVerified: p.emailVerifiedAt !== null, choice: p.monthlySummaryMail }));
+        .map((p) => ({ userId: p.id, email: p.email, locale: p.locale, choice: p.monthlySummaryMail }));
     },
     pastDueCandidates: async () =>
       [...this.billingSubs.values()]
