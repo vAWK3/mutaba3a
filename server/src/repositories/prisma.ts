@@ -28,6 +28,10 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   AccountPurgeRepository,
+  IssueDocumentInput,
+  IssueResult,
+  IssuedDocumentRecord,
+  IssuingRepository,
   OperatorAccountCursor,
   VendorRecord,
   VendorNameRecord,
@@ -188,6 +192,9 @@ import type {
 import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
+import { ledgerPlan } from '../issuing/ledger-plan.js';
+import { numberGaps } from '../issuing/gaps.js';
+import type { IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -766,6 +773,95 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
         if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
+    },
+  };
+
+  /**
+   * MUT-568 (ADR-259): the issuing core. `issue` is one transaction: the counter row first (INSERT … ON CONFLICT, so
+   * the very first document of a type can't race), then D6's date check after that lock (READ COMMITTED: the previous
+   * holder's commit is visible), the original's Owed locked for a credit note or a receipt, the ledger rows, then the
+   * document. A refusal throws IssueRefused so the whole transaction, counter increment included, rolls back: no gap.
+   */
+  readonly issuing: IssuingRepository = {
+    getIssuer: (organizationId) => this.prisma.issuerDetails.findUnique({ where: { organizationId } }),
+    putIssuer: async (organizationId, input, expectedVersion, at) => {
+      if (expectedVersion === null) {
+        try {
+          const record = await translate(() => this.prisma.issuerDetails.create({ data: { organizationId, ...input, createdAt: at, updatedAt: at } }));
+          return { kind: 'created', record };
+        } catch (err) {
+          if (!(err instanceof UniqueViolation)) throw err;
+          const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+          return record ? { kind: 'stale', record } : { kind: 'not_found' };
+        }
+      }
+      const { count } = await this.prisma.issuerDetails.updateMany({ where: { organizationId, version: expectedVersion }, data: { ...input, version: { increment: 1 }, updatedAt: at } });
+      const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+    setStartingNumber: (organizationId, docType, start) =>
+      this.prisma.$transaction(async (tx) => {
+        if (await tx.issuedDocument.findFirst({ where: { organizationId, docType }, select: { id: true } })) return { kind: 'has_documents' as const };
+        const counter = await tx.issuedDocumentCounter.upsert({
+          where: { organizationId_docType: { organizationId, docType } },
+          create: { organizationId, docType, start, next: start },
+          update: { start, next: start },
+        });
+        return { kind: 'set' as const, counter };
+      }),
+    issue: async (input, at) => {
+      const replay = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+      if (replay) return { kind: 'issued', document: replay, created: false };
+      try {
+        return await this.prisma.$transaction((tx) => issueTx(tx, input, at));
+      } catch (err) {
+        if (err instanceof IssueRefused) return err.result;
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          // Two requests with one key raced past the replay read: the winner's document is the answer.
+          const winner = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+          if (winner) return { kind: 'issued', document: winner, created: false };
+        }
+        throw err;
+      }
+    },
+    getById: async (organizationId, id) => {
+      const row = await this.prisma.issuedDocument.findFirst({ where: { id, organizationId } });
+      return row ? withLines(this.prisma, row) : null;
+    },
+    list: async (organizationId, filter, page) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: {
+          organizationId,
+          ...(filter.docType ? { docType: filter.docType } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(page.cursor ? { OR: [{ issuedAt: { lt: page.cursor.createdAt } }, { issuedAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
+        },
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const kept = rows.slice(0, page.limit);
+      const lines = await this.prisma.issuedDocumentLine.findMany({ where: { documentId: { in: kept.map((r) => r.id) } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+      const items = kept.map((row) => issuedRecord(row, lines.filter((l) => l.documentId === row.id)));
+      const last = kept[kept.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
+    },
+    recordCopy: (organizationId, documentId, copy, at) =>
+      this.prisma.$transaction(async (tx) => {
+        // A row lock, not an UPDATE: the immutability trigger never fires, and concurrent copies queue here.
+        const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "issued_documents" WHERE "id" = ${documentId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+        if (locked.length === 0) return null;
+        const copyIndex = await tx.issuedDocumentCopy.count({ where: { documentId } });
+        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel } });
+        return { copyIndex };
+      }),
+    gaps: async (organizationId) => {
+      const [counters, numbers] = await Promise.all([
+        this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+        this.prisma.issuedDocument.findMany({ where: { organizationId }, select: { docType: true, number: true } }),
+      ]);
+      return counters.map((c) => numberGaps(c, numbers.filter((n) => n.docType === c.docType).map((n) => n.number)));
     },
   };
 
@@ -4948,6 +5044,168 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 
 /** A Stripe metadata user id is free text; only a UUID is looked up (the `::uuid` cast would throw otherwise). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---- MUT-568 (ADR-259): the issuing core's transaction -----------------------------------------------------------
+
+/** A refusal found inside the issue transaction: thrown so the counter's increment rolls back with everything else. */
+class IssueRefused extends Error {
+  constructor(readonly result: Exclude<IssueResult, { kind: 'issued' }>) {
+    super(result.kind);
+  }
+}
+
+type IssuedRow = Prisma.IssuedDocumentGetPayload<object>;
+type IssuedLineRow = Prisma.IssuedDocumentLineGetPayload<object>;
+
+function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRecord {
+  return {
+    ...row,
+    issuer: row.issuer as JsonObject,
+    customer: row.customer as JsonObject,
+    paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
+    lines: lines.map(({ documentId: _d, organizationId: _o, ...line }) => line),
+  };
+}
+
+async function withLines(db: Tx | PrismaClient, row: IssuedRow): Promise<IssuedDocumentRecord> {
+  return issuedRecord(row, await db.issuedDocumentLine.findMany({ where: { documentId: row.id }, orderBy: { index: 'asc' } }));
+}
+
+async function findIssuedByKey(db: Tx | PrismaClient, organizationId: string, requestKey: string): Promise<IssuedDocumentRecord | null> {
+  const row = await db.issuedDocument.findUnique({ where: { organizationId_requestKey: { organizationId, requestKey } } });
+  return row ? withLines(db, row) : null;
+}
+
+/** The number this document takes. One statement, so two first documents of a type never race on creating the row. */
+async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: IssuedDocType): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ taken: number }>>`
+    INSERT INTO "issued_document_counters" ("organizationId", "docType", "start", "next")
+    VALUES (${organizationId}::uuid, ${docType}::"IssuedDocType", 1, 2)
+    ON CONFLICT ("organizationId", "docType") DO UPDATE SET "next" = "issued_document_counters"."next" + 1
+    RETURNING "next" - 1 AS "taken"`;
+  return Number(rows[0]!.taken);
+}
+
+async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
+  const { organizationId } = input;
+  const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
+  const last = await tx.issuedDocument.findFirst({ where: { organizationId, docType: input.docType }, orderBy: { documentDate: 'desc' }, select: { documentDate: true } });
+  if (last && last.documentDate > input.documentDate) throw new IssueRefused({ kind: 'date_before_last', lastDate: last.documentDate });
+  if (input.customerId && !(await tx.customer.findFirst({ where: { id: input.customerId, organizationId }, select: { id: true } }))) {
+    throw new IssueRefused({ kind: 'customer_not_found' });
+  }
+  const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
+  let originalReceivableId: string | null = null;
+  if (originalId) {
+    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: 'TAX_INVOICE' }, select: { receivableId: true, customerId: true } });
+    if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+    const r = await lockReceivable(tx, original.receivableId);
+    const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
+    if (input.composed.grossMinor > outstandingMinor) {
+      throw new IssueRefused(input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor });
+    }
+    originalReceivableId = original.receivableId;
+  }
+  const plan = ledgerPlan(input, number);
+  const documentId = randomUUID();
+  let receivableId: string | null = null;
+  let paymentId: string | null = null;
+  let creditId: string | null = null;
+  if (plan.receivable) {
+    const receivable = await tx.receivable.create({
+      data: {
+        ...plan.receivable,
+        organizationId,
+        number: await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate),
+        projectId: null,
+        agreementId: null,
+        origin: 'ISSUED_DOCUMENT',
+        originId: documentId,
+        postedAt: at,
+        createdByUserId: input.createdByUserId,
+        createdAt: at,
+      },
+    });
+    receivableId = receivable.id;
+  }
+  if (plan.payment) {
+    const { allocate, ...p } = plan.payment;
+    const target = allocate === 'own' ? receivableId : allocate === 'applies' ? originalReceivableId : null;
+    const { payment } = await insertPaymentTx(
+      tx,
+      {
+        ...p,
+        organizationId,
+        projectId: null,
+        receiptNumber: null,
+        notes: null,
+        replacesPaymentId: null,
+        requestId: input.requestId,
+        createdByUserId: input.createdByUserId,
+        origin: 'ISSUED_DOCUMENT',
+        captureSource: null,
+        allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
+      },
+      await nextPaymentNumberTx(tx, organizationId, p.receivedOn),
+      at,
+    );
+    paymentId = payment.id;
+  }
+  if (plan.credit && originalReceivableId) {
+    const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: originalReceivableId, ...plan.credit, requestId: input.requestId, createdAt: at } });
+    await settleReceivable(tx, originalReceivableId, { creditedMinor: { increment: plan.credit.amountMinor } });
+    creditId = credit.id;
+  }
+  const { composed } = input;
+  const row = await tx.issuedDocument.create({
+    data: {
+      id: documentId,
+      organizationId,
+      docType: input.docType,
+      number,
+      documentDate: input.documentDate,
+      issuedAt: at,
+      currency: input.currency,
+      subtotalMinor: composed.subtotalMinor,
+      discountMinor: composed.discountMinor,
+      netMinor: composed.netMinor,
+      vatRateBasisPoints: composed.vatRateBasisPoints,
+      vatMinor: composed.vatMinor,
+      grossMinor: composed.grossMinor,
+      issuer: input.issuer,
+      customerId: input.customerId,
+      customer: input.customer,
+      language: input.language,
+      style: input.style,
+      ink: input.ink,
+      notes: input.notes,
+      originalId: input.originalId,
+      paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
+      allocationNumber: input.allocationNumber,
+      receivableId,
+      paymentId,
+      creditId,
+      coreVersion: input.coreVersion,
+      createdByUserId: input.createdByUserId,
+      requestKey: input.requestKey,
+    },
+  });
+  const lines = composed.lines.map((l) => ({
+    documentId,
+    organizationId,
+    index: l.index,
+    description: l.description.trim(),
+    kind: l.kind,
+    quantityMilli: l.quantityMilli,
+    unitPriceMinor: l.unitPriceMinor,
+    discountMinor: l.discountMinor,
+    netMinor: l.netMinor,
+    vatRateBasisPoints: l.vatRateBasisPoints,
+    vatMinor: l.vatMinor,
+  }));
+  await tx.issuedDocumentLine.createMany({ data: lines });
+  return { kind: 'issued', document: issuedRecord(row, lines), created: true };
+}
 
 async function translate<T>(op: () => Promise<T>): Promise<T> {
   try {

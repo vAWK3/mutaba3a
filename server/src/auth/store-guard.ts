@@ -364,6 +364,18 @@ export const STORE_ACCESS: StoreAccess = {
     run: 'sessionOnly',
   },
   // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
+  // MUT-568 (ADR-259): the issuing core. `issue` posts its own Owed/Received/credit inside the issuing domain's write.
+  issuing: {
+    getIssuer: { read: 'issuing' },
+    putIssuer: { write: 'issuing' },
+    counters: { read: 'issuing' },
+    setStartingNumber: { write: 'issuing' },
+    issue: { write: 'issuing' },
+    getById: { read: 'issuing' },
+    list: { read: 'issuing' },
+    recordCopy: { write: 'issuing' },
+    gaps: { read: 'issuing' },
+  },
   conversions: {
     create: { write: 'conversions' },
     getById: { read: 'conversions' },

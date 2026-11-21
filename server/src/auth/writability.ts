@@ -13,7 +13,7 @@ import { isScope, type Scope } from './scopes.js';
  * authenticate() and requireScope(), and drives the store guard
  * (store-guard.ts) from the same rows.
  */
-export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'capture' | 'identity' | 'conversions';
+export type Domain = 'integration' | 'customers' | 'projects' | 'agreements' | 'payments' | 'attachments' | 'summaries' | 'audit' | 'expenses' | 'capture' | 'identity' | 'conversions' | 'issuing';
 export type Access = 'read-write' | 'read' | 'none';
 export type WriterOfRecord = 'MALAFAT' | 'USER' | null;
 /** The two columns of the matrix that are enforced on the server. */
@@ -54,6 +54,8 @@ export const WRITABILITY_MATRIX: readonly MatrixRow[] = [
   { domain: 'identity', scopes: [], routes: '/v1/me, /v1/me/*, /v1/sessions/current, /v1/profiles*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
   // MUT-161: logged currency conversions. Session-only, same shape as `expenses` (full CRUD since MUT-194), no API key access.
   { domain: 'conversions', scopes: ['conversions:read', 'conversions:write'], routes: '/v1/conversions*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
+  // MUT-568 (ADR-259): issued documents. Session-only; the routes also need the owner's `invoicing` feature and refuse a Malafat-connected profile.
+  { domain: 'issuing', scopes: ['issuing:read', 'issuing:write'], routes: '/v1/issuer, /v1/issuing/*, /v1/issued-documents*', apiKey: 'none', session: 'read-write', writerOfRecord: 'USER' },
 ];
 
 function granted(access: Access, scope: string): boolean {

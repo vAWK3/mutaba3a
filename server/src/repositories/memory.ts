@@ -15,6 +15,12 @@ import { isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
 import { isLiveGrant } from '../accountants/grants.js';
 import type {
+  IssueDocumentInput,
+  IssueResult,
+  IssuedDocumentCounterRecord,
+  IssuedDocumentRecord,
+  IssuerDetailsRecord,
+  IssuingRepository,
   AccountClosureRecord,
   AccountPurgeRepository,
   BillingAccountRecord,
@@ -216,6 +222,8 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
+import { ledgerPlan } from '../issuing/ledger-plan.js';
+import { numberGaps } from '../issuing/gaps.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -365,6 +373,14 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-560 (ADR-247): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
   private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
   private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
+  /**
+   * MUT-568 (ADR-259): the issuing core, outside the snapshot too: the signed-out portal can't issue (its profiles are
+   * personal and have no feature grants), and a new snapshot map would change the shipped local format.
+   */
+  private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
+  private readonly issuedCounterMap = new Map<string, IssuedDocumentCounterRecord>();
+  private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  private readonly issuedCopyCount = new Map<string, number>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -885,6 +901,171 @@ export class MemoryLedgerStore implements LedgerStore {
 
   private hasActiveGrant(accountantUserId: string, organizationId: string): boolean {
     return [...this.accountantGrantMap.values()].some((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
+  }
+
+  /**
+   * MUT-568 (ADR-259): the issuing core. `issue` checks everything before it writes anything, so a refusal leaves no
+   * trace and takes no number (the Prisma store gets the same by rolling its transaction back).
+   */
+  readonly issuing: IssuingRepository = {
+    getIssuer: async (organizationId) => {
+      const r = this.issuerMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    putIssuer: async (organizationId, input, expectedVersion, at) => {
+      const existing = this.issuerMap.get(organizationId);
+      if (expectedVersion === null) {
+        if (existing) return { kind: 'stale', record: { ...existing } };
+        const record: IssuerDetailsRecord = { organizationId, ...input, logoAttachmentId: null, ink: 'BLACK', documentStyle: 'PROFESSIONAL', version: 1, createdAt: at, updatedAt: at };
+        this.issuerMap.set(organizationId, record);
+        return { kind: 'created', record: { ...record } };
+      }
+      if (!existing) return { kind: 'not_found' };
+      if (existing.version !== expectedVersion) return { kind: 'stale', record: { ...existing } };
+      Object.assign(existing, input, { version: existing.version + 1, updatedAt: at });
+      return { kind: 'updated', record: { ...existing } };
+    },
+    counters: async (organizationId) =>
+      [...this.issuedCounterMap.values()].filter((c) => c.organizationId === organizationId).sort((a, b) => (a.docType < b.docType ? -1 : 1)).map((c) => ({ ...c })),
+    setStartingNumber: async (organizationId, docType, start) => {
+      if ([...this.issuedDocMap.values()].some((d) => d.organizationId === organizationId && d.docType === docType)) return { kind: 'has_documents' };
+      const counter: IssuedDocumentCounterRecord = { organizationId, docType, start, next: start };
+      this.issuedCounterMap.set(`${organizationId}:${docType}`, counter);
+      return { kind: 'set', counter: { ...counter } };
+    },
+    issue: async (input, at) => this.issueNow(input, at),
+    getById: async (organizationId, id) => {
+      const d = this.issuedDocMap.get(id);
+      return d && d.organizationId === organizationId ? cloneIssued(d) : null;
+    },
+    list: async (organizationId, filter, page) => {
+      const rows = [...this.issuedDocMap.values()]
+        .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
+        .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime() || (a.id < b.id ? 1 : -1))
+        .filter((d) => !page.cursor || d.issuedAt < page.cursor.createdAt || (d.issuedAt.getTime() === page.cursor.createdAt.getTime() && d.id < page.cursor.id));
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items: items.map(cloneIssued), nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
+    },
+    recordCopy: async (organizationId, documentId) => {
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return null;
+      const copyIndex = this.issuedCopyCount.get(documentId) ?? 0;
+      this.issuedCopyCount.set(documentId, copyIndex + 1);
+      return { copyIndex };
+    },
+    gaps: async (organizationId) => {
+      const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+      return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
+    },
+  };
+
+  private issueNow(input: IssueDocumentInput, at: Date): IssueResult {
+    const { organizationId } = input;
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    const replay = docs.find((d) => d.requestKey === input.requestKey);
+    if (replay) return { kind: 'issued', document: cloneIssued(replay), created: false };
+    const lastDate = docs.filter((d) => d.docType === input.docType).reduce<string | null>((max, d) => (max === null || d.documentDate > max ? d.documentDate : max), null);
+    if (lastDate !== null && lastDate > input.documentDate) return { kind: 'date_before_last', lastDate };
+    if (input.customerId && this.custs.get(input.customerId)?.organizationId !== organizationId) return { kind: 'customer_not_found' };
+    const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
+    let originalReceivable: ReceivableRecord | null = null;
+    if (originalId) {
+      const original = docs.find((d) => d.id === originalId && d.docType === 'TAX_INVOICE');
+      const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
+      if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
+      const outstandingMinor = r.status === 'OPEN' ? outstanding(r) : 0n;
+      if (input.composed.grossMinor > outstandingMinor) {
+        return input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor };
+      }
+      originalReceivable = r;
+    }
+    // Every check passed: from here on nothing refuses, so the number is never wasted.
+    const counterKey = `${organizationId}:${input.docType}`;
+    const counter = this.issuedCounterMap.get(counterKey) ?? { organizationId, docType: input.docType, start: 1, next: 1 };
+    const number = counter.next;
+    this.issuedCounterMap.set(counterKey, { ...counter, next: number + 1 });
+    const plan = ledgerPlan(input, number);
+    const id = randomUUID();
+    let receivableId: string | null = null;
+    let paymentId: string | null = null;
+    let creditId: string | null = null;
+    if (plan.receivable) {
+      const { title, ...rest } = plan.receivable;
+      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, origin: 'ISSUED_DOCUMENT', originId: id, postedAt: at, createdByUserId: input.createdByUserId }).id;
+    }
+    if (plan.payment) {
+      const { allocate, ...p } = plan.payment;
+      const target = allocate === 'own' ? receivableId : allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
+      paymentId = this.insertPayment(
+        {
+          ...p,
+          organizationId,
+          projectId: null,
+          receiptNumber: null,
+          notes: null,
+          replacesPaymentId: null,
+          requestId: input.requestId,
+          createdByUserId: input.createdByUserId,
+          origin: 'ISSUED_DOCUMENT',
+          captureSource: null,
+          allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
+        },
+        at,
+      ).payment.id;
+    }
+    if (plan.credit && originalReceivable) {
+      const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: originalReceivable.id, ...plan.credit, reasonCode: plan.credit.reasonCode ?? null, requestId: input.requestId, createdAt: at };
+      this.credits.set(credit.id, credit);
+      originalReceivable.creditedMinor += plan.credit.amountMinor;
+      settle(originalReceivable);
+      creditId = credit.id;
+    }
+    const { composed } = input;
+    const document: IssuedDocumentRecord = {
+      id,
+      organizationId,
+      docType: input.docType,
+      number,
+      documentDate: input.documentDate,
+      issuedAt: at,
+      currency: input.currency,
+      subtotalMinor: composed.subtotalMinor,
+      discountMinor: composed.discountMinor,
+      netMinor: composed.netMinor,
+      vatRateBasisPoints: composed.vatRateBasisPoints,
+      vatMinor: composed.vatMinor,
+      grossMinor: composed.grossMinor,
+      issuer: input.issuer,
+      customerId: input.customerId,
+      customer: input.customer,
+      language: input.language,
+      style: input.style,
+      ink: input.ink,
+      notes: input.notes,
+      originalId: input.originalId,
+      paymentDetails: input.payment ? { ...input.payment } : null,
+      allocationNumber: input.allocationNumber,
+      receivableId,
+      paymentId,
+      creditId,
+      coreVersion: input.coreVersion,
+      createdByUserId: input.createdByUserId,
+      requestKey: input.requestKey,
+      lines: composed.lines.map((l) => ({
+        index: l.index,
+        description: l.description.trim(),
+        kind: l.kind,
+        quantityMilli: l.quantityMilli,
+        unitPriceMinor: l.unitPriceMinor,
+        discountMinor: l.discountMinor,
+        netMinor: l.netMinor,
+        vatRateBasisPoints: l.vatRateBasisPoints,
+        vatMinor: l.vatMinor,
+      })),
+    };
+    this.issuedDocMap.set(id, cloneIssued(document));
+    return { kind: 'issued', document, created: true };
   }
 
   /** MUT-314 (ADR-248): the same rules as the entries feed and `listReadyByExpenseIds`, counted. */
@@ -4408,6 +4589,11 @@ function liveAllocations(rows: ReadonlyMap<string, AllocationRecord>): Map<strin
   const live = new Map<string, Omit<AllocationRecord, 'releasedAt'>>();
   for (const [key, { releasedAt, ...row }] of rows) if (!releasedAt) live.set(key, row);
   return live;
+}
+
+/** Issued documents are immutable: every read hands out a copy, so no caller can change the stored one. */
+function cloneIssued(d: IssuedDocumentRecord): IssuedDocumentRecord {
+  return { ...d, issuer: structuredClone(d.issuer), customer: structuredClone(d.customer), paymentDetails: d.paymentDetails ? { ...d.paymentDetails } : null, lines: d.lines.map((l) => ({ ...l })) };
 }
 
 function settle(r: ReceivableRecord): void {
