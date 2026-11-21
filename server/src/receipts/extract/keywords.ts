@@ -176,3 +176,12 @@ export const STREET = keywords("רח'", 'רחוב', "שד'", 'شارع', 'street
 
 /** MUT-514: column headings of an item table; a row with two of them is the table's header. */
 export const TABLE_COLUMN = keywords('תיאור', 'פריט', 'כמות', 'מחיר', 'סכום', 'description', 'item', 'qty', 'quantity', 'price', 'amount', 'الوصف', 'الصنف', 'الكمية', 'السعر', 'المبلغ');
+
+/**
+ * MUT-630: a customer's or account's number label. Its row is never money (`מספר לקוח: 1.261` reads as an
+ * amount) and never holds the vendor's phone. Not a NOT_CUSTOMER phrase: `العميل` still heads a bill-to block.
+ */
+export const CUSTOMER_NUMBER = keywords('מספר לקוח', "מס' לקוח", 'מס.לקוח', "מס' חשבון", 'account no', 'customer no', 'رقم العميل', 'رقم الحساب');
+
+/** MUT-630: an email's label, on a bill-to block's contact row. */
+export const EMAIL_LABEL = keywords('דוא"ל', 'דואל', 'אימייל', 'מייל', 'דואר אלקטרוני', 'email', 'e-mail', 'mail', 'البريد الإلكتروني', 'بريد الكتروني', 'ايميل');

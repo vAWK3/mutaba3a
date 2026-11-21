@@ -4632,3 +4632,15 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 | Portal | `SignInCode.test.tsx`: link beside Forgot, email first, the full step, Arabic-Indic digits, each refusal, under review, resend after 60 s, back to password, RTL | AC1, AC6 |
 | Release-QA | `portal.signin.email-code` (stubbed, en + ar), `portal-selfservice.signin.email-code` (live outbox, en + ar) | AC1, AC6, AC7 |
 
+## MUT-630/631 — no buyer email, billed line, item line or garbled name as the vendor's (2026-11-21, ADR-241 addendum)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/receipts/extract/__tests__/buyer.test.ts` "MUT-630" | a customer-number row never ends the block; up to 2 contact rows past the cap (email, phone, labelled), nothing else, not past a non-contact row; block emails learned lower-cased, contact rows past the cap excluded but never learned; digits inside an email are no phone or ID; `startsBody`; `normalizeIdentifier` on emails; `learnedBuyerIds` keeps an email |
+| Unit (vitest) | `extract.test.ts` "MUT-630/631" | a mobile bill's text layer gives no email or phone and its total; a billed line under the table header or on a money row (labelled `נייד`) is no phone; header and footer phones still read; a bill-to or learned email is no vendor email, a vendor's is; emails never in `vendorIdentifiers`; a table header or money row first gives no vendor; three garbled names give none (nor the row under them); five real names with Latin in them still read |
+| Reader (memory store) | `receipts/__tests__/reader-buyer-memory.test.ts` | generation 5 stamp; a learned bill-to email is never filled on a later receipt; `withVendor` gives a saved vendor's name by registration no. (`source: 'vendor'`) |
+| Script (memory store) | `scripts/__tests__/receipts-reread.test.ts` "--buyer-contacts" | lists a vendor (phone + email) and a To-review receipt (email) carrying the buyer's contact by id and field name only, writes nothing, no value in the output; only profiles of a `receipt_reading` holder |
+| Bench | `server/ocr/bench/run.py --rescore … --compare` (main's extractor as the baseline) | 78 real receipts incl. `prod-8285ca9d.pdf`: 0 fields lost; wrong vendor 8 → 5, phone 10 → 7, email 6 → 3; the four production receipts give no vendor, phone or email |
+
+Not run: `test:db` (no store change: the report only reads through existing repository methods).
+
