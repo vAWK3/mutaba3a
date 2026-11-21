@@ -911,15 +911,22 @@ describe('MUT-630/631: no wrong vendor contact details or names', () => {
       expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 60', 'קו 055-1234567'])), 'phone')).toBeUndefined();
     });
 
+    it('the item table ends at its last total row with an amount: a wrapped header, a line subtotal or an item named "Total" does not end it (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות', 'מחיר ליחידה סה"כ', 'פריט 10.00', 'נייד 050-1234567', 'סה"כ 10.00'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 59.90', 'סה"כ למנוי 59.90', 'מנוי 052-2222222', 'סה"כ 119.80'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'description qty price', 'Total Care plan', 'mobile 054-3333333', 'Total 30.00', '03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
     it('a count line (סה"כ פריטים) does not end the item table; the total does (review)', () => {
       expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'סה"כ פריטים 2', 'קו 055-1234567', 'סה"כ 59.90', '03-5551234'])), 'phone')).toBe('03-5551234');
     });
 
-    it("once the buyer's email shows outside a block, only a labelled email after it is offered: a bare one could be anyone's (review)", () => {
+    it("once the buyer's email shows outside a block, no later email is offered, labelled or not: it could be anyone's (review)", () => {
       expect(value(readWith(receipt(['Phone Co', 'Total 10.00', EMAIL, 'support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
       expect(value(readWith(receipt(['Phone Co', 'info@phoneco.example', 'Total 10.00', EMAIL]), { buyerIds: [EMAIL] }), 'email')).toBe('info@phoneco.example');
-      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'Email: billing@phoneco.example']), { buyerIds: [EMAIL] }), 'email')).toBe('billing@phoneco.example');
-      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'info@mail.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      // A label does not say whose: a platform, an accountant, the buyer's own second address.
+      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'Questions? Email support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      expect(value(readWith(receipt(['Phone Co', `Email: ${EMAIL}, accounts@buyer-firm.example`, 'Total 10.00']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
     });
 
     it('a bill-to email is kept for the buyer memory; an email is never reported as the vendor\'s (it is never unlearned)', () => {

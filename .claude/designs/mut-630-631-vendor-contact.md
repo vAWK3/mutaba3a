@@ -135,9 +135,10 @@ Bench (rescore over the saved reads, main's extractor vs the branch's, 78 real r
 
 ## Pre-landing review fixes (2026-11-21, /review: 6 specialists + adversarial)
 
-- `itemBody` stays "table header to the first total, else to the end" (a second adversarial pass showed that ending at the last money row lets a billed line printed under the last amount, or a whole-number table, fill the vendor's phone). A count line (`סה"כ פריטים`, `NOT_TOTAL`) no longer ends the table. A missed total label leaves the footer phone empty, never wrong.
-- `readEmail`: once the buyer's email shows outside a block, only a labelled email after it (`Email:`, label checked with the addresses removed) is offered; a bare one could be anyone's (as `readPhone` treats bare phones).
+- `itemBody`: an item table runs from its header to the **last** total row with an amount under it (a wrapped header, a line's subtotal, an item named "Total" and a count line stay inside), or to the end when there is none. Two adversarial passes showed that ending at the first total word, or at the last money row, lets a billed line fill the vendor's phone. A footer phone under a missed total is empty, never wrong.
+- `readEmail`: once the buyer's email shows outside a block, no later email is offered, labelled or not (a third pass showed a label does not say whose: a platform's, an accountant's, the buyer's own second address).
 - Tests: a phone-shaped customer/account number is never the vendor's phone; the report's no-value assertion no longer matches random UUIDs (a ~2% flake).
 - Report wording: "matches a learned buyer identifier", not "is the buyer's".
 - Open for Basel: a weak bill-to label (`עבור`, `customer`, `to:`) can teach a vendor's own footer email as the buyer's, and emails are never unlearned (P1/revision 2). Not changed without his say.
+- Follow-up candidate: billed lines printed after the grand total with no item-table header (`פירוט שיחות` / `קו 050-…`) can still read as a bare vendor phone (pre-existing; needs a detail-section signal).
 - Follow-up candidate: `hasEmbeddedLatin` (revision 7) also empties short or lowercase Latin brand words between Hebrew words (`פז yellow`, `ACE`, `HOT`, `H&M`); `withVendor` restores the name once the vendor is saved with its registration no.
