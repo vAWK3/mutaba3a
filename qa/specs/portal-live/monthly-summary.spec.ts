@@ -1,6 +1,6 @@
 import { test, expect } from '../../support/qa';
 import type { Page } from '@playwright/test';
-import { advanceClock, customerOnClock, finishSignupInPage, invoicesOf, outboxOf, provisionPerson, requestSignup, runMailJob, setEmailVerified, signIn, subscribeByApi } from '../../support/livePortal';
+import { advanceClock, customerOnClock, finishSignupInPage, invoicesOf, liveState, outboxOf, provisionPerson, requestSignup, runMailJob, setEmailVerified, signIn, subscribeByApi } from '../../support/livePortal';
 import { openYou } from '../../support/you';
 
 /**
@@ -24,7 +24,9 @@ function lastMonth(): { day: (d: number) => string; en: string; ar: string } {
 
 let ik = 0;
 async function record(page: Page, profileId: string, path: string, body: Record<string, unknown>): Promise<{ id: string }> {
-  const res = await page.request.post(path, { data: body, headers: { 'x-mutaba3a-profile': profileId, 'idempotency-key': `qa-mut535-${Date.now()}-${++ik}` } });
+  // A session's writes come from the portal's own origin (the API refuses another site's).
+  const headers = { origin: liveState().portalOrigin, 'x-mutaba3a-profile': profileId, 'idempotency-key': `qa-mut535-${Date.now()}-${++ik}` };
+  const res = await page.request.post(path, { data: body, headers });
   expect(res.status(), `${path} ${await res.text()}`).toBe(201);
   return res.json();
 }
