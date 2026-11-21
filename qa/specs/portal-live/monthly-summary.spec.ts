@@ -111,6 +111,8 @@ test('You › Account’s Monthly summary email switch - off, then on, kept afte
   const person = await step('A trialist with last month recorded opens You › Account', async () => {
     const p = await finishSignupInPage(page, await requestSignup('en', 'summaryswitch'), 'en');
     await record(page, p.personalId, '/v1/income', { kind: 'received', amount: '400.00', currency: 'ILS', occurredOn: month.day(5) });
+    // A new signup lands on the trial's welcome step (MUT-418); the person answers it first.
+    await page.getByRole('dialog', { name: 'Your free trial' }).getByRole('button', { name: 'Not now' }).click();
     await openYou(page, 'account');
     return p;
   });
