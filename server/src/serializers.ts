@@ -13,6 +13,9 @@ import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.j
 import { allocationNumberRequired } from './israel/allocation-number.js';
 import type { CreditReasonCode } from './payments/credit.js';
 import type {
+  IssuedDocumentLineRecord,
+  IssuedDocumentRecord,
+  IssuerDetailsRecord,
   BillingAccountRecord,
   EntitlementGrantRecord,
   ConversionRecord,
@@ -803,4 +806,64 @@ export function serializeBillingAccount(a: BillingAccountRecord) {
     createdAt: a.createdAt.toISOString(),
     updatedAt: a.updatedAt.toISOString(),
   };
+}
+
+// ---- MUT-568 (ADR-259): the issuing core ----------------------------------------------------------------------------
+
+/** A quantity in thousandths as the shortest decimal ("40", "1.5"). */
+export function formatQuantity(milli: bigint): string {
+  const whole = milli / 1000n;
+  const fraction = (milli % 1000n).toString().padStart(3, '0').replace(/0+$/, '');
+  return fraction ? `${whole}.${fraction}` : `${whole}`;
+}
+
+export function serializeComposedTotals(d: { currency: string; subtotalMinor: bigint; discountMinor: bigint; netMinor: bigint; vatRateBasisPoints: number; vatMinor: bigint; grossMinor: bigint; lines: IssuedDocumentLineRecord[] }) {
+  return {
+    subtotal: amt(d.subtotalMinor, d.currency),
+    discount: amt(d.discountMinor, d.currency),
+    net: amt(d.netMinor, d.currency),
+    vatRateBasisPoints: d.vatRateBasisPoints,
+    vat: amt(d.vatMinor, d.currency),
+    gross: amt(d.grossMinor, d.currency),
+    lines: d.lines.map((l) => ({
+      index: l.index,
+      description: l.description,
+      kind: l.kind,
+      quantity: formatQuantity(l.quantityMilli),
+      unitPrice: amt(l.unitPriceMinor, d.currency),
+      discount: amt(l.discountMinor, d.currency),
+      net: amt(l.netMinor, d.currency),
+      vatRateBasisPoints: l.vatRateBasisPoints,
+      vat: amt(l.vatMinor, d.currency),
+    })),
+  };
+}
+
+export function serializeIssuedDocument(d: IssuedDocumentRecord) {
+  return {
+    ...serializeComposedTotals(d),
+    id: d.id,
+    docType: d.docType,
+    number: d.number,
+    documentDate: d.documentDate,
+    issuedAt: d.issuedAt.toISOString(),
+    currency: d.currency,
+    language: d.language,
+    style: d.style,
+    ink: d.ink,
+    customerId: d.customerId,
+    customer: d.customer as Record<string, unknown>,
+    issuer: d.issuer as Record<string, unknown>,
+    notes: d.notes,
+    originalId: d.originalId,
+    paymentDetails: d.paymentDetails ? { method: d.paymentDetails.method, reference: d.paymentDetails.reference, receivedOn: d.paymentDetails.receivedOn } : null,
+    allocationNumber: d.allocationNumber,
+    receivableId: d.receivableId,
+    paymentId: d.paymentId,
+    coreVersion: d.coreVersion,
+  };
+}
+
+export function serializeIssuer(r: IssuerDetailsRecord) {
+  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, version: r.version };
 }

@@ -30,6 +30,12 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/streak',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
+  'GET /v1/issued-documents',
+  'GET /v1/issued-documents/{documentId}',
+  'GET /v1/issuer',
+  'GET /v1/issuing/gaps',
+  'GET /v1/issuing/settings',
   'GET /v1/payments',
   // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
   'GET /v1/period-downloads/ticket',
@@ -132,6 +138,10 @@ beforeAll(async () => {
   storage.put(attachmentKey, { sizeBytes: 2048, contentType: 'application/pdf' });
   await h.store.attachments.complete(profileId, attachment.id, h.now());
   ids.attachmentId = attachment.id;
+  // MUT-568: the owner issues one tax invoice, so every issuing GET reads a real document.
+  await h.store.features.grant({ userId: owner.userId, feature: 'invoicing', grantedBy: 'test', at: h.now(), audit: [] });
+  await h.app.request('/v1/issuer', json({ legalName: 'Sader Studio', vatId: '123456789', dealerType: 'COMPANY' }, owner.on(profileId), 'PUT'));
+  ids.documentId = (await seed('/v1/issued-documents', { docType: 'TAX_INVOICE', documentDate: '2026-11-01', currency: 'ILS', language: 'en', customerId: customer.id, lines: [{ description: 'Logo', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] })).id;
   accountant = await shared(h, owner, profileId);
   await expenseOn(h, accountant, accountant.personalId, 'My own lunch');
 

@@ -613,8 +613,14 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * (ACCOUNTANT_READ_ONLY). The last-viewed stamp and SYSTEM catch-up posting run on the store beneath the guard
  * (`unguarded`), as for every session.
  */
+/**
+ * MUT-568 (ADR-259): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
+ * issuing routes read the owner's flags under the accountant's guard. A read of flags only; listed, never derived.
+ */
+export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
+
 export function accountantStoreGuard(): StoreGuard {
-  return { ...readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly), narrow: accountantExpenseView };
+  return { ...readOnlyStoreGuard(ACCOUNTANT_EXTRA_READS, accountantReadOnly), narrow: accountantExpenseView };
 }
 
 /**

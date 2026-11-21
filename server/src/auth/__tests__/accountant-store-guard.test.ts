@@ -4,7 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { AppEnv } from '../middleware.js';
-import { PROFILE_FEED_READS, STORE_ACCESS, accountantStoreGuard, requestScopedStore, shareLinkStoreGuard, unguarded, type MethodAccess } from '../store-guard.js';
+import { ACCOUNTANT_EXTRA_READS, PROFILE_FEED_READS, STORE_ACCESS, accountantStoreGuard, requestScopedStore, shareLinkStoreGuard, unguarded, type MethodAccess } from '../store-guard.js';
 import { accountantMayRead, accountantScopes } from '../writability.js';
 
 /**
@@ -16,7 +16,7 @@ const isRead = (access: MethodAccess) => access === 'read' || (typeof access ===
 
 describe('accountantScopes (MUT-559)', () => {
   it('holds only the read scopes of the shared domains: never a write, agreements, audit or integration', () => {
-    expect([...accountantScopes()].sort()).toEqual(['attachments:read', 'conversions:read', 'customers:read', 'expenses:read', 'payments:read', 'projects:read', 'summaries:read']);
+    expect([...accountantScopes()].sort()).toEqual(['attachments:read', 'conversions:read', 'customers:read', 'expenses:read', 'issuing:read', 'payments:read', 'projects:read', 'summaries:read']);
   });
 
   it('allows a GET only when it names at least one scope and every one is the accountant’s (D1)', () => {
@@ -33,11 +33,11 @@ describe('accountantScopes (MUT-559)', () => {
 });
 
 describe('accountantStoreGuard (MUT-559 D2)', () => {
-  it('passes every read and the named feed reads (MUT-575), and refuses every other classified method with READ_ONLY_PROFILE, ACCOUNTANT_READ_ONLY', () => {
+  it('passes every read, the named feed reads (MUT-575) and the owner-flag read (MUT-568), and refuses every other classified method with READ_ONLY_PROFILE, ACCOUNTANT_READ_ONLY', () => {
     const guard = accountantStoreGuard();
     for (const [repo, methods] of Object.entries(STORE_ACCESS)) {
       for (const [method, access] of Object.entries(methods as Record<string, MethodAccess>)) {
-        if (isRead(access) || PROFILE_FEED_READS.has(`${repo}.${method}`)) {
+        if (isRead(access) || ACCOUNTANT_EXTRA_READS.has(`${repo}.${method}`)) {
           expect(() => guard.assertCanCall(repo, method), `${repo}.${method}`).not.toThrow();
         } else {
           let thrown: unknown;

@@ -141,7 +141,7 @@ export function writeRefusal(domain: Domain, profileWriter: ProfileWriter): ApiE
  * MUT-559 (ADR-245): the domains an accountant reads on a profile shared with them. Customers and projects only so
  * income rows carry their client's and matter's names; agreements, audit, integration and identity are never theirs.
  */
-export const ACCOUNTANT_DOMAINS: ReadonlySet<Domain> = new Set(['expenses', 'payments', 'attachments', 'summaries', 'conversions', 'customers', 'projects']);
+export const ACCOUNTANT_DOMAINS: ReadonlySet<Domain> = new Set(['expenses', 'payments', 'attachments', 'summaries', 'conversions', 'customers', 'projects', 'issuing']);
 
 /** The scopes an accountant's session holds on a shared profile: only the `:read` scopes of ACCOUNTANT_DOMAINS. */
 export function accountantScopes(): readonly Scope[] {
