@@ -182,8 +182,8 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   }
 
   /**
-   * MUT-514 (D6, D10): the organization's own phone and ID numbers, from the bill-to blocks its latest receipts' reads
-   * found, less any number one of them read as the vendor's. Learned from reads, not approvals; this receipt's own
+   * MUT-514 (D6, D10): the organization's own phone and ID numbers (MUT-630: and emails), from the bill-to blocks its
+   * latest receipts' reads found, less any number one of them read as the vendor's (`organizationBuyerIds`). Learned from reads, not approvals; this receipt's own
    * earlier read is left out, so a re-read never feeds on itself.
    */
   async function buyerIds(receipt: ExpenseReceiptRecord): Promise<string[]> {

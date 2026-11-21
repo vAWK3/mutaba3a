@@ -158,7 +158,8 @@ describe('receipts:reread --buyer-contacts (MUT-630)', () => {
       { kind: 'receipt', id: carrying.id, organizationId: w.ORG, fields: ['email'] },
     ]);
     expect(await w.store.vendors.getById(w.ORG, own!.id)).toEqual(before);
-    expect(JSON.stringify(items)).not.toMatch(/dana|052/i);
+    // Ids are random UUIDs: only the rest of the report may not carry a value.
+    expect(JSON.stringify(items.map(({ kind, fields }) => ({ kind, fields })))).not.toMatch(/dana|052/i);
   });
 
   it('looks only at profiles a receipt_reading holder belongs to', async () => {

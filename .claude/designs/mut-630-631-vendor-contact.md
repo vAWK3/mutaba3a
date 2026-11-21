@@ -132,3 +132,12 @@ Found on the real rows (Partner PDF `8285ca9d`, local sidecar on :8197, current 
 5. `organizationBuyerIds` (reader.ts) is the one place the learned identifiers are computed; the read job and the report share it.
 
 Bench (rescore over the saved reads, main's extractor vs the branch's, 78 real receipts incl. `prod-8285ca9d.pdf`): 0 fields lost; confidently wrong vendor 8 → 5, phone 10 → 7, email 6 → 3. All four production receipts now give no vendor, phone or email, totals unchanged.
+
+## Pre-landing review fixes (2026-11-21, /review: 6 specialists + adversarial)
+
+- `itemBody` ends at the first total row under an item table's header, or at its last money row when no total was read (a missed total label no longer swallows the footer phone).
+- `readEmail`: once the buyer's email shows outside a block, no later email is offered (as `readPhone` does for a buyer's labelled phone).
+- Tests: a phone-shaped customer/account number is never the vendor's phone; the report's no-value assertion no longer matches random UUIDs (a ~2% flake).
+- Report wording: "matches a learned buyer identifier", not "is the buyer's".
+- Open for Basel: a weak bill-to label (`עבור`, `customer`, `to:`) can teach a vendor's own footer email as the buyer's, and emails are never unlearned (P1/revision 2). Not changed without his say.
+- Follow-up candidate: `hasEmbeddedLatin` (revision 7) also empties short or lowercase Latin brand words between Hebrew words (`פז yellow`, `ACE`, `HOT`, `H&M`); `withVendor` restores the name once the vendor is saved with its registration no.

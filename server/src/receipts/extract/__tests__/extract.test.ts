@@ -901,6 +901,20 @@ describe('MUT-630/631: no wrong vendor contact details or names', () => {
       expect(value(read(receipt(['Phone Co', `Contact: ${EMAIL}`, 'Total 10.00'])), 'email')).toBe(EMAIL);
     });
 
+    it("a customer or account number shaped like a phone is never the vendor's phone (review)", () => {
+      expect(value(read(receipt(['Phone Co', 'מספר לקוח: 052-9876543', 'סה"כ 59.90'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', '03-5551234', "מס' חשבון: 052-9876543", 'סה"כ 59.90'])), 'phone')).toBe('03-5551234');
+    });
+
+    it('an item table with no total row read ends at its last money row: the footer phone is still read (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'קו 055-1234567', 'פריט 10.00', 'Tel 03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
+    it("once the buyer's email shows outside a block, no later email is offered: it could be anyone's (review)", () => {
+      expect(value(readWith(receipt(['Phone Co', 'Total 10.00', EMAIL, 'support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      expect(value(readWith(receipt(['Phone Co', 'info@phoneco.example', 'Total 10.00', EMAIL]), { buyerIds: [EMAIL] }), 'email')).toBe('info@phoneco.example');
+    });
+
     it('a bill-to email is kept for the buyer memory; an email is never reported as the vendor\'s (it is never unlearned)', () => {
       const r = readReceipt({ lines: receipt(['Phone Co', 'Bill to: Dana', EMAIL, 'Total 10.00']) }, { readerVersion: READER });
       expect(r.buyerIdentifiers).toEqual([EMAIL]);

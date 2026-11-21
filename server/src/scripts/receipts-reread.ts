@@ -187,7 +187,7 @@ if (isMain) {
   try {
     if (contacts) {
       const items = await buyerContactReport(store);
-      for (const item of items) console.log(`${item.kind} ${item.id} org ${item.organizationId}: ${item.fields.join(' ')} is the buyer's`);
+      for (const item of items) console.log(`${item.kind} ${item.id} org ${item.organizationId}: ${item.fields.join(' ')} matches a learned buyer identifier`);
       console.log(`receipts-reread --buyer-contacts: ${items.length} found; nothing written (a vendor's detail changes only with Basel's OK)`);
     } else if (args) {
       const r = await rereadReceipts(store, { ...args, now: new Date() });

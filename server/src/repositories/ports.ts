@@ -3863,8 +3863,8 @@ export type ReceiptReadRequest = 'PENDING' | 'SKIPPED';
  * MUT-514 (D6, D10): the phone and ID numbers a server read found, digits only: in the receipt's bill-to blocks
  * (`buyer`), and the ones it filled as the vendor's (`vendor`). The organization's buyer memory is learned from these.
  * MUT-630: `buyer` also holds the block's emails, lower-cased (`vendor` never does: an email is never unlearned). A
- * rollback reads a stored email as a digit fragment, which never matches a phone. Server-only: never in the API, a
- * records file or a log.
+ * rollback reads a stored email as its digits: an email whose local part is a phone or ID number then reads as that
+ * number (most likely the buyer's own). Server-only: never in the API, a records file or a log.
  */
 export interface ReadIdentifiers {
   buyer: string[];
