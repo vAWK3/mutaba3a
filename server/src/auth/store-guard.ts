@@ -403,6 +403,8 @@ export const STORE_ACCESS: StoreAccess = {
     pastDueCandidates: 'operator',
     // MUT-534: the daily come-back run.
     comebackCandidates: 'operator',
+    // MUT-535: the monthly summary run only (a job on the unguarded store).
+    monthlySummaryCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',

@@ -2484,6 +2484,15 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
+/** MUT-535 (plan D2): a person whose own billing facts may cover a profile, for the monthly summary run. */
+export interface MonthlySummaryCandidate {
+  userId: string;
+  email: string;
+  locale: UserLocale;
+  emailVerified: boolean;
+  choice: MonthlySummaryChoice | null;
+}
+
 /** MUT-534: a subscription Stripe ended, whose payer the come-back mail may reach. */
 export interface ComebackCandidate {
   stripeSubscriptionId: string;
@@ -2563,6 +2572,13 @@ export interface BillingRepository {
    * closing their account, oldest end first: who the daily come-back run looks at.
    */
   comebackCandidates(window: { endedAfter: Date; endedUpTo: Date }): Promise<ComebackCandidate[]>;
+  /**
+   * MUT-535 (D2): ACTIVE people who aren't closing their account and whose own facts may cover a profile: a profile-plan
+   * subscription of theirs in a covering status (active, trialing, past_due), a trial started after
+   * `trialStartedAfter`, a live profile-plan grant to them, or a profile they OWN with Malafat connected. Keyset by
+   * userId (after `after`), at most `limit`. Entitlement still decides per profile; this only finds who to ask.
+   */
+  monthlySummaryCandidates(input: { trialStartedAfter: Date; now: Date; after: string | null; limit: number }): Promise<MonthlySummaryCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

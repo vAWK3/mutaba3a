@@ -3224,6 +3224,25 @@ export class PrismaLedgerStore implements LedgerStore {
           : [];
       });
     },
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+      const people = await this.prisma.user.findMany({
+        where: {
+          status: 'ACTIVE',
+          deleteAfter: null,
+          ...(after ? { id: { gt: after } } : {}),
+          OR: [
+            { billingAccount: { is: { subscriptions: { some: { tier: { not: 'ACCOUNTANT' }, status: { in: ['active', 'trialing', 'past_due'] } } } } } },
+            { trialStartedAt: { gt: trialStartedAfter } },
+            { entitlementGrants: { some: { tier: { not: 'ACCOUNTANT' }, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } },
+            { memberships: { some: { role: 'OWNER', organization: { integrations: { some: { provider: 'MALAFAT', status: 'CONNECTED' } } } } } },
+          ],
+        },
+        select: { id: true, email: true, locale: true, emailVerifiedAt: true, monthlySummaryMail: true },
+        orderBy: { id: 'asc' },
+        take: limit,
+      });
+      return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, emailVerified: p.emailVerifiedAt !== null, choice: monthlySummaryChoiceOf(p.monthlySummaryMail) }));
+    },
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({
         where: { status: 'past_due', billingAccount: { user: { is: { status: 'ACTIVE', deleteAfter: null } } } },
