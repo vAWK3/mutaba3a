@@ -66,7 +66,7 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
   const vendor = readVendor(rows, buyer);
   const registration = readRegistration(rows, buyer);
   const phone = readPhone(rows, buyer);
-  const email = readEmail(rows);
+  const email = readEmail(rows, buyer);
   const allocationNumber = readAllocationNumber(rows);
 
   const suggestion: ReceiptSuggestion = {
@@ -90,7 +90,9 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
 
 /**
  * R9: the numbers this receipt shows as the vendor's outside its own bill-to blocks, read without the learned buyer
- * numbers: a number a misfired block once taught is still seen as a vendor's here, so the memory unlearns it.
+ * numbers: a number a misfired block once taught is still seen as a vendor's here, so the memory unlearns it. MUT-630:
+ * never an email: an e-receipt printing the buyer's email unlabelled would unlearn it (a vendor email hidden this way
+ * is left empty, not wrong).
  */
 function vendorIdentifiersOf(rows: Parameters<typeof buyerOf>[0]): string[] {
   const ownBlocks = buyerOf(rows);
