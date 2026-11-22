@@ -124,6 +124,8 @@ describe('mapCorrectionError (MUT-453)', () => {
   it('re-reads on nothing left, an already reversed payment, a changed row or a gone one', () => {
     expect(mapCorrectionError(v('RECEIVABLE_NOT_OPEN'))).toEqual({ fields: [], toast: 'hosted.correct.errors.nothingLeft', reread: true });
     expect(mapCorrectionError(new ApiError(409, 'CONFLICT', 'x', { reason: 'ALREADY_REVERSED' }))).toEqual({ fields: [], toast: 'hosted.correct.errors.alreadyReversed', reread: true });
+    // MUT-709: a receipt stands on the payment; nothing changed, so it says why and does not re-read.
+    expect(mapCorrectionError(new ApiError(409, 'CONFLICT', 'x', { reason: 'HAS_DOCUMENT' }))).toEqual({ fields: [], toast: 'hosted.correct.errors.hasDocument' });
     expect(mapCorrectionError(new ApiError(409, 'CONFLICT', 'x', { reason: 'VERSION_MISMATCH' }))).toEqual({ fields: [], toast: 'hosted.correct.errors.changed', reread: true });
     expect(mapCorrectionError(new ApiError(404, 'NOT_FOUND', 'x', null))).toEqual({ fields: [], toast: 'hosted.redate.gone', reread: true });
   });

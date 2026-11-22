@@ -8634,7 +8634,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves).
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -8899,7 +8899,7 @@ export interface paths {
         put?: never;
         /**
          * Record a payment with its allocations, from a preview
-         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment.
+         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment. MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -9369,7 +9369,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a payment: every allocation undone, status REVERSED
-         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
+         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-709: a payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT (details documentId, docType, number); issue a credit note instead. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
          */
         post: {
             parameters: {
@@ -12108,7 +12108,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future. MUT-709: a Received capture retried with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded (without receivedCount), never a second one.
          */
         post: {
             parameters: {
@@ -12191,7 +12191,7 @@ export interface paths {
         post?: never;
         /**
          * Undo an income entry this session created
-         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. MUT-709: a Received payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT; issue a credit note instead. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
          */
         delete: {
             parameters: {
