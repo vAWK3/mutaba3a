@@ -119,7 +119,7 @@ function Workspace({ profile, setup, issuer, owner }: { profile: HostedProfile; 
   const logoUrl = useIssuerLogoUrl(profile.id, setup.hasLogo);
   const done = doneSteps(setup);
   // Opens on the first step still to do; picking a region (or a step's Next) moves it.
-  const [current, setCurrent] = useState<SetupStep>(() => SETUP_STEPS.find((step) => setup.steps[step] === 'todo') ?? 'details');
+  const [current, setCurrent] = useState<SetupStep>(() => (new URLSearchParams(window.location.search).has('taxAuthority') ? 'taxAuthority' : (SETUP_STEPS.find((step) => setup.steps[step] === 'todo') ?? 'details')));
   // What the open step's form holds, over what is saved: the letterhead follows the typing (AC3).
   const [draft, setDraft] = useState<Partial<PaperModel>>({});
   const nextNumber = counters.data?.counters.find((c) => c.docType === 'TAX_INVOICE')?.next ?? 1;
@@ -158,7 +158,7 @@ function Workspace({ profile, setup, issuer, owner }: { profile: HostedProfile; 
         ) : current === 'numbering' ? (
           <NumberingStep {...stepProps} answered={setup.steps.numbering === 'done'} counters={counters.data} />
         ) : (
-          <TaxAuthorityStep onDone={() => go(SETUP_STEPS.find((step) => setup.steps[step] === 'todo' && REQUIRED_STEPS.has(step)) ?? 'taxAuthority')} />
+          <TaxAuthorityStep profileId={profile.id} onDone={() => go(SETUP_STEPS.find((step) => setup.steps[step] === 'todo' && REQUIRED_STEPS.has(step)) ?? 'taxAuthority')} />
         )}
       </section>
     </div>
