@@ -82,7 +82,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   // MUT-648: the save toast's "Issue …" opens the issue drawer for the entry just saved, after its own drawer closed.
   const [issueStart, setIssueStart] = useState<IssueStart | null>(null);
   const onOfferIssue = (start: IssueStart) => setIssueStart(start);
-  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
+  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: {} } as never));
   if (issueStart) {
     return (
       <IssueDocumentDrawer

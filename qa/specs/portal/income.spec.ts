@@ -296,9 +296,8 @@ test('Add income from a client’s page starts as Owed with that client filled i
     expect(api.last('POST', /^\/v1\/income$/)?.body).toMatchObject({ kind: 'owed', amount: '300.00', customerId: C2 });
   });
 
-  await step('It is on the client’s Receivables tab', async () => {
-    await page.getByRole('tab', { name: 'Receivables' }).click();
-    await expect(page.getByRole('table', { name: 'Receivables' })).toContainText('300.00');
+  await step('It is on the client’s ledger card', async () => {
+    await expect(page.getByTestId('ledger-card')).toContainText('300.00');
   });
 });
 

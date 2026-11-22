@@ -15,9 +15,9 @@ const noRetryOn404 = (count: number, error: unknown) => !notFound(error) && coun
 
 export const issuedKey = (profileId: string, ...rest: string[]) => profileKey(profileId, 'issued', ...rest);
 
-export function useIssuedDocuments(profileId: string, filter: { customerId?: string; docType?: IssuedDocType } = {}, enabled = true) {
+export function useIssuedDocuments(profileId: string, filter: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string } = {}, enabled = true) {
   return useQuery({
-    queryKey: issuedKey(profileId, 'list', filter.customerId ?? '', filter.docType ?? ''),
+    queryKey: issuedKey(profileId, 'list', filter.customerId ?? '', filter.docType ?? '', filter.currency ?? '', filter.from ?? '', filter.to ?? ''),
     queryFn: ({ signal }) => api.issuedDocuments(profileId, filter, signal),
     retry: noRetryOn404,
     enabled,

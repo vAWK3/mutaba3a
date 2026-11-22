@@ -1130,6 +1130,7 @@ export class FakeApi {
       this.customers[at] = saved;
       return json(saved);
     }
+    if (resource === 'customers' && method === 'GET' && id && sub === 'statement') return this.statementAnswer(id, q);
     if (resource === 'customers' && method === 'GET') {
       if (!id) return page(this.customers);
       const found = this.customers.find((c) => c.id === id);
@@ -1171,6 +1172,26 @@ export class FakeApi {
     if (resource === 'conversions') return this.conversionAnswer(e, id);
     if (resource === 'receipts') return this.libraryAnswer(e, id, sub);
     return undefined;
+  }
+
+  /**
+   * MUT-664: GET /v1/customers/{id}/statement, the ledger card, from the fake's receivables and payments in one
+   * currency: charges debit, payments credit, running balance oldest first, served in the asked order. No documents.
+   */
+  private statementAnswer(customerId: string, q: (key: string) => string | undefined) {
+    const currency = q('currency') ?? 'ILS';
+    const toAmount = (minor: number) => toDecimal(minor);
+    const raw = [
+      ...this.receivables.filter((r) => r.customerId === customerId && r.currency === currency).map((r) => ({ id: r.id, date: r.postingDate as string, debit: toMinor(r.gross), credit: 0, line: { kind: 'CHARGE' as const, receivableId: r.id, number: (r as { number?: string }).number ?? null, outstanding: r.outstanding } })),
+      ...this.payments.filter((p) => p.customerId === customerId && p.currency === currency && p.status === 'POSTED').map((p) => ({ id: p.id, date: p.receivedOn as string, debit: 0, credit: toMinor(p.amount), line: { kind: 'PAYMENT' as const, paymentId: p.id, number: p.number } })),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.debit > 0 ? -1 : 1));
+    let running = 0;
+    const lines = raw.map((x) => {
+      running += x.debit - x.credit;
+      return { ...x.line, id: x.id, date: x.date, projectId: null, debit: toAmount(x.debit), credit: toAmount(x.credit), runningBalance: toAmount(running), documents: [], due: null };
+    });
+    const closing = toAmount(running);
+    return json({ customerId, currency, projectId: null, from: q('from') ?? null, to: q('to') ?? null, asOf: '2026-10-15', openingBalance: '0.00', totals: { debit: toAmount(raw.reduce((s, x) => s + x.debit, 0)), credit: toAmount(raw.reduce((s, x) => s + x.credit, 0)) }, closingBalance: closing, lines: q('order') === 'desc' ? lines.reverse() : lines, nextCursor: null });
   }
 
   /** MUT-260: GET /v1/receipts (and counts, one, download), library uploads, approve and delete, as MUT-255 answers them. */
