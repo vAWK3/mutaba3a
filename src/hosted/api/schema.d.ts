@@ -8702,7 +8702,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves).
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -8967,7 +8967,7 @@ export interface paths {
         put?: never;
         /**
          * Record a payment with its allocations, from a preview
-         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment.
+         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment. MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -9437,7 +9437,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a payment: every allocation undone, status REVERSED
-         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
+         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-709: a payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT (details documentId, docType, number); issue a credit note instead. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
          */
         post: {
             parameters: {
@@ -12176,7 +12176,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future. MUT-709: a Received capture retried with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded (without receivedCount), never a second one.
          */
         post: {
             parameters: {
@@ -12259,7 +12259,7 @@ export interface paths {
         post?: never;
         /**
          * Undo an income entry this session created
-         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. MUT-709: a Received payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT; issue a credit note instead. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
          */
         delete: {
             parameters: {
@@ -14318,7 +14318,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType: components["schemas"]["IssuedDocType"];
                 };
                 cookie?: never;
@@ -14500,7 +14500,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType?: components["schemas"]["IssuedDocType"];
                     customerId?: string;
                     /** @description MUT-664 */
@@ -14743,6 +14743,108 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment request (MUT-662)
+         * @description D18: a payment request is cancelled by a record of its own (CX series); the document and its Owed never change, and the Owed goes back to documents due. Refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while an invoice-receipt or receipt refers to it (cancel that with a credit note first), 409 ALREADY_CANCELLED, 422 NOT_A_PAYMENT_REQUEST. Owner only. The same Idempotency-Key returns the same cancellation.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancelPaymentRequest"];
+                };
+            };
+            responses: {
+                /** @description Cancelled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -28729,7 +28831,7 @@ export interface components {
             /** @enum {string} */
             source: "ISSUED" | "EXTERNAL";
             /** @enum {string} */
-            docType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+            docType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
             number: string;
         };
         StatementChargeOrigin: {
@@ -30114,6 +30216,7 @@ export interface components {
                 TAX_INVOICE_RECEIPT?: number;
                 CREDIT_NOTE?: number;
                 RECEIPT?: number;
+                PAYMENT_REQUEST?: number;
             };
         };
         IssuingStyles: {
@@ -30132,10 +30235,10 @@ export interface components {
             hasDocuments: boolean;
         };
         /**
-         * @description 305, 320, 330 and 400 in the Tax Authority's codes
+         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
          * @enum {string}
          */
-        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
         StartingNumberRequest: {
             start: number;
         };
@@ -30193,7 +30296,7 @@ export interface components {
             originalId?: string;
             /**
              * Format: uuid
-             * @description A receipt: the open tax invoice it pays
+             * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
              */
             appliesToDocumentId?: string;
             /** @description An invoice-receipt or a receipt: how the money came in */
@@ -30272,7 +30375,32 @@ export interface components {
             /** Format: uuid */
             paymentId: string | null;
             coreVersion: string;
+            /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
+            displayNumber: string;
+            paymentRequest: components["schemas"]["PaymentRequestFacts"];
         };
+        /** @description MUT-662: a payment request's derived status; null for other types */
+        PaymentRequestFacts: {
+            /** @enum {string} */
+            status: "UNPAID" | "PARTLY_PAID" | "PAID" | "CANCELLED";
+            /** @description What the referring invoice-receipts and receipts cover, after their credit notes */
+            covered: string;
+            linked: {
+                /** Format: uuid */
+                id: string;
+                docType: components["schemas"]["IssuedDocType"];
+                number: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            }[];
+            cancellation: {
+                number: number;
+                displayNumber: string;
+                /** Format: date-time */
+                cancelledAt: string;
+                reason: string | null;
+            } | null;
+        } | null;
         IssuedDocumentPage: {
             items: components["schemas"]["IssuedDocumentListItem"][];
             nextCursor: string | null;
@@ -30285,6 +30413,9 @@ export interface components {
              * @enum {string|null}
              */
             settlement: "OPEN" | "PARTLY_PAID" | "PAID" | "CANCELLED" | null;
+        };
+        CancelPaymentRequest: {
+            reason?: string | null;
         };
         IssuedCopyRequest: {
             /** @enum {string} */

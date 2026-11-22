@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IssuedDocumentRecord, ReceivableRecord } from '../../repositories/ports.js';
+import type { PaymentRequestFacts } from '../payment-request.js';
 import { settlementOf } from '../settlement.js';
 
 const doc = (o: Partial<IssuedDocumentRecord>) => ({ id: 'd1', docType: 'TAX_INVOICE', grossMinor: 600_000n, originalId: null, ...o }) as IssuedDocumentRecord;
@@ -19,5 +20,15 @@ describe('settlementOf (MUT-664, D22)', () => {
   it('a money document is paid; a credit note has no settlement', () => {
     expect(settlementOf(doc({ docType: 'RECEIPT', grossMinor: 100_000n }), null, [])).toEqual({ settledMinor: 100_000n, settlement: 'PAID' });
     expect(settlementOf(doc({ docType: 'CREDIT_NOTE' }), null, [])).toEqual({ settledMinor: null, settlement: null });
+  });
+
+  it('a payment request is settled by what its documents cover (MUT-662), not paid on issue', () => {
+    const pr = doc({ docType: 'PAYMENT_REQUEST' });
+    const facts = (status: PaymentRequestFacts['status'], coveredMinor: bigint) => ({ status, coveredMinor, linked: [], cancellation: null }) as PaymentRequestFacts;
+    expect(settlementOf(pr, null, [])).toEqual({ settledMinor: 0n, settlement: 'OPEN' });
+    expect(settlementOf(pr, null, [], facts('UNPAID', 0n))).toEqual({ settledMinor: 0n, settlement: 'OPEN' });
+    expect(settlementOf(pr, null, [], facts('PARTLY_PAID', 200_000n))).toEqual({ settledMinor: 200_000n, settlement: 'PARTLY_PAID' });
+    expect(settlementOf(pr, null, [], facts('PAID', 700_000n))).toEqual({ settledMinor: 600_000n, settlement: 'PAID' });
+    expect(settlementOf(pr, null, [], facts('CANCELLED', 0n)).settlement).toBe('CANCELLED');
   });
 });

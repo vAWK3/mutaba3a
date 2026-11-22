@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
+import { Badge } from '../../../components/ui/Badge';
 import { Button } from '../../../components/ui/Button';
+import { Input } from '../../../components/ui/Input';
 import { useLanguage } from '../../../lib/i18n/core';
 import { ApiError, api, type Currency, type HostedProfile, type IssuedDocType, type IssuedDocument, type IssuedDocumentListItem } from '../../api/client';
 import { useDocumentsDue } from '../../data/documentsDueQueries';
@@ -11,7 +13,8 @@ import { IssueDocumentDrawer, type IssueStart } from '../../components/IssueDocu
 import { Skeleton } from '../../components/QueryView';
 import { useToast } from '../../components/Toast';
 import { SectionTabs } from '../../components/SectionTabs';
-import { openPdf, useIssuedDocument, useIssuedDocuments } from '../../data/issuedQueries';
+import { openPdf, useCancelPaymentRequest, useIssuedDocument, useIssuedDocuments } from '../../data/issuedQueries';
+import { useIssuer } from '../../data/issuingQueries';
 import { useIssuingSetup } from '../../data/issuingQueries';
 import { formatDecimal } from '../../format/DecimalAmount';
 import { profileKey, useWritableFor } from '../../session/me';
@@ -27,7 +30,28 @@ import { PageHeader, useBackTo } from './shared';
  * still owed, a credit note, a similar document) and its PDF.
  */
 
-const docTitle = (t: (key: string) => string, doc: Pick<IssuedDocument, 'docType' | 'number'>) => `${t(`hosted.issue.types.${doc.docType}`)} ${doc.number}`;
+// MUT-662: the number as shown (PR-0007 for a payment request).
+const docTitle = (t: (key: string) => string, doc: Pick<IssuedDocument, 'docType' | 'number' | 'displayNumber'>) => `${t(`hosted.issue.types.${doc.docType}`)} ${doc.displayNumber ?? doc.number}`;
+
+/** MUT-662: how much of a request is covered, a whole percent, from the decimal strings (no floats). */
+const minorOf = (amount: string) => BigInt(amount.replace('.', ''));
+const coveredPercent = (covered: string, gross: string) => {
+  const total = minorOf(gross);
+  return total === 0n ? '0' : ((minorOf(covered) * 100n) / total).toString();
+};
+
+/** MUT-662: a payment request's status; tax documents read "Issued". */
+const STATUS_BADGE = { UNPAID: 'unpaid', PARTLY_PAID: 'warning', PAID: 'paid', CANCELLED: 'neutral' } as const;
+function DocStatus({ doc }: { doc: IssuedDocument }) {
+  const { t } = useLanguage();
+  const status = doc.paymentRequest?.status;
+  if (!status) return <span className="hp-muted">{t('hosted.issue.paymentRequest.issued')}</span>;
+  return (
+    <Badge variant={STATUS_BADGE[status]} size="sm" data-testid="issued-status">
+      {t(`hosted.issue.paymentRequest.status.${status}`)}
+    </Badge>
+  );
+}
 const customerName = (doc: IssuedDocument) => (typeof doc.customer.name === 'string' ? doc.customer.name : '');
 
 export function IssuedDocumentsPage({ profile, customerId }: { profile: HostedProfile; customerId?: string }) {
@@ -67,7 +91,7 @@ export function IssuedDocumentsPage({ profile, customerId }: { profile: HostedPr
         <div className="hp-ledger-controls" data-testid="client-docs-filters">
           <select aria-label={t('hosted.client.documentsTab.type')} value={docType} onChange={(e) => setDocType(e.target.value as IssuedDocType | '')}>
             <option value="">{t('hosted.client.documentsTab.allTypes')}</option>
-            {(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const).map((type) => (
+            {(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const).map((type) => (
               <option key={type} value={type}>
                 {t(`hosted.issue.types.${type}`)}
               </option>
@@ -103,6 +127,7 @@ export function IssuedDocumentsPage({ profile, customerId }: { profile: HostedPr
               <th scope="col">{t('hosted.issue.colDocument')}</th>
               {!customerId && <th scope="col">{t('hosted.issue.colClient')}</th>}
               <th scope="col">{t('hosted.issue.colDate')}</th>
+              <th scope="col">{t('hosted.issue.colStatus')}</th>
               <th scope="col" className="hp-num">
                 {t('hosted.issue.colAmount')}
               </th>
@@ -120,6 +145,9 @@ export function IssuedDocumentsPage({ profile, customerId }: { profile: HostedPr
                 </td>
                 {!customerId && <td dir="auto">{customerName(doc)}</td>}
                 <td>{doc.documentDate}</td>
+                <td>
+                  <DocStatus doc={doc} />
+                </td>
                 <td className="hp-num">{formatDecimal(doc.gross, doc.currency as Currency, language)}</td>
                 {customerId && <td data-testid="client-doc-status">{settlementText(t, doc, language)}</td>}
               </tr>
@@ -173,6 +201,11 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
   const [busy, setBusy] = useState(false);
   const attempt = useAttemptKey();
   const toast = useToast();
+  const issuer = useIssuer(profile.id);
+  const cancel = useCancelPaymentRequest(profile.id);
+  const cancelAttempt = useAttemptKey();
+  const [cancelOpen, setCancelOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState('');
   if (doc.error) return <p className="hp-muted" role="alert">{t('hosted.issue.notFound')}</p>;
   if (!doc.data) return <Skeleton />;
   const d = doc.data;
@@ -243,6 +276,15 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
             <dd data-testid="issued-outstanding">{formatDecimal(outstanding, 'ILS', language)}</dd>
           </div>
         )}
+        {d.paymentRequest && (
+          <div>
+            <dt>{t('hosted.issue.colStatus')}</dt>
+            <dd>
+              <DocStatus doc={d} />{' '}
+              <span data-testid="payment-request-covered">{t('hosted.issue.paymentRequest.covered', { covered: formatDecimal(d.paymentRequest.covered, 'ILS', language), gross: formatDecimal(d.gross, 'ILS', language) })}</span>
+            </dd>
+          </div>
+        )}
         {d.allocationNumber && (
           <div>
             <dt>{t('hosted.issue.allocationNumber')}</dt>
@@ -250,6 +292,33 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
           </div>
         )}
       </dl>
+      {d.paymentRequest && (
+        <section className="hp-issued-request" aria-labelledby="hp-issued-request-title" data-testid="payment-request-block">
+          <progress className="hp-issued-request-bar" max={100} value={coveredPercent(d.paymentRequest.covered, d.gross)} aria-label={t('hosted.issue.colStatus')} />
+          <p className="hp-muted">{t('hosted.issue.paymentRequest.notTax')}</p>
+          {d.paymentRequest.linked.length > 0 && (
+            <>
+              <h2 id="hp-issued-request-title">{t('hosted.issue.paymentRequest.linkedTitle')}</h2>
+              <ul className="hp-issued-request-linked">
+                {d.paymentRequest.linked.map((l) => (
+                  <li key={l.id}>
+                    <Link className="hp-link" to={`/p/${profile.id}/documents/issued/${l.id}`}>
+                      {t(`hosted.issue.types.${l.docType}`)} {l.number}
+                    </Link>{' '}
+                    · {formatDecimal(l.gross, 'ILS', language)}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+          {d.paymentRequest.cancellation && (
+            <p data-testid="payment-request-cancelled">
+              {t('hosted.issue.paymentRequest.cancelledLine', { number: d.paymentRequest.cancellation.displayNumber, date: d.paymentRequest.cancellation.cancelledAt.slice(0, 10) })}
+              {d.paymentRequest.cancellation.reason ? ` · ${d.paymentRequest.cancellation.reason}` : ''}
+            </p>
+          )}
+        </section>
+      )}
       <div className="hp-issued-actions">
         <Button onClick={() => void pdf(true)} disabled={busy} data-testid="issued-download">
           {t('hosted.issue.downloadPdf')}
@@ -267,12 +336,66 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
             {t('hosted.issue.creditNote')}
           </Button>
         )}
+        {writable && d.paymentRequest && d.paymentRequest.status !== 'CANCELLED' && d.paymentRequest.status !== 'PAID' && owing && (
+          <Button
+            variant="secondary"
+            data-testid="payment-request-pay"
+            onClick={() => setDrawer({ docType: issuer.data?.dealerType === 'EXEMPT' ? 'RECEIPT' : 'TAX_INVOICE_RECEIPT', customerId: d.customerId ?? undefined, appliesToDocumentId: d.id, pricesIncludeVat: true, lines: [{ description: t('hosted.issue.receiptLine', { document: docTitle(t, d) }), kind: 'SERVICE', quantity: '1', unitPrice: outstanding!, discount: '' }] })}
+          >
+            {t('hosted.issue.recordPayment')}
+          </Button>
+        )}
+        {writable && d.paymentRequest && d.paymentRequest.status !== 'CANCELLED' && (
+          <Button variant="ghost" data-testid="payment-request-cancel" aria-expanded={cancelOpen} onClick={() => setCancelOpen(!cancelOpen)}>
+            {t('hosted.issue.paymentRequest.cancel')}
+          </Button>
+        )}
         {writable && d.docType !== 'CREDIT_NOTE' && (
           <Button variant="ghost" onClick={() => setDrawer({ docType: d.docType, customerId: d.customerId ?? undefined, lines, pricesIncludeVat: d.pricesIncludeVat })}>
             {t('hosted.issue.similar')}
           </Button>
         )}
       </div>
+      {cancelOpen && d.paymentRequest && (
+        <section className="hp-issued-cancel" aria-labelledby="hp-issued-cancel-title" data-testid="payment-request-cancel-panel">
+          <h2 id="hp-issued-cancel-title">{t('hosted.issue.paymentRequest.cancelTitle', { document: docTitle(t, d) })}</h2>
+          {d.paymentRequest.linked.length > 0 ? (
+            <p role="status" data-testid="payment-request-cancel-blocked">
+              {t('hosted.issue.paymentRequest.cancelBlocked')}
+            </p>
+          ) : (
+            <>
+              <p className="hp-muted">{t('hosted.issue.paymentRequest.cancelBody')}</p>
+              <Input label={t('hosted.issue.paymentRequest.reason')} id="hp-issued-cancel-reason" value={cancelReason} dir="auto" maxLength={300} onChange={(e) => setCancelReason(e.target.value)} />
+              <div className="hp-issued-actions">
+                <Button
+                  variant="danger"
+                  isLoading={cancel.isPending}
+                  data-testid="payment-request-cancel-confirm"
+                  onClick={() =>
+                    cancel.mutate(
+                      { documentId: d.id, reason: cancelReason.trim() || null, key: cancelAttempt.keyFor({ cancel: d.id }) },
+                      {
+                        onSuccess: (next) => {
+                          cancelAttempt.succeeded();
+                          setCancelOpen(false);
+                          toast(t('hosted.issue.paymentRequest.cancelled', { number: docTitle(t, d), cancellation: next.paymentRequest?.cancellation?.displayNumber ?? '' }));
+                        },
+                        onError: (error) => toast(error instanceof ApiError && error.status === 409 ? t('hosted.issue.paymentRequest.cancelBlocked') : t('hosted.issue.failed')),
+                      },
+                    )
+                  }
+                >
+                  {t('hosted.issue.paymentRequest.cancelConfirm')}
+                </Button>
+                <Button variant="ghost" onClick={() => setCancelOpen(false)}>
+                  {t('common.close')}
+                </Button>
+              </div>
+            </>
+          )}
+        </section>
+      )}
       <p className="hp-muted">{t('hosted.issue.finalNote')}</p>
       {drawer && (
         <IssueDocumentDrawer

@@ -60,7 +60,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
   'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 4, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
-  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 2 },
+  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)

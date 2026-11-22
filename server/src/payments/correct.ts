@@ -8,6 +8,7 @@ import { eligibleFor, releaseAllocations, resultingBalances, suggestAllocations,
 import { allocationFailure } from './allocation-error.js';
 import { paymentCorrectTokenParts } from './preview-token.js';
 import { carriedReceiptNumber } from './receipt-number.js';
+import { assertNoMoneyDocument } from './document-guard.js';
 
 /**
  * MUT-443 (ADR-225): correcting a recorded payment in one call. This composes what both routes need (the preview and
@@ -53,6 +54,8 @@ export interface ComposedCorrection {
 export async function assertCorrectable(store: LedgerStore, organizationId: string, payment: PaymentRecord): Promise<void> {
   if (payment.origin !== 'INTEGRATION' || payment.customerId === null) throw validationError('PAYMENT_NOT_CORRECTABLE', 'Only a payment recorded through the API key can be corrected here', { paymentId: payment.id });
   if (payment.status !== 'POSTED') throw await paymentNotPosted(store, organizationId, payment);
+  // MUT-709: a correction reverses the original, so never one an issued receipt or invoice-receipt stands on.
+  await assertNoMoneyDocument(store, organizationId, payment.id);
 }
 
 /** 409 PAYMENT_NOT_POSTED, with where the money went, so a caller that lost the response can recover under any key (R3). */

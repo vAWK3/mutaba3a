@@ -564,7 +564,7 @@ interface StubIssuing {
   external: (Record<string, Json> & { id: string; entryKind: string; entryId: string })[];
 }
 const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
-const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
+const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const;
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
 export interface StubShareLink {
@@ -1416,12 +1416,35 @@ export class FakeApi {
   private issuedAnswer(e: Logged, state: StubIssuing, id: string | undefined, sub: string | undefined, missing: string[]) {
     const { method } = e;
     const pdf = { status: 200, contentType: 'application/pdf', body: '%PDF-1.4 qa' };
+    // MUT-662: a payment request carries its derived status and its PR-0007 number, as the server's serializer does.
+    const withFacts = (d: Record<string, Json>) => {
+      const displayNumber = d.docType === 'PAYMENT_REQUEST' ? `PR-${String(d.number).padStart(4, '0')}` : String(d.number);
+      if (d.docType !== 'PAYMENT_REQUEST') return { ...d, displayNumber, paymentRequest: null };
+      const linked = state.docs.filter((x) => x.originalId === d.id && (x.docType === 'TAX_INVOICE_RECEIPT' || x.docType === 'RECEIPT')).reverse();
+      const covered = linked.reduce((sum, x) => sum + toMinor(String(x.gross)), 0);
+      const cancellation = (d.cancellation as Record<string, Json> | undefined) ?? null;
+      const status = cancellation ? 'CANCELLED' : covered >= toMinor(String(d.gross)) ? 'PAID' : covered > 0 ? 'PARTLY_PAID' : 'UNPAID';
+      return { ...d, displayNumber, paymentRequest: { status, covered: toDecimal(covered), linked: linked.map((x) => ({ id: x.id, docType: x.docType, number: x.number, gross: x.gross })), cancellation } };
+    };
     if (method === 'GET' && !id) {
       const customerId = e.query.get('customerId');
-      return page(state.docs.filter((d) => !customerId || d.customerId === customerId));
+      return page(state.docs.filter((d) => !customerId || d.customerId === customerId).map(withFacts));
+    }
+    if (method === 'POST' && id && sub === 'cancel') {
+      const d = state.docs.find((x) => x.id === id);
+      if (!d) return notFound();
+      if (d.docType !== 'PAYMENT_REQUEST') return json({ error: { code: 'VALIDATION_FAILED', message: 'not a request', details: { reason: 'NOT_A_PAYMENT_REQUEST' } } }, 422);
+      if (d.cancellation) return json({ error: { code: 'CONFLICT', message: 'cancelled', details: { reason: 'ALREADY_CANCELLED' } } }, 409);
+      if ((withFacts(d).paymentRequest as { linked: unknown[] }).linked.length > 0) return json({ error: { code: 'CONFLICT', message: 'has documents', details: { reason: 'PAYMENT_REQUEST_HAS_DOCUMENTS' } } }, 409);
+      const number = state.docs.filter((x) => x.cancellation).length + 1;
+      d.cancellation = { number, displayNumber: `CX-${String(number).padStart(4, '0')}`, cancelledAt: '2026-11-22T11:00:00.000Z', reason: ((e.body as Record<string, Json> | null)?.reason as string | null) ?? null };
+      return json(withFacts(d));
     }
     if (id === 'preview' && method === 'POST') return sub === 'pdf' ? pdf : json(this.composeDoc(e.body as Record<string, Json>));
-    if (method === 'GET' && id && !sub) return json(state.docs.find((d) => d.id === id) ?? null, state.docs.some((d) => d.id === id) ? 200 : 404);
+    if (method === 'GET' && id && !sub) {
+      const d = state.docs.find((x) => x.id === id);
+      return d ? json(withFacts(d)) : json(null, 404);
+    }
     if (id && sub === 'pdf') return pdf;
     if (method === 'POST' && !id) {
       if (missing.length) return json({ error: { code: 'CONFLICT', message: 'setup', details: { reason: 'ISSUING_SETUP_INCOMPLETE', missing } } }, 409);
@@ -1434,7 +1457,7 @@ export class FakeApi {
       const docId = uid(0xd0, state.docs.length + 1);
       const gross = toMinor(totals.gross);
       let receivableId: string | null = null;
-      if (docType === 'TAX_INVOICE') {
+      if (docType === 'TAX_INVOICE' || docType === 'PAYMENT_REQUEST') {
         receivableId = uid(0xe0, state.docs.length + 1);
         state.owed.set(receivableId, { gross, outstanding: gross, customerId: (body.customerId as string) ?? null });
       }
@@ -1449,7 +1472,7 @@ export class FakeApi {
       }
       const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber: null, receivableId, paymentId: null, coreVersion: '1.0.0' };
       state.docs.unshift(doc);
-      return json(doc, 201);
+      return json(withFacts(doc), 201);
     }
     return notFound();
   }

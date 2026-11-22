@@ -244,6 +244,7 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-443: a reversal and its replacement in one write; the same domain as each half.
     correct: { write: 'payments' },
     findReplacedBy: 'read',
+    findByClientRequestKey: 'read',
     // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
     capture: { write: 'capture' },
     undoCapture: { write: 'capture' },
@@ -381,6 +382,8 @@ export const STORE_ACCESS: StoreAccess = {
     dueInputs: { read: 'issuing' },
     incomeContext: { read: 'issuing' },
     setNotForInvoice: { write: 'issuing' },
+    cancelPaymentRequest: { write: 'issuing' },
+    paymentRequestFacts: { read: 'issuing' },
     // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
     getTaxConnection: { read: 'issuing' },
     putTaxConnection: { write: 'issuing' },
@@ -390,6 +393,8 @@ export const STORE_ACCESS: StoreAccess = {
     setStartingNumber: { write: 'issuing' },
     issue: { write: 'issuing' },
     getById: { read: 'issuing' },
+    // MUT-709: whether a receipt stands on a payment; asked by every route that may reverse one, whoever calls it.
+    moneyDocumentOn: 'read',
     list: { read: 'issuing' },
     recordCopy: { write: 'issuing' },
     // MUT-641: the signed original, kept once.

@@ -19,6 +19,7 @@ const owed = (over: Partial<DueReceivableInput> = {}): DueReceivableInput => ({
   deleted: false,
   documented: false,
   taxInvoiceId: null,
+  paymentRequestId: null,
   externalInvoice: false,
   ...over,
 });
@@ -68,9 +69,26 @@ describe('documentsDue: receivables (Owed)', () => {
     expect(kinds(input({ receivables: [owed({ externalInvoice: true })] }))).toEqual([]);
   });
 
-  it('payment request first: due a payment request, listed but not issuable until MUT-662', () => {
+  it('payment request first: due a payment request, issuable and always linked (MUT-662)', () => {
     const [item] = documentsDue(input({ receivables: [owed({ customerId: 'quds' })] }));
-    expect(item).toMatchObject({ kind: 'PAYMENT_REQUEST', issuable: false, reason: 'PAYMENT_REQUEST_PENDING' });
+    expect(item).toMatchObject({ kind: 'PAYMENT_REQUEST', issuable: true, linkOnly: true });
+    expect(item?.reason).toBeUndefined();
+  });
+
+  it('MUT-662: a live payment request settles its Owed; a cancelled one (no paymentRequestId) puts it back', () => {
+    expect(kinds(input({ receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })] }))).toEqual([]);
+    expect(kinds(input({ receivables: [owed({ customerId: 'quds', paymentRequestId: null })] }))).toEqual([`receivable:r1:PAYMENT_REQUEST:${ils(3400)}`]);
+  });
+
+  it("MUT-662: a payment on a payment request's Owed is due an invoice-receipt that refers to it, linked only", () => {
+    const items = documentsDue(input({ receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', appliesToDocumentId: 'pr7', linkOnly: true, issuable: true, amountMinor: ils(1000) });
+  });
+
+  it('MUT-662: an exempt dealer gets a receipt that refers to the payment request', () => {
+    const items = documentsDue(input({ dealerType: 'EXEMPT', receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    expect(items).toEqual([expect.objectContaining({ kind: 'RECEIPT', appliesToDocumentId: 'pr7' })]);
   });
 
   it('on payment (the default, also a null preference) and no document: an Owed is due nothing', () => {

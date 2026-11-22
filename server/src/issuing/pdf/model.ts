@@ -1,6 +1,6 @@
 import type { IssuedDocumentRecord } from '../../repositories/ports.js';
 import { roundHalfUpDiv } from '../../vat.js';
-import { DOCUMENT_LANGUAGES, type DocumentLanguage } from '../labels.js';
+import { CANCELLED_MARK, DOCUMENT_LANGUAGES, documentNumberLabel, PAYMENT_REQUEST_NOTICE, type DocumentLanguage } from '../labels.js';
 import { DOC_TYPE_TITLES, PDF_LABELS, type PdfLabels } from './labels.js';
 
 /**
@@ -12,10 +12,12 @@ export type CopyMark = 'ORIGINAL' | 'COPY' | 'DRAFT';
 
 export interface PdfRenderOptions {
   mark: CopyMark;
-  /** The tax invoice a credit note credits or a receipt pays, by number. */
-  originalNumber: number | null;
+  /** The tax invoice a credit note credits or a receipt pays, by number (MUT-662: PR-0007 for a payment request). */
+  originalNumber: number | string | null;
   /** The business's logo (PNG or JPEG), when it has one. */
   logo: Uint8Array | null;
+  /** MUT-662: a payment request's cancellation number, printed on its later copies ("Cancelled · CX-0002"). */
+  cancelledAs?: number | null;
 }
 
 export interface LabelValue {
@@ -41,6 +43,8 @@ export interface PdfViewModel {
   /** D-PDF1: the Hebrew legal title on Arabic and English documents. */
   legalTitle: string | null;
   number: string;
+  /** MUT-662 (D16): the framed line under a payment request's title ("not a tax invoice"), with its cancellation. */
+  notice: string | null;
   mark: string;
   isDraft: boolean;
   logo: Buffer | null;
@@ -118,7 +122,11 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
     if (exemptNet > 0n) totals.push({ label: l.taxable, value: money(doc.netMinor - exemptNet) }, { label: l.exempt, value: money(exemptNet) });
     totals.push({ label: l.net, value: money(doc.netMinor) }, { label: l.vat(percent(doc.vatRateBasisPoints)), value: money(doc.vatMinor) });
   }
-  const grandLabel = doc.docType === 'CREDIT_NOTE' ? l.totalCredit : doc.docType === 'RECEIPT' ? l.received : l.total;
+  const grandLabel = doc.docType === 'CREDIT_NOTE' ? l.totalCredit : doc.docType === 'RECEIPT' ? l.received : doc.docType === 'PAYMENT_REQUEST' ? l.totalRequested : l.total;
+  const notice =
+    doc.docType === 'PAYMENT_REQUEST'
+      ? [PAYMENT_REQUEST_NOTICE[language], ...(options.cancelledAs ? [`${CANCELLED_MARK[language]} · ${documentNumberLabel('CANCELLATION', options.cancelledAs)}`] : [])].join(' · ')
+      : null;
   const payment: LabelValue[] = doc.paymentDetails
     ? [
         { label: l.paymentHeading, value: l.method[doc.paymentDetails.method] },
@@ -133,7 +141,8 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
     ink,
     title: DOC_TYPE_TITLES[language][doc.docType],
     legalTitle: language === 'he' ? null : DOC_TYPE_TITLES.he[doc.docType],
-    number: String(doc.number),
+    number: documentNumberLabel(doc.docType, doc.number),
+    notice,
     mark: options.mark === 'ORIGINAL' ? l.original : options.mark === 'COPY' ? l.copy : l.draft,
     isDraft: options.mark === 'DRAFT',
     logo: options.logo ? Buffer.from(options.logo) : null,

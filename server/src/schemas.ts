@@ -2350,6 +2350,9 @@ export const CONFLICT_REASONS = [
   'ACCOUNTANT_LIMIT',
   'ALREADY_HAS_ACCESS',
   'ACCOUNT_EXISTS',
+  // MUT-709: reversing, correcting or undoing a payment an issued receipt or invoice-receipt stands on. details carry
+  // documentId, docType and number; the way out is a credit note.
+  'HAS_DOCUMENT',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -3109,7 +3112,7 @@ export const StatementDocumentTagSchema = z
   .object({
     id: uuid.nullable().openapi({ description: 'The issued document; null for one issued elsewhere' }),
     source: z.enum(['ISSUED', 'EXTERNAL']),
-    docType: z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']),
+    docType: z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST']),
     number: z.string(),
   })
   .openapi('StatementDocumentTag');
@@ -5036,7 +5039,9 @@ export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type
 
 // ---- MUT-568 (ADR-260): the issuing core ---------------------------------------------------------------------------
 
-export const IssuedDocTypeSchema = z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']).openapi('IssuedDocType', { description: '305, 320, 330 and 400 in the Tax Authority\'s codes' });
+export const IssuedDocTypeSchema = z
+  .enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST'])
+  .openapi('IssuedDocType', { description: '305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority\'s codes. Clients skip types they don\'t know.' });
 export const DealerTypeSchema = z.enum(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']).openapi('DealerType', { description: 'עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה' });
 export const DocumentLanguageSchema = z.enum(['ar', 'he', 'en']).openapi('DocumentLanguage');
 
@@ -5206,7 +5211,7 @@ export const IssueDocumentRequestSchema = z
     customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
     dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
     originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
-    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice it pays' }),
+    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
     discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
     pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: whether the prices typed include VAT; default from the business details' }),
@@ -5224,6 +5229,19 @@ export const IssueDocumentRequestSchema = z
   .openapi('IssueDocumentRequest');
 
 const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
+
+/** MUT-662: a payment request's status, derived from what refers to it. */
+export const PaymentRequestFactsSchema = z
+  .object({
+    status: z.enum(['UNPAID', 'PARTLY_PAID', 'PAID', 'CANCELLED']),
+    covered: AmountSchema.openapi({ description: 'What the referring invoice-receipts and receipts cover, after their credit notes' }),
+    linked: z.array(z.object({ id: uuid, docType: IssuedDocTypeSchema, number: z.number().int(), gross: AmountSchema })),
+    cancellation: z.object({ number: z.number().int(), displayNumber: z.string(), cancelledAt: z.string().datetime(), reason: z.string().nullable() }).nullable(),
+  })
+  .openapi('PaymentRequestFacts');
+
+/** MUT-662 (D18): cancelling a payment request. */
+export const CancelPaymentRequestSchema = z.object({ reason: z.string().trim().max(300).nullable().optional() }).openapi('CancelPaymentRequest');
 
 export const IssuedDocumentPreviewSchema = z
   .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
@@ -5249,6 +5267,9 @@ export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
   coreVersion: z.string(),
+  /** MUT-662 */
+  displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
+  paymentRequest: PaymentRequestFactsSchema.nullable().openapi({ description: 'MUT-662: a payment request\'s derived status; null for other types' }),
 }).openapi('IssuedDocument');
 
 /** MUT-664 (D22): a list item carries how much of it is settled (the client page's Documents tab). */

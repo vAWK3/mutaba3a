@@ -844,6 +844,9 @@ export const api = {
     request<{ changed: number }>('POST', '/v1/documents-due/not-for-invoice', { profileId, body, idempotencyKey }),
   setEntryNotForInvoice: (profileId: string, entry: DueEntryRef, value: boolean, version: number) =>
     request<NotForInvoiceEntry>('PUT', `/v1/${entry.kind === 'owed' ? 'receivables' : 'payments'}/${encodeURIComponent(entry.id)}/not-for-invoice`, { profileId, body: { value }, ifMatchVersion: String(version) }),
+  /** MUT-662 (D18): cancels a payment request with a record of its own; no Undo. The same key returns the same result. */
+  cancelPaymentRequest: (profileId: string, documentId: string, reason: string | null, idempotencyKey: string) =>
+    request<IssuedDocument>('POST', `/v1/issued-documents/${encodeURIComponent(documentId)}/cancel`, { profileId, body: { reason }, idempotencyKey }),
   /** The draft PDF (watermarked), as a file. */
   draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
     (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),
