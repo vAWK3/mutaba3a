@@ -1,0 +1,693 @@
+diff --git a/node_modules/@digicole/pdfmake-rtl/js/DocPreprocessor.js b/node_modules/@digicole/pdfmake-rtl/js/DocPreprocessor.js
+index 09091fd526bbf766bae0986e03d3e7c8c65b0c2d..4a82cc67c8225d5eadced9f33b794aba18e4335c 100644
+--- a/node_modules/@digicole/pdfmake-rtl/js/DocPreprocessor.js
++++ b/node_modules/@digicole/pdfmake-rtl/js/DocPreprocessor.js
+@@ -59,12 +59,14 @@ class DocPreprocessor {
+     if (node && typeof node === 'object' && node.rtl === true) {
+       node = (0, _rtlUtils.processRTLElement)(node, true);
+     }
+-    // Auto-detect RTL for text nodes without explicit rtl property
+-    else if (node && typeof node === 'object' && node.text && typeof node.text === 'string' && (0, _rtlUtils.containsRTL)(node.text) && !node.rtl) {
++    // Auto-detect RTL for text nodes without explicit rtl property. Paragraphs
++    // only: a fragment inside a text array has no alignment of its own, and
++    // giving one 'right' overrode the paragraph's (MAL-64).
++    else if (node && typeof node === 'object' && node.text && typeof node.text === 'string' && (0, _rtlUtils.containsRTL)(node.text) && node.rtl === undefined && this.parentNode === null) {
+       node = (0, _rtlUtils.applyRTLToNode)(node, false);
+     }
+     // Auto-detect RTL for table nodes - reverse columns if table has RTL content
+-    else if (node && typeof node === 'object' && node.table && !node.rtl) {
++    else if (node && typeof node === 'object' && node.table && node.rtl === undefined) {
+       node = (0, _rtlUtils.processRTLTable)(node);
+     }
+     if (node.section) {
+diff --git a/node_modules/@digicole/pdfmake-rtl/js/ElementWriter.js b/node_modules/@digicole/pdfmake-rtl/js/ElementWriter.js
+index 2bf8d827f3c98223190cba4bb4a47a7304416f5e..19011ba6770fa43567b7059f7e37cf1a31ed81dc 100644
+--- a/node_modules/@digicole/pdfmake-rtl/js/ElementWriter.js
++++ b/node_modules/@digicole/pdfmake-rtl/js/ElementWriter.js
+@@ -60,14 +60,17 @@ class ElementWriter extends _events.EventEmitter {
+     let lineWidth = line.getWidth();
+     let alignment = line.inlines && line.inlines.length > 0 && line.inlines[0].alignment;
+     let isRTL = line.isRTL && line.isRTL();
++    // baseDirection 'ltr' marks an LTR paragraph quoting RTL text: reorder the
++    // RTL words but keep LTR run order and the paragraph's own alignment.
++    let baseDirection = line.inlines && line.inlines.length > 0 && line.inlines[0].baseDirection === 'ltr' ? 'ltr' : 'rtl';
+     let offset = 0;
+ 
+     // For RTL lines, apply special handling
+     if (isRTL) {
+-      if (!alignment || alignment === 'left') {
++      if (baseDirection === 'rtl' && (!alignment || alignment === 'left')) {
+         alignment = 'right';
+       }
+-      this.adjustRTLInlines(line, width);
++      this.adjustRTLInlines(line, baseDirection);
+     }
+     switch (alignment) {
+       case 'right':
+@@ -108,7 +111,7 @@ class ElementWriter extends _events.EventEmitter {
+    *
+    * @param {object} line - Line containing RTL text
+    */
+-  adjustRTLInlines(line) {
++  adjustRTLInlines(line, baseDirection = 'rtl') {
+     if (!line.inlines || line.inlines.length === 0) {
+       return;
+     }
+@@ -117,74 +120,73 @@ class ElementWriter extends _events.EventEmitter {
+     // Characters that are "boundary neutral" — separators/punctuation between scripts
+     const BOUNDARY_NEUTRAL = /[/\\\-()[\]{}<>:;.,!?@#$%^&*_=+|~`'"،؛؟\s]/;
+ 
+-    // --- Step 0: Pre-split inlines at RTL↔neutral and LTR↔neutral boundaries ---
+-    // e.g. "العربية/" → ["العربية", "/"]  and  "hello-" → ["hello", "-"]
++    // --- Step 0: Split inlines into pieces the reordering can move apart ---
++    // Leading and trailing punctuation and whitespace become pieces of their own,
++    // whitespace apart from punctuation: a space left inside "5541 " or "& " was
++    // drawn on the wrong side once the inline moved, gluing or doubling spaces.
++    // A word that switches between RTL and LTR letters ("وMüller") is cut where it
++    // switches; otherwise fontkit lays the whole word out right to left.
++    const isWhitespace = ch => /\s/.test(ch);
++    const isEdgeNeutral = ch => BOUNDARY_NEUTRAL.test(ch) && !(0, _rtlUtils.containsRTL)(ch) && !LTR_REGEX.test(ch);
++    const strongDirOf = ch => (0, _rtlUtils.containsRTL)(ch) ? 'rtl' : LTR_REGEX.test(ch) ? 'ltr' : null;
++    const pieceOf = (inline, text) => {
++      let clone = Object.assign({}, inline);
++      clone.text = text;
++      clone.width = inline.font ? inline.font.widthOfString(text, inline.fontSize, inline.fontFeatures) + (inline.characterSpacing || 0) * (text.length - 1) : 0;
++      clone._isSplit = true;
++      return clone;
++    };
++    const groupEdge = chars => chars.reduce((groups, ch) => {
++      let last = groups[groups.length - 1];
++      if (last !== undefined && isWhitespace(last[0]) === isWhitespace(ch)) {
++        groups[groups.length - 1] = last + ch;
++      } else {
++        groups.push(ch);
++      }
++      return groups;
++    }, []);
++    const splitAtDirectionChanges = core => {
++      let pieces = [];
++      let current = '';
++      let currentDir = null;
++      for (const ch of core) {
++        let dir = strongDirOf(ch);
++        if (dir && currentDir && dir !== currentDir) {
++          pieces.push(current);
++          current = '';
++        }
++        if (dir) {
++          currentDir = dir;
++        }
++        current += ch;
++      }
++      if (current) {
++        pieces.push(current);
++      }
++      return pieces;
++    };
+     let splitInlines = [];
+     line.inlines.forEach(inline => {
+-      let text = inline.text;
+-      if (!text || text.length === 0) {
++      let chars = inline.text ? Array.from(inline.text) : [];
++      if (chars.length < 2) {
+         splitInlines.push(inline);
+         return;
+       }
+-      let hasStrongRTL = (0, _rtlUtils.containsRTL)(text);
+-      let hasStrongLTR = LTR_REGEX.test(text);
+-
+-      // Only split if the inline has strong directional chars AND trailing/leading neutrals
+-      if ((hasStrongRTL || hasStrongLTR) && text.length > 1) {
+-        // Split trailing neutral characters (e.g. "العربية/" → "العربية" + "/")
+-        let trailingStart = text.length;
+-        while (trailingStart > 0) {
+-          let ch = text[trailingStart - 1];
+-          if (BOUNDARY_NEUTRAL.test(ch) && !(0, _rtlUtils.containsRTL)(ch) && !LTR_REGEX.test(ch)) {
+-            trailingStart--;
+-          } else {
+-            break;
+-          }
+-        }
+-
+-        // Split leading neutral characters (e.g. "/العربية" → "/" + "العربية")
+-        let leadingEnd = 0;
+-        while (leadingEnd < text.length) {
+-          let ch = text[leadingEnd];
+-          if (BOUNDARY_NEUTRAL.test(ch) && !(0, _rtlUtils.containsRTL)(ch) && !LTR_REGEX.test(ch)) {
+-            leadingEnd++;
+-          } else {
+-            break;
+-          }
+-        }
+-
+-        // Only split if there's a meaningful core left
+-        if ((leadingEnd > 0 || trailingStart < text.length) && leadingEnd < trailingStart) {
+-          let leadingText = text.slice(0, leadingEnd);
+-          let coreText = text.slice(leadingEnd, trailingStart);
+-          let trailingText = text.slice(trailingStart);
+-          if (leadingText) {
+-            let clone = Object.assign({}, inline);
+-            clone.text = leadingText;
+-            clone.width = inline.font ? inline.font.widthOfString(leadingText, inline.fontSize, inline.fontFeatures) + (inline.characterSpacing || 0) * (leadingText.length - 1) : 0;
+-            clone._isSplit = true;
+-            splitInlines.push(clone);
+-          }
+-          if (coreText) {
+-            let clone = Object.assign({}, inline);
+-            clone.text = coreText;
+-            clone.width = inline.font ? inline.font.widthOfString(coreText, inline.fontSize, inline.fontFeatures) + (inline.characterSpacing || 0) * (coreText.length - 1) : 0;
+-            clone._isSplit = true;
+-            splitInlines.push(clone);
+-          }
+-          if (trailingText) {
+-            let clone = Object.assign({}, inline);
+-            clone.text = trailingText;
+-            clone.width = inline.font ? inline.font.widthOfString(trailingText, inline.fontSize, inline.fontFeatures) + (inline.characterSpacing || 0) * (trailingText.length - 1) : 0;
+-            clone._isSplit = true;
+-            splitInlines.push(clone);
+-          }
+-        } else {
+-          splitInlines.push(inline);
+-        }
+-      } else {
++      let start = 0;
++      while (start < chars.length && isEdgeNeutral(chars[start])) {
++        start++;
++      }
++      let end = chars.length;
++      while (end > start && isEdgeNeutral(chars[end - 1])) {
++        end--;
++      }
++      let core = chars.slice(start, end).join('');
++      let pieces = [...groupEdge(chars.slice(0, start)), ...(core ? splitAtDirectionChanges(core) : []), ...groupEdge(chars.slice(end))];
++      if (pieces.length <= 1) {
+         splitInlines.push(inline);
++        return;
+       }
++      pieces.forEach(piece => splitInlines.push(pieceOf(inline, piece)));
+     });
+ 
+     // --- Step 1: Classify each inline ---
+@@ -208,13 +210,30 @@ class ElementWriter extends _events.EventEmitter {
+       };
+     });
+ 
++    // --- Step 1b: Numbers belong to the strong text before them (UBA W2/W7) ---
++    // \"Contract 42\" stays one LTR run, and \"رقم 5541\" keeps its number on the
++    // Arabic side. A number with nothing before it takes the base direction.
++    const strongDirs = classified.map(item => item.dir);
++    classified.forEach((item, index) => {
++      if (item.dir !== 'neutral' || !/\d/.test(item.inline.text)) return;
++      let resolved = null;
++      for (let j = index - 1; j >= 0 && !resolved; j--) {
++        if (strongDirs[j] !== 'neutral') resolved = strongDirs[j];
++      }
++      item.dir = resolved || baseDirection;
++    });
++
+     // --- Step 2: Build directional runs (groups of consecutive same-direction) ---
++    // Whitespace gets runs of its own, so a bracket's run never carries the space
++    // after it into the bracket's direction — that space belongs between runs.
+     let runs = [];
+     let currentRun = null;
+     classified.forEach(item => {
+-      if (!currentRun || currentRun.dir !== item.dir) {
++      let isSpace = !/\S/.test(item.inline.text || '');
++      if (!currentRun || currentRun.dir !== item.dir || currentRun.isSpace !== isSpace) {
+         currentRun = {
+           dir: item.dir,
++          isSpace,
+           inlines: []
+         };
+         runs.push(currentRun);
+@@ -301,15 +320,11 @@ class ElementWriter extends _events.EventEmitter {
+           break;
+         }
+       }
+-      if (prevDir && nextDir) {
+-        runs[i].dir = prevDir === nextDir ? prevDir : 'rtl';
+-      } else if (prevDir) {
+-        runs[i].dir = prevDir;
+-      } else if (nextDir) {
+-        runs[i].dir = nextDir;
+-      } else {
+-        runs[i].dir = 'rtl'; // all neutral → base direction
+-      }
++      // The line's ends count as the paragraph's direction (UBA sos/eos): a
++      // period after Arabic at the end of an English line stays at its end.
++      let before = prevDir || baseDirection;
++      let after = nextDir || baseDirection;
++      runs[i].dir = before === after ? before : baseDirection;
+     }
+ 
+     // --- Step 3c: Merge adjacent runs that now share the same direction ---
+@@ -324,8 +339,10 @@ class ElementWriter extends _events.EventEmitter {
+     }
+     runs = merged;
+ 
+-    // --- Step 4: Reverse run order (base direction is RTL) ---
+-    runs.reverse();
++    // --- Step 4: Reverse run order when the base direction is RTL ---
++    if (baseDirection === 'rtl') {
++      runs.reverse();
++    }
+ 
+     // --- Step 5: Within each RTL run, reverse the inline order ---
+     runs.forEach(run => {
+diff --git a/node_modules/@digicole/pdfmake-rtl/js/Renderer.js b/node_modules/@digicole/pdfmake-rtl/js/Renderer.js
+index d04607ee208e91ca88b2d7a6d797e21e128af629..df0bc5a4d25fe6e8d60bdcc5c8a8471d0edd26df 100644
+--- a/node_modules/@digicole/pdfmake-rtl/js/Renderer.js
++++ b/node_modules/@digicole/pdfmake-rtl/js/Renderer.js
+@@ -7,6 +7,20 @@ var _TextInlines = _interopRequireDefault(require("./TextInlines"));
+ var _variableType = require("./helpers/variableType");
+ var _svgToPdfkit = _interopRequireDefault(require("./3rd-party/svg-to-pdfkit"));
+ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
++// fontkit lays out a word in an RTL script right to left, digits included, so
++// "٢٠٢٦" (2026) would print as ٦٢٠٢ and "ص.15" as ص.51. Numbers read left to
++// right inside RTL text (UBA), so reverse each number first; fontkit's own
++// reversal then restores it.
++const NUMBER_RUN = /[0-9\u0660-\u0669\u06F0-\u06F9]+(?:[.,:/\u066B\u066C-][0-9\u0660-\u0669\u06F0-\u06F9]+)*/g;
++const FIRST_SCRIPTED_CHAR = /[\p{L}\u0660-\u0669\u06F0-\u06F9]/u;
++const RTL_SCRIPT_CHAR = /[\p{Script=Arabic}\p{Script=Hebrew}]/u;
++function keepNumbersLeftToRight(text) {
++  if (typeof text !== 'string') return text;
++  const first = text.match(FIRST_SCRIPTED_CHAR);
++  if (!first || !RTL_SCRIPT_CHAR.test(first[0])) return text;
++  return text.replace(NUMBER_RUN, run => Array.from(run).reverse().join(''));
++}
++
+ const findFont = (fonts, requiredFonts, defaultFont) => {
+   for (let i = 0; i < requiredFonts.length; i++) {
+     let requiredFont = requiredFonts[i].toLowerCase();
+@@ -162,7 +176,7 @@ class Renderer {
+       this.pdfDocument._font = inline.font;
+       this.pdfDocument.fontSize(inline.fontSize);
+       let shiftedY = offsetText(y + shiftToBaseline, inline);
+-      this.pdfDocument.text(inline.text, x + inline.x, shiftedY, options);
++      this.pdfDocument.text(keepNumbersLeftToRight(inline.text), x + inline.x, shiftedY, options);
+       if (inline.linkToPage) {
+         this.pdfDocument.ref({
+           Type: 'Action',
+diff --git a/node_modules/@digicole/pdfmake-rtl/js/TextInlines.js b/node_modules/@digicole/pdfmake-rtl/js/TextInlines.js
+index 003737c4849f4d26bd58e363b6ffe3254f0c39c8..2d765b6e7054454ee5b070769ced83836c661374 100644
+--- a/node_modules/@digicole/pdfmake-rtl/js/TextInlines.js
++++ b/node_modules/@digicole/pdfmake-rtl/js/TextInlines.js
+@@ -137,6 +137,8 @@ class TextInlines {
+         }
+       }
+       item.fontSize = _StyleContextStack.default.getStyleProperty(item, styleContextStack, 'fontSize', 12);
++      // Paragraph base direction ('ltr' | 'rtl'). Unset keeps the RTL-first behaviour.
++      item.baseDirection = _StyleContextStack.default.getStyleProperty(item, styleContextStack, 'baseDirection', null);
+       item.fontFeatures = _StyleContextStack.default.getStyleProperty(item, styleContextStack, 'fontFeatures', null);
+       item.characterSpacing = _StyleContextStack.default.getStyleProperty(item, styleContextStack, 'characterSpacing', 0);
+       item.color = _StyleContextStack.default.getStyleProperty(item, styleContextStack, 'color', 'black');
+diff --git a/node_modules/@digicole/pdfmake-rtl/js/rtlUtils.js b/node_modules/@digicole/pdfmake-rtl/js/rtlUtils.js
+index 7b62115cf65a4ec5c53c4e45e8cc5da05e07df6d..e7f86b983781fac6a5f44216637370b2cb19a17c 100644
+--- a/node_modules/@digicole/pdfmake-rtl/js/rtlUtils.js
++++ b/node_modules/@digicole/pdfmake-rtl/js/rtlUtils.js
+@@ -14,7 +14,7 @@ exports.processRTLElement = processRTLElement;
+ exports.processRTLList = processRTLList;
+ exports.processRTLTable = processRTLTable;
+ /**
+- * RTL (Right-to-Left) utilities for handling Arabic, Persian (Farsi), and Urdu languages
++ * RTL (Right-to-Left) utilities for handling Arabic, Persian (Farsi), Urdu, and Hebrew languages
+  * Production-ready module for pdfmake RTL support
+  */
+ 
+@@ -70,8 +70,11 @@ const URDU_RANGE = [[0x0679, 0x0679],
+ [0x06D3, 0x06D3] // Urdu Yeh Barree with Hamza
+ ];
+ 
+-// Strong RTL characters (Arabic, Persian, Urdu)
+-const RTL_CHARS = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u200C-\u200D]/;
++// Unicode ranges for Hebrew characters
++const HEBREW_RANGE = [[0x0590, 0x05FF], [0xFB1D, 0xFB4F]];
++
++// Strong RTL characters (Arabic, Persian, Urdu, Hebrew)
++const RTL_CHARS = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFB4F\uFB50-\uFDFF\uFE70-\uFEFF\u200C-\u200D]/;
+ 
+ // Strong LTR characters (Latin, etc.)
+ const LTR_CHARS = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/;
+@@ -106,6 +109,11 @@ function isUrduChar(char) {
+   return URDU_RANGE.some(range => code >= range[0] && code <= range[1]) || isArabicChar(char);
+ }
+ 
++function isHebrewChar(char) {
++  const code = char.charCodeAt(0);
++  return HEBREW_RANGE.some(range => code >= range[0] && code <= range[1]);
++}
++
+ /**
+  * Check if a character requires RTL rendering
+  * @param {string} char - Single character to check
+diff --git a/node_modules/@digicole/pdfmake-rtl/src/DocPreprocessor.js b/node_modules/@digicole/pdfmake-rtl/src/DocPreprocessor.js
+index 5d7390e7f0de77ed7b906ee6f4f457ae1b20edb4..097496d802cdf7201d662a10fb23944f137c811f 100644
+--- a/node_modules/@digicole/pdfmake-rtl/src/DocPreprocessor.js
++++ b/node_modules/@digicole/pdfmake-rtl/src/DocPreprocessor.js
+@@ -54,12 +54,14 @@ class DocPreprocessor {
+ 		if (node && typeof node === 'object' && node.rtl === true) {
+ 			node = processRTLElement(node, true);
+ 		}
+-		// Auto-detect RTL for text nodes without explicit rtl property
+-		else if (node && typeof node === 'object' && node.text && typeof node.text === 'string' && containsRTL(node.text) && !node.rtl) {
++		// Auto-detect RTL for text nodes without explicit rtl property. Paragraphs
++		// only: a fragment inside a text array has no alignment of its own, and
++		// giving one 'right' overrode the paragraph's (MAL-64).
++		else if (node && typeof node === 'object' && node.text && typeof node.text === 'string' && containsRTL(node.text) && node.rtl === undefined && this.parentNode === null) {
+ 			node = applyRTLToNode(node, false);
+ 		}
+ 		// Auto-detect RTL for table nodes - reverse columns if table has RTL content
+-		else if (node && typeof node === 'object' && node.table && !node.rtl) {
++		else if (node && typeof node === 'object' && node.table && node.rtl === undefined) {
+ 			node = processRTLTable(node);
+ 		}
+ 
+diff --git a/node_modules/@digicole/pdfmake-rtl/src/ElementWriter.js b/node_modules/@digicole/pdfmake-rtl/src/ElementWriter.js
+index abc91c3c4215d140dc905867b457b6cd7e8ecced..099b540a8b3cf3254c1c3495a18599614e51345c 100644
+--- a/node_modules/@digicole/pdfmake-rtl/src/ElementWriter.js
++++ b/node_modules/@digicole/pdfmake-rtl/src/ElementWriter.js
+@@ -67,15 +67,18 @@ class ElementWriter extends EventEmitter {
+ 
+ 		let alignment = line.inlines && line.inlines.length > 0 && line.inlines[0].alignment;
+ 		let isRTL = line.isRTL && line.isRTL();
++		// baseDirection 'ltr' marks an LTR paragraph quoting RTL text: reorder the
++		// RTL words but keep LTR run order and the paragraph's own alignment.
++		let baseDirection = line.inlines && line.inlines.length > 0 && line.inlines[0].baseDirection === 'ltr' ? 'ltr' : 'rtl';
+ 
+ 		let offset = 0;
+ 
+ 		// For RTL lines, apply special handling
+ 		if (isRTL) {
+-			if (!alignment || alignment === 'left') {
++			if (baseDirection === 'rtl' && (!alignment || alignment === 'left')) {
+ 				alignment = 'right';
+ 			}
+-			this.adjustRTLInlines(line, width);
++			this.adjustRTLInlines(line, baseDirection);
+ 		}
+ 
+ 		switch (alignment) {
+@@ -124,7 +127,7 @@ class ElementWriter extends EventEmitter {
+ 	 *
+ 	 * @param {object} line - Line containing RTL text
+ 	 */
+-	adjustRTLInlines(line) {
++	adjustRTLInlines(line, baseDirection = 'rtl') {
+ 		if (!line.inlines || line.inlines.length === 0) {
+ 			return;
+ 		}
+@@ -134,78 +137,73 @@ class ElementWriter extends EventEmitter {
+ 		// Characters that are "boundary neutral" — separators/punctuation between scripts
+ 		const BOUNDARY_NEUTRAL = /[/\\\-()[\]{}<>:;.,!?@#$%^&*_=+|~`'"،؛؟\s]/;
+ 
+-		// --- Step 0: Pre-split inlines at RTL↔neutral and LTR↔neutral boundaries ---
+-		// e.g. "العربية/" → ["العربية", "/"]  and  "hello-" → ["hello", "-"]
++		// --- Step 0: Split inlines into pieces the reordering can move apart ---
++		// Leading and trailing punctuation and whitespace become pieces of their own,
++		// whitespace apart from punctuation: a space left inside "5541 " or "& " was
++		// drawn on the wrong side once the inline moved, gluing or doubling spaces.
++		// A word that switches between RTL and LTR letters ("وMüller") is cut where it
++		// switches; otherwise fontkit lays the whole word out right to left.
++		const isWhitespace = ch => /\s/.test(ch);
++		const isEdgeNeutral = ch => BOUNDARY_NEUTRAL.test(ch) && !containsRTL(ch) && !LTR_REGEX.test(ch);
++		const strongDirOf = ch => containsRTL(ch) ? 'rtl' : LTR_REGEX.test(ch) ? 'ltr' : null;
++		const pieceOf = (inline, text) => {
++			let clone = Object.assign({}, inline);
++			clone.text = text;
++			clone.width = inline.font ? inline.font.widthOfString(text, inline.fontSize, inline.fontFeatures) + (inline.characterSpacing || 0) * (text.length - 1) : 0;
++			clone._isSplit = true;
++			return clone;
++		};
++		const groupEdge = chars => chars.reduce((groups, ch) => {
++			let last = groups[groups.length - 1];
++			if (last !== undefined && isWhitespace(last[0]) === isWhitespace(ch)) {
++				groups[groups.length - 1] = last + ch;
++			} else {
++				groups.push(ch);
++			}
++			return groups;
++		}, []);
++		const splitAtDirectionChanges = core => {
++			let pieces = [];
++			let current = '';
++			let currentDir = null;
++			for (const ch of core) {
++				let dir = strongDirOf(ch);
++				if (dir && currentDir && dir !== currentDir) {
++					pieces.push(current);
++					current = '';
++				}
++				if (dir) {
++					currentDir = dir;
++				}
++				current += ch;
++			}
++			if (current) {
++				pieces.push(current);
++			}
++			return pieces;
++		};
+ 		let splitInlines = [];
+ 		line.inlines.forEach(inline => {
+-			let text = inline.text;
+-			if (!text || text.length === 0) {
++			let chars = inline.text ? Array.from(inline.text) : [];
++			if (chars.length < 2) {
+ 				splitInlines.push(inline);
+ 				return;
+ 			}
+-
+-			let hasStrongRTL = containsRTL(text);
+-			let hasStrongLTR = LTR_REGEX.test(text);
+-
+-			// Only split if the inline has strong directional chars AND trailing/leading neutrals
+-			if ((hasStrongRTL || hasStrongLTR) && text.length > 1) {
+-				// Split trailing neutral characters (e.g. "العربية/" → "العربية" + "/")
+-				let trailingStart = text.length;
+-				while (trailingStart > 0) {
+-					let ch = text[trailingStart - 1];
+-					if (BOUNDARY_NEUTRAL.test(ch) && !containsRTL(ch) && !LTR_REGEX.test(ch)) {
+-						trailingStart--;
+-					} else {
+-						break;
+-					}
+-				}
+-
+-				// Split leading neutral characters (e.g. "/العربية" → "/" + "العربية")
+-				let leadingEnd = 0;
+-				while (leadingEnd < text.length) {
+-					let ch = text[leadingEnd];
+-					if (BOUNDARY_NEUTRAL.test(ch) && !containsRTL(ch) && !LTR_REGEX.test(ch)) {
+-						leadingEnd++;
+-					} else {
+-						break;
+-					}
+-				}
+-
+-				// Only split if there's a meaningful core left
+-				if ((leadingEnd > 0 || trailingStart < text.length) && leadingEnd < trailingStart) {
+-					let leadingText = text.slice(0, leadingEnd);
+-					let coreText = text.slice(leadingEnd, trailingStart);
+-					let trailingText = text.slice(trailingStart);
+-
+-					if (leadingText) {
+-						let clone = Object.assign({}, inline);
+-						clone.text = leadingText;
+-						clone.width = inline.font ? inline.font.widthOfString(leadingText, inline.fontSize, inline.fontFeatures) + ((inline.characterSpacing || 0) * (leadingText.length - 1)) : 0;
+-						clone._isSplit = true;
+-						splitInlines.push(clone);
+-					}
+-
+-					if (coreText) {
+-						let clone = Object.assign({}, inline);
+-						clone.text = coreText;
+-						clone.width = inline.font ? inline.font.widthOfString(coreText, inline.fontSize, inline.fontFeatures) + ((inline.characterSpacing || 0) * (coreText.length - 1)) : 0;
+-						clone._isSplit = true;
+-						splitInlines.push(clone);
+-					}
+-
+-					if (trailingText) {
+-						let clone = Object.assign({}, inline);
+-						clone.text = trailingText;
+-						clone.width = inline.font ? inline.font.widthOfString(trailingText, inline.fontSize, inline.fontFeatures) + ((inline.characterSpacing || 0) * (trailingText.length - 1)) : 0;
+-						clone._isSplit = true;
+-						splitInlines.push(clone);
+-					}
+-				} else {
+-					splitInlines.push(inline);
+-				}
+-			} else {
++			let start = 0;
++			while (start < chars.length && isEdgeNeutral(chars[start])) {
++				start++;
++			}
++			let end = chars.length;
++			while (end > start && isEdgeNeutral(chars[end - 1])) {
++				end--;
++			}
++			let core = chars.slice(start, end).join('');
++			let pieces = [...groupEdge(chars.slice(0, start)), ...(core ? splitAtDirectionChanges(core) : []), ...groupEdge(chars.slice(end))];
++			if (pieces.length <= 1) {
+ 				splitInlines.push(inline);
++				return;
+ 			}
++			pieces.forEach(piece => splitInlines.push(pieceOf(inline, piece)));
+ 		});
+ 
+ 		// --- Step 1: Classify each inline ---
+@@ -226,12 +224,32 @@ class ElementWriter extends EventEmitter {
+ 			return { inline, dir };
+ 		});
+ 
++		// --- Step 1b: Numbers belong to the strong text before them (UBA W2/W7) ---
++		// \"Contract 42\" stays one LTR run, and \"رقم 5541\" keeps its number on the
++		// Arabic side. A number with nothing before it takes the base direction.
++		const strongDirs = classified.map(item => item.dir);
++		classified.forEach((item, index) => {
++		  if (item.dir !== 'neutral' || !/\d/.test(item.inline.text)) return;
++		  let resolved = null;
++		  for (let j = index - 1; j >= 0 && !resolved; j--) {
++		    if (strongDirs[j] !== 'neutral') resolved = strongDirs[j];
++		  }
++		  item.dir = resolved || baseDirection;
++		});
++
+ 		// --- Step 2: Build directional runs (groups of consecutive same-direction) ---
++		// Whitespace gets runs of its own, so a bracket's run never carries the space
++		// after it into the bracket's direction — that space belongs between runs.
+ 		let runs = [];
+ 		let currentRun = null;
+ 		classified.forEach(item => {
+-			if (!currentRun || currentRun.dir !== item.dir) {
+-				currentRun = { dir: item.dir, inlines: [] };
++			let isSpace = !/\S/.test(item.inline.text || '');
++			if (!currentRun || currentRun.dir !== item.dir || currentRun.isSpace !== isSpace) {
++				currentRun = {
++					dir: item.dir,
++					isSpace,
++					inlines: []
++				};
+ 				runs.push(currentRun);
+ 			}
+ 			currentRun.inlines.push(item.inline);
+@@ -309,15 +327,11 @@ class ElementWriter extends EventEmitter {
+ 				if (runs[j].dir !== 'neutral') { nextDir = runs[j].dir; break; }
+ 			}
+ 
+-			if (prevDir && nextDir) {
+-				runs[i].dir = (prevDir === nextDir) ? prevDir : 'rtl';
+-			} else if (prevDir) {
+-				runs[i].dir = prevDir;
+-			} else if (nextDir) {
+-				runs[i].dir = nextDir;
+-			} else {
+-				runs[i].dir = 'rtl'; // all neutral → base direction
+-			}
++			// The line's ends count as the paragraph's direction (UBA sos/eos): a
++			// period after Arabic at the end of an English line stays at its end.
++			let before = prevDir || baseDirection;
++			let after = nextDir || baseDirection;
++			runs[i].dir = before === after ? before : baseDirection;
+ 		}
+ 
+ 		// --- Step 3c: Merge adjacent runs that now share the same direction ---
+@@ -332,8 +346,10 @@ class ElementWriter extends EventEmitter {
+ 		}
+ 		runs = merged;
+ 
+-		// --- Step 4: Reverse run order (base direction is RTL) ---
+-		runs.reverse();
++		// --- Step 4: Reverse run order when the base direction is RTL ---
++		if (baseDirection === 'rtl') {
++		  runs.reverse();
++		}
+ 
+ 		// --- Step 5: Within each RTL run, reverse the inline order ---
+ 		runs.forEach(run => {
+diff --git a/node_modules/@digicole/pdfmake-rtl/src/Renderer.js b/node_modules/@digicole/pdfmake-rtl/src/Renderer.js
+index 9de387bd725015786bffb06f9933c7a381aef4eb..5f2dd135629450049ebf33dbadd0b3dd22c38c55 100644
+--- a/node_modules/@digicole/pdfmake-rtl/src/Renderer.js
++++ b/node_modules/@digicole/pdfmake-rtl/src/Renderer.js
+@@ -3,6 +3,20 @@ import TextInlines from './TextInlines';
+ import { isNumber, isString } from './helpers/variableType';
+ import SVGtoPDF from './3rd-party/svg-to-pdfkit';
+ 
++// fontkit lays out a word in an RTL script right to left, digits included, so
++// "٢٠٢٦" (2026) would print as ٦٢٠٢ and "ص.15" as ص.51. Numbers read left to
++// right inside RTL text (UBA), so reverse each number first; fontkit's own
++// reversal then restores it.
++const NUMBER_RUN = /[0-9\u0660-\u0669\u06F0-\u06F9]+(?:[.,:/\u066B\u066C-][0-9\u0660-\u0669\u06F0-\u06F9]+)*/g;
++const FIRST_SCRIPTED_CHAR = /[\p{L}\u0660-\u0669\u06F0-\u06F9]/u;
++const RTL_SCRIPT_CHAR = /[\p{Script=Arabic}\p{Script=Hebrew}]/u;
++function keepNumbersLeftToRight(text) {
++  if (typeof text !== 'string') return text;
++  const first = text.match(FIRST_SCRIPTED_CHAR);
++  if (!first || !RTL_SCRIPT_CHAR.test(first[0])) return text;
++  return text.replace(NUMBER_RUN, run => Array.from(run).reverse().join(''));
++}
++
+ const findFont = (fonts, requiredFonts, defaultFont) => {
+ 	for (let i = 0; i < requiredFonts.length; i++) {
+ 		let requiredFont = requiredFonts[i].toLowerCase();
+@@ -181,7 +195,7 @@ class Renderer {
+ 			this.pdfDocument.fontSize(inline.fontSize);
+ 
+ 			let shiftedY = offsetText(y + shiftToBaseline, inline);
+-			this.pdfDocument.text(inline.text, x + inline.x, shiftedY, options);
++			this.pdfDocument.text(keepNumbersLeftToRight(inline.text), x + inline.x, shiftedY, options);
+ 
+ 			if (inline.linkToPage) {
+ 				this.pdfDocument.ref({ Type: 'Action', S: 'GoTo', D: [inline.linkToPage, 0, 0] }).end();
+diff --git a/node_modules/@digicole/pdfmake-rtl/src/TextInlines.js b/node_modules/@digicole/pdfmake-rtl/src/TextInlines.js
+index f6dcb92bf132ce09936cab72892e412f746f1ead..5e17fb340c521a244558cf0c7bdf6a6a4a9aa605 100644
+--- a/node_modules/@digicole/pdfmake-rtl/src/TextInlines.js
++++ b/node_modules/@digicole/pdfmake-rtl/src/TextInlines.js
+@@ -150,6 +150,8 @@ class TextInlines {
+ 			}
+ 
+ 			item.fontSize = StyleContextStack.getStyleProperty(item, styleContextStack, 'fontSize', 12);
++			// Paragraph base direction ('ltr' | 'rtl'). Unset keeps the RTL-first behaviour.
++			item.baseDirection = StyleContextStack.getStyleProperty(item, styleContextStack, 'baseDirection', null);
+ 			item.fontFeatures = StyleContextStack.getStyleProperty(item, styleContextStack, 'fontFeatures', null);
+ 			item.characterSpacing = StyleContextStack.getStyleProperty(item, styleContextStack, 'characterSpacing', 0);
+ 			item.color = StyleContextStack.getStyleProperty(item, styleContextStack, 'color', 'black');
+diff --git a/node_modules/@digicole/pdfmake-rtl/src/rtlUtils.js b/node_modules/@digicole/pdfmake-rtl/src/rtlUtils.js
+index b9b33dd72ba45d97a3bb757350ce1e556243c717..21860050c644caea868aa0c5ffd3046797b9bc99 100644
+--- a/node_modules/@digicole/pdfmake-rtl/src/rtlUtils.js
++++ b/node_modules/@digicole/pdfmake-rtl/src/rtlUtils.js
+@@ -1,5 +1,5 @@
+ /**
+- * RTL (Right-to-Left) utilities for handling Arabic, Persian (Farsi), and Urdu languages
++ * RTL (Right-to-Left) utilities for handling Arabic, Persian (Farsi), Urdu, and Hebrew languages
+  * Production-ready module for pdfmake RTL support
+  */
+ 
+@@ -38,8 +38,14 @@ const URDU_RANGE = [
+ 	[0x06D3, 0x06D3]  // Urdu Yeh Barree with Hamza
+ ];
+ 
+-// Strong RTL characters (Arabic, Persian, Urdu)
+-const RTL_CHARS = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF\u200C-\u200D]/;
++// Unicode ranges for Hebrew characters
++const HEBREW_RANGE = [
++	[0x0590, 0x05FF], // Hebrew block
++	[0xFB1D, 0xFB4F]  // Hebrew presentation forms
++];
++
++// Strong RTL characters (Arabic, Persian, Urdu, Hebrew)
++const RTL_CHARS = /[\u0590-\u05FF\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB1D-\uFB4F\uFB50-\uFDFF\uFE70-\uFEFF\u200C-\u200D]/;
+ 
+ // Strong LTR characters (Latin, etc.)
+ const LTR_CHARS = /[A-Za-z\u00C0-\u024F\u1E00-\u1EFF]/;
+@@ -74,6 +80,11 @@ function isUrduChar(char) {
+ 	return URDU_RANGE.some(range => code >= range[0] && code <= range[1]) || isArabicChar(char);
+ }
+ 
++function isHebrewChar(char) {
++	const code = char.charCodeAt(0);
++	return HEBREW_RANGE.some(range => code >= range[0] && code <= range[1]);
++}
++
+ /**
+  * Check if a character requires RTL rendering
+  * @param {string} char - Single character to check
