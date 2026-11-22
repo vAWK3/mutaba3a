@@ -6823,7 +6823,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
 
-**Amendment (2026-11-22, invoicing follow-ups, API 1.128.0-followups):**
+**Amendment (2026-11-22, invoicing follow-ups, API 1.129.0-followups):**
 - **Where the callback lands.** PORTAL_ORIGIN alone doesn't say a portal page exists there (a local API sets it to itself and serves no portal), so the callback used to redirect to an API 404. Now the state also signs the portal the person pressed Connect on: the connect request's Origin, kept only when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server (the Vite dev portal on another port). The callback returns there; with none, to this server's own portal when it serves one (PORTAL_DIST_DIR); with neither (a phone's start, a forged or late state), to its own short page in Arabic and English. A declined consent (`error=access_denied`) lands as `taxAuthority=refused` with its own words.
 - **The re-consent reminder (AC3).** A daily job (`POST /jobs/v1/issuing/tax-authority-reminders`, Terraform `tax_authority_reminders_enabled`, off by default) mails the profile's owner ten days before the consent ends and once when it has ended (for 7 days), each once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`), with no new column: the windows stay inside the log's 30 days. The setup page's Tax Authority step says the same from `until` and offers Connect again.
 

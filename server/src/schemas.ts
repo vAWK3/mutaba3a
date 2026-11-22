@@ -2350,6 +2350,9 @@ export const CONFLICT_REASONS = [
   'ACCOUNTANT_LIMIT',
   'ALREADY_HAS_ACCESS',
   'ACCOUNT_EXISTS',
+  // MUT-709: reversing, correcting or undoing a payment an issued receipt or invoice-receipt stands on. details carry
+  // documentId, docType and number; the way out is a credit note.
+  'HAS_DOCUMENT',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
