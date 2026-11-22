@@ -568,6 +568,11 @@ export interface TwoFactorRepository {
   recordCodeSent(id: string, codeDigest: string, at: Date, limits: { minGapMs: number; maxCodes: number }): Promise<boolean>;
   /** Deletes challenges that expired before `before`. */
   pruneChallenges(before: Date): Promise<number>;
+  /**
+   * D8/D10: true when the person owns a profile (creator, co-owner or a Malafat firm's partner, as `ownsProfile`) that
+   * has issuer details or a Tax Authority connection; then two-step sign-in can't be turned off.
+   */
+  ownsIssuingProfile(userId: string): Promise<boolean>;
 }
 
 export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';

@@ -9,6 +9,8 @@ const base = {
   MUTABA3A_ADMIN_TOKEN: 'x'.repeat(32),
   API_KEY_ENVIRONMENT: 'test',
   SESSION_TOKEN_PEPPER: 's'.repeat(32),
+  // MUT-710: production and staging refuse to start without it; set here so the other production cases load.
+  TWO_FACTOR_SEAL_KEY: 't'.repeat(32),
 };
 
 describe('loadConfig — argon2 parameters (MUT-37)', () => {
@@ -186,6 +188,13 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...deployed, API_ORIGIN: undefined })).toThrow(/API_ORIGIN/);
     expect(() => loadConfig({ ...deployed, READ_INVOKER_SA: undefined })).toThrow(/READ_INVOKER_SA/);
     expect(() => loadConfig({ ...deployed, READ_QUEUE: 'receipt-reads' })).toThrow(/READ_QUEUE/);
+  });
+
+  it('TWO_FACTOR_SEAL_KEY (MUT-710 D4): required on production and staging, optional elsewhere', () => {
+    const { TWO_FACTOR_SEAL_KEY: _key, ...without } = base;
+    for (const env of ['production', 'staging']) expect(() => loadConfig({ ...without, NODE_ENV: env }), env).toThrow('TWO_FACTOR_SEAL_KEY');
+    expect(loadConfig({ ...without, NODE_ENV: 'development' }).TWO_FACTOR_SEAL_KEY).toBeUndefined();
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).TWO_FACTOR_SEAL_KEY).toBe('t'.repeat(32));
   });
 
   it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {

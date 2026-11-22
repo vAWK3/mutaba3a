@@ -1552,6 +1552,13 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       return count;
     },
+    ownsIssuingProfile: async (userId) => {
+      for (const org of this.orgs.values()) {
+        if (!this.issuerMap.has(org.id) && !this.taxConnectionMap.has(org.id)) continue;
+        if (ownsProfile(org, userId, this.members.get(membershipKey(userId, org.id))?.role ?? null)) return true;
+      }
+      return false;
+    },
   };
 
   private replaceTwoFactorCodes(userId: string, digests: readonly string[], at: Date): void {

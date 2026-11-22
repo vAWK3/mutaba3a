@@ -100,6 +100,12 @@ const envSchema = z.object({
   TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
+  /**
+   * MUT-710 (ADR-275 D4): seals two-step sign-in's authenticator secrets (AES-256-GCM) and keys its recovery-code digests.
+   * Required on production and staging with no fallback (Terraform generates it, two_factor.tf); elsewhere derived
+   * from the session pepper when unset.
+   */
+  TWO_FACTOR_SEAL_KEY: secret('TWO_FACTOR_SEAL_KEY').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
@@ -526,6 +532,9 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
       for (const name of ['TAX_AUTHORITY_BASE_URL', 'TAX_AUTHORITY_SOFTWARE_NUMBER', 'TAX_AUTHORITY_TOKEN_KEY'] as const) if (!config[name]) refuse(name, 'the production Tax Authority takes no sandbox defaults: set it');
     }
     if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TAX_AUTHORITY_TOKEN_KEY) refuse('TAX_AUTHORITY_TOKEN_KEY', `stored tokens need their own key on ${config.NODE_ENV}`);
+  }
+  if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TWO_FACTOR_SEAL_KEY) {
+    refuse('TWO_FACTOR_SEAL_KEY', `two-step sign-in secrets need their own key on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

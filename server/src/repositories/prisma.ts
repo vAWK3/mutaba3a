@@ -1482,6 +1482,20 @@ export class PrismaLedgerStore implements LedgerStore {
       return count === 1;
     },
     pruneChallenges: async (before) => (await this.prisma.twoFactorChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    ownsIssuingProfile: async (userId) => {
+      // A person owns a handful of profiles at most: read their ids, then whether any issues.
+      const owned = await this.prisma.organization.findMany({
+        where: { OR: [ownedBy(userId), coOwnedBy(userId), { memberSyncAt: { not: null }, memberships: { some: { userId, role: 'OWNER' } } }] },
+        select: { id: true },
+      });
+      const ids = owned.map((o) => o.id);
+      if (ids.length === 0) return false;
+      const [issuers, connections] = await Promise.all([
+        this.prisma.issuerDetails.count({ where: { organizationId: { in: ids } } }),
+        this.prisma.taxAuthorityConnection.count({ where: { organizationId: { in: ids } } }),
+      ]);
+      return issuers + connections > 0;
+    },
   };
 
   readonly passkeys: PasskeyRepository = {

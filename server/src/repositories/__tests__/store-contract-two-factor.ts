@@ -11,6 +11,24 @@ export function describeLedgerStoreTwoFactorContract(name: string, makeStore: ()
   const at = (minute: number) => new Date(Date.UTC(2026, 10, 24, 9, minute, 0));
   const digest = () => unique().padEnd(64, '0').slice(0, 64);
   const POLICY = { lockAfter: 5, windowMs: 15 * 60_000, lockMs: 15 * 60_000 };
+  const ISSUER = {
+    legalName: 'Rana Saleh',
+    vatId: '123456789',
+    dealerType: 'COMPANY' as const,
+    address: null,
+    city: 'Nazareth',
+    phone: null,
+    email: null,
+    website: null,
+    pricesIncludeVat: false,
+    ink: 'BLACK' as const,
+    documentStyle: 'PROFESSIONAL' as const,
+    defaultLanguage: 'he' as const,
+    paymentTermsDays: null,
+    bankDetails: null,
+    footerNote: null,
+    offerAfterSave: true,
+  };
 
   async function person(store: LedgerStore): Promise<UserRecord> {
     const org = await store.organizations.create({ name: 'Firm', slug: `firm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
@@ -175,6 +193,21 @@ export function describeLedgerStoreTwoFactorContract(name: string, makeStore: ()
       await enable(store, user.id, { method: 'email', codes: [digest()] });
       expect(await store.twoFactor.get(user.id)).toMatchObject({ method: 'email', totpSecretSealed: null });
       expect(await store.twoFactor.recoveryCodesLeft(user.id)).toBe(1);
+    });
+
+    it('knows whether the person owns a profile that issues (D8: then it can\'t be turned off)', async () => {
+      const store = await makeStore();
+      const user = await person(store);
+      const memberships = await store.memberships.listByUser(user.id);
+      const profiles = await Promise.all(memberships.map((m) => store.organizations.getById(m.organizationId)));
+      const personal = profiles.find((o) => o?.personalOwnerUserId === user.id)!;
+      const firm = profiles.find((o) => o && o.personalOwnerUserId === null)!;
+      expect(await store.twoFactor.ownsIssuingProfile(user.id)).toBe(false);
+      // A firm the person is only a member of doesn't count.
+      await store.issuing.putIssuer(firm.id, ISSUER, null, at(3));
+      expect(await store.twoFactor.ownsIssuingProfile(user.id)).toBe(false);
+      await store.issuing.putIssuer(personal.id, ISSUER, null, at(4));
+      expect(await store.twoFactor.ownsIssuingProfile(user.id)).toBe(true);
     });
 
     it('prunes challenges that expired before the cut-off', async () => {

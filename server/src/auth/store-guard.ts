@@ -181,6 +181,7 @@ export const STORE_ACCESS: StoreAccess = {
     consumeChallenge: 'sessionOnly',
     recordCodeSent: 'sessionOnly',
     pruneChallenges: 'operator',
+    ownsIssuingProfile: 'sessionOnly',
   },
   // MUT-595: Sign in with Malafat runs on public routes, unguarded, like sign-in.
   malafatSignIns: { create: 'operator', claimCallback: 'operator', recordResult: 'operator', claimResult: 'operator', issueTicket: 'operator', findByTicket: 'operator', proveLink: 'operator', claimCompletion: 'operator' },
