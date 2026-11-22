@@ -395,7 +395,9 @@ test('download the uniform file (מבנה אחיד) for this year: the zip, and 
 
   await step('Issue a tax invoice for Client 1', async () => {
     await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await expect(page.getByTestId('issued-empty')).toBeVisible();
     await page.getByTestId('issue-open').click();
+    await expect(drawer).toBeVisible();
     await drawer.getByLabel('Client').fill('Client 1');
     await page.getByRole('option', { name: /Client 1/ }).click();
     await drawer.getByLabel('Description').fill('Flutter development, sprint 3');
