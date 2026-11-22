@@ -5,6 +5,7 @@ import { SegmentedControl } from '../../../components/ui/SegmentedControl';
 import { useT } from '../../../lib/i18n/core';
 import { ApiError, apiErrorReason, type IssuerDetails, type IssuingSettings } from '../../api/client';
 import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
+import { useIssuingStyles } from '../../data/issuedQueries';
 import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuerLogo } from '../../data/issuingQueries';
 import { DEFAULT_INK, INKS, wholeNumber, type PaperModel } from './setupSteps';
 
@@ -20,7 +21,8 @@ interface StepProps {
 }
 
 const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
-const STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'] as const;
+/** MUT-570 (Basel): the styles come from the server, so a new one appears without a portal release; until it answers, these. */
+const KNOWN_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'];
 const LANGUAGES = ['he', 'ar', 'en'] as const;
 const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
 export const LOGO_MAX_BYTES = 256 * 1024;
@@ -216,6 +218,7 @@ export function LogoStep({ profileId, hasLogo, onPreview, onDone }: StepProps & 
 export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps & { issuer: IssuerDetails | null }) {
   const t = useT();
   const save = useSaveIssuerDefaults(profileId);
+  const styles = useIssuingStyles(profileId);
   const [form, setForm] = useState({
     documentStyle: (issuer?.documentStyle ?? 'PROFESSIONAL') as PaperModel['style'],
     ink: (issuer?.ink ?? DEFAULT_INK) as PaperModel['ink'],
@@ -252,7 +255,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
       <SegmentedControl
         labelledBy="issuer-style-label"
         value={form.documentStyle}
-        options={STYLES.map((value) => ({ value, label: t(`hosted.invoicing.defaults.styles.${value}`) }))}
+        options={(styles.data?.styles.map((style) => style.key) ?? KNOWN_STYLES).map((value) => ({ value: value as PaperModel['style'], label: t(`hosted.invoicing.defaults.styles.${value}`) }))}
         onChange={(value) => change('documentStyle', value, { style: value })}
       />
       {labelled('issuer-ink-label', t('hosted.invoicing.defaults.ink'))}
