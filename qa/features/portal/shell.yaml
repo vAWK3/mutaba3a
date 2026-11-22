@@ -84,6 +84,23 @@ features:
       - The summary shows Last payment, the ILS strip and each matter with its status
       - Each tab lists only this client's records, without a client column, and asks the server with that customerId
       - All clients returns to the list
+  - id: client-business
+    title: A client's VAT or company number and address, filled from the companies registry by its number (MUT-642)
+    tier: secondary
+    tickets: [MUT-642]
+    paths:
+      - src/hosted/components/ClientBusinessDetails.tsx
+      - src/hosted/data/customerQueries.ts
+    steps:
+      - Open Client 1 and choose Add business details
+      - Type a company's 9-digit number
+      - Save, then type a dissolved company's number and a sole dealer's
+      - Open it in Arabic
+    expect:
+      - The registry's name shows under the number and its registered address fills the empty Address
+      - Save sends PATCH /v1/customers/<id> with the number and address (If-Match the version) and the card shows both
+      - A dissolved company shows its registry status as a warning; a sole dealer's number says it is not in the registry and the details are typed by hand
+      - The Arabic card reads بيانات المنشأة, right to left, with the number left to right
   - id: no-profiles
     title: An account with no profile yet is offered New profile beside Sign out (MUT-183)
     tier: secondary

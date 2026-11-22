@@ -92,6 +92,8 @@ export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
 export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
+export type UpdateCustomerRequest = Schemas['UpdateCustomerRequest'];
+export type BusinessLookup = Schemas['BusinessLookup'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
@@ -745,6 +747,12 @@ export const api = {
   /** MUT-286: the client picker's Add «name», on a profile the person owns (session `customers:write`, MUT-65). */
   createCustomer: (profileId: string, body: CreateCustomerRequest, idempotencyKey: string) =>
     request<Customer>('POST', '/v1/customers', { profileId, body, idempotencyKey }),
+  /** MUT-642: a client's VAT or company number and address, with the version read (If-Match). */
+  updateCustomer: (profileId: string, customerId: string, version: number, body: UpdateCustomerRequest) =>
+    request<Customer>('PATCH', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId, body, ifMatchVersion: String(version) }),
+  /** MUT-642: a company or nonprofit by its number (hosted only: the signed-out portal has no lookup). */
+  businessLookup: (profileId: string, number: string) =>
+    request<BusinessLookup>('GET', '/v1/business-lookup', { profileId, query: { number } }),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>

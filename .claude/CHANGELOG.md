@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — A client's VAT or company number and address, from the registry (MUT-642, ADR-262, API 1.117.0-mut642)
+
+### Added
+- `Customer.taxId` (Israeli check digit, stored as 9 digits) and `address`; 422 `TAX_ID_INVALID`. Issued documents snapshot both.
+- `GET /v1/business-lookup?number=`: the Registrar of Companies and the nonprofits registry on data.gov.il (24 h cache, 30/min per person, 404 `NOT_IN_REGISTRY`, 502 `REGISTRY_UNAVAILABLE`). Hosted only.
+- Portal: a Business details card on the client page (`ClientBusinessDetails`): the number fills the registry name and an empty address, warns about a dissolved company. QA `portal.shell.client-business`.
+
+### Changed
+- `PATCH /v1/customers/{id}` accepts session and device-session auth (it was API-key only).
+
+### Technical
+- Migration `20261122150000_mut642_customer_tax_id`; signed-out format v21 (`addCustomerTaxId`); config `DATA_GOV_IL_*`.
+
 ## [Unreleased] - 2026-11-22 — Issued documents as PDFs in Hebrew, Arabic and English, three styles (MUT-640, ADR-261, API 1.116.0-mut640)
 
 ### Added

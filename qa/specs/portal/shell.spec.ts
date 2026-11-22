@@ -276,6 +276,59 @@ test('a client opens to its summary and matters, then its own receivables, payme
   });
 });
 
+test('a client’s VAT or company number fills its name and address from the registry, and saves with the address', { tag: '@portal.shell.client-business' }, async ({ page, step }) => {
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 1,
+    customerSummaries: [customerSummary(C1, { currency: 'ILS', outstanding: '0.00', overdue: '0.00', lastPaymentOn: null, status: 'ACTIVE', matters: [] })],
+    registry: [
+      { taxId: '516123452', kind: 'company', name: 'אקמי דיגיטל בע״מ', nameEn: 'ACME DIGITAL LTD', status: 'פעילה', active: true, address: 'הרצל 5, חיפה' },
+      { taxId: '510000045', kind: 'company', name: 'ישנה בע״מ', nameEn: null, status: 'מחוקה', active: false, address: null },
+    ],
+  });
+  const card = page.getByRole('region', { name: 'Business details' });
+
+  await step('Open Client 1 and choose Add business details', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
+    await card.getByRole('button', { name: 'Add business details' }).click();
+  });
+
+  await step('Type a company number: the registry name shows and its address fills Address', async () => {
+    await card.getByLabel('VAT or company number').fill('51-612345-2');
+    await expect(card.getByText('Registrar of Companies: אקמי דיגיטל בע״מ')).toBeVisible();
+    await expect(card.getByLabel('Address')).toHaveValue('הרצל 5, חיפה');
+    expect(api.last('GET', /^\/v1\/business-lookup$/)?.query.get('number')).toBe('516123452');
+  });
+
+  await step('Save: the card shows the number and the address', async () => {
+    await card.getByRole('button', { name: 'Save' }).click();
+    await expect(card.getByText('516123452')).toBeVisible();
+    await expect(card.getByText('הרצל 5, חיפה')).toBeVisible();
+    const patch = api.last('PATCH', new RegExp(`^/v1/customers/${C1}$`));
+    expect(patch?.body).toEqual({ taxId: '516123452', address: 'הרצל 5, חיפה' });
+    expect(patch?.headers['if-match']).toBe('1');
+  });
+
+  await step('A dissolved company warns with its status; a sole dealer is not in the registry', async () => {
+    await card.getByRole('button', { name: 'Edit' }).click();
+    const number = card.getByLabel('VAT or company number');
+    await number.fill('510000045');
+    await expect(card.getByRole('alert')).toContainText('“מחוקה”');
+    await number.fill('000000018');
+    await expect(card.getByText(/Not in the companies or nonprofits registry/)).toBeVisible();
+    await card.getByRole('button', { name: 'Cancel' }).click();
+  });
+
+  await step('In Arabic the card reads بيانات المنشأة, right to left, the number left to right', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`, 'ar');
+    const ar = page.getByRole('region', { name: 'بيانات المنشأة' });
+    await expect(ar).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(ar.locator('dd[dir="ltr"]')).toHaveText('516123452');
+  });
+});
+
 test('an account with no profile yet is offered New profile and Sign out', { tag: '@portal.shell.no-profiles' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [] });
 

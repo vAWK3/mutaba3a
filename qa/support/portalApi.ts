@@ -474,6 +474,8 @@ export interface FakeApiSeed {
   fxRates?: Json | 'unavailable';
   summary?: ReturnType<typeof currencyBlock>[];
   customerSummaries?: ReturnType<typeof customerSummary>[];
+  /** MUT-642: GET /v1/business-lookup answers these by number; any other complete number is NOT_IN_REGISTRY. */
+  registry?: { taxId: string; kind: 'company' | 'nonprofit'; name: string; nameEn: string | null; status: string; active: boolean; address: string | null }[];
   /** Expenses a type change would leave uncategorized (GET …/type-change). */
   uncategorizedOnTypeChange?: number;
   signedIn?: boolean;
@@ -742,6 +744,7 @@ export class FakeApi {
   private readonly fxRates: Json | 'unavailable';
   private readonly summary;
   private readonly customerSummaries;
+  private readonly registry;
   private readonly uncategorized: number;
   private readonly onceQueue: { method: string; path: RegExp; answer: OnceAnswer }[] = [];
   private serial = 500;
@@ -794,6 +797,7 @@ export class FakeApi {
     this.fxRates = seed.fxRates ?? FX_RATES_ILS;
     this.summary = seed.summary ?? [];
     this.customerSummaries = new Map((seed.customerSummaries ?? []).map((s) => [s.customerId, s]));
+    this.registry = new Map((seed.registry ?? []).map((r) => [r.taxId, r]));
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
     this.setupLink = seed.setupLink ?? null;
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
@@ -999,6 +1003,20 @@ export class FakeApi {
       const created = { ...customer(this.customers.length), name: String((e.body as { name?: unknown } | null)?.name ?? '') };
       this.customers.push(created);
       return json(created, 201);
+    }
+    if (resource === 'business-lookup' && method === 'GET') {
+      const found = this.registry.get(q('number') ?? '');
+      return found ? json(found) : json({ error: { code: 'NOT_FOUND', message: 'Not in the registry', details: { reason: 'NOT_IN_REGISTRY' } } }, 404);
+    }
+    if (resource === 'customers' && method === 'PATCH' && id) {
+      // MUT-642: the client's VAT or company number and address, If-Match the version read.
+      const at = this.customers.findIndex((c) => c.id === id);
+      if (at < 0) return notFound();
+      const current = this.customers[at];
+      if (e.headers['if-match'] !== String(current.version)) return json({ error: { code: 'CONFLICT', message: 'changed', details: { reason: 'VERSION_MISMATCH' } } }, 409);
+      const saved = { ...current, ...(e.body as object), version: current.version + 1 };
+      this.customers[at] = saved;
+      return json(saved);
     }
     if (resource === 'customers' && method === 'GET') {
       if (!id) return page(this.customers);

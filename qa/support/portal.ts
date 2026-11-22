@@ -86,6 +86,8 @@ export function customer(i: number) {
     vatTreatment: 'STANDARD_RATED',
     status: 'ACTIVE',
     archivedAt: null,
+    taxId: null as string | null,
+    address: null as string | null,
     externalReference: null,
     version: 1,
     createdAt: STAMP,

@@ -1643,3 +1643,17 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-two-panel-scene { display: block; margin-bottom: var(--space-4); }
 .hp-two-panel-ended .hp-scene, .hp-client-gone .hp-scene, .hp-client-books-empty .hp-scene { display: block; margin-inline: auto; }
 .hp-client-books-empty { text-align: center; }
+
+/* ---------- Client business details (MUT-642) ---------- */
+
+.hp-business { padding: var(--space-4); margin-bottom: var(--space-4); max-width: 560px; }
+.hp-business-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+.hp-business-title { font-size: var(--text-label); font-weight: var(--weight-medium); margin: 0; }
+.hp-business-list { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1-5) var(--space-4); margin: 0; font-size: var(--text-label); }
+.hp-business-list dt { color: var(--muted); }
+.hp-business-list dd { margin: 0; }
+.hp-business-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-business-form p { margin: 0; font-size: var(--text-label); }
+.hp-business-warning { color: var(--warning); background: var(--warning-subtle); padding: var(--space-2) var(--space-3); border-radius: var(--radius-card); }
+.hp-business-actions { display: flex; gap: var(--space-2); }
+@media (max-width: 480px) { .hp-business-list { grid-template-columns: 1fr; } }
