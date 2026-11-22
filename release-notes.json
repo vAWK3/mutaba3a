@@ -1,4 +1,12 @@
 {
+  "0.3.7": {
+    "en": [
+      "The privacy policy now describes the monthly summary email and how to turn it off."
+    ],
+    "ar": [
+      "تصف سياسة الخصوصية الآن رسالة الملخص الشهري وطريقة إيقافها."
+    ]
+  },
   "0.3.6": {
     "en": [
       "After we update the website, a page you already had open no longer shows an error screen: it reloads once and carries on."
