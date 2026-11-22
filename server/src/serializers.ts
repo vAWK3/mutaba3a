@@ -868,6 +868,7 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord, facts: PaymentR
     originalId: d.originalId,
     paymentDetails: d.paymentDetails ? { method: d.paymentDetails.method, reference: d.paymentDetails.reference, receivedOn: d.paymentDetails.receivedOn } : null,
     allocationNumber: d.allocationNumber,
+    allocationSource: d.allocationSource,
     receivableId: d.receivableId,
     paymentId: d.paymentId,
     coreVersion: d.coreVersion,

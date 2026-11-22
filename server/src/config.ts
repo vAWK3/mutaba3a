@@ -108,6 +108,12 @@ const envSchema = z.object({
   SOFTWARE_HOUSE_NAME: z.string().min(1).max(20).default('MTB3A'),
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
+  /**
+   * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
+   * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
+   * confirmed (open item on MUT-711).
+   */
+  TAX_AUTHORITY_MANUAL_ALLOCATION_URL: z.string().url().refine((u) => u.startsWith('https://'), 'must be https').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),

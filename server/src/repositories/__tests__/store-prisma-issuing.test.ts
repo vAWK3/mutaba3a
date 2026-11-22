@@ -51,6 +51,20 @@ if (!url) {
       await expect(raw.$executeRawUnsafe(`TRUNCATE "${table}"`)).rejects.toThrow(/immutable|append-only/);
     });
 
+    it('MUT-711: a number issued before allocationSource reads as API; a source never stands without a number', async () => {
+      const org = await store.organizations.create({ name: 'Old', slug: `old-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
+      await raw.$executeRaw`INSERT INTO "issued_document_counters" VALUES (${org.id}::uuid, 'TAX_INVOICE', 1, 3)`;
+      const insert = (number: number, allocationNumber: string | null, source: string | null) => {
+        const id = crypto.randomUUID();
+        return raw.$executeRaw`INSERT INTO "issued_documents" ("id","organizationId","docType","number","documentDate","currency","subtotalMinor","discountMinor","netMinor","vatRateBasisPoints","vatMinor","grossMinor","pricesIncludeVat","issuer","customer","language","style","ink","coreVersion","createdByUserId","requestKey","allocationNumber","allocationSource")
+          VALUES (${id}::uuid, ${org.id}::uuid, 'TAX_INVOICE', ${number}, '2026-11-22', 'ILS', 100, 0, 100, 1800, 18, 118, false, '{}', '{}', 'he', 'PROFESSIONAL', 'BLACK', '1.0.0', ${org.id}::uuid, ${unique()}, ${allocationNumber}, ${source})`.then(() => id);
+      };
+      const old = await insert(1, '123456789', null);
+      expect(await store.issuing.getById(org.id, old)).toMatchObject({ allocationNumber: '123456789', allocationSource: 'API' });
+      await expect(insert(2, null, 'MANUAL')).rejects.toThrow(/issued_documents_allocation_source/);
+      await expect(insert(2, '123456789', 'OTHER')).rejects.toThrow(/issued_documents_allocation_source/);
+    });
+
     it('never moves a counter back, nor deletes it, once a document of its type exists', async () => {
       const { org } = await oneDocument();
       await expect(raw.$executeRaw`UPDATE "issued_document_counters" SET "next" = 1 WHERE "organizationId" = ${org.id}::uuid`).rejects.toThrow(/append-only/);

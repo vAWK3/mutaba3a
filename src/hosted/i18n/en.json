@@ -3070,7 +3070,12 @@
         "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
         "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only.",
         "ENTRY_MISMATCH": "The document must keep the entry's client and amount; change the entry first if it was recorded wrong.",
-        "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here."
+        "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here.",
+        "ALLOCATION_NUMBER_MOVED": "This invoice's number is now {next}. Request the allocation number again for invoice number {next} and enter it.",
+        "ALLOCATION_NUMBER_REQUIRED": "This invoice needs an allocation number. Request it on the Tax Authority's site and enter it.",
+        "ALLOCATION_NUMBER_INVALID": "An allocation number is 9 digits.",
+        "ALLOCATION_NOT_NEEDED": "This document no longer needs an allocation number. Clear it and issue again.",
+        "TAX_AUTHORITY_NOT_CONNECTED": "This invoice needs an allocation number, and this profile isn't connected to the Tax Authority."
       },
       "backToList": "Issued documents",
       "issuedTitle": "{document} was issued",
@@ -3115,6 +3120,23 @@
         "cancelConfirm": "Cancel payment request",
         "cancelled": "{number} cancelled ({cancellation})",
         "cancelBlocked": "An invoice-receipt refers to this request. Cancel the invoice-receipt with a credit note first."
+      },
+      "allocation": {
+        "title": "This invoice needs an allocation number",
+        "why": "Its amount before VAT reaches the threshold and the client is VAT-registered. MTB3A can't request the number for this profile, so request it on the Tax Authority's site and enter it here.",
+        "details": "The details the Tax Authority asks for",
+        "invoiceNumber": "Invoice number",
+        "date": "Date",
+        "net": "Amount before VAT",
+        "customerTaxId": "Client's VAT number",
+        "copyOne": "Copy {field}",
+        "copyAll": "Copy all",
+        "open": "Open the Tax Authority's allocation page",
+        "label": "Allocation number (9 digits)",
+        "hint": "Request it for invoice number {number}. The number isn't held: if another document is issued first, you'll be asked to request it again.",
+        "invalid": "An allocation number is 9 digits.",
+        "orChange": "Or",
+        "changeAmount": "change the amount"
       }
     },
     "home": {

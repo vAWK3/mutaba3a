@@ -30486,7 +30486,29 @@ export interface components {
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
             }[];
+            allocation: components["schemas"]["IssueAllocation"];
         };
+        /** @description MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711. */
+        IssueAllocation: {
+            /**
+             * @description AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`.
+             * @enum {string}
+             */
+            mode: "AUTOMATIC" | "MANUAL";
+            /** @description The number this document would take if issued now. A preview, never a reservation. */
+            nextNumber: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /** @description The amount before VAT the Tax Authority asks for */
+            net: string;
+            /** @description The client’s VAT number */
+            customerTaxId: string;
+            /**
+             * Format: uri
+             * @description Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)
+             */
+            requestUrl: string;
+        } | null;
         IssueDocumentRequest: {
             docType: components["schemas"]["IssuedDocType"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -30538,6 +30560,13 @@ export interface components {
             withoutAllocation?: {
                 heldKey: string;
             };
+            /** @description MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711. */
+            manualAllocation?: {
+                /** @description The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise). */
+                number: string;
+                /** @description The document number it was requested for: the preview's `allocation.nextNumber` at the time. */
+                forNumber: number;
+            };
             lines: {
                 description: string;
                 /** @enum {string} */
@@ -30554,7 +30583,35 @@ export interface components {
                 vatExempt?: boolean;
             }[];
         };
-        IssuedDocument: components["schemas"]["IssuedDocumentPreview"] & {
+        IssuedDocument: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            subtotal: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            discount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            vatRateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            pricesIncludeVat: boolean;
+            lines: {
+                index: number;
+                description: string;
+                kind: string;
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                pricesIncludeVat: boolean;
+                vatRateBasisPoints: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
             /** Format: uuid */
             id: string;
             docType: components["schemas"]["IssuedDocType"];
@@ -30585,6 +30642,11 @@ export interface components {
                 receivedOn: string;
             } | null;
             allocationNumber: string | null;
+            /**
+             * @description MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.
+             * @enum {string|null}
+             */
+            allocationSource: "API" | "MANUAL" | null;
             /** Format: uuid */
             receivableId: string | null;
             /** Format: uuid */
@@ -30765,7 +30827,7 @@ export interface components {
                 status: "issued" | "held" | "refused";
                 /** @description Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason) */
                 reason: string | null;
-                document: components["schemas"]["IssuedDocument"];
+                document: components["schemas"]["IssuedDocument"] & unknown;
             }[];
             issued: number;
         };

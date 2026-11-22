@@ -5252,12 +5252,23 @@ export const IssueDocumentRequestSchema = z
       .object({ heldKey: z.string().min(8).max(128) })
       .optional()
       .openapi({ description: 'MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first.' }),
+    manualAllocation: z
+      .object({
+        number: z.string().max(40).openapi({ description: 'The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise).' }),
+        forNumber: z.number().int().min(1).max(999_999_999).openapi({ description: 'The document number it was requested for: the preview\'s `allocation.nextNumber` at the time.' }),
+      })
+      .optional()
+      .openapi({
+        description:
+          'MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711.',
+      }),
     lines: z.array(IssueLineRequestSchema).min(1).max(200),
   })
   .openapi('IssueDocumentRequest');
 
 const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
 
+const IssuedTotalsSchema = z.object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) });
 /** MUT-662: a payment request's status, derived from what refers to it. */
 export const PaymentRequestFactsSchema = z
   .object({
@@ -5271,11 +5282,24 @@ export const PaymentRequestFactsSchema = z
 /** MUT-662 (D18): cancelling a payment request. */
 export const CancelPaymentRequestSchema = z.object({ reason: z.string().trim().max(300).nullable().optional() }).openapi('CancelPaymentRequest');
 
-export const IssuedDocumentPreviewSchema = z
-  .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
-  .openapi('IssuedDocumentPreview');
 
-export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
+/** MUT-711 (ADR-273): what the review step needs when the document must carry an allocation number. */
+export const IssueAllocationSchema = z
+  .object({
+    mode: z.enum(['AUTOMATIC', 'MANUAL']).openapi({ description: 'AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`.' }),
+    nextNumber: z.number().int().openapi({ description: 'The number this document would take if issued now. A preview, never a reservation.' }),
+    documentDate: IsoDateSchema,
+    net: AmountSchema.openapi({ description: 'The amount before VAT the Tax Authority asks for' }),
+    customerTaxId: z.string().openapi({ description: 'The client’s VAT number' }),
+    requestUrl: z.string().url().openapi({ description: 'Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)' }),
+  })
+  .openapi('IssueAllocation');
+
+export const IssuedDocumentPreviewSchema = IssuedTotalsSchema.extend({
+  allocation: IssueAllocationSchema.nullable().openapi({ description: 'MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711.' }),
+}).openapi('IssuedDocumentPreview');
+
+export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   id: uuid,
   docType: IssuedDocTypeSchema,
   number: z.number().int(),
@@ -5292,6 +5316,7 @@ export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
   originalId: uuid.nullable(),
   paymentDetails: z.object({ method: z.string(), reference: z.string().nullable(), receivedOn: IsoDateSchema }).nullable(),
   allocationNumber: z.string().nullable(),
+  allocationSource: z.enum(['API', 'MANUAL']).nullable().openapi({ description: 'MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.' }),
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
   coreVersion: z.string(),

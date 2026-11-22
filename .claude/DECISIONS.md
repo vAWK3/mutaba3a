@@ -6971,3 +6971,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 6. **Built on request, never stored.** A 10k-document history is a few MB in memory (TD-323 for streaming).
 7. **Same gate as the issuing reads.** An accountant may export; only a member's export is audited (an accountant runs under the read-only store).
 
+## ADR-273: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
+
+**Status:** Accepted (2026-11-22; wireframe A "Number first, then issue", chosen by Basel; canvas https://claude.ai/artifact/Ev11vFMKsFAuXVXVp2nx4e).
+
+**Context:** MTB3A requests allocation numbers itself only where the Tax Authority is on (`TAX_AUTHORITY_ENV`) and the profile is connected (ADR-264). Until the software is registered (MUT-567/638) that is nowhere in production, and until now a server with the Tax Authority off issued such an invoice with no number at all.
+
+**Decision:**
+1. **The preview says what the review step needs.** `POST /v1/issued-documents/preview` answers `allocation`: null when the document needs no number (`needsAllocation`), else `{ mode, nextNumber, documentDate, net, customerTaxId, requestUrl }`. `mode` is AUTOMATIC when the Tax Authority is on here and the profile is connected, else MANUAL.
+2. **The number is entered before issuing.** `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`. The number is normalized like an expense's (`normalizeAllocationNumber`, 422 ALLOCATION_NUMBER_INVALID). A document that needs none refuses it (422 ALLOCATION_NOT_NEEDED). Without one, a document that needs a number is refused: 409 ALLOCATION_NUMBER_REQUIRED (`details.next`) when the Tax Authority is off here, 409 TAX_AUTHORITY_NOT_CONNECTED as before when it is on.
+3. **The invoice number is a preview, never a reservation.** The manual number runs through the same `allocate` hook as the API's, inside the issue with the counter locked: if the number this document takes is not `forNumber`, nothing is written and the answer is 409 ALLOCATION_NUMBER_MOVED (`details.requestedFor`, `details.next`). Walking away consumes nothing, so the numbering has no gaps, and a number requested for another invoice number is never printed.
+4. **The source is kept.** `issued_documents.allocationSource` is API or MANUAL (null with no number; a CHECK keeps a source from standing without a number). Issued documents are immutable (MUT-568), so rows issued before the column are not backfilled: a number with no source reads as API, the only source there was. The API answers it as `allocationSource`. The PDF prints a manual number exactly like an API one.
+5. **The link is configuration.** `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https), default the Tax Authority's site (`DEFAULT_MANUAL_ALLOCATION_URL`) until the exact page is confirmed.
+6. **Clients.** The portal drawer and the phone's issue sheet show the panel for MANUAL: the four details with Copy and Copy all, the link, a 9-digit input and "change the amount". Issue stays disabled until the number is well formed. On ALLOCATION_NUMBER_MOVED the entered number is cleared and the preview read again.
+
+**Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.133.0-mut711.

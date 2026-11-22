@@ -298,6 +298,7 @@ const app = createApp({
   registry,
   taxAuthority,
   uniformFileSoftware: { registrationNumber: config.UNIFORM_FILE_REGISTRATION_NUMBER, houseVatId: config.SOFTWARE_HOUSE_VAT_ID, houseName: config.SOFTWARE_HOUSE_NAME },
+  manualAllocationUrl: config.TAX_AUTHORITY_MANUAL_ALLOCATION_URL ?? null,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },

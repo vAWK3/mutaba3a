@@ -667,3 +667,67 @@ test('Set a client’s documents preference on the client page', { tag: '@portal
     expect(patch?.headers['if-match']).toBeTruthy();
   });
 });
+
+test('a number requested by hand is entered before issuing; the invoice number is a preview, never held (MUT-711)', { tag: '@portal.invoicing.manual-allocation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', manualAllocation: true });
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const panel = drawer.getByTestId('issue-allocation');
+  const input = drawer.getByLabel('Allocation number (9 digits)');
+
+  await step('AC1 A tax invoice of 6,000 to Client 1: the panel lists what the Tax Authority asks for; Issue waits', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await page.getByTestId('issue-open').click();
+    await drawer.getByLabel('Client').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await drawer.getByLabel('Description').fill('Annual retainer');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('6000');
+    await expect(panel.getByRole('heading', { name: 'This invoice needs an allocation number' })).toBeVisible();
+    await expect(panel.getByTestId('issue-allocation-number')).toContainText('1');
+    await expect(panel.getByTestId('issue-allocation-net')).toContainText('6,000.00');
+    await expect(panel.getByTestId('issue-allocation-taxId')).toContainText('516123452');
+    await expect(panel.getByRole('button', { name: 'Copy Invoice number' })).toBeVisible();
+    await expect(panel.getByRole('button', { name: 'Copy all' })).toBeVisible();
+    await expect(panel.getByTestId('issue-allocation-link')).toHaveAttribute('href', /gov\.il/);
+    await expect(panel.getByRole('button', { name: 'change the amount' })).toBeVisible();
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+  });
+
+  await step('AC2 A malformed number keeps Issue disabled; nine digits (with dashes) enable it', async () => {
+    await input.fill('12345');
+    await expect(panel.getByText('An allocation number is 9 digits.')).toBeVisible();
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+    await input.fill('123-456-789');
+    await expect(page.getByTestId('issue-submit')).toBeEnabled();
+  });
+
+  await step('AC3 Another document takes number 1 first: the issue is refused, the number cleared, the panel now shows 2', async () => {
+    expect(api.issueElsewhere(OFFICE_A)).toBe(1);
+    await page.getByTestId('issue-submit').click();
+    await expect(drawer.getByRole('alert')).toContainText("This invoice's number is now 2");
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ manualAllocation: { number: '123456789', forNumber: 1 } });
+    await expect(input).toHaveValue('');
+    await expect(panel.getByTestId('issue-allocation-number')).toContainText('2');
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+  });
+
+  await step('AC4 The number requested for invoice 2 issues it; its page shows the allocation number', async () => {
+    await input.fill('987654321');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 2');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ manualAllocation: { number: '987654321', forNumber: 2 } });
+    await expect(page.getByText('987654321')).toBeVisible();
+  });
+
+  await step('AC5 In Arabic the panel reads right to left in formal Arabic', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`, 'ar');
+    await page.getByTestId('issue-open').click();
+    const ar = page.getByRole('dialog', { name: 'إصدار مستند' });
+    await ar.getByLabel('العميل').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await ar.getByLabel('الوصف').fill('Annual retainer');
+    await ar.getByRole('textbox', { name: 'السعر', exact: true }).fill('6000');
+    await expect(ar.getByTestId('issue-allocation').getByRole('heading', { name: 'تحتاج هذه الفاتورة إلى رقم تخصيص' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expectNoHorizontalOverflow(page);
+  });
+});

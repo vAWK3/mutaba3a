@@ -12,6 +12,8 @@ import { CUSTOMERS, C1, C2, page, payment } from './fixtures';
  */
 
 const OWN = profile({ writerOfRecord: null, owned: true, type: 'BUSINESS', access: { payments: 'read-write', capture: 'read-write', expenses: 'read-write' }, income: { received: true, owed: true, customer: 'optional' } });
+// The owner holds the invoicing feature: To issue and the documents preference are invoicing parts (invoicingWorthAsking).
+const ME = ((m) => ({ ...m, user: { ...m.user, features: [...m.user.features, 'invoicing'] } }))(me([OWN]));
 const TO_ISSUE = `/p/${ORG_A}/documents/to-issue`;
 
 const item = (id: string, over: Partial<DueItem> = {}): DueItem => ({
@@ -50,7 +52,7 @@ afterEach(() => vi.unstubAllGlobals());
 
 function portal(path: string, routes: Record<string, Handler> = {}) {
   const api = stubApi({
-    'GET /v1/me': () => ok(me([OWN])),
+    'GET /v1/me': () => ok(ME),
     ...emptyProfileRoutes(),
     'GET /v1/customers': () => ok(page(CUSTOMERS)),
     'GET /v1/issuing/setup': () => ok({ issuer: null, logoId: null, numberingAnswered: true, introSeen: true, defaultsSaved: true, missing: [] }),
