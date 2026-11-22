@@ -13,6 +13,8 @@ import { formatDecimal } from '../format/DecimalAmount';
 import { todayInZone } from '../format/dates';
 import { useWritableFor } from '../session/me';
 import { ClientPicker } from './ClientPicker';
+import { allocationDigits } from './expenseForm/useHostedExpenseForm';
+import { ManualAllocationPanel } from './ManualAllocationPanel';
 import { Drawer } from './Drawer';
 import { Skeleton } from './QueryView';
 import { useToast } from './Toast';
@@ -100,6 +102,8 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const [receivedOn, setReceivedOn] = useState(today);
   const [notes, setNotes] = useState('');
   const [tried, setTried] = useState(false);
+  // MUT-711: the allocation number requested by hand, when MTB3A can't request it.
+  const [allocationInput, setAllocationInput] = useState('');
   const pricesIncludeVat = vatIncluded ?? issuer.data?.pricesIncludeVat ?? false;
   const language_ = (issuer.data?.defaultLanguage ?? 'he') as IssueDocumentRequest['language'];
   const takesPayment = docType === 'TAX_INVOICE_RECEIPT' || docType === 'RECEIPT';
@@ -165,17 +169,33 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const refusal = issue.error ?? preview.error;
   const refusalText = refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
+  // MUT-711 (ADR-272): the preview says the invoice needs an allocation number MTB3A can't request. Issue waits for a
+  // well-formed number, sent with the invoice number it was requested for (a preview, never a reservation).
+  const allocation = preview.data?.allocation ?? null;
+  const manual = allocation?.mode === 'MANUAL' ? allocation : null;
+  const allocationNumber = manual ? allocationDigits(allocationInput) : null;
+  const awaitingAllocation = !!manual && allocationNumber === null;
+  const allocationInvalid = !!manual && allocationNumber === null && (allocationInput.trim() !== '' || tried);
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setTried(true);
-    if (!body) return;
+    if (!body || awaitingAllocation) return;
+    const sent: IssueDocumentRequest = manual && allocationNumber ? { ...body, manualAllocation: { number: allocationNumber, forNumber: manual.nextNumber } } : body;
     setIssuedFor(serialized);
     issue.mutate(
-      { body, key: attempt.keyFor(body) },
+      { body: sent, key: attempt.keyFor(sent) },
       {
         onSuccess: (doc) => {
           attempt.succeeded();
           onIssued(doc);
+        },
+        onError: (error) => {
+          // AC3: another document took the number; the one entered was requested for it, so it can't be used.
+          if (error instanceof ApiError && apiErrorReason(error) === 'ALLOCATION_NUMBER_MOVED') {
+            setAllocationInput('');
+            void preview.refetch();
+          }
         },
       },
     );
@@ -215,7 +235,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
               <Button type="button" variant="secondary" onClick={() => void draftPdf()} disabled={!body || drafting}>
                 {t('hosted.issue.draftPdf')}
               </Button>
-              <Button type="submit" form={formId} isLoading={issue.isPending} keepLabelWhileLoading data-testid="issue-submit">
+              <Button type="submit" form={formId} isLoading={issue.isPending} keepLabelWhileLoading disabled={awaitingAllocation} aria-describedby={awaitingAllocation ? `${formId}-allocation-note` : undefined} data-testid="issue-submit">
                 {t('hosted.issue.issueAs', { type: typeLabel(docType) })}
               </Button>
             </div>
@@ -369,6 +389,17 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
 
           <Input label={t('hosted.issue.notes')} id={`${formId}-notes`} value={notes} dir="auto" maxLength={500} onChange={(e) => setNotes(e.target.value)} />
 
+          {manual && (
+            <ManualAllocationPanel
+              allocation={manual}
+              value={allocationInput}
+              onChange={setAllocationInput}
+              invalid={allocationInvalid}
+              inputId={`${formId}-allocation`}
+              onChangeAmount={() => document.getElementById(`${formId}-price-0`)?.focus()}
+            />
+          )}
+
           <dl className="hp-issue-totals" data-testid="issue-totals" aria-live="polite">
             <div>
               <dt>{t('hosted.issue.net')}</dt>
@@ -407,6 +438,8 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
   const reason = apiErrorReason(error);
   // MUT-647: the entry already has an invoice issued elsewhere; MTB3A issues none for it while it is attached.
   if (reason === 'EXTERNAL_INVOICE_ATTACHED') return t('hosted.issue.refusals.EXTERNAL_INVOICE_ATTACHED', { number: String((error.details as { number?: unknown }).number ?? '') });
+  // MUT-711 (AC3): the previewed number was taken first; the allocation number must be requested again for the new one.
+  if (reason === 'ALLOCATION_NUMBER_MOVED') return t('hosted.issue.refusals.ALLOCATION_NUMBER_MOVED', { next: String((error.details as { next?: unknown }).next ?? '') });
   const known = [
     'ENTRY_MISMATCH',
     'DATE_BEFORE_LAST_DOCUMENT',
@@ -418,6 +451,10 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
     'DISCOUNT_INVALID',
     'TOTAL_NOT_POSITIVE',
     'EXEMPT_DEALER_TAX_INVOICE',
+    'ALLOCATION_NUMBER_REQUIRED',
+    'ALLOCATION_NUMBER_INVALID',
+    'ALLOCATION_NOT_NEEDED',
+    'TAX_AUTHORITY_NOT_CONNECTED',
   ];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');

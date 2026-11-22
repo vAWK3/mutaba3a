@@ -1729,6 +1729,21 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-issue-footer { display: grid; gap: var(--space-2); width: 100%; }
 .hp-issue-final { margin: 0; font-size: var(--text-label); color: var(--muted); }
 .hp-issue-blocked { display: grid; gap: var(--space-2); }
+/* MUT-711 (wireframe A): the manual allocation number panel above the totals. */
+.hp-issue-allocation { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); }
+.hp-issue-allocation h3 { margin: 0; font-size: var(--text-body); }
+.hp-issue-allocation p { margin: 0; }
+.hp-issue-allocation-why { color: var(--text-secondary, var(--muted)); }
+.hp-issue-allocation-label { font-size: var(--text-label); color: var(--muted); }
+.hp-issue-allocation-details { display: grid; gap: 0; margin: 0; }
+.hp-issue-allocation-details div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-2); align-items: center; border-block-end: 1px solid var(--border); min-height: 44px; }
+.hp-issue-allocation-details div:last-child { border-block-end: 0; }
+.hp-issue-allocation-details dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.hp-issue-allocation-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.hp-issue-allocation-actions .hp-link { display: inline-flex; align-items: center; min-height: 44px; }
+.hp-issue-allocation-input { font-family: var(--font-mono); letter-spacing: 0.15em; }
+.hp-issue-allocation-way-out { font-size: var(--text-label); color: var(--muted); }
+.hp-issue-allocation-way-out .hp-link-button { min-height: 44px; }
 @media (max-width: 760px) {
   .hp-issue-line-numbers, .hp-issue-dates { grid-template-columns: minmax(0, 1fr); }
 }

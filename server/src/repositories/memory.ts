@@ -1016,7 +1016,7 @@ export class MemoryLedgerStore implements LedgerStore {
         const counter = this.issuedCounterMap.get(`${input.organizationId}:${input.docType}`);
         const outcome = await input.allocate(counter?.next ?? 1);
         if (outcome.kind !== 'allocated') return { kind: 'allocation_failed', outcome };
-        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number };
+        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number, allocationSource: outcome.source };
         delete allocated.allocate;
         return this.issueNow(allocated, at);
       }
@@ -1211,6 +1211,7 @@ export class MemoryLedgerStore implements LedgerStore {
       originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : null,
       allocationNumber: input.allocationNumber,
+      allocationSource: input.allocationNumber ? (input.allocationSource ?? 'API') : null,
       receivableId,
       paymentId,
       creditId,

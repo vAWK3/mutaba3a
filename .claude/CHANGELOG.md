@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Manual allocation number before issuing (MUT-711, ADR-272, API 1.127.0-mut711)
+
+### Added
+- The issue preview answers `allocation` (null, or `{ mode: AUTOMATIC|MANUAL, nextNumber, documentDate, net, customerTaxId, requestUrl }`) so the review step knows a number is needed and whether MTB3A can request it.
+- `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`: a number requested by hand, saved with source MANUAL. Refusals: 409 ALLOCATION_NUMBER_REQUIRED, 409 ALLOCATION_NUMBER_MOVED (the previewed number was taken; nothing is reserved), 422 ALLOCATION_NUMBER_INVALID, 422 ALLOCATION_NOT_NEEDED.
+- `IssuedDocument.allocationSource` (API | MANUAL | null); migration `20261122230000_mut711_manual_allocation` adds the column with a CHECK and backfills API.
+- `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https; default the Tax Authority's site until the page is confirmed).
+- Portal: `ManualAllocationPanel` in the issue drawer (details with Copy and Copy all, the link, the 9-digit input, "change the amount"); Issue disabled until the number is well formed. QA feature `portal.invoicing.manual-allocation`.
+
+### Changed
+- With the Tax Authority off on a server, a tax invoice that needs an allocation number is refused until one is entered (it used to issue without one).
+
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

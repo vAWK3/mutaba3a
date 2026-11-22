@@ -179,7 +179,7 @@ export function allocator(deps: TaxAuthorityDeps, organizationId: string, now: D
     }
     switch (answer.kind) {
       case 'approved':
-        return { kind: 'allocated', number: answer.confirmationNumber.slice(-ALLOCATION_NUMBER_DIGITS) };
+        return { kind: 'allocated', number: answer.confirmationNumber.slice(-ALLOCATION_NUMBER_DIGITS), source: 'API' };
       case 'held':
         return { kind: 'held', message: answer.message };
       case 'refused':
@@ -190,4 +190,19 @@ export function allocator(deps: TaxAuthorityDeps, organizationId: string, now: D
         return { kind: 'unavailable' };
     }
   };
+}
+
+/**
+ * MUT-711 (ADR-272): where a business requests an allocation number by hand when MTB3A can't. The Tax Authority's own
+ * site until the exact page is confirmed; TAX_AUTHORITY_MANUAL_ALLOCATION_URL overrides it.
+ */
+export const DEFAULT_MANUAL_ALLOCATION_URL = 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page';
+
+/**
+ * MUT-711: the `allocate` hook for a number requested by hand. The document number it was requested for is only what
+ * the preview showed (never reserved, so the numbering has no gaps): the issue goes ahead only if that is still the
+ * number this document takes, under the counter's lock; otherwise nothing is written and the person asks again.
+ */
+export function manualAllocator(allocationNumber: string, forNumber: number): (number: number) => Promise<AllocationOutcome> {
+  return async (number) => (number === forNumber ? { kind: 'allocated', number: allocationNumber, source: 'MANUAL' } : { kind: 'number_moved', requestedFor: forNumber, next: number });
 }

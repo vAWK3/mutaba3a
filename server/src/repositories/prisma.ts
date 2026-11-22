@@ -5216,6 +5216,7 @@ function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRec
     issuer: row.issuer as JsonObject,
     customer: row.customer as JsonObject,
     paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
+    allocationSource: row.allocationSource as IssuedDocumentRecord['allocationSource'],
     lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
   };
 }
@@ -5287,10 +5288,12 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   // MUT-572 (ADR-264): every check has passed and the counter is locked; the Tax Authority is asked now, so a refusal
   // rolls the whole issue back and takes no number.
   let allocationNumber = input.allocationNumber;
+  let allocationSource = input.allocationNumber ? (input.allocationSource ?? 'API') : null;
   if (input.allocate) {
     const outcome = await input.allocate(number);
     if (outcome.kind !== 'allocated') throw new IssueRefused({ kind: 'allocation_failed', outcome });
     allocationNumber = outcome.number;
+    allocationSource = outcome.source;
   }
   const plan = ledgerPlan(input, number);
   const documentId = randomUUID();
@@ -5383,6 +5386,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
       allocationNumber,
+      allocationSource,
       receivableId,
       paymentId,
       creditId,

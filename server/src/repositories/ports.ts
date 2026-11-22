@@ -4585,6 +4585,8 @@ export interface IssuedDocumentRecord {
   originalId: string | null;
   paymentDetails: IssuedPaymentDetails | null;
   allocationNumber: string | null;
+  /** MUT-711 (ADR-272): requested by MTB3A or entered by the business; null with no number. */
+  allocationSource: AllocationSource | null;
   receivableId: string | null;
   paymentId: string | null;
   creditId: string | null;
@@ -4624,6 +4626,8 @@ export interface IssueDocumentInput {
   fromEntry: { kind: 'receivable' | 'payment'; id: string } | null;
   /** MUT-572 fills it; null until then. */
   allocationNumber: string | null;
+  /** MUT-711: where a given `allocationNumber` came from (API when absent); an `allocate` outcome names its own. */
+  allocationSource?: AllocationSource;
   /**
    * MUT-572 (ADR-264): asks the Tax Authority for this document's allocation number once its own number is known and
    * every check has passed, inside the issue (the counter stays locked meanwhile). Anything but `allocated` refuses the
@@ -4639,9 +4643,14 @@ export interface IssueDocumentInput {
   requestId: string | null;
 }
 
+/** MUT-711 (ADR-272): API = requested by MTB3A (MUT-572); MANUAL = requested by hand on the Tax Authority site. */
+export type AllocationSource = 'API' | 'MANUAL';
+
 /** MUT-572: what asking for an allocation number came to. `allocated` carries the 9 digits printed on the document. */
 export type AllocationOutcome =
-  | { kind: 'allocated'; number: string }
+  | { kind: 'allocated'; number: string; source: AllocationSource }
+  /** MUT-711: a manual number was requested for another document number; the next one is now `next`. */
+  | { kind: 'number_moved'; requestedFor: number; next: number }
   /** The Tax Authority held the number: the person picks one of the four choices (InvoiceDecision). */
   | { kind: 'held'; message: string | null }
   /** The request was refused for its content (fix and send again). */

@@ -66,6 +66,7 @@ function fixture(lang: Lang, style: string, ink: 'BLACK' | 'BLUE'): IssuedDocume
     originalId: null,
     paymentDetails: null,
     allocationNumber: '246813579',
+    allocationSource: 'API',
     receivableId: null,
     paymentId: null,
     creditId: null,

@@ -2246,6 +2246,8 @@ model IssuedDocument {
   paymentDetails     Json?
   /// MUT-572 fills it before the document is written.
   allocationNumber   String?       @db.VarChar(9)
+  /// MUT-711 (ADR-272): API (requested by MTB3A) or MANUAL (requested by hand); null with no number.
+  allocationSource   String?       @db.VarChar(8)
   receivableId       String?       @db.Uuid
   paymentId          String?       @db.Uuid
   creditId           String?       @db.Uuid

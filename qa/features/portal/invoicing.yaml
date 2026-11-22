@@ -129,3 +129,21 @@ features:
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup
+  - id: manual-allocation
+    title: When MTB3A can't request the allocation number, enter one requested by hand before issuing; the number is a preview, never held (MUT-711)
+    tier: secondary
+    tickets: [MUT-711]
+    paths:
+      - src/hosted/components/ManualAllocationPanel.tsx
+    steps:
+      - On a profile MTB3A can't request allocation numbers for, open Issue a document, choose Client 1 and a line of 6,000
+      - Type 12345 as the allocation number, then 123-456-789
+      - Another document takes number 1 before Issue
+      - Enter the number requested for invoice 2 and issue
+      - Open the drawer again in Arabic with the same line
+    expect:
+      - The panel says the invoice needs an allocation number and lists invoice number 1, the date, 6,000.00 before VAT and the client's VAT number, each with Copy, plus Copy all, the Tax Authority link, the 9-digit input and "change the amount"; Issue is disabled
+      - 12345 is refused as not 9 digits and Issue stays disabled; 123-456-789 enables it
+      - The server refuses with "This invoice's number is now 2", the entered number is cleared and the panel now shows invoice number 2
+      - Tax invoice 2 is issued with the number (manualAllocation for 2) and its page shows the allocation number
+      - The panel reads right to left in formal Arabic

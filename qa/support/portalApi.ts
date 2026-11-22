@@ -530,6 +530,12 @@ export interface FakeApiSeed {
   externalReading?: { read: boolean; number: string | null; documentDate: string | null; amount: string | null };
   /** MUT-648: the business's "offer to issue after saving" (on unless false). */
   offerAfterSave?: boolean;
+  /**
+   * MUT-711: MTB3A can't request allocation numbers here (the Tax Authority is off or the profile not connected): a tax
+   * invoice of 5,000.00 or more before VAT previews a MANUAL allocation (every QA client counts as VAT-registered,
+   * 516123452) and is issued only with `manualAllocation` for the number it takes.
+   */
+  manualAllocation?: boolean;
 }
 
 /** MUT-646: one profile's invoicing setup, as the server keeps it. */
@@ -808,6 +814,7 @@ export class FakeApi {
   private readonly invoicingReady: boolean;
   private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
   private readonly offerAfterSave: boolean;
+  private readonly manualAllocation: boolean;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -845,6 +852,7 @@ export class FakeApi {
     this.invoicingReady = seed.invoicing === 'ready';
     this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
+    this.manualAllocation = seed.manualAllocation ?? false;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -1328,7 +1336,12 @@ export class FakeApi {
       const customerId = e.query.get('customerId');
       return page(state.docs.filter((d) => !customerId || d.customerId === customerId));
     }
-    if (id === 'preview' && method === 'POST') return sub === 'pdf' ? pdf : json(this.composeDoc(e.body as Record<string, Json>));
+    if (id === 'preview' && method === 'POST') {
+      if (sub === 'pdf') return pdf;
+      const body = e.body as Record<string, Json>;
+      const totals = this.composeDoc(body);
+      return json({ ...totals, allocation: this.needsManualAllocation(body, totals.net) ? { mode: 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page' } : null });
+    }
     if (method === 'GET' && id && !sub) return json(state.docs.find((d) => d.id === id) ?? null, state.docs.some((d) => d.id === id) ? 200 : 404);
     if (id && sub === 'pdf') return pdf;
     if (method === 'POST' && !id) {
@@ -1336,8 +1349,17 @@ export class FakeApi {
       const body = e.body as Record<string, Json>;
       const docType = String(body.docType);
       const totals = this.composeDoc(body);
-      const count = state.docs.filter((d) => d.docType === docType).length;
-      const number = (state.starts[docType] ?? 1) + count;
+      const number = this.nextNumber(state, docType);
+      // MUT-711 (ADR-272): the number is only a preview; a manual allocation number must be for the number this one takes.
+      let allocationNumber: string | null = null;
+      if (this.needsManualAllocation(body, totals.net)) {
+        const manual = body.manualAllocation as { number?: string; forNumber?: number } | undefined;
+        if (!manual) return json({ error: { code: 'CONFLICT', message: 'needs a number', details: { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next: number } } }, 409);
+        const digits = String(manual.number ?? '').replace(/[\s-]/g, '');
+        if (!/^\d{9}$/.test(digits)) return json({ error: { code: 'VALIDATION_FAILED', message: 'nine digits', details: { reason: 'ALLOCATION_NUMBER_INVALID', field: 'allocationNumber' } } }, 422);
+        if (manual.forNumber !== number) return json({ error: { code: 'CONFLICT', message: `now ${number}`, details: { reason: 'ALLOCATION_NUMBER_MOVED', field: 'manualAllocation', requestedFor: manual.forNumber ?? null, next: number } } }, 409);
+        allocationNumber = digits;
+      }
       const customer = this.customers.find((c) => c.id === body.customerId);
       const docId = uid(0xd0, state.docs.length + 1);
       const gross = toMinor(totals.gross);
@@ -1355,11 +1377,30 @@ export class FakeApi {
           owed.outstanding -= gross;
         }
       }
-      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber: null, receivableId, paymentId: null, coreVersion: '1.0.0' };
+      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource: allocationNumber ? 'MANUAL' : null, receivableId, paymentId: null, coreVersion: '1.0.0' };
       state.docs.unshift(doc);
       return json(doc, 201);
     }
     return notFound();
+  }
+
+  /** The number the next document of this type takes (gap-free per type). */
+  private nextNumber(state: StubIssuing, docType: string): number {
+    return (state.starts[docType] ?? 1) + state.docs.filter((d) => d.docType === docType).length;
+  }
+
+  /** MUT-711: a tax invoice of 5,000.00 or more before VAT to a client, while MTB3A can't request the number. */
+  private needsManualAllocation(body: Record<string, Json>, net: string): boolean {
+    return this.manualAllocation && (body.docType === 'TAX_INVOICE' || body.docType === 'TAX_INVOICE_RECEIPT') && !!body.customerId && toMinor(net) >= 500_000;
+  }
+
+  /** MUT-711 (AC3): another session issues a tax invoice now, taking the number a preview showed. */
+  issueElsewhere(profileId: string, docType = 'TAX_INVOICE'): number {
+    const state = this.issuing?.get(profileId);
+    if (!state) throw new Error('open the profile first');
+    const number = this.nextNumber(state, docType);
+    state.docs.unshift({ id: uid(0xd0, 900 + state.docs.length), docType, number, documentDate: '2026-11-22', issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: 'en', customerId: null, customer: { name: 'Elsewhere' }, gross: '100.00', net: '100.00', allocationNumber: null, allocationSource: null });
+    return number;
   }
 
   /** The issued-document Owed for GET /v1/receivables/{id}, or undefined. */
