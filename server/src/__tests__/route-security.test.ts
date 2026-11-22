@@ -283,6 +283,8 @@ const SESSION_OPERATIONS = [
   'GET /v1/agreements/{agreementId}',
   'GET /v1/attachments',
   'GET /v1/attachments/{attachmentId}/download',
+  // MUT-664: every client's balance, the client page's ledger figures
+  'GET /v1/customer-balances',
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   // MUT-478: the statement is a read like the customer summary, so the portal (and its local mode) can show it later

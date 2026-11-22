@@ -3369,7 +3369,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const { allocations: requested, ...rest } = input;
     // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
     if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
-    const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
+    const payment: PaymentRecord = { id: randomUUID(), ...rest, clientRequestKey: rest.clientRequestKey ?? null, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
     const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);
     return { payment: { ...payment }, allocations };

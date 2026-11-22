@@ -21,6 +21,7 @@ const ALLOWED_GETS = [
   'GET /v1/attachments/{attachmentId}/download',
   'GET /v1/conversions',
   'GET /v1/conversions/{conversionId}',
+  'GET /v1/customer-balances', // MUT-664: the balances the statement already shows, every client at once
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   'GET /v1/customers/{customerId}/statement',
