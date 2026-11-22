@@ -698,6 +698,7 @@ describe('loadConfig — the issued-document signer (MUT-641, ADR-265)', () => {
     expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_CERT_CHAIN: `${CERT}-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----\n` })).toThrow(/holds a private key/);
     expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_KMS_KEY: 'documents' })).toThrow(/ISSUING_SIGNING_KMS_KEY/);
     expect(loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'http://timestamp.digicert.com' }).ISSUING_TSA_URL).toBe('http://timestamp.digicert.com');
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', ...kms, ISSUING_TSA_URL: 'http://timestamp.digicert.com' })).toThrow(/ISSUING_TSA_URL: a time-stamp authority is reached over https on production/);
     expect(() => loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'ftp://tsa.example/' })).toThrow(/ISSUING_TSA_URL/);
   });
 });

@@ -2304,6 +2304,8 @@ model IssuedDocumentCopy {
 model IssuedDocumentOriginal {
   documentId     String   @id @db.Uuid
   organizationId String   @db.Uuid
+  /// The produced copy (issued_document_copies.copyIndex) that received the original; every other copy is a copy.
+  copyIndex      Int
   bytes          Bytes
   /// SHA-256 of bytes, hex.
   sha256         String   @db.VarChar(64)

@@ -192,16 +192,19 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const w = await world(store);
       const doc = await w.issued(store, w.issue());
       expect(await store.issuing.getOriginalPdf(w.a.id, doc.id)).toBeNull();
-      const first = { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 1]), sha256: '1'.repeat(64) };
+      const first = { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 1]), sha256: '1'.repeat(64), copyIndex: 0 };
+      expect(await store.issuing.originalCopyIndex(w.a.id, doc.id)).toBeNull();
       const kept = await store.issuing.keepOriginalPdf(w.a.id, doc.id, first, at(30));
-      expect(kept).toMatchObject({ documentId: doc.id, organizationId: w.a.id, sha256: first.sha256 });
+      expect(kept).toMatchObject({ documentId: doc.id, organizationId: w.a.id, sha256: first.sha256, copyIndex: 0 });
+      expect(await store.issuing.originalCopyIndex(w.a.id, doc.id)).toBe(0);
       expect([...kept!.bytes]).toEqual([...first.bytes]);
       // A racing twin (or a later call) never replaces it: it gets the first one back.
-      const twin = await store.issuing.keepOriginalPdf(w.a.id, doc.id, { bytes: new Uint8Array([9]), sha256: '2'.repeat(64) }, at(31));
-      expect(twin!.sha256).toBe(first.sha256);
+      const twin = await store.issuing.keepOriginalPdf(w.a.id, doc.id, { bytes: new Uint8Array([9]), sha256: '2'.repeat(64), copyIndex: 1 }, at(31));
+      expect(twin).toMatchObject({ sha256: first.sha256, copyIndex: 0 });
       expect([...(await store.issuing.getOriginalPdf(w.a.id, doc.id))!.bytes]).toEqual([...first.bytes]);
       // Another profile sees nothing and can keep nothing.
       expect(await store.issuing.getOriginalPdf(w.b.id, doc.id)).toBeNull();
+      expect(await store.issuing.originalCopyIndex(w.b.id, doc.id)).toBeNull();
       expect(await store.issuing.keepOriginalPdf(w.b.id, doc.id, first, at(32))).toBeNull();
     });
 

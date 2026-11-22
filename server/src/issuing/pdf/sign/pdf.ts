@@ -1,5 +1,6 @@
 import { PDFArray, PDFDocument, PDFHexString, PDFName, PDFNumber, PDFString, type PDFDict } from 'pdf-lib';
 import { buildSignedData, OID, sha256, type SigningKey } from './cms.js';
+import { SigningSetupError } from './retry.js';
 import type { Timestamper } from './timestamp.js';
 
 /**
@@ -77,8 +78,8 @@ export async function signPdf(pdf: Uint8Array, details: SignatureDetails, key: S
   out.write(filled.padEnd(range[0].length, ' '), range.index, 'latin1');
 
   const signedBytes = Buffer.concat([out.subarray(0, contentsStart), out.subarray(contentsEnd)]);
-  const cms = await buildSignedData({ key, contentType: OID.data, contentDigest: sha256(signedBytes), timestamp: (digest) => timestamper.timestamp(digest) });
-  if (cms.length > SIGNATURE_BYTES) throw new Error(`The signature (${cms.length} bytes) does not fit its ${SIGNATURE_BYTES}-byte placeholder`);
+  const cms = await buildSignedData({ key, contentType: OID.data, contentDigest: sha256(signedBytes), timestamp: (digest) => timestamper.timestamp(digest), at: details.signedAt });
+  if (cms.length > SIGNATURE_BYTES) throw new SigningSetupError(`The signature (${cms.length} bytes) does not fit its ${SIGNATURE_BYTES}-byte placeholder`, 'SIGNATURE_TOO_LARGE');
   out.write(Buffer.from(cms).toString('hex').toUpperCase().padEnd(SIGNATURE_BYTES * 2, '0'), contentsStart + 1, 'latin1');
   return new Uint8Array(out);
 }

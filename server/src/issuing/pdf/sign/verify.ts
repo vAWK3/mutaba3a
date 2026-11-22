@@ -72,7 +72,7 @@ function checkSigner(signed: pkijs.SignedData, content: Uint8Array, options: { s
 
   const sid = signerInfo.sid as pkijs.IssuerAndSerialNumber;
   const certificates = (signed.certificates ?? []).filter((c): c is pkijs.Certificate => c instanceof pkijs.Certificate);
-  const leaf = certificates.find((c) => c.serialNumber.isEqual(sid.serialNumber));
+  const leaf = certificates.find((c) => c.issuer.isEqual(sid.issuer) && c.serialNumber.isEqual(sid.serialNumber));
   const certificate = leaf ? new Uint8Array(leaf.toSchema(false).toBER(false)) : null;
   if (!certificate) {
     problems.push('the signer certificate is missing');
@@ -85,6 +85,42 @@ function checkSigner(signed: pkijs.SignedData, content: Uint8Array, options: { s
 
 function subjectOf(certificate: Uint8Array | null): string | null {
   return certificate ? new X509Certificate(certificate).subject : null;
+}
+
+const EKU_TIME_STAMPING = '1.3.6.1.5.5.7.3.8';
+
+export interface TimestampCheck {
+  problems: string[];
+  genTime: Date | null;
+  authority: string | null;
+}
+
+/**
+ * MUT-641 (review): an RFC 3161 time-stamp token over a signature (`signatureDigest` is its SHA-256): a SignedData holding a TSTInfo, its SHA-256 imprint
+ * of this signature value, signed by a certificate made for time-stamping. The client runs it on every token before
+ * embedding it (an http TSA's answer is only as good as its signature), and checkSignedPdf runs it on signed files.
+ */
+export function checkTimestampToken(token: asn1js.AsnType, signatureDigest: Uint8Array): TimestampCheck {
+  const result: TimestampCheck = { problems: [], genTime: null, authority: null };
+  try {
+    const info = new pkijs.ContentInfo({ schema: token });
+    if (info.contentType !== OID.signedData) throw new Error('not a SignedData');
+    const signed = new pkijs.SignedData({ schema: info.content });
+    if (signed.encapContentInfo.eContentType !== OID.tstInfo) result.problems.push('the token holds no TSTInfo');
+    const tstBytes = signed.encapContentInfo.eContent?.getValue();
+    if (!tstBytes) throw new Error('no TSTInfo');
+    const tst = pkijs.TSTInfo.fromBER(tstBytes);
+    const authority = checkSigner(signed, new Uint8Array(tstBytes), { sha256Only: false });
+    result.problems.push(...authority.problems);
+    if (authority.certificate && !(new X509Certificate(authority.certificate).keyUsage ?? []).includes(EKU_TIME_STAMPING)) result.problems.push('the signer is not a time-stamp authority');
+    if (tst.messageImprint.hashAlgorithm.algorithmId !== OID.sha256) result.problems.push('the imprint is not SHA-256');
+    if (!same(bytesOf(tst.messageImprint.hashedMessage), signatureDigest)) result.problems.push('the time-stamp is for another signature');
+    result.genTime = tst.genTime;
+    result.authority = subjectOf(authority.certificate);
+  } catch (error) {
+    result.problems.push(`the token can't be read (${error instanceof Error ? error.message : String(error)})`);
+  }
+  return result;
 }
 
 const pdfString = (text: string, key: string): string | null => {
@@ -111,7 +147,10 @@ export function checkSignedPdf(pdf: Uint8Array): SignatureCheck {
 
   try {
     const cms = new Uint8Array(Buffer.from(contents.slice(1, -1), 'hex'));
-    const info = pkijs.ContentInfo.fromBER(toArrayBuffer(cms.subarray(0, asn1js.fromBER(toArrayBuffer(cms)).offset)));
+    const end = asn1js.fromBER(toArrayBuffer(cms)).offset;
+    // The placeholder's padding isn't covered by the byte ranges (no PDF signature covers it); it must stay zeros.
+    if (cms.subarray(end).some((byte) => byte !== 0)) result.problems.push('the signature value has bytes after the signature');
+    const info = pkijs.ContentInfo.fromBER(toArrayBuffer(cms.subarray(0, end)));
     if (info.contentType !== OID.signedData) throw new Error('not a SignedData');
     const signed = new pkijs.SignedData({ schema: info.content });
     if (signed.encapContentInfo.eContentType !== OID.data || signed.encapContentInfo.eContent) result.problems.push('the signature is not a detached signature over the file');
@@ -123,18 +162,10 @@ export function checkSignedPdf(pdf: Uint8Array): SignatureCheck {
     const token = attribute(document.signerInfo.unsignedAttrs, OID.signatureTimeStampToken);
     if (!token) result.problems.push('no time-stamp');
     else {
-      const tokenInfo = new pkijs.ContentInfo({ schema: token });
-      if (tokenInfo.contentType !== OID.signedData) throw new Error('The time-stamp token is not a SignedData');
-      const tokenSigned = new pkijs.SignedData({ schema: tokenInfo.content });
-      if (tokenSigned.encapContentInfo.eContentType !== OID.tstInfo) result.problems.push('time-stamp: the token holds no TSTInfo');
-      const tstBytes = tokenSigned.encapContentInfo.eContent?.getValue();
-      if (!tstBytes) throw new Error('The time-stamp token holds no TSTInfo');
-      const tst = pkijs.TSTInfo.fromBER(tstBytes);
-      const authority = checkSigner(tokenSigned, new Uint8Array(tstBytes), { sha256Only: false });
-      result.problems.push(...authority.problems.map((p) => `time-stamp: ${p}`));
-      if (!same(bytesOf(tst.messageImprint.hashedMessage), sha256(document.signature))) result.problems.push('the time-stamp is for another signature');
-      result.timestampedAt = tst.genTime;
-      result.timestampAuthority = subjectOf(authority.certificate);
+      const stamp = checkTimestampToken(token, sha256(document.signature));
+      result.problems.push(...stamp.problems.map((p) => (p === 'the time-stamp is for another signature' ? p : `time-stamp: ${p}`)));
+      result.timestampedAt = stamp.genTime;
+      result.timestampAuthority = stamp.authority;
     }
   } catch (error) {
     result.problems.push(`the signature can't be read (${error instanceof Error ? error.message : String(error)})`);

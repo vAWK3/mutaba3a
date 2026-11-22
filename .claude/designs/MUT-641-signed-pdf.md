@@ -41,7 +41,7 @@ Which production certificate: the accountant answers MUT-567 Q3 (secure e-signat
 
 ## Interim v1 (Basel, 2026-11-22): signing before a certifying authority does
 
-Basel asked to sign in production while the authority deal is negotiated. The production KMS key certifies itself: `npm run signing:interim-cert -- --key <version> --organization "Barmajiyat Ltd."` (operator ADC with `cloudkms.publicKeyViewer` + `cloudkms.signer` on that key) prints a self-issued certificate signed inside KMS; it becomes `ISSUING_SIGNING_CERT_CHAIN`. Readers show "signature valid, document unchanged, signer not trusted". Later the authority certifies the same key from a CSR (`npm run signing:interim-cert -- --csr --key <version> --organization … --company-number …`, a PKCS #10 request KMS signs; OpenSSL verified one on 2026-11-22), and only the chain changes. Time-stamps from a public RFC 3161 service until then (DigiCert, Sectigo, FreeTSA verified against our client on 2026-11-22; `ISSUING_TSA_URL` accepts http for them). Legal standing: the accountant's call (MUT-567 Q3).
+Basel asked to sign in production while the authority deal is negotiated. The production KMS key certifies itself: `npm run signing:interim-cert -- --key <version> --organization "Barmajiyat Ltd."` (operator ADC with `cloudkms.publicKeyViewer` + `cloudkms.signer` on that key) prints a self-issued certificate signed inside KMS; it becomes `ISSUING_SIGNING_CERT_CHAIN`. Readers show "signature valid, document unchanged, signer not trusted". Later the authority certifies the same key from a CSR (`npm run signing:interim-cert -- --csr --key <version> --organization … --company-number …`, a PKCS #10 request KMS signs; OpenSSL verified one on 2026-11-22), and only the chain changes. Time-stamps from a public RFC 3161 service until then: Sectigo over https (DigiCert, Sectigo, FreeTSA verified against our client on 2026-11-22; production refuses plain http). Legal standing: the accountant's call (MUT-567 Q3).
 
 ## Decisions taken in the build
 
@@ -66,3 +66,8 @@ No screen in this ticket (MUT-570/573 show and send the PDF). Evidence is the AP
 ## Cost
 
 Dev/QA: nothing. Production (after Basel's decision): the certificate (yearly), Cloud KMS HSM key version (~$1–2.5/month) + signing operations (fractions of a cent each), the CA's TSA (often bundled).
+
+## Pre-landing review (2026-11-22)
+
+/review with 7 specialists, a Red Team and an adversarial pass, then a second adversarial check on the fixes. Fixed: an outage no longer spends the original, and the original goes out on exactly one copy (kept with its copyIndex); certificate validity is checked at signing and the chain at boot (boot log and 30-day warning); the time-stamp token is verified (signature, timeStamping certificate, imprint, nonce, clock within 10 minutes) and its reply capped while streaming; one retry each for KMS and the TSA, never for setup errors (KMS 400/403/404 included); SIGNING_NOT_CONFIGURED carries `details.reason`; a 10-minute view-copy cache; Terraform `prevent_destroy`, an https-only TSA (Sectigo) and a Cloud Run precondition for the chain-needs-key rule. Open: TD-318 (Sentry grouping and the off state's reports), TD-319 (per-instance view cache).
+

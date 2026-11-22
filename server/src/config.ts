@@ -374,9 +374,9 @@ const envSchema = z.object({
     .refine((pem) => !/PRIVATE KEY/.test(pem), 'holds a private key: the signing key stays in Cloud KMS and never travels in configuration')
     .optional(),
   /**
-   * An RFC 3161 time-stamp authority: the certifying authority's, or a public one (DigiCert, Sectigo) until then.
-   * Unset outside `kms` = the development authority's. Plain http is allowed, as those services serve it: the token
-   * is signed by the authority and checked against this request's nonce and digest.
+   * An RFC 3161 time-stamp authority: the certifying authority's, or a public one (Sectigo over https) until then.
+   * Unset outside `kms` = the development authority's. https on production and staging; plain http only elsewhere
+   * (a test against DigiCert's http-only service).
    */
   ISSUING_TSA_URL: z
     .string()
@@ -497,6 +497,10 @@ function issuingSignerConfig(config: z.infer<typeof envSchema>): void {
     for (const name of ['ISSUING_SIGNING_KMS_KEY', 'ISSUING_SIGNING_CERT_CHAIN', 'ISSUING_TSA_URL'] as const) {
       if (!config[name]) refuse(name, 'ISSUING_SIGNER=kms needs the key version, its certificate chain and a time-stamp authority');
     }
+  }
+  // MUT-641 (review): over plain http anyone on the path could answer with a token signed by a certificate of their own.
+  if (config.ISSUING_TSA_URL && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !isHttpsOrLocalHttp(config.ISSUING_TSA_URL)) {
+    refuse('ISSUING_TSA_URL', `a time-stamp authority is reached over https on ${config.NODE_ENV} (e.g. https://timestamp.sectigo.com)`);
   }
 }
 

@@ -1,6 +1,7 @@
 import { createHash, verify as verifySignature, X509Certificate } from 'node:crypto';
 import * as asn1js from 'asn1js';
 import * as pkijs from 'pkijs';
+import { SigningSetupError } from './retry.js';
 
 /**
  * MUT-641 (ADR-265): CMS signatures in the shape PAdES baseline asks for (ETSI EN 319 142-1, CAdES detached): a
@@ -41,12 +42,30 @@ export function parseCertificate(der: Uint8Array): pkijs.Certificate {
   return pkijs.Certificate.fromBER(toArrayBuffer(der));
 }
 
-/** The signature algorithm a certificate's key signs with: RSA or EC, always over SHA-256. */
+/** SHA-256 with RSA (PKCS #1 v1.5) or ECDSA: the only two this signer speaks. */
+export function signatureAlgorithm(keyAlgorithm: 'RSA' | 'EC'): pkijs.AlgorithmIdentifier {
+  return keyAlgorithm === 'RSA'
+    ? new pkijs.AlgorithmIdentifier({ algorithmId: OID.sha256WithRsa, algorithmParams: new asn1js.Null() })
+    : new pkijs.AlgorithmIdentifier({ algorithmId: OID.ecdsaWithSha256 });
+}
+
+/** The signature algorithm a certificate's key signs with. */
 function signatureAlgorithmOf(cert: pkijs.Certificate): pkijs.AlgorithmIdentifier {
   const keyAlgorithm = cert.subjectPublicKeyInfo.algorithm.algorithmId;
-  if (keyAlgorithm === OID.rsaEncryption) return new pkijs.AlgorithmIdentifier({ algorithmId: OID.sha256WithRsa, algorithmParams: new asn1js.Null() });
-  if (keyAlgorithm === OID.ecPublicKey) return new pkijs.AlgorithmIdentifier({ algorithmId: OID.ecdsaWithSha256 });
-  throw new Error(`Unsupported signing key algorithm ${keyAlgorithm}`);
+  if (keyAlgorithm === OID.rsaEncryption) return signatureAlgorithm('RSA');
+  if (keyAlgorithm === OID.ecPublicKey) return signatureAlgorithm('EC');
+  throw new SigningSetupError(`Unsupported signing key algorithm ${keyAlgorithm}`, 'KEY_ALGORITHM');
+}
+
+/**
+ * MUT-641 (review): a signature made outside its certificate's validity is one no validator accepts, and an original
+ * is kept for good: refuse instead. `at` is the signing time.
+ */
+export function assertCertificateValid(certDer: Uint8Array, at: Date): void {
+  const cert = new X509Certificate(certDer);
+  if (at < new Date(cert.validFrom) || at > new Date(cert.validTo)) {
+    throw new SigningSetupError(`The signing certificate (${cert.subject.replace(/\n/g, ', ')}) is valid from ${cert.validFrom} to ${cert.validTo}, not at ${at.toISOString()}`, 'CERTIFICATE_NOT_VALID');
+  }
 }
 
 /** SigningCertificateV2 (RFC 5035): the signer certificate's SHA-256 (the default hash, so not named) and issuer/serial. */
@@ -75,6 +94,8 @@ export interface SignedDataInput {
   content?: Uint8Array;
   /** A time-stamp authority's token over the signature value, added as an unsigned attribute. */
   timestamp?: (signatureDigest: Uint8Array) => Promise<Uint8Array>;
+  /** When it is signed: the certificate must be valid then (default: now). */
+  at?: Date;
 }
 
 /** A ContentInfo holding one SignedData with one signer, DER-encoded. */
@@ -82,6 +103,7 @@ export async function buildSignedData(input: SignedDataInput): Promise<Uint8Arra
   const [leafDer] = input.key.chain;
   if (!leafDer) throw new Error('A signing key needs its certificate');
   const leaf = parseCertificate(leafDer);
+  assertCertificateValid(leafDer, input.at ?? new Date());
   const attributes = [
     new pkijs.Attribute({ type: OID.contentType, values: [new asn1js.ObjectIdentifier({ value: input.contentType })] }),
     new pkijs.Attribute({ type: OID.messageDigest, values: [new asn1js.OctetString({ valueHex: toArrayBuffer(input.contentDigest) })] }),
@@ -93,7 +115,7 @@ export async function buildSignedData(input: SignedDataInput): Promise<Uint8Arra
 
   const signature = await input.key.sign(toBeSigned);
   // A key that answers with another key's signature (a KMS key paired with the wrong certificate) stops here.
-  if (!verifyWith(leafDer, toBeSigned, signature)) throw new Error('The signing key does not match its certificate');
+  if (!verifyWith(leafDer, toBeSigned, signature)) throw new SigningSetupError('The signing key does not match its certificate', 'KEY_MISMATCH');
 
   const signerInfo = new pkijs.SignerInfo({
     version: 1,
@@ -130,6 +152,12 @@ export function verifyWith(certDer: Uint8Array, data: Uint8Array, signature: Uin
   } catch {
     return false;
   }
+}
+
+/** DER to PEM under `label` (CERTIFICATE, CERTIFICATE REQUEST). */
+export function toPem(der: Uint8Array, label = 'CERTIFICATE'): string {
+  const body = Buffer.from(der).toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
+  return `-----BEGIN ${label}-----\n${body}\n-----END ${label}-----\n`;
 }
 
 /** PEM certificates (a chain, signer first) to DER. */

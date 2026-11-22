@@ -1,5 +1,7 @@
-# MUT-641 (ADR-265): the issued-document signing key. Off by default; issuing_signing_key creates an HSM key the API
-# may only sign with; signing reaches the API only once the key's certificate chain is set. Providers are mocked:
+# MUT-641 (ADR-265): issuing_signing_key creates an HSM key the API may only sign with; signing reaches the API only
+# once the key's certificate chain is set. The key is never destroyed (prevent_destroy), so these runs only plan: an
+# applied key would fail the test's own teardown (Terraform 1.9, CI). Values known only after apply (the key's id, the
+# service account's email) aren't asserted. The off cases are in issuing_signing_off.tftest.hcl. Providers are mocked:
 #   terraform init -backend=false && terraform test
 
 mock_provider "google" {
@@ -34,17 +36,8 @@ variables {
   hosts_file = "../../../config/fixtures/hosts.no-domain.json"
 }
 
-run "off_by_default" {
-  command = plan
-
-  assert {
-    condition     = length(google_kms_crypto_key.issuing_documents) == 0 && !contains(keys(google_project_service.apis), "cloudkms.googleapis.com")
-    error_message = "No KMS key (and no KMS API) until issuing_signing_key."
-  }
-}
-
 run "key_without_certificate_signs_nothing" {
-  command = apply
+  command = plan
 
   variables {
     issuing_signing_key = true
@@ -63,7 +56,8 @@ run "key_without_certificate_signs_nothing" {
   assert {
     condition = (
       google_kms_crypto_key_iam_member.api_signs_issued_documents[0].role == "roles/cloudkms.signer"
-      && google_kms_crypto_key_iam_member.api_signs_issued_documents[0].member == "serviceAccount:mutaba3a-api@test-project.iam.gserviceaccount.com"
+      && length(google_kms_crypto_key_iam_member.api_signs_issued_documents) == 1
+      && google_kms_crypto_key.issuing_documents[0].destroy_scheduled_duration == "2592000s"
     )
     error_message = "The API's service account may sign with the key, nothing more."
   }
@@ -72,15 +66,10 @@ run "key_without_certificate_signs_nothing" {
     condition     = length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if startswith(e.name, "ISSUING_")]) == 0
     error_message = "Without the certificate the API gets no ISSUING_ variables: it doesn't sign, and its PDF routes answer 503."
   }
-
-  assert {
-    condition     = output.issuing_signing_key_version == "projects/test-project/locations/europe-west1/keyRings/mutaba3a-issuing/cryptoKeys/issued-documents/cryptoKeyVersions/1"
-    error_message = "The output names version 1, for `npm run signing:interim-cert -- --key`."
-  }
 }
 
 run "certificate_turns_signing_on" {
-  command = apply
+  command = plan
 
   variables {
     issuing_signing_key        = true
@@ -90,11 +79,11 @@ run "certificate_turns_signing_on" {
   assert {
     condition = (
       one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ISSUING_SIGNER"]) == "kms"
-      && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ISSUING_SIGNING_KMS_KEY"]) == "projects/test-project/locations/europe-west1/keyRings/mutaba3a-issuing/cryptoKeys/issued-documents/cryptoKeyVersions/1"
+      && length([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e if e.name == "ISSUING_SIGNING_KMS_KEY"]) == 1
       && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ISSUING_SIGNING_CERT_CHAIN"]) == "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"
-      && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ISSUING_TSA_URL"]) == "http://timestamp.digicert.com"
+      && one([for e in google_cloud_run_v2_service.api.template[0].containers[0].env : e.value if e.name == "ISSUING_TSA_URL"]) == "https://timestamp.sectigo.com"
     )
-    error_message = "With the certificate, the API signs with the KMS key version, the chain and DigiCert's time-stamps."
+    error_message = "With the certificate, the API signs with the KMS key version, the chain and Sectigo's https time-stamps."
   }
 }
 
@@ -104,16 +93,6 @@ run "refuses_a_private_key_in_the_chain" {
   variables {
     issuing_signing_key        = true
     issuing_signing_cert_chain = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----\n"
-  }
-
-  expect_failures = [var.issuing_signing_cert_chain]
-}
-
-run "refuses_a_chain_without_the_key" {
-  command = plan
-
-  variables {
-    issuing_signing_cert_chain = "-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n"
   }
 
   expect_failures = [var.issuing_signing_cert_chain]

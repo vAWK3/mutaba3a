@@ -2,7 +2,7 @@ import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
 import { TokenBox } from './israel/tax-authority/token-box.js';
 import { RegistryLookup } from './israel/registry.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
-import { documentSignerFrom } from './issuing/pdf/sign/index.js';
+import { documentSignerFrom, signerStatus } from './issuing/pdf/sign/index.js';
 import { loadConfig, readOidcAudience } from './config.js';
 import { HttpOcrClient } from './receipts/ocr-client.js';
 import { CloudTasksDispatcher } from './receipts/reading/cloud-tasks.js';
@@ -217,7 +217,8 @@ const app = createApp({
   store,
   logger,
   rateLimiter,
-  // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; then the PDF routes answer 503.
+  // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; while null, the PDF routes answer 503
+  // SIGNING_NOT_CONFIGURED. A kms signer whose chain is wrong stops the boot here (documentSignerFrom).
   documentSigner,
   adminToken: config.MUTABA3A_ADMIN_TOKEN,
   keyEnvironment: config.API_KEY_ENVIRONMENT,
@@ -313,6 +314,11 @@ if (!receiptReadVerifier) logger.info('READ_OIDC_AUDIENCE/API_ORIGIN or READ_INV
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
 if (!documentSigner) logger.info('ISSUING_SIGNER is off; issued-document PDFs answer 503 SIGNING_NOT_CONFIGURED (the draft preview still prints)');
 else if (documentSigner.kind === 'dev') logger.info('ISSUING_SIGNER is dev; issued-document PDFs are signed by a throwaway development authority, never a legal original');
+else {
+  // MUT-641 (review): who signs and until when; a certificate near or past its end is said at every start.
+  const status = signerStatus(documentSigner, new Date());
+  logger[status.level](status.details, status.message);
+}
 if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
 if (!config.OPERATOR_ALERT_EMAIL) logger.warn('OPERATOR_ALERT_EMAIL is not set; no signup review digest is mailed');
 if (config.EMAIL_DOMAIN_CHECKER === 'fixture') logger.info('EMAIL_DOMAIN_CHECKER is fixture; signup domains are judged from the .example table, not DNS');

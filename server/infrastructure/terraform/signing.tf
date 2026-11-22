@@ -28,6 +28,12 @@ resource "google_kms_key_ring" "issuing" {
   name     = "mutaba3a-issuing${local.suffix}"
   location = var.region
 
+  # KMS never deletes a key ring; Terraform would only forget it, and turning the key back on would then fail (409).
+  # To switch signing off, remove issuing_signing_cert_chain instead (before-release.md, MUT-641).
+  lifecycle {
+    prevent_destroy = true
+  }
+
   depends_on = [google_project_service.apis]
 }
 
@@ -43,9 +49,13 @@ resource "google_kms_crypto_key" "issuing_documents" {
     protection_level = "HSM"
   }
 
-  # A destroyed key version can't sign again and its certificate becomes useless; KMS waits 30 days before it
-  # really destroys one, so a mistaken destroy can still be undone (gcloud kms keys versions restore).
+  # A destroyed key version can't sign again and the certificate a certifying authority issued for it becomes useless.
+  # Terraform refuses to destroy it; KMS would also wait 30 days, restorable with gcloud kms keys versions restore.
   destroy_scheduled_duration = "2592000s"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "google_kms_crypto_key_iam_member" "api_signs_issued_documents" {

@@ -4480,6 +4480,8 @@ export interface IssuerLogoRecord {
 export interface IssuedOriginalPdfRecord {
   documentId: string;
   organizationId: string;
+  /** The produced copy that received it (review): the original goes out on exactly one copy. */
+  copyIndex: number;
   bytes: Uint8Array;
   /** The SHA-256 of `bytes` (hex). */
   sha256: string;
@@ -4683,10 +4685,13 @@ export interface IssuingRepository {
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
   /** MUT-641: the signed original, or null until it was first produced. */
   getOriginalPdf(organizationId: string, documentId: string): Promise<IssuedOriginalPdfRecord | null>;
+  /** MUT-641 (review): which produced copy received the original, without its bytes; null until one did. */
+  originalCopyIndex(organizationId: string, documentId: string): Promise<number | null>;
   /**
-   * MUT-641: keeps the signed original. The first one kept wins and is what every caller gets back (a racing twin
-   * gets the winner's bytes); it is never replaced. Null for an unknown document.
+   * MUT-641: keeps the signed original for the copy that produced it. The first one kept wins and is what every caller
+   * gets back (a racing twin gets the winner's, with the winner's copyIndex); it is never replaced. Null for an unknown
+   * document.
    */
-  keepOriginalPdf(organizationId: string, documentId: string, pdf: Pick<IssuedOriginalPdfRecord, 'bytes' | 'sha256'>, at: Date): Promise<IssuedOriginalPdfRecord | null>;
+  keepOriginalPdf(organizationId: string, documentId: string, pdf: Pick<IssuedOriginalPdfRecord, 'bytes' | 'sha256' | 'copyIndex'>, at: Date): Promise<IssuedOriginalPdfRecord | null>;
   gaps(organizationId: string): Promise<IssuedNumberGap[]>;
 }

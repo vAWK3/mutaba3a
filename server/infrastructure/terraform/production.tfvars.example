@@ -41,7 +41,7 @@ live_label          = false
 # ...
 # -----END CERTIFICATE-----
 # EOT
-# issuing_tsa_url            = "http://timestamp.digicert.com"
+# issuing_tsa_url            = "https://timestamp.sectigo.com"
 # MUT-148: error reports to Sentry. Set true only after server/DEPLOYMENT.md §1.5 has applied the Sentry stack.
 # sentry_enabled      = false
 # MUT-389: the receipts library. Set true when MUT-260 or MUT-258 ships, and leave it on (server/DEPLOYMENT.md).

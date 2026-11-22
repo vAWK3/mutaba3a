@@ -49,6 +49,14 @@
 **Status**: Open (2026-11-22, MUT-641 S4)
 - **What:** Instruction 18B wants the recipient's prior agreement to digital documents. Its shape and retention wait for the accountant's answer (MUT-567 Q3); the field and UI belong to MUT-570/573, which send documents. Until then nothing records it.
 
+### TD-318: Signing errors reach Sentry as one group, and the off switch is reported too
+**Status**: Open (2026-11-22, MUT-641 review)
+- **What:** SIGNING_UNAVAILABLE is reported without its root cause (that lives in the `issued document could not be signed` log line, with the document), and SIGNING_NOT_CONFIGURED (503) is reported on every PDF request while production is deliberately off. Fine while issuing is behind the `invoicing` feature; before it opens, report the cause and exempt the deliberate off state (app-shell's onError reports every status >= 500).
+
+### TD-319: The view-copy cache is per instance
+**Status**: Open (2026-11-22, MUT-641 review)
+- **What:** each Cloud Run instance signs a document's view copy once per 10 minutes, so N instances can each sign it. Fine at today's 1-3 instances; a shared cache (or storing view copies) if signing volume grows.
+
 ### TD-310: Malafat's connect and revoke are audited as an agent's
 **Status**: Open (MUT-593, 2026-11-12; ADR-254)
 - **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".

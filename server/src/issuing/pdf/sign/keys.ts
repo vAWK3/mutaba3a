@@ -1,8 +1,9 @@
 import { createPublicKey, generateKeyPair, sign as signBytes, X509Certificate, type KeyObject } from 'node:crypto';
 import { promisify } from 'node:util';
 import { GoogleAuth } from 'google-auth-library';
-import { certificateRequest, issueCertificate, requestToPem, toPem } from './certificates.js';
-import { pemCertificates, sha256, type SigningKey } from './cms.js';
+import { certificateRequest, issueCertificate } from './certificates.js';
+import { pemCertificates, sha256, toPem, type SigningKey } from './cms.js';
+import { SigningSetupError, withOneRetry } from './retry.js';
 
 /**
  * MUT-641 (ADR-265): where the signing key lives. Two kinds:
@@ -16,10 +17,10 @@ import { pemCertificates, sha256, type SigningKey } from './cms.js';
 const generate = promisify(generateKeyPair);
 
 export interface DevAuthority {
-  /** The development root, for a validator to trust while checking evidence. Never trusted outside development. */
-  root: Uint8Array;
   signer: SigningKey;
   timestampAuthority: SigningKey;
+  /** Issues a document-signing certificate under the development root for another key (tests stand KMS in with it). */
+  certify(publicKey: KeyObject): Promise<Uint8Array[]>;
 }
 
 const DEV_ORGANIZATION = 'MTB3A development (not for production)';
@@ -29,15 +30,11 @@ function localKey(privateKey: KeyObject, chain: Uint8Array[]): SigningKey {
   return { chain, sign: async (data) => new Uint8Array(signBytes('sha256', data, privateKey)) };
 }
 
-interface DevAuthorityWithRoot extends DevAuthority {
-  /** Issues a document-signing certificate under the development root for another key (tests stand KMS in with it). */
-  certify(publicKey: KeyObject): Promise<Uint8Array[]>;
-}
-
-async function makeDevAuthority(): Promise<DevAuthorityWithRoot> {
+async function makeDevAuthority(): Promise<DevAuthority> {
   const rsa = () => generate('rsa', { modulusLength: 2048 });
   const [root, signer, tsa] = await Promise.all([rsa(), rsa(), rsa()]);
-  const validFrom = new Date(Date.now() - 24 * 60 * 60 * 1000);
+  // Wide on purpose: tests sign at fixed clocks in the past. Throwaway, and refused in production.
+  const validFrom = new Date(Date.now() - 10 * 365 * 24 * 60 * 60 * 1000);
   const validTo = new Date(Date.now() + 365 * 24 * 60 * 60 * 1000);
   const rootName = { commonName: 'MTB3A development root', organization: DEV_ORGANIZATION };
   const signWithRoot = async (tbs: Uint8Array) => new Uint8Array(signBytes('sha256', tbs, root.privateKey));
@@ -57,17 +54,16 @@ async function makeDevAuthority(): Promise<DevAuthorityWithRoot> {
     rootCert,
   ];
   return {
-    root: rootCert,
     signer: localKey(signer.privateKey, await certify(signer.publicKey)),
     timestampAuthority: localKey(tsa.privateKey, await certify(tsa.publicKey, 'timestamp')),
     certify: (publicKey) => certify(publicKey),
   };
 }
 
-let devAuthority: Promise<DevAuthorityWithRoot> | null = null;
+let devAuthority: Promise<DevAuthority> | null = null;
 
 /** The development authority, made once per process on first use (three RSA keys: well under a second). */
-export function devSigningAuthority(): Promise<DevAuthorityWithRoot> {
+export function devSigningAuthority(): Promise<DevAuthority> {
   devAuthority ??= makeDevAuthority().catch((error: unknown) => {
     devAuthority = null;
     throw error;
@@ -92,9 +88,26 @@ export function googleKms(timeoutMs: number): KmsApi {
   return { get: (url) => request(url, 'GET'), post: (url, body) => request(url, 'POST', body) };
 }
 
-/** KMS signs the SHA-256 of `data` (only the digest leaves this process). */
-async function kmsSign(kms: KmsApi, keyVersion: string, data: Uint8Array): Promise<Uint8Array> {
-  const answer = await kms.post(`${KMS}/${keyVersion}:asymmetricSign`, { digest: { sha256: Buffer.from(sha256(data)).toString('base64') } });
+/** KMS signs the SHA-256 of `data` (only the digest leaves this process); a transient failure gets one more try. */
+function kmsSign(kms: KmsApi, keyVersion: string, data: Uint8Array): Promise<Uint8Array> {
+  return withOneRetry(() => kmsSignOnce(kms, keyVersion, data));
+}
+
+/**
+ * KMS's own refusals (400 a disabled or destroyed key version, 403 no signer role, 404 no such key) are setup
+ * problems: retrying can't fix them, and the 503 should say so. Anything else (a timeout, a 5xx) is transient.
+ */
+const KMS_SETUP_STATUSES = new Set([400, 403, 404]);
+
+async function kmsSignOnce(kms: KmsApi, keyVersion: string, data: Uint8Array): Promise<Uint8Array> {
+  let answer: unknown;
+  try {
+    answer = await kms.post(`${KMS}/${keyVersion}:asymmetricSign`, { digest: { sha256: Buffer.from(sha256(data)).toString('base64') } });
+  } catch (error) {
+    const status = (error as { status?: unknown; response?: { status?: unknown } } | null)?.response?.status ?? (error as { status?: unknown } | null)?.status;
+    if (typeof status === 'number' && KMS_SETUP_STATUSES.has(status)) throw new SigningSetupError(`Cloud KMS refused to sign with ${keyVersion} (${status})`, 'KEY_UNAVAILABLE');
+    throw error;
+  }
   const signature = (answer as { signature?: unknown } | null)?.signature;
   if (typeof signature !== 'string' || signature.length === 0) throw new Error('Cloud KMS answered without a signature');
   return new Uint8Array(Buffer.from(signature, 'base64'));
@@ -118,10 +131,31 @@ export interface KmsSigningKeyOptions {
   kms?: KmsApi;
 }
 
+/**
+ * MUT-641 (review): the chain as configured: every certificate parses and the first is the signer's own, not a CA's
+ * (some authorities ship the chain root first). A wrong chain stops the server at boot, before any original is spent.
+ */
+export function signingChain(chainPem: string): X509Certificate[] {
+  const chain = pemCertificates(chainPem);
+  if (chain.length === 0) throw new SigningSetupError('The signing certificate chain holds no certificate', 'CHAIN_INVALID');
+  const parsed = chain.map((der, i) => {
+    try {
+      return new X509Certificate(der);
+    } catch {
+      throw new SigningSetupError(`Certificate ${i + 1} of the signing chain can't be read`, 'CHAIN_INVALID');
+    }
+  });
+  if (parsed[0]!.ca) throw new SigningSetupError('The signing chain starts with a CA certificate: put the signer\'s own certificate first, then its issuers', 'CHAIN_INVALID');
+  parsed.slice(1).forEach((issuer, i) => {
+    if (!parsed[i]!.checkIssued(issuer)) throw new SigningSetupError(`Certificate ${i + 2} of the signing chain didn't issue certificate ${i + 1}: list the chain signer first, then each issuer`, 'CHAIN_INVALID');
+  });
+  return parsed;
+}
+
 /** A Cloud KMS asymmetric key (RSA_SIGN_PKCS1_*_SHA256 or EC_SIGN_P256_SHA256): KMS signs the digest; no key leaves it. */
 export function kmsSigningKey(options: KmsSigningKeyOptions): SigningKey {
+  signingChain(options.chainPem);
   const chain = pemCertificates(options.chainPem);
-  if (chain.length === 0) throw new Error('The signing certificate chain holds no certificate');
   const kms = options.kms ?? googleKms(options.timeoutMs);
   return { chain, sign: (data) => kmsSign(kms, options.keyVersion, data) };
 }
@@ -190,5 +224,5 @@ export async function kmsCertificateRequest(options: KmsCertificateRequestOption
     keyAlgorithm,
     sign: (tbs) => kmsSign(options.kms, options.keyVersion, tbs),
   });
-  return { pem: requestToPem(request), algorithm };
+  return { pem: toPem(request, 'CERTIFICATE REQUEST'), algorithm };
 }

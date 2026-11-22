@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import * as asn1js from 'asn1js';
 import * as pkijs from 'pkijs';
-import { der, OID, toArrayBuffer } from './cms.js';
+import { der, signatureAlgorithm, toArrayBuffer } from './cms.js';
 
 /**
  * MUT-641 (ADR-265): X.509 certificates this service issues itself: the development authority's (root, document signer,
@@ -57,15 +57,14 @@ function keyIdentifier(spki: Uint8Array): ArrayBuffer {
   return toArrayBuffer(new Uint8Array(createHash('sha1').update(new Uint8Array(info.subjectPublicKey.valueBlock.valueHexView)).digest()));
 }
 
+/** KeyUsage (critical). DER: a named bit list drops its trailing zero bits. */
+function keyUsage(bits: number): pkijs.Extension {
+  return extension('2.5.29.15', true, new asn1js.BitString({ valueHex: toArrayBuffer(new Uint8Array([bits])), unusedBits: Math.log2(bits & -bits) }));
+}
+
 function extension(extnID: string, critical: boolean, value: { toSchema(): { toBER(sizeOnly?: boolean): ArrayBuffer } } | asn1js.BaseBlock) {
   const schema = 'toSchema' in value ? value.toSchema() : value;
   return new pkijs.Extension({ extnID, critical, extnValue: schema.toBER(false) });
-}
-
-export function signatureAlgorithm(keyAlgorithm: 'RSA' | 'EC'): pkijs.AlgorithmIdentifier {
-  return keyAlgorithm === 'RSA'
-    ? new pkijs.AlgorithmIdentifier({ algorithmId: OID.sha256WithRsa, algorithmParams: new asn1js.Null() })
-    : new pkijs.AlgorithmIdentifier({ algorithmId: OID.ecdsaWithSha256 });
 }
 
 /** A DER certificate. */
@@ -84,8 +83,7 @@ export async function issueCertificate(request: CertificateRequest): Promise<Uin
     request.kind === 'root' ? KEY_USAGE.keyCertSign | KEY_USAGE.cRLSign : request.kind === 'signer' ? KEY_USAGE.digitalSignature | KEY_USAGE.nonRepudiation : KEY_USAGE.digitalSignature;
   cert.extensions = [
     extension('2.5.29.19', true, new pkijs.BasicConstraints({ cA: request.kind === 'root' })),
-    // DER: a named bit list drops its trailing zero bits.
-    extension('2.5.29.15', true, new asn1js.BitString({ valueHex: toArrayBuffer(new Uint8Array([usage])), unusedBits: Math.log2(usage & -usage) })),
+    keyUsage(usage),
     extension('2.5.29.14', false, new asn1js.OctetString({ valueHex: keyIdentifier(request.publicKey) })),
     extension('2.5.29.35', false, new pkijs.AuthorityKeyIdentifier({ keyIdentifier: new asn1js.OctetString({ valueHex: keyIdentifier(request.issuer?.publicKey ?? request.publicKey) }) })),
     ...(request.kind === 'timestamp' ? [extension('2.5.29.37', true, new pkijs.ExtKeyUsage({ keyPurposes: [EKU_TIME_STAMPING] }))] : []),
@@ -96,11 +94,6 @@ export async function issueCertificate(request: CertificateRequest): Promise<Uin
   const signature = await request.sign(cert.tbsView);
   cert.signatureValue = new asn1js.BitString({ valueHex: toArrayBuffer(signature) });
   return der(cert.toSchema(false));
-}
-
-export function toPem(certificate: Uint8Array): string {
-  const body = Buffer.from(certificate).toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
-  return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
 }
 
 const SIGNER_KEY_USAGE = KEY_USAGE.digitalSignature | KEY_USAGE.nonRepudiation;
@@ -124,7 +117,7 @@ export async function certificateRequest(input: CertificateRequestInput): Promis
   request.subject = nameOf(input.subject);
   request.subjectPublicKeyInfo = pkijs.PublicKeyInfo.fromBER(toArrayBuffer(input.publicKey));
   const extensions = new pkijs.Extensions({
-    extensions: [extension('2.5.29.15', true, new asn1js.BitString({ valueHex: toArrayBuffer(new Uint8Array([SIGNER_KEY_USAGE])), unusedBits: Math.log2(SIGNER_KEY_USAGE & -SIGNER_KEY_USAGE) }))],
+    extensions: [keyUsage(SIGNER_KEY_USAGE)],
   });
   request.attributes = [new pkijs.Attribute({ type: '1.2.840.113549.1.9.14', values: [extensions.toSchema()] })];
   request.signatureAlgorithm = signatureAlgorithm(input.keyAlgorithm);
@@ -132,9 +125,3 @@ export async function certificateRequest(input: CertificateRequestInput): Promis
   request.signatureValue = new asn1js.BitString({ valueHex: toArrayBuffer(await input.sign(request.tbsView)) });
   return der(request.toSchema(false));
 }
-
-export function requestToPem(request: Uint8Array): string {
-  const body = Buffer.from(request).toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
-  return `-----BEGIN CERTIFICATE REQUEST-----\n${body}\n-----END CERTIFICATE REQUEST-----\n`;
-}
-

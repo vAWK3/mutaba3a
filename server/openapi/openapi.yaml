@@ -24904,7 +24904,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
-          description: "MUT-641: the document could not be signed (SIGNING_UNAVAILABLE) or this server has no signer (SIGNING_NOT_CONFIGURED); nothing was sent"
+          description: "MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE)."
           content:
             application/json:
               schema:
@@ -24913,7 +24913,7 @@ paths:
       tags:
         - Issuing
       summary: Produce a copy of a document as a PDF (download, email, share)
-      description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes.'
+      description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes. Until the original has been signed and kept (a signing outage), every produced copy is the original.'
       security:
         - session: []
         - deviceSession: []
@@ -24979,7 +24979,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
-          description: "MUT-641: the document could not be signed (SIGNING_UNAVAILABLE) or this server has no signer (SIGNING_NOT_CONFIGURED); nothing was sent"
+          description: "MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE)."
           content:
             application/json:
               schema:

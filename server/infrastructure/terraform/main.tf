@@ -911,6 +911,12 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     precondition {
+      # MUT-641: the certificate is for the KMS key; without the key there is nothing to sign with.
+      condition     = var.issuing_signing_cert_chain == null || var.issuing_signing_key
+      error_message = "issuing_signing_cert_chain needs issuing_signing_key = true: the certificate is for that KMS key (signing.tf)."
+    }
+
+    precondition {
       # MUT-558/565: the plan sells through Stripe; without it an accountant at the 4th client has no way to pay.
       condition     = !var.accountant_plan_enabled || var.stripe_enabled
       error_message = "accountant_plan_enabled needs stripe_enabled: the Accountant plan is sold through Stripe (MUT-565, pilot runbook §1.12)."

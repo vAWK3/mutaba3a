@@ -1,8 +1,10 @@
 -- MUT-641 (ADR-265): an issued document's signed original ("מקור"), kept once and handed out as is.
 -- INSERT-only like the issued documents (ADR-260): the MUT-568 trigger refuses UPDATE, DELETE and TRUNCATE.
+-- copyIndex: the produced copy that received it; every other copy is a copy ("העתק"), so the original goes out once.
 CREATE TABLE "issued_document_originals" (
     "documentId" UUID NOT NULL,
     "organizationId" UUID NOT NULL,
+    "copyIndex" INTEGER NOT NULL,
     "bytes" BYTEA NOT NULL,
     "sha256" VARCHAR(64) NOT NULL,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,

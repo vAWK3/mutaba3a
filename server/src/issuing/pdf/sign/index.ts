@@ -1,7 +1,9 @@
+import type { X509Certificate } from 'node:crypto';
+import type { Config } from '../../../config.js';
 import type { IssuedDocumentRecord } from '../../../repositories/ports.js';
 import { PDF_LABELS } from '../labels.js';
 import type { SigningKey } from './cms.js';
-import { devSigningAuthority, kmsSigningKey, type KmsApi } from './keys.js';
+import { devSigningAuthority, kmsSigningKey, signingChain, type KmsApi } from './keys.js';
 import { signPdf, type SignatureDetails } from './pdf.js';
 import { localTimestamper, rfc3161Timestamper, type BinaryPost, type Timestamper } from './timestamp.js';
 
@@ -13,11 +15,13 @@ import { localTimestamper, rfc3161Timestamper, type BinaryPost, type Timestamper
 export interface DocumentSigner {
   /** dev | kms: which kind of key signs, for logs. */
   readonly kind: 'dev' | 'kms';
+  /** The signer's own certificate (kms), for the boot log and its expiry warning. */
+  readonly certificate?: X509Certificate;
   sign(pdf: Uint8Array, details: SignatureDetails): Promise<Uint8Array>;
 }
 
-export function documentSigner(kind: DocumentSigner['kind'], key: () => Promise<SigningKey>, timestamper: Timestamper): DocumentSigner {
-  return { kind, sign: async (pdf, details) => signPdf(pdf, details, await key(), timestamper) };
+export function documentSigner(kind: DocumentSigner['kind'], key: () => Promise<SigningKey>, timestamper: Timestamper, certificate?: X509Certificate): DocumentSigner {
+  return { kind, ...(certificate ? { certificate } : {}), sign: async (pdf, details) => signPdf(pdf, details, await key(), timestamper) };
 }
 
 /** Development, tests and QA: this process's throwaway authority signs and time-stamps. */
@@ -25,14 +29,7 @@ export function devDocumentSigner(timestamper?: Timestamper): DocumentSigner {
   return documentSigner('dev', async () => (await devSigningAuthority()).signer, timestamper ?? localTimestamper(async () => (await devSigningAuthority()).timestampAuthority));
 }
 
-export interface SignerConfig {
-  NODE_ENV: 'development' | 'test' | 'staging' | 'production';
-  ISSUING_SIGNER?: 'dev' | 'kms' | 'off' | undefined;
-  ISSUING_SIGNING_KMS_KEY?: string | undefined;
-  ISSUING_SIGNING_CERT_CHAIN?: string | undefined;
-  ISSUING_TSA_URL?: string | undefined;
-  ISSUING_SIGNING_TIMEOUT_MS: number;
-}
+export type SignerConfig = Pick<Config, 'NODE_ENV' | 'ISSUING_SIGNER' | 'ISSUING_SIGNING_KMS_KEY' | 'ISSUING_SIGNING_CERT_CHAIN' | 'ISSUING_TSA_URL' | 'ISSUING_SIGNING_TIMEOUT_MS'>;
 
 /** The signer this server's configuration names; null = none (production until the certificate is in place). */
 export function documentSignerFrom(config: SignerConfig, io: { kms?: KmsApi; tsaPost?: BinaryPost } = {}): DocumentSigner | null {
@@ -42,7 +39,22 @@ export function documentSignerFrom(config: SignerConfig, io: { kms?: KmsApi; tsa
   if (kind === 'dev') return devDocumentSigner(tsa);
   // loadConfig makes sure a kms signer has its key, its chain and a time-stamp authority.
   const key = kmsSigningKey({ keyVersion: config.ISSUING_SIGNING_KMS_KEY!, chainPem: config.ISSUING_SIGNING_CERT_CHAIN!, timeoutMs: config.ISSUING_SIGNING_TIMEOUT_MS, ...(io.kms ? { kms: io.kms } : {}) });
-  return documentSigner('kms', async () => key, tsa!);
+  return documentSigner('kms', async () => key, tsa!, signingChain(config.ISSUING_SIGNING_CERT_CHAIN!)[0]);
+}
+
+/** Within this many days of its certificate's end, the server warns at every start (MUT-641 review). */
+export const CERTIFICATE_EXPIRY_WARNING_DAYS = 30;
+
+/** What the boot log says about the signer: who signs, until when, and whether that end is near or past. */
+export function signerStatus(signer: DocumentSigner, now: Date): { level: 'info' | 'warn' | 'error'; message: string; details: Record<string, unknown> } {
+  const cert = signer.certificate;
+  if (!cert) return { level: 'info', message: `issued-document PDFs are signed by the ${signer.kind} signer`, details: { signer: signer.kind } };
+  const validTo = new Date(cert.validTo);
+  const daysLeft = Math.floor((validTo.getTime() - now.getTime()) / 86_400_000);
+  const details = { signer: signer.kind, subject: cert.subject.replace(/\n/g, ', '), fingerprint256: cert.fingerprint256, validTo: validTo.toISOString(), daysLeft };
+  if (daysLeft < 0 || now < new Date(cert.validFrom)) return { level: 'error', message: 'the signing certificate is not valid now: issued-document PDFs answer 503 SIGNING_NOT_CONFIGURED until it is replaced', details };
+  if (daysLeft <= CERTIFICATE_EXPIRY_WARNING_DAYS) return { level: 'warn', message: `the signing certificate ends in ${daysLeft} days: renew it (docs/operations/before-release.md, MUT-641)`, details };
+  return { level: 'info', message: 'issued-document PDFs are signed with the KMS key', details };
 }
 
 const text = (value: unknown): string | null => (typeof value === 'string' && value.trim() ? value.trim() : null);

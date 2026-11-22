@@ -1046,10 +1046,14 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.issuedOriginals.get(documentId);
       return r && r.organizationId === organizationId ? { ...r, bytes: new Uint8Array(r.bytes) } : null;
     },
+    originalCopyIndex: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? r.copyIndex : null;
+    },
     keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
       const d = this.issuedDocMap.get(documentId);
       if (!d || d.organizationId !== organizationId) return null;
-      const kept = this.issuedOriginals.get(documentId) ?? { documentId, organizationId, bytes: new Uint8Array(pdf.bytes), sha256: pdf.sha256, createdAt: at };
+      const kept = this.issuedOriginals.get(documentId) ?? { documentId, organizationId, copyIndex: pdf.copyIndex, bytes: new Uint8Array(pdf.bytes), sha256: pdf.sha256, createdAt: at };
       this.issuedOriginals.set(documentId, kept);
       return { ...kept, bytes: new Uint8Array(kept.bytes) };
     },

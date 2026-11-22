@@ -29,7 +29,7 @@ if (!url) {
         VALUES (${id}::uuid, ${org.id}::uuid, 'RECEIPT', 1, '2026-11-22', 'ILS', 100, 0, 100, 0, 0, 100, false, '{}', '{}', 'he', 'PROFESSIONAL', 'BLACK', '1.0.0', ${org.id}::uuid, ${unique()})`;
       await raw.$executeRaw`INSERT INTO "issued_document_lines" VALUES (${id}::uuid, 1, ${org.id}::uuid, 'x', 'GOODS', 1000, 100, 0, 100, false, 0, 0)`;
       await raw.$executeRaw`INSERT INTO "issued_document_copies" ("documentId","copyIndex","organizationId","producedByUserId","channel") VALUES (${id}::uuid, 0, ${org.id}::uuid, ${org.id}::uuid, 'DOWNLOAD')`;
-      await raw.$executeRaw`INSERT INTO "issued_document_originals" ("documentId","organizationId","bytes","sha256") VALUES (${id}::uuid, ${org.id}::uuid, '\x25504446'::bytea, ${'a'.repeat(64)})`;
+      await raw.$executeRaw`INSERT INTO "issued_document_originals" ("documentId","organizationId","copyIndex","bytes","sha256") VALUES (${id}::uuid, ${org.id}::uuid, 0, '\x25504446'::bytea, ${'a'.repeat(64)})`;
       return { org, id };
     }
 

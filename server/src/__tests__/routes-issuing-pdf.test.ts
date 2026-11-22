@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { inspectPdf, pageText } from '../issuing/pdf/__tests__/pdf-inspection.js';
+import pino from 'pino';
 import type { DocumentSigner } from '../issuing/pdf/sign/index.js';
 import { checkSignedPdf } from '../issuing/pdf/sign/verify.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
@@ -151,5 +152,52 @@ describe('issued-document PDFs are signed (MUT-641, ADR-265)', () => {
     expect(await text(retry)).toContain('מקור');
     expect(signedWhole(bytes).intact).toBe(true);
   });
-});
 
+  it('an outage doesn\'t spend the original: the next produced copy, with any key, is the signed original (review)', async () => {
+    const failures: unknown[] = [];
+    const logger = pino({ level: 'error' }, { write: (line: string) => void failures.push(JSON.parse(line)) });
+    const down: DocumentSigner = { kind: 'kms', sign: () => Promise.reject(new Error('TSA unavailable')) };
+    const failing = accountantHarness({ documentSigner: down, logger });
+    const w = await invoicing(failing);
+    const doc = await read(await failing.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() })));
+    const firstKey = idem();
+    expect((await failing.app.request(`/v1/issued-documents/${doc.id}/pdf`, json({ channel: 'EMAIL' }, { ...w.on, ...firstKey }))).status).toBe(503);
+    // The failure is logged with the document, so an outage is seen.
+    expect(failures).toContainEqual(expect.objectContaining({ msg: 'issued document could not be signed; nothing was sent', documentId: doc.id, organizationId: w.profileId }));
+    const recovered = accountantHarness({ store: failing.store });
+    const fresh = await recovered.app.request(`/v1/issued-documents/${doc.id}/pdf`, json({ channel: 'DOWNLOAD' }, { ...w.on, ...idem() }));
+    const bytes = new Uint8Array(await fresh.clone().arrayBuffer());
+    expect(await text(fresh)).toContain('מקור');
+    expect(signedWhole(bytes).intact).toBe(true);
+    // Kept now, with the copy that received it: the next one is a copy, and so is the failed request's own retry.
+    expect(await text(await recovered.app.request(`/v1/issued-documents/${doc.id}/pdf`, json({ channel: 'DOWNLOAD' }, { ...w.on, ...idem() })))).toContain('העתק');
+    const oldKey = await text(await recovered.app.request(`/v1/issued-documents/${doc.id}/pdf`, json({ channel: 'EMAIL' }, { ...w.on, ...firstKey })));
+    expect(oldKey).toContain('העתק');
+    expect(oldKey).not.toContain('מקור');
+  });
+
+  it('a setup problem (an expired certificate, a key that isn\'t the certificate\'s) is SIGNING_NOT_CONFIGURED with its reason', async () => {
+    const broken: DocumentSigner = { kind: 'kms', sign: () => Promise.reject(Object.assign(new Error('expired'), { name: 'SigningSetupError', reason: 'CERTIFICATE_NOT_VALID' })) };
+    const h = accountantHarness({ documentSigner: broken });
+    const w = await invoicing(h);
+    const doc = await read(await h.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() })));
+    const res = await h.app.request(`/v1/issued-documents/${doc.id}/pdf`, { headers: w.on });
+    expect(res.status).toBe(503);
+    expect(((await res.json()) as { error: { code: string; details: unknown } }).error).toMatchObject({ code: 'SIGNING_NOT_CONFIGURED', details: { reason: 'CERTIFICATE_NOT_VALID' } });
+  });
+
+  it('a view copy is signed once and served again for a few minutes, not re-signed on every reload (review)', async () => {
+    let signatures = 0;
+    const counting: DocumentSigner = { kind: 'dev', sign: async (pdf) => ((signatures += 1), pdf) };
+    const h = accountantHarness({ documentSigner: counting });
+    const w = await invoicing(h);
+    const doc = await read(await h.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() })));
+    const view = () => h.app.request(`/v1/issued-documents/${doc.id}/pdf`, { headers: w.on });
+    expect((await view()).status).toBe(200);
+    expect((await view()).status).toBe(200);
+    expect(signatures).toBe(1);
+    h.setNow(new Date(h.now().getTime() + 11 * 60 * 1000));
+    expect((await view()).status).toBe(200);
+    expect(signatures).toBe(2);
+  });
+});

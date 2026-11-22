@@ -513,19 +513,15 @@ variable "issuing_signing_cert_chain" {
     condition     = var.issuing_signing_cert_chain == null || (strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "-----BEGIN CERTIFICATE-----") && !strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "PRIVATE KEY"))
     error_message = "issuing_signing_cert_chain must hold PEM certificates and no private key: the signing key stays in Cloud KMS."
   }
-  validation {
-    condition     = var.issuing_signing_cert_chain == null || var.issuing_signing_key
-    error_message = "issuing_signing_cert_chain needs issuing_signing_key = true: the certificate is for that KMS key."
-  }
 }
 
 variable "issuing_tsa_url" {
-  description = "MUT-641: the RFC 3161 time-stamp authority on every signature: DigiCert's public service until the certifying authority's (checked 2026-11-22)."
+  description = "MUT-641: the RFC 3161 time-stamp authority on every signature: Sectigo's public service (https, checked 2026-11-22) until the certifying authority's. https only: over http anyone on the path could answer with a token of their own."
   type        = string
-  default     = "http://timestamp.digicert.com"
+  default     = "https://timestamp.sectigo.com"
   validation {
-    condition     = can(regex("^https?://", var.issuing_tsa_url))
-    error_message = "issuing_tsa_url must be an http(s) URL."
+    condition     = can(regex("^https://", var.issuing_tsa_url))
+    error_message = "issuing_tsa_url must be an https URL (the API refuses plain http on production)."
   }
 }
 
