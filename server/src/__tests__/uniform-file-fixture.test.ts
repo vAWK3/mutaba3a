@@ -106,6 +106,11 @@ describe('uniform file simulator fixture (MUT-569, AC1)', () => {
     // Hebrew letters (0xE0–0xFA) in the names and lines, Arabic ones written in them.
     expect([...bkmv].some((b) => b >= 0xe0 && b <= 0xfa)).toBe(true);
     expect(Number(res.headers.get('x-uniform-file-records'))).toBe(records.length);
+    // Every line adds up to the agora (field 1267 = 1264 × 1265 − 1266), VAT-inclusive lines included.
+    for (const r of records.filter((x) => x.startsWith('D110'))) {
+      const n = (start: number, width: number) => BigInt(r.slice(start - 1, start - 1 + width));
+      expect((n(224, 17) * n(241, 15) + 5_000n) / 10_000n + n(256, 15), r.slice(0, 50)).toBe(n(271, 15));
+    }
 
     if (OUT) {
       mkdirSync(OUT, { recursive: true });

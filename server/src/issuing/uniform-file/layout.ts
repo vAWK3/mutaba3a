@@ -1,4 +1,4 @@
-import { alpha, amount, numeric, quantity } from './format.js';
+import { alpha, amount, FieldOverflowError, numeric, quantity } from './format.js';
 
 /**
  * MUT-569 (ADR-270): the uniform file's records as the spec 1.31 tables give them (§3.1–3.2, §4.1–4.5): field number,
@@ -76,7 +76,8 @@ export function renderRecord(code: RecordCode, values: Readonly<Record<number, F
             return quantity(typeof value === 'bigint' ? value : 0n, width);
         }
       } catch (err) {
-        throw new RangeError(`uniform file ${code} field ${field}: ${(err as Error).message}`);
+        const message = `uniform file ${code} field ${field}: ${(err as Error).message}`;
+        throw err instanceof FieldOverflowError ? new FieldOverflowError(message) : new RangeError(message);
       }
     })
     .join('');

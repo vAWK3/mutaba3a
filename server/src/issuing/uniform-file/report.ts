@@ -95,7 +95,7 @@ table{border-collapse:collapse;margin-top:8px}th,td{border:1px solid #E6E2ED;pad
 <h2>${l.records}</h2>
 <table><tr><th>${l.code}</th><th>${l.description}</th><th>${l.count}</th></tr>${recordRows}<tr><th colspan="2">${l.total}</th><td class="n">${file.totalRecords}</td></tr></table>
 <h2>${l.documents}</h2>
-${file.byType.length ? `<table><tr><th>${l.docNumber}</th><th>${l.docType}</th><th>${l.count}</th><th>${l.amount}</th></tr>${documentRows}</table>` : `<p>${l.none}</p>`}
+${file.byType.some((t) => t.count > 0) ? '' : `<p>${l.none}</p>`}<table><tr><th>${l.docNumber}</th><th>${l.docType}</th><th>${l.count}</th><th>${l.amount}</th></tr>${documentRows}</table>
 </body></html>
 `;
 }

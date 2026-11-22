@@ -84,9 +84,18 @@ export function toFileText(text: string): string {
   return out;
 }
 
-/** A finished line as ISO-8859-8 bytes. Throws on a character `toFileText` would have replaced (a missed field). */
-export function encodeLine(line: string): Buffer {
-  const bytes = Buffer.alloc(line.length);
+/**
+ * A value too wide for its field: a document whose amount the file can't hold (over 10^12 shekels). The export turns it
+ * into a 422 naming the document rather than writing a wrong file.
+ */
+export class FieldOverflowError extends RangeError {}
+
+/**
+ * A finished line as ISO-8859-8 bytes. Throws on a character `toFileText` would have replaced (a missed field).
+ * Plain `Uint8Array`, no Node `Buffer`: these routes also run in the signed-out portal (MUT-286 platform shims).
+ */
+export function encodeLine(line: string): Uint8Array {
+  const bytes = new Uint8Array(line.length);
   for (let i = 0; i < line.length; i += 1) {
     const cp = line.charCodeAt(i);
     if (cp >= 0x20 && cp < 0x7f) bytes[i] = cp;
@@ -106,13 +115,13 @@ export function alpha(value: string | null | undefined, width: number): string {
 export function numeric(value: string | number | bigint | null | undefined, width: number): string {
   const digits = value === null || value === undefined ? '' : String(value);
   if (!/^\d*$/.test(digits)) throw new RangeError(`uniform file: "${digits}" is not a number`);
-  if (digits.length > width) throw new RangeError(`uniform file: ${digits} is wider than ${width}`);
+  if (digits.length > width) throw new FieldOverflowError(`uniform file: ${digits} is wider than ${width}`);
   return digits.padStart(width, '0');
 }
 
 function signed(value: bigint, width: number): string {
   const digits = (value < 0n ? -value : value).toString();
-  if (digits.length > width - 1) throw new RangeError(`uniform file: ${value} is wider than ${width}`);
+  if (digits.length > width - 1) throw new FieldOverflowError(`uniform file: ${value} is wider than ${width}`);
   return (value < 0n ? '-' : '+') + digits.padStart(width - 1, '0');
 }
 

@@ -49,7 +49,9 @@ describe('uniformFileReport', () => {
   });
 
   it('says so when no documents fall in the range', () => {
-    expect(uniformFileReport({ ...file, byType: [] }, meta, 'en')).toContain('No documents in these dates');
+    const html = uniformFileReport({ ...file, byType: [{ docType: 'TAX_INVOICE', count: 0, grossMinor: 0n }] }, meta, 'en');
+    expect(html).toContain('No documents in these dates');
+    expect(html).toMatch(/305<\/td><td>Tax invoice<\/td><td class="n">0</);
   });
 });
 

@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createHash, randomInt } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
@@ -11,7 +11,7 @@ import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
-import { buildUniformFile, UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFileHouse } from '../issuing/uniform-file/export.js';
+import { buildUniformFile, DocumentTooLargeError, UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFile, type UniformFileHouse } from '../issuing/uniform-file/export.js';
 import { uniformFileReport } from '../issuing/uniform-file/report.js';
 import { UNIFORM_FILE_MIME, uniformFileZip } from '../issuing/uniform-file/zip.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
@@ -71,8 +71,20 @@ const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): Jso
 /** MUT-569: the product's name in the uniform file (A000 1007). */
 const UNIFORM_FILE_SOFTWARE_NAME = 'MTB3A';
 
-/** A000 1004: 15 random digits, one per export, the first never zero (appendix 5, note 2). */
-const uniformFilePrimaryId = () => `${randomInt(1, 10)}${String(randomInt(0, 1e7)).padStart(7, '0')}${String(randomInt(0, 1e7)).padStart(7, '0')}`;
+/**
+ * A000 1004: 15 random digits, one per export, the first never zero (appendix 5, note 2). From randomBytes, which the
+ * signed-out portal's crypto shim also has (no randomInt there).
+ */
+const UNIFORM_FILE_ID_FLOOR = 10n ** 14n;
+/** No document predates this (the issuing core shipped in 2026; the spec's dates are 8 digits). */
+const UNIFORM_FILE_EARLIEST = '2000-01-01';
+const uniformFilePrimaryId = () => String(UNIFORM_FILE_ID_FLOOR + (BigInt(`0x${randomBytes(8).toString('hex')}`) % (9n * UNIFORM_FILE_ID_FLOOR)));
+
+/** A real calendar day (the regex lets 2026-02-31 through). */
+const isCalendarDay = (iso: string) => {
+  const day = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === iso;
+};
 
 const UniformFileQuerySchema = z.object({
   from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from is a date, YYYY-MM-DD').openapi({ example: '2025-01-01' }),
@@ -964,13 +976,22 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const organization = await issuingProfile(c, false);
       const { from, to, lang } = c.req.valid('query');
       const now = c.get('now')();
+      for (const [field, day] of [['from', from], ['to', to]] as const) {
+        if (!isCalendarDay(day) || day < UNIFORM_FILE_EARLIEST) throw new ApiError('VALIDATION_FAILED', `${field} is not a date MTB3A could have issued on`, { reason: 'PERIOD_RANGE', field });
+      }
       if (from > to) throw new ApiError('VALIDATION_FAILED', 'to comes before from', { reason: 'PERIOD_RANGE', field: 'to' });
       if (to > todayFor(organization, now)) throw new ApiError('VALIDATION_FAILED', 'A range can’t reach past today', { reason: 'PERIOD_RANGE', field: 'to' });
       const issuer = await mustIssuer(organization.id);
       const documents = await store.issuing.inRange(organization.id, from, to);
       const originals = await originalsOf(organization.id, documents);
       const software = { ...uniformFileHouse, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
-      const file = buildUniformFile({ issuer, documents, originals, range: { from, to }, producedAt: now, primaryId: uniformFilePrimaryId(), software });
+      let file: UniformFile;
+      try {
+        file = buildUniformFile({ issuer, documents, originals, range: { from, to }, producedAt: now, primaryId: uniformFilePrimaryId(), software });
+      } catch (err) {
+        if (!(err instanceof DocumentTooLargeError)) throw err;
+        throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
+      }
       const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range: { from, to }, producedAt: now, software }, lang);
       const zip = uniformFileZip(file, report);
       // A member's export is recorded; an accountant reads under a read-only store, like every issuing read (no audit).

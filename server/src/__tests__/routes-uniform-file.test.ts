@@ -85,7 +85,7 @@ describe('GET /v1/issuing/uniform-file (MUT-569)', () => {
   it('refuses a reversed range, a range past today and a malformed date', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);
-    for (const query of ['from=2026-11-05&to=2026-11-01', 'from=2026-11-01&to=2026-11-07', 'from=2026-1-1&to=2026-11-01']) {
+    for (const query of ['from=2026-11-05&to=2026-11-01', 'from=2026-11-01&to=2026-11-07', 'from=2026-1-1&to=2026-11-01', 'from=2026-02-31&to=2026-11-01', 'from=0000-01-01&to=2026-11-01']) {
       const res = await download(h, w.on, query);
       expect(res.status, query).toBe(422);
     }

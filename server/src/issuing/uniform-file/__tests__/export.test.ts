@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeLineInput } from '../../compose.js';
 import type { IssuedDocType } from '../../types.js';
-import { buildUniformFile, type UniformFileDocument, type UniformFileInput } from '../export.js';
+import { buildUniformFile, DocumentTooLargeError, type UniformFileDocument, type UniformFileInput } from '../export.js';
 
 /** MUT-569: issued documents → INI.TXT + BKMVDATA.TXT (spec 1.31). AC2 (counts match) and AC3 (no documents) live here. */
 
@@ -61,7 +61,7 @@ const input = (documents: UniformFileDocument[], over: Partial<UniformFileInput>
   ...over,
 });
 
-const lines = (buf: Buffer) => buf.toString('latin1').split('\r\n').filter((l) => l.length > 0);
+const lines = (buf: Uint8Array) => Buffer.from(buf).toString('latin1').split('\r\n').filter((l) => l.length > 0);
 const field = (line: string, start: number, width: number) => line.slice(start - 1, start - 1 + width);
 const code = (line: string) => line.slice(0, 4);
 const signed = (s: string) => BigInt(s);
@@ -80,7 +80,7 @@ describe('buildUniformFile', () => {
 
   it('ends every record with CRLF, at its spec width, in ISO-8859-8', () => {
     const file = buildUniformFile(input([doc('TAX_INVOICE', 1), doc('TAX_INVOICE_RECEIPT', 1), doc('RECEIPT', 1)]));
-    const text = file.bkmv.toString('latin1');
+    const text = Buffer.from(file.bkmv).toString('latin1');
     expect(text.endsWith('\r\n')).toBe(true);
     const widths: Record<string, number> = { A100: 95, C100: 444, D110: 339, D120: 222, Z900: 110 };
     for (const l of lines(file.bkmv)) expect(l.length).toBe(widths[code(l)]);
@@ -200,8 +200,34 @@ describe('buildUniformFile', () => {
     const file = buildUniformFile(input([doc('TAX_INVOICE', 1), doc('TAX_INVOICE', 2), doc('RECEIPT', 1)]));
     expect(file.byType).toEqual([
       { docType: 'TAX_INVOICE', count: 2, grossMinor: shekels(1180) * 2n },
+      { docType: 'TAX_INVOICE_RECEIPT', count: 0, grossMinor: 0n },
+      { docType: 'CREDIT_NOTE', count: 0, grossMinor: 0n },
       { docType: 'RECEIPT', count: 1, grossMinor: shekels(1000) },
     ]);
+  });
+
+  it('VAT-inclusive prices: every line still adds up to the agora (unit price rounded up, the rest a discount)', () => {
+    const docs = [117, 203.81, 99.99, 1180, 0.01, 33.33].map((price, i) =>
+      doc('TAX_INVOICE', i + 1, { pricesIncludeVat: true, lines: [line('a', 3_000n, price), line('b', 1_500n, price + 1), line('c', 7_000n, price)] }),
+    );
+    for (const l of lines(buildUniformFile(input(docs)).bkmv).filter((r) => code(r) === 'D110')) {
+      const qty = signed(field(l, 224, 17));
+      const unit = signed(field(l, 241, 15));
+      const discount = signed(field(l, 256, 15));
+      expect(discount).toBeLessThanOrEqual(0n);
+      expect((qty * unit + 5_000n) / 10_000n + discount).toBe(signed(field(l, 271, 15)));
+    }
+  });
+
+  it('a document too large for the file is named, not written wrong', () => {
+    const huge = doc('TAX_INVOICE', 9);
+    huge.grossMinor = 10n ** 15n;
+    expect(() => buildUniformFile(input([huge]))).toThrow(DocumentTooLargeError);
+    try {
+      buildUniformFile(input([huge]));
+    } catch (err) {
+      expect(err).toMatchObject({ docType: 'TAX_INVOICE', number: 9 });
+    }
   });
 });
 

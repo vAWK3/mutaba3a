@@ -1,7 +1,7 @@
 import type { IssuedDocumentRecord } from '../../repositories/ports.js';
 import { roundHalfUpDiv } from '../../vat.js';
 import { DOC_TYPE_CODES, ISSUED_DOC_TYPES, type DealerType, type IssuedDocType } from '../types.js';
-import { encodeLine, isoDate } from './format.js';
+import { encodeLine, FieldOverflowError, isoDate } from './format.js';
 import { renderRecord, type FieldValue, type RecordCode } from './layout.js';
 
 /**
@@ -71,6 +71,13 @@ export interface UniformFileInput {
   software: UniformFileSoftware;
 }
 
+/** A document the file can't hold (an amount over its field's 12 digits of shekels): named, so the route can say which. */
+export class DocumentTooLargeError extends Error {
+  constructor(readonly docType: IssuedDocType, readonly number: number) {
+    super(`uniform file: ${docType} ${number} has an amount too large for the file`);
+  }
+}
+
 export interface UniformFileTypeTotal {
   docType: IssuedDocType;
   count: number;
@@ -80,13 +87,13 @@ export interface UniformFileTypeTotal {
 export interface UniformFile {
   /** `OPENFRMT/<first 8 VAT digits>.<YY>/<MMDDhhmm>` (spec §2.2). */
   folder: string;
-  ini: Buffer;
-  bkmv: Buffer;
+  ini: Uint8Array;
+  bkmv: Uint8Array;
   /** Every BKMVDATA record, A100 and Z900 included. */
   totalRecords: number;
   /** Records per type, BKMVDATA's order (the production summary, appendix 4). */
   recordCounts: { code: RecordCode; count: number }[];
-  /** The documents report (§2.6 b): per type present, by code. */
+  /** The documents report (§2.6 b): every type MTB3A issues, by code, zero where none. */
   byType: UniformFileTypeTotal[];
 }
 
@@ -120,9 +127,12 @@ function customerKey(doc: UniformFileDocument): string {
   return doc.customerId ? doc.customerId.replace(/-/g, '').slice(0, CUSTOMER_KEY_WIDTH) : WALK_IN_KEY;
 }
 
+const ceilDiv = (n: bigint, d: bigint) => (n + d - 1n) / d;
+
 /** The line's unit price before VAT, and the discount that makes quantity × price − discount its net, to the agora. */
 function lineFigures(line: UniformFileDocument['lines'][number]): { unitMinor: bigint; discountMinor: bigint } {
-  const unitMinor = line.pricesIncludeVat ? roundHalfUpDiv(line.unitPriceMinor * BP, BP + BigInt(line.vatRateBasisPoints)) : line.unitPriceMinor;
+  // Rounded up: quantity × price then never falls below the net, and the spare agora lands in the discount (1266).
+  const unitMinor = line.pricesIncludeVat ? ceilDiv(line.unitPriceMinor * BP, BP + BigInt(line.vatRateBasisPoints)) : line.unitPriceMinor;
   const before = roundHalfUpDiv(line.quantityMilli * unitMinor, MILLI);
   return { unitMinor, discountMinor: before > line.netMinor ? before - line.netMinor : 0n };
 }
@@ -184,9 +194,19 @@ function writeDocument(out: Writer, doc: UniformFileDocument, input: UniformFile
 const byCodeThenNumber = (a: UniformFileDocument, b: UniformFileDocument) =>
   DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number;
 
-const CRLF = Buffer.from('\r\n', 'latin1');
-/** Every record ends in CR LF, the last one too (spec §2.4 ט). */
-const crlf = (records: string[]) => Buffer.concat(records.flatMap((r) => [encodeLine(r), CRLF]));
+/** Every record ends in CR LF, the last one too (spec §2.4 ט). Byte arrays only (no Node Buffer: see encodeLine). */
+function crlf(records: string[]): Uint8Array {
+  const lines = records.map(encodeLine);
+  const out = new Uint8Array(lines.reduce((n, l) => n + l.length + 2, 0));
+  let at = 0;
+  for (const line of lines) {
+    out.set(line, at);
+    out[at + line.length] = 0x0d;
+    out[at + line.length + 1] = 0x0a;
+    at += line.length + 2;
+  }
+  return out;
+}
 
 export function buildUniformFile(input: UniformFileInput): UniformFile {
   const { issuer, software, primaryId } = input;
@@ -196,7 +216,14 @@ export function buildUniformFile(input: UniformFileInput): UniformFile {
 
   const out = new Writer();
   out.add('A100', { 1100: 'A100', 1102: issuer.vatId, 1103: primaryId, 1104: CONSTANT }, 1101);
-  for (const doc of documents) writeDocument(out, doc, input);
+  for (const doc of documents) {
+    try {
+      writeDocument(out, doc, input);
+    } catch (err) {
+      if (err instanceof FieldOverflowError) throw new DocumentTooLargeError(doc.docType, doc.number);
+      throw err;
+    }
+  }
   const totalRecords = out.lines.length + 1;
   out.add('Z900', { 1150: 'Z900', 1152: issuer.vatId, 1153: primaryId, 1154: CONSTANT, 1155: totalRecords }, 1151);
 
@@ -216,7 +243,7 @@ export function buildUniformFile(input: UniformFileInput): UniformFile {
     const ofType = documents.filter((d) => d.docType === docType);
     return { docType, count: ofType.length, grossMinor: ofType.reduce((s, d) => s + d.grossMinor, 0n) };
   })
-    .filter((t) => t.count > 0)
+    // §2.6 b: every type the software issues, with zero where none.
     .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType]);
 
   return {
