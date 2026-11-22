@@ -2108,6 +2108,9 @@ export const CustomerSchema = z
     notes: z.string().nullable(),
     /** Default VAT treatment for this customer's items (e.g. OUT_OF_SCOPE for a foreign client). */
     vatTreatment: VatTreatmentSchema.nullable(),
+    /** MUT-642: VAT, company or ID number, 9 digits; printed on issued documents. */
+    taxId: z.string().nullable(),
+    address: z.string().nullable(),
     status: EntityStatusSchema,
     archivedAt: z.string().datetime().nullable(),
     externalReference: ExternalReferenceSchema.nullable(),
@@ -2125,6 +2128,9 @@ export const CreateCustomerRequestSchema = z
     phone: phone.optional(),
     notes: notes.optional(),
     vatTreatment: VatTreatmentSchema.optional(),
+    /** MUT-642: 9 digits with the check digit (shorter numbers are left-padded; dashes and spaces ignored), else 422 TAX_ID_INVALID. */
+    taxId: z.string().max(20).optional(),
+    address: z.string().trim().max(300).optional(),
     /** When present and already known, the existing customer is returned (200) instead of a duplicate. */
     externalReference: ExternalReferenceSchema.optional(),
   })
@@ -2137,6 +2143,8 @@ export const UpdateCustomerRequestSchema = z
     phone: phone.nullable().optional(),
     notes: notes.nullable().optional(),
     vatTreatment: VatTreatmentSchema.nullable().optional(),
+    taxId: z.string().max(20).nullable().optional(),
+    address: z.string().trim().max(300).nullable().optional(),
   })
   .strict()
   .openapi('UpdateCustomerRequest');

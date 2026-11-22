@@ -114,6 +114,8 @@ export const ERROR_CODES = {
   RECONCILE_FAILED: 502,
   /** MUT-362: Stripe didn't answer a Checkout, Customer Portal or customer call in time; trying again shortly may work. */
   STRIPE_UNAVAILABLE: 502,
+  /** MUT-642: the public company/nonprofit registry (data.gov.il) didn't answer in time; the person types the details. */
+  REGISTRY_UNAVAILABLE: 502,
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
   BILLING_NOT_CONFIGURED: 503,

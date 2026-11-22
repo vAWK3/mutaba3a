@@ -43,7 +43,7 @@ type Columns<R> = { [K in keyof R]-?: true };
 
 const cols = <R>() => <S extends Columns<R>>(select: S & Record<Exclude<keyof S, keyof R>, never>) => select;
 
-const CUSTOMER = cols<CustomerRecord>()({ id: true, organizationId: true, name: true, email: true, phone: true, notes: true, status: true, vatTreatment: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
+const CUSTOMER = cols<CustomerRecord>()({ id: true, organizationId: true, name: true, email: true, phone: true, notes: true, status: true, vatTreatment: true, taxId: true, address: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 const PROJECT = cols<ProjectRecord>()({ id: true, organizationId: true, customerId: true, name: true, currency: true, status: true, vatTreatment: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 const EXTERNAL_REFERENCE = cols<ExternalReferenceRecord>()({ id: true, organizationId: true, provider: true, entityType: true, entityId: true, externalId: true, createdAt: true });
 const VAT_RATE = cols<VatRateRecord>()({ id: true, organizationId: true, rateBasisPoints: true, effectiveFrom: true, createdAt: true });

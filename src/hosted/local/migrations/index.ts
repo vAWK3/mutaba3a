@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, IntegrationRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, CustomerRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, IntegrationRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -273,6 +273,12 @@ function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
 }
 
+/** MUT-642, 20 → 21: a customer gains a VAT/company number and an address, both unknown on a device: null. */
+function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
+  const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'taxId' | 'address'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, custs: new Map([...custs].map(([id, c]) => [id, { ...c, taxId: null, address: null }])) } };
+}
+
 /**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
@@ -299,6 +305,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 17, to: 18, migrate: addMemberSyncAt },
   { from: 18, to: 19, migrate: addPasswordChosen },
   { from: 19, to: 20, migrate: addMonthlySummaryMail },
+  { from: 20, to: 21, migrate: addCustomerTaxId },
 ];
 
 /**

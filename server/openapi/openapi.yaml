@@ -1,13 +1,13 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.116.0-mut640
+  version: 1.117.0-mut642
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -734,6 +734,7 @@ components:
                 - INTERNAL
                 - RECONCILE_FAILED
                 - STRIPE_UNAVAILABLE
+                - REGISTRY_UNAVAILABLE
                 - ATTACHMENTS_NOT_CONFIGURED
                 - BILLING_NOT_CONFIGURED
                 - MAILER_NOT_CONFIGURED
@@ -5640,6 +5641,12 @@ components:
           allOf:
             - $ref: "#/components/schemas/VatTreatment"
             - nullable: true
+        taxId:
+          type: string
+          nullable: true
+        address:
+          type: string
+          nullable: true
         status:
           $ref: "#/components/schemas/EntityStatus"
         archivedAt:
@@ -5664,6 +5671,8 @@ components:
         - phone
         - notes
         - vatTreatment
+        - taxId
+        - address
         - status
         - archivedAt
         - externalReference
@@ -5708,6 +5717,12 @@ components:
           maxLength: 4000
         vatTreatment:
           $ref: "#/components/schemas/VatTreatment"
+        taxId:
+          type: string
+          maxLength: 20
+        address:
+          type: string
+          maxLength: 300
         externalReference:
           $ref: "#/components/schemas/ExternalReference"
       required:
@@ -5750,6 +5765,14 @@ components:
           allOf:
             - $ref: "#/components/schemas/VatTreatment"
             - nullable: true
+        taxId:
+          type: string
+          nullable: true
+          maxLength: 20
+        address:
+          type: string
+          nullable: true
+          maxLength: 300
       additionalProperties: false
     CustomerStatement:
       type: object
@@ -10939,6 +10962,38 @@ components:
           format: uuid
       required:
         - receiptId
+    BusinessLookup:
+      type: object
+      properties:
+        taxId:
+          type: string
+        kind:
+          type: string
+          enum:
+            - company
+            - nonprofit
+        name:
+          type: string
+        nameEn:
+          type: string
+          nullable: true
+        status:
+          type: string
+          description: As the registry says it (Hebrew), e.g. פעילה, מחוקה, רשומה
+        active:
+          type: boolean
+          description: "False for a dissolved, struck-off or deleted body: warn before invoicing it"
+        address:
+          type: string
+          nullable: true
+      required:
+        - taxId
+        - kind
+        - name
+        - nameEn
+        - status
+        - active
+        - address
     CreateLibraryReceiptUploadRequest:
       type: object
       properties:
@@ -19286,8 +19341,11 @@ paths:
       tags:
         - Customers
       summary: Update a customer (optimistic, If-Match)
+      description: "MUT-642: a session may update a customer on a profile it writes (its own, not a Malafat-fed one), e.g. to add the VAT number and address an issued document needs."
       security:
         - apiKey: []
+        - session: []
+        - deviceSession: []
       parameters:
         - schema:
             type: string
@@ -25760,6 +25818,60 @@ paths:
                 anyOf:
                   - $ref: "#/components/schemas/ReceiptReadJobResult"
                   - $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/business-lookup:
+    get:
+      tags:
+        - Customers
+      summary: Look a company or nonprofit up by its number
+      description: Validates the check digit (422 TAX_ID_INVALID), then asks the Registrar of Companies or the nonprofits registry (open data). 404 NOT_IN_REGISTRY for a number neither holds (a sole dealer, a person); 502 REGISTRY_UNAVAILABLE when the registry doesn't answer in time.
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 20
+          required: true
+          name: number
+          in: query
+      responses:
+        "200":
+          description: Found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BusinessLookup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/receipts/uploads:
     post:
       tags:

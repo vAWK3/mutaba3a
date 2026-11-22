@@ -353,6 +353,22 @@ describe('local snapshot migrations', () => {
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
+  it('20 → 21 (MUT-642): a client gains a null VAT number and address, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'maya@studio.ps', displayName: 'Maya', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-maya', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.customers.create({ organizationId: org.id, name: 'Acme', email: null, phone: null, notes: null }, AT);
+    const { maps } = store.snapshot();
+    const custs = new Map([...maps.custs].map(([id, c]) => [id, Object.fromEntries(Object.entries(c).filter(([field]) => field !== 'taxId' && field !== 'address'))]));
+    const before: StoredSnapshot = { formatVersion: 20, stateVersion: 4, savedAt: AT, maps: { ...maps, custs } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.custs.values()]).toEqual([...maps.custs.values()]);
+    expect([...after.maps.custs.values()][0]).toMatchObject({ name: 'Acme', taxId: null, address: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
   it("leaves the snapshot it was given untouched", async () => {
     const before = await formatOneSnapshot();
     const orgs = JSON.stringify([...before.maps.orgs.values()]);

@@ -78,6 +78,8 @@ const CORRECTION_OPERATIONS = ['POST /v1/payments/{paymentId}/reverse', 'POST /v
 
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];
+/** MUT-642: the company/nonprofit lookup — session-only, hosted only. */
+const BUSINESS_LOOKUP_OPERATIONS = ['GET /v1/business-lookup'];
 /** MUT-568 (ADR-260): issuing — session-only. */
 const ISSUING_OPERATIONS = [
   'GET /v1/issuer',
@@ -296,6 +298,10 @@ const SESSION_OPERATIONS = [
   // MUT-65: a session may now create a customer or a project on its own personal profile.
   'POST /v1/customers',
   'POST /v1/projects',
+  // MUT-642: and update a customer on a profile it writes (the VAT number and address issuing needs).
+  'PATCH /v1/customers/{customerId}',
+  // MUT-642: the company/nonprofit lookup (hosted only).
+  'GET /v1/business-lookup',
 ].sort();
 /** MUT-64: the same surface, minus cookie-only sign-out, plus the device-only sign-out. A device token gets exactly a cookie session's reach. */
 // MUT-434: connecting an agent is the portal's (cookie) alone; the phone has no consent page.
@@ -500,7 +506,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...BUSINESS_LOOKUP_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -510,7 +516,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...BUSINESS_LOOKUP_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);

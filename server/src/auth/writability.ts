@@ -158,7 +158,7 @@ export function accountantScopes(): readonly Scope[] {
  *  - MUT-589: an expense's move preview, tagged expenses:read: it is the first half of a move (a write), and it reads
  *    the person's other profiles.
  */
-export const ACCOUNTANT_EXCLUDED_ROUTES: ReadonlySet<string> = new Set(['GET /v1/retainers/:agreementId/charges', 'GET /v1/expenses/:expenseId/move-preview']);
+export const ACCOUNTANT_EXCLUDED_ROUTES: ReadonlySet<string> = new Set(['GET /v1/retainers/:agreementId/charges', 'GET /v1/expenses/:expenseId/move-preview', 'GET /v1/business-lookup']);
 
 /**
  * MUT-559 (D1): whether an accountant may call the GET `endpoint` (`METHOD /hono/:path`) whose `requireScope` tags are

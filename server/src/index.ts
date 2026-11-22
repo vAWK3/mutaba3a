@@ -1,3 +1,4 @@
+import { RegistryLookup } from './israel/registry.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { loadConfig, readOidcAudience } from './config.js';
 import { HttpOcrClient } from './receipts/ocr-client.js';
@@ -146,6 +147,15 @@ const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 *
 // MUT-115 (D2): config has already refused an origin outside the RP ID; null = no passkeys.
 const webauthn = webauthnConfigOf({ rpId: config.WEBAUTHN_RP_ID, origins: config.WEBAUTHN_ORIGINS, portalOrigin: config.PORTAL_ORIGIN });
 
+// MUT-642: the company/nonprofit lookup; answers are cached for a day.
+const registry = new RegistryLookup({
+  baseUrl: config.DATA_GOV_IL_URL,
+  companiesResource: config.DATA_GOV_IL_COMPANIES_RESOURCE,
+  nonprofitsResource: config.DATA_GOV_IL_NONPROFITS_RESOURCE,
+  timeoutMs: config.DATA_GOV_IL_TIMEOUT_MS,
+  ttlMs: 24 * 60 * 60 * 1000,
+});
+
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
   ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
@@ -258,6 +268,7 @@ const app = createApp({
         }
       : null,
   fxRates,
+  registry,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },

@@ -7564,7 +7564,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a customer (optimistic, If-Match) */
+        /**
+         * Update a customer (optimistic, If-Match)
+         * @description MUT-642: a session may update a customer on a profile it writes (its own, not a Malafat-fed one), e.g. to add the VAT number and address an issued document needs.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -16586,6 +16589,92 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Look a company or nonprofit up by its number
+         * @description Validates the check digit (422 TAX_ID_INVALID), then asks the Registrar of Companies or the nonprofits registry (open data). 404 NOT_IN_REGISTRY for a number neither holds (a sole dealer, a person); 502 REGISTRY_UNAVAILABLE when the registry doesn't answer in time.
+         */
+        get: {
+            parameters: {
+                query: {
+                    number: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Found */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BusinessLookup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -26335,6 +26424,8 @@ export interface components {
             phone: string | null;
             notes: string | null;
             vatTreatment: components["schemas"]["VatTreatment"] & unknown;
+            taxId: string | null;
+            address: string | null;
             status: components["schemas"]["EntityStatus"];
             /** Format: date-time */
             archivedAt: string | null;
@@ -26358,6 +26449,8 @@ export interface components {
             phone?: string;
             notes?: string;
             vatTreatment?: components["schemas"]["VatTreatment"];
+            taxId?: string;
+            address?: string;
             externalReference?: components["schemas"]["ExternalReference"];
         };
         CustomerPage: {
@@ -26371,6 +26464,8 @@ export interface components {
             phone?: string | null;
             notes?: string | null;
             vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+            taxId?: string | null;
+            address?: string | null;
         };
         CustomerStatement: {
             /** Format: uuid */
@@ -28338,6 +28433,18 @@ export interface components {
         ReceiptReadJobRequest: {
             /** Format: uuid */
             receiptId: string;
+        };
+        BusinessLookup: {
+            taxId: string;
+            /** @enum {string} */
+            kind: "company" | "nonprofit";
+            name: string;
+            nameEn: string | null;
+            /** @description As the registry says it (Hebrew), e.g. פעילה, מחוקה, רשומה */
+            status: string;
+            /** @description False for a dissolved, struck-off or deleted body: warn before invoicing it */
+            active: boolean;
+            address: string | null;
         };
         CreateLibraryReceiptUploadRequest: {
             filename: string;

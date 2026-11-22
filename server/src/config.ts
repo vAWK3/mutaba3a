@@ -80,6 +80,11 @@ const envSchema = z.object({
     .default('https://api.frankfurter.dev/v1/latest'),
   FX_RATES_TTL_MINUTES: z.coerce.number().int().min(15).max(1440).default(240),
   FX_RATES_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(3000),
+  /** MUT-642: Israel's open-data CKAN `datastore_search` (data.gov.il) and the two registries' resource ids. */
+  DATA_GOV_IL_URL: z.string().url().refine(isHttpsOrLocalHttp, 'must be https (plain http only for localhost or 127.0.0.1)').default('https://data.gov.il/api/3/action/datastore_search'),
+  DATA_GOV_IL_COMPANIES_RESOURCE: z.string().min(1).default('f004176c-b85f-4542-8901-7b3176f9a054'),
+  DATA_GOV_IL_NONPROFITS_RESOURCE: z.string().min(1).default('be5b7935-3922-45d4-9638-08871b17ec95'),
+  DATA_GOV_IL_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(2500),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),

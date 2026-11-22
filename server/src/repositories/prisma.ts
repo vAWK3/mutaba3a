@@ -1939,6 +1939,8 @@ export class PrismaLedgerStore implements LedgerStore {
       if (patch.phone !== undefined) data.phone = patch.phone;
       if (patch.notes !== undefined) data.notes = patch.notes;
       if (patch.vatTreatment !== undefined) data.vatTreatment = patch.vatTreatment;
+      if (patch.taxId !== undefined) data.taxId = patch.taxId;
+      if (patch.address !== undefined) data.address = patch.address;
       const { count } = await this.prisma.customer.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
       const record = await this.prisma.customer.findFirst({ where: { id, organizationId } });
       if (!record) return { kind: 'not_found' };

@@ -13,7 +13,7 @@ import { ISSUED_DOC_TYPES } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   IssueDocumentRequestSchema,
   IssuedCopyRequestSchema,
@@ -34,6 +34,10 @@ import { serializeComposedTotals, serializeIssuedDocument, serializeIssuer } fro
 import { z } from '@hono/zod-openapi';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
+
+/** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */
+const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
+  customer ? { name: customer.name, ...(customer.taxId ? { taxId: customer.taxId } : {}), ...(customer.address ? { address: customer.address } : {}) } : {};
 
 /** The business details printed on a document, frozen on it at issue. */
 const issuerSnapshot = (issuer: IssuerDetailsRecord): JsonObject => ({ legalName: issuer.legalName, vatId: issuer.vatId, dealerType: issuer.dealerType, address: issuer.address, city: issuer.city, phone: issuer.phone, email: issuer.email, website: issuer.website });
@@ -280,8 +284,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
         composed,
         issuer: issuerSnapshot(issuer),
         customerId: customer?.id ?? null,
-        // R-D3: the name now; the VAT number and address join the snapshot with MUT-642.
-        customer: customer ? { name: customer.name } : {},
+        customer: customerSnapshot(customer),
         language: body.language,
         style: issuer.documentStyle,
         ink: issuer.ink,
@@ -412,7 +415,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
           pricesIncludeVat: composed.pricesIncludeVat,
           issuer: issuerSnapshot(issuer),
           customerId: customer?.id ?? null,
-          customer: customer ? { name: customer.name } : {},
+          customer: customerSnapshot(customer),
           language: body.language,
           style: issuer.documentStyle,
           ink: issuer.ink,

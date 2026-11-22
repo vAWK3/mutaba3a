@@ -5,6 +5,7 @@ import { postDueItems } from '../agreements/posting.js';
 import { buildStatement, decodeStatementCursor } from '../statements/build.js';
 import { serializeStatement } from '../statements/serialize.js';
 import { ApiError } from '../errors.js';
+import { normalizeTaxId } from '../israel/tax-id.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
@@ -37,6 +38,13 @@ import {
 const customerJson = { content: { 'application/json': { schema: CustomerSchema } } };
 
 /** /v1/customers — the party money is owed by (M2 brief §2.2). */
+
+/** MUT-642: a customer's VAT, company or ID number, normalised to 9 digits, or 422 TAX_ID_INVALID. */
+function validTaxId(raw: string): string {
+  const taxId = normalizeTaxId(raw);
+  if (!taxId) throw new ApiError('VALIDATION_FAILED', 'Not a valid VAT, company or ID number (9 digits with the check digit)', { field: 'taxId', reason: 'TAX_ID_INVALID' });
+  return taxId;
+}
 export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
@@ -80,7 +88,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let customer: CustomerRecord;
       try {
         customer = await store.customers.create(
-          { organizationId: organization.id, name: body.name, email: body.email ?? null, phone: body.phone ?? null, notes: body.notes ?? null, vatTreatment: body.vatTreatment ?? null },
+          { organizationId: organization.id, name: body.name, email: body.email ?? null, phone: body.phone ?? null, notes: body.notes ?? null, vatTreatment: body.vatTreatment ?? null, taxId: body.taxId?.trim() ? validTaxId(body.taxId) : null, address: body.address?.trim() || null },
           now,
           reference,
         );
@@ -156,13 +164,15 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/customers/{customerId}',
       tags: ['Customers'],
       summary: 'Update a customer (optimistic, If-Match)',
-      security: [{ apiKey: [] }],
+      description: 'MUT-642: a session may update a customer on a profile it writes (its own, not a Malafat-fed one), e.g. to add the VAT number and address an issued document needs.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('customers:write'), ifMatch()] as const,
       request: { params: CustomerIdParamSchema, headers: IfMatchHeaderSchema, body: { required: true, content: { 'application/json': { schema: UpdateCustomerRequestSchema } } } },
       responses: { 200: { description: 'Updated', ...customerJson }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, apiKey } = keyAuth(c);
+      const { organization } = c.get('auth');
+      const actor = actorOf(c);
       const body = c.req.valid('json');
       const patch: UpdateCustomerPatch = {};
       if (body.name !== undefined) patch.name = body.name;
@@ -170,6 +180,8 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (body.phone !== undefined) patch.phone = body.phone;
       if (body.notes !== undefined) patch.notes = body.notes;
       if (body.vatTreatment !== undefined) patch.vatTreatment = body.vatTreatment;
+      if (body.taxId !== undefined) patch.taxId = body.taxId?.trim() ? validTaxId(body.taxId) : null;
+      if (body.address !== undefined) patch.address = body.address?.trim() || null;
 
       const result = await store.customers.update(organization.id, c.req.valid('param').customerId, c.get('expectedVersion'), patch, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such customer');
@@ -177,8 +189,8 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 
       await store.audit.append({
         organizationId: organization.id,
-        actorType: 'API_KEY',
-        actorId: apiKey.id,
+        actorType: actor.actorType,
+        actorId: actor.actorId,
         action: 'customer.updated',
         entityType: 'customer',
         entityId: result.record.id,

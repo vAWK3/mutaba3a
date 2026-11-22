@@ -414,7 +414,25 @@
         "outstanding": "Outstanding",
         "status": "Status"
       },
-      "noMatters": "No matters with fees on this client yet."
+      "noMatters": "No matters with fees on this client yet.",
+      "business": {
+        "title": "Business details",
+        "add": "Add business details",
+        "edit": "Edit",
+        "taxId": "VAT or company number",
+        "taxIdHint": "9 digits. A company or nonprofit fills in from the registry.",
+        "address": "Address",
+        "invalid": "This number is not valid. Check the digits.",
+        "looking": "Looking it up in the registry…",
+        "foundCompany": "Registrar of Companies: {name}",
+        "foundNonprofit": "Registrar of Nonprofits: {name}",
+        "inactive": "The registry lists this business as “{status}”. Check before you issue it an invoice.",
+        "notInRegistry": "Not in the companies or nonprofits registry. For a licensed or exempt dealer, enter the details yourself.",
+        "registryDown": "The registry did not answer. Enter the details yourself, or try again later.",
+        "saveFailed": "The details were not saved. Try again.",
+        "useName": "Rename this client to the registered name, “{name}”",
+        "changedElsewhere": "This client was changed elsewhere. The latest version is loaded; review it and save again."
+      }
     },
     "matters": {
       "add": "Add matter",
