@@ -606,6 +606,17 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-710: seals two-step sign-in secrets; required on production (config.ts), generated in two_factor.tf.
+        env {
+          name = "TWO_FACTOR_SEAL_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.two_factor_seal_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+
         # MUT-434: OAuth for MCP agents stays off (503) until oauth_enabled; the key always holds a version.
         dynamic "env" {
           for_each = var.oauth_enabled ? toset(["OAUTH_DERIVE_KEY"]) : toset([])
@@ -952,6 +963,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_version.job_token,
     google_secret_manager_secret_version.oauth_derive_key,
     google_secret_manager_secret_iam_member.api_reads_oauth_derive_key,
+    google_secret_manager_secret_version.two_factor_seal_key,
+    google_secret_manager_secret_iam_member.api_reads_two_factor_seal_key,
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
     google_secret_manager_secret_iam_member.api_reads_session_pepper,

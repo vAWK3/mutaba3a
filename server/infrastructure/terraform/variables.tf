@@ -525,3 +525,9 @@ variable "issuing_tsa_url" {
   }
 }
 
+
+variable "auth_log_bucket_locked" {
+  description = "MUT-710: lock the 12-month authentication-log bucket (auth_log.tf). Irreversible: the retention can't be shortened and the bucket can't be deleted. Turn on after the first month's records are checked (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
