@@ -899,6 +899,12 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.issuedDocument.findFirst({ where: { id, organizationId } });
       return row ? withLines(this.prisma, row) : null;
     },
+    moneyDocumentOn: (organizationId, paymentId) =>
+      this.prisma.issuedDocument.findFirst({
+        where: { organizationId, paymentId, docType: { in: ['RECEIPT', 'TAX_INVOICE_RECEIPT'] } },
+        select: { id: true, docType: true, number: true },
+        orderBy: [{ issuedAt: 'asc' }, { id: 'asc' }],
+      }),
     list: async (organizationId, filter, page) => {
       const rows = await this.prisma.issuedDocument.findMany({
         where: {
@@ -2772,6 +2778,7 @@ export class PrismaLedgerStore implements LedgerStore {
         throw isTransactionTimeout(err) ? new LockConflict() : err;
       });
     },
+    findByClientRequestKey: (organizationId, clientRequestKey) => this.prisma.payment.findFirst({ where: { organizationId, clientRequestKey } }),
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
     capture: (input, at) =>
       this.paymentWrite(() =>
