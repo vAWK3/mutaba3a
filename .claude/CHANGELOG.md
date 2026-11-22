@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-270, API 1.127.0-mut702)
+
+### Added
+- `server/src/billing/plans.ts`: the one source for the plans (solo, business, firm; legacy freelancer): `TIER_OF`, `RANK` (Solo = Freelancer < Business < Firm), `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` (enforced by MUT-704) and `currentPlanOf`. No provider, price or lookup key.
+- Prisma `BillingTier` gains `SOLO` and `BUSINESS` (migration `20261123100000_mut702_plan_tiers`, ADD VALUE only).
+- `GET /v1/billing` `currentPlan`: the best plan covering any profile the person created (grant, subscription or trial); null when nothing covers them.
+- Operator grants of Solo and Business (admin route, console route, `users billing-grant`); the console lists Solo, Business, Firm and Freelancer (legacy), Solo first (en + ar; Arabic names await Basel).
+- Release-QA feature `portal-selfservice.operator.billing-grant-business` and its spec (not yet run).
+
+### Changed
+- A trial (running, read-only or locked) resolves to tier `BUSINESS`, not `FREELANCER`. Nothing reads the tier yet.
+- `entitlement.ts` ranks grants and subscriptions by `plans.ts` `RANK` (was: Firm 1, everything else 0).
+- Schemas: one inline `ProfilePlanTierSchema` for the profile tier enums; `BillingTier` gains SOLO and BUSINESS. Additive.
+
+**Why:** epic MUT-701 sells Solo, Business and Firm. The seller and provider are open (MUT-700), so only the provider-neutral half is built; per-plan prices, Checkout per plan, plan change and the catalog script (Part B) are held.
+
+**Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261123100000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

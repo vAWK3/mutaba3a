@@ -2945,3 +2945,7 @@ Issued documents get a row trigger that refuses UPDATE and DELETE and a statemen
 
 ### Pattern: A gap-free counter is one upsert statement, and refusals throw inside the transaction (MUT-568)
 `INSERT … ON CONFLICT DO UPDATE SET next = next + 1 RETURNING next - 1` as the transaction's first statement: the row lock serialises, the very first row can't race (Prisma's upsert can raise P2002 there), and checks that need the latest committed state run after it (READ COMMITTED). A refusal found after the increment throws a typed error caught outside `$transaction`, so the increment rolls back and no number is wasted; the memory store gets the same by checking everything before it writes.
+
+## Pattern: plan names, rank and limits live only in `billing/plans.ts` (MUT-702, ADR-270)
+**Where**: `server/src/billing/plans.ts`; read by `billing/entitlement.ts` (rank) and `routes/billing.ts` (`currentPlan`).
+**Rule**: any code that compares plans, picks the better one, decides when a change takes effect, or reads a plan's limits imports `RANK`, `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` or `currentPlanOf` from `plans.ts`. Never compare tiers by hand (`tier === 'FIRM'`) and never spell a limit elsewhere. `plans.ts` stays pure and provider-neutral: no payment provider, price or lookup key (those belong to the provider adapter, MUT-702 Part B).
