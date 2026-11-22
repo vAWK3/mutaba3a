@@ -33,7 +33,7 @@ trace), no defined retention, Cloud Logging default 30 days.
 - AC7 Authentication events (sign-in success/failure/lockout, every two-step event, password change/reset, Tax
   Authority connect, token issue and refresh) are written to a Cloud Logging bucket kept 365 days, encrypted at rest;
   a Terraform test asserts the bucket, its retention and the sink filter.
-- AC8 The phone and portal screens follow wireframes Basel approved (not built before approval).
+- AC8 The phone and portal screens follow the wireframes Basel approved on 2026-11-22 (`mut-710-wireframes.html`).
 
 ## 2. Decisions (→ ADR-275)
 
