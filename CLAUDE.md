@@ -32,7 +32,7 @@ MTB3A (Arabic **متابعة**; English is always "MTB3A", ADR-173) tracks who o
 
 ### Portal routes (`src/hosted/router.tsx`)
 - Pages that need no sign-in: `/sign-in`, `/signup`, `/recover`, `/setup`, `/carry-over`, `/carry-over/receive`, `/welcome` (MUT-513; a first visit to `/` shows the same welcome), `/accountant-invite` and `/share` (MUT-562, public; they work signed in too), `/mail-off` (MUT-535, the monthly summary's turn-it-off page).
-- Under a profile, `/p/$profileId`: `/` (overview), `/receivables`, `/payments`, `/clients`, `/clients/$customerId`, `/expenses` (with `/groups` and `/receipts`), `/conversions`, `/documents`, `/reports`.
+- Under a profile, `/p/$profileId`: `/` (home, MUT-657: Receipts & to-dos, `?view=in-out` for In & out; a bare `?currency=` redirects to Owed), `/owed` (Owed's overview), `/receivables`, `/payments`, `/clients`, `/clients/$customerId`, `/expenses` (with `/groups` and `/receipts`), `/conversions`, `/documents`, `/reports`.
 - Also `/reports` (the Glance across profiles, ADR-204), `/capture`, `/connect/approve`, `/client-books` and `/client-books/$profileId` (an accountant's desk, outside any profile, MUT-562).
 
 ---
