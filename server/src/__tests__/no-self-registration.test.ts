@@ -87,6 +87,9 @@ describe('no self-registration route exists (MUT-37)', () => {
       'GET /v1/auth/malafat/callback',
       'GET /v1/auth/malafat/office',
       'GET /v1/auth/malafat/start',
+      // MUT-571 (ADR-264): the Tax Authority sends the browser back here after sign-in; it trusts only its signed state
+      // and creates no account.
+      'GET /v1/issuing/tax-authority/callback',
       'GET /v1/public/fx-rates',
       'GET /v1/self-service',
       'POST /v1/account-recovery',
