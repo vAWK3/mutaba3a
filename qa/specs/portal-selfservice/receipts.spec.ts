@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { person } from '../../support/agent';
-import { chooseLanguage, grantCoverage, grantFeature, liveState } from '../../support/selfService';
+import { chooseLanguage, grantCoverage, liveState } from '../../support/selfService';
 
 /**
  * MUT-441 (AC8): our own server reads an uploaded receipt, against the live dev API (support/selfservice-live.mjs) and
