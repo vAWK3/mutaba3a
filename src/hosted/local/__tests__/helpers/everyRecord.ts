@@ -110,6 +110,8 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
     {
       organizationId: org, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 20_000n, receivedOn: '2026-10-03', method: 'BANK',
       reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: user.id, origin: 'CAPTURE', captureSource: null,
+      // pays.clientRequestKey: the phone's retry key (MUT-709)
+      clientRequestKey: 'k'.repeat(64),
       allocations: [{ receivableId: posted.receivable.id, amountMinor: 20_000n }],
     },
     LATER,

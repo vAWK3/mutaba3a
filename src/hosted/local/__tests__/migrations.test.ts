@@ -369,7 +369,7 @@ describe('local snapshot migrations', () => {
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
-  it('21 → 22 (MUT-660): a client gains a null documents preference, Owed and Received an unset not-for-invoice mark', async () => {
+  it('21 → 22 (MUT-660, MUT-709): a client gains a null documents preference, Owed and Received an unset not-for-invoice mark, Received a null client request key', async () => {
     const store = new MemoryLedgerStore();
     const { personalOrganization: org, user } = await store.users.create({ email: 'nour@studio.ps', displayName: 'Nour', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
     const client = await store.customers.create({ organizationId: org.id, name: 'Acme', email: null, phone: null, notes: null }, AT);
@@ -377,7 +377,7 @@ describe('local snapshot migrations', () => {
     await store.payments.capture({ organizationId: org.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 50n, receivedOn: '2026-11-21', method: 'BANK', notes: null, createdByUserId: user.id, requestId: null, captureSource: null }, AT);
     const { maps } = store.snapshot();
     const without = <T extends object>(m: Map<string, T>, field: string) => new Map([...m].map(([id, v]) => [id, Object.fromEntries(Object.entries(v).filter(([f]) => f !== field))]));
-    const before: StoredSnapshot = { formatVersion: 21, stateVersion: 4, savedAt: AT, maps: { ...maps, custs: without(maps.custs, 'documentsPreference'), recs: without(maps.recs, 'notForInvoice'), pays: without(maps.pays, 'notForInvoice') } as unknown as StoredSnapshot['maps'] };
+    const before: StoredSnapshot = { formatVersion: 21, stateVersion: 4, savedAt: AT, maps: { ...maps, custs: without(maps.custs, 'documentsPreference'), recs: without(maps.recs, 'notForInvoice'), pays: without(without(maps.pays, 'notForInvoice'), 'clientRequestKey') } as unknown as StoredSnapshot['maps'] };
 
     const after = migrate(before);
 
@@ -385,7 +385,7 @@ describe('local snapshot migrations', () => {
     expect([...after.maps.custs.values()]).toEqual([...maps.custs.values()]);
     expect([...after.maps.recs.values()]).toEqual([...maps.recs.values()]);
     expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()]);
-    expect([...after.maps.pays.values()][0]).toMatchObject({ notForInvoice: false });
+    expect([...after.maps.pays.values()][0]).toMatchObject({ notForInvoice: false, clientRequestKey: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

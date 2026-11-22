@@ -282,18 +282,19 @@ function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
 /**
  * MUT-660, 21 → 22: a customer gains a documents preference (null: the profile default), and every Owed and Received a
  * "not for invoice" mark (false). Invoicing is off on a device, so they are kept and round-trip but change nothing here.
+ * MUT-709 (same unreleased version): a Received also carries its client request key, null when none was sent.
  */
 function addDocumentsFields(snapshot: StoredSnapshot): StoredSnapshot {
   const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'documentsPreference'>>;
   const recs = snapshot.maps.recs as Map<string, Omit<ReceivableRecord, 'notForInvoice'>>;
-  const pays = snapshot.maps.pays as Map<string, Omit<PaymentRecord, 'notForInvoice'>>;
+  const pays = snapshot.maps.pays as Map<string, Omit<PaymentRecord, 'notForInvoice' | 'clientRequestKey'> & { clientRequestKey?: string | null }>;
   return {
     ...snapshot,
     maps: {
       ...snapshot.maps,
       custs: new Map([...custs].map(([id, c]) => [id, { ...c, documentsPreference: null }])),
       recs: new Map([...recs].map(([id, r]) => [id, { ...r, notForInvoice: false }])),
-      pays: new Map([...pays].map(([id, p]) => [id, { ...p, notForInvoice: false }])),
+      pays: new Map([...pays].map(([id, p]) => [id, { ...p, notForInvoice: false, clientRequestKey: p.clientRequestKey ?? null }])),
     },
   };
 }
