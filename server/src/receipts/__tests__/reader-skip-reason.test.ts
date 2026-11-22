@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../../attachments/storage.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { receipt } from '../extract/__tests__/fixtures.js';
@@ -24,7 +24,6 @@ let ORG = '';
 async function harness(result: (during: () => Promise<void>) => Promise<OcrResult>) {
   const store = new MemoryLedgerStore();
   ORG = (await store.organizations.create({ name: 'Firm', slug: `skip-${Math.random().toString(36).slice(2, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' })).id;
-  vi.spyOn(store.features, 'activeFor').mockResolvedValue(['receipt_reading']);
   const storage = new MemoryAttachmentStorage();
   const logs: Record<string, unknown>[] = [];
   const logger = pino({ level: 'info' }, { write: (line: string) => void logs.push(JSON.parse(line)) });

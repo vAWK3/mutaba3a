@@ -4091,11 +4091,11 @@ export interface ExpenseReceiptRepository {
   /** MUT-441: PENDING receipts whose lease is free (never taken, or expired), oldest request first: the sweep's work. */
   listPendingForSweep(now: Date, limit: number): Promise<ExpenseReceiptRecord[]>;
   /**
-   * MUT-441 (R5): when a person is granted `receipt_reading`, the To-review READY receipts they uploaded (on one
-   * profile, or all) whose suggestion is missing a field and which were never asked to be read (NONE) become PENDING,
-   * requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
+   * MUT-441 (R5): the To-review READY receipts one person uploaded (on one profile, or all), or with no `userId`
+   * everyone's (MUT-659's one-off backlog), whose suggestion is missing a field and which were never asked to be read
+   * (NONE) become PENDING, requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
    */
-  markBacklogPending(scope: { userId: string; organizationId?: string }, now: Date): Promise<string[]>;
+  markBacklogPending(scope: { userId?: string; organizationId?: string }, now: Date): Promise<string[]>;
   /**
    * MUT-514 (the re-read command): READY, live, To-review, unapproved receipts not being read now (not PENDING) whose
    * suggestion a server reader stamped (`server-ocr-…`), any profile, oldest first. The caller picks the generations.

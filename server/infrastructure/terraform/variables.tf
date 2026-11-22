@@ -108,9 +108,9 @@ variable "sentry_enabled" {
 }
 
 variable "receipts_library_enabled" {
-  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. false (default) = the API behaves as before MUT-255. Turn it on when MUT-260 (portal) or MUT-258 (phone) ships, and don't turn it back off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
+  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. MUT-659: true by default, for everyone. Don't turn it off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "accountant_access_enabled" {
