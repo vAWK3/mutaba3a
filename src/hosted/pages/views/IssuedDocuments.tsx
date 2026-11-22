@@ -30,6 +30,13 @@ import { PageHeader, useBackTo } from './shared';
 // MUT-662: the number as shown (PR-0007 for a payment request).
 const docTitle = (t: (key: string) => string, doc: Pick<IssuedDocument, 'docType' | 'number' | 'displayNumber'>) => `${t(`hosted.issue.types.${doc.docType}`)} ${doc.displayNumber ?? doc.number}`;
 
+/** MUT-662: how much of a request is covered, a whole percent, from the decimal strings (no floats). */
+const minorOf = (amount: string) => BigInt(amount.replace('.', ''));
+const coveredPercent = (covered: string, gross: string) => {
+  const total = minorOf(gross);
+  return total === 0n ? '0' : ((minorOf(covered) * 100n) / total).toString();
+};
+
 /** MUT-662: a payment request's status; tax documents read "Issued". */
 const STATUS_BADGE = { UNPAID: 'unpaid', PARTLY_PAID: 'warning', PAID: 'paid', CANCELLED: 'neutral' } as const;
 function DocStatus({ doc }: { doc: IssuedDocument }) {
@@ -234,7 +241,7 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
       </dl>
       {d.paymentRequest && (
         <section className="hp-issued-request" aria-labelledby="hp-issued-request-title" data-testid="payment-request-block">
-          <progress className="hp-issued-request-bar" max={Number(d.gross)} value={Number(d.paymentRequest.covered)} aria-label={t('hosted.issue.colStatus')} />
+          <progress className="hp-issued-request-bar" max={100} value={coveredPercent(d.paymentRequest.covered, d.gross)} aria-label={t('hosted.issue.colStatus')} />
           <p className="hp-muted">{t('hosted.issue.paymentRequest.notTax')}</p>
           {d.paymentRequest.linked.length > 0 && (
             <>
