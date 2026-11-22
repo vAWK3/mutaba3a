@@ -68,6 +68,10 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
   'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
+  'src/hosted/pages/views/DocumentsDuePage.tsx': { auto: 1 }, // MUT-660: the client's name heading a group
+  'src/hosted/pages/home/HomeInOut.tsx': { auto: 1 }, // MUT-657: a category or client name
+  'src/hosted/pages/home/OverdueGroup.tsx': { auto: 1 }, // MUT-657: a client's name
+  'src/hosted/pages/home/ToIssueGroup.tsx': { auto: 1 }, // MUT-660: a client's name
   'src/hosted/pages/views/PaymentsList.tsx': { ltr: 1 }, // payment number
   'src/hosted/pages/auth/SignInPage.tsx': { ltr: 2 }, // email, password
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)

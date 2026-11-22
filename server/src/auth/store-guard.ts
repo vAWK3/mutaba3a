@@ -658,15 +658,18 @@ export function accountantStoreGuard(): StoreGuard {
  * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
  */
 export function shareLinkStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(PROFILE_FEED_READS, shareLinkReadOnly);
+  return readOnlyStoreGuard(SHARE_LINK_EXTRA_READS, shareLinkReadOnly);
 }
+
+/** MUT-660 (ADR-270): a link's summary and download split income when the owner holds `invoicing`, so they read the owner's flags. A read of flags only. */
+export const SHARE_LINK_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
 
 /**
  * MUT-314 (ADR-248): the guard a period download's stream runs under, whoever asked, so nothing it reaches can write.
  * A share link's stream keeps the link's own guard; an owner's or an accountant's reads like an accountant's, plus the
  * entries feed (sessionOnly: it reads across a person's profiles; the download reads it for its one profile).
  */
-export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list']);
+export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'features.activeFor']);
 
 export function periodDownloadStoreGuard(kind: 'member' | 'accountant' | 'link'): StoreGuard {
   if (kind === 'link') return shareLinkStoreGuard();

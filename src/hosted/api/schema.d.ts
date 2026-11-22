@@ -16190,7 +16190,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/receivables/{entryId}/not-for-invoice": {
+    "/v1/receivables/{receivableId}/not-for-invoice": {
         parameters: {
             query?: never;
             header?: never;
@@ -16210,7 +16210,7 @@ export interface paths {
                     "if-match": string;
                 };
                 path: {
-                    entryId: string;
+                    receivableId: string;
                 };
                 cookie?: never;
             };
@@ -16292,7 +16292,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/payments/{entryId}/not-for-invoice": {
+    "/v1/payments/{paymentId}/not-for-invoice": {
         parameters: {
             query?: never;
             header?: never;
@@ -16312,7 +16312,7 @@ export interface paths {
                     "if-match": string;
                 };
                 path: {
-                    entryId: string;
+                    paymentId: string;
                 };
                 cookie?: never;
             };

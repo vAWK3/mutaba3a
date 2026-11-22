@@ -10,12 +10,12 @@ import { documentsDue, olderThan, type DocumentsDueInput, type DueItem } from '.
 import { DEFAULT_LINE_DESCRIPTION, DOCUMENT_LANGUAGES, type DocumentLanguage } from '../issuing/labels.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { IssuedDocumentRecord, JsonObject, LedgerStore, NotForInvoiceItem, Organization } from '../repositories/ports.js';
+import type { IssueDocumentRequestSchema } from '../schemas.js';
 import {
   DocumentsDueCountSchema,
   DocumentsDueQuerySchema,
   DocumentsDueSchema,
   IfMatchHeaderSchema,
-  IssueDocumentRequestSchema,
   IssueDueRequestSchema,
   IssueDueResultSchema,
   NotForInvoiceEntrySchema,
@@ -37,7 +37,8 @@ const json = <T>(description: string, schema: T) => ({ description, content: { '
 
 type IssueRequest = z.infer<typeof IssueDocumentRequestSchema>;
 type EntryKind = 'owed' | 'received';
-const EntryParamSchema = z.object({ entryId: z.string().uuid() });
+const ReceivableParamSchema = z.object({ receivableId: z.string().uuid() });
+const PaymentParamSchema = z.object({ paymentId: z.string().uuid() });
 
 export interface DocumentsDueDeps {
   store: LedgerStore;
@@ -241,7 +242,7 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
   );
 
   for (const kind of ['owed', 'received'] as const) {
-    const path = kind === 'owed' ? '/v1/receivables/{entryId}/not-for-invoice' : '/v1/payments/{entryId}/not-for-invoice';
+    const path = kind === 'owed' ? '/v1/receivables/{receivableId}/not-for-invoice' : '/v1/payments/{paymentId}/not-for-invoice';
     app.openapi(
       createRoute({
         method: 'put',
@@ -251,12 +252,13 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
         description: 'MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.',
         security: [{ session: [] }, { deviceSession: [] }],
         middleware: [requireScope('issuing:write'), ifMatch()] as const,
-        request: { params: EntryParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(SetNotForInvoiceRequestSchema) },
+        request: { params: kind === 'owed' ? ReceivableParamSchema : PaymentParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(SetNotForInvoiceRequestSchema) },
         responses: { 200: json('Set', NotForInvoiceEntrySchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
       }),
       async (c) => {
         const organization = await issuingProfile(c, true);
-        const id = c.req.valid('param').entryId;
+        const params = c.req.valid('param') as { receivableId?: string; paymentId?: string };
+        const id = (params.receivableId ?? params.paymentId)!;
         const result = await mark(c, organization, [{ kind: storeKind(kind), id, expectedVersion: c.get('expectedVersion') }], c.req.valid('json').value);
         const record = kind === 'owed' ? result.receivables[0] : result.payments[0];
         if (!record) throw new ApiError('NOT_FOUND', 'No such entry');

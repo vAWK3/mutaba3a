@@ -26194,7 +26194,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/receivables/{entryId}/not-for-invoice:
+  /v1/receivables/{receivableId}/not-for-invoice:
     put:
       tags:
         - Issuing
@@ -26208,7 +26208,7 @@ paths:
             type: string
             format: uuid
           required: true
-          name: entryId
+          name: receivableId
           in: path
         - schema:
             type: string
@@ -26266,7 +26266,7 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/payments/{entryId}/not-for-invoice:
+  /v1/payments/{paymentId}/not-for-invoice:
     put:
       tags:
         - Issuing
@@ -26280,7 +26280,7 @@ paths:
             type: string
             format: uuid
           required: true
-          name: entryId
+          name: paymentId
           in: path
         - schema:
             type: string
