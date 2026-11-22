@@ -116,6 +116,8 @@ export const ERROR_CODES = {
   STRIPE_UNAVAILABLE: 502,
   /** MUT-642: the public company/nonprofit registry (data.gov.il) didn't answer in time; the person types the details. */
   REGISTRY_UNAVAILABLE: 502,
+  /** MUT-571/572: the Tax Authority's Open API did not answer, or failed; nothing was issued. */
+  TAX_AUTHORITY_UNAVAILABLE: 502,
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
   BILLING_NOT_CONFIGURED: 503,

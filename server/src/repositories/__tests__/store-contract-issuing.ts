@@ -251,6 +251,28 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.issuing.getSetup(w.b.id)).toBeNull();
     });
 
+    it('MUT-571: one Tax Authority connection per profile; the lock runs refreshes one at a time', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const row = (version: string) => ({ organizationId: w.a.id, environment: 'sandbox', accessTokenSealed: `v1.a.${version}`, accessExpiresAt: at(10), refreshTokenSealed: `v1.r.${version}`, refreshExpiresAt: at(20), connectedByUserId: w.a.id, connectedAt: at(1) });
+      expect(await store.issuing.getTaxConnection(w.a.id)).toBeNull();
+      expect(await store.issuing.putTaxConnection(row('1'))).toMatchObject({ accessTokenSealed: 'v1.a.1', version: 1 });
+      const seen: string[] = [];
+      const refresh = (label: string) =>
+        store.issuing.withTaxConnectionLock(w.a.id, async (current) => {
+          seen.push(`${label}:${current?.refreshTokenSealed}`);
+          await new Promise((resolve) => setTimeout(resolve, 20));
+          return { update: current?.refreshTokenSealed === 'v1.r.1' ? row('2') : null, result: label };
+        });
+      expect(await Promise.all([refresh('first'), refresh('second')])).toEqual(['first', 'second']);
+      // The second waited and saw the first's new refresh token, so the spent one was used once.
+      expect(seen.map((entry) => entry.split(':')[1]).sort()).toEqual(['v1.r.1', 'v1.r.2']);
+      expect(await store.issuing.getTaxConnection(w.a.id)).toMatchObject({ refreshTokenSealed: 'v1.r.2', version: 2 });
+      expect(await store.issuing.getTaxConnection(w.b.id)).toBeNull();
+      expect(await store.issuing.deleteTaxConnection(w.a.id)).toBe(true);
+      expect(await store.issuing.deleteTaxConnection(w.a.id)).toBe(false);
+    });
+
     it('MUT-646: keeps every logo; clearing only drops the current one', async () => {
       const store = await makeStore();
       const w = await world(store);

@@ -96,6 +96,7 @@ import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-rou
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
 import type { RegistryLookup } from './israel/registry.js';
+import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
@@ -150,6 +151,8 @@ export interface AppDependencies {
   fxRates?: CachedFxRates | null;
   /** MUT-642: the company/nonprofit registry lookup; absent in tests unless given (the route then answers 502 REGISTRY_UNAVAILABLE). */
   registry?: RegistryLookup | null;
+  /** MUT-571/572: the Tax Authority's Open API client and token box; absent = no connection on this server (the routes answer 404). */
+  taxAuthority?: Omit<TaxAuthorityDeps, 'store'> | null;
   businessLookupLimiter?: RateLimiter;
   /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
   publicFxIpLimiter?: RateLimiter;
@@ -611,6 +614,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     billing: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
+    // MUT-571/572: hosted only, like the PDF.
+    taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
+    portalOrigin: sessions.portalOrigin ?? null,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
     issuedPdf: {
       render: renderIssuedDocumentPdf,

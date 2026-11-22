@@ -7,7 +7,7 @@ info:
 
     Scopes: integration:read, integration:write, customers:read, customers:write, projects:read, projects:write, agreements:read, agreements:write, payments:read, payments:write, attachments:read, attachments:write, summaries:read, audit:read.
 
-    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
+    Error codes: INVALID_SIGNATURE, EMAIL_NOT_ACCEPTED, UNAUTHENTICATED, INVALID_API_KEY, API_KEY_REVOKED, API_KEY_EXPIRED, API_KEY_ENVIRONMENT_MISMATCH, ADMIN_UNAUTHORIZED, INVALID_WEBHOOK_SIGNATURE, JOB_UNAUTHORIZED, INVALID_CREDENTIALS, SIGN_IN_CODE_WRONG, SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES, SESSION_EXPIRED, INSUFFICIENT_SCOPE, PRINCIPAL_NOT_ACCEPTED, READ_ONLY_PROFILE, CROSS_SITE_REQUEST, CHECK_FAILED, ACCOUNT_UNDER_REVIEW, CURRENT_PASSWORD_WRONG, ACCOUNT_CLOSING, ACCOUNT_CLOSE_BLOCKED, RECENT_SIGN_IN_REQUIRED, PASSKEY_NOT_ACCEPTED, PASSKEY_LIMIT, SUBSCRIPTION_LAPSED, ACCOUNTANT_PLAN_REQUIRED, INVITE_EMAIL_MISMATCH, SHARE_LINK_REFUSED, FEATURE_NOT_ENABLED, NOT_FOUND, ORGANIZATION_MISMATCH, CONFLICT, OPERATION_IN_PROGRESS, RECONCILE_RUNNING, LINK_ORIGIN_LOOPBACK, TERMS_VERSION_STALE, SETUP_LINK_UNUSABLE, VALIDATION_FAILED, IDEMPOTENCY_KEY_REUSED, IDEMPOTENCY_KEY_REQUIRED, PAYLOAD_TOO_LARGE, RATE_LIMITED, INTERNAL, RECONCILE_FAILED, STRIPE_UNAVAILABLE, REGISTRY_UNAVAILABLE, TAX_AUTHORITY_UNAVAILABLE, ATTACHMENTS_NOT_CONFIGURED, BILLING_NOT_CONFIGURED, MAILER_NOT_CONFIGURED, JOBS_NOT_CONFIGURED, OAUTH_NOT_CONFIGURED, FX_RATES_UNAVAILABLE, SIGNING_NOT_CONFIGURED, SIGNING_UNAVAILABLE, APP_UPDATE_REQUIRED, MAINTENANCE. Every error is {"error":{"code","message","details?","requestId"}}.
 
     Financial writes require an `Idempotency-Key` header (8–128 chars). Same key + same body replays the stored outcome; same key + different body is rejected with IDEMPOTENCY_KEY_REUSED. A JSON body is compared by meaning: key order, whitespace and escaping (`\/`, `\u00e9`) do not count; array order and values do.
 
@@ -735,6 +735,7 @@ components:
                 - RECONCILE_FAILED
                 - STRIPE_UNAVAILABLE
                 - REGISTRY_UNAVAILABLE
+                - TAX_AUTHORITY_UNAVAILABLE
                 - ATTACHMENTS_NOT_CONFIGURED
                 - BILLING_NOT_CONFIGURED
                 - MAILER_NOT_CONFIGURED
@@ -9712,6 +9713,21 @@ components:
           description: The next number per document type, when moving from another tool
       required:
         - alreadyIssuing
+    IssuingStyles:
+      type: object
+      properties:
+        styles:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                description: The value PUT /v1/issuer/defaults takes as documentStyle
+            required:
+              - key
+      required:
+        - styles
     IssuingSettings:
       type: object
       properties:
@@ -9913,6 +9929,16 @@ components:
           type: string
           nullable: true
           maxLength: 1000
+        withoutAllocation:
+          type: object
+          properties:
+            heldKey:
+              type: string
+              minLength: 8
+              maxLength: 128
+          required:
+            - heldKey
+          description: "MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first."
         lines:
           type: array
           items:
@@ -10076,6 +10102,58 @@ components:
             - SHARE
       required:
         - channel
+    TaxAuthorityStatus:
+      type: object
+      properties:
+        state:
+          type: string
+          enum:
+            - none
+            - connected
+            - expired
+        connectedAt:
+          type: string
+          nullable: true
+          format: date-time
+        until:
+          type: string
+          nullable: true
+          format: date-time
+          description: When the consent ends (90 days after it was given); connect again before it
+        environment:
+          type: string
+          nullable: true
+          description: sandbox or production
+      required:
+        - state
+        - connectedAt
+        - until
+        - environment
+    TaxAuthorityConnect:
+      type: object
+      properties:
+        authorizeUrl:
+          type: string
+          format: uri
+          description: "Open it in the browser: the Tax Authority sign-in"
+      required:
+        - authorizeUrl
+    AllocationDecisionRequest:
+      type: object
+      properties:
+        heldKey:
+          type: string
+          minLength: 8
+          maxLength: 128
+          description: The Idempotency-Key of the issue request that was held
+        choice:
+          type: string
+          enum:
+            - CANCEL
+            - FURTHER_OBJECTION
+      required:
+        - heldKey
+        - choice
     IssuingGaps:
       type: object
       properties:
@@ -24242,6 +24320,47 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/styles:
+    get:
+      tags:
+        - Issuing
+      summary: The document styles a business can pick
+      description: "MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The styles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingStyles"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/issuing/setup:
     get:
       tags:
@@ -24861,6 +24980,214 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: "MUT-641: the document could not be signed (SIGNING_UNAVAILABLE) or this server has no signer (SIGNING_NOT_CONFIGURED); nothing was sent"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/tax-authority:
+    get:
+      tags:
+        - Issuing
+      summary: Whether this profile is connected to the Tax Authority
+      description: "MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. 404 when this server has no Tax Authority connection configured."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The connection
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxAuthorityStatus"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Issuing
+      summary: Disconnect this profile from the Tax Authority
+      description: "MUT-571: the stored tokens are deleted. Issuing above the allocation threshold then waits for a new connection. Owner only."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "204":
+          description: Disconnected
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/tax-authority/connect:
+    post:
+      tags:
+        - Issuing
+      summary: Start connecting this profile to the Tax Authority
+      description: "MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: Where to sign in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxAuthorityConnect"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/tax-authority/callback:
+    get:
+      tags:
+        - Issuing
+      summary: Where the Tax Authority sends the browser back after sign-in
+      description: "MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the portal's invoicing setup with `taxAuthority=connected` or `failed`."
+      security: []
+      parameters:
+        - schema:
+            type: string
+            maxLength: 4096
+          required: false
+          name: code
+          in: query
+        - schema:
+            type: string
+            maxLength: 2048
+          required: false
+          name: state
+          in: query
+        - schema:
+            type: string
+            maxLength: 200
+          required: false
+          name: error
+          in: query
+      responses:
+        "200":
+          description: Done (no portal configured)
+          content:
+            text/html:
+              schema:
+                type: string
+        "302":
+          description: Back to the portal
+  /v1/issuing/allocation-decisions:
+    post:
+      tags:
+        - Issuing
+      summary: Report the choice for a held allocation number
+      description: "MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264)."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AllocationDecisionRequest"
+      responses:
+        "204":
+          description: Reported
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
           content:
             application/json:
               schema:

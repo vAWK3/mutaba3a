@@ -1,10 +1,13 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { Input, Select, Textarea } from '../../../components/ui/Input';
 import { SegmentedControl } from '../../../components/ui/SegmentedControl';
 import { useT } from '../../../lib/i18n/core';
-import { ApiError, apiErrorReason, type IssuerDetails, type IssuingSettings } from '../../api/client';
+import { ApiError, api, apiErrorReason, type IssuerDetails, type IssuingSettings } from '../../api/client';
+import { profileKey } from '../../session/me';
 import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
+import { useIssuingStyles } from '../../data/issuedQueries';
 import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuerLogo } from '../../data/issuingQueries';
 import { DEFAULT_INK, INKS, wholeNumber, type PaperModel } from './setupSteps';
 
@@ -20,7 +23,8 @@ interface StepProps {
 }
 
 const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
-const STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'] as const;
+/** MUT-570 (Basel): the styles come from the server, so a new one appears without a portal release; until it answers, these. */
+const KNOWN_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'];
 const LANGUAGES = ['he', 'ar', 'en'] as const;
 const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
 export const LOGO_MAX_BYTES = 256 * 1024;
@@ -216,6 +220,7 @@ export function LogoStep({ profileId, hasLogo, onPreview, onDone }: StepProps & 
 export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps & { issuer: IssuerDetails | null }) {
   const t = useT();
   const save = useSaveIssuerDefaults(profileId);
+  const styles = useIssuingStyles(profileId);
   const [form, setForm] = useState({
     documentStyle: (issuer?.documentStyle ?? 'PROFESSIONAL') as PaperModel['style'],
     ink: (issuer?.ink ?? DEFAULT_INK) as PaperModel['ink'],
@@ -252,7 +257,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
       <SegmentedControl
         labelledBy="issuer-style-label"
         value={form.documentStyle}
-        options={STYLES.map((value) => ({ value, label: t(`hosted.invoicing.defaults.styles.${value}`) }))}
+        options={(styles.data?.styles.map((style) => style.key) ?? KNOWN_STYLES).map((value) => ({ value: value as PaperModel['style'], label: t(`hosted.invoicing.defaults.styles.${value}`) }))}
         onChange={(value) => change('documentStyle', value, { style: value })}
       />
       {labelled('issuer-ink-label', t('hosted.invoicing.defaults.ink'))}
@@ -371,15 +376,71 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
   );
 }
 
-/** Step 5: the Tax Authority connection is MUT-571's; until then it says so and stays "When needed". */
-export function TaxAuthorityStep({ onDone }: { onDone: () => void }) {
+/**
+ * Step 5 (MUT-571): connect the profile to the Tax Authority, for allocation numbers. Connect opens the Tax Authority's
+ * own sign-in (the business owner signs in there; MTB3A never sees the password) and comes back here. A server without
+ * the connection configured answers 404: the step then says it will be available.
+ */
+export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const t = useT();
+  const status = useQuery({ queryKey: profileKey(profileId, 'issuing', 'tax-authority'), queryFn: ({ signal }) => api.taxAuthorityStatus(profileId, signal), retry: false });
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const returned = new URLSearchParams(window.location.search).get('taxAuthority');
+  const connect = async () => {
+    setBusy(true);
+    setFailed(false);
+    try {
+      window.location.assign((await api.taxAuthorityConnect(profileId)).authorizeUrl);
+    } catch {
+      setFailed(true);
+      setBusy(false);
+    }
+  };
+  const disconnect = async () => {
+    setBusy(true);
+    try {
+      await api.taxAuthorityDisconnect(profileId);
+    } finally {
+      setBusy(false);
+      void status.refetch();
+    }
+  };
+  const state = status.data?.state;
   return (
-    <div className="hp-setup-form">
-      <p>{t('hosted.invoicing.taxAuthority.body')}</p>
+    <div className="hp-setup-form" data-testid="tax-authority-step">
+      {status.error ? (
+        <p>{t('hosted.invoicing.taxAuthority.body')}</p>
+      ) : state === 'connected' ? (
+        <p role="status" data-testid="tax-authority-connected">
+          {t('hosted.invoicing.taxAuthority.connected', { until: status.data!.until?.slice(0, 10) ?? '' })}
+        </p>
+      ) : (
+        <p>{t(state === 'expired' ? 'hosted.invoicing.taxAuthority.expired' : 'hosted.invoicing.taxAuthority.connectBody')}</p>
+      )}
+      {returned === 'failed' && state !== 'connected' && (
+        <p className="input-error-message" role="alert">
+          {t('hosted.invoicing.taxAuthority.returnedFailed')}
+        </p>
+      )}
+      {failed && (
+        <p className="input-error-message" role="alert">
+          {t('hosted.invoicing.saveFailed')}
+        </p>
+      )}
       <div className="hp-setup-actions">
+        {status.data && state !== 'connected' && (
+          <Button type="button" onClick={() => void connect()} disabled={busy} data-testid="tax-authority-connect">
+            {t('hosted.invoicing.taxAuthority.connect')}
+          </Button>
+        )}
+        {state === 'connected' && (
+          <Button type="button" variant="ghost" onClick={() => void disconnect()} disabled={busy}>
+            {t('hosted.invoicing.taxAuthority.disconnect')}
+          </Button>
+        )}
         <Button type="button" variant="secondary" onClick={onDone}>
-          {t('hosted.invoicing.later')}
+          {t(state === 'connected' ? 'hosted.invoicing.next' : 'hosted.invoicing.later')}
         </Button>
       </div>
     </div>

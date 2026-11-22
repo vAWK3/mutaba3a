@@ -85,6 +85,21 @@ const envSchema = z.object({
   DATA_GOV_IL_COMPANIES_RESOURCE: z.string().min(1).default('f004176c-b85f-4542-8901-7b3176f9a054'),
   DATA_GOV_IL_NONPROFITS_RESOURCE: z.string().min(1).default('be5b7935-3922-45d4-9638-08871b17ec95'),
   DATA_GOV_IL_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(2500),
+  /**
+   * MUT-571/572 (ADR-264): the Tax Authority's Open API (SHAAM). Off unless TAX_AUTHORITY_ENV is set; `production` also
+   * needs every value set explicitly (no sandbox defaults reach it). The client secret and the token key are secrets.
+   */
+  TAX_AUTHORITY_ENV: z.enum(['sandbox', 'production']).optional(),
+  TAX_AUTHORITY_BASE_URL: z.string().url().refine(isHttpsOrLocalHttp, 'must be https (plain http only for localhost or 127.0.0.1)').optional(),
+  TAX_AUTHORITY_CLIENT_ID: z.string().min(1).optional(),
+  TAX_AUTHORITY_CLIENT_SECRET: z.string().min(1).optional(),
+  TAX_AUTHORITY_REDIRECT_URI: z.string().url().optional(),
+  TAX_AUTHORITY_SCOPE: z.string().min(1).default('invoices_scope'),
+  /** The software's registration number (MUT-567); the sandbox accepts the spec's test value 987654321. */
+  TAX_AUTHORITY_SOFTWARE_NUMBER: z.coerce.number().int().positive().optional(),
+  TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
+  /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
+  TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
@@ -500,6 +515,13 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   }
   if (config.OAUTH_CLIENT_LOCAL_HTTP && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('OAUTH_CLIENT_LOCAL_HTTP', `a client's keys are fetched over https on ${config.NODE_ENV}`);
+  }
+  if (config.TAX_AUTHORITY_ENV) {
+    for (const name of ['TAX_AUTHORITY_CLIENT_ID', 'TAX_AUTHORITY_CLIENT_SECRET', 'TAX_AUTHORITY_REDIRECT_URI'] as const) if (!config[name]) refuse(name, 'TAX_AUTHORITY_ENV needs it');
+    if (config.TAX_AUTHORITY_ENV === 'production') {
+      for (const name of ['TAX_AUTHORITY_BASE_URL', 'TAX_AUTHORITY_SOFTWARE_NUMBER', 'TAX_AUTHORITY_TOKEN_KEY'] as const) if (!config[name]) refuse(name, 'the production Tax Authority takes no sandbox defaults: set it');
+    }
+    if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TAX_AUTHORITY_TOKEN_KEY) refuse('TAX_AUTHORITY_TOKEN_KEY', `stored tokens need their own key on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

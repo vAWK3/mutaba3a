@@ -55,6 +55,10 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/invoicing/InvoicingSteps.tsx': { ltr: 5, auto: 5 },
   // MUT-646: the letterhead reads in the document's language, not the portal's: English left to right, Hebrew and Arabic right to left
   'src/hosted/pages/invoicing/Letterhead.tsx': { ltr: 1, rtl: 1 },
+  // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
+  'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 4, auto: 2 },
+  // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
+  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 2 },
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)

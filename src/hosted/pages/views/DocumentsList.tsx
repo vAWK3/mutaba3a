@@ -6,12 +6,15 @@ import { ClientFilter, FilterBar, SelectFilter } from '../../components/FilterCo
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
+import { SectionTabs } from '../../components/SectionTabs';
 import { useToast } from '../../components/Toast';
 import { downloadNavigator } from '../../data/download';
 import { DOCUMENT_KINDS, isNarrowed, type DocumentFilters } from '../../data/filters';
+import { useIssuingSetup } from '../../data/issuingQueries';
 import { useAttachments, useCustomerDirectory } from '../../data/queries';
 import { formatInstant, formatSize } from '../../format/dates';
 import { useProfile } from '../../session/me';
+import { documentTabs } from './issuedTabs';
 import { NoMatch, PageHeader, ShowMore, useBackTo } from './shared';
 
 /**
@@ -162,7 +165,16 @@ export function DocumentsPage(props: Omit<DocumentsListProps, 'fixedCustomerId'>
   return (
     <>
       <PageHeader title={t('hosted.documents.title')} back={back} />
+      <IssuingTabs />
       <DocumentsList {...props} />
     </>
   );
+}
+
+/** MUT-570: where issuing is on for the profile, Documents has two tabs: Issued and Files (this list). */
+function IssuingTabs() {
+  const { t } = useLanguage();
+  const profile = useProfile();
+  const setup = useIssuingSetup(profile.id, profile.type !== 'PERSONAL');
+  return setup.data ? <SectionTabs {...documentTabs(profile.id, t)} /> : null;
 }

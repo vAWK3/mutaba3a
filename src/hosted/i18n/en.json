@@ -2908,7 +2908,13 @@
       },
       "taxAuthority": {
         "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
-        "status": "When needed"
+        "status": "When needed",
+        "connectBody": "Connect this profile to the Tax Authority so invoices that require an allocation number receive one. You sign in at the Tax Authority's own site; MTB3A never sees your password.",
+        "connect": "Connect to the Tax Authority",
+        "connected": "Connected to the Tax Authority until {until}.",
+        "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
+        "disconnect": "Disconnect",
+        "returnedFailed": "The connection was not completed. Please try again."
       },
       "ready": {
         "title": "Your letterhead is ready",
@@ -2922,6 +2928,93 @@
         "number": "Number",
         "address": "Address"
       }
+    },
+    "issue": {
+      "title": "Issue a document",
+      "open": "Issue a document",
+      "forThisClient": "Issue a document for this client",
+      "listTitle": "Issued documents",
+      "tabsLabel": "Documents",
+      "tabIssued": "Issued",
+      "tabFiles": "Files",
+      "empty": "No documents issued on this profile yet.",
+      "colDocument": "Document",
+      "colClient": "Client",
+      "colDate": "Date",
+      "colAmount": "Amount",
+      "types": {
+        "TAX_INVOICE": "Tax invoice",
+        "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
+        "RECEIPT": "Receipt",
+        "CREDIT_NOTE": "Credit note"
+      },
+      "client": "Client",
+      "clientPlaceholder": "Search by name or number",
+      "clientRequired": "Choose the client.",
+      "type": "Document type",
+      "lines": "Lines",
+      "pricesIncludeVat": "Prices include VAT",
+      "description": "Description",
+      "descriptionRequired": "Describe this line.",
+      "quantity": "Quantity",
+      "price": "Price",
+      "numberInvalid": "Enter a number.",
+      "lineOptions": "Line options",
+      "removeLine": "Remove",
+      "kind": "Type of line",
+      "kinds": {
+        "SERVICE": "Service",
+        "GOODS": "Goods"
+      },
+      "lineDiscount": "Discount on this line",
+      "linePriceIncludesVat": "This price includes VAT",
+      "lineExempt": "Exempt from VAT",
+      "addLine": "+ Add a line",
+      "date": "Document date",
+      "dueDate": "Due date",
+      "payment": "Payment",
+      "method": "Payment method",
+      "methods": {
+        "BANK": "Bank transfer",
+        "CASH": "Cash"
+      },
+      "reference": "Reference",
+      "receivedOn": "Received on",
+      "notes": "Notes",
+      "net": "Total before VAT",
+      "vat": "VAT {rate}%",
+      "gross": "Total",
+      "final": "An issued document cannot be edited; it is corrected by a credit note.",
+      "draftPdf": "Preview the PDF",
+      "issueAs": "Issue the {type}",
+      "failed": "The document could not be issued. Please try again.",
+      "openSetup": "Open the invoicing setup",
+      "refusals": {
+        "DATE_BEFORE_LAST_DOCUMENT": "A document of this type was already issued with a later date. Choose that date or a later one.",
+        "ORIGINAL_PAID": "A credit note credits only what is still owed on its tax invoice.",
+        "EXCEEDS_OUTSTANDING": "The receipt is more than the tax invoice still owes.",
+        "ISSUING_SETUP_INCOMPLETE": "Finish the invoicing setup before issuing.",
+        "DATE_BEFORE_ORIGINAL": "A credit note can't be dated before its tax invoice.",
+        "QUANTITY_INVALID": "Enter a quantity greater than zero.",
+        "DISCOUNT_INVALID": "A discount can't be more than the line's amount.",
+        "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
+        "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only."
+      },
+      "backToList": "Issued documents",
+      "issuedTitle": "{document} was issued",
+      "issuedBody": "Its number is final. Download the original to send it to the client.",
+      "outstanding": "Still owed",
+      "allocationNumber": "Allocation number",
+      "downloadPdf": "Download the original",
+      "viewPdf": "View the PDF",
+      "recordPayment": "Record a payment and issue a receipt",
+      "creditNote": "Issue a credit note",
+      "similar": "Issue a similar document",
+      "receiptLine": "Payment for {document}",
+      "finalNote": "This document stays as it was issued. A credit note corrects it.",
+      "pdfFailed": "The PDF could not be prepared. Please try again.",
+      "notFound": "This document could not be found.",
+      "creditLine": "Credit for {document}"
     }
   }
 }

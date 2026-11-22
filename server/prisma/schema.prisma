@@ -2167,6 +2167,25 @@ model IssuingSetup {
   @@map("issuing_setup")
 }
 
+/// MUT-571: a profile's connection to the Tax Authority's Open API (OAuth2, one consent per profile). The tokens are
+/// sealed with AES-256-GCM before they reach the database; the refresh token is single-use, so a refresh rewrites the row
+/// under its lock.
+model TaxAuthorityConnection {
+  organizationId     String    @id @db.Uuid
+  /// sandbox | production: a token from one never goes to the other.
+  environment        String    @db.VarChar(16)
+  accessTokenSealed  String
+  accessExpiresAt    DateTime
+  refreshTokenSealed String?
+  refreshExpiresAt   DateTime?
+  connectedByUserId  String    @db.Uuid
+  connectedAt        DateTime
+  version            Int       @default(1)
+  updatedAt          DateTime  @updatedAt
+
+  @@map("tax_authority_connections")
+}
+
 /// MUT-646: every logo a profile ever uploaded, never changed or removed, so an issued document always prints its own.
 model IssuerLogo {
   id             String   @id @default(uuid()) @db.Uuid

@@ -1,3 +1,5 @@
+import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
+import { TokenBox } from './israel/tax-authority/token-box.js';
 import { RegistryLookup } from './israel/registry.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { documentSignerFrom } from './issuing/pdf/sign/index.js';
@@ -157,6 +159,26 @@ const registry = new RegistryLookup({
   ttlMs: 24 * 60 * 60 * 1000,
 });
 
+// MUT-571/572: the Tax Authority's Open API, only where configured (TAX_AUTHORITY_ENV). The token key is the configured
+// one, or (outside production and staging, which config refuses without it) one derived from the session pepper.
+const taxAuthority = config.TAX_AUTHORITY_ENV
+  ? {
+      client: new HttpTaxAuthorityClient({
+        environment: config.TAX_AUTHORITY_ENV,
+        baseUrl: config.TAX_AUTHORITY_BASE_URL ?? 'https://openapi.taxes.gov.il/shaam/tsandbox',
+        clientId: config.TAX_AUTHORITY_CLIENT_ID!,
+        clientSecret: config.TAX_AUTHORITY_CLIENT_SECRET!,
+        redirectUri: config.TAX_AUTHORITY_REDIRECT_URI!,
+        scope: config.TAX_AUTHORITY_SCOPE,
+        timeoutMs: config.TAX_AUTHORITY_TIMEOUT_MS,
+      }),
+      box: new TokenBox(config.TAX_AUTHORITY_TOKEN_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
+      stateSecret: sessionDigest(config.SESSION_TOKEN_PEPPER, 'mut-571-tax-authority-state-v1'),
+      // The spec's test registration number until MUT-567 gives the real one.
+      accountingSoftwareNumber: config.TAX_AUTHORITY_SOFTWARE_NUMBER ?? 987654321,
+    }
+  : null;
+
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
   ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
@@ -273,6 +295,7 @@ const app = createApp({
       : null,
   fxRates,
   registry,
+  taxAuthority,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },

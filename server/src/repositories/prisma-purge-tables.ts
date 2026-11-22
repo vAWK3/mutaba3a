@@ -46,6 +46,8 @@ export const PURGE_PROFILE_TABLES = [
   'external_identities',
   // MUT-646: where the invoicing setup stood (the details and logos it points at are kept, below).
   'issuing_setup',
+  // MUT-571: the profile's Tax Authority tokens go with it (nothing issued depends on them).
+  'tax_authority_connections',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */

@@ -24,6 +24,7 @@ import type {
   IssuerLogoRecord,
   IssuedOriginalPdfRecord,
   IssuingSetupRecord,
+  TaxAuthorityConnectionRecord,
   AccountClosureRecord,
   AccountPurgeRepository,
   BillingAccountRecord,
@@ -387,6 +388,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly issuingSetupMap = new Map<string, IssuingSetupRecord>();
   private readonly issuerLogoMap = new Map<string, IssuerLogoRecord>();
   private readonly issuedOriginals = new Map<string, IssuedOriginalPdfRecord>();
+  /** MUT-571 */
+  private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
+  private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
@@ -971,6 +975,28 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.issuerLogoMap.get(logoId);
       return r && r.organizationId === organizationId ? { ...r } : null;
     },
+    getTaxConnection: async (organizationId) => {
+      const r = this.taxConnectionMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    putTaxConnection: async (record) => {
+      const next = { ...record, version: (this.taxConnectionMap.get(record.organizationId)?.version ?? 0) + 1 };
+      this.taxConnectionMap.set(record.organizationId, next);
+      return { ...next };
+    },
+    deleteTaxConnection: async (organizationId) => this.taxConnectionMap.delete(organizationId),
+    withTaxConnectionLock: async (organizationId, fn) => {
+      // One caller at a time per profile, as the Prisma store's row lock.
+      const before = this.taxConnectionLocks.get(organizationId) ?? Promise.resolve();
+      const run = before.then(async () => {
+        const current = this.taxConnectionMap.get(organizationId);
+        const { update, result } = await fn(current ? { ...current } : null);
+        if (update && current) this.taxConnectionMap.set(organizationId, { ...update, version: current.version + 1 });
+        return result;
+      });
+      this.taxConnectionLocks.set(organizationId, run.catch(() => undefined));
+      return run;
+    },
     counters: async (organizationId) =>
       [...this.issuedCounterMap.values()].filter((c) => c.organizationId === organizationId).sort((a, b) => (a.docType < b.docType ? -1 : 1)).map((c) => ({ ...c })),
     setStartingNumber: async (organizationId, docType, start) => {
@@ -979,7 +1005,20 @@ export class MemoryLedgerStore implements LedgerStore {
       this.issuedCounterMap.set(`${organizationId}:${docType}`, counter);
       return { kind: 'set', counter: { ...counter } };
     },
-    issue: async (input, at) => this.issueNow(input, at),
+    issue: async (input, at) => {
+      // MUT-572 (ADR-264): every check first, then the number is known and the Tax Authority asked, then the write.
+      if (input.allocate) {
+        const refusal = this.issueRefusal(input);
+        if (refusal) return refusal;
+        const counter = this.issuedCounterMap.get(`${input.organizationId}:${input.docType}`);
+        const outcome = await input.allocate(counter?.next ?? 1);
+        if (outcome.kind !== 'allocated') return { kind: 'allocation_failed', outcome };
+        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number };
+        delete allocated.allocate;
+        return this.issueNow(allocated, at);
+      }
+      return this.issueNow(input, at);
+    },
     getById: async (organizationId, id) => {
       const d = this.issuedDocMap.get(id);
       return d && d.organizationId === organizationId ? cloneIssued(d) : null;
@@ -1019,6 +1058,17 @@ export class MemoryLedgerStore implements LedgerStore {
       return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
     },
   };
+
+  /** MUT-572: the issue's refusals (a replay included), without writing anything; null when it would issue. */
+  private issueRefusal(input: IssueDocumentInput): IssueResult | null {
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === input.organizationId);
+    const replay = docs.find((d) => d.requestKey === input.requestKey);
+    if (replay) return { kind: 'issued', document: cloneIssued(replay), created: false };
+    const lastDate = docs.filter((d) => d.docType === input.docType).reduce<string | null>((max, d) => (max === null || d.documentDate > max ? d.documentDate : max), null);
+    if (lastDate !== null && lastDate > input.documentDate) return { kind: 'date_before_last', lastDate };
+    if (input.customerId && this.custs.get(input.customerId)?.organizationId !== input.organizationId) return { kind: 'customer_not_found' };
+    return null;
+  }
 
   private issueNow(input: IssueDocumentInput, at: Date): IssueResult {
     const { organizationId } = input;
