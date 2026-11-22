@@ -297,6 +297,7 @@ const app = createApp({
   fxRates,
   registry,
   taxAuthority,
+  manualAllocationUrl: config.TAX_AUTHORITY_MANUAL_ALLOCATION_URL ?? null,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },

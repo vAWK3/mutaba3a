@@ -49,7 +49,9 @@ import { registerExternalInvoiceRoutes } from './external-invoices.js';
 import { registerTaxAuthorityRoutes, reportDecision } from './tax-authority.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import type { OcrClient } from '../receipts/ocr-client.js';
-import { allocationInvoiceId, allocator, approvalRequest, needsAllocation, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
+import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCATION_URL, manualAllocator, needsAllocation, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
+import { normalizeAllocationNumber } from '../israel/allocation-number.js';
+import type { ComposedDocument } from '../issuing/compose.js';
 
 /** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */
 const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
@@ -152,6 +154,9 @@ function allocationError(outcome: Exclude<AllocationOutcome, { kind: 'allocated'
       return new ApiError('VALIDATION_FAILED', 'The Tax Authority refused the allocation request', { reason: 'ALLOCATION_REFUSED', errors: outcome.errors });
     case 'unavailable':
       return new ApiError('TAX_AUTHORITY_UNAVAILABLE', 'The Tax Authority did not answer; nothing was issued. Send the same request again.');
+    case 'number_moved':
+      // MUT-711 (AC3): the number was only previewed; another document took it, so this one would print a number requested for another.
+      return new ApiError('CONFLICT', `This document's number is now ${outcome.next}; request the allocation number again for ${outcome.next}`, { reason: 'ALLOCATION_NUMBER_MOVED', field: 'manualAllocation', requestedFor: outcome.requestedFor, next: outcome.next });
   }
 }
 
@@ -161,6 +166,8 @@ export interface IssuingTaxAuthority {
   portalOrigin: string | null;
   /** This server serves the portal (PORTAL_DIST_DIR), so the callback may return to its own pages. */
   servesPortal?: boolean;
+  /** MUT-711: where an allocation number is requested by hand; null/absent = DEFAULT_MANUAL_ALLOCATION_URL. */
+  manualAllocationUrl?: string | null;
 }
 
 /** MUT-647: where an invoice issued elsewhere is kept, and the reader that fills its fields. */
@@ -252,7 +259,19 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         requestId: c.get('requestId'),
       };
       // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
-      if (tax.deps && needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null })) {
+      const needs = needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null });
+      if (body.manualAllocation && !needs) {
+        throw new ApiError('VALIDATION_FAILED', 'This document needs no allocation number', { field: 'manualAllocation', reason: 'ALLOCATION_NOT_NEEDED' });
+      }
+      if (needs && body.manualAllocation) {
+        // MUT-711 (ADR-273): requested by hand. Issued only if the number it was requested for is still this document's.
+        const allocationNumber = normalizeAllocationNumber(body.manualAllocation.number);
+        input.allocate = manualAllocator(allocationNumber, body.manualAllocation.forNumber);
+      } else if (needs && !tax.deps) {
+        // MUT-711: the Tax Authority is off on this server, so MTB3A can't request the number: the business enters it.
+        const next = (await store.issuing.counters(organization.id)).find((k) => k.docType === body.docType)?.next ?? 1;
+        throw new ApiError('CONFLICT', 'This invoice needs an allocation number: request it from the Tax Authority and enter it', { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next });
+      } else if (tax.deps && needs) {
         const ta = tax.deps;
         if (body.withoutAllocation) {
           // Held earlier: the person chose to issue without a number; the Tax Authority hears CONTINUE first.
@@ -376,6 +395,30 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       })),
     };
     return { documentDate, composed: composeDocument(input) };
+  }
+
+  /**
+   * MUT-711 (ADR-273): whether MTB3A can request this document's allocation number itself (AUTOMATIC: the Tax Authority
+   * is on here and the profile is connected) or the business requests it by hand (MANUAL).
+   */
+  async function allocationMode(organizationId: string, now: Date): Promise<'AUTOMATIC' | 'MANUAL'> {
+    if (!tax.deps) return 'MANUAL';
+    const connection = await store.issuing.getTaxConnection(organizationId);
+    return statusOf(connection, tax.deps.client.environment, now).state === 'connected' ? 'AUTOMATIC' : 'MANUAL';
+  }
+
+  /** MUT-711: the review step's allocation panel, or null when the document needs no number. */
+  async function allocationPreview(organizationId: string, body: IssueRequest, documentDate: string, composed: ComposedDocument, customer: CustomerRecord | null, now: Date) {
+    if (!customer?.taxId || !needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer.taxId })) return null;
+    const [mode, counters] = await Promise.all([allocationMode(organizationId, now), store.issuing.counters(organizationId)]);
+    return {
+      mode,
+      nextNumber: counters.find((k) => k.docType === body.docType)?.next ?? 1,
+      documentDate,
+      net: serializeComposedTotals({ ...composed, currency: body.currency }).net,
+      customerTaxId: customer.taxId,
+      requestUrl: tax.manualAllocationUrl ?? DEFAULT_MANUAL_ALLOCATION_URL,
+    };
   }
 
   app.openapi(
@@ -695,8 +738,11 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const organization = await issuingProfile(c, false);
       const issuer = await mustIssuer(organization.id);
       const body = c.req.valid('json');
-      const { composed } = composeFrom(body, issuer, todayFor(organization, c.get('now')()), await creditedInvoice(organization.id, body));
-      return c.json(serializeComposedTotals({ ...composed, currency: 'ILS' }), 200);
+      const now = c.get('now')();
+      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
+      const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
+      const allocation = await allocationPreview(organization.id, body, documentDate, composed, customer, now);
+      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation }, 200);
     },
   );
 
@@ -950,6 +996,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           originalId: body.originalId ?? body.appliesToDocumentId ?? null,
           paymentDetails: body.payment ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: body.payment.receivedOn } : null,
           allocationNumber: null,
+          allocationSource: null,
           receivableId: null,
           paymentId: null,
           creditId: null,

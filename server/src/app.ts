@@ -154,6 +154,8 @@ export interface AppDependencies {
   registry?: RegistryLookup | null;
   /** MUT-571/572: the Tax Authority's Open API client and token box; absent = no connection on this server (the routes answer 404). */
   taxAuthority?: Omit<TaxAuthorityDeps, 'store'> | null;
+  /** MUT-711: where an allocation number is requested by hand; absent = DEFAULT_MANUAL_ALLOCATION_URL. */
+  manualAllocationUrl?: string | null;
   businessLookupLimiter?: RateLimiter;
   /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
   publicFxIpLimiter?: RateLimiter;
@@ -388,7 +390,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.131.0-mut664';
+export const API_VERSION = '1.133.0-mut711';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -617,6 +619,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     logger: deps.logger,
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
+    manualAllocationUrl: deps.manualAllocationUrl ?? null,
     portalOrigin: sessions.portalOrigin ?? null,
     servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.

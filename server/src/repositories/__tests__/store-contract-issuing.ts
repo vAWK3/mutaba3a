@@ -70,6 +70,23 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
   }
 
   describe(`${name} LedgerStore issuing contract (MUT-568)`, () => {
+    it('MUT-711: a manual allocation number is kept with source MANUAL; one requested for a taken number rolls back, no gap', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const manual = (allocationNumber: string, forNumber: number) => async (n: number) =>
+        n === forNumber ? ({ kind: 'allocated', number: allocationNumber, source: 'MANUAL' } as const) : ({ kind: 'number_moved', requestedFor: forNumber, next: n } as const);
+      const first = await w.issued(store, w.issue({ allocate: manual('123456789', 1) }));
+      expect(first).toMatchObject({ number: 1, allocationNumber: '123456789', allocationSource: 'MANUAL' });
+      const moved = await store.issuing.issue(w.issue({ allocate: manual('222222222', 1) }), at(2));
+      expect(moved).toEqual({ kind: 'allocation_failed', outcome: { kind: 'number_moved', requestedFor: 1, next: 2 } });
+      const second = await w.issued(store, w.issue({ allocate: manual('333333333', 2) }), 3);
+      expect(second).toMatchObject({ number: 2, allocationNumber: '333333333', allocationSource: 'MANUAL' });
+      expect(await store.issuing.getById(w.a.id, second.id)).toMatchObject({ allocationSource: 'MANUAL' });
+      const plain = await w.issued(store, w.issue(), 4);
+      expect(plain).toMatchObject({ number: 3, allocationNumber: null, allocationSource: null });
+      expect((await store.issuing.gaps(w.a.id)).find((g) => g.docType === 'TAX_INVOICE')).toMatchObject({ last: 3, missing: [] });
+    });
+
     it('issues a tax invoice: number 1, its lines, and an Owed posted under the document', async () => {
       const store = await makeStore();
       const w = await world(store);

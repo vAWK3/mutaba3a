@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.131.0-mut664
+  version: 1.133.0-mut711
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -10026,6 +10026,8 @@ components:
               - pricesIncludeVat
               - vatRateBasisPoints
               - vat
+        allocation:
+          $ref: "#/components/schemas/IssueAllocation"
       required:
         - subtotal
         - discount
@@ -10035,6 +10037,43 @@ components:
         - gross
         - pricesIncludeVat
         - lines
+        - allocation
+    IssueAllocation:
+      type: object
+      nullable: true
+      properties:
+        mode:
+          type: string
+          enum:
+            - AUTOMATIC
+            - MANUAL
+          description: "AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`."
+        nextNumber:
+          type: integer
+          description: The number this document would take if issued now. A preview, never a reservation.
+        documentDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: The amount before VAT the Tax Authority asks for
+        customerTaxId:
+          type: string
+          description: The client’s VAT number
+        requestUrl:
+          type: string
+          format: uri
+          description: "Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)"
+      required:
+        - mode
+        - nextNumber
+        - documentDate
+        - net
+        - customerTaxId
+        - requestUrl
+      description: "MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711."
     IssueDocumentRequest:
       type: object
       properties:
@@ -10124,6 +10163,22 @@ components:
           required:
             - heldKey
           description: "MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first."
+        manualAllocation:
+          type: object
+          properties:
+            number:
+              type: string
+              maxLength: 40
+              description: The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise).
+            forNumber:
+              type: integer
+              minimum: 1
+              maximum: 999999999
+              description: "The document number it was requested for: the preview's `allocation.nextNumber` at the time."
+          required:
+            - number
+            - forNumber
+          description: "MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711."
         lines:
           type: array
           items:
@@ -10168,108 +10223,191 @@ components:
         - language
         - lines
     IssuedDocument:
-      allOf:
-        - $ref: "#/components/schemas/IssuedDocumentPreview"
-        - type: object
+      type: object
+      properties:
+        subtotal:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        discount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        net:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        vatRateBasisPoints:
+          type: integer
+        vat:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        gross:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricesIncludeVat:
+          type: boolean
+        lines:
+          type: array
+          items:
+            type: object
+            properties:
+              index:
+                type: integer
+              description:
+                type: string
+              kind:
+                type: string
+              quantity:
+                type: string
+              unitPrice:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              discount:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              net:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              pricesIncludeVat:
+                type: boolean
+              vatRateBasisPoints:
+                type: integer
+              vat:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            required:
+              - index
+              - description
+              - kind
+              - quantity
+              - unitPrice
+              - discount
+              - net
+              - pricesIncludeVat
+              - vatRateBasisPoints
+              - vat
+        id:
+          type: string
+          format: uuid
+        docType:
+          $ref: "#/components/schemas/IssuedDocType"
+        number:
+          type: integer
+        documentDate:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        issuedAt:
+          type: string
+          format: date-time
+        currency:
+          type: string
+        language:
+          type: string
+        style:
+          type: string
+        ink:
+          type: string
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        customer:
+          type: object
+          additionalProperties:
+            nullable: true
+        issuer:
+          type: object
+          additionalProperties:
+            nullable: true
+        notes:
+          type: string
+          nullable: true
+        originalId:
+          type: string
+          nullable: true
+          format: uuid
+        paymentDetails:
+          type: object
+          nullable: true
           properties:
-            id:
+            method:
               type: string
-              format: uuid
-            docType:
-              $ref: "#/components/schemas/IssuedDocType"
-            number:
-              type: integer
-            documentDate:
+            reference:
+              type: string
+              nullable: true
+            receivedOn:
               type: string
               pattern: ^\d{4}-\d{2}-\d{2}$
               description: Calendar date in the organization timezone, YYYY-MM-DD
-            issuedAt:
-              type: string
-              format: date-time
-            currency:
-              type: string
-            language:
-              type: string
-            style:
-              type: string
-            ink:
-              type: string
-            customerId:
-              type: string
-              nullable: true
-              format: uuid
-            customer:
-              type: object
-              additionalProperties:
-                nullable: true
-            issuer:
-              type: object
-              additionalProperties:
-                nullable: true
-            notes:
-              type: string
-              nullable: true
-            originalId:
-              type: string
-              nullable: true
-              format: uuid
-            paymentDetails:
-              type: object
-              nullable: true
-              properties:
-                method:
-                  type: string
-                reference:
-                  type: string
-                  nullable: true
-                receivedOn:
-                  type: string
-                  pattern: ^\d{4}-\d{2}-\d{2}$
-                  description: Calendar date in the organization timezone, YYYY-MM-DD
-              required:
-                - method
-                - reference
-                - receivedOn
-            allocationNumber:
-              type: string
-              nullable: true
-            receivableId:
-              type: string
-              nullable: true
-              format: uuid
-            paymentId:
-              type: string
-              nullable: true
-              format: uuid
-            coreVersion:
-              type: string
-            displayNumber:
-              type: string
-              description: "The number as shown: PR-0007 for a payment request, the plain number otherwise"
-            paymentRequest:
-              $ref: "#/components/schemas/PaymentRequestFacts"
           required:
-            - id
-            - docType
-            - number
-            - documentDate
-            - issuedAt
-            - currency
-            - language
-            - style
-            - ink
-            - customerId
-            - customer
-            - issuer
-            - notes
-            - originalId
-            - paymentDetails
-            - allocationNumber
-            - receivableId
-            - paymentId
-            - coreVersion
-            - displayNumber
-            - paymentRequest
+            - method
+            - reference
+            - receivedOn
+        allocationNumber:
+          type: string
+          nullable: true
+        allocationSource:
+          type: string
+          nullable: true
+          enum:
+            - API
+            - MANUAL
+            - null
+          description: "MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711."
+        receivableId:
+          type: string
+          nullable: true
+          format: uuid
+        paymentId:
+          type: string
+          nullable: true
+          format: uuid
+        coreVersion:
+          type: string
+        displayNumber:
+          type: string
+          description: "The number as shown: PR-0007 for a payment request, the plain number otherwise"
+        paymentRequest:
+          $ref: "#/components/schemas/PaymentRequestFacts"
+      required:
+        - subtotal
+        - discount
+        - net
+        - vatRateBasisPoints
+        - vat
+        - gross
+        - pricesIncludeVat
+        - lines
+        - id
+        - docType
+        - number
+        - documentDate
+        - issuedAt
+        - currency
+        - language
+        - style
+        - ink
+        - customerId
+        - customer
+        - issuer
+        - notes
+        - originalId
+        - paymentDetails
+        - allocationNumber
+        - allocationSource
+        - receivableId
+        - paymentId
+        - coreVersion
+        - displayNumber
+        - paymentRequest
     PaymentRequestFacts:
       type: object
       nullable: true
@@ -10693,7 +10831,9 @@ components:
                 nullable: true
                 description: Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason)
               document:
-                $ref: "#/components/schemas/IssuedDocument"
+                allOf:
+                  - $ref: "#/components/schemas/IssuedDocument"
+                  - nullable: true
             required:
               - entry
               - status
