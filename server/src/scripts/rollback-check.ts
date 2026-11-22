@@ -26,6 +26,12 @@ export interface RollbackHazard {
 
 export const ROLLBACK_HAZARDS: readonly RollbackHazard[] = [
   {
+    ticket: 'MUT-568',
+    migration: '_mut568_',
+    count: `SELECT (SELECT count(*) FROM receivables WHERE origin = 'ISSUED_DOCUMENT') + (SELECT count(*) FROM payments WHERE origin = 'ISSUED_DOCUMENT')`,
+    consequence: "an older revision's Prisma client has no ISSUED_DOCUMENT origin, so every list holding a document's Owed or Received fails",
+  },
+  {
     ticket: 'MUT-100',
     migration: '_mut100_',
     count: `SELECT count(*) FROM agreements WHERE type = 'CONTINGENCY'`,

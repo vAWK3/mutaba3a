@@ -13379,6 +13379,832 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business details printed on this profile’s documents */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The details */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Set the business details printed on documents
+         * @description Without If-Match the details are created (409 VERSION_MISMATCH if they exist); with it they are replaced. Issued documents keep the details they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuerDetailsRequest"];
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Numbering per document type */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The counters */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSettings"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/starting-numbers/{docType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the first number of a document type
+         * @description D3: for a business moving from another tool. Refused with 409 (reason HAS_DOCUMENTS) once a document of that type exists.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    docType: components["schemas"]["IssuedDocType"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StartingNumberRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingCounter"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a document would say, without issuing it
+         * @description D7: stateless. The same rules and math as issuing; nothing is written and no number is taken.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDocumentRequest"];
+                };
+            };
+            responses: {
+                /** @description The totals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocumentPreview"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issued documents, newest first */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    docType?: components["schemas"]["IssuedDocType"];
+                    customerId?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocumentPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Issue a tax invoice, invoice-receipt, receipt or credit note
+         * @description Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDocumentRequest"];
+                };
+            };
+            responses: {
+                /** @description Issued */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One issued document */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/copies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a copy produced (download, email, share)
+         * @description The first copy of a document is its original ("מקור"); every later one is a copy ("העתק"). The PDF (MUT-640) prints the label this returns. A retry with the same Idempotency-Key gets the same answer.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuedCopyRequest"];
+                };
+            };
+            responses: {
+                /** @description Recorded */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedCopy"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Missing document numbers, per type
+         * @description AC5: every number from a type’s first to its last taken that has no document. Empty in normal use.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Gaps per type */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingGaps"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/fx-rates": {
         parameters: {
             query?: never;
@@ -24785,7 +25611,7 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** Format: uuid */
             originId: string | null;
             currency: components["schemas"]["Currency"];
@@ -25290,7 +26116,7 @@ export interface components {
             /** Format: uuid */
             createdByUserId: string | null;
             /** @enum {string} */
-            origin: "capture" | "integration";
+            origin: "capture" | "integration" | "issued_document";
             /** Format: uuid */
             settlesOwedId: string | null;
             /** Format: uuid */
@@ -25645,7 +26471,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        PaymentOrigin: "integration" | "capture";
+        PaymentOrigin: "integration" | "capture" | "issued_document";
         /** @enum {string} */
         AllocationState: "unallocated" | "partial" | "allocated";
         /** @enum {string} */
@@ -25658,7 +26484,7 @@ export interface components {
             /** Format: uuid */
             projectId: string;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -25728,7 +26554,7 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -26785,6 +27611,209 @@ export interface components {
             toAmount?: string;
             toCurrency?: components["schemas"]["Currency"] & unknown;
             notes?: string | null;
+        };
+        IssuerDetails: {
+            legalName: string;
+            vatId: string;
+            dealerType: components["schemas"]["DealerType"];
+            address: string | null;
+            city: string | null;
+            phone: string | null;
+            email: string | null;
+            website: string | null;
+            ink: string;
+            documentStyle: string;
+            pricesIncludeVat: boolean;
+            version: number;
+        };
+        /**
+         * @description עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה
+         * @enum {string}
+         */
+        DealerType: "LICENSED" | "EXEMPT" | "COMPANY" | "NONPROFIT";
+        IssuerDetailsRequest: {
+            legalName: string;
+            /** @description VAT file number or company number (ח.פ./ע.מ.), 9 digits */
+            vatId: string;
+            dealerType: components["schemas"]["DealerType"];
+            address?: string | null;
+            city?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
+            website?: string | null;
+            /** @description V1-a: the default for new documents (default false) */
+            pricesIncludeVat?: boolean;
+        };
+        IssuingSettings: {
+            counters: components["schemas"]["IssuingCounter"][];
+        };
+        IssuingCounter: {
+            docType: components["schemas"]["IssuedDocType"];
+            start: number;
+            next: number;
+            hasDocuments: boolean;
+        };
+        /**
+         * @description 305, 320, 330 and 400 in the Tax Authority's codes
+         * @enum {string}
+         */
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+        StartingNumberRequest: {
+            start: number;
+        };
+        IssuedDocumentPreview: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            subtotal: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            discount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            vatRateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            pricesIncludeVat: boolean;
+            lines: {
+                index: number;
+                description: string;
+                kind: string;
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                pricesIncludeVat: boolean;
+                vatRateBasisPoints: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
+        };
+        IssueDocumentRequest: {
+            docType: components["schemas"]["IssuedDocType"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /**
+             * @description Shekels only in v1 (D4)
+             * @enum {string}
+             */
+            currency: "ILS";
+            language: components["schemas"]["DocumentLanguage"];
+            /**
+             * Format: uuid
+             * @description Required except for a receipt
+             */
+            customerId?: string | null;
+            /** @description A tax invoice: when its Owed falls due (default: the document date) */
+            dueDate?: string;
+            /**
+             * Format: uuid
+             * @description A credit note: the tax invoice it credits
+             */
+            originalId?: string;
+            /**
+             * Format: uuid
+             * @description A receipt: the open tax invoice it pays
+             */
+            appliesToDocumentId?: string;
+            /** @description An invoice-receipt or a receipt: how the money came in */
+            payment?: {
+                /** @enum {string} */
+                method: "CASH" | "BANK";
+                reference?: string | null;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+            };
+            /** @description A discount on the whole document, in the document's terms (VAT included or not) */
+            discount?: string;
+            /** @description V1-a: whether the prices typed include VAT; default from the business details */
+            pricesIncludeVat?: boolean;
+            /** @description I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH). */
+            fromEntry?: {
+                /** @enum {string} */
+                kind: "owed" | "received";
+                /** Format: uuid */
+                id: string;
+            };
+            notes?: string | null;
+            lines: {
+                description: string;
+                /** @enum {string} */
+                kind: "GOODS" | "SERVICE";
+                /** @description Positive, up to 3 decimals, e.g. "40" or "1.5" */
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount?: string;
+                /** @description V1-a: overrides the document for this line */
+                pricesIncludeVat?: boolean;
+                /** @description No VAT on this line */
+                vatExempt?: boolean;
+            }[];
+        };
+        /** @enum {string} */
+        DocumentLanguage: "ar" | "he" | "en";
+        IssuedDocument: components["schemas"]["IssuedDocumentPreview"] & {
+            /** Format: uuid */
+            id: string;
+            docType: components["schemas"]["IssuedDocType"];
+            number: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /** Format: date-time */
+            issuedAt: string;
+            currency: string;
+            language: string;
+            style: string;
+            ink: string;
+            /** Format: uuid */
+            customerId: string | null;
+            customer: {
+                [key: string]: unknown;
+            };
+            issuer: {
+                [key: string]: unknown;
+            };
+            notes: string | null;
+            /** Format: uuid */
+            originalId: string | null;
+            paymentDetails: {
+                method: string;
+                reference: string | null;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+            } | null;
+            allocationNumber: string | null;
+            /** Format: uuid */
+            receivableId: string | null;
+            /** Format: uuid */
+            paymentId: string | null;
+            coreVersion: string;
+        };
+        IssuedDocumentPage: {
+            items: components["schemas"]["IssuedDocument"][];
+            nextCursor: string | null;
+        };
+        IssuedCopy: {
+            copyIndex: number;
+            /** @enum {string} */
+            label: "ORIGINAL" | "COPY";
+        };
+        IssuedCopyRequest: {
+            /** @enum {string} */
+            channel: "DOWNLOAD" | "EMAIL" | "SHARE";
+        };
+        IssuingGaps: {
+            types: {
+                docType: components["schemas"]["IssuedDocType"];
+                start: number;
+                last: number;
+                missing: number[];
+            }[];
         };
         FxRatesResponse: {
             base: components["schemas"]["Currency"];
@@ -28335,7 +29364,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
-            origin: "capture" | "integration";
+            origin: "capture" | "integration" | "issued_document";
             /** @description It paid toward one Owed entry (a settle). */
             settlesOwed: boolean;
             /** @description It replaced a payment Malafat reversed. */

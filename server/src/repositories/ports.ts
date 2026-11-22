@@ -8,6 +8,8 @@ import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/conting
 import type { PricingBasis, VatTreatment } from '../vat.js';
 import type { CreditReasonCode } from '../payments/credit.js';
 import type { ShareLinkPeriod } from '../share-links/period.js';
+import type { ComposedDocument } from '../issuing/compose.js';
+import type { DealerType, IssuedDocType } from '../issuing/types.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -772,7 +774,7 @@ export interface VatRateRepository {
 export type AgreementType = 'FIXED' | 'RECURRING' | 'CONTINGENCY';
 export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
-export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
+export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT' | 'ISSUED_DOCUMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
 export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION' | 'CORRECTION';
@@ -1328,7 +1330,7 @@ export interface ReceivableRepository {
 export type PaymentMethod = 'CASH' | 'BANK';
 export type PaymentStatus = 'POSTED' | 'REVERSED';
 /** MUT-61: who put a payment on the ledger. */
-export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE';
+export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE' | 'ISSUED_DOCUMENT';
 
 export interface PaymentRecord {
   id: string;
@@ -2792,6 +2794,8 @@ export interface LedgerStore {
   shareLinks: ShareLinkRepository;
   /** MUT-314 (ADR-248): a period download's size estimate and its batched name lookups. Reads only. */
   periodPack: PeriodPackRepository;
+  /** MUT-568 (ADR-260): issued documents, INSERT-only legal records, and the details printed on them. Session only. */
+  issuing: IssuingRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -4412,4 +4416,175 @@ export interface InboxEntryRepository {
   fileAsExpense(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; expense: CreateExpenseInput }, at: Date): Promise<{ kind: 'filed'; expense: ExpenseRecord } | { kind: 'not_found' }>;
   /** The same shape for the Payment (received) or adjustment Receivable (owed) write. */
   fileAsIncome(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; write: IncomeWriteInput }, at: Date): Promise<{ kind: 'filed'; result: IncomeWriteResult } | { kind: 'not_found' }>;
+}
+
+// ---- MUT-568 (ADR-260): the issuing core -------------------------------------------------------------------------
+
+export interface IssuerDetailsInput {
+  legalName: string;
+  vatId: string;
+  dealerType: DealerType;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  /** V1-a: the default for new documents. */
+  pricesIncludeVat: boolean;
+}
+
+export interface IssuerDetailsRecord extends IssuerDetailsInput {
+  organizationId: string;
+  logoAttachmentId: string | null;
+  ink: string;
+  documentStyle: string;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface IssuedDocumentCounterRecord {
+  organizationId: string;
+  docType: IssuedDocType;
+  /** The first number of this type (D3). */
+  start: number;
+  /** The number the next document takes. */
+  next: number;
+}
+
+export interface IssuedDocumentLineRecord {
+  index: number;
+  description: string;
+  kind: string;
+  quantityMilli: bigint;
+  unitPriceMinor: bigint;
+  discountMinor: bigint;
+  netMinor: bigint;
+  pricesIncludeVat: boolean;
+  vatRateBasisPoints: number;
+  vatMinor: bigint;
+}
+
+export interface IssuedPaymentDetails {
+  method: PaymentMethod;
+  reference: string | null;
+  receivedOn: IsoDate;
+}
+
+export interface IssuedDocumentRecord {
+  id: string;
+  organizationId: string;
+  docType: IssuedDocType;
+  number: number;
+  documentDate: IsoDate;
+  issuedAt: Date;
+  currency: string;
+  subtotalMinor: bigint;
+  discountMinor: bigint;
+  netMinor: bigint;
+  vatRateBasisPoints: number;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  pricesIncludeVat: boolean;
+  issuer: JsonObject;
+  customerId: string | null;
+  customer: JsonObject;
+  language: string;
+  style: string;
+  ink: string;
+  notes: string | null;
+  /** A credit note's tax invoice, or the tax invoice a receipt pays. */
+  originalId: string | null;
+  paymentDetails: IssuedPaymentDetails | null;
+  allocationNumber: string | null;
+  receivableId: string | null;
+  paymentId: string | null;
+  creditId: string | null;
+  coreVersion: string;
+  createdByUserId: string;
+  requestKey: string;
+  lines: IssuedDocumentLineRecord[];
+}
+
+/** What the route hands the store: composed and validated (issuing/compose.ts), snapshots taken. */
+export interface IssueDocumentInput {
+  organizationId: string;
+  docType: IssuedDocType;
+  documentDate: IsoDate;
+  currency: string;
+  composed: ComposedDocument;
+  issuer: JsonObject;
+  /** Required for 305, 320 and 330 (the ledger row names a customer); a 400 may have none. */
+  customerId: string | null;
+  customer: JsonObject;
+  language: string;
+  style: string;
+  ink: string;
+  notes: string | null;
+  /** 305 and 320: when the Owed falls due. */
+  dueDate: IsoDate | null;
+  /** 330: the tax invoice it credits. */
+  originalId: string | null;
+  /** 320 and 400: how the money came in. */
+  payment: IssuedPaymentDetails | null;
+  /** 400: the open tax invoice this receipt pays, if any. */
+  appliesToDocumentId: string | null;
+  /**
+   * I1-a: the recorded entry this document is for. The document takes it over (no new Owed or Received): a 305 an Owed
+   * a person recorded; a 320 or 400 a Received a person captured. Same customer, currency and amount.
+   */
+  fromEntry: { kind: 'receivable' | 'payment'; id: string } | null;
+  /** MUT-572 fills it; null until then. */
+  allocationNumber: string | null;
+  /** The ledger rows' title before the number, e.g. "חשבונית מס"; the store appends the number. */
+  titlePrefix: string;
+  coreVersion: string;
+  createdByUserId: string;
+  /** The issue request's idempotency key: the same key returns the same document. */
+  requestKey: string;
+  requestId: string | null;
+}
+
+export type IssueResult =
+  | { kind: 'issued'; document: IssuedDocumentRecord; created: boolean }
+  /** D6: the date is before the last issued document of this type. */
+  | { kind: 'date_before_last'; lastDate: IsoDate }
+  | { kind: 'customer_not_found' }
+  /** 330's original or 400's appliesTo: missing, another profile's, or not an open tax invoice. */
+  | { kind: 'original_not_found' }
+  /** R-D2: a credit note credits only what is still owed on its tax invoice (MUT-643 for paid ones). */
+  | { kind: 'original_paid'; outstandingMinor: bigint }
+  /** 400 against a 305: more than it still owes. */
+  | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
+  /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */
+  | { kind: 'entry_not_found' }
+  | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' };
+
+export interface IssuedDocumentFilter {
+  docType?: IssuedDocType;
+  customerId?: string;
+}
+
+export interface IssuedNumberGap {
+  docType: IssuedDocType;
+  start: number;
+  /** The last number taken; start − 1 when none. */
+  last: number;
+  missing: number[];
+}
+
+export interface IssuingRepository {
+  getIssuer(organizationId: string): Promise<IssuerDetailsRecord | null>;
+  /** Creates the details (expectedVersion null) or updates them (If-Match); `stale` on a version mismatch. */
+  putIssuer(organizationId: string, input: IssuerDetailsInput, expectedVersion: number | null, at: Date): Promise<UpdateResult<IssuerDetailsRecord> | { kind: 'created'; record: IssuerDetailsRecord }>;
+  counters(organizationId: string): Promise<IssuedDocumentCounterRecord[]>;
+  /** D3: sets a type's first number; `has_documents` once one of that type exists. */
+  setStartingNumber(organizationId: string, docType: IssuedDocType, start: number): Promise<{ kind: 'set'; counter: IssuedDocumentCounterRecord } | { kind: 'has_documents' }>;
+  /** One transaction: the next gap-free number, the document and its lines, and its ledger rows. */
+  issue(input: IssueDocumentInput, at: Date): Promise<IssueResult>;
+  getById(organizationId: string, id: string): Promise<IssuedDocumentRecord | null>;
+  list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
+  /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
+  recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string }, at: Date): Promise<{ copyIndex: number } | null>;
+  gaps(organizationId: string): Promise<IssuedNumberGap[]>;
 }

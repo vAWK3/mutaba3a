@@ -28,6 +28,10 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   AccountPurgeRepository,
+  IssueDocumentInput,
+  IssueResult,
+  IssuedDocumentRecord,
+  IssuingRepository,
   MonthlySummaryChoice,
   OperatorAccountCursor,
   VendorRecord,
@@ -189,6 +193,9 @@ import type {
 import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
+import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
+import { numberGaps } from '../issuing/gaps.js';
+import type { IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -771,6 +778,97 @@ export class PrismaLedgerStore implements LedgerStore {
         const { count } = await tx.accountantGrant.updateMany({ where: { id: grantId, status: 'ACTIVE' }, data: { lastViewedAt: at } });
         if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
       });
+    },
+  };
+
+  /**
+   * MUT-568 (ADR-260): the issuing core. `issue` is one transaction: the counter row first (INSERT … ON CONFLICT, so
+   * the very first document of a type can't race), then D6's date check after that lock (READ COMMITTED: the previous
+   * holder's commit is visible), the original's Owed locked for a credit note or a receipt, the ledger rows, then the
+   * document. A refusal throws IssueRefused so the whole transaction, counter increment included, rolls back: no gap.
+   */
+  readonly issuing: IssuingRepository = {
+    getIssuer: (organizationId) => this.prisma.issuerDetails.findUnique({ where: { organizationId } }),
+    putIssuer: async (organizationId, input, expectedVersion, at) => {
+      if (expectedVersion === null) {
+        try {
+          const record = await translate(() => this.prisma.issuerDetails.create({ data: { organizationId, ...input, createdAt: at, updatedAt: at } }));
+          return { kind: 'created', record };
+        } catch (err) {
+          if (!(err instanceof UniqueViolation)) throw err;
+          const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+          return record ? { kind: 'stale', record } : { kind: 'not_found' };
+        }
+      }
+      const { count } = await this.prisma.issuerDetails.updateMany({ where: { organizationId, version: expectedVersion }, data: { ...input, version: { increment: 1 }, updatedAt: at } });
+      const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+    setStartingNumber: (organizationId, docType, start) =>
+      this.prisma.$transaction(async (tx) => {
+        // Review fix 9: lock the counter first, so a first document can't commit between the check and the write.
+        await tx.$queryRaw`SELECT 1 FROM "issued_document_counters" WHERE "organizationId" = ${organizationId}::uuid AND "docType" = ${docType}::"IssuedDocType" FOR UPDATE`;
+        if (await tx.issuedDocument.findFirst({ where: { organizationId, docType }, select: { id: true } })) return { kind: 'has_documents' as const };
+        const counter = await tx.issuedDocumentCounter.upsert({
+          where: { organizationId_docType: { organizationId, docType } },
+          create: { organizationId, docType, start, next: start },
+          update: { start, next: start },
+        });
+        return { kind: 'set' as const, counter };
+      }),
+    issue: async (input, at) => {
+      const replay = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+      if (replay) return { kind: 'issued', document: replay, created: false };
+      try {
+        return await this.prisma.$transaction((tx) => issueTx(tx, input, at), CORRECT_TX_OPTIONS);
+      } catch (err) {
+        if (err instanceof IssueRefused) return err.result;
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          // Two requests with one key raced past the replay read: the winner's document is the answer.
+          const winner = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+          if (winner) return { kind: 'issued', document: winner, created: false };
+        }
+        throw err;
+      }
+    },
+    getById: async (organizationId, id) => {
+      const row = await this.prisma.issuedDocument.findFirst({ where: { id, organizationId } });
+      return row ? withLines(this.prisma, row) : null;
+    },
+    list: async (organizationId, filter, page) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: {
+          organizationId,
+          ...(filter.docType ? { docType: filter.docType } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(page.cursor ? { OR: [{ issuedAt: { lt: page.cursor.createdAt } }, { issuedAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
+        },
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const kept = rows.slice(0, page.limit);
+      const lines = await this.prisma.issuedDocumentLine.findMany({ where: { documentId: { in: kept.map((r) => r.id) } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+      const items = kept.map((row) => issuedRecord(row, lines.filter((l) => l.documentId === row.id)));
+      const last = kept[kept.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
+    },
+    recordCopy: (organizationId, documentId, copy, at) =>
+      this.prisma.$transaction(async (tx) => {
+        // A row lock, not an UPDATE: the immutability trigger never fires, and concurrent copies queue here.
+        const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "issued_documents" WHERE "id" = ${documentId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+        if (locked.length === 0) return null;
+        const copyIndex = await tx.issuedDocumentCopy.count({ where: { documentId } });
+        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel } });
+        return { copyIndex };
+      }),
+    gaps: async (organizationId) => {
+      const [counters, numbers] = await Promise.all([
+        this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+        this.prisma.issuedDocument.findMany({ where: { organizationId }, select: { docType: true, number: true } }),
+      ]);
+      return counters.map((c) => numberGaps(c, numbers.filter((n) => n.docType === c.docType).map((n) => n.number)));
     },
   };
 
@@ -2281,7 +2379,8 @@ export class PrismaLedgerStore implements LedgerStore {
       return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n);
     },
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
-      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null }, select: { id: true } });
+      // MUT-568 (review fix 2): a document's Owed is corrected only by a credit note, never credited here.
+      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null, origin: { not: 'ISSUED_DOCUMENT' } }, select: { id: true } });
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         const r = await lockReceivable(tx, receivableId);
@@ -2352,7 +2451,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // landing in between would otherwise hide a row a POSTED payment is allocated to. Same shape as
     // payments.reverse re-asserting `status: 'POSTED'`. A refusal shows up as a row that comes back undeleted.
     softDeleteAdjustment: async (organizationId, id, at) => {
-      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
+      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n, origin: { not: 'ISSUED_DOCUMENT' } }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
     // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
@@ -4439,10 +4538,10 @@ async function nextPaymentNumberTx(tx: Tx, organizationId: string, receivedOn: s
 }
 
 /** Inserts a numbered payment and its allocations (capacity checked under row locks). */
-async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date, allowDocumentOwned = false): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
   const { allocations: requested, ...rest } = input;
   const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
-  const allocations = await applyAllocations(tx, payment, requested, at);
+  const allocations = await applyAllocations(tx, payment, requested, at, allowDocumentOwned);
   const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
   return { payment: fresh, allocations };
 }
@@ -4502,10 +4601,15 @@ async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput
 }
 
 /** Allocation rows + receivable sums + payment allocated total, all inside the caller's transaction; capacity checked under row locks. */
-async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): Promise<AllocationRecord[]> {
+async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date, allowDocumentOwned = false): Promise<AllocationRecord[]> {
   const created: AllocationRecord[] = [];
   let total = 0n;
   await lockReceivablesInIdOrder(tx, requested.map((a) => a.receivableId));
+  // MUT-568 (review fix 2): only issuing pays a document's Owed (a 320, or a 400 naming its invoice); any other payment can't.
+  if (!allowDocumentOwned && requested.length > 0) {
+    const owned = await tx.receivable.count({ where: { id: { in: requested.map((a) => a.receivableId) }, origin: 'ISSUED_DOCUMENT' } });
+    if (owned > 0) throw new ForeignKeyViolation('payment_allocations.receivableId');
+  }
   for (const a of requested) {
     created.push(await allocateRowTx(tx, { organizationId: payment.organizationId, paymentId: payment.id, ...a }, at));
     total += a.amountMinor;
@@ -4978,6 +5082,209 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 
 /** A Stripe metadata user id is free text; only a UUID is looked up (the `::uuid` cast would throw otherwise). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// ---- MUT-568 (ADR-260): the issuing core's transaction -----------------------------------------------------------
+
+/** A refusal found inside the issue transaction: thrown so the counter's increment rolls back with everything else. */
+class IssueRefused extends Error {
+  constructor(readonly result: Exclude<IssueResult, { kind: 'issued' }>) {
+    super(result.kind);
+  }
+}
+
+type IssuedRow = Prisma.IssuedDocumentGetPayload<object>;
+type IssuedLineRow = Prisma.IssuedDocumentLineGetPayload<object>;
+
+function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRecord {
+  return {
+    ...row,
+    issuer: row.issuer as JsonObject,
+    customer: row.customer as JsonObject,
+    paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
+    lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
+  };
+}
+
+async function withLines(db: Tx | PrismaClient, row: IssuedRow): Promise<IssuedDocumentRecord> {
+  return issuedRecord(row, await db.issuedDocumentLine.findMany({ where: { documentId: row.id }, orderBy: { index: 'asc' } }));
+}
+
+async function findIssuedByKey(db: Tx | PrismaClient, organizationId: string, requestKey: string): Promise<IssuedDocumentRecord | null> {
+  const row = await db.issuedDocument.findUnique({ where: { organizationId_requestKey: { organizationId, requestKey } } });
+  return row ? withLines(db, row) : null;
+}
+
+/** The number this document takes. One statement, so two first documents of a type never race on creating the row. */
+async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: IssuedDocType): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ taken: number }>>`
+    INSERT INTO "issued_document_counters" ("organizationId", "docType", "start", "next")
+    VALUES (${organizationId}::uuid, ${docType}::"IssuedDocType", 1, 2)
+    ON CONFLICT ("organizationId", "docType") DO UPDATE SET "next" = "issued_document_counters"."next" + 1
+    RETURNING "next" - 1 AS "taken"`;
+  return Number(rows[0]!.taken);
+}
+
+/**
+ * I1-a: locks the recorded entry a document takes over and checks it is a person's own, untouched one for the same
+ * customer, currency and amount. Refusals throw IssueRefused (inside the issue transaction, so nothing is kept).
+ */
+async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput): Promise<{ kind: 'receivable' | 'payment'; id: string } | null> {
+  const from = input.fromEntry;
+  if (!from) return null;
+  const table = from.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
+  const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM ${table} WHERE "id" = ${from.id}::uuid AND "organizationId" = ${input.organizationId}::uuid FOR UPDATE`;
+  if (locked.length === 0) throw new IssueRefused({ kind: 'entry_not_found' });
+  const entry =
+    from.kind === 'receivable'
+      ? await tx.receivable.findUniqueOrThrow({ where: { id: from.id } }).then((r) => ({ ok: r.origin === 'ADJUSTMENT' && !r.deletedAt && r.creditedMinor === 0n, customerId: r.customerId as string | null, currency: r.currency, amountMinor: r.grossMinor }))
+      : await tx.payment.findUniqueOrThrow({ where: { id: from.id } }).then((p) => ({ ok: p.origin === 'CAPTURE' && p.status === 'POSTED' && p.allocatedMinor === 0n, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor }));
+  const refusal = fromEntryRefusal(entry, input);
+  if (refusal) throw new IssueRefused(refusal);
+  return from;
+}
+
+async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
+  const { organizationId } = input;
+  const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
+  // Review fix 7: the year counters before any receivable lock, the order every other posting writer takes (MUT-443).
+  const postsOwed = (input.docType === 'TAX_INVOICE' || input.docType === 'TAX_INVOICE_RECEIPT') && input.fromEntry?.kind !== 'receivable';
+  const postsReceived = (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
+  const owedNumber = postsOwed ? await nextReceivableNumberTx(tx, organizationId, input.documentDate) : null;
+  const receivedNumber = postsReceived && input.payment ? await nextPaymentNumberTx(tx, organizationId, input.payment.receivedOn) : null;
+  const last = await tx.issuedDocument.findFirst({ where: { organizationId, docType: input.docType }, orderBy: { documentDate: 'desc' }, select: { documentDate: true } });
+  if (last && last.documentDate > input.documentDate) throw new IssueRefused({ kind: 'date_before_last', lastDate: last.documentDate });
+  if (input.customerId && !(await tx.customer.findFirst({ where: { id: input.customerId, organizationId }, select: { id: true } }))) {
+    throw new IssueRefused({ kind: 'customer_not_found' });
+  }
+  const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
+  let originalReceivableId: string | null = null;
+  if (originalId) {
+    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: 'TAX_INVOICE' }, select: { receivableId: true, customerId: true } });
+    if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+    const r = await lockReceivable(tx, original.receivableId);
+    const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
+    if (input.composed.grossMinor > outstandingMinor) {
+      throw new IssueRefused(input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor });
+    }
+    originalReceivableId = original.receivableId;
+  }
+  const from = await lockFromEntryTx(tx, input);
+  const plan = ledgerPlan(input, number);
+  const documentId = randomUUID();
+  let receivableId: string | null = null;
+  let paymentId: string | null = null;
+  let creditId: string | null = null;
+  if (plan.receivable && from?.kind === 'receivable') {
+    // I1-a: the recorded Owed becomes the document's: its money is now the document's VAT split, read-only from here.
+    // Review fix 3: it also takes the document's dates, so its VAT falls in the invoice's month.
+    const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate } = plan.receivable;
+    await tx.receivable.update({ where: { id: from.id }, data: { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate, origin: 'ISSUED_DOCUMENT', originId: documentId, version: { increment: 1 } } });
+    receivableId = from.id;
+  } else if (plan.receivable) {
+    const receivable = await tx.receivable.create({
+      data: {
+        ...plan.receivable,
+        organizationId,
+        number: owedNumber ?? (await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate)),
+        projectId: null,
+        agreementId: null,
+        origin: 'ISSUED_DOCUMENT',
+        originId: documentId,
+        postedAt: at,
+        createdByUserId: input.createdByUserId,
+        createdAt: at,
+      },
+    });
+    receivableId = receivable.id;
+  }
+  if (plan.payment && from?.kind === 'payment') {
+    // I1-a: the captured Received becomes the document's, and pays its Owed (320) or the invoice it names (400).
+    const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? originalReceivableId : null;
+    const payment = await tx.payment.update({ where: { id: from.id }, data: { origin: 'ISSUED_DOCUMENT', version: { increment: 1 }, updatedAt: at } });
+    if (target) await applyAllocations(tx, payment, [{ receivableId: target, amountMinor: payment.amountMinor }], at, true);
+    paymentId = from.id;
+  } else if (plan.payment) {
+    const { allocate, ...p } = plan.payment;
+    const target = allocate === 'own' ? receivableId : allocate === 'applies' ? originalReceivableId : null;
+    const { payment } = await insertPaymentTx(
+      tx,
+      {
+        ...p,
+        organizationId,
+        projectId: null,
+        receiptNumber: null,
+        notes: null,
+        replacesPaymentId: null,
+        requestId: input.requestId,
+        createdByUserId: input.createdByUserId,
+        origin: 'ISSUED_DOCUMENT',
+        captureSource: null,
+        allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
+      },
+      receivedNumber ?? (await nextPaymentNumberTx(tx, organizationId, p.receivedOn)),
+      at,
+      true,
+    );
+    paymentId = payment.id;
+  }
+  if (plan.credit && originalReceivableId) {
+    const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: originalReceivableId, ...plan.credit, requestId: input.requestId, createdAt: at } });
+    await settleReceivable(tx, originalReceivableId, { creditedMinor: { increment: plan.credit.amountMinor } });
+    creditId = credit.id;
+  }
+  const { composed } = input;
+  const row = await tx.issuedDocument.create({
+    data: {
+      id: documentId,
+      organizationId,
+      docType: input.docType,
+      number,
+      documentDate: input.documentDate,
+      issuedAt: at,
+      currency: input.currency,
+      subtotalMinor: composed.subtotalMinor,
+      discountMinor: composed.discountMinor,
+      netMinor: composed.netMinor,
+      vatRateBasisPoints: composed.vatRateBasisPoints,
+      vatMinor: composed.vatMinor,
+      grossMinor: composed.grossMinor,
+      pricesIncludeVat: composed.pricesIncludeVat,
+      issuer: input.issuer,
+      customerId: input.customerId,
+      customer: input.customer,
+      language: input.language,
+      style: input.style,
+      ink: input.ink,
+      notes: input.notes,
+      // Review fix 5: a receipt keeps the invoice it pays.
+      originalId: input.originalId ?? input.appliesToDocumentId,
+      paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
+      allocationNumber: input.allocationNumber,
+      receivableId,
+      paymentId,
+      creditId,
+      coreVersion: input.coreVersion,
+      createdByUserId: input.createdByUserId,
+      requestKey: input.requestKey,
+    },
+  });
+  const lines = composed.lines.map((l) => ({
+    documentId,
+    organizationId,
+    index: l.index,
+    description: l.description.trim(),
+    kind: l.kind,
+    quantityMilli: l.quantityMilli,
+    unitPriceMinor: l.unitPriceMinor,
+    discountMinor: l.discountMinor,
+    netMinor: l.netMinor,
+    pricesIncludeVat: l.pricesIncludeVat,
+    vatRateBasisPoints: l.vatRateBasisPoints,
+    vatMinor: l.vatMinor,
+  }));
+  await tx.issuedDocumentLine.createMany({ data: lines });
+  return { kind: 'issued', document: issuedRecord(row, lines), created: true };
+}
 
 async function translate<T>(op: () => Promise<T>): Promise<T> {
   try {

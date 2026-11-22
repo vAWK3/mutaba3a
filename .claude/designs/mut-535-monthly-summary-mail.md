@@ -13,7 +13,7 @@ Plan written 2026-11-21 on branch `claude/interesting-swirles-03d6c9` (from main
 | AC3 | Off with one link and in You › Account; off by default for Malafat-covered profiles | D6–D8 |
 | AC4 | After a monthly payer's 2nd payment, the "Switch to yearly" line | D9: MUT-531's own rule, moved out of the route |
 | AC5 | Nothing sent for a profile with no entries that month | D10 |
-| AC6 | Amounts in mails: decide against ADR-159 §5 | D11 → **ADR-259** (Basel's yes, Jira comment 13353) + privacy policy (§7c) |
+| AC6 | Amounts in mails: decide against ADR-159 §5 | D11 → **ADR-260** (Basel's yes, Jira comment 13353) + privacy policy (§7c) |
 | AC7 | Tests and a release-QA flow on the memory mailer | §5, §6 |
 
 ## 2. Decisions
@@ -69,7 +69,7 @@ Plan written 2026-11-21 on branch `claude/interesting-swirles-03d6c9` (from main
   paused, no stay offer running, ≥ 2 paid invoices. Only a person with a monthly list-price subscription costs Stripe
   reads (catalog once per run, paid-invoice count cached). With no Stripe on the server, or Stripe failing, or no
   saving to name, the line is left out and the mail still goes; the job never answers 503 for want of Stripe. The line
-  names the yearly saving in the subscription's currency (ADR-259 covers that amount) and links to
+  names the yearly saving in the subscription's currency (ADR-260 covers that amount) and links to
   `/?billing=true&step=switch`.
 - **D10 No entries, no block (AC5, R15).** A profile is in the mail only if it has an income, payment or expense dated
   in the month (from the reads D5 already makes: open income's posting dates, the month's payments and expenses; no new
@@ -128,7 +128,7 @@ hidden (signed-in only) and the parity tests list the new routes as account-only
 
 Website: the privacy policy's "Emails we send" paragraph, ar + en (§7c), and its page test.
 
-Docs and knowledge: ADR-259, CHANGELOG, SYSTEM_OVERVIEW (mail jobs), TEST_PLAN, PATTERNS (signed opt-out link),
+Docs and knowledge: ADR-260, CHANGELOG, SYSTEM_OVERVIEW (mail jobs), TEST_PLAN, PATTERNS (signed opt-out link),
 INFRA (pepper rotation voids opt-out links), CLAUDE.md public routes (`/mail-off`), `docs/operations/before-release.md`.
 
 ## 4. Cost and scale

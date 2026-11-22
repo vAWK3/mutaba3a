@@ -6,6 +6,7 @@ import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { attachmentRoutes } from './attachments.js';
 import { conversionRoutes } from './conversions.js';
+import { issuingRoutes } from './issuing.js';
 import { expenseCategoryRoutes } from './expense-categories.js';
 import { expenseGroupRoutes } from './expense-groups.js';
 import { expenseRoutes } from './expenses.js';
@@ -64,6 +65,8 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => incomeRoutes(deps.store),
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),
+  // MUT-568 (ADR-260): issued documents.
+  (deps) => issuingRoutes(deps.store),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
   // MUT-596: who is on the profile, read-only (a Malafat firm's seats).

@@ -2888,7 +2888,7 @@ export const ReceivableSchema = z
     /** Null for an "Owed" capture with no matter (MUT-65); always set for INSTALLMENT/RETAINER_CHARGE. */
     projectId: uuid.nullable(),
     agreementId: uuid.nullable(),
-    origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']),
+    origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']),
     originId: uuid.nullable(),
     currency: CurrencySchema,
     net: AmountSchema,
@@ -3178,7 +3178,7 @@ export type CaptureSource = z.infer<typeof CaptureSourceSchema>;
 export const StoredCaptureSourceSchema = z.enum(['app', 'siri', 'widget', 'quick_action', 'share', 'mcp', 'malafat']).openapi('StoredCaptureSource');
 export type StoredCaptureSource = z.infer<typeof StoredCaptureSourceSchema>;
 /** MUT-61: who put a payment on the ledger — Malafat's integration, or a person capturing money they were handed. */
-export const PaymentOriginSchema = z.enum(['integration', 'capture']).openapi('PaymentOrigin');
+export const PaymentOriginSchema = z.enum(['integration', 'capture', 'issued_document']).openapi('PaymentOrigin');
 /** MUT-61: how much of a payment has been applied; a REVERSED payment reads `unallocated` (see status). */
 export const AllocationStateSchema = z.enum(['unallocated', 'partial', 'allocated']).openapi('AllocationState');
 export const AllocationStrategySchema = z.enum(['OLDEST_FIRST', 'SETTLE_MATTERS']).openapi('AllocationStrategy');
@@ -3206,7 +3206,7 @@ export const AllocationPreviewRequestSchema = z
 export const BalanceSchema = z.object({ outstanding: AmountSchema, overdue: AmountSchema }).openapi('Balance');
 
 export const EligibleReceivableSchema = z
-  .object({ receivableId: uuid, projectId: uuid, agreementId: uuid.nullable(), origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), dueDate: IsoDateSchema, gross: AmountSchema, outstanding: AmountSchema, status: ItemStatusSchema })
+  .object({ receivableId: uuid, projectId: uuid, agreementId: uuid.nullable(), origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']), dueDate: IsoDateSchema, gross: AmountSchema, outstanding: AmountSchema, status: ItemStatusSchema })
   .openapi('EligibleReceivable');
 
 export const AllocationPreviewResponseSchema = z
@@ -3252,7 +3252,7 @@ export const CreatePaymentRequestSchema = z
   .openapi('CreatePaymentRequest');
 
 export const AllocationSchema = z
-  .object({ id: uuid, receivableId: uuid, projectId: uuid, origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT']), amount: AmountSchema, receivableOutstanding: AmountSchema, receivableStatus: ItemStatusSchema, createdAt: z.string().datetime() })
+  .object({ id: uuid, receivableId: uuid, projectId: uuid, origin: z.enum(['INSTALLMENT', 'RETAINER_CHARGE', 'ADJUSTMENT', 'ISSUED_DOCUMENT']), amount: AmountSchema, receivableOutstanding: AmountSchema, receivableStatus: ItemStatusSchema, createdAt: z.string().datetime() })
   .openapi('Allocation');
 
 export const PaymentSchema = z
@@ -4645,7 +4645,7 @@ export const EntrySchema = z
       /** Null for a payment Malafat recorded: no person logged it. */
       createdByUserId: uuid.nullable(),
       /** capture: a person recorded it (POST /v1/income, inbox filing or a settle); integration: Malafat did. */
-      origin: z.enum(['capture', 'integration']),
+      origin: z.enum(['capture', 'integration', 'issued_document']),
       /** The one Owed entry this payment paid toward (a settle, full or partial), or null. The Owed reads `settled` once paid in full, `open` before. */
       settlesOwedId: uuid.nullable(),
       /** The payment Malafat reversed and replaced with this one, or null. The replaced one reads `reversed`. */
@@ -4800,7 +4800,7 @@ export const ShareLinkEntrySchema = z
     z.object({
       kind: z.literal('received'),
       createdAt: z.string().datetime(),
-      origin: z.enum(['capture', 'integration']),
+      origin: z.enum(['capture', 'integration', 'issued_document']),
       settlesOwed: z.boolean().openapi({ description: 'It paid toward one Owed entry (a settle).' }),
       replacesPayment: z.boolean().openapi({ description: 'It replaced a payment Malafat reversed.' }),
       income: ShareLinkIncomeSchema,
@@ -4982,3 +4982,119 @@ export const PeriodDownloadStreamRequestSchema = z
   .openapi('PeriodDownloadStreamRequest');
 
 export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type: downloadType, lang: downloadLang, asOf: downloadAsOf }).strict().openapi('ShareLinkDownloadTicketRequest');
+
+// ---- MUT-568 (ADR-260): the issuing core ---------------------------------------------------------------------------
+
+export const IssuedDocTypeSchema = z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']).openapi('IssuedDocType', { description: '305, 320, 330 and 400 in the Tax Authority\'s codes' });
+export const DealerTypeSchema = z.enum(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']).openapi('DealerType', { description: 'עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה' });
+export const DocumentLanguageSchema = z.enum(['ar', 'he', 'en']).openapi('DocumentLanguage');
+
+export const IssuerDetailsRequestSchema = z
+  .object({
+    legalName: z.string().trim().min(1).max(200),
+    vatId: z.string().regex(/^\d{9}$/, '9 digits').openapi({ description: 'VAT file number or company number (ח.פ./ע.מ.), 9 digits' }),
+    dealerType: DealerTypeSchema,
+    address: z.string().trim().max(300).nullable().optional(),
+    city: z.string().trim().max(100).nullable().optional(),
+    phone: z.string().trim().max(40).nullable().optional(),
+    email: z.string().trim().email().max(200).nullable().optional(),
+    website: z.string().trim().max(200).nullable().optional(),
+    pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: the default for new documents (default false)' }),
+  })
+  .openapi('IssuerDetailsRequest');
+
+export const IssuerDetailsSchema = z
+  .object({
+    legalName: z.string(),
+    vatId: z.string(),
+    dealerType: DealerTypeSchema,
+    address: z.string().nullable(),
+    city: z.string().nullable(),
+    phone: z.string().nullable(),
+    email: z.string().nullable(),
+    website: z.string().nullable(),
+    ink: z.string(),
+    documentStyle: z.string(),
+    pricesIncludeVat: z.boolean(),
+    version: z.number().int(),
+  })
+  .openapi('IssuerDetails');
+
+export const IssuingCounterSchema = z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), next: z.number().int(), hasDocuments: z.boolean() }).openapi('IssuingCounter');
+export const IssuingSettingsSchema = z.object({ counters: z.array(IssuingCounterSchema) }).openapi('IssuingSettings');
+export const StartingNumberRequestSchema = z.object({ start: z.number().int().min(1).max(999_999_999) }).openapi('StartingNumberRequest');
+export const IssuedDocTypeParamSchema = z.object({ docType: IssuedDocTypeSchema });
+
+const IssueLineRequestSchema = z.object({
+  description: z.string().max(300),
+  kind: z.enum(['GOODS', 'SERVICE']),
+  quantity: z.string().openapi({ description: 'Positive, up to 3 decimals, e.g. "40" or "1.5"' }),
+  unitPrice: AmountSchema,
+  discount: AmountSchema.optional(),
+  pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: overrides the document for this line' }),
+  vatExempt: z.boolean().optional().openapi({ description: 'No VAT on this line' }),
+});
+
+export const IssueDocumentRequestSchema = z
+  .object({
+    docType: IssuedDocTypeSchema,
+    documentDate: IsoDateSchema,
+    currency: z.literal('ILS').openapi({ description: 'Shekels only in v1 (D4)' }),
+    language: DocumentLanguageSchema,
+    customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
+    dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
+    originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
+    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice it pays' }),
+    payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
+    discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
+    pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: whether the prices typed include VAT; default from the business details' }),
+    fromEntry: z
+      .object({ kind: z.enum(['owed', 'received']), id: uuid })
+      .optional()
+      .openapi({ description: 'I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH).' }),
+    notes: z.string().max(1000).nullable().optional(),
+    lines: z.array(IssueLineRequestSchema).min(1).max(200),
+  })
+  .openapi('IssueDocumentRequest');
+
+const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
+
+export const IssuedDocumentPreviewSchema = z
+  .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
+  .openapi('IssuedDocumentPreview');
+
+export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
+  id: uuid,
+  docType: IssuedDocTypeSchema,
+  number: z.number().int(),
+  documentDate: IsoDateSchema,
+  issuedAt: z.string().datetime(),
+  currency: z.string(),
+  language: z.string(),
+  style: z.string(),
+  ink: z.string(),
+  customerId: uuid.nullable(),
+  customer: z.record(z.string(), z.unknown()),
+  issuer: z.record(z.string(), z.unknown()),
+  notes: z.string().nullable(),
+  originalId: uuid.nullable(),
+  paymentDetails: z.object({ method: z.string(), reference: z.string().nullable(), receivedOn: IsoDateSchema }).nullable(),
+  allocationNumber: z.string().nullable(),
+  receivableId: uuid.nullable(),
+  paymentId: uuid.nullable(),
+  coreVersion: z.string(),
+}).openapi('IssuedDocument');
+
+export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
+export const ListIssuedDocumentsQuerySchema = z.object({
+  docType: IssuedDocTypeSchema.optional(),
+  customerId: uuid.optional(),
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  cursor: z.string().optional(),
+});
+export const IssuedDocumentIdParamSchema = z.object({ documentId: uuid });
+export const IssuedCopyRequestSchema = z.object({ channel: z.enum(['DOWNLOAD', 'EMAIL', 'SHARE']) }).openapi('IssuedCopyRequest');
+export const IssuedCopySchema = z.object({ copyIndex: z.number().int(), label: z.enum(['ORIGINAL', 'COPY']) }).openapi('IssuedCopy');
+export const IssuingGapsSchema = z
+  .object({ types: z.array(z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), last: z.number().int(), missing: z.array(z.number().int()) })) })
+  .openapi('IssuingGaps');

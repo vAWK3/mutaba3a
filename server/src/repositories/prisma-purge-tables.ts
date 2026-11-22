@@ -50,6 +50,13 @@ export const PURGE_PROFILE_TABLES = [
 export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   billing_subscriptions: 'SET NULL: a subscription is its payer’s; the closing person’s own are deleted with their billing account',
   storage_purges: 'the queue of deleted profiles whose bucket prefix still has to be emptied (R1)',
+  // MUT-568 (ADR-260, Basel 2026-11-22): issued documents and the details printed on them are kept 7 years after the
+  // account closes; no foreign keys hold them, a trigger refuses their deletion, and MUT-644's sweep removes them.
+  issuer_details: 'kept 7 years after closing: the business details printed on its issued documents (MUT-644)',
+  issued_document_counters: 'kept 7 years after closing: numbering of the retained documents (MUT-644)',
+  issued_documents: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
+  issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
+  issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
 };
 
 /**

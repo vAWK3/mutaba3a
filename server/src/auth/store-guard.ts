@@ -367,6 +367,18 @@ export const STORE_ACCESS: StoreAccess = {
     run: 'sessionOnly',
   },
   // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
+  // MUT-568 (ADR-260): the issuing core. `issue` posts its own Owed/Received/credit inside the issuing domain's write.
+  issuing: {
+    getIssuer: { read: 'issuing' },
+    putIssuer: { write: 'issuing' },
+    counters: { read: 'issuing' },
+    setStartingNumber: { write: 'issuing' },
+    issue: { write: 'issuing' },
+    getById: { read: 'issuing' },
+    list: { read: 'issuing' },
+    recordCopy: { write: 'issuing' },
+    gaps: { read: 'issuing' },
+  },
   conversions: {
     create: { write: 'conversions' },
     getById: { read: 'conversions' },
@@ -606,8 +618,14 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * (ACCOUNTANT_READ_ONLY). The last-viewed stamp and SYSTEM catch-up posting run on the store beneath the guard
  * (`unguarded`), as for every session.
  */
+/**
+ * MUT-568 (ADR-260): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
+ * issuing routes read the owner's flags under the accountant's guard. A read of flags only; listed, never derived.
+ */
+export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
+
 export function accountantStoreGuard(): StoreGuard {
-  return { ...readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly), narrow: accountantExpenseView };
+  return { ...readOnlyStoreGuard(ACCOUNTANT_EXTRA_READS, accountantReadOnly), narrow: accountantExpenseView };
 }
 
 /**

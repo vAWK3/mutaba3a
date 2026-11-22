@@ -295,7 +295,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           ...(q.status ? { status: q.status } : {}),
           ...(q.receivedBefore ? { receivedBefore: q.receivedBefore } : {}),
           ...(q.receivedAfter ? { receivedAfter: q.receivedAfter } : {}),
-          ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : ('INTEGRATION' as const) } : {}),
+          ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : q.origin === 'issued_document' ? ('ISSUED_DOCUMENT' as const) : ('INTEGRATION' as const) } : {}),
           ...(q.allocationState ? { allocationState: q.allocationState } : {}),
           ...(q.receiptNumber?.trim() ? { receiptNumber: q.receiptNumber.trim() } : {}),
         },

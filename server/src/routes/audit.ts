@@ -11,7 +11,7 @@ import { encodeNextCursor, errorResponses, toPageRequest, validationResponse } f
  * Audit entity types of a hosted profile's own session-only activity: expenses (MUT-42) and
  * conversions (MUT-161; closed by MUT-194 — `conversion.created` used to leak here).
  */
-export const SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion'] as const;
+export const SESSION_ONLY_ENTITY_TYPES = [...EXPENSE_ENTITY_TYPES, 'conversion', 'issued_document', 'issuer_details'] as const;
 
 /**
  * MUT-223: a person's own edits on rows whose entity types Malafat does read (receivable, payment). Excluded by action,

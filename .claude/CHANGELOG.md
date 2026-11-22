@@ -45,6 +45,22 @@
 - Tests: parity of `readProfileFigures` with the verdict route; rules, job (memory store, memory mailer), routes, token, templates (ADR-159 pin), route-security and public-route pins, portal switch and page, local migration and fingerprint, privacy page. Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link`, `monthly-summary-account-switch`, `monthly-summary-yearly-line`.
 - Operator steps in `docs/operations/before-release.md` (server and web).
 
+## [Unreleased] - 2026-11-22 — The issuing core: issued invoices, receipts and credit notes (MUT-568, ADR-260, API 1.115.0-mut568)
+
+### Added
+- **Issuing (server only):** `/v1/issuer`, `/v1/issuing/settings`, `/v1/issuing/starting-numbers/{docType}`, `/v1/issued-documents/preview`, `/v1/issued-documents` (issue, list, one), `/v1/issued-documents/{id}/copies`, `/v1/issuing/gaps`. Tax invoice (305), invoice-receipt (320), receipt (400) and credit note (330), gap-free numbers per type, the matching Owed/Received/credit posted in the same transaction, "מקור" for the first copy and "העתק" after. Behind the operator feature `invoicing` on business profiles.
+- Feature `invoicing`; session-only scopes `issuing:read`/`issuing:write`; matrix domain `issuing`.
+- Note: an Owed a document takes over (issue from a recorded entry) leaves the Income feed until MUT-570 shows documents there; its Received counterpart stays, as `issued_document`.
+- **Issue from a recorded entry** (`fromEntry`: an Owed for a tax invoice, a Received for an invoice-receipt or receipt): the document takes the entry over, no second Owed/Received. **Prices including VAT** per document and per line, and VAT-exempt lines (MUT-566 decisions I1-a, V1-a).
+
+### Fixed (pre-landing review)
+- A credit note credits at its tax invoice's VAT rate and can't be dated before it; the store refuses to credit, delete or pay a document-owned Owed outside issuing; a taken-over Owed takes the document's dates; an all-exempt document posts an EXEMPT Owed; a receipt keeps the invoice it pays; the document discount is checked in the document's terms and never capped; year counters are taken before receivable locks; issue transactions use explicit limits; setting a starting number locks its counter first.
+
+### Technical
+- Migrations `20261122120000_mut568_issued_document_origin` (`ISSUED_DOCUMENT` on `ReceivableOrigin`/`PaymentOrigin`) and `20261122120100_mut568_issuing_core` (tables, immutability triggers, counter guard). Purge leaves the issuing tables (kept 7 years, MUT-644). Rollback hazard MUT-568 and DEPLOYMENT §6 row.
+- `server/src/issuing/` (compose, ledger plan, labels, gaps, copies, VAT table, core version), `IssuingRepository` in both stores, `routes/issuing.ts`. Payment origin on the wire gains `issued_document` (`paymentOriginWire`); period-pack source label "Issued document".
+- Files: `server/prisma/*`, `server/src/{issuing,routes/issuing.ts,repositories/{ports,prisma,memory,prisma-purge-tables}.ts,auth/{writability,scopes,store-guard}.ts,schemas.ts,serializers.ts,features.ts,app.ts,scripts/rollback-check.ts}`, `src/hosted/api/schema.d.ts`, `.claude/designs/{MUT-568-issuing-core,hosted-portal}.md`.
+
 ## [Unreleased] - 2026-11-21 — Receipt reading: no buyer email, billed line, item line or garbled name as the vendor's (MUT-630, MUT-631, reader generation 5)
 
 ### Fixed
