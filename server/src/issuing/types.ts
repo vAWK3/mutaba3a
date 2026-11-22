@@ -7,6 +7,8 @@ export const DOC_TYPE_CODES = {
   TAX_INVOICE_RECEIPT: 320,
   CREDIT_NOTE: 330,
   RECEIPT: 400,
+  /** MUT-662: חשבון עסקה. Not a tax document: never allocated, never in VAT or the tax-document totals. */
+  PAYMENT_REQUEST: 300,
 } as const;
 
 export type IssuedDocType = keyof typeof DOC_TYPE_CODES;
@@ -34,4 +36,10 @@ export const MAX_LINES = 200;
 export const MAX_DESCRIPTION_LENGTH = 300;
 
 /** Tax invoices and their credit notes carry VAT; receipts record money received and carry none. */
-export const VAT_BEARING: ReadonlySet<IssuedDocType> = new Set(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE']);
+export const VAT_BEARING: ReadonlySet<IssuedDocType> = new Set(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST']);
+
+/**
+ * MUT-662: the tax documents (VAT and tax totals count only these). A payment request shows VAT so the invoice-receipts
+ * that follow match it, but it is not one of them.
+ */
+export const TAX_DOCUMENTS: ReadonlySet<IssuedDocType> = new Set(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE']);

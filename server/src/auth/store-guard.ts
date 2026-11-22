@@ -382,6 +382,8 @@ export const STORE_ACCESS: StoreAccess = {
     dueInputs: { read: 'issuing' },
     incomeContext: { read: 'issuing' },
     setNotForInvoice: { write: 'issuing' },
+    cancelPaymentRequest: { write: 'issuing' },
+    paymentRequestFacts: { read: 'issuing' },
     // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
     getTaxConnection: { read: 'issuing' },
     putTaxConnection: { write: 'issuing' },

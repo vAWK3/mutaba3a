@@ -30,7 +30,8 @@ const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
 /** MUT-570 (Basel): the styles come from the server, so a new one appears without a portal release; until it answers, these. */
 const KNOWN_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'];
 const LANGUAGES = ['he', 'ar', 'en'] as const;
-const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
+// MUT-662: a payment request has its own series, so it is asked like the others.
+const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const;
 export const LOGO_MAX_BYTES = 256 * 1024;
 
 function SaveError({ error }: { error: unknown }) {

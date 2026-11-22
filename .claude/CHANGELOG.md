@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.129.0-followups)
+## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
 
 ### Added
 - **Re-consent reminder (MUT-571 AC3).** `POST /jobs/v1/issuing/tax-authority-reminders` (job token, daily) and `POST /admin/v1/issuing/tax-authority-reminders` (operator, `dryRun`): the owner of each connected profile is mailed ten days before the 90-day consent ends and once when it has ended (for 7 days), in their language. Each stage once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`); retries and later runs answer `duplicate`. New mail template `tax-authority-reconnect` (en + formal ar), exempt from the per-recipient cap like the other job mails. Store: `issuing.taxConnectionsEndingBetween` (operator-only in the guard).
@@ -43,6 +43,22 @@
 - Files: `server/src/routes/tax-authority.ts`, `server/src/israel/tax-authority/{service,reconnect-reminder}.ts`, `server/src/routes/tax-authority-reminders.ts`, `server/src/email/{ports.ts,templates/copy.ts,templates/look.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/infrastructure/terraform/{main,variables}.tf`, `src/hosted/components/IssueOffer.tsx`, `src/hosted/components/IncomeDrawerHost.tsx`, `src/hosted/session/AuthGate.tsx`, `src/hosted/pages/invoicing/{InvoicingSteps.tsx,setupSteps.ts}`, i18n en + ar. Tests: `routes-tax-authority.test.ts` (landing cases), `routes-tax-authority-reminders.test.ts`, `service.test.ts`, `IssueOffer.test.tsx`, `InvoicingSteps.test.tsx`, the mail template samples.
 
 ---
+## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.129.0-mut662)
+
+### Added
+- Issued document type PAYMENT_REQUEST (חשבון עסקה, code 300): own series, shows VAT so the invoice-receipts that follow match, never allocated and never in VAT or tax totals. From an Owed it is linked (posts nothing); with no entry it posts an ordinary ADJUSTMENT Owed.
+- A 320 (or an exempt dealer's 400) with `appliesToDocumentId` = a payment request pays that request's Owed and posts no Owed of its own.
+- Derived `paymentRequest` facts (UNPAID / PARTLY_PAID / PAID / CANCELLED, covered, linked documents, cancellation) and `displayNumber` (PR-0007) on issued documents.
+- `POST /v1/issued-documents/{documentId}/cancel`: a cancellation record (CX series, insert-only table `issued_document_cancellations`), refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while a live 320/400 refers to it (D18).
+- PDF: the framed "not a tax invoice" notice (D16), "Total requested", the cancelled mark on later copies.
+- Portal: the drawer's Payment request type, a Status column, the request's page (progress, linked documents, record a payment, cancel panel), numbering step and exempt offer.
+
+### Changed
+- Documents due: PAYMENT_REQUEST items are issuable (PAYMENT_REQUEST_PENDING no longer produced); an Owed with a live request is settled; a payment on it is due a linked 320 (400 for exempt) applying the request.
+- An exempt dealer may issue payment requests (EXEMPT_DEALER_TAX_INVOICE still refuses tax invoices).
+
+### Technical
+- Migrations 20261123000000_mut662_doc_type (enum value alone) and 20261123000100_mut662_cancellations. A 320 applying a request locks the request's Owed before reading its cancellation; cancelling takes the same lock (R4).
 ## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.128.0-mut709)
 
 ### Fixed
