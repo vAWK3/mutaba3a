@@ -140,9 +140,9 @@ const received = async (h: AccountantHarness, w: { on: Record<string, string>; c
   (await read(await h.app.request('/v1/income', json({ kind: 'received', amount, currency: 'ILS', occurredOn: '2026-11-05', customerId: w.customerId }, { ...w.on, ...idem() })))) as Loose;
 
 /**
- * Issuing from a captured Received makes the payment the document's (origin ISSUED_DOCUMENT), which the person's routes
- * already answer 404 for. MUT-660's payment-linked issuing links a document to a payment and leaves it the person's own
- * (origin CAPTURE): the case these routes must refuse. This puts the payment in that state.
+ * Issuing from an unallocated captured Received takes the payment over (origin ISSUED_DOCUMENT), which the person's routes
+ * already answer 404 for. MUT-660's linked issuing (`fromEntryMode` 'link', e.g. a payment that settled an Owed) leaves
+ * the payment the person's own (origin CAPTURE): the case these routes must refuse. This puts the payment in that state.
  */
 function linkedOnly(h: AccountantHarness, paymentId: string): void {
   const pays = (h.store as unknown as { pays: Map<string, { origin: string }> }).pays;
