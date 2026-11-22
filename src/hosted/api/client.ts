@@ -100,6 +100,12 @@ export type IssuerDefaultsRequest = Schemas['IssuerDefaultsRequest'];
 export type IssuingSetup = Schemas['IssuingSetup'];
 export type IssuingNumberingRequest = Schemas['IssuingNumberingRequest'];
 export type IssuingSettings = Schemas['IssuingSettings'];
+export type IssuedDocument = Schemas['IssuedDocument'];
+export type IssuedDocumentPage = Schemas['IssuedDocumentPage'];
+export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
+export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
+export type IssuedDocType = Schemas['IssuedDocType'];
+export type IssuingStyles = Schemas['IssuingStyles'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
@@ -778,6 +784,27 @@ export const api = {
   /** A PNG or JPEG of at most 256 KB (413 beyond; 422 LOGO_NOT_AN_IMAGE when it isn't one). */
   saveIssuerLogo: (profileId: string, file: Blob) => request<void>('PUT', '/v1/issuer/logo', { profileId, file }),
   removeIssuerLogo: (profileId: string) => request<void>('DELETE', '/v1/issuer/logo', { profileId }),
+  /** MUT-570: issued documents. Every call is 404 where issuing is off for the profile. */
+  issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
+  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; cursor?: string | null } = {}, signal?: AbortSignal) =>
+    request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),
+  issuedDocument: (profileId: string, documentId: string, signal?: AbortSignal) =>
+    request<IssuedDocument>('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}`, { profileId, signal }),
+  /** The totals a document would have; nothing is written and no number is taken. */
+  previewDocument: (profileId: string, body: IssueDocumentRequest, signal?: AbortSignal) =>
+    request<IssuedDocumentPreview>('POST', '/v1/issued-documents/preview', { profileId, body, signal }),
+  /** Irreversible: the document takes the next number. A retry with the same key returns the same document. */
+  issueDocument: (profileId: string, body: IssueDocumentRequest, idempotencyKey: string) =>
+    request<IssuedDocument>('POST', '/v1/issued-documents', { profileId, body, idempotencyKey }),
+  /** The draft PDF (watermarked), as a file. */
+  draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
+    (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),
+  /** A view copy: counts nothing (the original or a copy, as the record stands). */
+  viewPdf: async (profileId: string, documentId: string) =>
+    (await send('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, accept: 'application/pdf' })).blob(),
+  /** A produced copy, counted: the first is the original. The key makes a retry return the same copy. */
+  producePdf: async (profileId: string, documentId: string, idempotencyKey: string) =>
+    (await send('POST', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, body: { channel: 'DOWNLOAD' }, idempotencyKey, accept: 'application/pdf' })).blob(),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>

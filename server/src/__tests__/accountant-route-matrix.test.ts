@@ -38,6 +38,7 @@ const ALLOWED_GETS = [
   // MUT-646: the setup and the logo.
   'GET /v1/issuer/logo',
   'GET /v1/issuing/setup',
+  'GET /v1/issuing/styles',
   'GET /v1/issuing/gaps',
   'GET /v1/issuing/settings',
   'GET /v1/payments',

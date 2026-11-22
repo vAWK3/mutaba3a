@@ -13852,7 +13852,7 @@ export interface paths {
         get?: never;
         /**
          * Answer “already issuing documents elsewhere?”
-         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless.
+         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless.
          */
         put: {
             parameters: {
@@ -13932,6 +13932,81 @@ export interface paths {
                 };
             };
         };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The document styles a business can pick
+         * @description MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The styles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingStyles"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -28512,6 +28587,12 @@ export interface components {
                 CREDIT_NOTE?: number;
                 RECEIPT?: number;
             };
+        };
+        IssuingStyles: {
+            styles: {
+                /** @description The value PUT /v1/issuer/defaults takes as documentStyle */
+                key: string;
+            }[];
         };
         IssuingSettings: {
             counters: components["schemas"]["IssuingCounter"][];

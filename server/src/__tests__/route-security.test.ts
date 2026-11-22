@@ -91,6 +91,8 @@ const ISSUING_OPERATIONS = [
   'DELETE /v1/issuer/logo',
   'PUT /v1/issuing/numbering',
   'GET /v1/issuing/setup',
+  // MUT-570: the styles list.
+  'GET /v1/issuing/styles',
   'POST /v1/issuing/setup/intro-seen',
   'GET /v1/issuing/settings',
   'PUT /v1/issuing/starting-numbers/{docType}',

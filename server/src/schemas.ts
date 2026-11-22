@@ -5033,6 +5033,11 @@ export const IssuerDetailsSchema = z
   })
   .openapi('IssuerDetails');
 
+/** MUT-570: the document styles a business can pick, in the order to show them. */
+export const IssuingStylesSchema = z
+  .object({ styles: z.array(z.object({ key: z.string().openapi({ description: 'The value PUT /v1/issuer/defaults takes as documentStyle' }) })) })
+  .openapi('IssuingStyles');
+
 /** MUT-646: the setup's defaults step. Replaces all of them; If-Match is the details' version. */
 export const IssuerDefaultsRequestSchema = z
   .object({

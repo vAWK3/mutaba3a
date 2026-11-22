@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.118.0-mut646
+  version: 1.119.0-mut570
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9710,6 +9710,21 @@ components:
           description: The next number per document type, when moving from another tool
       required:
         - alreadyIssuing
+    IssuingStyles:
+      type: object
+      properties:
+        styles:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                description: The value PUT /v1/issuer/defaults takes as documentStyle
+            required:
+              - key
+      required:
+        - styles
     IssuingSettings:
       type: object
       properties:
@@ -24186,7 +24201,7 @@ paths:
       tags:
         - Issuing
       summary: Answer “already issuing documents elsewhere?”
-      description: "MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless."
+      description: "MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless."
       security:
         - session: []
         - deviceSession: []
@@ -24230,6 +24245,47 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/styles:
+    get:
+      tags:
+        - Issuing
+      summary: The document styles a business can pick
+      description: "MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The styles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingStyles"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:
