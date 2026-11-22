@@ -2121,6 +2121,8 @@ enum IssuedDocType {
   TAX_INVOICE_RECEIPT
   CREDIT_NOTE
   RECEIPT
+  /// MUT-662: חשבון עסקה (code 300), not a tax document.
+  PAYMENT_REQUEST
 }
 
 /// MUT-660 (ADR-270): which documents a client is due.
@@ -2279,6 +2281,29 @@ model IssuedDocument {
   @@index([organizationId, receivableId])
   @@index([organizationId, paymentId])
   @@map("issued_documents")
+}
+
+/// MUT-662: a payment request's cancellation, insert-only (its own CX series). No foreign keys (MUT-644).
+model IssuedDocumentCancellation {
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @db.Uuid
+  documentId      String   @unique @db.Uuid
+  number          Int
+  cancelledAt     DateTime @default(now())
+  reason          String?  @db.VarChar(300)
+  createdByUserId String   @db.Uuid
+  requestKey      String   @db.VarChar(128)
+
+  @@unique([organizationId, number])
+  @@unique([organizationId, requestKey])
+  @@map("issued_document_cancellations")
+}
+
+model IssuedCancellationCounter {
+  organizationId String @id @db.Uuid
+  next           Int
+
+  @@map("issued_cancellation_counters")
 }
 
 model IssuedDocumentLine {

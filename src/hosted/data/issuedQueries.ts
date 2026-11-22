@@ -63,6 +63,18 @@ export function useIssueDocument(profileId: string) {
   });
 }
 
+/** MUT-662: cancel a payment request. Its Owed goes back to documents due, so those and the summaries refetch. */
+export function useCancelPaymentRequest(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, reason, key }: { documentId: string; reason: string | null; key: string }): Promise<IssuedDocument> => api.cancelPaymentRequest(profileId, documentId, reason, key),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(issuedKey(profileId, 'doc', doc.id), doc);
+      for (const scope of ['issued', 'receivables', 'receivable', 'documents-due', 'summary']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
+    },
+  });
+}
+
 /** Opens a PDF blob in a new tab (the browser's own viewer), or saves it when the browser won't open one. */
 export function openPdf(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);

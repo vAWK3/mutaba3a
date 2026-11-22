@@ -14,8 +14,9 @@ describe('issueOffers (MUT-648)', () => {
     expect(types(issueOffers(saved('received', 'c1'), 'Services', false))).toEqual(['TAX_INVOICE_RECEIPT', 'RECEIPT']);
     expect(types(issueOffers(saved('received', null), 'Services', false))).toEqual(['RECEIPT']);
   });
-  it('an exempt dealer gets a receipt for a Received and nothing for an Owed', () => {
-    expect(issueOffers(saved('owed', 'c1'), 'Services', true)).toEqual([]);
+  it('an exempt dealer gets a receipt for a Received and a payment request for an Owed (MUT-662)', () => {
+    expect(types(issueOffers(saved('owed', 'c1'), 'Services', true))).toEqual(['PAYMENT_REQUEST']);
+    expect(issueOffers(saved('owed', null), 'Services', true)).toEqual([]);
     expect(types(issueOffers(saved('received', 'c1'), 'Services', true))).toEqual(['RECEIPT']);
   });
   it('links the document to the entry and keeps the typed amount VAT-included', () => {

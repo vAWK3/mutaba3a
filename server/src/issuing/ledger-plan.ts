@@ -10,6 +10,8 @@ import type { VatTreatment } from '../vat.js';
  *  - 320 invoice-receipt: an Owed and a Received that pays it in full
  *  - 400 receipt: a Received, paying an open 305 when `appliesToDocumentId` names one
  *  - 330 credit note: a credit on its tax invoice's Owed (R-D2: up to what's still owed)
+ *  - 300 payment request (MUT-662): nothing from an Owed (it is linked, never takes it over); an ordinary Owed when
+ *    issued with no entry. A 320 or 400 that applies a payment request posts only a Received paying its Owed.
  */
 
 export interface PlannedReceivable {
@@ -23,6 +25,8 @@ export interface PlannedReceivable {
   title: string;
   dueDate: IsoDate;
   postingDate: IsoDate;
+  /** MUT-662: a payment request's Owed is an ordinary one (cancelling the request leaves it); others are the document's. */
+  origin: 'ISSUED_DOCUMENT' | 'ADJUSTMENT';
 }
 
 export interface PlannedPayment {
@@ -32,7 +36,7 @@ export interface PlannedPayment {
   receivedOn: IsoDate;
   method: PaymentMethod;
   reference: string | null;
-  /** 'own': pays this document's Owed (320); 'applies': pays the 305 it names (400); null: unallocated. */
+  /** 'own': pays this document's Owed (320); 'applies': pays the 305 or payment request it names; null: unallocated. */
   allocate: 'own' | 'applies' | null;
 }
 
@@ -63,6 +67,7 @@ export function ledgerPlan(input: IssueDocumentInput, number: number): LedgerPla
     title,
     dueDate: input.dueDate ?? input.documentDate,
     postingDate: input.documentDate,
+    origin: input.docType === 'PAYMENT_REQUEST' ? 'ADJUSTMENT' : 'ISSUED_DOCUMENT',
   });
   const received = (allocate: PlannedPayment['allocate']): PlannedPayment => {
     if (!input.payment) throw new Error('a 320 or 400 carries its payment details');
@@ -80,7 +85,11 @@ export function ledgerPlan(input: IssueDocumentInput, number: number): LedgerPla
     case 'TAX_INVOICE':
       return { receivable: owed(requireCustomer(input)), payment: null, credit: null };
     case 'TAX_INVOICE_RECEIPT':
+      // MUT-662: applying a payment request, it pays the request's Owed and posts no Owed of its own.
+      if (input.appliesToDocumentId) return { receivable: null, payment: received('applies'), credit: null };
       return { receivable: owed(requireCustomer(input)), payment: received('own'), credit: null };
+    case 'PAYMENT_REQUEST':
+      return { receivable: input.fromEntry ? null : owed(requireCustomer(input)), payment: null, credit: null };
     case 'RECEIPT':
       return { receivable: null, payment: received(input.appliesToDocumentId ? 'applies' : null), credit: null };
     case 'CREDIT_NOTE':
@@ -93,8 +102,16 @@ export function ledgerPlan(input: IssueDocumentInput, number: number): LedgerPla
   }
 }
 
+/** Whether the document posts a new Owed (the year counter is taken before any lock, review fix 7). */
+export function postsNewOwed(input: Pick<IssueDocumentInput, 'docType' | 'appliesToDocumentId' | 'fromEntry'>): boolean {
+  if (input.fromEntry?.kind === 'receivable') return false;
+  if (input.docType === 'TAX_INVOICE') return true;
+  if (input.docType === 'TAX_INVOICE_RECEIPT') return !input.appliesToDocumentId;
+  return input.docType === 'PAYMENT_REQUEST' && !input.fromEntry;
+}
+
 function requireCustomer(input: IssueDocumentInput): string {
-  if (!input.customerId) throw new Error('a 305, 320 or 330 names its customer (the route checks this first)');
+  if (!input.customerId) throw new Error('a 305, 320, 330 or 300 names its customer (the route checks this first)');
   return input.customerId;
 }
 
@@ -111,7 +128,7 @@ export interface EntryState {
   grossMinor: bigint;
   creditedMinor: bigint;
   allocatedMinor: bigint;
-  /** A document is already linked to it (`receivableId` / `paymentId`; credit notes aside). */
+  /** A document is already linked to it (`receivableId` / `paymentId`; credit notes and cancelled payment requests aside). */
   documented: boolean;
 }
 
@@ -126,6 +143,8 @@ export function fromEntryMode(entry: EntryState | null, docType: IssueDocumentIn
   if (!entry || entry.documented || entry.origin === 'ISSUED_DOCUMENT') return null;
   if (entry.kind === 'receivable') {
     if (entry.deleted || entryAmount(entry) <= 0n) return null;
+    // MUT-662: a payment request asks for an Owed's money and never takes it over: it is always linked.
+    if (docType === 'PAYMENT_REQUEST') return 'link';
     if (entry.origin === 'ADJUSTMENT' && entry.creditedMinor === 0n) return 'take';
     return docType === 'TAX_INVOICE' ? 'link' : null;
   }

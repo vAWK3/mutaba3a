@@ -33,6 +33,8 @@ import type {
   NotForInvoiceResult,
   IssueResult,
   IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
   IssuingRepository,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
@@ -198,7 +200,8 @@ import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, postsNewOwed, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DuePaymentInput, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
 import type { IssuedDocType } from '../issuing/types.js';
@@ -986,6 +989,8 @@ export class PrismaLedgerStore implements LedgerStore {
                (r."deletedAt" IS NOT NULL) AS "deleted",
                EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" IN ('TAX_INVOICE', 'TAX_INVOICE_RECEIPT')) AS "documented",
                (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'TAX_INVOICE' ORDER BY d."issuedAt", d."id" LIMIT 1) AS "taxInvoiceId",
+               (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'PAYMENT_REQUEST'
+                  AND NOT EXISTS (SELECT 1 FROM "issued_document_cancellations" c WHERE c."documentId" = d."id") ORDER BY d."issuedAt", d."id" LIMIT 1) AS "paymentRequestId",
                EXISTS (SELECT 1 FROM "external_invoices" x WHERE x."organizationId" = r."organizationId" AND x."entryKind" = 'OWED' AND x."entryId" = r."id" AND x."removedAt" IS NULL) AS "externalInvoice"
         FROM "receivables" r
         WHERE r."organizationId" = ${organizationId}::uuid AND r."deletedAt" IS NULL AND (
@@ -1066,6 +1071,45 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.issuedDocument.findMany({ where: { organizationId }, select: { docType: true, number: true } }),
       ]);
       return counters.map((c) => numberGaps(c, numbers.filter((n) => n.docType === c.docType).map((n) => n.number)));
+    },
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at) =>
+      this.prisma.$transaction(async (tx): Promise<CancelPaymentRequestResult> => {
+        const replay = await tx.issuedDocumentCancellation.findFirst({ where: { organizationId, requestKey: cancel.requestKey } });
+        if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: replay, created: false } : { kind: 'not_found' };
+        const d = await tx.issuedDocument.findFirst({ where: { id: documentId, organizationId }, select: { id: true, docType: true, receivableId: true } });
+        if (!d) return { kind: 'not_found' };
+        if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+        // R4: the request's Owed first, the order a 320 applying it takes. (FOR UPDATE on the document itself is refused
+        // by its insert-only trigger's spirit; the Owed is the shared lock.)
+        if (d.receivableId) await lockReceivable(tx, d.receivableId);
+        const existing = await tx.issuedDocumentCancellation.findUnique({ where: { documentId } });
+        if (existing) return { kind: 'already_cancelled', cancellation: existing };
+        if (blocksCancel(await referringDocumentsOf(tx, organizationId, [documentId]).then((m) => m.get(documentId) ?? []))) return { kind: 'has_documents' };
+        const counter = await tx.$queryRaw<Array<{ taken: number }>>`
+          INSERT INTO "issued_cancellation_counters" ("organizationId", "next") VALUES (${organizationId}::uuid, 2)
+          ON CONFLICT ("organizationId") DO UPDATE SET "next" = "issued_cancellation_counters"."next" + 1
+          RETURNING "next" - 1 AS "taken"`;
+        const cancellation: IssuedDocumentCancellationRecord = await tx.issuedDocumentCancellation.create({
+          data: { organizationId, documentId, number: Number(counter[0]!.taken), cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey },
+        });
+        return { kind: 'cancelled', cancellation, created: true };
+      }),
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      if (documentIds.length === 0) return out;
+      const requests = await this.prisma.issuedDocument.findMany({ where: { organizationId, id: { in: [...documentIds] }, docType: 'PAYMENT_REQUEST' }, select: { id: true, grossMinor: true } });
+      if (requests.length === 0) return out;
+      const ids = requests.map((r) => r.id);
+      const [referring, cancellations] = await Promise.all([
+        referringDocumentsOf(this.prisma, organizationId, ids),
+        this.prisma.issuedDocumentCancellation.findMany({ where: { organizationId, documentId: { in: ids } } }),
+      ]);
+      const byDoc = new Map(cancellations.map((c) => [c.documentId, c]));
+      for (const r of requests) {
+        const c = byDoc.get(r.id);
+        out.set(r.id, paymentRequestFacts(r.grossMinor, referring.get(r.id) ?? [], c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
     },
   };
 
@@ -5317,6 +5361,25 @@ async function findIssuedByKey(db: Tx | PrismaClient, organizationId: string, re
 }
 
 /** The number this document takes. One statement, so two first documents of a type never race on creating the row. */
+/** MUT-662: the 320s and 400s referring to each payment request, with their credit notes: two reads, never per row. */
+async function referringDocumentsOf(db: Pick<PrismaClient, 'issuedDocument'>, organizationId: string, requestIds: readonly string[]): Promise<Map<string, ReferringDocument[]>> {
+  const docs = await db.issuedDocument.findMany({
+    where: { organizationId, originalId: { in: [...requestIds] }, docType: { in: ['TAX_INVOICE_RECEIPT', 'RECEIPT'] } },
+    select: { id: true, docType: true, number: true, grossMinor: true, originalId: true },
+    orderBy: { number: 'asc' },
+  });
+  const credits = docs.length
+    ? await db.issuedDocument.groupBy({ by: ['originalId'], where: { organizationId, docType: 'CREDIT_NOTE', originalId: { in: docs.map((d) => d.id) } }, _sum: { grossMinor: true } })
+    : [];
+  const credited = new Map(credits.map((c) => [c.originalId, c._sum.grossMinor ?? 0n]));
+  const out = new Map<string, ReferringDocument[]>();
+  for (const d of docs) {
+    if (!d.originalId || !referringToRequest(d.docType)) continue;
+    out.set(d.originalId, [...(out.get(d.originalId) ?? []), { id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: credited.get(d.id) ?? 0n }]);
+  }
+  return out;
+}
+
 async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: IssuedDocType): Promise<number> {
   const rows = await tx.$queryRaw<Array<{ taken: number }>>`
     INSERT INTO "issued_document_counters" ("organizationId", "docType", "start", "next")
@@ -5332,7 +5395,13 @@ async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: Issue
  */
 /** MUT-660: what fromEntryMode reads of an entry, or null when it isn't this profile's. */
 async function entryStateTx(tx: Tx, organizationId: string, from: NonNullable<IssueDocumentInput['fromEntry']>): Promise<EntryState | null> {
-  const linked = (where: Prisma.IssuedDocumentWhereInput) => tx.issuedDocument.count({ where: { organizationId, docType: { not: 'CREDIT_NOTE' }, ...where } }).then((n) => n > 0);
+  // MUT-662: a cancelled payment request no longer counts (its Owed can be asked for again).
+  const linked = async (where: Prisma.IssuedDocumentWhereInput) => {
+    const docs = await tx.issuedDocument.findMany({ where: { organizationId, docType: { not: 'CREDIT_NOTE' }, ...where }, select: { id: true, docType: true } });
+    const requests = docs.filter((d) => d.docType === 'PAYMENT_REQUEST').map((d) => d.id);
+    const cancelled = requests.length ? await tx.issuedDocumentCancellation.count({ where: { documentId: { in: requests } } }) : 0;
+    return docs.length - cancelled > 0;
+  };
   if (from.kind === 'receivable') {
     const r = await tx.receivable.findFirst({ where: { id: from.id, organizationId } });
     if (!r) return null;
@@ -5399,7 +5468,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   const expected = input.fromEntry ? fromEntryMode(await entryStateTx(tx, organizationId, input.fromEntry), input.docType) : null;
   const linked = expected === 'link';
   // Review fix 7: the year counters before any receivable lock, the order every other posting writer takes (MUT-443).
-  const postsOwed = !linked && (input.docType === 'TAX_INVOICE' || input.docType === 'TAX_INVOICE_RECEIPT') && input.fromEntry?.kind !== 'receivable';
+  const postsOwed = !linked && postsNewOwed(input);
   const postsReceived = !linked && (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
   const owedNumber = postsOwed ? await nextReceivableNumberTx(tx, organizationId, input.documentDate) : null;
   const receivedNumber = postsReceived && input.payment ? await nextPaymentNumberTx(tx, organizationId, input.payment.receivedOn) : null;
@@ -5411,8 +5480,16 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
   let originalReceivableId: string | null = null;
   if (originalId) {
-    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: 'TAX_INVOICE' }, select: { receivableId: true, customerId: true } });
+    // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
+    const types: IssuedDocType[] = input.docType === 'CREDIT_NOTE' ? ['TAX_INVOICE'] : ['TAX_INVOICE', 'PAYMENT_REQUEST'];
+    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: { in: types } }, select: { id: true, docType: true, receivableId: true, customerId: true } });
     if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+    if (original.docType === 'PAYMENT_REQUEST') {
+      // R4: the request's Owed is locked before its cancellation is read, the order cancelling takes, so a 320 can't
+      // land after a cancel passed its check (or the other way round).
+      await lockReceivable(tx, original.receivableId);
+      if ((await tx.issuedDocumentCancellation.count({ where: { documentId: original.id } })) > 0) throw new IssueRefused({ kind: 'original_not_found' });
+    }
     // MUT-660: a linked receipt names the invoice its payment already paid; it allocates nothing, so no outstanding check.
     if (!linked) {
       const r = await lockReceivable(tx, original.receivableId);
@@ -5458,8 +5535,8 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
         number: owedNumber ?? (await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate)),
         projectId: null,
         agreementId: null,
-        origin: 'ISSUED_DOCUMENT',
-        originId: documentId,
+        // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+        originId: plan.receivable.origin === 'ISSUED_DOCUMENT' ? documentId : null,
         postedAt: at,
         createdByUserId: input.createdByUserId,
         createdAt: at,

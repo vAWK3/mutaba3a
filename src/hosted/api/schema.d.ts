@@ -14250,7 +14250,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType: components["schemas"]["IssuedDocType"];
                 };
                 cookie?: never;
@@ -14432,7 +14432,7 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType?: components["schemas"]["IssuedDocType"];
                     customerId?: string;
                     limit?: number;
@@ -14669,6 +14669,108 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment request (MUT-662)
+         * @description D18: a payment request is cancelled by a record of its own (CX series); the document and its Owed never change, and the Owed goes back to documents due. Refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while an invoice-receipt or receipt refers to it (cancel that with a credit note first), 409 ALREADY_CANCELLED, 422 NOT_A_PAYMENT_REQUEST. Owner only. The same Idempotency-Key returns the same cancellation.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancelPaymentRequest"];
+                };
+            };
+            responses: {
+                /** @description Cancelled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -30005,6 +30107,7 @@ export interface components {
                 TAX_INVOICE_RECEIPT?: number;
                 CREDIT_NOTE?: number;
                 RECEIPT?: number;
+                PAYMENT_REQUEST?: number;
             };
         };
         IssuingStyles: {
@@ -30023,10 +30126,10 @@ export interface components {
             hasDocuments: boolean;
         };
         /**
-         * @description 305, 320, 330 and 400 in the Tax Authority's codes
+         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
          * @enum {string}
          */
-        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
         StartingNumberRequest: {
             start: number;
         };
@@ -30084,7 +30187,7 @@ export interface components {
             originalId?: string;
             /**
              * Format: uuid
-             * @description A receipt: the open tax invoice it pays
+             * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
              */
             appliesToDocumentId?: string;
             /** @description An invoice-receipt or a receipt: how the money came in */
@@ -30163,10 +30266,38 @@ export interface components {
             /** Format: uuid */
             paymentId: string | null;
             coreVersion: string;
+            /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
+            displayNumber: string;
+            paymentRequest: components["schemas"]["PaymentRequestFacts"];
         };
+        /** @description MUT-662: a payment request's derived status; null for other types */
+        PaymentRequestFacts: {
+            /** @enum {string} */
+            status: "UNPAID" | "PARTLY_PAID" | "PAID" | "CANCELLED";
+            /** @description What the referring invoice-receipts and receipts cover, after their credit notes */
+            covered: string;
+            linked: {
+                /** Format: uuid */
+                id: string;
+                docType: components["schemas"]["IssuedDocType"];
+                number: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            }[];
+            cancellation: {
+                number: number;
+                displayNumber: string;
+                /** Format: date-time */
+                cancelledAt: string;
+                reason: string | null;
+            } | null;
+        } | null;
         IssuedDocumentPage: {
             items: components["schemas"]["IssuedDocument"][];
             nextCursor: string | null;
+        };
+        CancelPaymentRequest: {
+            reason?: string | null;
         };
         IssuedCopyRequest: {
             /** @enum {string} */
