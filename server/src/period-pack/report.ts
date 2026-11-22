@@ -19,7 +19,7 @@ const HIDDEN_FROM_LINKS: ReadonlySet<string> = new Set(['loggedBy', 'id']);
 
 /** A table sheet from rows keyed by column, the link's hidden columns left out. */
 function tableSheet(name: string, rows: PeriodRows, columns: readonly Column[], body: ReadonlyArray<Record<string, Cell>>): Sheet {
-  const shown = columns.filter((c) => !(rows.forLink && HIDDEN_FROM_LINKS.has(c.key)));
+  const shown = columns.filter((c) => !(rows.forLink && HIDDEN_FROM_LINKS.has(c.key)) && (c.key !== 'invoiceStatus' || rows.invoicing));
   return {
     name,
     rtl: rows.lang === 'ar',
@@ -59,7 +59,7 @@ function expenseSheet(rows: PeriodRows): Sheet {
 function incomeSheet(rows: PeriodRows): Sheet {
   const { lang } = rows;
   const tz = rows.organization.timezone;
-  const body = rows.income.map(({ ref, record: p, client, project, loggedBy }): Record<string, Cell> => ({
+  const body = rows.income.map(({ ref, record: p, client, project, loggedBy, invoiceStatus }): Record<string, Cell> => ({
     ref,
     date: { serial: dateSerial(p.receivedOn), fmt: 'date' },
     client: text(client),
@@ -69,6 +69,8 @@ function incomeSheet(rows: PeriodRows): Sheet {
     method: words(PAYMENT_METHOD_LABELS, p.method, lang),
     reference: text(p.reference),
     receiptNumber: text(p.receiptNumber),
+    // Canvas D24: English codes whatever the language, so a spreadsheet filter works the same everywhere.
+    invoiceStatus: text(invoiceStatus),
     notes: text(p.notes),
     source: SOURCE_LABELS[p.origin][lang],
     loggedBy: text(loggedBy),

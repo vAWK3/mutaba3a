@@ -64,3 +64,16 @@ export function splitIncome(payments: readonly ClassPaymentInput[], ctx: IncomeC
   }
   return [...rows.values()].sort((a, b) => a.currency.localeCompare(b.currency));
 }
+
+/** MUT-660: an income row's status in exports: English codes in every language (canvas D24). */
+export type InvoiceStatus = 'due' | 'issued' | 'not_for_invoice' | 'no_document';
+
+/** A document on the money first; then the marks; then a No document client; else it still needs its document. */
+export function invoiceStatusOf(p: ClassPaymentInput, ctx: IncomeClassContext): InvoiceStatus {
+  if (p.documented || p.externalInvoice || p.origin === 'ISSUED_DOCUMENT') return 'issued';
+  if (p.notForInvoice) return 'not_for_invoice';
+  const shares = p.allocations.map((a) => ctx.receivables.get(a.receivableId)).filter((r): r is { customerId: string; notForInvoice: boolean } => !!r);
+  if (shares.length > 0 && shares.every((r) => r.notForInvoice)) return 'not_for_invoice';
+  const customerId = shares[0]?.customerId ?? p.customerId;
+  return preferenceOf(ctx, customerId) === 'NO_DOCUMENT' ? 'no_document' : 'due';
+}

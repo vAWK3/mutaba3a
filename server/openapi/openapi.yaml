@@ -7736,6 +7736,11 @@ components:
             - byCustomer
             - samples
           description: Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries
+        invoiceSplit:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceSplitRow"
+          description: "MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received"
       required:
         - from
         - to
@@ -7747,6 +7752,28 @@ components:
         - currencies
         - history
         - daysToPaid
+    InvoiceSplitRow:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        invoiceIncome:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        notForInvoice:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        all:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+      required:
+        - currency
+        - invoiceIncome
+        - notForInvoice
+        - all
     Verdict:
       type: object
       properties:
@@ -14861,6 +14888,11 @@ components:
               - total
               - count
           description: Received payments per currency (reversed ones left out), never summed across currencies.
+        invoiceSplit:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceSplitRow"
+          description: "MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency"
       required:
         - from
         - to

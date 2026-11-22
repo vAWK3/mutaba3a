@@ -4325,6 +4325,9 @@ const currencyActivity = z.object({
   byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })).openapi({ description: 'Received per client, largest first; null = no client, last' }),
 });
 const daysToPaid = { median: z.number().int(), n: z.number().int() };
+/** MUT-660 (ADR-270): one currency's received money, split. */
+export const InvoiceSplitRowSchema = z.object({ currency: CurrencySchema, invoiceIncome: AmountSchema, notForInvoice: AmountSchema, all: AmountSchema }).openapi('InvoiceSplitRow');
+
 export const ActivitySummarySchema = z
   .object({
     from: IsoDateSchema,
@@ -4343,6 +4346,7 @@ export const ActivitySummarySchema = z
         samples: z.array(z.number().int()).openapi({ description: 'Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median' }),
       })
       .openapi({ description: 'Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received' }),
   })
   .openapi('ActivitySummary');
 
@@ -4844,6 +4848,7 @@ export const ShareLinkSummarySchema = z
       )
       .openapi({ description: 'Per currency, never summed across currencies; breakdowns by name.' }),
     received: z.array(z.object({ currency: CurrencySchema, ...visitorBucket })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency' }),
   })
   .openapi('ShareLinkSummary');
 

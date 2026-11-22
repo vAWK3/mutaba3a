@@ -5,6 +5,8 @@ import { listAll } from '../repositories/list-all.js';
 import type { ExpenseCursor, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
 import { historyEnd, historyStart, summarizeActivity, type ActivitySummary } from './activity.js';
 import { owedOf, type Owed } from './verdict.js';
+import { invoiceSplitOf } from '../income/invoice-split.js';
+import type { IncomeSplitRow } from '../income/invoice-class.js';
 
 /**
  * MUT-535 (plan D5): one profile's figures as Reports' Glance reads them — due items posted first, then the POSTED
@@ -20,6 +22,8 @@ export interface ProfileFigures {
   owed: Owed;
   /** MUT-535 (D10): an income still open, a payment or an expense is dated in [from, to]. */
   entriesInRange: boolean;
+  /** MUT-660: the range's received money split; null where invoicing is off. */
+  invoiceSplit: IncomeSplitRow[] | null;
 }
 
 /** How catch-up posting writes: a request's door (`lazyPostingOf`), or a job's (the unguarded store, SYSTEM). */
@@ -69,6 +73,7 @@ export async function readProfileFigures(store: LedgerStore, organization: Organ
     activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
     owed: owedOf(receivables, today),
     entriesInRange: entriesIn(window, receivables, from, to),
+    invoiceSplit: await invoiceSplitOf(store, organization, window.payments, { from, to }),
   };
 }
 

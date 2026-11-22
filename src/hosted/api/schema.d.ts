@@ -29233,6 +29233,17 @@ export interface components {
                 /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
                 samples: number[];
             };
+            /** @description MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
+        };
+        InvoiceSplitRow: {
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            invoiceIncome: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            notForInvoice: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            all: string;
         };
         Verdict: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -31977,6 +31988,8 @@ export interface components {
                 total: string;
                 count: number;
             }[];
+            /** @description MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
         };
         ShareLinkViewRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */

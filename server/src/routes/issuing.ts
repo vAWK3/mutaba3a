@@ -179,13 +179,6 @@ export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, w
   return organization;
 }
 
-/** Whether issuing is on for the profile (the same rule as `issuingProfileOf`, without a session: summaries, mail). */
-export async function invoicingOn(store: LedgerStore, organization: Organization): Promise<boolean> {
-  const owner = profileOwnerOf(organization);
-  if (isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') return false;
-  return hasFeature(store, owner, 'invoicing');
-}
-
 export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 

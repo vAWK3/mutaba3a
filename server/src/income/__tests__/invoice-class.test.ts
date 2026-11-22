@@ -89,3 +89,16 @@ describe('splitIncome', () => {
     }
   });
 });
+
+describe('invoiceStatusOf (exports)', () => {
+  it('issued, not for invoice (own mark or every Owed marked), no document, else due', async () => {
+    const { invoiceStatusOf } = await import('../invoice-class.js');
+    expect(invoiceStatusOf(pay({ documented: true, notForInvoice: true }), ctx())).toBe('issued');
+    expect(invoiceStatusOf(pay({ origin: 'ISSUED_DOCUMENT' }), ctx())).toBe('issued');
+    expect(invoiceStatusOf(pay({ notForInvoice: true }), ctx())).toBe('not_for_invoice');
+    expect(invoiceStatusOf(pay({ allocations: [{ receivableId: 'r2', amountMinor: ils(1000) }] }), ctx())).toBe('not_for_invoice');
+    expect(invoiceStatusOf(pay({ customerId: 'zaid' }), ctx())).toBe('no_document');
+    expect(invoiceStatusOf(pay({ customerId: null, allocations: [{ receivableId: 'r3', amountMinor: ils(1000) }] }), ctx())).toBe('no_document');
+    expect(invoiceStatusOf(pay(), ctx())).toBe('due');
+  });
+});
