@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.130.0-followups
+  version: 1.131.0-mut664
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -5795,6 +5795,34 @@ components:
         documentsPreference:
           $ref: "#/components/schemas/DocumentsPreference"
       additionalProperties: false
+    CustomerBalances:
+      type: object
+      properties:
+        asOf:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: Calendar date in the organization timezone, YYYY-MM-DD
+        balances:
+          type: array
+          items:
+            type: object
+            properties:
+              customerId:
+                type: string
+                format: uuid
+              currency:
+                $ref: "#/components/schemas/Currency"
+              balance:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            required:
+              - customerId
+              - currency
+              - balance
+      required:
+        - asOf
+        - balances
     CustomerStatement:
       type: object
       properties:
@@ -5891,6 +5919,19 @@ components:
               type: string
               pattern: ^-?\d+(\.\d+)?$
               description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatementDocumentTag"
+            due:
+              type: string
+              nullable: true
+              enum:
+                - TAX_INVOICE
+                - PAYMENT_REQUEST
+                - RECEIPT
+                - TAX_INVOICE_RECEIPT
+                - null
             kind:
               type: string
               enum:
@@ -5933,6 +5974,8 @@ components:
             - debit
             - credit
             - runningBalance
+            - documents
+            - due
             - kind
             - receivableId
             - origin
@@ -5970,6 +6013,19 @@ components:
               type: string
               pattern: ^-?\d+(\.\d+)?$
               description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatementDocumentTag"
+            due:
+              type: string
+              nullable: true
+              enum:
+                - TAX_INVOICE
+                - PAYMENT_REQUEST
+                - RECEIPT
+                - TAX_INVOICE_RECEIPT
+                - null
             kind:
               type: string
               enum:
@@ -5991,6 +6047,8 @@ components:
             - debit
             - credit
             - runningBalance
+            - documents
+            - due
             - kind
             - receivableId
             - receivableNumber
@@ -6023,6 +6081,19 @@ components:
               type: string
               pattern: ^-?\d+(\.\d+)?$
               description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatementDocumentTag"
+            due:
+              type: string
+              nullable: true
+              enum:
+                - TAX_INVOICE
+                - PAYMENT_REQUEST
+                - RECEIPT
+                - TAX_INVOICE_RECEIPT
+                - null
             kind:
               type: string
               enum:
@@ -6056,6 +6127,8 @@ components:
             - debit
             - credit
             - runningBalance
+            - documents
+            - due
             - kind
             - paymentId
             - method
@@ -6090,6 +6163,19 @@ components:
               type: string
               pattern: ^-?\d+(\.\d+)?$
               description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatementDocumentTag"
+            due:
+              type: string
+              nullable: true
+              enum:
+                - TAX_INVOICE
+                - PAYMENT_REQUEST
+                - RECEIPT
+                - TAX_INVOICE_RECEIPT
+                - null
             kind:
               type: string
               enum:
@@ -6113,11 +6199,41 @@ components:
             - debit
             - credit
             - runningBalance
+            - documents
+            - due
             - kind
             - paymentId
             - receiptNumber
             - reason
             - reasonCode
+    StatementDocumentTag:
+      type: object
+      properties:
+        id:
+          type: string
+          nullable: true
+          format: uuid
+          description: The issued document; null for one issued elsewhere
+        source:
+          type: string
+          enum:
+            - ISSUED
+            - EXTERNAL
+        docType:
+          type: string
+          enum:
+            - TAX_INVOICE
+            - TAX_INVOICE_RECEIPT
+            - CREDIT_NOTE
+            - RECEIPT
+            - PAYMENT_REQUEST
+        number:
+          type: string
+      required:
+        - id
+        - source
+        - docType
+        - number
     StatementChargeOrigin:
       oneOf:
         - type: object
@@ -10221,13 +10337,36 @@ components:
         items:
           type: array
           items:
-            $ref: "#/components/schemas/IssuedDocument"
+            $ref: "#/components/schemas/IssuedDocumentListItem"
         nextCursor:
           type: string
           nullable: true
       required:
         - items
         - nextCursor
+    IssuedDocumentListItem:
+      allOf:
+        - $ref: "#/components/schemas/IssuedDocument"
+        - type: object
+          properties:
+            settled:
+              type: string
+              nullable: true
+              pattern: ^-?\d+(\.\d+)?$
+              description: Paid + credited on its Owed, at most its gross; null on a credit note
+            settlement:
+              type: string
+              nullable: true
+              enum:
+                - OPEN
+                - PARTLY_PAID
+                - PAID
+                - CANCELLED
+                - null
+              description: "CANCELLED: credit notes cover its gross. Null on a credit note"
+          required:
+            - settled
+            - settlement
     CancelPaymentRequest:
       type: object
       properties:
@@ -20238,6 +20377,41 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/customer-balances:
+    get:
+      tags:
+        - Customers
+      summary: Every client's balance per currency
+      description: "MUT-664: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals). Negative: the client is in credit. Clients with no movement are absent; money with no client is not here. Dated installments whose date has arrived are posted first, as on the statement."
+      security:
+        - apiKey: []
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The balances
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerBalances"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/customers/{customerId}/statement:
     get:
       tags:
@@ -20303,6 +20477,17 @@ paths:
           required: false
           description: Opaque `nextCursor` from the previous page.
           name: cursor
+          in: query
+        - schema:
+            type: string
+            enum:
+              - asc
+              - desc
+            default: asc
+            description: "MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way."
+          required: false
+          description: "MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way."
+          name: order
           in: query
       responses:
         "200":
@@ -25226,6 +25411,30 @@ paths:
             format: uuid
           required: false
           name: customerId
+          in: query
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/Currency"
+              - description: MUT-664
+          required: false
+          description: MUT-664
+          name: currency
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: "MUT-664: documentDate on or after"
+          required: false
+          description: "MUT-664: documentDate on or after"
+          name: from
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+            description: "MUT-664: documentDate on or before"
+          required: false
+          description: "MUT-664: documentDate on or before"
+          name: to
           in: query
         - schema:
             type: integer

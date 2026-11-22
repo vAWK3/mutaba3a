@@ -259,3 +259,17 @@ describe('issuing routes (MUT-568)', () => {
   });
 });
 
+
+describe('MUT-664: the Documents tab list', () => {
+  it('a tax invoice carries what is settled on it, and the list filters by currency and period', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const doc = await read(await issue(h, w.on, invoiceBody(w.customerId)));
+    expect(doc.docType).toBe('TAX_INVOICE');
+    const page = await read(await h.app.request(`/v1/issued-documents?customerId=${w.customerId}`, { headers: w.on }));
+    expect(page.items[0]).toMatchObject({ id: doc.id, settlement: 'OPEN', settled: '0.00' });
+    expect((await read(await h.app.request(`/v1/issued-documents?customerId=${w.customerId}&currency=USD`, { headers: w.on }))).items).toEqual([]);
+    expect((await read(await h.app.request(`/v1/issued-documents?from=2026-11-06`, { headers: w.on }))).items).toEqual([]);
+    expect((await read(await h.app.request(`/v1/issued-documents?from=2026-11-01&to=2026-11-05`, { headers: w.on }))).items).toHaveLength(1);
+  });
+});

@@ -917,6 +917,8 @@ export class PrismaLedgerStore implements LedgerStore {
           organizationId,
           ...(filter.docType ? { docType: filter.docType } : {}),
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.currency ? { currency: filter.currency } : {}),
+          ...(filter.from || filter.to ? { documentDate: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } } : {}),
           ...(page.cursor ? { OR: [{ issuedAt: { lt: page.cursor.createdAt } }, { issuedAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
         },
         orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
