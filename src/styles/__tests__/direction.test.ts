@@ -35,6 +35,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // B: text that reads left to right in any language
   'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
   'src/hosted/shell/YouIsland.tsx': { auto: 1 },
+  'src/hosted/pages/home/HomeInOut.tsx': { auto: 1 }, // MUT-657: a category's name (D)
+  'src/hosted/pages/home/OverdueGroup.tsx': { auto: 1 }, // MUT-657: a client's name (D)
   // MUT-562: the Client books desk, the accept-invite page and a share link's page (names, emails, months, PINs)
   'src/hosted/components/EntriesTable.tsx': { auto: 2 }, // an entry's title and category (D)
   'src/hosted/components/PinBoxes.tsx': { ltr: 1 }, // a PIN's digits run left to right in both languages (B)
