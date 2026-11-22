@@ -2942,7 +2942,10 @@
         "connected": "Connected to the Tax Authority until {until}.",
         "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
         "disconnect": "Disconnect",
-        "returnedFailed": "The connection was not completed. Please try again."
+        "returnedFailed": "The connection was not completed. Please try again.",
+        "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
+        "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
+        "reconnect": "Connect again"
       },
       "ready": {
         "title": "Your letterhead is ready",

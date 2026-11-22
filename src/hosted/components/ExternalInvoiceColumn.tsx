@@ -4,9 +4,8 @@ import { Button } from '../../components/ui/Button';
 import { useLanguage } from '../../lib/i18n/core';
 import type { Currency, ExternalEntryKind, ExternalInvoice } from '../api/client';
 import { useExternalInvoices } from '../data/externalInvoiceQueries';
-import { useIssuingSetup } from '../data/issuingQueries';
+import { useInvoicingWorthAsking, useIssuingSetup } from '../data/issuingQueries';
 import { useProfile, useWriteGate } from '../session/me';
-import { useIsLocalMode } from '../session/mode';
 import { AttachExternalInvoiceDrawer } from './AttachExternalInvoiceDrawer';
 import type { Column } from './HostedTable';
 
@@ -40,10 +39,9 @@ export function useExternalInvoiceColumn<Row extends ExternalRow>(
   extra?: (row: Row) => ReactNode,
 ) {
   const profile = useProfile();
-  const local = useIsLocalMode();
   const { writable } = useWriteGate();
   const { t } = useLanguage();
-  const on = !local && profile.type !== 'PERSONAL';
+  const on = useInvoicingWorthAsking(profile);
   const setup = useIssuingSetup(profile.id, on);
   const shown = on && Boolean(setup.data);
   const ids = useMemo(() => (rows ?? []).filter(eligible).map((r) => r.id), [rows, eligible]);

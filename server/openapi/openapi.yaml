@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.129.0-mut662
+  version: 1.130.0-followups
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -14119,6 +14119,84 @@ components:
         - token
         - on
       additionalProperties: false
+    TaxAuthorityReminderSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        checked:
+          type: integer
+          description: Connections whose consent ends within 10 days or ended within 7
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: This stage of this consent was already mailed
+        notSent:
+          type: integer
+          description: "Due but not sent: a read or the mailer failed, mail off, capped or refused"
+        skipped:
+          type: integer
+          description: Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed
+      required:
+        - dryRun
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - skipped
+    TaxAuthorityReminderRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/TaxAuthorityReminderSummary"
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId:
+                type: string
+                format: uuid
+              stage:
+                type: string
+                nullable: true
+                enum:
+                  - soon
+                  - ended
+                  - null
+              action:
+                type: string
+                enum:
+                  - send
+                  - skip
+              skip:
+                type: string
+                nullable: true
+                enum:
+                  - other-environment
+                  - no-refresh
+                  - profile-gone
+                  - owner-gone
+                  - owner-inactive
+                  - suppressed
+                  - null
+              outcome:
+                type: string
+                nullable: true
+            required:
+              - organizationId
+              - stage
+              - action
+              - skip
+              - outcome
+      required:
+        - summary
+        - rows
     AccountPurgeSummary:
       type: object
       properties:
@@ -25980,7 +26058,7 @@ paths:
       tags:
         - Issuing
       summary: Where the Tax Authority sends the browser back after sign-in
-      description: "MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the portal's invoicing setup with `taxAuthority=connected` or `failed`."
+      description: "MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened."
       security: []
       parameters:
         - schema:
@@ -31943,6 +32021,72 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "429":
           description: Too many attempts from this address
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/issuing/tax-authority-reminders:
+    post:
+      tags:
+        - Issuing
+      summary: Daily Tax Authority re-consent reminders (Cloud Scheduler)
+      description: "MUT-571 AC3. The Tax Authority consent lasts 90 days. Mails the owner of each connected profile, in their language: once when it ends within 10 days, and once when it has ended (for 7 days after), each with a link to connect again. Each stage is sent once per consent (the send log), so a retry or a second run sends nothing new. Answers counts only; an empty run where the Tax Authority connection is not configured."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxAuthorityReminderSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/issuing/tax-authority-reminders:
+    post:
+      tags:
+        - Admin
+      summary: Run the Tax Authority re-consent reminders now, or see who they would mail
+      description: "The same run as the daily job, for the operator, with one row per profile looked at: the stage it mails or why not. `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TaxAuthorityReminderRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
           content:
             application/json:
               schema:

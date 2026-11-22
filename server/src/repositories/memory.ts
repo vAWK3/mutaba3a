@@ -999,6 +999,11 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...next };
     },
     deleteTaxConnection: async (organizationId) => this.taxConnectionMap.delete(organizationId),
+    taxConnectionsEndingBetween: async (from, to) =>
+      [...this.taxConnectionMap.values()]
+        .filter((r) => r.refreshExpiresAt !== null && r.refreshExpiresAt >= from && r.refreshExpiresAt < to)
+        .sort((a, b) => a.refreshExpiresAt!.getTime() - b.refreshExpiresAt!.getTime())
+        .map((r) => ({ ...r })),
     withTaxConnectionLock: async (organizationId, fn) => {
       // One caller at a time per profile, as the Prisma store's row lock.
       const before = this.taxConnectionLocks.get(organizationId) ?? Promise.resolve();

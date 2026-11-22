@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ApiError, api, type IssuerDefaultsRequest, type IssuerDetails, type IssuerDetailsRequest, type IssuingNumberingRequest, type IssuingSetup } from '../api/client';
-import { profileKey } from '../session/me';
+import { ApiError, api, type HostedProfile, type IssuerDefaultsRequest, type IssuerDetails, type IssuerDetailsRequest, type IssuingNumberingRequest, type IssuingSetup, type Me } from '../api/client';
+import { profileKey, useMeOrNull } from '../session/me';
+import { useIsLocalMode } from '../session/mode';
 
 /**
  * MUT-646: the invoicing setup's data. The setup answer is the source of truth for progress: every step's save
@@ -14,6 +15,27 @@ export const setupKey = (profileId: string) => profileKey(profileId, 'issuing', 
 const issuerKey = (profileId: string) => profileKey(profileId, 'issuing', 'issuer');
 const logoKey = (profileId: string) => profileKey(profileId, 'issuing', 'logo');
 const countersKey = (profileId: string) => profileKey(profileId, 'issuing', 'counters');
+
+type InvoicingProfile = Pick<HostedProfile, 'type' | 'owned' | 'owners' | 'writerOfRecord' | 'managedInMalafat'>;
+
+/**
+ * Whether asking the server about issuing on this profile (the setup, the issuer, documents due) can answer anything
+ * but 404. The server's rule (issuingProfileOf) is the profile creator's `invoicing` feature, never on a personal
+ * profile or one Malafat writes. Where the person created the profile, their own features already say it, so nothing is
+ * asked; where someone else did (a co-owner, an accountant), only the server knows, so it is asked.
+ */
+export function invoicingWorthAsking(profile: InvoicingProfile | null, me: Pick<Me, 'user'> | null, local: boolean): boolean {
+  if (local || !profile || !me) return false;
+  if (profile.type === 'PERSONAL' || profile.writerOfRecord === 'MALAFAT' || profile.managedInMalafat) return false;
+  const creator = profile.owners?.find((owner) => owner.creator)?.userId;
+  const created = profile.owned && (creator === undefined || creator === me.user.id);
+  return created ? me.user.features.includes('invoicing') : true;
+}
+
+/** `invoicingWorthAsking` for the signed-in person, on this device's mode. */
+export function useInvoicingWorthAsking(profile: InvoicingProfile | null): boolean {
+  return invoicingWorthAsking(profile, useMeOrNull(), useIsLocalMode());
+}
 
 export function useIssuingSetup(profileId: string, enabled = true) {
   return useQuery({ queryKey: setupKey(profileId), queryFn: ({ signal }) => api.issuingSetup(profileId, signal), retry: noRetryOn404, enabled });

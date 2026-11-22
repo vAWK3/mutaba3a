@@ -1,20 +1,20 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { ApiError, type IssuerDetails } from '../../../api/client';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
-import { DefaultsStep, DetailsStep, LOGO_MAX_BYTES, LogoStep, NumberingStep } from '../InvoicingSteps';
+import { DefaultsStep, DetailsStep, LOGO_MAX_BYTES, LogoStep, NumberingStep, TaxAuthorityStep } from '../InvoicingSteps';
 import { Letterhead } from '../Letterhead';
-import { wholeNumber, type PaperModel } from '../setupSteps';
+import { endsSoon, wholeNumber, type PaperModel } from '../setupSteps';
 
-const api = vi.hoisted(() => ({ lookup: vi.fn(), saveIssuer: vi.fn(), saveDefaults: vi.fn(), numbering: vi.fn(), saveLogo: vi.fn(), removeLogo: vi.fn() }));
+const api = vi.hoisted(() => ({ lookup: vi.fn(), saveIssuer: vi.fn(), saveDefaults: vi.fn(), numbering: vi.fn(), saveLogo: vi.fn(), removeLogo: vi.fn(), taxStatus: vi.fn() }));
 vi.mock('../../../api/client', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../api/client')>();
   return {
     ...real,
-    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo, issuingStyles: async () => ({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] }) },
+    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo, taxAuthorityStatus: api.taxStatus, issuingStyles: async () => ({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] }) },
   };
 });
 
@@ -140,5 +140,42 @@ describe('invoicing setup steps (MUT-646)', () => {
     expect(screen.getByRole('button', { name: 'الخطوة 2: الشعار' })).toHaveAttribute('aria-current', 'step');
     await userEvent.click(screen.getByRole('button', { name: 'الخطوة 4: الترقيم' }));
     expect(onPick).toHaveBeenCalledWith('numbering');
+  });
+});
+
+describe('the Tax Authority step (MUT-571 follow-ups)', () => {
+  const DAY = 86_400_000;
+  const inDays = (n: number) => new Date(Date.now() + n * DAY).toISOString();
+  const connected = (until: string) => ({ state: 'connected', connectedAt: inDays(-80), until, environment: 'sandbox' });
+
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('ends soon only within the last ten days, never after the end', () => {
+    const now = new Date('2026-11-22T10:00:00Z');
+    expect(endsSoon('2026-12-02T10:00:00Z', now)).toBe(true);
+    expect(endsSoon('2026-12-02T10:00:01Z', now)).toBe(false);
+    expect(endsSoon('2026-11-22T09:59:59Z', now)).toBe(false);
+    expect(endsSoon(null, now)).toBe(false);
+  });
+
+  it('AC3: ten days before the end it says so and offers Connect again; earlier it just says connected', async () => {
+    api.taxStatus.mockResolvedValue(connected(inDays(6)));
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByTestId('tax-authority-ending')).toHaveTextContent('ends on');
+    expect(screen.getByTestId('tax-authority-connect')).toHaveTextContent('Connect again');
+  });
+
+  it('a connection with weeks left shows "connected until" and no Connect', async () => {
+    api.taxStatus.mockResolvedValue(connected(inDays(40)));
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByTestId('tax-authority-connected')).toBeInTheDocument();
+    expect(screen.queryByTestId('tax-authority-connect')).toBeNull();
+  });
+
+  it('back from a refused consent it says the connection was not approved, in Arabic too', async () => {
+    window.history.replaceState(null, '', '/p/p1/you/invoicing?taxAuthority=refused');
+    api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />, 'ar');
+    expect(await screen.findByTestId('tax-authority-returned')).toHaveTextContent('لم تتم الموافقة على الربط');
   });
 });
