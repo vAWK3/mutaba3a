@@ -130,6 +130,36 @@ describe('the three first sign-ins (AC1)', () => {
   });
 });
 
+describe('two-step sign-in (MUT-710 D6)', () => {
+  const turnOn = (h: Awaited<ReturnType<typeof malafatSetup>>['h'], userId: string) =>
+    h.store.twoFactor.enable({ userId, method: 'email', totpSecretSealed: null, lastUsedStep: null, recoveryDigests: [], at: new Date(), keepSessionId: null, audit: [] });
+
+  it('a linked person with it on gets the challenge, not a session', async () => {
+    const { h, malafat, who } = await malafatSetup();
+    malafat.state.who = who();
+    const first = await read(await exchange(h, (await roundTrip(h)).fragment.get('result') ?? ''));
+    const done = await read(await consent(h, { ticket: first.ticket, ...NEW_ACCOUNT }));
+    await turnOn(h, done.me.user.id);
+    const again = await exchange(h, (await roundTrip(h)).fragment.get('result') ?? '');
+    expect(again.status).toBe(403);
+    expect((await read(again)).error).toMatchObject({ code: 'TWO_FACTOR_REQUIRED', details: { method: 'email' } });
+    expect(again.headers.get('set-cookie') ?? '').not.toMatch(/mut_session=/);
+  });
+
+  it('linking an account that has it on is refused after its password, and nothing is linked (review 8)', async () => {
+    const { h, firm, malafat, who } = await malafatSetup();
+    const existing = await person(h, { flag: false });
+    const email = (await h.store.users.getById(existing.userId))!.email;
+    await turnOn(h, existing.userId);
+    malafat.state.who = who({ email });
+    const step = await read(await exchange(h, (await roundTrip(h)).fragment.get('result') ?? ''));
+    const refused = await read(await h.app.request('/v1/auth/malafat/link', json({ ticket: step.ticket, password: existing.password }, SAME_ORIGIN)));
+    expect(refused.error.code).toBe('TWO_FACTOR_LINK_UNAVAILABLE');
+    expect((await consent(h, { ticket: step.ticket })).status).toBe(404);
+    expect(await h.store.externalIdentities.findBySubject('MALAFAT', firm!.tenant, 'mal-user-1')).toBeNull();
+  });
+});
+
 describe('the phone (client=app, R1–R4)', () => {
   it('returns to mutaba3a://auth/malafat and needs the verifier of its challenge; the code burns on the first try', async () => {
     const { h, malafat, who } = await malafatSetup();

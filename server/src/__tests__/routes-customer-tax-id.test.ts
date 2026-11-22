@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RegistryLookup } from '../israel/registry.js';
-import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
+import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /** MUT-642: a customer's VAT/company number and address, the registry lookup, and both on issued documents. */
 const company = { 'שם חברה': 'אקמי דיגיטל בע״מ', 'שם באנגלית': 'ACME DIGITAL LTD', 'סטטוס חברה': 'פעילה', 'שם רחוב': 'הרצל', 'מספר בית': '5', 'שם עיר': 'חיפה' };
@@ -8,7 +8,7 @@ const company = { 'שם חברה': 'אקמי דיגיטל בע״מ', 'שם בא�
 function harness(records: unknown[] | 'down' = [company]) {
   const fetch = async () => (records === 'down' ? Promise.reject(new Error('timeout')) : new Response(JSON.stringify({ success: true, result: { records } }), { status: 200 }));
   const registry = new RegistryLookup({ baseUrl: 'https://data.example/api', companiesResource: 'c', nonprofitsResource: 'n', timeoutMs: 1000, ttlMs: 60_000, fetch });
-  return accountantHarness({ registry });
+  return issuingHarness({ registry });
 }
 
 async function profile(h: AccountantHarness) {

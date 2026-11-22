@@ -95,6 +95,9 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/account-recovery',
       'POST /v1/account-setup',
       'POST /v1/account-setup/check',
+      // MUT-710 (ADR-274): the second step of a sign-in or setup link already begun. Its credential is the challenge token
+      // the first step returned; it creates no account.
+      'POST /v1/account-setup/two-factor',
       // MUT-559 (ADR-245): the accountant invite's check, and signing up from it.
       'POST /v1/accountant-invites/check',
       'POST /v1/accountant-invites/signup',
@@ -105,6 +108,7 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/device-sessions',
       'POST /v1/device-sessions/code',
       'POST /v1/device-sessions/passkey',
+      'POST /v1/device-sessions/two-factor', // MUT-710: the device sign-in's second step
       // MUT-618 (ADR-256): asking for an emailed sign-in code, portal and phone. Mails only an existing account.
       'POST /v1/device-sign-in-codes',
       'POST /v1/email/resend/webhook',
@@ -116,6 +120,7 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/sessions',
       'POST /v1/sessions/code',
       'POST /v1/sessions/passkey',
+      'POST /v1/sessions/two-factor', // MUT-710: the portal sign-in's second step
       // MUT-560 (ADR-247): a share link's visitor. No account is created and no one is signed in: a viewer token opens
       // only the link's period, through these routes.
       'POST /v1/share-links/check',
@@ -126,6 +131,8 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/share-links/unlock',
       'POST /v1/sign-in-codes',
       'POST /v1/signups',
+      // MUT-710 (D5): resends the second step's emailed code for a challenge token; mails only that challenge's person.
+      'POST /v1/two-factor/email-code',
     ]);
   });
 

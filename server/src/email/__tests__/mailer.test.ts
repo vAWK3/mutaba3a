@@ -65,6 +65,8 @@ const vars = {
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://portal.example.test/' },
   // MUT-535: one profile, no yearly line.
   'monthly-summary': {
     month: { year: 2026, month: 11 },

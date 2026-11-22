@@ -37,6 +37,8 @@ export const TEMPLATE_IDS = [
   'accountant-invite',
   'sign-in-code',
   'monthly-summary',
+  'two-factor-code',
+  'two-factor-changed',
   'tax-authority-reconnect',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
@@ -55,6 +57,9 @@ export const RECOVERY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTempl
  */
 export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>([
   'password-changed',
+  // MUT-710 (D8): the takeover notice is gated by the password and the second step (or the operator); never capped
+  // away. The two-step code itself is not exempt (D5).
+  'two-factor-changed',
   'account-ready',
   'account-declined',
   'review-digest',
@@ -118,6 +123,13 @@ export interface TemplateVars {
   'passkey-added': { passkeyName: string; signInLink: string };
   /** MUT-618: an emailed sign-in code (six digits) and how long it works. A code, never a link (no magic links). */
   'sign-in-code': { code: string; validMinutes: number };
+  /** MUT-710 (ADR-274 D5): the second step's emailed code (six digits) and how long it works. */
+  'two-factor-code': { code: string; validMinutes: number };
+  /**
+   * MUT-710 (D8, D9): two-step sign-in changed on the account, so a takeover by enrolment is seen by the mailbox owner.
+   * `method` is the method now on (enabled, switched) or the one that was on (disabled, reset).
+   */
+  'two-factor-changed': { change: 'enabled' | 'switched' | 'disabled' | 'recovery_codes' | 'reset'; method: 'totp' | 'email'; signInLink: string };
   /**
    * MUT-525 (DD8): ~30 days before a launch-offer subscription's first renewal. `listAmount` is the subscription's own
    * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.

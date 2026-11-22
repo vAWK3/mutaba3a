@@ -126,7 +126,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -205,7 +205,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -293,7 +293,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in), or TWO_FACTOR_USE_PASSWORD — the second step is a code by email, so sign in with the password (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -312,6 +312,85 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in (sets the session cookie) (MUT-710)
+         * @description After a sign-in answered 403 TWO_FACTOR_REQUIRED: send its `challengeToken` with the 6-digit code (authenticator app or email), or one recovery code instead. The challenge works once, for 10 minutes and 5 tries; 5 wrong second steps in 15 minutes lock the second step for 15 minutes (429). Answers what the first step would have: the signed-in person, and the cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step (disabled, closed) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -708,7 +787,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token */
+                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/device-sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -787,7 +866,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -875,7 +954,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -894,6 +973,85 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in from a native app (returns a bearer token) (MUT-710)
+         * @description As POST /v1/sessions/two-factor, for a challenge a device sign-in started; answers what the first step would have: the person and the token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -957,6 +1115,525 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your two-step sign-in (MUT-710) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorState"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Turn off two-step sign-in (MUT-710)
+         * @description Needs the current password (when you have your own) and the current second step. Refused while you own a profile that issues documents or is connected to the Tax Authority.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description Off */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_REQUIRED_FOR_ISSUING, or CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a second step to change your two-step sign-in (MUT-710)
+         * @description While it is on, switching method, new recovery codes and turning it off each need the current second step. With the email method the code is mailed now.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The challenge (the TWO_FACTOR_REQUIRED details) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            method: "totp" | "email";
+                            /** Format: date-time */
+                            expiresAt: string;
+                            emailHint?: string;
+                            challengeToken: string;
+                        };
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start turning on (or switching) two-step sign-in (MUT-710)
+         * @description Proof (D8): the current password when you have your own; while it is already on, the current second step too (POST /v1/me/two-factor/challenge). The app method answers a new secret, its otpauth:// address and a QR code; the email method mails a code. Without a password of your own, the app method also mails a code (`emailCodeRequired`). Confirm within 10 minutes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEnrolmentRequest"];
+                };
+            };
+            responses: {
+                /** @description What to confirm */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEnrolment"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED (send the current second step), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn on two-step sign-in with a code from the new method (MUT-710)
+         * @description Turns it on (or switches it), answers the 10 recovery codes once, stamps this session as having passed it, signs out your other sessions, and mails a notice. Runs under your row lock, so two confirmations can’t leave two sets of codes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorConfirmRequest"];
+                };
+            };
+            responses: {
+                /** @description On; the recovery codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make new recovery codes (the old ones stop working) (MUT-710) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description The new codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/two-factor/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a fresh second-step code (MUT-710)
+         * @description For a challenge whose method is email (sign-in or a setup link). At most once every 30 seconds and 5 times per challenge, and 10 codes an hour per person; the newest code replaces the last. A browser call must come from the portal itself.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEmailCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description A new code is on its way */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEmailCodeResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or TWO_FACTOR_CHALLENGE_EXPIRED (unknown, used, expired, or not an email challenge) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — too soon after the last code, too many codes, or too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1645,6 +2322,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account-setup/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the second step a setup link needs (MUT-710)
+         * @description For a valid person link (setup, reset, an operator link) whose person has two-step sign-in on, whatever the link is for. Creates a challenge bound to this link (10 minutes, 5 tries) and, with the email method, mails the code. Send its `challengeToken` with the code (or a recovery code) to POST /v1/account-setup.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkCheckRequest"];
+                };
+            };
+            responses: {
+                /** @description The challenge */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkTwoFactor"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF — this link needs no second step */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account-setup": {
         parameters: {
             query?: never;
@@ -1677,7 +2442,7 @@ export interface paths {
                         "application/json": components["schemas"]["SetupLinkRedeemResponse"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST */
+                /** @description CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -2234,6 +2999,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description TWO_FACTOR_REQUIRED — the account has two-step sign-in on: finish with POST /v1/sessions/two-factor (web) or /v1/device-sessions/two-factor (app) (MUT-710) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match */
                 404: {
                     headers: {
@@ -2304,6 +3078,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account has two-step sign-in on (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID */
                 404: {
                     headers: {
@@ -2363,6 +3146,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account turned on two-step sign-in after /link (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
                 /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven */
@@ -21869,6 +22661,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/users/{userId}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset a person's two-step sign-in after checking who they are (MUT-710 D9)
+         * @description For a person who lost their authenticator and recovery codes. Turns two-step sign-in off, signs them out everywhere, audits it on each of their profiles (ADMIN) and mails them a notice. A suspected takeover is `rotate --lock` plus this (the attacker may have enrolled their own factor).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reset */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorResetResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown user or organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/signup-reviews": {
         parameters: {
             query?: never;
@@ -26805,6 +27665,7 @@ export interface components {
                 features: string[];
                 /** @enum {boolean} */
                 operator?: true;
+                twoFactor: components["schemas"]["TwoFactorState"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -26860,6 +27721,13 @@ export interface components {
              */
             deleteAfter: string;
         } | null;
+        TwoFactorState: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            method: "totp" | "email" | null;
+            recoveryCodesLeft: number;
+            requiredForIssuing: boolean;
+        };
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -26998,6 +27866,13 @@ export interface components {
             email: string;
             code: string;
         };
+        TwoFactorFinishRequest: {
+            challengeToken: string;
+            /** @description The authenticator app's code, or the emailed one */
+            code?: string;
+            /** @description One of the ten recovery codes (xxxx-xxxx), in place of `code`; works once */
+            recoveryCode?: string;
+        };
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
@@ -27033,6 +27908,51 @@ export interface components {
         NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
+        };
+        TwoFactorEnrolment: {
+            enrolmentToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            secret?: string;
+            otpauthUri?: string;
+            qrSvg?: string;
+            emailHint?: string;
+            emailCodeRequired: boolean;
+        };
+        TwoFactorEnrolmentRequest: {
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorRecoveryCodes: {
+            recoveryCodes: string[];
+        };
+        TwoFactorConfirmRequest: {
+            enrolmentToken: string;
+            code: string;
+            emailCode?: string;
+        };
+        TwoFactorManageRequest: {
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorEmailCodeResponse: {
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        TwoFactorEmailCodeRequest: {
+            challengeToken: string;
         };
         PasskeyList: {
             items: components["schemas"]["Passkey"][];
@@ -27170,6 +28090,10 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             termsVersion: components["schemas"]["TermsVersion"];
+            twoFactor?: {
+                /** @enum {string} */
+                method: "totp" | "email";
+            } | null;
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -27179,6 +28103,14 @@ export interface components {
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
         SetupLinkCheckRequest: {
             token: string;
+        };
+        SetupLinkTwoFactor: {
+            challengeToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            emailHint?: string;
         };
         SetupLinkRedeemResponse: {
             email: string;
@@ -27198,6 +28130,9 @@ export interface components {
             displayName?: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
         };
         SelfServiceDoors: {
             signup: boolean;
@@ -31627,6 +32562,11 @@ export interface components {
             revoked: number;
             /** @description MUT-434 (D12): connected agents disconnected too */
             agentGrantsRevoked: number;
+        };
+        TwoFactorResetResponse: {
+            /** @enum {boolean} */
+            reset: true;
+            revoked: number;
         };
         SignupReviewList: {
             data: components["schemas"]["SignupReview"][];

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { readInvoiceNumber } from '../issuing/external-reading.js';
 import type { OcrClient, OcrResult } from '../receipts/ocr-client.js';
-import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
+import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /**
  * MUT-647: an invoice issued elsewhere, attached to an Owed or a Received. Read (number, date, total), confirmed,
@@ -26,7 +26,7 @@ class FakeOcr implements OcrClient {
 async function setup(options: { ocr?: OcrClient | null; storage?: boolean } = {}) {
   const storage = new MemoryAttachmentStorage();
   const ocr = options.ocr === undefined ? new FakeOcr() : options.ocr;
-  const h = accountantHarness({
+  const h = issuingHarness({
     ...(options.storage === false ? {} : { attachments: storage, attachmentUrlTtlSeconds: 600 }),
     ...(ocr ? { receiptReading: { ocr, dispatcher: { enqueue: async () => undefined } } } : {}),
   });

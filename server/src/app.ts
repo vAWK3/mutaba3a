@@ -69,6 +69,9 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
 import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
+import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, twoFactorRoutes } from './routes/two-factor.js';
+import { TwoFactorFlow } from './auth/two-factor-flow.js';
+import { TwoFactorKeys } from './auth/two-factor.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
 import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
@@ -137,6 +140,13 @@ export interface AppDependencies {
   terms?: CurrentTerms;
   /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
   sessions?: SessionSettings;
+  /**
+   * MUT-710 (ADR-274 D4): seals TOTP secrets and keys recovery codes. Production builds it from TWO_FACTOR_SEAL_KEY;
+   * absent = derived from the session pepper (tests, local).
+   */
+  twoFactorKeys?: TwoFactorKeys;
+  /** MUT-710 (D5): the per-person budget for emailed two-step codes (10 an hour). Absent = that default, in process. */
+  twoFactorMailLimiter?: RateLimiter;
   /** Sign-in lockout state (in process, one instance until TD-017). */
   signInThrottle?: SignInThrottle;
   /** Per-IP sign-in attempt budget. */
@@ -197,6 +207,11 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (TWO_FACTOR_SETUP_REQUIRED). Production passes
+   * TWO_FACTOR_ISSUING_GATE_ENABLED (off by default). Absent = off; issuingHarness and the gate's own suites turn it on.
+   */
+  twoFactorIssuingGate?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -311,7 +326,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -393,7 +408,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.134.0-mut569';
+export const API_VERSION = '1.135.0-mut710';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -407,7 +422,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -527,6 +542,15 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
   app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
   app.route('/', healthRoutes(store, deps.version, reporter.enabled));
+  // MUT-710 (ADR-274): the second step, shared by every sign-in route and setup links.
+  const twoFactor = new TwoFactorFlow({
+    keys: deps.twoFactorKeys ?? new TwoFactorKeys(`pepper:${sessions.pepper}`),
+    pepper: sessions.pepper,
+    mailer,
+    logger: deps.logger,
+    mailLimiter: deps.twoFactorMailLimiter ?? new SlidingWindowRateLimiter(10, 3_600_000),
+    settings: sessions,
+  });
   app.route(
     '/',
     sessionRoutes({
@@ -540,6 +564,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
       webauthn: deps.webauthn ?? null,
       reporter,
+      twoFactor,
     }),
   );
   app.route(
@@ -552,8 +577,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
       terms,
       webauthn: deps.webauthn ?? null,
+      twoFactor,
     }),
   );
+  app.route('/', twoFactorRoutes({ store, settings: sessions, ipLimiter: signInIpLimiter, twoFactor, passwordHasher, throttle: signInThrottle, mailer, logger: deps.logger }));
   // MUT-115: a person's passkeys, and the public sign-in challenge (the sign-in IP limiter, under its own key).
   app.route(
     '/',
@@ -571,14 +598,14 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
   app.route('/', accountClosureRoutes({ store, passwordHasher, throttle: signInThrottle, settings: sessions, mailer, logger: deps.logger, stripe: deps.stripe?.accountGateway ?? null }));
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
   const selfService = { ...(deps.selfService ?? defaultSelfServiceOptions()), malafatSignIn: Boolean(deps.malafatSignIn) };
   app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
   // MUT-595: Sign in with Malafat, on the raw store like sign-in, sharing its throttle and IP limiter.
   app.route(
     '/',
-    malafatSignInRoutes({ store: deps.store, passwordHasher, settings: sessions, throttle: signInThrottle, ipLimiter: signInIpLimiter, terms, webauthn: deps.webauthn ?? null, config: deps.malafatSignIn ?? null }),
+    malafatSignInRoutes({ store: deps.store, passwordHasher, settings: sessions, throttle: signInThrottle, ipLimiter: signInIpLimiter, terms, webauthn: deps.webauthn ?? null, config: deps.malafatSignIn ?? null, twoFactor }),
   );
   // MUT-559 (ADR-245): an owner's accountants, and the invite an accountant accepts or signs up from. The public pair
   // shares the sign-in IP limiter under its own key, and signup's Turnstile check.
@@ -712,7 +739,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses

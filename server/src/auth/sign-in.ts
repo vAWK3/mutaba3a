@@ -1,13 +1,15 @@
 import type { Context } from 'hono';
 import { isAccountGone } from '../accounts/closure.js';
 import { ApiError } from '../errors.js';
-import { StateConflict } from '../repositories/memory.js';
+import { ForeignKeyViolation, StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, SessionRecord, UserRecord } from '../repositories/ports.js';
 import type { AppEnv } from './middleware.js';
 import { generateDeviceSessionToken, generateSessionToken, sessionDigest, SIGN_IN_POLICY, type SessionKind, type SignInThrottle } from './sessions.js';
 import { SIGN_IN_CODE_POLICY, signInCodeDigest } from './sign-in-code.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from './users.js';
+import { authEmailKey } from '../observability/auth-log.js';
 import { verifyAssertion, type WebauthnConfig } from './webauthn.js';
+import { challengeExpired, twoFactorRequired, type PresentedSecondStep, type SecondStepUsed, type TwoFactorFlow } from './two-factor-flow.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 
 /**
@@ -47,6 +49,8 @@ export interface SignInDeps {
   passwordHasher: PasswordHasher;
   throttle: SignInThrottle;
   pepper: string;
+  /** MUT-710 (ADR-274 D1): the second step every sign-in passes through when the person has it on. */
+  twoFactor: TwoFactorFlow;
 }
 
 export interface SignInLifetime {
@@ -71,12 +75,14 @@ export async function signIn(
   lifetime: SignInLifetime,
 ): Promise<SignInResult> {
   const user = await verifyPassword(c, deps, credentials, sessionKind);
-  return issueSession(c, deps, user, { sessionKind, method: 'password' }, lifetime);
+  return beginOrIssue(c, deps, user, { sessionKind, method: 'password' }, lifetime);
 }
 
 /**
  * The password sign-in's checks, without the session: the account, the throttle and lockout, review and closure.
  * MUT-595: Sign in with Malafat's link step proves the existing account this way (D4) and issues nothing yet (R8).
+ * MUT-710 (D3): the email key's throttle is not cleared here: beginOrIssue clears it when it issues a session, and
+ * with two-step sign-in on only the finished second step does, so "password, wrong codes, password again" keeps counting.
  */
 export async function verifyPassword(c: Context<AppEnv>, deps: SignInDeps, credentials: { email: string; password: string }, sessionKind: SessionKind): Promise<UserRecord> {
   const { store, passwordHasher, throttle } = deps;
@@ -95,8 +101,6 @@ export async function verifyPassword(c: Context<AppEnv>, deps: SignInDeps, crede
     if (!locked) await recordSignInFailure(c, deps, key, user, { sessionKind, method: 'password' });
     throw invalidCredentials();
   }
-
-  throttle.clear(key);
   return user;
 }
 
@@ -120,7 +124,8 @@ export async function signInWithPasskey(
   lifetime: SignInLifetime,
 ): Promise<SignInResult> {
   const { user, audit } = await verifyPasskey(c, deps, presented, sessionKind);
-  return issueSession(c, deps, user, audit, lifetime);
+  // MUT-710 (D7): a passkey is a first step like the password; it isn't relied on as the second.
+  return beginOrIssue(c, deps, user, audit, lifetime);
 }
 
 /** The passkey sign-in's checks, without the session (MUT-595's link step, as `verifyPassword`). */
@@ -152,7 +157,6 @@ export async function verifyPasskey(
     throw invalidCredentials();
   }
 
-  throttle.clear(key);
   await store.passkeys.recordUse(passkey.id, outcome.signCount, now);
   return { user, audit };
 }
@@ -174,7 +178,7 @@ export async function signInWithCode(
   lifetime: SignInLifetime,
 ): Promise<SignInResult> {
   const user = await verifySignInCode(c, deps, presented, sessionKind);
-  return issueSession(c, deps, user, { sessionKind, method: 'email-code' }, lifetime);
+  return beginOrIssue(c, deps, user, { sessionKind, method: 'email-code' }, lifetime);
 }
 
 export async function verifySignInCode(c: Context<AppEnv>, deps: SignInDeps, presented: { email: string; code: string }, sessionKind: SessionKind): Promise<UserRecord> {
@@ -206,7 +210,6 @@ export async function verifySignInCode(c: Context<AppEnv>, deps: SignInDeps, pre
   if (!user || attempt.userId !== user.id) throw invalidCredentials();
   if (user.status === 'PENDING_REVIEW') throw underReview();
   if (isAccountGone(user.closure, now) || user.status !== 'ACTIVE') throw invalidCredentials();
-  throttle.clear(key);
   return user;
 }
 
@@ -236,6 +239,8 @@ export interface SignInAudit {
   method: SignInMethod;
   /** MUT-115: the passkey that signed in, on a passkey sign-in. */
   passkeyId?: string;
+  /** MUT-710 (D2): the second step this sign-in passed, when the person has it on. */
+  twoFactor?: SecondStepUsed;
 }
 
 /**
@@ -245,9 +250,58 @@ export interface SignInAudit {
 export async function recordSignInFailure(c: Context<AppEnv>, deps: SignInDeps, key: string, user: UserRecord | null, audit: SignInAudit): Promise<void> {
   const now = c.get('now')();
   const lockUntil = deps.throttle.recordFailure(key, now);
+  // MUT-710 (D12): every failure goes to the authentication log; an address with no account only as its keyed digest.
+  const logged = { method: audit.method, sessionKind: audit.sessionKind, emailKey: authEmailKey(deps.pepper, key) };
+  deps.twoFactor.log(c, 'sign_in.failed', user?.id ?? null, logged);
+  if (lockUntil) deps.twoFactor.log(c, 'sign_in.locked_out', user?.id ?? null, logged);
   if (!user) return;
   await deps.store.users.recordFailedSignIn(user.id, now, lockUntil);
   if (lockUntil) await auditToMembers(c, deps.store, user, 'user.locked_out', audit);
+}
+
+/**
+ * MUT-710 (ADR-274 D1, D14): the one way a verified first step becomes a session. Without two-step sign-in the session
+ * is issued as before (and the email key's throttle cleared). With it on, a challenge is created instead and the
+ * caller gets 403 TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }; finishTwoFactor issues the
+ * session. D6: with the email method an emailed sign-in code is one factor twice, so it is refused (said only to the
+ * person who just proved the mailbox).
+ */
+export async function beginOrIssue(c: Context<AppEnv>, deps: SignInDeps, user: UserRecord, audit: SignInAudit, lifetime: SignInLifetime): Promise<SignInResult> {
+  if (user.passwordHash === null) throw invalidCredentials();
+  const state = await deps.twoFactor.stateOf(deps.store, user.id);
+  if (!state) {
+    deps.throttle.clear(normalizeEmail(user.email));
+    return issueSession(c, deps, user, audit, lifetime);
+  }
+  if (audit.method === 'email-code' && state.method === 'email') {
+    throw new ApiError('TWO_FACTOR_USE_PASSWORD', 'Sign in with your password; your second step is a code by email');
+  }
+  const issued = await deps.twoFactor.challenge(c, deps.store, user, state, {
+    purpose: 'sign_in',
+    sessionKind: audit.sessionKind,
+    firstStep: { method: audit.method, ...(audit.passkeyId === undefined ? {} : { passkeyId: audit.passkeyId }) },
+  });
+  throw twoFactorRequired(issued);
+}
+
+/**
+ * MUT-710 (D2, D3): POST /v1/sessions/two-factor and /v1/device-sessions/two-factor. Checks the second step (single
+ * use, counted, locked out by the store's conditional updates), then rechecks the person before the session: still
+ * ACTIVE, not closed, and the same password as at the first step (a change in between voids the challenge). The
+ * session and its `user.signed_in` audit are what the first step would have made, plus `twoFactor` and twoFactorAt.
+ */
+export async function finishTwoFactor(c: Context<AppEnv>, deps: SignInDeps, presented: PresentedSecondStep, sessionKind: SessionKind, lifetime: SignInLifetime): Promise<SignInResult> {
+  const verified = await deps.twoFactor.verify(c, deps.store, presented, { purpose: 'sign_in', sessionKind });
+  const { challenge } = verified;
+  const now = c.get('now')();
+  const user = await deps.store.users.getById(challenge.userId);
+  if (!user || user.status !== 'ACTIVE' || isAccountGone(user.closure, now) || user.passwordHash === null) throw invalidCredentials();
+  if ((user.passwordChangedAt?.getTime() ?? null) !== (challenge.passwordChangedAt?.getTime() ?? null)) throw challengeExpired();
+  if (verified.used === 'recovery_code') await auditToMembers(c, deps.store, user, 'user.two_factor_recovery_code_used', { sessionKind, method: challenge.firstStep?.method ?? 'password', codesLeft: verified.recoveryCodesLeft ?? 0 });
+  deps.throttle.clear(normalizeEmail(user.email));
+  const first = challenge.firstStep ?? { method: 'password' as const };
+  const audit: SignInAudit = { sessionKind, method: first.method, ...(first.passkeyId === undefined ? {} : { passkeyId: first.passkeyId }), twoFactor: verified.used };
+  return issueSession(c, deps, user, audit, lifetime, now);
 }
 
 /**
@@ -255,7 +309,7 @@ export async function recordSignInFailure(c: Context<AppEnv>, deps: SignInDeps, 
  * review): an operator --lock, a setup-link redeem or a disable that commits meanwhile wins, and the sign-in gets the
  * usual 401. A passkey sign-in binds to the same hash (MUT-115 D6), so a person with no password can't sign in at all.
  */
-export async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: UserRecord, audit: SignInAudit, lifetime: SignInLifetime): Promise<SignInResult> {
+async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: UserRecord, audit: SignInAudit, lifetime: SignInLifetime, twoFactorAt?: Date): Promise<SignInResult> {
   const { store, pepper } = deps;
   const now = c.get('now')();
   if (user.passwordHash === null) throw invalidCredentials();
@@ -273,13 +327,16 @@ export async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: U
       userAgent: c.req.header('user-agent')?.slice(0, USER_AGENT_MAX) ?? null,
       verifiedPasswordHash: user.passwordHash,
       ...(audit.passkeyId === undefined ? {} : { passkeyId: audit.passkeyId }),
+      ...(twoFactorAt ? { twoFactorAt } : {}),
     });
   } catch (err) {
-    if (err instanceof StateConflict) throw invalidCredentials();
+    // MUT-710: a passkey removed between the first and second step is the usual refusal too.
+    if (err instanceof StateConflict || err instanceof ForeignKeyViolation) throw invalidCredentials();
     throw err;
   }
   const signedIn = (await store.users.recordSignIn(user.id, now)) ?? user;
   await auditToMembers(c, store, signedIn, 'user.signed_in', audit);
+  deps.twoFactor.log(c, 'sign_in.succeeded', user.id, { method: audit.method, sessionKind: audit.sessionKind, ...(audit.twoFactor ? { outcome: `two_factor:${audit.twoFactor}` } : {}) });
   return { user: signedIn, token, session };
 }
 
@@ -292,14 +349,14 @@ export async function auditToMembers(
   c: Context<AppEnv>,
   store: LedgerStore,
   user: UserRecord,
-  action: 'user.signed_in' | 'user.locked_out' | 'user.passkey_counter_regressed' | 'user.malafat_linked',
-  audit: SignInAudit,
+  action: 'user.signed_in' | 'user.locked_out' | 'user.passkey_counter_regressed' | 'user.malafat_linked' | 'user.two_factor_recovery_code_used',
+  audit: SignInAudit | (Omit<SignInAudit, 'twoFactor'> & { codesLeft: number }),
 ): Promise<void> {
   for (const m of await store.memberships.listByUser(user.id)) {
     await store.audit.append({
       organizationId: m.organizationId,
-      actorType: action === 'user.signed_in' || action === 'user.malafat_linked' ? 'USER' : 'SYSTEM',
-      actorId: action === 'user.signed_in' || action === 'user.malafat_linked' ? user.id : null,
+      actorType: action === 'user.locked_out' || action === 'user.passkey_counter_regressed' ? 'SYSTEM' : 'USER',
+      actorId: action === 'user.locked_out' || action === 'user.passkey_counter_regressed' ? null : user.id,
       action,
       entityType: 'user',
       entityId: user.id,

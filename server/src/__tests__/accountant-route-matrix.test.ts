@@ -5,7 +5,7 @@ import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { ACCOUNTANT_EXCLUDED_ROUTES, accountantMayRead } from '../auth/writability.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
-import { accountantHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
+import { issuingHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 
 /**
  * MUT-559 (ADR-245): every profile-scoped route a session can call, enumerated from the published contract and the
@@ -120,7 +120,7 @@ const call = (op: Operation, query = '') =>
 
 beforeAll(async () => {
   storage = new MemoryAttachmentStorage();
-  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
+  h = issuingHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');

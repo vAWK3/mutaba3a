@@ -24,6 +24,8 @@ export interface ApiShellDependencies {
   accountantAccess?: boolean;
   /** MUT-565 (ACCOUNTANT_PLAN): the client-books cap. Absent = off, no cap. */
   accountantPlan?: AccountantPlanConfig;
+  /** MUT-710 (D10, TWO_FACTOR_ISSUING_GATE_ENABLED): whether issuing needs two-step sign-in. Absent = off. */
+  twoFactorIssuingGate?: boolean;
 }
 
 /**
@@ -54,6 +56,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('now', now);
     c.set('billingGate', deps.billingGate ?? false);
     c.set('passkeys', deps.passkeys ?? false);
+    c.set('twoFactorIssuingGate', deps.twoFactorIssuingGate ?? false);
     c.set('maxOwnedProfiles', deps.maxOwnedProfiles);
     c.set('accountantAccess', deps.accountantAccess ?? false);
     c.set('accountantPlan', deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF);

@@ -4706,6 +4706,19 @@ Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated f
 
 No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
 
+## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-274)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/auth/__tests__/totp.test.ts`, `two-factor.test.ts`, `observability/__tests__/auth-log.test.ts` | RFC 6238 vectors, recovery codes, sealing, the log line |
+| Store contract | `repositories/__tests__/store-contract-two-factor.ts` (memory + Postgres) | conditional counters; `reserveTry` lets exactly 5 of 12 parallel tries through; single-use challenge, step, recovery code |
+| Sign-in | `__tests__/routes-two-factor-sign-in.test.ts` | password, emailed code, cookie and device; wrong/expired/replayed codes; 8 parallel wrong codes (≤4 judged, rest locked, one lockout audit); 5 parallel right codes → one session; one recovery code on two challenges → one session; email method and resend; D6; throttle not cleared; every setup link incl. SETUP after `--lock`; the auth_event lines carry no secret |
+| Management | `__tests__/routes-two-factor-enrolment.test.ts` | app and email enrolment, proof, parallel confirm, switching, new codes, off refused while issuing, operator reset |
+| Gate | `__tests__/routes-two-factor-gate.test.ts` | the four routes, enrolled false/true, no idempotent replay of the refusal, disconnect open |
+| Terraform | `infrastructure/terraform/tests/auth_log.tftest.hcl` | 365-day bucket, location, pinned sink filter |
+
+Release-qa flows (brief §5) wait for the portal and phone screens.
+
 ## MUT-660 — documents due, not for invoice, the books split (2026-11-22, ADR-270)
 
 | Layer | File | Covers |

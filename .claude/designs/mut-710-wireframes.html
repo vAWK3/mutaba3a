@@ -1,0 +1,411 @@
+<title>MTB3A Two-Step Sign-In</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Arabic:wght@400;500;700&display=swap">
+<style>
+/* Layout: a flow rail, then each step shown twice side by side, portal (desktop drawer or page) beside the phone. MTB3A's own roles; Plex stands in for Thmanyah. */
+:root {
+  --bg: #FCF6ED; --surface: #FFFCF7; --field: #F4F2FB; --line: #E6E2ED;
+  --ink: #392F4B; --ink2: #564E68; --primary: #795DBA; --primary-solid: #5E439E; --on-primary: #FFFCF7;
+  --lav: #E0D7FF; --lav-ink: #4D387E; --rose: #FFCED5; --rose-ink: #742B35; --butter: #F6E8B3; --butter-ink: #67450A;
+  --mint: #BAEBD4; --mint-ink: #00513E; --overlay: rgba(57,47,75,.28); --frame: #D9D3E3;
+  --font: "IBM Plex Sans Arabic", "Thmanyah Sans", system-ui, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #221B2D; --surface: #2E273C; --field: #3B334C; --line: #4B435A; --ink: #F4EEE4; --ink2: #BAB3C8;
+  --primary: #BCA9F7; --primary-solid: #C8B7FF; --on-primary: #221B2D; --lav: #453A64; --lav-ink: #DBCEFF;
+  --rose: #62313A; --rose-ink: #FFC2CB; --butter: #57451E; --butter-ink: #F0DE99; --mint: #134E39; --mint-ink: #A5E9CA;
+  --overlay: rgba(10,6,16,.5); --frame: #4B435A; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #221B2D; --surface: #2E273C; --field: #3B334C; --line: #4B435A; --ink: #F4EEE4; --ink2: #BAB3C8;
+  --primary: #BCA9F7; --primary-solid: #C8B7FF; --on-primary: #221B2D; --lav: #453A64; --lav-ink: #DBCEFF;
+  --rose: #62313A; --rose-ink: #FFC2CB; --butter: #57451E; --butter-ink: #F0DE99; --mint: #134E39; --mint-ink: #A5E9CA;
+  --overlay: rgba(10,6,16,.5); --frame: #4B435A; color-scheme: dark }
+* { box-sizing: border-box }
+body { background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 15px; line-height: 1.5; margin: 0 }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 20px 48px; max-width: 1360px; margin: 0 auto; display: grid; gap: 20px }
+header.top { display: flex; flex-wrap: wrap; gap: 12px 24px; align-items: end; justify-content: space-between }
+header.top h1 { font-size: 26px; margin: 0; font-weight: 700; text-wrap: balance }
+header.top p { margin: 4px 0 0; color: var(--ink2); max-width: 70ch; font-size: 14px }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 999px; padding: 3px; background: var(--surface); gap: 2px }
+.seg button { border: 0; background: none; color: var(--ink2); font: inherit; font-size: 13px; padding: 6px 12px; border-radius: 999px; cursor: pointer; min-height: 32px }
+.seg button[aria-pressed="true"] { background: var(--lav); color: var(--lav-ink); font-weight: 500 }
+.controls { display: flex; flex-wrap: wrap; gap: 8px }
+.flows { display: flex; flex-wrap: wrap; gap: 6px }
+.flows button { font: inherit; font-size: 14px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 12px; padding: 8px 14px; cursor: pointer; min-height: 40px }
+.flows button[aria-current="true"] { border-color: var(--primary); background: var(--lav); color: var(--lav-ink); font-weight: 500 }
+.flows button:focus-visible, .seg button:focus-visible, .stage button:focus-visible, .stage input:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px }
+.stepbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; justify-content: space-between; border-top: 1px solid var(--line); padding-top: 14px }
+.stepbar .what { min-width: 0 }
+.stepbar strong { font-size: 17px }
+.stepbar .note { color: var(--ink2); font-size: 13px; margin: 2px 0 0; max-width: 80ch }
+.pager { display: flex; gap: 6px; align-items: center }
+.pager button { font: inherit; font-size: 13px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 10px; padding: 6px 12px; cursor: pointer; min-height: 36px }
+.pager button:disabled { opacity: .4; cursor: default }
+.pager span { font-family: var(--mono); font-size: 12px; color: var(--ink2); font-variant-numeric: tabular-nums }
+.stage { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 24px; align-items: start }
+@media (max-width: 1100px) { .stage { grid-template-columns: minmax(0, 1fr) } .phone-col { justify-self: center } }
+.label { font-size: 11px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink2); margin: 0 0 8px }
+.desk-scroll { overflow-x: auto; border-radius: 16px }
+/* desktop frame */
+.desk { width: 920px; height: 600px; border: 1px solid var(--frame); border-radius: 16px; background: var(--bg); position: relative; overflow: hidden }
+.desk .chrome { height: 34px; display: flex; align-items: center; gap: 6px; padding-inline: 12px; border-bottom: 1px solid var(--line); background: var(--surface) }
+.desk .chrome i { width: 9px; height: 9px; border-radius: 50%; background: var(--line); display: block }
+.desk .chrome .url { margin-inline-start: 12px; font-family: var(--mono); font-size: 11px; color: var(--ink2); direction: ltr }
+.desk .page { padding: 28px 40px; height: calc(100% - 34px); position: relative }
+.pill { display: flex; gap: 4px; justify-content: center; margin-bottom: 22px }
+.pill span { font-size: 13px; padding: 6px 14px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); color: var(--ink2) }
+.pill span.on { background: var(--lav); color: var(--lav-ink); border-color: transparent }
+.ptitle { font-size: 26px; font-weight: 700; margin: 0 0 14px }
+.overlay { position: absolute; inset: 34px 0 0 0; background: var(--overlay) }
+.drawer { position: absolute; top: 34px; bottom: 0; inset-inline-end: 0; width: 440px; background: var(--surface); border-inline-start: 1px solid var(--line); display: flex; flex-direction: column }
+.drawer .dh { display: flex; justify-content: space-between; align-items: center; padding: 16px 20px; border-bottom: 1px solid var(--line); font-weight: 700 }
+.drawer .db { padding: 18px 20px; overflow: auto; flex: 1; display: grid; gap: 14px; align-content: start }
+.drawer .df { padding: 12px 20px; border-top: 1px solid var(--line); background: var(--bg); display: flex; gap: 8px; justify-content: flex-end }
+.x { border: 0; background: none; color: var(--ink2); font-size: 18px; cursor: pointer; min-width: 32px; min-height: 32px }
+.card { max-width: 400px; margin: 30px auto 0; background: var(--surface); border: 1px solid var(--line); border-radius: 24px; padding: 28px; display: grid; gap: 14px }
+.brand { font-weight: 700; color: var(--primary); font-size: 15px }
+/* phone frame */
+.phone { width: 340px; height: 690px; border: 10px solid var(--ink); border-radius: 44px; background: var(--bg); position: relative; overflow: hidden; display: flex; flex-direction: column }
+.phone .sb { height: 34px; display: flex; justify-content: space-between; align-items: center; padding-inline: 22px; font-size: 12px; font-family: var(--mono); color: var(--ink); direction: ltr; flex: none }
+.phone .nav { display: flex; align-items: center; gap: 8px; padding: 6px 14px 10px; flex: none }
+.phone .nav .back { border: 0; background: none; color: var(--primary); font: inherit; font-size: 15px; cursor: pointer; min-height: 36px; padding: 0 }
+.phone .nav h2 { font-size: 17px; margin: 0; flex: 1; text-align: center; font-weight: 700 }
+.phone .nav .sp { width: 52px }
+.phone .body { padding: 6px 18px 12px; overflow: auto; flex: 1; display: grid; gap: 14px; align-content: start }
+.phone .foot { padding: 10px 18px 22px; display: grid; gap: 8px; flex: none }
+.phone .big { font-size: 26px; font-weight: 700; margin: 4px 0 0; line-height: 1.25 }
+/* shared controls */
+.muted { color: var(--ink2); font-size: 14px; margin: 0 }
+.small { font-size: 13px }
+.field { display: grid; gap: 6px }
+.field label { font-size: 13px; color: var(--ink2) }
+.field input { font: inherit; font-size: 16px; background: var(--field); color: var(--ink); border: 1px solid transparent; border-radius: 12px; padding: 11px 14px; min-height: 46px; width: 100% }
+.field input.code { font-family: var(--mono); font-size: 22px; letter-spacing: .35em; text-align: center; direction: ltr }
+.field input.rc { font-family: var(--mono); font-size: 18px; letter-spacing: .12em; text-align: center; direction: ltr }
+.field .hint { font-size: 12px; color: var(--ink2) }
+.btn { font: inherit; font-size: 15px; font-weight: 500; border-radius: 12px; padding: 10px 18px; min-height: 44px; cursor: pointer; border: 1px solid transparent }
+.btn.primary { background: var(--primary-solid); color: var(--on-primary) }
+.btn.primary:disabled { opacity: .45; cursor: default }
+.btn.secondary { background: var(--surface); color: var(--ink); border-color: var(--line) }
+.btn.danger { background: var(--rose-ink); color: var(--surface) }
+.btn.block { width: 100% }
+.link { border: 0; background: none; color: var(--primary-solid); font: inherit; font-size: 14px; cursor: pointer; padding: 6px 0; min-height: 36px; text-align: start }
+.link[disabled] { color: var(--ink2); cursor: default }
+.banner { display: flex; gap: 10px; align-items: flex-start; border-radius: 12px; padding: 11px 13px; font-size: 14px }
+.banner b { display: block }
+.banner.error { background: var(--rose); color: var(--rose-ink) }
+.banner.info { background: var(--lav); color: var(--lav-ink) }
+.banner.warn { background: var(--butter); color: var(--butter-ink) }
+.banner.ok { background: var(--mint); color: var(--mint-ink) }
+.banner .ic { font-family: var(--mono); font-weight: 500; flex: none; width: 18px; height: 18px; border-radius: 50%; border: 1.5px solid currentColor; display: grid; place-items: center; font-size: 11px; margin-top: 1px }
+.rows { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface) }
+.row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; min-height: 52px; border-top: 1px solid var(--line); width: 100%; background: none; border-inline: 0; border-bottom: 0; font: inherit; color: inherit; text-align: start; cursor: pointer }
+.row:first-child { border-top: 0 }
+.row .t { flex: 1; min-width: 0 }
+.row .t b { font-weight: 500; display: block }
+.row .t span { font-size: 13px; color: var(--ink2) }
+.row .chev { color: var(--ink2) }
+[dir="rtl"] .row .chev { transform: scaleX(-1) }
+.row.sel { background: var(--lav); color: var(--lav-ink) }
+.row.sel .t span { color: var(--lav-ink) }
+.row.danger { color: var(--rose-ink) }
+.row.inert { cursor: default; opacity: .6 }
+.radio { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--ink2); flex: none }
+.row.sel .radio { border: 5px solid var(--primary-solid) }
+.chip { font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 999px; background: var(--mint); color: var(--mint-ink); white-space: nowrap }
+.chip.off { background: var(--field); color: var(--ink2) }
+.qrbox { display: flex; gap: 16px; align-items: center; flex-wrap: wrap }
+.qr { width: 132px; height: 132px; background: #fff; border-radius: 10px; padding: 8px; flex: none }
+.qr canvas { width: 116px; height: 116px; image-rendering: pixelated; display: block }
+.secret { font-family: var(--mono); font-size: 15px; letter-spacing: .08em; direction: ltr; background: var(--field); border-radius: 10px; padding: 8px 10px; word-break: break-all }
+.codes { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 14px; font-family: var(--mono); font-size: 15px; direction: ltr; background: var(--field); border-radius: 12px; padding: 14px; font-variant-numeric: tabular-nums }
+.codes span.used { text-decoration: line-through; color: var(--ink2) }
+.check { display: flex; gap: 10px; align-items: center; font-size: 14px; cursor: pointer; min-height: 40px }
+.check input { width: 18px; height: 18px; accent-color: var(--primary-solid) }
+.btnrow { display: flex; gap: 8px; flex-wrap: wrap }
+.confirm { border: 1px solid var(--rose-ink); border-radius: 14px; padding: 14px; display: grid; gap: 10px; background: var(--surface) }
+.docrow { display: grid; grid-template-columns: 1fr auto auto; gap: 16px; padding: 12px 14px; border-top: 1px solid var(--line); font-size: 14px }
+.docrow:first-child { border-top: 0 }
+.amount { font-family: var(--mono); font-variant-numeric: tabular-nums }
+.toast { position: absolute; inset-inline: 0; bottom: 18px; margin: auto; width: max-content; max-width: 90%; background: var(--ink); color: var(--bg); padding: 9px 16px; border-radius: 12px; font-size: 14px }
+.decisions { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 8px; max-width: 90ch }
+.decisions h2 { font-size: 17px; margin: 0 }
+.decisions ol { margin: 0; padding-inline-start: 20px; display: grid; gap: 6px; color: var(--ink2); font-size: 14px }
+.decisions b { color: var(--ink) }
+@media (prefers-reduced-motion: no-preference) { .drawer, .phone .body { animation: in .22s ease-out } @keyframes in { from { opacity: .4 } to { opacity: 1 } } }
+</style>
+
+<div class="wrap" id="app">
+  <header class="top">
+    <div>
+      <h1 id="h1"></h1>
+      <p id="lede"></p>
+    </div>
+    <div class="controls">
+      <div class="seg" role="group" aria-label="Language">
+        <button type="button" data-lang="ar">العربية</button>
+        <button type="button" data-lang="en">English</button>
+      </div>
+      <div class="seg" role="group" aria-label="Second step" id="methodSeg">
+        <button type="button" data-method="totp"></button>
+        <button type="button" data-method="email"></button>
+      </div>
+    </div>
+  </header>
+  <nav class="flows" id="flows" aria-label="Flows"></nav>
+  <div class="stepbar">
+    <div class="what"><strong id="stepTitle"></strong><p class="note" id="stepNote"></p></div>
+    <div class="pager"><button type="button" id="prev"></button><span id="count"></span><button type="button" id="next"></button></div>
+  </div>
+  <div class="stage">
+    <div style="min-width:0"><p class="label" id="lblPortal"></p><div class="desk-scroll"><div class="desk" id="desk"></div></div></div>
+    <div class="phone-col"><p class="label" id="lblPhone"></p><div class="phone" id="phone"></div></div>
+  </div>
+  <section class="decisions" id="decisions"></section>
+</div>
+
+<script>
+const S = {
+  en: {
+    h1: 'Two-step sign-in', lede: 'Wireframes for MUT-710: turning it on, signing in with it, losing your phone, and the prompt before issuing. Click inside either screen to move through a flow. These are layouts and copy for approval, not final styling.',
+    totp: 'Authenticator app', email: 'Code by email', portal: 'Portal (desktop)', phone: 'Phone app', prev: '‹ Back', next: 'Next ›',
+    brand: 'MTB3A', home: 'Home', docs: 'Documents', clients: 'Clients', reports: 'Reports', you: 'You',
+    tsTitle: 'Two-step sign-in', enterApp: 'Enter the 6-digit code from your authenticator app.', enterEmail: 'We emailed a 6-digit code to s•••@basel.ps. It works for 10 minutes.',
+    code: 'Code', cont: 'Continue', useRc: 'Use a recovery code instead', useCode: 'Use the code instead', backSignIn: 'Back to sign in',
+    resend: 'Send a new code', resendIn: 'Send a new code in 0:24', wrong: 'That code isn’t right.', triesLeft: '4 tries left.', rcLabel: 'Recovery code', rcHint: 'One of the 10 codes you saved when you turned this on. Each works once.',
+    oldApp: 'Update MTB3A to finish signing in.',
+    account: 'Account', changePw: 'Change password', passkeys: 'Passkeys', twoRow: 'Two-step sign-in', off: 'Off', onApp: 'On · authenticator app', onEmail: 'On · code by email', two_desc: 'A code after your password, from an app or by email.',
+    chooseTitle: 'Turn on two-step sign-in', chooseLede: 'After your password, MTB3A will ask for a one-time code. Pick where it comes from.',
+    appDesc: 'Authy, Google Authenticator, 1Password and others. Works without signal.', emailDesc: 'Sent to s•••@basel.ps each time you sign in.', rec: 'Recommended',
+    curPw: 'Current password', cancel: 'Cancel', nextBtn: 'Next',
+    scan: 'Scan this with your authenticator app.', orKey: 'Or enter this key:', copyKey: 'Copy key', openApp: 'Open in authenticator app', scanOther: 'Authenticator on another device? Show the QR code',
+    appCodeLabel: 'Code the app shows', turnOn: 'Turn on', emailSent: 'We sent a code to s•••@basel.ps to check it reaches you.',
+    rcTitle: 'Save your recovery codes', rcLede: 'If you lose your phone or can’t get the code, each of these lets you in once. Keep them somewhere safe, away from this device.',
+    copyAll: 'Copy all', download: 'Download', share: 'Share', saved: 'I’ve saved these codes', done: 'Done',
+    onToast: 'Two-step sign-in is on. Your other sessions were signed out.',
+    manageLede: 'Your account asks for a code after your password.', method: 'Second step', rcLeft: 'Recovery codes', rcLeftV: '8 of 10 left', newRc: 'Get new recovery codes', switchTo: 'Switch to code by email', switchToApp: 'Switch to authenticator app', turnOff: 'Turn off two-step sign-in',
+    reqNote: 'Required while you issue documents or are connected to the Tax Authority.', offConfirm: 'Turn off two-step sign-in? Sign-in will need only your password.', confirmCode: 'Code from your app',
+    issueTitle: 'New tax invoice', issueBanner: 'Two-step sign-in is required to issue documents.', issueBannerBody: 'It keeps your Tax Authority connection safe if someone learns your password. It takes about a minute.', setUp: 'Set up two-step sign-in', issueBtn: 'Issue',
+    taCard: 'Tax Authority', taBody: 'Connect so each invoice gets its allocation number.', connect: 'Connect',
+    resetTitle: 'Choose a new password', resetStep: 'First, confirm it’s you', resetLede: 'Your account uses two-step sign-in, so a reset needs the code too.',
+    newPw: 'New password', setPw: 'Set password',
+    flows: ['Sign in', 'Turn on', 'Recovery code', 'Manage', 'Before issuing', 'Reset password'],
+    steps: {
+      signin: [['The second step', 'Shown after the password, a passkey, an emailed sign-in code or Malafat. Nothing is signed in yet.'], ['A wrong code', 'Five wrong codes end the try and count toward the usual 15-minute lock.']],
+      enrol: [['Choose', 'From You › Account. Needs the current password.'], ['Prove it works', 'The app gets a QR code and a key; email gets a test code.'], ['Recovery codes', 'Shown once. Done waits for the checkbox.'], ['On', 'Other sessions are signed out, since they were opened with one step.']],
+      recovery: [['Lost phone', 'Swap the code field for a recovery code.'], ['Signed in', 'The person is told how many codes are left.']],
+      manage: [['Manage', 'Turning off needs the password and a current code.'], ['Turn off (required)', 'While a profile issues or is connected to the Tax Authority, turning off is refused.']],
+      issue: [['The prompt', 'The issue drawer and the Tax Authority card say why, before the person tries.'], ['Set up in place', 'The setup opens as a pane in the same drawer, then returns to the invoice.']],
+      reset: [['Reset asks for the code', 'After the emailed link, before the new password.']]
+    },
+    dTitle: 'Decisions behind these screens',
+    d: [
+      '<b>Passkeys still get the second step.</b> A passkey sign-in is asked for the code too, so the Tax Authority rule never rests on a passkey (Basel, 22 Nov).',
+      '<b>No SMS.</b> Only an authenticator app or an email code. The app is marked Recommended because an email code and a password reset both rest on the same mailbox.',
+      '<b>One code field, not six boxes.</b> It pastes, autofills from iOS and Android one-time-code suggestions, and reads the same in Arabic and English (digits stay left to right).',
+      '<b>Portal: a drawer from You › Account</b>, with panes, as Passkeys does. Phone: pushed screens with the action pinned at the bottom.',
+      '<b>Before issuing</b>, a warning banner explains why, and setup opens in the same drawer so the invoice isn’t lost.'
+    ]
+  },
+  ar: {
+    h1: 'الدخول بخطوتين', lede: 'نماذج أولية لـ MUT-710: التفعيل، والدخول بالرمز، وفقدان الهاتف، والتنبيه قبل إصدار مستند. اضغط داخل أي شاشة للتنقل. هذه تخطيطات ونصوص للموافقة، وليست التصميم النهائي.',
+    totp: 'تطبيق المصادقة', email: 'رمز بالبريد', portal: 'البوابة (حاسوب)', phone: 'تطبيق الهاتف', prev: '› السابق', next: 'التالي ‹',
+    brand: 'متابعة', home: 'الرئيسية', docs: 'المستندات', clients: 'العملاء', reports: 'التقارير', you: 'أنت',
+    tsTitle: 'الدخول بخطوتين', enterApp: 'أدخل الرمز المكوّن من 6 أرقام من تطبيق المصادقة.', enterEmail: 'أرسلنا رمزًا من 6 أرقام إلى s•••@basel.ps. يعمل لمدة 10 دقائق.',
+    code: 'الرمز', cont: 'متابعة', useRc: 'استخدم رمز استرداد بدلًا من ذلك', useCode: 'استخدم الرمز بدلًا من ذلك', backSignIn: 'العودة إلى تسجيل الدخول',
+    resend: 'أرسل رمزًا جديدًا', resendIn: 'إرسال رمز جديد بعد 0:24', wrong: 'هذا الرمز غير صحيح.', triesLeft: 'بقيت 4 محاولات.', rcLabel: 'رمز الاسترداد', rcHint: 'أحد الرموز العشرة التي حفظتها عند التفعيل. كل رمز يعمل مرة واحدة.',
+    oldApp: 'حدّث متابعة لإكمال تسجيل الدخول.',
+    account: 'الحساب', changePw: 'تغيير كلمة المرور', passkeys: 'مفاتيح المرور', twoRow: 'الدخول بخطوتين', off: 'متوقف', onApp: 'مفعّل · تطبيق المصادقة', onEmail: 'مفعّل · رمز بالبريد', two_desc: 'رمز بعد كلمة المرور، من تطبيق أو بالبريد.',
+    chooseTitle: 'تفعيل الدخول بخطوتين', chooseLede: 'بعد كلمة المرور ستطلب متابعة رمزًا لمرة واحدة. اختر من أين يأتي.',
+    appDesc: 'Authy أو Google Authenticator أو 1Password وغيرها. يعمل دون إنترنت.', emailDesc: 'يُرسل إلى s•••@basel.ps في كل مرة تسجّل فيها الدخول.', rec: 'موصى به',
+    curPw: 'كلمة المرور الحالية', cancel: 'إلغاء', nextBtn: 'التالي',
+    scan: 'امسح هذا الرمز بتطبيق المصادقة.', orKey: 'أو أدخل هذا المفتاح:', copyKey: 'نسخ المفتاح', openApp: 'افتح في تطبيق المصادقة', scanOther: 'تطبيق المصادقة على جهاز آخر؟ اعرض رمز QR',
+    appCodeLabel: 'الرمز الظاهر في التطبيق', turnOn: 'تفعيل', emailSent: 'أرسلنا رمزًا إلى s•••@basel.ps للتأكد من وصوله إليك.',
+    rcTitle: 'احفظ رموز الاسترداد', rcLede: 'إذا فقدت هاتفك أو لم يصلك الرمز، يُدخلك كل رمز من هذه مرة واحدة. احفظها في مكان آمن بعيدًا عن هذا الجهاز.',
+    copyAll: 'نسخ الكل', download: 'تنزيل', share: 'مشاركة', saved: 'حفظتُ هذه الرموز', done: 'تم',
+    onToast: 'تم تفعيل الدخول بخطوتين. سُجّل خروجك من الجلسات الأخرى.',
+    manageLede: 'يطلب حسابك رمزًا بعد كلمة المرور.', method: 'الخطوة الثانية', rcLeft: 'رموز الاسترداد', rcLeftV: 'بقي 8 من 10', newRc: 'احصل على رموز استرداد جديدة', switchTo: 'التحويل إلى رمز بالبريد', switchToApp: 'التحويل إلى تطبيق المصادقة', turnOff: 'إيقاف الدخول بخطوتين',
+    reqNote: 'مطلوب ما دمت تُصدر مستندات أو كنت متصلًا بسلطة الضرائب.', offConfirm: 'إيقاف الدخول بخطوتين؟ سيكفي تسجيل الدخول بكلمة المرور وحدها.', confirmCode: 'الرمز من التطبيق',
+    issueTitle: 'فاتورة ضريبية جديدة', issueBanner: 'الدخول بخطوتين مطلوب لإصدار المستندات.', issueBannerBody: 'يحمي اتصالك بسلطة الضرائب إذا عرف أحد كلمة مرورك. يستغرق دقيقة تقريبًا.', setUp: 'إعداد الدخول بخطوتين', issueBtn: 'إصدار',
+    taCard: 'سلطة الضرائب', taBody: 'اتصل لتحصل كل فاتورة على رقم التخصيص.', connect: 'اتصال',
+    resetTitle: 'اختر كلمة مرور جديدة', resetStep: 'أولًا، أكّد أنه أنت', resetLede: 'حسابك يستخدم الدخول بخطوتين، لذلك تحتاج إعادة التعيين إلى الرمز أيضًا.',
+    newPw: 'كلمة المرور الجديدة', setPw: 'حفظ كلمة المرور',
+    flows: ['تسجيل الدخول', 'التفعيل', 'رمز الاسترداد', 'الإدارة', 'قبل الإصدار', 'إعادة تعيين كلمة المرور'],
+    steps: {
+      signin: [['الخطوة الثانية', 'تظهر بعد كلمة المرور أو مفتاح المرور أو رمز الدخول بالبريد أو Malafat. لا يُسجَّل الدخول قبلها.'], ['رمز خاطئ', 'خمسة رموز خاطئة تُنهي المحاولة وتُحتسب ضمن القفل المعتاد لمدة 15 دقيقة.']],
+      enrol: [['الاختيار', 'من أنت › الحساب. يحتاج كلمة المرور الحالية.'], ['التأكد من أنه يعمل', 'التطبيق: رمز QR ومفتاح. البريد: رمز تجريبي.'], ['رموز الاسترداد', 'تُعرض مرة واحدة. زر «تم» ينتظر خانة التأكيد.'], ['مفعّل', 'يُسجَّل الخروج من الجلسات الأخرى لأنها فُتحت بخطوة واحدة.']],
+      recovery: [['فقدت الهاتف', 'استبدل حقل الرمز برمز استرداد.'], ['تم الدخول', 'يُخبَر الشخص بعدد الرموز المتبقية.']],
+      manage: [['الإدارة', 'الإيقاف يحتاج كلمة المرور ورمزًا حاليًا.'], ['الإيقاف (مطلوب)', 'ما دام ملف يُصدر مستندات أو متصلًا بسلطة الضرائب، يُرفض الإيقاف.']],
+      issue: [['التنبيه', 'درج الإصدار وبطاقة سلطة الضرائب يشرحان السبب قبل المحاولة.'], ['الإعداد في مكانه', 'يُفتح الإعداد في الدرج نفسه، ثم يعود إلى الفاتورة.']],
+      reset: [['إعادة التعيين تطلب الرمز', 'بعد الرابط المرسل بالبريد، وقبل كلمة المرور الجديدة.']]
+    },
+    dTitle: 'القرارات وراء هذه الشاشات',
+    d: [
+      '<b>مفاتيح المرور تمر بالخطوة الثانية أيضًا.</b> الدخول بمفتاح مرور يطلب الرمز كذلك، فلا يعتمد شرط سلطة الضرائب على مفتاح المرور (باسل، 22 تشرين الثاني).',
+      '<b>بلا رسائل SMS.</b> تطبيق مصادقة أو رمز بالبريد فقط. التطبيق «موصى به» لأن رمز البريد وإعادة تعيين كلمة المرور يعتمدان على صندوق البريد نفسه.',
+      '<b>حقل رمز واحد لا ست خانات.</b> يقبل اللصق والتعبئة التلقائية للرموز على iOS وAndroid، ويُقرأ بالطريقة نفسها بالعربية والإنجليزية (الأرقام من اليسار إلى اليمين).',
+      '<b>البوابة: درج من أنت › الحساب</b> بأقسام متتالية، كما في مفاتيح المرور. الهاتف: شاشات متتابعة والزر مثبّت في الأسفل.',
+      '<b>قبل الإصدار</b> يشرح شريط تحذير السبب، ويُفتح الإعداد في الدرج نفسه فلا تضيع الفاتورة.'
+    ]
+  }
+};
+const FLOW_KEYS = ['signin', 'enrol', 'recovery', 'manage', 'issue', 'reset'];
+const state = { lang: 'ar', method: 'totp', flow: 0, step: 0, saved: false, showQr: false, confirmOff: false };
+try { const s = JSON.parse(localStorage.getItem('mut710-wf') || '{}'); Object.assign(state, { lang: s.lang || 'ar', method: s.method || 'totp', flow: s.flow || 0 }); } catch (e) {}
+const t = (k) => S[state.lang][k];
+const $ = (id) => document.getElementById(id);
+const esc = (s) => s;
+const CODES = ['k7mq-2xdp', 'h4vt-9wcn', 'p3rf-6jxa', 'z8bn-4tqe', 'c2wy-7hmk', 'f9ds-3pvr', 'm6ga-8kzt', 'x5ue-2nfb', 'r4jh-9cwq', 'v7tp-6mya'];
+
+function codeField(id, label, err) {
+  return `<div class="field"><label for="${id}">${label}</label><input id="${id}" class="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" value="${err ? '482193' : ''}">${err ? '' : ''}</div>`;
+}
+function banner(kind, title, body) {
+  const ic = kind === 'error' ? '!' : kind === 'ok' ? '✓' : 'i';
+  return `<div class="banner ${kind}" role="${kind === 'error' ? 'alert' : 'note'}"><span class="ic" aria-hidden="true">${ic}</span><div><b>${title}</b>${body ? body : ''}</div></div>`;
+}
+function deskShell(url, active, inner) {
+  const tabs = ['home', 'docs', 'clients', 'reports'].map((k) => `<span class="${k === active ? 'on' : ''}">${t(k)}</span>`).join('');
+  return `<div class="chrome"><i></i><i></i><i></i><span class="url">app.mtb3a.com${url}</span></div><div class="page">${active ? `<div class="pill">${tabs}<span class="${active === 'you' ? 'on' : ''}">${t('you')}</span></div>` : ''}${inner}</div>`;
+}
+function drawer(title, body, foot) {
+  return `<div class="overlay"></div><aside class="drawer" role="dialog" aria-label="${title}"><div class="dh"><span>${title}</span><button class="x" type="button" aria-label="Close">✕</button></div><div class="db">${body}</div>${foot ? `<div class="df">${foot}</div>` : ''}</aside>`;
+}
+function phoneShell(title, body, foot, back = true) {
+  return `<div class="sb"><span>9:41</span><span>●●● ▮</span></div><div class="nav">${back ? `<button class="back" type="button" data-act="prev">${state.lang === 'ar' ? '›' : '‹'} ${state.lang === 'ar' ? 'رجوع' : 'Back'}</button>` : '<span class="sp"></span>'}<h2>${title}</h2><span class="sp"></span></div><div class="body">${body}</div>${foot ? `<div class="foot">${foot}</div>` : ''}`;
+}
+const pBtn = (label, act = 'next', dis = false) => `<button class="btn primary block" type="button" data-act="${act}" ${dis ? 'disabled' : ''}>${label}</button>`;
+
+function youAccountRows(status) {
+  return `<div class="rows"><button class="row" type="button"><span class="t"><b>${t('changePw')}</b></span><span class="chev">›</span></button><button class="row" type="button"><span class="t"><b>${t('passkeys')}</b><span>2</span></span><span class="chev">›</span></button><button class="row" type="button" data-act="next"><span class="t"><b>${t('twoRow')}</b><span>${status ? (state.method === 'totp' ? t('onApp') : t('onEmail')) : t('two_desc')}</span></span><span class="chip ${status ? '' : 'off'}">${status ? '✓' : t('off')}</span><span class="chev">›</span></button></div>`;
+}
+function youPage(status) {
+  return `<h1 class="ptitle">${t('account')}</h1><div style="max-width:520px">${youAccountRows(status)}</div>`;
+}
+function chooseBody() {
+  const sel = state.method;
+  return `<p class="muted">${t('chooseLede')}</p><div class="rows" role="radiogroup"><button class="row ${sel === 'totp' ? 'sel' : ''}" type="button" data-method="totp" role="radio" aria-checked="${sel === 'totp'}"><span class="radio"></span><span class="t"><b>${t('totp')} <span class="chip">${t('rec')}</span></b><span>${t('appDesc')}</span></span></button><button class="row ${sel === 'email' ? 'sel' : ''}" type="button" data-method="email" role="radio" aria-checked="${sel === 'email'}"><span class="radio"></span><span class="t"><b>${t('email')}</b><span>${t('emailDesc')}</span></span></button></div><div class="field"><label for="pw-${Math.random().toString(36).slice(2, 6)}">${t('curPw')}</label><input type="password" value="••••••••••"></div>`;
+}
+function proveBody(phone) {
+  if (state.method === 'email') return `${banner('info', t('emailSent'))}${codeField('c' + (phone ? 'p' : 'd'), t('code'))}<button class="link" type="button" disabled>${t('resendIn')}</button>`;
+  const key = 'JBSW Y3DP EHPK 3PXP 7QMR';
+  if (phone) {
+    return `<p class="muted">${t('appDesc')}</p><button class="btn secondary block" type="button">${t('openApp')}</button><div class="field"><label>${t('orKey')}</label><div class="secret">${key}</div></div><button class="link" type="button" data-act="qr">${t('scanOther')}</button>${state.showQr ? '<div class="qr"><canvas data-qr></canvas></div>' : ''}${codeField('cp', t('appCodeLabel'))}`;
+  }
+  return `<div class="qrbox"><div class="qr"><canvas data-qr></canvas></div><div style="min-width:0;flex:1;display:grid;gap:8px"><p class="muted">${t('scan')}</p><span class="small" style="color:var(--ink2)">${t('orKey')}</span><div class="secret">${key}</div><button class="link" type="button">${t('copyKey')}</button></div></div>${codeField('cd', t('appCodeLabel'))}`;
+}
+function rcBody(phone) {
+  return `<p class="muted">${t('rcLede')}</p><div class="codes">${CODES.map((c) => `<span>${c}</span>`).join('')}</div><div class="btnrow"><button class="btn secondary" type="button">${t('copyAll')}</button><button class="btn secondary" type="button">${phone ? t('share') : t('download')}</button></div><label class="check"><input type="checkbox" id="saved-${phone ? 'p' : 'd'}" ${state.saved ? 'checked' : ''} data-act="saved"> ${t('saved')}</label>`;
+}
+function signInStep(phone, opts = {}) {
+  const email = state.method === 'email';
+  let b = '';
+  if (opts.err) b += banner('error', t('wrong'), ` ${t('triesLeft')}`);
+  if (opts.rc) {
+    b += `<p class="muted">${t('rcHint')}</p><div class="field"><label>${t('rcLabel')}</label><input class="rc" placeholder="xxxx-xxxx" value="${opts.rcVal || ''}"></div><button class="link" type="button" data-act="prev">${t('useCode')}</button>`;
+  } else {
+    b += `<p class="muted">${email ? t('enterEmail') : t('enterApp')}</p>${codeField(phone ? 'sp' : 'sd', t('code'), opts.err)}`;
+    if (email) b += `<button class="link" type="button">${t('resend')}</button>`;
+    b += `<button class="link" type="button" data-act="${opts.rcLink || 'next'}">${t('useRc')}</button>`;
+  }
+  return b;
+}
+
+const screens = {
+  signin: [
+    { desk: () => deskShell('/sign-in', null, `<div class="card"><span class="brand">${t('brand')}</span><h1 class="ptitle" style="margin:0">${t('tsTitle')}</h1>${signInStep(false, { rcLink: 'none' })}<button class="btn primary block" type="button" data-act="next">${t('cont')}</button><button class="link" type="button">${t('backSignIn')}</button></div>`),
+      phone: () => phoneShell('', `<span class="brand">${t('brand')}</span><p class="big">${t('tsTitle')}</p>${signInStep(true, { rcLink: 'none' })}`, pBtn(t('cont'))) },
+    { desk: () => deskShell('/sign-in', null, `<div class="card"><span class="brand">${t('brand')}</span><h1 class="ptitle" style="margin:0">${t('tsTitle')}</h1>${signInStep(false, { err: true, rcLink: 'none' })}<button class="btn primary block" type="button">${t('cont')}</button><button class="link" type="button" data-act="prev">${t('backSignIn')}</button></div>`),
+      phone: () => phoneShell('', `<span class="brand">${t('brand')}</span><p class="big">${t('tsTitle')}</p>${signInStep(true, { rcLink: 'none' })}`, `${banner('error', t('wrong'), ` ${t('triesLeft')}`)}${pBtn(t('cont'), 'none')}`) }
+  ],
+  enrol: [
+    { desk: () => deskShell('/you/account?twoFactor=1', 'you', youPage(false) + drawer(t('chooseTitle'), chooseBody(), `<button class="btn secondary" type="button">${t('cancel')}</button><button class="btn primary" type="button" data-act="next">${t('nextBtn')}</button>`)),
+      phone: () => phoneShell(t('twoRow'), `<p class="big">${t('chooseTitle')}</p>${chooseBody()}`, pBtn(t('nextBtn'))) },
+    { desk: () => deskShell('/you/account?twoFactor=1', 'you', youPage(false) + drawer(state.method === 'totp' ? t('totp') : t('email'), proveBody(false), `<button class="btn secondary" type="button" data-act="prev">${t('cancel')}</button><button class="btn primary" type="button" data-act="next">${t('turnOn')}</button>`)),
+      phone: () => phoneShell(state.method === 'totp' ? t('totp') : t('email'), proveBody(true), pBtn(t('turnOn'))) },
+    { desk: () => deskShell('/you/account?twoFactor=1', 'you', youPage(false) + drawer(t('rcTitle'), rcBody(false), `<button class="btn primary" type="button" data-act="next" ${state.saved ? '' : 'disabled'}>${t('done')}</button>`)),
+      phone: () => phoneShell(t('rcTitle'), rcBody(true), pBtn(t('done'), 'next', !state.saved), false) },
+    { desk: () => deskShell('/you/account', 'you', youPage(true) + `<div class="toast" role="status">${t('onToast')}</div>`),
+      phone: () => phoneShell(t('account'), youAccountRows(true) + `<div class="banner ok" role="status"><span class="ic">✓</span><div>${t('onToast')}</div></div>`, '') }
+  ],
+  recovery: [
+    { desk: () => deskShell('/sign-in', null, `<div class="card"><span class="brand">${t('brand')}</span><h1 class="ptitle" style="margin:0">${t('tsTitle')}</h1>${signInStep(false, { rc: true, rcVal: 'k7mq-2xdp' })}<button class="btn primary block" type="button" data-act="next">${t('cont')}</button></div>`),
+      phone: () => phoneShell('', `<span class="brand">${t('brand')}</span><p class="big">${t('tsTitle')}</p>${signInStep(true, { rc: true, rcVal: 'k7mq-2xdp' })}`, pBtn(t('cont'))) },
+    { desk: () => deskShell('/p/sader/', 'home', `<h1 class="ptitle">${t('home')}</h1>${banner('warn', state.lang === 'ar' ? 'دخلتَ برمز استرداد. بقيت لديك 9 رموز.' : 'You signed in with a recovery code. 9 are left.', state.lang === 'ar' ? ' إذا فقدت هاتفك، فعّل الدخول بخطوتين من جديد على جهاز جديد من أنت › الحساب.' : ' If you lost your phone, set two-step sign-in up again on a new one in You › Account.')}`),
+      phone: () => phoneShell(t('home'), banner('warn', state.lang === 'ar' ? 'دخلتَ برمز استرداد. بقيت لديك 9 رموز.' : 'You signed in with a recovery code. 9 are left.', state.lang === 'ar' ? ' إذا فقدت هاتفك، فعّل الدخول بخطوتين من جديد من الإعدادات.' : ' If you lost your phone, set it up again in Settings.'), '', false) }
+  ],
+  manage: [
+    { desk: () => deskShell('/you/account?twoFactor=1', 'you', youPage(true) + drawer(t('twoRow'), manageBody(false), '')),
+      phone: () => phoneShell(t('twoRow'), manageBody(false), '') },
+    { desk: () => deskShell('/you/account?twoFactor=1', 'you', youPage(true) + drawer(t('twoRow'), manageBody(true), '')),
+      phone: () => phoneShell(t('twoRow'), manageBody(true), '') }
+  ],
+  issue: [
+    { desk: () => deskShell('/p/sader/documents?issue=tax-invoice', 'docs', docsPage() + drawer(t('issueTitle'), `${banner('warn', t('issueBanner'), `<br>${t('issueBannerBody')}`)}<button class="btn primary" type="button" data-act="next">${t('setUp')}</button><div style="opacity:.5;display:grid;gap:12px"><div class="field"><label>${state.lang === 'ar' ? 'العميل' : 'Client'}</label><input value="${state.lang === 'ar' ? 'شركة الأفق للتجارة' : 'Al Ofoq Trading'}"></div><div class="field"><label>${state.lang === 'ar' ? 'المبلغ' : 'Amount'}</label><input class="amount" value="₪ 4,250.00" dir="ltr"></div></div>`, `<button class="btn secondary" type="button">${t('cancel')}</button><button class="btn primary" type="button" disabled>${t('issueBtn')}</button>`)),
+      phone: () => phoneShell(t('issueTitle'), `${banner('warn', t('issueBanner'), `<br>${t('issueBannerBody')}`)}<div style="opacity:.5;display:grid;gap:12px"><div class="field"><label>${state.lang === 'ar' ? 'العميل' : 'Client'}</label><input value="${state.lang === 'ar' ? 'شركة الأفق للتجارة' : 'Al Ofoq Trading'}"></div><div class="field"><label>${state.lang === 'ar' ? 'المبلغ' : 'Amount'}</label><input class="amount" value="₪ 4,250.00" dir="ltr"></div></div>`, pBtn(t('setUp'))) },
+    { desk: () => deskShell('/p/sader/documents?issue=tax-invoice&twoFactor=1', 'docs', docsPage() + drawer(t('chooseTitle'), chooseBody(), `<button class="btn secondary" type="button" data-act="prev">${t('cancel')}</button><button class="btn primary" type="button">${t('nextBtn')}</button>`)),
+      phone: () => phoneShell(t('twoRow'), `<p class="big">${t('chooseTitle')}</p>${chooseBody()}`, pBtn(t('nextBtn'), 'none')) }
+  ],
+  reset: [
+    { desk: () => deskShell('/setup', null, `<div class="card"><span class="brand">${t('brand')}</span><h1 class="ptitle" style="margin:0">${t('resetTitle')}</h1><p class="muted"><b style="color:var(--ink)">${t('resetStep')}</b> · ${t('resetLede')}</p>${signInStep(false, { rcLink: 'none' })}<div style="opacity:.45;display:grid;gap:10px"><div class="field"><label>${t('newPw')}</label><input type="password" disabled></div></div><button class="btn primary block" type="button">${t('cont')}</button></div>`),
+      phone: () => phoneShell('', `<span class="brand">${t('brand')}</span><p class="big">${t('resetStep')}</p><p class="muted">${t('resetLede')}</p>${signInStep(true, { rcLink: 'none' })}`, pBtn(t('cont'), 'none')) }
+  ]
+};
+function manageBody(required) {
+  const other = state.method === 'totp' ? t('switchTo') : t('switchToApp');
+  let b = `<p class="muted">${t('manageLede')}</p><div class="rows"><div class="row" style="cursor:default"><span class="t"><b>${t('method')}</b><span>${state.method === 'totp' ? t('totp') : t('email')}</span></span><span class="chip">✓</span></div><div class="row" style="cursor:default"><span class="t"><b>${t('rcLeft')}</b><span>${t('rcLeftV')}</span></span></div></div><div class="rows"><button class="row" type="button"><span class="t"><b>${t('newRc')}</b></span><span class="chev">›</span></button><button class="row" type="button"><span class="t"><b>${other}</b></span><span class="chev">›</span></button>`;
+  if (required) b += `<div class="row danger inert" tabindex="0"><span class="t"><b>${t('turnOff')}</b><span>${t('reqNote')}</span></span></div></div>`;
+  else if (state.confirmOff) b += `</div><div class="confirm" role="group"><b>${t('offConfirm')}</b><div class="field"><label>${t('curPw')}</label><input type="password" value="••••••••"></div>${codeField('off', t('confirmCode'))}<div class="btnrow"><button class="btn secondary" type="button" data-act="cancelOff">${t('cancel')}</button><button class="btn danger" type="button">${t('turnOff')}</button></div></div>`;
+  else b += `<button class="row danger" type="button" data-act="confirmOff"><span class="t"><b>${t('turnOff')}</b></span></button></div>`;
+  return b;
+}
+function docsPage() {
+  const rows = [['INV-0041', '₪ 1,800.00'], ['INV-0040', '₪ 6,120.00'], ['RCP-0112', '₪ 950.00']].map(([n, a]) => `<div class="docrow"><span>${n}</span><span class="amount"><bdi>${a}</bdi></span><span class="chip">${state.lang === 'ar' ? 'صادر' : 'Issued'}</span></div>`).join('');
+  return `<h1 class="ptitle">${t('docs')}</h1><div style="display:grid;grid-template-columns:1fr 260px;gap:16px;max-width:820px"><div class="rows">${rows}</div><div class="rows" style="padding:14px;display:grid;gap:8px"><b>${t('taCard')}</b><span class="muted small">${t('taBody')}</span><span class="small" style="color:var(--butter-ink)">${t('issueBanner')}</span><button class="btn secondary" type="button">${t('setUp')}</button></div></div>`;
+}
+
+function drawQr() {
+  document.querySelectorAll('canvas[data-qr]').forEach((cv) => {
+    const n = 29; cv.width = n; cv.height = n; const g = cv.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, n, n); g.fillStyle = '#1b1524';
+    let s = 7; const rnd = () => { s = (s * 16807) % 2147483647; return s / 2147483647; };
+    for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) if (rnd() > 0.52) g.fillRect(x, y, 1, 1);
+    [[0, 0], [n - 7, 0], [0, n - 7]].forEach(([x, y]) => { g.fillStyle = '#fff'; g.fillRect(x - 1 < 0 ? 0 : x - 1, y - 1 < 0 ? 0 : y - 1, 9, 9); g.fillStyle = '#1b1524'; g.fillRect(x, y, 7, 7); g.fillStyle = '#fff'; g.fillRect(x + 1, y + 1, 5, 5); g.fillStyle = '#1b1524'; g.fillRect(x + 2, y + 2, 3, 3); });
+  });
+}
+function render() {
+  const L = state.lang; document.documentElement.lang = L; document.documentElement.dir = L === 'ar' ? 'rtl' : 'ltr';
+  try { localStorage.setItem('mut710-wf', JSON.stringify({ lang: L, method: state.method, flow: state.flow })); } catch (e) {}
+  $('h1').textContent = t('h1'); $('lede').textContent = t('lede');
+  document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', b.dataset.lang === L));
+  document.querySelectorAll('#methodSeg [data-method]').forEach((b) => { b.textContent = t(b.dataset.method); b.setAttribute('aria-pressed', b.dataset.method === state.method); });
+  $('flows').innerHTML = t('flows').map((f, i) => `<button type="button" data-flow="${i}" aria-current="${i === state.flow}">${f}</button>`).join('');
+  const key = FLOW_KEYS[state.flow]; const list = screens[key]; const meta = t('steps')[key][state.step];
+  $('stepTitle').textContent = meta[0]; $('stepNote').textContent = meta[1];
+  $('prev').textContent = t('prev'); $('next').textContent = t('next');
+  $('prev').disabled = state.step === 0; $('next').disabled = state.step === list.length - 1;
+  $('count').textContent = `${state.step + 1} / ${list.length}`;
+  $('lblPortal').textContent = t('portal'); $('lblPhone').textContent = t('phone');
+  $('desk').innerHTML = list[state.step].desk(); $('phone').innerHTML = list[state.step].phone();
+  $('decisions').innerHTML = `<h2>${t('dTitle')}</h2><ol>${t('d').map((x) => `<li>${x}</li>`).join('')}</ol>`;
+  drawQr();
+}
+function go(step) { const n = screens[FLOW_KEYS[state.flow]].length; state.step = Math.max(0, Math.min(n - 1, step)); render(); }
+document.addEventListener('click', (e) => {
+  const el = e.target.closest('[data-lang],[data-method],[data-flow],[data-act],#prev,#next'); if (!el) return;
+  if (el.dataset.lang) { state.lang = el.dataset.lang; render(); return; }
+  if (el.dataset.method) { state.method = el.dataset.method; render(); return; }
+  if (el.dataset.flow) { state.flow = +el.dataset.flow; state.step = 0; state.saved = false; state.showQr = false; state.confirmOff = false; render(); return; }
+  if (el.id === 'prev') return go(state.step - 1);
+  if (el.id === 'next') return go(state.step + 1);
+  const a = el.dataset.act;
+  if (a === 'next') go(state.step + 1); else if (a === 'prev') go(state.step - 1);
+  else if (a === 'qr') { state.showQr = !state.showQr; render(); }
+  else if (a === 'confirmOff') { state.confirmOff = true; render(); }
+  else if (a === 'cancelOff') { state.confirmOff = false; render(); }
+});
+document.addEventListener('change', (e) => { if (e.target.dataset && e.target.dataset.act === 'saved') { state.saved = e.target.checked; render(); } });
+render();
+</script>

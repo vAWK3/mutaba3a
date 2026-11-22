@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FEATURES } from '../features.js';
 import { SESSION_ONLY_ENTITY_TYPES } from '../routes/audit.js';
-import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
+import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
 
 /**
  * MUT-568 (ADR-260): /v1/issuer, /v1/issuing/*, /v1/issued-documents*. Gated on the profile owner's `invoicing` feature
@@ -44,7 +44,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('is switched off (404) without the owner’s feature, and on personal profiles', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const owner = await person(h);
     const profileId = await businessOf(h, owner);
     expect((await h.app.request('/v1/issuer', json(ISSUER, owner.on(profileId), 'PUT'))).status).toBe(404);
@@ -55,7 +55,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('previews without issuing, then issues number 1 with the right totals and an Owed (D5)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const preview = await h.app.request('/v1/issued-documents/preview', json(invoiceBody(w.customerId), w.on));
     expect(preview.status).toBe(200);
@@ -73,7 +73,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('a retry with the same Idempotency-Key returns the same document and takes no second number', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const key = idem();
     const first = await read(await issue(h, w.on, invoiceBody(w.customerId), key));
@@ -84,7 +84,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('has no route that changes or removes an issued document (AC1)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const doc = await read(await issue(h, w.on, invoiceBody(w.customerId)));
     for (const method of ['PATCH', 'PUT', 'DELETE']) {
@@ -97,7 +97,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('refuses the wrong fields for a type, a future date and a date before the last of its type', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const reason = async (body: unknown) => (await read(await issue(h, w.on, body))).error.details.reason;
     expect(await reason(invoiceBody(w.customerId, { payment: { method: 'BANK', receivedOn: '2026-11-05' } }))).toBe('FIELD_NOT_ALLOWED_FOR_TYPE');
@@ -109,7 +109,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('a credit note credits its invoice up to what is owed; beyond is ORIGINAL_PAID (AC3)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const invoice = await read(await issue(h, w.on, invoiceBody(w.customerId)));
     const note = { docType: 'CREDIT_NOTE', documentDate: '2026-11-05', currency: 'ILS', language: 'he', customerId: w.customerId, originalId: invoice.id, lines: [{ description: 'Discount agreed', kind: 'SERVICE', quantity: '1', unitPrice: '1000.00' }] };
@@ -121,7 +121,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('an invoice-receipt is received in full; an exempt dealer issues only receipts', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const res = await issue(h, w.on, invoiceBody(w.customerId, { docType: 'TAX_INVOICE_RECEIPT', payment: { method: 'BANK', reference: 'TRX-1', receivedOn: '2026-11-05' } }));
     expect(res.status, await res.clone().text()).toBe(201);
@@ -136,7 +136,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('starting numbers until the first document, and no gaps (D3, AC5)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const set = (start: number) => h.app.request('/v1/issuing/starting-numbers/TAX_INVOICE', json({ start }, w.on, 'PUT'));
     expect((await set(1040)).status).toBe(200);
@@ -149,7 +149,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('a co-owner issues on the creator’s feature; an accountant reads but never writes', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const coOwner = await person(h);
     expect((await h.app.request(`/admin/v1/users/${coOwner.userId}/memberships`, json({ organizationId: w.profileId, role: 'OWNER' }, ADMIN))).status).toBe(201);
@@ -160,7 +160,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('prices that include VAT: the customer pays exactly the typed total; a line may be exempt (V1-a)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const body = invoiceBody(w.customerId, { pricesIncludeVat: true, discount: undefined, lines: [{ description: 'All in', kind: 'SERVICE', quantity: '1', unitPrice: '1180.00' }, { description: 'Fee', kind: 'SERVICE', quantity: '1', unitPrice: '50.00', vatExempt: true }] });
     const preview = await read(await h.app.request('/v1/issued-documents/preview', json(body, w.on)));
@@ -171,7 +171,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('issues a tax invoice for a recorded Owed, taking it over with no second Owed (I1-a)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const owed = await read(await h.app.request('/v1/income', json({ kind: 'owed', amount: '1180.00', currency: 'ILS', occurredOn: '2026-11-04', customerId: w.customerId }, { ...w.on, ...idem() })));
     const body = invoiceBody(w.customerId, { discount: undefined, pricesIncludeVat: true, fromEntry: { kind: 'owed', id: owed.id }, lines: [{ description: 'Sprint 3', kind: 'SERVICE', quantity: '1', unitPrice: '1180.00' }] });
@@ -186,7 +186,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('refuses an entry whose amount differs, or the wrong document type for it (I1-a)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const owed = await read(await h.app.request('/v1/income', json({ kind: 'owed', amount: '999.00', currency: 'ILS', occurredOn: '2026-11-04', customerId: w.customerId }, { ...w.on, ...idem() })));
     const mismatch = await read(await issue(h, w.on, invoiceBody(w.customerId, { fromEntry: { kind: 'owed', id: owed.id } })));
@@ -196,7 +196,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('a credit note can\'t be dated before its tax invoice (review fix 1)', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const invoice = await read(await issue(h, w.on, invoiceBody(w.customerId, { documentDate: '2026-11-05' })));
     const note = { docType: 'CREDIT_NOTE', documentDate: '2026-11-04', currency: 'ILS', language: 'he', customerId: w.customerId, originalId: invoice.id, lines: [{ description: 'Early', kind: 'SERVICE', quantity: '1', unitPrice: '10.00' }] };
@@ -204,7 +204,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('MUT-662: a payment request: PR-0001, no allocation asked, status from the invoice-receipts that settle it', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const res = await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST', dueDate: '2026-12-05' }));
     expect(res.status, await res.clone().text()).toBe(201);
@@ -222,7 +222,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('MUT-662 (D18): cancel is refused while an invoice-receipt refers to it; the owner cancels otherwise, once; an accountant never', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const pr = await read(await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST' })));
     const cancel = (id: string, headers: Record<string, string>, key = idem()) => h.app.request(`/v1/issued-documents/${id}/cancel`, json({ reason: 'sent twice' }, { ...headers, ...key }));
@@ -242,7 +242,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('MUT-662: an exempt dealer may issue a payment request, at no VAT', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const current = await read(await h.app.request('/v1/issuer', { headers: w.on }));
     expect((await h.app.request('/v1/issuer', json({ ...ISSUER, dealerType: 'EXEMPT' }, { ...w.on, 'if-match': String(current.version) }, 'PUT'))).status).toBe(200);
@@ -252,7 +252,7 @@ describe('issuing routes (MUT-568)', () => {
   });
 
   it('audits the issue as session-only activity', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     await issue(h, w.on, invoiceBody(w.customerId));
     expect(SESSION_ONLY_ENTITY_TYPES).toEqual(expect.arrayContaining(['issued_document', 'issuer_details']));
@@ -262,7 +262,7 @@ describe('issuing routes (MUT-568)', () => {
 
 describe('MUT-664: the Documents tab list', () => {
   it('a tax invoice carries what is settled on it, and the list filters by currency and period', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await invoicing(h);
     const doc = await read(await issue(h, w.on, invoiceBody(w.customerId)));
     expect(doc.docType).toBe('TAX_INVOICE');

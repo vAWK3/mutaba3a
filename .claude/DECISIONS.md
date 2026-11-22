@@ -6986,3 +6986,21 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 6. **Clients.** The portal drawer and the phone's issue sheet show the panel for MANUAL: the four details with Copy and Copy all, the link, a 9-digit input and "change the amount". Issue stays disabled until the number is well formed. On ALLOCATION_NUMBER_MOVED the entered number is cleared and the preview read again.
 
 **Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.133.0-mut711.
+
+## ADR-274: Two-Step Sign-In (Authenticator App or Emailed Code) and a 12-Month Authentication Log (MUT-710)
+
+**Date**: 2026-11-22 · **Status**: Accepted (Basel: build first, then sign the SHAAM security appendix; wireframes approved 2026-11-22) · **Number**: reserved above in-flight ADR-269…271; renumber at merge if needed.
+
+**Context.** The SHAAM security appendix (22-07-2025) §17 requires a second factor, §19 authentication logs kept encrypted for 12 months. The full design (D1–D14) is `.claude/designs/mut-710-two-factor.md`.
+
+**Decision.**
+1. The second factor is an authenticator app (TOTP, RFC 6238) or an emailed 6-digit code, the person's choice; no SMS; passkeys stay a first step and are not relied on as a second.
+2. One way to mint a session: `beginOrIssue` after any first step (password, passkey, emailed sign-in code, Malafat) creates a challenge when the person has two-step on; `finishTwoFactor` issues the session (twoFactorAt). `issueSession` is private.
+3. Every person setup link (any purpose) asks for the second step when it is on (review 4). The challenge is bound to the link and consumed before the redeem's transaction; a redeem that then loses its race leaves it spent (stricter, see TD-326).
+4. Counting is atomic (review 2): a try is reserved on the person under their `two_factor` row lock before the code is read; 5 in 15 minutes lock the second step 15 minutes (429). Challenges: 10 minutes, 5 tries, single use; TOTP steps and recovery codes are claimed by conditional updates.
+5. Issuing and the Tax Authority need two-step on and a session that passed it (`requireTwoFactor`, before idempotency so a refusal is never replayed); disconnecting always works; turning it off is refused while the person owns an issuing profile. The gate (and that refusal, and Me's `requiredForIssuing`) is enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false): it ships dark so nobody already issuing is locked out before the screens that turn it on are live; the second step at sign-in is always on for people who turned it on.
+6. With the email method an emailed sign-in code is refused as a first step (`TWO_FACTOR_USE_PASSWORD`), and a reset rests on the mailbox alone (link and code both mailed); the enrolment screen recommends the app. Linking a Malafat identity to an account with two-step on is refused for now (TD-324).
+7. TOTP secrets are sealed with AES-256-GCM under `TWO_FACTOR_SEAL_KEY` (own key on production and staging); recovery codes are keyed digests from the same secret, so rotating the session pepper doesn't void them.
+8. Authentication events are `auth_event` stdout lines (never a code, token, password or unknown address) copied by a pinned sink into a Cloud Logging bucket kept 365 days (Google-managed AES-256 at rest); locking the bucket is an operator step after a month.
+
+**Consequences.** Old phone builds show the server's message for a two-step sign-in until the phone half ships (then the minimum build rises). Support load from lost factors is covered by recovery codes and the audited operator reset (`two-factor-reset`, plus `rotate --lock` for a suspected takeover).

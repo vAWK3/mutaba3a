@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
 import { TokenBox } from '../israel/tax-authority/token-box.js';
-import { ADMIN, ORIGIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
+import { ADMIN, ORIGIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /**
  * MUT-571/572 (ADR-264): connecting a profile to the Tax Authority, and the allocation number on an issued invoice. The
@@ -10,8 +10,8 @@ import { ADMIN, ORIGIN, accountantHarness, businessOf, idem, json, person, read,
 const box = new TokenBox('route-test-secret-with-at-least-32-characters');
 const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '777777715', dealerType: 'COMPANY', city: 'Nazareth' };
 
-function harness(client = new FakeTaxAuthority(), over: Parameters<typeof accountantHarness>[0] = {}) {
-  const h = accountantHarness({ taxAuthority: { client, box, stateSecret: 'state-secret-for-tests', accountingSoftwareNumber: 987654321 }, ...over });
+function harness(client = new FakeTaxAuthority(), over: Parameters<typeof issuingHarness>[0] = {}) {
+  const h = issuingHarness({ taxAuthority: { client, box, stateSecret: 'state-secret-for-tests', accountingSoftwareNumber: 987654321 }, ...over });
   return { h, client };
 }
 
@@ -50,7 +50,7 @@ const invoice = (customerId: string, price: string, over: Record<string, unknown
 
 describe('Tax Authority connection (MUT-571)', () => {
   it('is 404 on a server without it configured', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect((await h.app.request('/v1/issuing/tax-authority', { headers: w.on })).status).toBe(404);
   });

@@ -531,6 +531,19 @@ variable "issuing_tsa_url" {
   }
 }
 
+
+variable "auth_log_bucket_locked" {
+  description = "MUT-710: lock the 12-month authentication-log bucket (auth_log.tf). Irreversible: the retention can't be shortened and the bucket can't be deleted. Turn on after the first month's records are checked (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "two_factor_issuing_gate_enabled" {
+  description = "MUT-710 (ADR-274 D10): sets TWO_FACTOR_ISSUING_GATE_ENABLED=true, so PUT /v1/issuer, issuing, the Tax Authority connect and allocation decisions need two-step sign-in on and a session that passed it (403 TWO_FACTOR_SETUP_REQUIRED). false (default) = issuing as before MUT-710. Turn on only after the portal and phone screens that turn two-step sign-in on are live, and after everyone already issuing has turned it on (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
 variable "uniform_file_registration_number" {
   description = "MUT-569 (ADR-272): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
   type        = string

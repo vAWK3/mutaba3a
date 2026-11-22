@@ -47,6 +47,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/accountant-invite#sample-token`, expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618
   'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://portal.example.test/' },
   // MUT-535: two profiles, two currencies, the yearly line.
   'monthly-summary': {
     month: { year: 2026, month: 11 },

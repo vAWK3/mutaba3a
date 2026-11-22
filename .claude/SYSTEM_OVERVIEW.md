@@ -660,6 +660,13 @@ mini-crm/
 - **At setup (MUT-619, ADR-257):** right after `/setup` sets the password and signs in, a device that can make a passkey is offered one before Home ("Create a passkey" / Not now). Same `passkeyPrompt` rules (`passkeyOfferable`): Not now spends one of the three offers, so Home doesn't ask again for 30 days. The password stays required (ADR-159 d9). `/accountant-invite` doesn't offer it yet.
 - Accountant pages (MUT-562, ADR-250): `/client-books` (the desk of profiles shared with an accountant, outside any profile, with a corner beside Reports) and `/client-books/$profileId` (one client read-only by whole months, totals per currency, receipts); the public `/accountant-invite` (accept, or sign up then sign in) and `/share` (a share link opened with a PIN). Public pages count cookieless only.
 
+## MUT-710 — Two-step sign-in and the 12-month authentication log (2026-11-22, ADR-274, server half)
+
+- A person can turn on a second step: an authenticator app (TOTP) or an emailed code, with 10 recovery codes (`/v1/me/two-factor…`). With it on, every first step (password, passkey, emailed sign-in code, Malafat) and every setup link answers `TWO_FACTOR_REQUIRED` with a challenge; `POST /v1/sessions/two-factor` / `/v1/device-sessions/two-factor` finish it. `auth/sign-in.ts` `beginOrIssue` / `finishTwoFactor` are the only session minters; `auth/two-factor-flow.ts` holds challenges, codes and the atomic counting.
+- Issuing and the Tax Authority need it (`requireTwoFactor`, 403 `TWO_FACTOR_SETUP_REQUIRED`); disconnecting doesn't.
+- Every authentication event is an `auth_event` line (`observability/auth-log.ts`) kept 365 days in the `auth-events` Cloud Logging bucket (`auth_log.tf`).
+- Portal and phone screens follow `.claude/designs/mut-710-wireframes.html` (approved 2026-11-22); not built yet.
+
 ## MUT-660 — Documents due per client (2026-11-22, ADR-270)
 
 - **What is due** is derived on each read from the client's documents preference (else the profile default, On payment) and what is issued or attached: `server/src/issuing/documents-due.ts`. Served by GET /v1/documents-due (grouped by client) and /count; Issue all is POST /v1/documents-due/issue (one client, ≤25, through the single issue).
