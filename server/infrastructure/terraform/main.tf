@@ -123,6 +123,8 @@ resource "google_project_service" "apis" {
     local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
     # MUT-511: the budget (budget.tf) takes its quota from this project.
     var.billing_account_id == null ? [] : ["billingbudgets.googleapis.com"],
+    # MUT-641: the issued-document signing key (signing.tf).
+    var.issuing_signing_key ? ["cloudkms.googleapis.com"] : [],
   ))
   project            = var.project_id
   service            = each.key
@@ -678,6 +680,16 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-641 (ADR-265): issued-document PDFs are signed with the KMS key once its certificate is set (signing.tf).
+        # Without it ISSUING_SIGNER stays unset, which the API reads as off in production (the PDF routes answer 503).
+        dynamic "env" {
+          for_each = local.issuing_signing_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-361: the lapse gate is on unless billing_gate_enabled = false (the kill switch).
         dynamic "env" {
           for_each = var.billing_gate_enabled ? {} : { BILLING_GATE = "false" }
@@ -896,6 +908,12 @@ resource "google_cloud_run_v2_service" "api" {
       # MUT-359: config.ts refuses these again at boot; here they fail the plan, before a release.
       condition     = var.mailer != "resend" || (local.domain != null && var.mail_reply_to != null && var.mail_daily_cap != null)
       error_message = "mailer = \"resend\" needs a domain in config/hosts.json (the sender is no-reply@<domain>), mail_reply_to and mail_daily_cap (MUT-359, DEPLOYMENT.md §6f)."
+    }
+
+    precondition {
+      # MUT-641: the certificate is for the KMS key; without the key there is nothing to sign with.
+      condition     = var.issuing_signing_cert_chain == null || var.issuing_signing_key
+      error_message = "issuing_signing_cert_chain needs issuing_signing_key = true: the certificate is for that KMS key (signing.tf)."
     }
 
     precondition {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { issueOffers } from '../IncomeCaptureDrawer';
+import { issueOffers } from '../issueOffers';
 import type { IncomeResponse } from '../../api/client';
 
 const saved = (kind: 'owed' | 'received', customerId: string | null) => ({ id: 'e1', kind, customerId, amount: '1180.00', currency: 'ILS', title: 'Design work' }) as unknown as IncomeResponse;

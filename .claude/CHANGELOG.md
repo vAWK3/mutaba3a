@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.124.0-mut659)
+## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed
 - Server receipt reading is for every uploader while `SERVER_OCR` is on: no per-person grant (`reader.ts` `decide` and the claim-time check; a receipt whose uploader left is still skipped, code `uploader_gone`).
@@ -36,12 +36,45 @@
 - `receipts:reread`: no grant filter (`noGrant` → `noUploader`); `--buyer-contacts` looks at every profile; new `--backlog --apply` asks once for every never-read To-review receipt (`markBacklogPending({})`).
 
 ### Removed
-- `receipt_reading` from `FEATURES`, the operator console's words for it, and the grant-time backlog hook. Migration `20261122200000_mut659_receipt_reading_for_everyone` revokes its open grants.
+- `receipt_reading` from `FEATURES`, the operator console's words for it, and the grant-time backlog hook. Migration `20261122220000_mut659_receipt_reading_for_everyone` revokes its open grants.
 
 ### Technical
 - Operator tests and the `portal-selfservice` operator specs use `accountant_access` as their named-feature example; the receipts specs no longer grant reading.
 
 ---
+## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.125.0-mut647)
+
+### Added
+- `POST /v1/issuing/external-invoices/read` (number, date, total; nothing stored), `POST /v1/issuing/external-invoices` (raw PDF/JPEG/PNG body, the confirmed number and date in the query), `GET /v1/issuing/external-invoices?entryKind&entryIds`, `GET …/{id}/file`, `DELETE …/{id}`.
+- Issuing from an entry with an attached invoice is refused: 409 `EXTERNAL_INVOICE_ATTACHED`.
+- Portal: a Document column on Owed and Paid (Attach, or drop a file on the row; "Issued elsewhere" opens it), the attach drawer (read → confirm → attach; an amount mismatch is said, never blocking).
+- `HostedTable` takes `onRowFileDrop` / `canDropFile`.
+
+### Technical
+- Table `external_invoices` (migration `20261122210000_mut647_external_invoices`), one live per entry; the file is the entry's INVOICE attachment, written by the issuing store. `AttachmentStorage.write`.
+- QA: `portal.invoicing.attach-external`.
+
+## [Unreleased] - 2026-11-22 — Issued-document PDFs leave signed: PAdES with a time-stamp, the original kept once (MUT-641, ADR-265, API 1.124.0-mut641)
+
+### Added
+- Every issued-document PDF that leaves is digitally signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp): `GET` and `POST /v1/issued-documents/{id}/pdf`. The draft preview stays unsigned.
+- The signed original is kept once (`issued_document_originals`, INSERT-only) and every later request for it gets the same bytes.
+- Config `ISSUING_SIGNER` (dev | kms | off), `ISSUING_SIGNING_KMS_KEY`, `ISSUING_SIGNING_CERT_CHAIN`, `ISSUING_TSA_URL`, `ISSUING_SIGNING_TIMEOUT_MS`. Dev and QA sign with a throwaway in-process authority; production signs only with a Cloud KMS key and a certifying authority's certificate, otherwise refuses.
+- Errors 503 `SIGNING_NOT_CONFIGURED` and 503 `SIGNING_UNAVAILABLE`: never an unsigned file.
+- Terraform `signing.tf`: `issuing_signing_key` (HSM KMS key, the API may only sign), `issuing_signing_cert_chain` + `issuing_tsa_url` turn signing on; output `issuing_signing_key_version`; `tests/issuing_signing.tftest.hcl`.
+- Pre-landing review fixes:
+  - An outage never spends the original, and the original goes out on exactly one copy (kept with its copyIndex).
+  - Certificate validity is checked at signing time, and the kms chain at boot, with a boot log and an expiry warning.
+  - The time-stamp token is verified, with a clock-skew bound and a streaming size cap; the default TSA is Sectigo over https, and production refuses plain http.
+  - One retry each for KMS and the time-stamp authority.
+  - SIGNING_NOT_CONFIGURED carries `details.reason` for setup errors.
+  - A 10-minute view-copy cache.
+  - Terraform `prevent_destroy` and a precondition in place of the cross-variable validation.
+- `npm run signing:interim-cert -- --csr`: the certificate request (PKCS #10) for the certifying authority, signed by the KMS key, with the company number as the subject's serialNumber.
+- Interim v1: `npm run signing:interim-cert` has the production KMS key certify itself in Barmajiyat's name, so production can sign before a certifying authority does; the authority later certifies the same key. `ISSUING_TSA_URL` accepts the public http time-stamp services.
+
+### Technical
+- `server/src/issuing/pdf/sign/` (cms, pdf, timestamp, keys, verify). Dependencies `pkijs` 3.4.3, `asn1js` 3.1.0; `pdf-lib` moved to runtime. Migration `20261122200000_mut641_issued_document_originals` (additive). Purge catalog: originals kept with the documents (MUT-644). The MUT-640 gate also runs on the signed files.
 
 ## [Unreleased] - 2026-11-22 — Offer to issue after saving income (MUT-648, ADR-268, API 1.123.0-mut648)
 

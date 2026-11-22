@@ -4667,6 +4667,20 @@ Not run: `test:db` (no store change: the report only reads through existing repo
 
 No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
 
+## MUT-641 — signed issued-document PDFs (2026-11-22, ADR-265)
+
+| Layer | File | Covers |
+|---|---|---|
+| Signer | `server/src/issuing/pdf/sign/__tests__/sign.test.ts` | AC1 intact CAdES-detached signature + time-stamp; AC2 one byte changed anywhere (content, dictionary, CMS, signature, end) fails; bytes appended after signing; AC5 key and TSA outages reject; key/certificate mismatch refused; panel language; KMS request carries only the digest; RFC 3161 client refuses HTTP errors, refusals, another nonce or digest; config → signer |
+| Render gate | `server/src/issuing/pdf/__tests__/gate.test.ts` | AC6 the MUT-640 gate on signed output, 3 styles × he/ar/en; signed files in `server/.pdf-e2e/*-signed.pdf` |
+| Routes | `server/src/__tests__/routes-issuing-pdf.test.ts` | AC4 POST, GET and the accountant's GET signed, preview unsigned; the original replayed byte-for-byte; no signer → 503, no copy counted; AC5 outage → 503 JSON, retry with the same key is the signed original |
+| Interim certificate | `sign.test.ts` | a stand-in KMS (public key + digest-only signing) self-issues the certificate in the business name and it signs PDFs; EC P-256 path; unsupported algorithms and a KMS signing with another key refused; the CSR's subject (C, O, serialNumber, CN), extension request and KMS signature verify. Live check 2026-11-22: `openssl req -verify` OK on an RSA 3072 request. Live check 2026-11-22: DigiCert, Sectigo and FreeTSA tokens verify (and again under the stricter token check; Sectigo and FreeTSA over https) |
+| Review fixes | `sign.test.ts`, `routes-issuing-pdf.test.ts`, `tests/issuing_signing*.tftest.hcl` (Terraform 1.9.8 as CI, and 1.15) | the outage then a fresh-key retry is the original (and the failure is logged), and the failed request's own retry is then a copy; KMS 403 is KEY_UNAVAILABLE without a retry; a chunked reply past 256 KB is refused while it streams; setup errors give 503 SIGNING_NOT_CONFIGURED with a reason; the view copy is signed once per 10 minutes; a certificate outside its validity, a chain CA-first or out of order, and an unreadable chain are refused; a time-stamp token with a broken signature, from a non-time-stamping certificate, or 60 minutes off is refused; KMS and the TSA each retry once; padding bytes are flagged; the boot status (info, warn within 30 days, error past the end); Terraform keeps the key (prevent_destroy) and fails a chain without a key |
+| Config | `server/src/__tests__/config.test.ts` | AC3 dev refused in production; kms needs key, chain, TSA; a private key in the chain is refused |
+| Store | `store-contract-issuing.ts`, `store-prisma-issuing.test.ts` | the first original kept wins; another profile sees none; the trigger refuses UPDATE/DELETE/TRUNCATE |
+
+Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated files (ac-evidence). No release-qa flow: no screen yet (MUT-570/573).
+
 ## MUT-640 — issued-document PDF (2026-11-22, ADR-261)
 
 | Layer | File | Covers |

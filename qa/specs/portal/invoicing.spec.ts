@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi } from '../../support/portalApi';
+import { FakeApi, payment, receivable } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -11,6 +11,7 @@ import { openYou } from '../../support/you';
  * own; issuing waits for the business details and the numbering answer.
  */
 const LOGO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../fixtures/invoicing/logo.png');
+const EXTERNAL_PDF = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../fixtures/invoicing/external-invoice.pdf');
 const setupPath = `/p/${OFFICE_A}/you/invoicing`;
 const C1 = customer(0).id;
 const iso = (text: string) => `⁨${text}⁩`;
@@ -230,6 +231,95 @@ test('issuing waits for the setup; a client page issues for that client', { tag:
     const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
     await off.open(page, `/p/${OFFICE_A}/documents`);
     await expect(page.getByRole('link', { name: 'Issued' })).toHaveCount(0);
+  });
+});
+
+test('attach an invoice issued elsewhere to an Owed and, by dropping it on its row, to a Received (MUT-647)', { tag: '@portal.invoicing.attach-external' }, async ({ page, step }) => {
+  const owed = receivable(1, { customerId: C1, gross: '1500.00' });
+  const ours = receivable(2, { customerId: C1, gross: '800.00', origin: 'ISSUED_DOCUMENT' });
+  const paid = payment(1, { customerId: C1, amount: '590.00', mine: true });
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', receivables: [owed, ours], payments: [paid] });
+  const drawer = page.getByRole('dialog', { name: 'Attach an invoice issued elsewhere' });
+  const attached = page.getByRole('dialog', { name: 'Invoice issued elsewhere' });
+
+  await step('Open Owed on Nour Studio: an entry offers Attach in its Document column; one MTB3A issued offers nothing', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await expect(page.getByRole('columnheader', { name: 'Document' })).toBeVisible();
+    await expect(page.getByTestId(`external-attach-${owed.id}`)).toBeVisible();
+    await expect(page.getByTestId(`issue-from-${owed.id}`)).toBeVisible();
+    await expect(page.getByTestId(`external-attach-${ours.id}`)).toHaveCount(0);
+    await page.getByTestId(`external-attach-${owed.id}`).click();
+    await expect(drawer.getByTestId('external-entry')).toContainText('Client 1');
+  });
+
+  await step('AC2 Choose the PDF: the reader fills the number, date and total; the person corrects the number', async () => {
+    await page.getByTestId('external-file').setInputFiles(EXTERNAL_PDF);
+    expect(api.last('POST', /^\/v1\/issuing\/external-invoices\/read$/)?.headers['content-type']).toBe('application/pdf');
+    await expect(drawer.getByLabel('Invoice number')).toHaveValue('3381');
+    await expect(drawer.getByLabel('Invoice date')).toHaveValue('2026-10-12');
+    await expect(drawer.getByLabel('Total on the invoice')).toHaveValue('1500.00');
+    await expect(drawer.getByTestId('external-amount-note')).toHaveText('The total matches this entry.');
+    await expect(drawer).toContainText('It does not number this invoice or include it in the uniform file.');
+    await drawer.getByLabel('Invoice number').fill('3382');
+  });
+
+  await step('A total that differs from the entry is said, never blocking', async () => {
+    await drawer.getByLabel('Total on the invoice').fill('1450');
+    await expect(drawer.getByTestId('external-amount-note')).toContainText('The total differs from this entry');
+    await expect(page.getByTestId('external-attach')).toBeEnabled();
+  });
+
+  await step('AC1 Attach: the entry shows "Issued elsewhere"; it opens with its number and date, and its file opens', async () => {
+    await page.getByTestId('external-attach').click();
+    const post = api.last('POST', /^\/v1\/issuing\/external-invoices$/);
+    expect(Object.fromEntries(post!.query)).toEqual({ entryKind: 'OWED', entryId: owed.id, number: '3382', documentDate: '2026-10-12', filename: 'external-invoice.pdf' });
+    expect(post!.raw?.subarray(0, 5).toString()).toBe('%PDF-');
+    await expect(drawer).toHaveCount(0);
+    const badge = page.getByTestId(`external-badge-${owed.id}`);
+    await expect(badge).toHaveText('Issued elsewhere');
+    await badge.click();
+    await expect(attached.getByRole('heading', { name: 'Invoice 3382' })).toBeVisible();
+    await expect(attached).toContainText('2026-10-12');
+    const popup = page.context().waitForEvent('page');
+    await attached.getByTestId('external-open').click();
+    // The signed URL opens in a new tab (noopener: it starts at about:blank), and the bucket serves the file inline.
+    await expect.poll(() => api.storage.some((r) => r.url.includes('/external/') && r.url.includes('disposition=inline'))).toBe(true);
+    await (await popup).close();
+  });
+
+  await step('AC3 While it is attached, MTB3A issues no document for this entry: the drawer says so and the row no longer offers Issue a tax invoice', async () => {
+    await expect(attached).toContainText('While this invoice is attached, MTB3A does not issue a document for this entry.');
+    await attached.getByRole('button', { name: 'Close' }).first().click();
+    await expect(page.getByTestId(`issue-from-${owed.id}`)).toHaveCount(0);
+  });
+
+  await step('B Drop a PDF on a Received row on Paid: it is read and attached the same way', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    const row = page.locator(`tr[data-drop-row="${paid.id}"]`);
+    await expect(row).toBeVisible();
+    const transfer = await page.evaluateHandle(() => {
+      const data = new DataTransfer();
+      data.items.add(new File(['%PDF-1.4 dropped'], 'dropped.pdf', { type: 'application/pdf' }));
+      return data;
+    });
+    await row.dispatchEvent('dragover', { dataTransfer: transfer });
+    await row.dispatchEvent('drop', { dataTransfer: transfer });
+    await expect(drawer.getByLabel('Invoice number')).toHaveValue('3381');
+    await expect(drawer.getByTestId('external-amount-note')).toContainText('The total differs from this entry');
+    await page.getByTestId('external-attach').click();
+    expect(api.last('POST', /^\/v1\/issuing\/external-invoices$/)?.query.get('entryKind')).toBe('RECEIVED');
+    await expect(page.getByTestId(`external-badge-${paid.id}`)).toBeVisible();
+  });
+
+  await step('Remove it: the Received offers Attach again; in Arabic the Owed reads "صادرة من جهة أخرى"', async () => {
+    await page.getByTestId(`external-badge-${paid.id}`).click();
+    await attached.getByTestId('external-remove').click();
+    await expect(page.getByTestId(`external-attach-${paid.id}`)).toBeVisible();
+    expect(api.last('DELETE', /^\/v1\/issuing\/external-invoices\//)).toBeTruthy();
+    await api.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByTestId(`external-badge-${owed.id}`)).toHaveText('صادرة من جهة أخرى');
+    await expectNoHorizontalOverflow(page);
   });
 });
 

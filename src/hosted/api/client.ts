@@ -106,6 +106,9 @@ export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
 export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
 export type IssuedDocType = Schemas['IssuedDocType'];
 export type IssuingStyles = Schemas['IssuingStyles'];
+export type ExternalInvoice = Schemas['ExternalInvoice'];
+export type ExternalInvoiceReading = Schemas['ExternalInvoiceReading'];
+export type ExternalEntryKind = Schemas['ExternalEntryKind'];
 export type TaxAuthorityStatus = Schemas['TaxAuthorityStatus'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
@@ -791,6 +794,15 @@ export const api = {
   /** The Tax Authority's sign-in address for this profile (state signed, 10 minutes). */
   taxAuthorityConnect: (profileId: string) => request<Schemas['TaxAuthorityConnect']>('POST', '/v1/issuing/tax-authority/connect', { profileId }),
   taxAuthorityDisconnect: (profileId: string) => request<void>('DELETE', '/v1/issuing/tax-authority', { profileId }),
+  /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received (404 where issuing is off). */
+  externalInvoices: (profileId: string, entryKind: ExternalEntryKind, entryIds: readonly string[], signal?: AbortSignal) =>
+    request<Schemas['ExternalInvoiceList']>('GET', '/v1/issuing/external-invoices', { profileId, query: { entryKind, entryIds: entryIds.join(',') }, signal }),
+  /** Reads a file (number, date, total) without storing it. */
+  readExternalInvoice: (profileId: string, file: Blob) => request<ExternalInvoiceReading>('POST', '/v1/issuing/external-invoices/read', { profileId, file }),
+  attachExternalInvoice: (profileId: string, query: { entryKind: ExternalEntryKind; entryId: string; number: string; documentDate: string; filename: string }, file: Blob) =>
+    request<ExternalInvoice>('POST', '/v1/issuing/external-invoices', { profileId, query, file }),
+  externalInvoiceFile: (profileId: string, id: string) => request<Schemas['ExternalInvoiceFile']>('GET', `/v1/issuing/external-invoices/${encodeURIComponent(id)}/file`, { profileId }),
+  removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
   issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; cursor?: string | null } = {}, signal?: AbortSignal) =>
     request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),

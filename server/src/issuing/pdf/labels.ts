@@ -42,6 +42,8 @@ export interface PdfLabels {
   notes: string;
   footer: string;
   page: (n: number, of: number) => string;
+  /** MUT-641: the signature panel's reason: the software signs on behalf of the business named on the document. */
+  signedOnBehalf: (business: string, id: string | null) => string;
 }
 
 export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
@@ -82,6 +84,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     notes: 'הערות',
     footer: 'הופק באמצעות MTB3A',
     page: (n, of) => `עמוד ${n} מתוך ${of}`,
+    signedOnBehalf: (business, id) => `נחתם דיגיטלית על ידי MTB3A בשם ${business}${id ? ` (${id})` : ''}`,
   },
   ar: {
     no: 'رقم',
@@ -120,6 +123,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     notes: 'ملاحظات',
     footer: 'صدر عبر MTB3A',
     page: (n, of) => `صفحة ${n} من ${of}`,
+    signedOnBehalf: (business, id) => `وُقّع رقميًا من MTB3A نيابةً عن ${business}${id ? ` (${id})` : ''}`,
   },
   en: {
     no: 'No.',
@@ -158,6 +162,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     notes: 'Notes',
     footer: 'Issued with MTB3A',
     page: (n, of) => `Page ${n} of ${of}`,
+    signedOnBehalf: (business, id) => `Digitally signed by MTB3A on behalf of ${business}${id ? ` (${id})` : ''}`,
   },
 };
 

@@ -1728,5 +1728,20 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
   .hp-issue-line-numbers, .hp-issue-dates { grid-template-columns: minmax(0, 1fr); }
 }
 
+/* MUT-647: an invoice issued elsewhere, attached to an Owed or a Received (round 3, A+B). */
+.hp-external-drop { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6) var(--space-4); border: 1.5px dashed var(--border); border-radius: var(--radius-md); text-align: center; }
+.hp-external-drop p { margin: 0; }
+.hp-external-drop[data-dragging] { border-color: var(--accent); background: var(--accent-subtle); }
+.hp-external-reading { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6) 0; text-align: center; }
+.hp-external-card { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-external-card h3, .hp-external-card p { margin: 0; }
+.hp-external-badge { font-size: var(--text-label); color: var(--accent-text); }
+.hp-external-mismatch { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--warning-subtle); font-size: var(--text-label); }
+.hp-external-chip { display: inline-flex; gap: var(--space-1); align-items: center; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: var(--text-label); white-space: nowrap; cursor: pointer; }
+.hp-external-glyph { flex: none; }
+:is(.data-table, .table) tr.hp-drop-target > td { background: var(--accent-subtle); }
+
 /* MUT-648: the save toast's second document choice, quieter than the first. */
 .hp-toast-action--quiet { margin-inline-start: 0; color: var(--muted); }
+/* MUT-647 + MUT-648: Issue a tax invoice and Attach share the Owed row's Document cell. */
+.hp-row-actions { display: inline-flex; gap: var(--space-2); align-items: center; }

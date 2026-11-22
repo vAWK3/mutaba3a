@@ -46,6 +46,8 @@ export const PURGE_PROFILE_TABLES = [
   'external_identities',
   // MUT-646: where the invoicing setup stood (the details and logos it points at are kept, below).
   'issuing_setup',
+  // MUT-647: invoices issued elsewhere (their files are the profile's attachments, deleted with it).
+  'external_invoices',
   // MUT-571: the profile's Tax Authority tokens go with it (nothing issued depends on them).
   'tax_authority_connections',
 ] as const;
@@ -62,6 +64,7 @@ export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
+  issued_document_originals: 'kept 7 years after closing: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
 };
 
 /**

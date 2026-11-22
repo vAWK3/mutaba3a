@@ -388,7 +388,16 @@ export const STORE_ACCESS: StoreAccess = {
     getById: { read: 'issuing' },
     list: { read: 'issuing' },
     recordCopy: { write: 'issuing' },
+    // MUT-641: the signed original, kept once.
+    getOriginalPdf: { read: 'issuing' },
+    originalCopyIndex: { read: 'issuing' },
+    keepOriginalPdf: { write: 'issuing' },
     gaps: { read: 'issuing' },
+    // MUT-647: invoices issued elsewhere.
+    attachExternal: { write: 'issuing' },
+    liveExternal: { read: 'issuing' },
+    getExternal: { read: 'issuing' },
+    removeExternal: { write: 'issuing' },
   },
   conversions: {
     create: { write: 'conversions' },

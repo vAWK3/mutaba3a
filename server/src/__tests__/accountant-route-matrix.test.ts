@@ -40,6 +40,9 @@ const ALLOWED_GETS = [
   // MUT-646: the setup and the logo.
   'GET /v1/issuer/logo',
   'GET /v1/issuing/setup',
+  // MUT-647: invoices issued elsewhere, and their files.
+  'GET /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices/{externalInvoiceId}/file',
   // MUT-571: whether the profile is connected to the Tax Authority.
   'GET /v1/issuing/tax-authority',
   'GET /v1/issuing/styles',
@@ -153,6 +156,15 @@ beforeAll(async () => {
   await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, owner.on(profileId), 'PUT'));
   await h.store.issuing.addLogo(profileId, { contentType: 'image/png', bytes: new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')), sha256: '0'.repeat(64) }, h.now());
   ids.documentId = (await seed('/v1/issued-documents', { docType: 'TAX_INVOICE', documentDate: '2026-11-01', currency: 'ILS', language: 'en', customerId: customer.id, lines: [{ description: 'Logo', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] })).id;
+  // MUT-647: an invoice issued elsewhere on the Owed, so its list and its file read a real one.
+  const externalKey = `attachments/${profileId}/00000000-0000-4000-8000-0000000000e7`;
+  storage.put(externalKey, { sizeBytes: 64, contentType: 'application/pdf' });
+  const external = await h.store.issuing.attachExternal(
+    { organizationId: profileId, entryKind: 'OWED', entryId: ids.receivableId!, attachmentId: '00000000-0000-4000-8000-0000000000e7', number: '3381', documentDate: '2026-11-01', createdByUserId: owner.userId, createdAt: h.now() },
+    { filename: 'invoice-3381.pdf', mimeType: 'application/pdf', sizeBytes: 64, storageKey: externalKey, customerId: customer.id, paymentId: null, requestId: null },
+  );
+  ids.externalInvoiceId = external.record.id;
+  QUERIES['GET /v1/issuing/external-invoices'] = `?entryKind=OWED&entryIds=${ids.receivableId}`;
   accountant = await shared(h, owner, profileId);
   await expenseOn(h, accountant, accountant.personalId, 'My own lunch');
 

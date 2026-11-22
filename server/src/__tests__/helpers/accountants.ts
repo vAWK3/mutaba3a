@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { createApp, type AppDependencies } from '../../app.js';
 import { createMailer } from '../../email/mailer.js';
+import { devDocumentSigner } from '../../issuing/pdf/sign/index.js';
 import { MemoryMailTransport } from '../../email/transports/memory.js';
 import { CURRENT_TERMS } from '../../legal.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
@@ -51,6 +52,8 @@ export function accountantHarness(overrides: Partial<AppDependencies> = {}) {
     sessions: { pepper: 'session-pepper-with-at-least-32-chars!!', idleMinutes: 60 * 24 * 400, absoluteHours: 24 * 400, secureCookie: false, trustedProxyHops: 1, deviceIdleDays: 400, deviceAbsoluteDays: 400, portalOrigin: ORIGIN },
     jobToken: JOB['x-job-token'],
     accountantAccess: true,
+    // MUT-641: the development authority signs, as on the dev server and in QA.
+    documentSigner: devDocumentSigner(),
     ...overrides,
   });
   return { app, store, transport, now: () => now, setNow: (at: Date) => void (now = at) };

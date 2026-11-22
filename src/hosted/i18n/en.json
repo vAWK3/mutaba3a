@@ -2995,7 +2995,8 @@
         "DISCOUNT_INVALID": "A discount can't be more than the line's amount.",
         "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
         "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only.",
-        "ENTRY_MISMATCH": "The document must keep the entry's client and amount; change the entry first if it was recorded wrong."
+        "ENTRY_MISMATCH": "The document must keep the entry's client and amount; change the entry first if it was recorded wrong.",
+        "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here."
       },
       "backToList": "Issued documents",
       "issuedTitle": "{document} was issued",
@@ -3019,6 +3020,41 @@
         "RECEIPT": "Issue a receipt",
         "column": "Document"
       }
+    },
+    "external": {
+      "title": "Attach an invoice issued elsewhere",
+      "attachedTitle": "Invoice issued elsewhere",
+      "owed": "Owed",
+      "received": "Received",
+      "drop": "Drop the invoice here",
+      "dropHint": "A PDF, JPEG or PNG, up to 10 MB. MTB3A reads its number, date and total.",
+      "choose": "Choose a file",
+      "wrongType": "Choose a PDF, JPEG or PNG file.",
+      "tooLarge": "The file is larger than 10 MB.",
+      "reading": "Reading the invoice…",
+      "number": "Invoice number",
+      "date": "Invoice date",
+      "amount": "Total on the invoice",
+      "numberRequired": "Enter the invoice number.",
+      "dateInvalid": "Enter the date as YYYY-MM-DD.",
+      "amountMatches": "The total matches this entry.",
+      "amountDiffers": "The total differs from this entry's {amount}. You can still attach it.",
+      "staysExternal": "MTB3A keeps the file with this entry. It does not number this invoice or include it in the uniform file.",
+      "attach": "Attach",
+      "exists": "This entry already has an invoice issued elsewhere.",
+      "issuedHere": "MTB3A issued this entry's document; nothing to attach.",
+      "failed": "The invoice could not be attached. Try again.",
+      "badge": "Issued elsewhere",
+      "invoiceNumber": "Invoice {number}",
+      "open": "Open the file",
+      "openFailed": "The file could not be opened. Try again.",
+      "remove": "Remove",
+      "noIssueWhileAttached": "While this invoice is attached, MTB3A does not issue a document for this entry.",
+      "column": "Document",
+      "attachRow": "Attach an invoice for {client}",
+      "attachShort": "Attach",
+      "showRow": "Invoice {number}, issued elsewhere, for {client}",
+      "removeFailed": "The invoice could not be removed. Try again."
     }
   }
 }

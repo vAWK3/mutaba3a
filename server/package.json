@@ -1,8 +1,8 @@
 {
   "name": "@mutaba3a/api",
   "private": true,
-  "version": "0.18.0",
-  "description": "Mutaba3a hosted financial API \u2014 organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
+  "version": "0.19.0",
+  "description": "Mutaba3a hosted financial API — organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -25,6 +25,7 @@
     "db:psql": "scripts/db.sh psql",
     "db:proxy": "scripts/db.sh proxy",
     "db:run": "scripts/db.sh run --",
+    "signing:interim-cert": "tsx src/scripts/signing-interim-cert.ts",
     "openapi:generate": "tsx src/scripts/export-openapi.ts",
     "openapi:check": "tsx src/scripts/export-openapi.ts --check",
     "provision": "tsx src/scripts/provision.ts",
@@ -91,11 +92,14 @@
     "@prisma/client": "6.19.3",
     "@sentry/node-core": "10.76.2",
     "@simplewebauthn/server": "13.3.3",
+    "asn1js": "3.1.0",
     "fflate": "0.8.3",
     "google-auth-library": "11.2.0",
     "hono": "4.13.13",
     "jose": "6.2.13",
+    "pdf-lib": "1.17.1",
     "pino": "10.4.0",
+    "pkijs": "3.4.3",
     "stripe": "23.0.0",
     "yaml": "2.9.1",
     "zod": "4.6.5"
@@ -107,7 +111,6 @@
     "exceljs": "^4.4.0",
     "globals": "^16.5.0",
     "patch-package": "8.0.0",
-    "pdf-lib": "1.17.1",
     "pdfjs-dist": "5.4.624",
     "prisma": "6.19.3",
     "tsx": "4.23.15",
