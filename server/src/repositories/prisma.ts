@@ -851,6 +851,9 @@ export class PrismaLedgerStore implements LedgerStore {
         select: TAX_CONNECTION_SELECT,
       }),
     deleteTaxConnection: async (organizationId) => (await this.prisma.taxAuthorityConnection.deleteMany({ where: { organizationId } })).count > 0,
+    // A small table (one row per connected profile), read once a day: no index on the consent's end.
+    taxConnectionsEndingBetween: (from, to) =>
+      this.prisma.taxAuthorityConnection.findMany({ where: { refreshExpiresAt: { gte: from, lt: to } }, orderBy: { refreshExpiresAt: 'asc' }, select: TAX_CONNECTION_SELECT }),
     withTaxConnectionLock: (organizationId, fn) =>
       // The row is locked for the refresh's round trip, so a second caller waits and then sees the new tokens.
       this.prisma.$transaction(

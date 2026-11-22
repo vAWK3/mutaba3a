@@ -5035,6 +5035,34 @@ export const IssuerDetailsSchema = z
   .openapi('IssuerDetails');
 
 /** MUT-571: a profile's connection to the Tax Authority. */
+/** MUT-571 AC3: one run of the Tax Authority re-consent reminders (counts only for the job). */
+export const TaxAuthorityReminderSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'Connections whose consent ends within 10 days or ended within 7' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage of this consent was already mailed' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: a read or the mailer failed, mail off, capped or refused' }),
+    skipped: z.number().int().openapi({ description: 'Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed' }),
+  })
+  .openapi('TaxAuthorityReminderSummary');
+
+export const TaxAuthorityReminderRunSchema = z
+  .object({
+    summary: TaxAuthorityReminderSummarySchema,
+    rows: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        stage: z.enum(['soon', 'ended']).nullable(),
+        action: z.enum(['send', 'skip']),
+        skip: z.enum(['other-environment', 'no-refresh', 'profile-gone', 'owner-gone', 'owner-inactive', 'suppressed']).nullable(),
+        outcome: z.string().nullable(),
+      }),
+    ),
+  })
+  .openapi('TaxAuthorityReminderRun');
+
 export const TaxAuthorityStatusSchema = z
   .object({
     state: z.enum(['none', 'connected', 'expired']),

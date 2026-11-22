@@ -4698,6 +4698,8 @@ export interface IssuingRepository {
   /** Replaces the connection (a new consent). */
   putTaxConnection(record: Omit<TaxAuthorityConnectionRecord, 'version'>): Promise<TaxAuthorityConnectionRecord>;
   deleteTaxConnection(organizationId: string): Promise<boolean>;
+  /** MUT-571 AC3: every connection (any profile) whose consent ends in [from, to), soonest first: the re-consent reminder's job. */
+  taxConnectionsEndingBetween(from: Date, to: Date): Promise<TaxAuthorityConnectionRecord[]>;
   /**
    * Runs `fn` with the connection locked (a single-use refresh token is never sent twice): `fn` sees the latest row and
    * returns the tokens to store, or null to leave it. Concurrent callers wait their turn and see the stored result.

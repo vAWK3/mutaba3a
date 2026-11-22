@@ -161,6 +161,12 @@ variable "monthly_summary_mail_enabled" {
   default     = false
 }
 
+variable "tax_authority_reminders_enabled" {
+  description = "MUT-571 AC3: creates the daily Tax Authority re-consent reminder job (09:00 Jerusalem): the owner of each connected profile is mailed 10 days before the 90-day consent ends and when it has ended. Off (default) until the Tax Authority connection (TAX_AUTHORITY_ENV) is configured on this service and the operator has read a dry run (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
 variable "monthly_summary_daily_sends" {
   description = "MUT-535 (D12): monthly summary mails per run (MONTHLY_SUMMARY_DAILY_SENDS). Every other mail shares mail_daily_cap with it, so keep it well under the cap: 40 of 90 leaves room for signups, trial and card mails. Seven runs a month carry 7x this many people. 40 (the API's default) leaves the variable unset."
   type        = number

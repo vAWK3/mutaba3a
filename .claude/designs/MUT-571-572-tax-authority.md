@@ -47,6 +47,6 @@ MUT-572:
 
 ## Not in this ticket (stated)
 - **Reverse charge** (Approval `action` 3, VAT 0): needs the compose rules for VAT 0. Follow-up.
-- **The 10-day reminder mail and portal banner** (MUT-571 AC3): the status carries `until`; the mail job and the UI are the portal lane (MUT-570) and a follow-up job. The API side is done.
+- ~~**The 10-day reminder mail and portal banner** (MUT-571 AC3)~~: done in the invoicing follow-ups (2026-11-22, ADR-264 amendment): the daily reminder job and the setup step's notice.
 - **Held error codes:** not published. The sandbox's held test dealer (777777723) is how to learn them; `HELD_ERROR_CODES` is empty until then.
 - **The portal and phone UI for connect and the four choices** (MUT-570/573/574).

@@ -15616,7 +15616,7 @@ export interface paths {
         };
         /**
          * Where the Tax Authority sends the browser back after sign-in
-         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the portal's invoicing setup with `taxAuthority=connected` or `failed`.
+         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened.
          */
         get: {
             parameters: {
@@ -24387,6 +24387,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily Tax Authority re-consent reminders (Cloud Scheduler)
+         * @description MUT-571 AC3. The Tax Authority consent lasts 90 days. Mails the owner of each connected profile, in their language: once when it ends within 10 days, and once when it has ended (for 7 days after), each with a link to connect again. Each stage is sent once per consent (the send log), so a retry or a second run sends nothing new. Answers counts only; an empty run where the Tax Authority connection is not configured.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the Tax Authority re-consent reminders now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per profile looked at: the stage it mails or why not. `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -30955,6 +31082,34 @@ export interface components {
         MailOffRequest: {
             token: string;
             on: boolean;
+        };
+        TaxAuthorityReminderSummary: {
+            dryRun: boolean;
+            /** @description Connections whose consent ends within 10 days or ended within 7 */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description This stage of this consent was already mailed */
+            duplicate: number;
+            /** @description Due but not sent: a read or the mailer failed, mail off, capped or refused */
+            notSent: number;
+            /** @description Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed */
+            skipped: number;
+        };
+        TaxAuthorityReminderRun: {
+            summary: components["schemas"]["TaxAuthorityReminderSummary"];
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string|null} */
+                stage: "soon" | "ended" | null;
+                /** @enum {string} */
+                action: "send" | "skip";
+                /** @enum {string|null} */
+                skip: "other-environment" | "no-refresh" | "profile-gone" | "owner-gone" | "owner-inactive" | "suppressed" | null;
+                outcome: string | null;
+            }[];
         };
         AccountPurgeSummary: {
             dryRun: boolean;
