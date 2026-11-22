@@ -1,3 +1,4 @@
+import type { OcrClient } from '../receipts/ocr-client.js';
 import type { TaxAuthorityDeps } from '../israel/tax-authority/service.js';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
@@ -42,6 +43,8 @@ export interface PortalRouteDependencies {
   /** MUT-571/572: the Tax Authority, hosted only and only where configured; the portal origin its callback returns to. */
   taxAuthority?: TaxAuthorityDeps | null;
   portalOrigin?: string | null;
+  /** MUT-647: the reader that fills an invoice issued elsewhere (the receipts OCR); hosted only, where configured. */
+  ocr?: OcrClient | null;
   attachments: { storage: AttachmentStorage | null; urlTtlSeconds: number };
   fxRates: CachedFxRates | null;
   /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */
@@ -72,7 +75,8 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),
   // MUT-568 (ADR-260): issued documents.
-  (deps) => issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null }),
+  (deps) =>
+    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
   // MUT-596: who is on the profile, read-only (a Malafat firm's seats).

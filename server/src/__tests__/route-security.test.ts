@@ -91,6 +91,12 @@ const ISSUING_OPERATIONS = [
   'DELETE /v1/issuer/logo',
   'PUT /v1/issuing/numbering',
   'GET /v1/issuing/setup',
+  // MUT-647: invoices issued elsewhere.
+  'POST /v1/issuing/external-invoices/read',
+  'POST /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices/{externalInvoiceId}/file',
+  'DELETE /v1/issuing/external-invoices/{externalInvoiceId}',
   // MUT-570: the styles list.
   'GET /v1/issuing/styles',
   'POST /v1/issuing/setup/intro-seen',

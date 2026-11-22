@@ -41,7 +41,10 @@ import { serializeComposedTotals, serializeIssuedDocument, serializeIssuer } fro
 import { z } from '@hono/zod-openapi';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
+import { registerExternalInvoiceRoutes } from './external-invoices.js';
 import { registerTaxAuthorityRoutes, reportDecision } from './tax-authority.js';
+import type { AttachmentStorage } from '../attachments/storage.js';
+import type { OcrClient } from '../receipts/ocr-client.js';
 import { allocationInvoiceId, allocator, approvalRequest, needsAllocation, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
 
 /** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */
@@ -144,7 +147,14 @@ export interface IssuingTaxAuthority {
   portalOrigin: string | null;
 }
 
-export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }): OpenAPIHono<AppEnv> {
+/** MUT-647: where an invoice issued elsewhere is kept, and the reader that fills its fields. */
+export interface IssuingExternalInvoices {
+  storage: AttachmentStorage | null;
+  ocr: OcrClient | null;
+  urlTtlSeconds: number;
+}
+
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   /** The selected profile, if issuing is on for it. The feature is the owner's, so co-owners and accountants see the same. */
@@ -588,6 +598,11 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const [current, setup] = await Promise.all([store.issuing.getIssuer(organization.id), store.issuing.getSetup(organization.id)]);
       const missing = setupMissing(current, setup);
       if (missing.length > 0) throw new ApiError('CONFLICT', 'Finish the invoicing setup before issuing', { reason: 'ISSUING_SETUP_INCOMPLETE', missing });
+      // MUT-647 (AC3): an entry whose invoice was issued elsewhere gets no second document from MTB3A.
+      if (body.fromEntry) {
+        const [attached] = await store.issuing.liveExternal(organization.id, body.fromEntry.kind === 'owed' ? 'OWED' : 'RECEIVED', [body.fromEntry.id]);
+        if (attached) throw new ApiError('CONFLICT', `This entry already has invoice ${attached.number}, issued elsewhere; remove it to issue one here`, { reason: 'EXTERNAL_INVOICE_ATTACHED', number: attached.number });
+      }
       const issuer = current!;
       const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
@@ -826,6 +841,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   }
 
   if (issuedPdf) registerPdfRoutes(issuedPdf.render);
+  registerExternalInvoiceRoutes(app, { store, storage: external.storage, ocr: external.ocr, urlTtlSeconds: external.urlTtlSeconds, issuingProfile, audit });
+
   registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, vatNumberOf: async (id) => {
     const issuer = await store.issuing.getIssuer(id);
     return issuer ? Number(issuer.vatId) : null;

@@ -5057,6 +5057,49 @@ export const IssuingStylesSchema = z
   .object({ styles: z.array(z.object({ key: z.string().openapi({ description: 'The value PUT /v1/issuer/defaults takes as documentStyle' }) })) })
   .openapi('IssuingStyles');
 
+/** MUT-647: an invoice issued elsewhere, attached to an Owed or a Received. Never numbered by MTB3A. */
+export const ExternalEntryKindSchema = z.enum(['OWED', 'RECEIVED']).openapi('ExternalEntryKind');
+export const ExternalInvoiceSchema = z
+  .object({
+    id: z.string().uuid(),
+    entryKind: ExternalEntryKindSchema,
+    entryId: z.string().uuid(),
+    number: z.string(),
+    documentDate: z.string().openapi({ description: 'YYYY-MM-DD, as printed on the invoice' }),
+    attachmentId: z.string().uuid(),
+    filename: z.string(),
+    mimeType: z.string(),
+    createdAt: z.string().datetime(),
+  })
+  .openapi('ExternalInvoice');
+export const ExternalInvoiceListSchema = z.object({ items: z.array(ExternalInvoiceSchema) }).openapi('ExternalInvoiceList');
+export const ExternalInvoiceReadingSchema = z
+  .object({
+    read: z.boolean().openapi({ description: 'false when no reader is configured or it could not read the file: the person types the fields' }),
+    number: z.string().nullable(),
+    documentDate: z.string().nullable(),
+    amount: z.string().nullable().openapi({ description: 'The total printed on the invoice, a decimal string' }),
+  })
+  .openapi('ExternalInvoiceReading');
+export const ExternalInvoiceListQuerySchema = z.object({
+  entryKind: ExternalEntryKindSchema.optional().openapi({ description: 'OWED or RECEIVED; without it (or without ids) the list is empty' }),
+  entryIds: z
+    .string()
+    .optional()
+    .openapi({ description: 'Comma-separated entry ids (at most 100): the page of Owed or Received on screen' })
+    .transform((v) => (v ?? '').split(',').map((id) => id.trim()).filter(Boolean))
+    .pipe(z.array(z.string().uuid()).max(100)),
+});
+export const AttachExternalInvoiceQuerySchema = z.object({
+  entryKind: ExternalEntryKindSchema,
+  entryId: z.string().uuid(),
+  number: z.string().trim().min(1).max(64),
+  documentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'YYYY-MM-DD'),
+  filename: z.string().trim().min(1).max(200),
+});
+export const ExternalInvoiceIdParamSchema = z.object({ externalInvoiceId: z.string().uuid() });
+export const ExternalInvoiceFileSchema = z.object({ url: z.string(), expiresAt: z.string().datetime() }).openapi('ExternalInvoiceFile');
+
 /** MUT-646: the setup's defaults step. Replaces all of them; If-Match is the details' version. */
 export const IssuerDefaultsRequestSchema = z
   .object({

@@ -255,6 +255,28 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.issuing.deleteTaxConnection(w.a.id)).toBe(false);
     });
 
+    it('MUT-647: one live external invoice per entry; removing it deletes its file’s attachment', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const entryId = '00000000-0000-4000-8000-00000000e001';
+      const fileFor = (attachmentId: string) => ({ filename: `${attachmentId}.pdf`, mimeType: 'application/pdf', sizeBytes: 10, storageKey: `attachments/${w.a.id}/${attachmentId}`, customerId: w.customer.id, paymentId: null, requestId: null });
+      const input = (attachmentId: string, number: string) => ({ organizationId: w.a.id, entryKind: 'OWED' as const, entryId, attachmentId, number, documentDate: '2026-11-15', createdByUserId: w.user.id, createdAt: at(1) });
+      const first = await store.issuing.attachExternal(input('00000000-0000-4000-8000-00000000a001', '3381'), fileFor('00000000-0000-4000-8000-00000000a001'));
+      expect(first).toMatchObject({ kind: 'attached', record: { number: '3381', entryKind: 'OWED', entryId, removedAt: null } });
+      expect(await store.attachments.getById(w.a.id, '00000000-0000-4000-8000-00000000a001')).toMatchObject({ kind: 'INVOICE', status: 'READY', invoiceNumber: '3381', invoiceDate: '2026-11-15', customerId: w.customer.id });
+      const second = await store.issuing.attachExternal(input('00000000-0000-4000-8000-00000000a002', '3382'), fileFor('00000000-0000-4000-8000-00000000a002'));
+      expect(second).toMatchObject({ kind: 'exists', record: { id: first.record.id } });
+      expect((await store.issuing.liveExternal(w.a.id, 'OWED', [entryId])).map((x) => x.id)).toEqual([first.record.id]);
+      expect(await store.issuing.liveExternal(w.b.id, 'OWED', [entryId])).toEqual([]);
+      expect(await store.issuing.removeExternal(w.b.id, first.record.id, at(2))).toBeNull();
+      expect(await store.issuing.removeExternal(w.a.id, first.record.id, at(2))).toMatchObject({ removedAt: at(2) });
+      expect(await store.attachments.getById(w.a.id, '00000000-0000-4000-8000-00000000a001')).toBeNull();
+      expect(await store.issuing.liveExternal(w.a.id, 'OWED', [entryId])).toEqual([]);
+      expect(await store.issuing.removeExternal(w.a.id, first.record.id, at(3))).toBeNull();
+      const again = await store.issuing.attachExternal(input('00000000-0000-4000-8000-00000000a003', '3390'), fileFor('00000000-0000-4000-8000-00000000a003'));
+      expect(again.kind).toBe('attached');
+    });
+
     it('MUT-646: keeps every logo; clearing only drops the current one', async () => {
       const store = await makeStore();
       const w = await world(store);

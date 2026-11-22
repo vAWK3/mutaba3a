@@ -33,6 +33,7 @@ import type {
   IssuedDocumentRecord,
   IssuingRepository,
   IssuerLogoRecord,
+  ExternalInvoiceRecord,
   MonthlySummaryChoice,
   OperatorAccountCursor,
   VendorRecord,
@@ -203,6 +204,9 @@ import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorO
 
 /** MUT-571 */
 const TAX_CONNECTION_SELECT = { organizationId: true, environment: true, accessTokenSealed: true, accessExpiresAt: true, refreshTokenSealed: true, refreshExpiresAt: true, connectedByUserId: true, connectedAt: true, version: true } as const;
+
+/** MUT-647 */
+const toExternal = (row: { entryKind: string } & Omit<ExternalInvoiceRecord, 'entryKind'>): ExternalInvoiceRecord => ({ ...row, entryKind: row.entryKind === 'RECEIVED' ? 'RECEIVED' : 'OWED' });
 
 /** MUT-646 */
 const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
@@ -927,6 +931,37 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel, requestKey } });
         return { copyIndex };
       }),
+    attachExternal: async (input, file) => {
+      const live = await this.prisma.externalInvoice.findFirst({ where: { organizationId: input.organizationId, entryKind: input.entryKind, entryId: input.entryId, removedAt: null } });
+      if (live) return { kind: 'exists', record: toExternal(live) };
+      try {
+        const created = await this.prisma.$transaction(async (tx) => {
+          await tx.attachment.create({ data: { id: input.attachmentId, organizationId: input.organizationId, kind: 'INVOICE', ...file, invoiceNumber: input.number, invoiceDate: input.documentDate, status: 'READY', createdAt: input.createdAt, completedAt: input.createdAt } });
+          return tx.externalInvoice.create({ data: { ...input } });
+        });
+        return { kind: 'attached', record: toExternal(created) };
+      } catch (err) {
+        // Two attaches raced past the read: the partial unique index lets one through.
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+        const winner = await this.prisma.externalInvoice.findFirstOrThrow({ where: { organizationId: input.organizationId, entryKind: input.entryKind, entryId: input.entryId, removedAt: null } });
+        return { kind: 'exists', record: toExternal(winner) };
+      }
+    },
+    liveExternal: async (organizationId, entryKind, entryIds) =>
+      entryIds.length === 0 ? [] : (await this.prisma.externalInvoice.findMany({ where: { organizationId, entryKind, entryId: { in: [...entryIds] }, removedAt: null } })).map(toExternal),
+    getExternal: async (organizationId, id) => {
+      const row = await this.prisma.externalInvoice.findFirst({ where: { id, organizationId } });
+      return row ? toExternal(row) : null;
+    },
+    removeExternal: async (organizationId, id, at) => {
+      return this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.externalInvoice.updateMany({ where: { id, organizationId, removedAt: null }, data: { removedAt: at } });
+        if (count === 0) return null;
+        const removed = await tx.externalInvoice.findUniqueOrThrow({ where: { id } });
+        await tx.attachment.updateMany({ where: { id: removed.attachmentId, organizationId, deletedAt: null }, data: { deletedAt: at } });
+        return toExternal(removed);
+      });
+    },
     gaps: async (organizationId) => {
       const [counters, numbers] = await Promise.all([
         this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),

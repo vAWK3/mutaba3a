@@ -4490,6 +4490,33 @@ export interface TaxAuthorityConnectionRecord {
   version: number;
 }
 
+/** MUT-647: the entry an invoice issued elsewhere belongs to: an Owed (receivable) or a Received (payment). */
+export type ExternalEntryKind = 'OWED' | 'RECEIVED';
+
+/** The READY INVOICE attachment an external invoice's file becomes (written with the link, in one transaction). */
+export interface ExternalInvoiceFileInput {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  customerId: string | null;
+  paymentId: string | null;
+  requestId: string | null;
+}
+
+export interface ExternalInvoiceRecord {
+  id: string;
+  organizationId: string;
+  entryKind: ExternalEntryKind;
+  entryId: string;
+  attachmentId: string;
+  number: string;
+  documentDate: string;
+  createdByUserId: string;
+  createdAt: Date;
+  removedAt: Date | null;
+}
+
 export interface IssuedDocumentCounterRecord {
   organizationId: string;
   docType: IssuedDocType;
@@ -4672,4 +4699,11 @@ export interface IssuingRepository {
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
   gaps(organizationId: string): Promise<IssuedNumberGap[]>;
+  /** MUT-647: attaches an invoice issued elsewhere; `exists` when the entry already has a live one. */
+  attachExternal(input: Omit<ExternalInvoiceRecord, 'id' | 'removedAt'>, file: ExternalInvoiceFileInput): Promise<{ kind: 'attached'; record: ExternalInvoiceRecord } | { kind: 'exists'; record: ExternalInvoiceRecord }>;
+  /** The live external invoices of these entries (one per entry at most). */
+  liveExternal(organizationId: string, entryKind: ExternalEntryKind, entryIds: readonly string[]): Promise<ExternalInvoiceRecord[]>;
+  getExternal(organizationId: string, id: string): Promise<ExternalInvoiceRecord | null>;
+  /** Marks it removed and its file's attachment deleted (both rows stay); null when there is no live one with that id. */
+  removeExternal(organizationId: string, id: string, at: Date): Promise<ExternalInvoiceRecord | null>;
 }

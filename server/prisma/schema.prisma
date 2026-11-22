@@ -2298,3 +2298,24 @@ model IssuedDocumentCopy {
   @@index([organizationId])
   @@map("issued_document_copies")
 }
+
+/// MUT-647: an invoice issued elsewhere, attached to an Owed or a Received. Its file is an INVOICE attachment; it is
+/// never numbered by MTB3A and never in the uniform file. One live per entry (a partial unique index); removing it
+/// keeps the row (removedAt) so the history stays.
+model ExternalInvoice {
+  id              String    @id @default(uuid()) @db.Uuid
+  organizationId  String    @db.Uuid
+  /// OWED (a receivable) or RECEIVED (a payment).
+  entryKind       String    @db.VarChar(8)
+  entryId         String    @db.Uuid
+  attachmentId    String    @db.Uuid
+  number          String    @db.VarChar(64)
+  documentDate    String    @db.VarChar(10)
+  createdByUserId String    @db.Uuid
+  createdAt       DateTime  @default(now())
+  removedAt       DateTime?
+
+  @@index([organizationId, entryKind, entryId])
+  @@map("external_invoices")
+}
+

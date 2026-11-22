@@ -381,7 +381,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.120.0-mut571';
+export const API_VERSION = '1.122.0-mut647';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -611,6 +611,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
     portalOrigin: sessions.portalOrigin ?? null,
+    // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.
+    ocr: deps.receiptReading?.ocr ?? null,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
     issuedPdf: {
       render: renderIssuedDocumentPdf,

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.120.0-mut571
+  version: 1.122.0-mut647
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -10100,6 +10100,88 @@ components:
             - SHARE
       required:
         - channel
+    ExternalInvoiceReading:
+      type: object
+      properties:
+        read:
+          type: boolean
+          description: "false when no reader is configured or it could not read the file: the person types the fields"
+        number:
+          type: string
+          nullable: true
+        documentDate:
+          type: string
+          nullable: true
+        amount:
+          type: string
+          nullable: true
+          description: The total printed on the invoice, a decimal string
+      required:
+        - read
+        - number
+        - documentDate
+        - amount
+    ExternalInvoice:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        entryKind:
+          $ref: "#/components/schemas/ExternalEntryKind"
+        entryId:
+          type: string
+          format: uuid
+        number:
+          type: string
+        documentDate:
+          type: string
+          description: YYYY-MM-DD, as printed on the invoice
+        attachmentId:
+          type: string
+          format: uuid
+        filename:
+          type: string
+        mimeType:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - entryKind
+        - entryId
+        - number
+        - documentDate
+        - attachmentId
+        - filename
+        - mimeType
+        - createdAt
+    ExternalEntryKind:
+      type: string
+      enum:
+        - OWED
+        - RECEIVED
+    ExternalInvoiceList:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ExternalInvoice"
+      required:
+        - items
+    ExternalInvoiceFile:
+      type: object
+      properties:
+        url:
+          type: string
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - url
+        - expiresAt
     TaxAuthorityStatus:
       type: object
       properties:
@@ -24960,6 +25042,346 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/external-invoices/read:
+    post:
+      tags:
+        - Issuing
+      summary: Read an invoice issued elsewhere before attaching it
+      description: "MUT-647: the raw PDF or photo (at most 10 MB). Answers what the reader found (number, date, total); nothing is stored. With no reader configured, or a file it can’t read, `read` is false and the person types the fields."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "200":
+          description: What the invoice says
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalInvoiceReading"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: PAYLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/external-invoices:
+    post:
+      tags:
+        - Issuing
+      summary: Attach an invoice issued elsewhere to an Owed or a Received
+      description: "MUT-647: the raw PDF or photo (at most 10 MB) with its confirmed number and date in the query. Kept as an INVOICE attachment of the entry; never numbered by MTB3A. 409 EXTERNAL_INVOICE_EXISTS when the entry already has one (remove it first); 409 ISSUED_HERE for an Owed MTB3A issued the document for."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            $ref: "#/components/schemas/ExternalEntryKind"
+          required: true
+          name: entryKind
+          in: query
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: entryId
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 64
+          required: true
+          name: number
+          in: query
+        - schema:
+            type: string
+            pattern: ^\d{4}-\d{2}-\d{2}$
+          required: true
+          name: documentDate
+          in: query
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 200
+          required: true
+          name: filename
+          in: query
+      requestBody:
+        required: true
+        content:
+          application/pdf:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+          image/png:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "201":
+          description: Attached
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalInvoice"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: PAYLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: ATTACHMENTS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Issuing
+      summary: The invoices issued elsewhere attached to these entries
+      description: "MUT-647: one request for the page of Owed or Received on screen (at most 100 ids); entries without one are left out."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            allOf:
+              - $ref: "#/components/schemas/ExternalEntryKind"
+              - description: OWED or RECEIVED; without it (or without ids) the list is empty
+          required: false
+          description: OWED or RECEIVED; without it (or without ids) the list is empty
+          name: entryKind
+          in: query
+        - schema:
+            type: string
+            description: "Comma-separated entry ids (at most 100): the page of Owed or Received on screen"
+          required: false
+          description: "Comma-separated entry ids (at most 100): the page of Owed or Received on screen"
+          name: entryIds
+          in: query
+      responses:
+        "200":
+          description: The attached invoices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalInvoiceList"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/external-invoices/{externalInvoiceId}/file:
+    get:
+      tags:
+        - Issuing
+      summary: Open an attached invoice’s file
+      description: "MUT-647: a short-lived signed URL that shows the file inline."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: externalInvoiceId
+          in: path
+      responses:
+        "200":
+          description: The signed URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExternalInvoiceFile"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: ATTACHMENTS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/external-invoices/{externalInvoiceId}:
+    delete:
+      tags:
+        - Issuing
+      summary: Remove an attached invoice issued elsewhere
+      description: "MUT-647: the entry then has no document, so MTB3A can issue one for it again. The row is kept (removed), and its file leaves the entry’s files."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: externalInvoiceId
+          in: path
+      responses:
+        "204":
+          description: Removed
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:
