@@ -15827,6 +15827,573 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/documents-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents due, grouped by client
+         * @description MUT-660: what each income entry is due, derived from the client’s documents preference (else the profile default) and what is issued or attached; never stored. view=not-for-invoice lists the entries marked not for invoice instead (kind null). olderThanMonths keeps items dated before today minus N months. Groups are by customerId (null: no client), in the order the items sort; the client’s name is the caller’s. 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    view?: "to-issue" | "not-for-invoice";
+                    /** @description Only items dated before today minus N months (0 = all) */
+                    olderThanMonths?: number | null;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The documents due */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDue"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many documents are due (Home’s To issue)
+         * @description MUT-660: every listed item counts (N2), including those that can’t be issued in MTB3A yet (they can be attached or marked). 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDueCount"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue all: one client’s due documents, each with its type and amount
+         * @description MUT-660: issues each item (at most 25, one client per call) in turn, through the same single issue as POST /v1/issued-documents: a tax invoice, receipt or invoice-receipt linked to its entry, dated today, one line for its amount with VAT included. Each item answers issued, held (the Tax Authority held its allocation number: issue it on its own to choose) or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue’s own reason). Irreversible per item. The same Idempotency-Key returns the same answer, and an item is never issued twice. 409 ISSUING_SETUP_INCOMPLETE before the setup is done.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDueRequest"];
+                };
+            };
+            responses: {
+                /** @description What happened to each item */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueDueResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark entries not for invoice, or bring them back (bulk)
+         * @description MUT-660: all or nothing, in one transaction. A marked entry is due no document and counts outside Invoice income (it stays in All income, the accountant’s view and exports). An entry already at `value` is left alone, so a replay changes nothing (`changed` counts what changed). Marking an entry with a tax document (a live tax invoice or an invoice-receipt; a receipt doesn’t count) is 409 HAS_TAX_DOCUMENT and changes nothing: a credit note comes first.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Done */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receivables/{receivableId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark an Owed entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/{paymentId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark a Received entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/fx-rates": {
         parameters: {
             query?: never;
@@ -24387,133 +24954,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/jobs/v1/issuing/tax-authority-reminders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Daily Tax Authority re-consent reminders (Cloud Scheduler)
-         * @description MUT-571 AC3. The Tax Authority consent lasts 90 days. Mails the owner of each connected profile, in their language: once when it ends within 10 days, and once when it has ended (for 7 days after), each with a link to connect again. Each stage is sent once per consent (the send log), so a retry or a second run sends nothing new. Answers counts only; an empty run where the Tax Authority connection is not configured.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody?: never;
-            responses: {
-                /** @description The run’s counts */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TaxAuthorityReminderSummary"];
-                    };
-                };
-                /** @description JOB_UNAUTHORIZED */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description JOBS_NOT_CONFIGURED */
-                503: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/admin/v1/issuing/tax-authority-reminders": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Run the Tax Authority re-consent reminders now, or see who they would mail
-         * @description The same run as the daily job, for the operator, with one row per profile looked at: the stage it mails or why not. `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header?: never;
-                path?: never;
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["TrialMailRequest"];
-                };
-            };
-            responses: {
-                /** @description The run */
-                200: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["TaxAuthorityReminderRun"];
-                    };
-                };
-                /** @description Missing or invalid admin token */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description LINK_ORIGIN_LOOPBACK */
-                409: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description VALIDATION_FAILED */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -27464,6 +27904,7 @@ export interface components {
             outstanding: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
+            notForInvoice: boolean;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -28014,6 +28455,7 @@ export interface components {
             vatTreatment: components["schemas"]["VatTreatment"] & unknown;
             taxId: string | null;
             address: string | null;
+            documentsPreference: components["schemas"]["DocumentsPreference"];
             status: components["schemas"]["EntityStatus"];
             /** Format: date-time */
             archivedAt: string | null;
@@ -28024,6 +28466,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).
+         * @enum {string|null}
+         */
+        DocumentsPreference: "TAX_INVOICE_FIRST" | "PAYMENT_REQUEST_FIRST" | "ON_PAYMENT" | "NO_DOCUMENT" | null;
         /** @enum {string} */
         EntityStatus: "ACTIVE" | "ARCHIVED";
         ExternalReference: {
@@ -28054,6 +28501,7 @@ export interface components {
             vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
             taxId?: string | null;
             address?: string | null;
+            documentsPreference?: components["schemas"]["DocumentsPreference"];
         };
         CustomerStatement: {
             /** Format: uuid */
@@ -28294,6 +28742,7 @@ export interface components {
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
             receiptNumber: string | null;
+            notForInvoice: boolean;
             notes: string | null;
             status: components["schemas"]["PaymentStatus"];
             /** Format: date-time */
@@ -28786,6 +29235,17 @@ export interface components {
                 /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
                 samples: number[];
             };
+            /** @description MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
+        };
+        InvoiceSplitRow: {
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            invoiceIncome: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            notForInvoice: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            all: string;
         };
         Verdict: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -29471,6 +29931,7 @@ export interface components {
             footerNote: string | null;
             /** @description MUT-648: offer to issue a document after saving income */
             offerAfterSave: boolean;
+            defaultDocumentsPreference: components["schemas"]["DocumentsPreference"] & unknown;
             version: number;
         };
         /**
@@ -29513,6 +29974,7 @@ export interface components {
             footerNote?: string | null;
             /** @description MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted) */
             offerAfterSave?: boolean;
+            defaultDocumentsPreference?: components["schemas"]["DocumentsPreference"] & unknown;
         };
         /** @enum {string} */
         DocumentLanguage: "ar" | "he" | "en";
@@ -29777,6 +30239,94 @@ export interface components {
                 last: number;
                 missing: number[];
             }[];
+        };
+        DocumentsDue: {
+            /** @enum {string} */
+            view: "to-issue" | "not-for-invoice";
+            groups: {
+                /** Format: uuid */
+                customerId: string | null;
+                items: components["schemas"]["DueItem"][];
+            }[];
+            counts: {
+                total: number;
+                byKind: {
+                    [key: string]: number;
+                };
+            };
+        };
+        DueItem: {
+            kind: components["schemas"]["DueKind"];
+            entry: components["schemas"]["DueEntryRef"] & {
+                number: string;
+            };
+            /** Format: uuid */
+            customerId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description The Owed’s posting date or the Received’s date */
+            date: string;
+            issuable: boolean;
+            reason: components["schemas"]["DueReason"];
+            /**
+             * Format: uuid
+             * @description A receipt: the tax invoice it pays
+             */
+            appliesToDocumentId: string | null;
+        };
+        /**
+         * @description The document due; null in the not-for-invoice view
+         * @enum {string|null}
+         */
+        DueKind: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+        DueEntryRef: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+        };
+        /**
+         * @description Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice
+         * @enum {string|null}
+         */
+        DueReason: "PAYMENT_REQUEST_PENDING" | "CURRENCY_NOT_ILS" | "MIXED_ALLOCATION" | "RECORDED_ELSEWHERE" | null;
+        DocumentsDueCount: {
+            total: number;
+        };
+        IssueDueResult: {
+            results: {
+                entry: components["schemas"]["DueEntryRef"];
+                /** @enum {string} */
+                status: "issued" | "held" | "refused";
+                /** @description Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason) */
+                reason: string | null;
+                document: components["schemas"]["IssuedDocument"];
+            }[];
+            issued: number;
+        };
+        IssueDueRequest: {
+            /** Format: uuid */
+            customerId: string | null;
+            items: components["schemas"]["DueEntryRef"][];
+        };
+        NotForInvoiceResult: {
+            changed: number;
+        };
+        NotForInvoiceRequest: {
+            items: components["schemas"]["DueEntryRef"][];
+            value: boolean;
+        };
+        NotForInvoiceEntry: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+            notForInvoice: boolean;
+            version: number;
+        };
+        SetNotForInvoiceRequest: {
+            value: boolean;
         };
         FxRatesResponse: {
             base: components["schemas"]["Currency"];
@@ -31083,34 +31633,6 @@ export interface components {
             token: string;
             on: boolean;
         };
-        TaxAuthorityReminderSummary: {
-            dryRun: boolean;
-            /** @description Connections whose consent ends within 10 days or ended within 7 */
-            checked: number;
-            /** @description Mailed, or in a dry run would be */
-            due: number;
-            sent: number;
-            /** @description This stage of this consent was already mailed */
-            duplicate: number;
-            /** @description Due but not sent: a read or the mailer failed, mail off, capped or refused */
-            notSent: number;
-            /** @description Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed */
-            skipped: number;
-        };
-        TaxAuthorityReminderRun: {
-            summary: components["schemas"]["TaxAuthorityReminderSummary"];
-            rows: {
-                /** Format: uuid */
-                organizationId: string;
-                /** @enum {string|null} */
-                stage: "soon" | "ended" | null;
-                /** @enum {string} */
-                action: "send" | "skip";
-                /** @enum {string|null} */
-                skip: "other-environment" | "no-refresh" | "profile-gone" | "owner-gone" | "owner-inactive" | "suppressed" | null;
-                outcome: string | null;
-            }[];
-        };
         AccountPurgeSummary: {
             dryRun: boolean;
             /** @description Accounts in their 30 days of grace or due */
@@ -31468,6 +31990,8 @@ export interface components {
                 total: string;
                 count: number;
             }[];
+            /** @description MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
         };
         ShareLinkViewRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */

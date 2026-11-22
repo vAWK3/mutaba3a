@@ -132,3 +132,64 @@ features:
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup
+  - id: to-issue-issue-all
+    title: Home's To issue count opens the documents due by client; Issue all issues one client's documents
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/pages/home/ToIssueGroup.tsx
+      - src/hosted/pages/home/HomeTodo.tsx
+      - src/hosted/data/documentsDueQueries.ts
+      - src/hosted/router.tsx
+    steps:
+      - Open Nour Studio's home
+      - Choose See all in the To issue group
+      - In Client 1's group choose Issue all, then confirm
+    expect:
+      - Home shows "To issue" with 3 documents and links to Documents › To issue
+      - The list groups the items by client (No client last); a payment request says it can't be issued here yet and offers Attach and Not for invoice
+      - Issue all confirms in place with the count and the client, sends one POST /v1/documents-due/issue for the client's items, and says 2 documents were issued; the group leaves the list
+  - id: to-issue-bulk-not-for-invoice
+    title: Select old items with "Older than 6 months", mark them not for invoice in one action, and bring them back
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/data/documentsDueQueries.ts
+    steps:
+      - Open Documents › To issue
+      - Choose Older than 6 months, then Select all shown
+      - Choose Not for invoice and confirm
+      - Open Not for invoice, select all shown, choose Back to invoice and confirm
+    expect:
+      - Older than offers 1, 3, 6 and 12 months; 6 months lists only the two items older than six months
+      - One confirmation names the count ("Mark 2 entries not for invoice?"); the items leave To issue and the toast offers Undo
+      - Not for invoice lists them, and Back to invoice returns both in one action
+  - id: not-for-invoice-refused
+    title: An entry with a tax document can't be marked not for invoice; the app says a credit note comes first
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/NotForInvoiceAction.tsx
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+    steps:
+      - Open Documents › To issue
+      - Choose Not for invoice on an item whose entry has a tax invoice
+    expect:
+      - The server refuses (409 HAS_TAX_DOCUMENT) and the page says to issue a credit note first; the item stays in To issue
+  - id: client-documents-preference
+    title: Set a client's documents preference on the client page
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/DocumentsPreferenceField.tsx
+      - src/hosted/components/ClientBusinessDetails.tsx
+      - src/hosted/data/customerQueries.ts
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+    steps:
+      - Open Client 1's page on Nour Studio
+      - Set Documents to Tax invoice first
+    expect:
+      - The field starts on "Profile default (On payment)" and says an invoice-receipt is due for each payment
+      - Choosing Tax invoice first saves PATCH /v1/customers with If-Match and says a tax invoice is due when an amount is owed, then a receipt for each payment

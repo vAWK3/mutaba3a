@@ -41,6 +41,8 @@ export function useUpdateCustomer(profileId: string, customerId: string) {
       queryClient.setQueryData(profileKey(profileId, 'customer', customerId), saved);
       void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'directory', 'customers') });
       void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary') });
+      // MUT-660: a documents preference changes what is due.
+      void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'documents-due') });
     },
     onError: (error) => {
       if (error instanceof ApiError && error.status === 409) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'customer', customerId) });

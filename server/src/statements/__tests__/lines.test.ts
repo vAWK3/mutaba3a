@@ -15,6 +15,7 @@ const view = { asOf: '2026-10-27', timezone: 'Asia/Jerusalem' };
 
 function receivable(o: Partial<ReceivableRecord> = {}): ReceivableRecord {
   return {
+    notForInvoice: false,
     id: '00000000-0000-4000-8000-0000000000b1',
     organizationId: ORG,
     customerId: CUST,

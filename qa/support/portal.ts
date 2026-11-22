@@ -88,6 +88,7 @@ export function customer(i: number) {
     archivedAt: null,
     taxId: null as string | null,
     address: null as string | null,
+    documentsPreference: null as string | null,
     externalReference: null,
     version: 1,
     createdAt: STAMP,

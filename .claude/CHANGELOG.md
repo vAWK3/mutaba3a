@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.127.0-followups)
+## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.128.0-followups)
 
 ### Added
 - **Re-consent reminder (MUT-571 AC3).** `POST /jobs/v1/issuing/tax-authority-reminders` (job token, daily) and `POST /admin/v1/issuing/tax-authority-reminders` (operator, `dryRun`): the owner of each connected profile is mailed ten days before the 90-day consent ends and once when it has ended (for 7 days), in their language. Each stage once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`); retries and later runs answer `duplicate`. New mail template `tax-authority-reconnect` (en + formal ar), exempt from the per-recipient cap like the other job mails. Store: `issuing.taxConnectionsEndingBetween` (operator-only in the guard).
@@ -43,6 +43,23 @@
 - Files: `server/src/routes/tax-authority.ts`, `server/src/israel/tax-authority/{service,reconnect-reminder}.ts`, `server/src/routes/tax-authority-reminders.ts`, `server/src/email/{ports.ts,templates/copy.ts,templates/look.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/infrastructure/terraform/{main,variables}.tf`, `src/hosted/components/IssueOffer.tsx`, `src/hosted/components/IncomeDrawerHost.tsx`, `src/hosted/session/AuthGate.tsx`, `src/hosted/pages/invoicing/{InvoicingSteps.tsx,setupSteps.ts}`, i18n en + ar. Tests: `routes-tax-authority.test.ts` (landing cases), `routes-tax-authority-reminders.test.ts`, `service.test.ts`, `IssueOffer.test.tsx`, `InvoicingSteps.test.tsx`, the mail template samples.
 
 ---
+## [Unreleased] - 2026-11-22 — Documents due per client, To issue, "not for invoice", invoice income in the books (MUT-660, ADR-270, API 1.127.0-mut660)
+
+### Added
+- Server: `documentsDue` (`server/src/issuing/documents-due.ts`), `splitIncome`/`invoiceStatusOf` (`server/src/income/invoice-class.ts`), `invoiceSplitOf` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`). Routes in `routes/documents-due.ts`: GET /v1/documents-due (by client; view=not-for-invoice; olderThanMonths), GET /v1/documents-due/count, POST /v1/documents-due/issue, POST /v1/documents-due/not-for-invoice, PUT /v1/{receivables,payments}/{id}/not-for-invoice. Store: `issuing.dueInputs`, `incomeContext`, `setNotForInvoice` (memory + Prisma, contract-tested).
+- Migration `20261122230000_mut660_documents_due`: `DocumentsPreference` enum, `customers.documentsPreference`, `issuer_details.defaultDocumentsPreference`, `receivables/payments.notForInvoice`, `issued_documents (organizationId, receivableId|paymentId)` indexes.
+- Portal: Documents › To issue (`DocumentsDuePage`), Home's `ToIssueGroup`, `NotForInvoiceAction` on Owed and Paid rows, `DocumentsPreferenceField` on the client page, the profile default in the invoicing defaults step, Reports' `InvoiceSplitCard`; `documentsDueQueries`. i18n ar+en.
+- Books: `invoiceSplit` on GET /v1/summaries/activity and the share-link summary; two lines in the monthly summary; `invoice_status` in the Excel Income sheet.
+- Release-QA: `portal.invoicing.to-issue-issue-all`, `to-issue-bulk-not-for-invoice`, `not-for-invoice-refused`, `client-documents-preference`, `portal.reports.invoice-split`.
+
+### Changed
+- Issuing for an entry decides take vs link (`fromEntryMode`): agreements' charges, credited Owed, allocated payments and no-client invoice-receipts are issued linked only (nothing posted). A no-client 320 is accepted for a Received entry.
+- `issueOne` extracted from POST /v1/issued-documents and reused by Issue all. Receivables and payments carry `notForInvoice`; customers `documentsPreference`; issuer details `defaultDocumentsPreference`.
+- This device's snapshot 21 → 22 (`addDocumentsFields`).
+
+### Why
+- Home's To issue box, MUT-661 and the books all need to know what each income entry is due, per client, without a stored flag that can drift.
+
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

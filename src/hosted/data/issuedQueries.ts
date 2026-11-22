@@ -57,7 +57,7 @@ export function useIssueDocument(profileId: string) {
     mutationFn: ({ body, key }: { body: IssueDocumentRequest; key: string }): Promise<IssuedDocument> => api.issueDocument(profileId, body, key),
     onSuccess: (doc) => {
       queryClient.setQueryData(issuedKey(profileId, 'doc', doc.id), doc);
-      for (const scope of ['issued', 'receivables', 'receivable', 'payments', 'payment', 'summary', 'directory', 'customer']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
+      for (const scope of ['issued', 'documents-due', 'receivables', 'receivable', 'payments', 'payment', 'summary', 'directory', 'customer']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
       void queryClient.invalidateQueries({ queryKey: setupKey(profileId) });
     },
   });

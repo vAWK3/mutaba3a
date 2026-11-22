@@ -13,6 +13,8 @@ import { ReceiptsUnavailable } from '../views/ReceiptsGallery';
 import { OverdueGroup } from './OverdueGroup';
 import { ReceiptDropZone } from './ReceiptDropZone';
 import { ToReviewGroup } from './ToReviewGroup';
+import { ToIssueGroup } from './ToIssueGroup';
+import { useDocumentsDueCount } from '../../data/documentsDueQueries';
 
 /**
  * Home's Receipts & to-dos (MUT-657, "Two lanes"): an Add lane beside a Waiting lane, Add first in reading order and
@@ -67,19 +69,23 @@ function WaitingLane({ profile, availability, toReview }: { profile: HostedProfi
   const id = useId();
   const summary = useOrganizationSummary(profile.id);
   const names = useCustomerDirectory(profile.id);
+  const isLocal = useIsLocalMode();
   const reviewing = availability === 'on' ? toReview : 0;
   const overdue = summary.data ? overdueClientCount(summary.data) : 0;
+  // MUT-660: null where invoicing is off (and on this device), so the group never shows there.
+  const toIssueCount = useDocumentsDueCount(profile.id, !isLocal);
+  const toIssue = toIssueCount.data ?? 0;
 
   let body;
   if (summary.isError) body = <Unreachable onRetry={() => void summary.refetch()} />;
   else if (summary.isPending || availability === 'checking') body = <Skeleton rows={2} />;
-  else if (reviewing === 0 && overdue === 0) body = <CalmLine />;
+  else if (reviewing === 0 && overdue === 0 && toIssue === 0) body = <CalmLine />;
   else
     body = (
       <>
         {reviewing > 0 && <ToReviewGroup profileId={profile.id} count={reviewing} />}
         {overdue > 0 && summary.data && <OverdueGroup profileId={profile.id} count={overdue} clients={overdueClients(summary.data, OVERDUE_SHOWN)} names={names.data} />}
-        {/* TODO(blocked-by MUT-648 + not-for-invoice flag): the To invoice group sits here, once income can say it needs no invoice */}
+        {toIssue > 0 && <ToIssueGroup profileId={profile.id} count={toIssue} names={names.data} />}
         {/* MUT-604's rhythm and period cards will sit under these groups */}
       </>
     );

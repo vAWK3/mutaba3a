@@ -170,6 +170,8 @@ export interface MailSummaryProfile {
   /** The profile's overview, `{portal}/p/{id}`. */
   link: string;
   cameIn: MailMoney[];
+  /** MUT-660: invoicing profiles only: what came in, split into Invoice income and Not for invoice. */
+  invoiceSplit?: { invoiceIncome: MailMoney[]; notForInvoice: MailMoney[] };
   owed: MailMoney[];
   overdue: MailMoney[];
   overdueCount: number;

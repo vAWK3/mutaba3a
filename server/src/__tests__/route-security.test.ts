@@ -116,6 +116,13 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/preview/pdf',
+  // MUT-660: documents due, Issue all and the not-for-invoice marks.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
+  'POST /v1/documents-due/issue',
+  'POST /v1/documents-due/not-for-invoice',
+  'PUT /v1/receivables/{receivableId}/not-for-invoice',
+  'PUT /v1/payments/{paymentId}/not-for-invoice',
 ];
 
 /**
