@@ -397,6 +397,10 @@ model User {
   externalIdentities    ExternalIdentity[]
   malafatSignIns        MalafatSignIn[]
   signInCodes           SignInCode[]
+  /// MUT-710 (ADR-275): two-step sign-in, when on.
+  twoFactor              TwoFactor?
+  twoFactorRecoveryCodes TwoFactorRecoveryCode[]
+  twoFactorChallenges    TwoFactorChallenge[]
 
   @@map("users")
 }
@@ -462,6 +466,85 @@ model Membership {
 enum SessionKind {
   cookie
   device
+}
+
+/// MUT-710 (ADR-275): where the second step's code comes from.
+enum TwoFactorMethod {
+  totp
+  email
+}
+
+/// MUT-710: what a challenge is for. sign_in: between the first step and the session. enrol: proving a new method.
+/// reset: a password or setup link. manage: turning it off, new recovery codes.
+enum TwoFactorPurpose {
+  sign_in
+  enrol
+  reset
+  manage
+}
+
+/// MUT-710 (ADR-275): a person's two-step sign-in. No row = off.
+model TwoFactor {
+  userId           String          @id @db.Uuid
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  method           TwoFactorMethod
+  /// TOTP only: the base32 secret sealed with TWO_FACTOR_SEAL_KEY (AES-256-GCM, v1.<nonce>.<ct+tag>).
+  totpSecretSealed String?
+  /// TOTP only: the last time step accepted; a step at or before it is refused (no replay). Set by a conditional update.
+  lastUsedStep     BigInt?
+  /// D3: wrong second steps since failuresSince; 5 in 15 minutes set lockedUntil (15 minutes).
+  failures         Int             @default(0)
+  failuresSince    DateTime?
+  lockedUntil      DateTime?
+  enabledAt        DateTime
+  updatedAt        DateTime
+
+  @@map("two_factor")
+}
+
+/// MUT-710 (D9): one-time recovery codes, stored as HMAC digests under TWO_FACTOR_SEAL_KEY's recovery key.
+model TwoFactorRecoveryCode {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @db.Uuid
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeDigest String    @unique @db.VarChar(64)
+  createdAt  DateTime
+  usedAt     DateTime?
+
+  @@index([userId])
+  @@map("two_factor_recovery_codes")
+}
+
+/// MUT-710 (D2, D3, D8, D11): a pending second step. Only the token's digest is stored; every counter moves by a
+/// conditional update. Pruned 24 hours after it expires.
+model TwoFactorChallenge {
+  id                  String           @id @default(uuid()) @db.Uuid
+  userId              String           @db.Uuid
+  user                User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenDigest         String           @unique @db.VarChar(64)
+  purpose             TwoFactorPurpose
+  method              TwoFactorMethod
+  /// sign_in: the session kind and the first step (method, passkeyId) the session will carry.
+  sessionKind         SessionKind?
+  firstStep           Json?
+  /// users.passwordChangedAt when the challenge began; a password change in between voids it.
+  passwordChangedAt   DateTime?
+  /// reset: the setup link this challenge belongs to, consumed with it.
+  linkId              String?          @db.Uuid
+  /// enrol (TOTP): the new secret, sealed, until it is confirmed.
+  pendingSecretSealed String?
+  /// email: HMAC(pepper, challenge + code) of the last code mailed.
+  codeDigest          String?          @db.VarChar(64)
+  codeSentAt          DateTime?
+  codesSent           Int              @default(0)
+  attempts            Int              @default(0)
+  createdAt           DateTime
+  expiresAt           DateTime
+  consumedAt          DateTime?
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("two_factor_challenges")
 }
 
 /// MUT-235: SETUP is a person's first password; RESET an operator reset of an existing one.
@@ -581,6 +664,9 @@ model Session {
   /// MUT-459 (ADR-212): the last operator passkey step-up on this session. Separate from credentialsVerifiedAt, which
   /// guards the password-change revocation and a step-up must never move.
   stepUpAt              DateTime?
+  /// MUT-710 (ADR-275 D8, D10): when this session passed the second step (or turned it on). Issuing and the Tax
+  /// Authority need it. A password-change rotation copies it: changing the password isn't losing a factor.
+  twoFactorAt           DateTime?
 
   @@index([userId])
   @@index([passkeyId])
