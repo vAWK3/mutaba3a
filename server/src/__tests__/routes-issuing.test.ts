@@ -16,6 +16,7 @@ async function invoicing(h: AccountantHarness) {
   const profileId = await businessOf(h, owner, 'Barmajiyat');
   const on = owner.on(profileId);
   expect((await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT'))).status).toBe(200);
+  expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
   const customer = await read(await h.app.request('/v1/customers', json({ name: 'Acme Digital Ltd.' }, { ...on, ...idem() })));
   return { owner, profileId, on, customerId: customer.id as string };
 }

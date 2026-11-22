@@ -93,7 +93,7 @@ import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
-import { renderIssuedDocumentPdf } from './issuing/pdf/render.js';
+import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import type { RegistryLookup } from './israel/registry.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
@@ -378,7 +378,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.117.0-mut642';
+export const API_VERSION = '1.118.0-mut646';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -606,7 +606,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
-    issuedPdf: renderIssuedDocumentPdf,
+    issuedPdf: {
+      render: renderIssuedDocumentPdf,
+      logoPrints,
+      logoFailed: ({ organizationId, documentId, error }) => deps.logger.warn({ organizationId, documentId, err: error }, 'issued document printed without its logo'),
+    },
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.

@@ -2135,19 +2135,50 @@ model IssuerDetails {
   phone            String?
   email            String?
   website          String?
-  /// MUT-570/640: the business's logo, printed on its documents.
-  logoAttachmentId String?    @db.Uuid
   /// BLACK | BLUE: the only print colours (Basel, 2026-11-22).
   ink              String     @default("BLACK") @db.VarChar(5)
   /// A key in issuing/styles (PROFESSIONAL | MODERN | MINIMAL); a string so a new style needs no migration.
   documentStyle    String     @default("PROFESSIONAL") @db.VarChar(32)
   /// V1-a: the default for new documents (each document and line may differ).
   pricesIncludeVat Boolean    @default(false)
+  /// MUT-646: he | ar | en, the language new documents start in.
+  defaultLanguage  String     @default("he") @db.VarChar(2)
+  /// MUT-646: printed as the due date's default on a tax invoice (days after the document date).
+  paymentTermsDays Int?
+  bankDetails      String?
+  footerNote       String?
   version          Int        @default(1)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
 
   @@map("issuer_details")
+}
+
+/// MUT-646: where a profile stands in the invoicing setup. Its own row, so the logo, numbering and intro can be done before the details.
+model IssuingSetup {
+  organizationId      String    @id @db.Uuid
+  /// The current logo (issuer_logos.id); issued documents keep the id they were issued with.
+  logoId              String?   @db.Uuid
+  numberingAnsweredAt DateTime?
+  introSeenAt         DateTime?
+  defaultsSavedAt     DateTime?
+  updatedAt           DateTime  @updatedAt
+
+  @@map("issuing_setup")
+}
+
+/// MUT-646: every logo a profile ever uploaded, never changed or removed, so an issued document always prints its own.
+model IssuerLogo {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// image/png | image/jpeg, from the file's own bytes.
+  contentType    String   @db.VarChar(10)
+  bytes          Bytes
+  sha256         String   @db.VarChar(64)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("issuer_logos")
 }
 
 /// Next number per profile and document type, never per year. `start` is the first number (D3), kept for the gap report.

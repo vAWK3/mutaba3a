@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Invoicing setup: details, logo, defaults, numbering, and nothing issued before them (MUT-646, ADR-263, API 1.118.0-mut646)
+
+### Added
+- `GET /v1/issuing/setup` (five steps, `canIssue`, `missing`), `POST /v1/issuing/setup/intro-seen`, `PUT /v1/issuing/numbering` ("already issuing elsewhere?", the D3 starting numbers in one answer).
+- `PUT /v1/issuer/defaults`: style, ink, document language, VAT pricing, payment terms, bank details, footer (If-Match the details' version).
+- `PUT/GET/DELETE /v1/issuer/logo`: a PNG or JPEG up to 256 KB, checked by its bytes and a trial print; every upload kept (`issuer_logos`), so each issued document prints the logo it was issued with (its issuer snapshot's `logoId`).
+- Portal: You › Profiles › Invoicing (`/p/:id/you/invoicing`): three introduction cards, then the letterhead with its five numbered regions and each step's form beside it; the paper follows the typing. QA `portal.invoicing.setup`, `portal.invoicing.setup-hidden`.
+
+### Changed
+- `POST /v1/issued-documents` answers 409 `ISSUING_SETUP_INCOMPLETE` (`details.missing`) until the business details and the numbering answer are in (S1-a).
+- `PUT /v1/issuer` keeps the defaults it doesn't carry (and `pricesIncludeVat` when omitted on an update).
+- Issued documents' PDFs print the logo (MUT-640 passed none).
+
+### Technical
+- Migration `20261122160000_mut646_issuer_setup` (drops the unused `issuer_details.logoAttachmentId`; adds the defaults, `issuing_setup`, `issuer_logos`). `DOCUMENT_STYLES` moved to `issuing/types.ts`. Purge catalog: `issuing_setup` deleted with the profile, `issuer_logos` kept with the documents (MUT-644).
+
 ## [Unreleased] - 2026-11-22 — A client's VAT or company number and address, from the registry (MUT-642, ADR-262, API 1.117.0-mut642)
 
 ### Added

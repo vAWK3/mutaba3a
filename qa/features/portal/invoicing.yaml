@@ -1,0 +1,45 @@
+app: portal
+area: invoicing
+title: Issuing documents — the invoicing setup (You › Profiles › Invoicing)
+tier: secondary
+# MUT-646 (epic MUT-566, round 3 variant 2): the letterhead is the map of the setup. Its five numbered regions are the
+# steps (details, logo, defaults, numbering, Tax Authority); each saves on its own; issuing waits for the details and
+# the numbering answer (the server's 409 ISSUING_SETUP_INCOMPLETE). Issuing itself is MUT-570's.
+paths:
+  - src/hosted/pages/invoicing/**
+  - src/hosted/data/issuingQueries.ts
+  - src/hosted/components/InvoicingEntryRow.tsx
+features:
+  - id: setup
+    title: Set up issuing from the three introduction cards to a ready letterhead, each step saved on its own
+    tier: secondary
+    tickets: [MUT-646]
+    paths:
+      - src/hosted/pages/you/YouProfiles.tsx
+    steps:
+      - Open You › Profiles on Nour Studio and choose Invoicing
+      - Read the three cards and choose Begin setup
+      - Type the company number; the registry fills the legal name and address; choose Next
+      - Choose a PNG logo, then Next
+      - Choose Modern, blue ink and English; choose Next
+      - Answer that numbering continues from another system at tax invoice 1043; choose Next
+      - Open it in Arabic
+    expect:
+      - The introduction says what can be issued, that issued documents are final (corrected by a credit note), and what allocation numbers are
+      - Until the details and numbering are saved, the page says issuing opens once Business details and Numbering are complete
+      - The letterhead shows the registry's name, ח.פ. and the number, and the address as they fill, before saving; Next saves PUT /v1/issuer and region 1 is ticked
+      - The logo appears in the letterhead's logo region and PUT /v1/issuer/logo carries the image
+      - Style, ink and language change the letterhead at once (Modern, blue, left to right with "Tax invoice"); Next saves PUT /v1/issuer/defaults with If-Match
+      - Typing 1043 shows "Tax invoice 1043" on the paper; Next saves PUT /v1/issuing/numbering and the page says the letterhead is ready, 4 of 5 complete
+      - In Arabic the page reads right to left and the regions are named الخطوة 1 … 5
+  - id: setup-hidden
+    title: Only a business profile whose owner issues documents has the way in
+    tier: secondary
+    tickets: [MUT-646]
+    paths:
+      - src/hosted/pages/you/YouProfiles.tsx
+    steps:
+      - Open You › Profiles on a server where issuing is off for the person
+      - Open the invoicing page's address directly
+    expect:
+      - There is no Invoicing row, and the page's address sends the person back to You › Profiles

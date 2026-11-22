@@ -11,6 +11,7 @@ async function invoicing(h: AccountantHarness) {
   const profileId = await businessOf(h, owner, 'Barmajiyat');
   const on = owner.on(profileId);
   expect((await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT'))).status).toBe(200);
+  expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
   const customer = await read(await h.app.request('/v1/customers', json({ name: 'Acme Digital Ltd.' }, { ...on, ...idem() })));
   const body = { docType: 'TAX_INVOICE', documentDate: '2026-11-05', currency: 'ILS', language: 'he', customerId: customer.id, lines: [{ description: 'פיתוח Flutter', kind: 'SERVICE', quantity: '1', unitPrice: '1000.00' }] };
   return { owner, profileId, on, body };

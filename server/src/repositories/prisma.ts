@@ -32,6 +32,7 @@ import type {
   IssueResult,
   IssuedDocumentRecord,
   IssuingRepository,
+  IssuerLogoRecord,
   MonthlySummaryChoice,
   OperatorAccountCursor,
   VendorRecord,
@@ -199,6 +200,14 @@ import { numberGaps } from '../issuing/gaps.js';
 import type { IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
+
+/** MUT-646 */
+const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
+const toLogo = (row: { id: string; organizationId: string; contentType: string; bytes: Uint8Array; sha256: string; createdAt: Date }): IssuerLogoRecord => ({
+  ...row,
+  contentType: row.contentType === 'image/png' ? 'image/png' : 'image/jpeg',
+  bytes: new Uint8Array(row.bytes),
+});
 
 /**
  * Production LedgerStore over Postgres.
@@ -805,6 +814,26 @@ export class PrismaLedgerStore implements LedgerStore {
       const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
       if (!record) return { kind: 'not_found' };
       return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    getSetup: (organizationId) => this.prisma.issuingSetup.findUnique({ where: { organizationId }, select: SETUP_SELECT }),
+    markSetup: async (organizationId, mark, at) => {
+      await this.prisma.issuingSetup.upsert({ where: { organizationId }, create: { organizationId, [mark]: at, updatedAt: at }, update: {} });
+      // First stamp wins: a repeat (or a racing twin) leaves it as it was.
+      await this.prisma.issuingSetup.updateMany({ where: { organizationId, [mark]: null }, data: { [mark]: at, updatedAt: at } });
+      return this.prisma.issuingSetup.findUniqueOrThrow({ where: { organizationId }, select: SETUP_SELECT });
+    },
+    addLogo: (organizationId, logo, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const row = await tx.issuerLogo.create({ data: { organizationId, contentType: logo.contentType, bytes: Buffer.from(logo.bytes), sha256: logo.sha256, createdAt: at } });
+        await tx.issuingSetup.upsert({ where: { organizationId }, create: { organizationId, logoId: row.id, updatedAt: at }, update: { logoId: row.id, updatedAt: at } });
+        return toLogo(row);
+      }),
+    clearLogo: async (organizationId, at) => {
+      await this.prisma.issuingSetup.updateMany({ where: { organizationId }, data: { logoId: null, updatedAt: at } });
+    },
+    getLogo: async (organizationId, logoId) => {
+      const row = await this.prisma.issuerLogo.findFirst({ where: { id: logoId, organizationId } });
+      return row ? toLogo(row) : null;
     },
     counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
     setStartingNumber: (organizationId, docType, start) =>

@@ -200,7 +200,7 @@ An API key still implies its organization, and no API-key request accepts an org
 | capture | capture:write | /v1/income* | none | read-write | USER | device |
 | identity | — | /v1/me, /v1/me/*, /v1/sessions/current, /v1/profiles* | none | read-write | USER | device |
 | conversions | conversions:read, conversions:write | /v1/conversions* | none | read-write | USER | device |
-| issuing | issuing:read, issuing:write | /v1/issuer, /v1/issuing/*, /v1/issued-documents* | none | read-write | USER | device |
+| issuing | issuing:read, issuing:write | /v1/issuer*, /v1/issuing/*, /v1/issued-documents* | none | read-write | USER | device |
 <!-- writability-matrix:end -->
 
 > **MUT-61 (2026-10-12):** the `capture` row lets a person record Received on *any* hosted profile, a Malafat-fed one included, without widening `payments`. What each profile then accepts on `POST /v1/income` is `incomeCaptureRulesFor(writerOfRecord)`, published per profile as `income` on `GET /v1/me`. On a Malafat-fed profile that is Received only, for a Malafat-linked client, stored unallocated (`origin: capture`) for Malafat to allocate. See ADR-037's MUT-61 amendment.

@@ -86,6 +86,7 @@ describe('issued documents carry the customer number and address (MUT-642 AC2)',
     const w = await profile(h);
     expect((await h.app.request(`/admin/v1/users/${w.owner.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
     expect((await h.app.request('/v1/issuer', json({ legalName: 'Barmajiyat Ltd.', vatId: '516123452', dealerType: 'COMPANY' }, w.on, 'PUT'))).status).toBe(200);
+    expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, w.on, 'PUT'))).status).toBe(200);
     const customer = await read(await h.app.request('/v1/customers', json({ name: 'Acme', taxId: '510000045', address: '5 Herzl St, Haifa' }, { ...w.on, ...idem() })));
     const body = { docType: 'TAX_INVOICE', documentDate: '2026-11-05', currency: 'ILS', language: 'en', customerId: customer.id, lines: [{ description: 'Sprint', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] };
     const doc = await read(await h.app.request('/v1/issued-documents', json(body, { ...w.on, ...idem() })));

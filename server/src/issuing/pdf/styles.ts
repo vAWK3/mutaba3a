@@ -2,15 +2,16 @@ import type { PdfFontFamily } from '../../pdf/fonts.js';
 import type { DocumentLanguage } from '../labels.js';
 import { documentFrame, kit, lineRows, logoNode, type Kit, type Node } from './layout.js';
 import type { PdfViewModel } from './model.js';
+import { DOCUMENT_STYLES, type DocumentStyle } from '../types.js';
+
+export { DOCUMENT_STYLES, type DocumentStyle };
 
 /**
  * MUT-640: the document styles a business chooses (Basel, 2026-11-22; canvas https://claude.ai/artifact/EevXQWU3AyFvJxugLTGrNC).
  * Each is a layout over the same view model: they differ in layout, typeface, size and information architecture,
- * never in colour (black or blue ink on white). A new style is one entry here plus its fixtures in the gate test.
+ * never in colour (black or blue ink on white). A new style is one entry in issuing/types plus its layout here and its
+ * fixtures in the gate test.
  */
-export const DOCUMENT_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'] as const;
-export type DocumentStyle = (typeof DOCUMENT_STYLES)[number];
-
 interface StyleDefinition {
   fonts: Record<DocumentLanguage, readonly PdfFontFamily[]>;
   layout: (k: Kit) => Node;

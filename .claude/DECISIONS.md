@@ -6766,3 +6766,25 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** Nevo or paid company-data APIs (cost, contracts); scanning a certificate (MUT-650, later); validating against the Tax Authority's dealer list (no open API).
 
+## ADR-263: Issuing Waits for a Five-Step Setup; Logos Are Kept Like the Documents That Print Them (MUT-646)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-646-invoicing-setup.md`; wireframe round 3, variant 2, approved by Basel).
+
+**Context:** no invoice may go out missing what the law prints on it, and a business moving from another tool must continue its numbering. The setup has to be a guided five minutes, on the portal and the phone.
+
+**Decision:**
+1. Five steps: business details (required), logo, defaults (style, ink, language, VAT pricing, payment terms, bank details, footer), numbering (required: "already issuing elsewhere?"), Tax Authority (`later` until MUT-571). `GET /v1/issuing/setup` is the one source of progress; each step saves on its own route.
+2. Hard gate (S1-a): `POST /v1/issued-documents` → 409 `CONFLICT` reason `ISSUING_SETUP_INCOMPLETE`, `details.missing` (`DETAILS`, `NUMBERING`), checked before any number is taken. The preview stays open.
+3. The setup's progress lives in its own row (`issuing_setup`), not on `issuer_details`: the logo, the numbering answer and the introduction can come before the details (which need a name and a number to exist).
+4. The defaults are their own route (`PUT /v1/issuer/defaults`, If-Match the details' version); `PUT /v1/issuer` keeps them. Saving the defaults is what marks that step done.
+5. Logos are append-only rows (`issuer_logos`, bytea ≤ 256 KB, PNG/JPEG by their own bytes and an engine trial print, since a broken image takes the decoder seconds to refuse); the current one is `issuing_setup.logoId`. A document snapshots `issuer.logoId` at issue and its PDF loads that row, so replacing or removing the logo never changes an issued document. A logo the engine can't draw at print time costs the logo, never the copy.
+6. Portal page under You (`/p/:id/you/invoicing`, like Sharing), shown only where `GET /v1/issuing/setup` answers (a 404 is issuing off); the letterhead is HTML, not the PDF, and follows each form as it is typed.
+
+**Drift from the plan:** the page path is `/you/invoicing` (the You convention) rather than `/settings/invoicing`; progress is a separate table rather than columns on `issuer_details` (point 3); the defaults have their own route rather than extending `PUT /v1/issuer`.
+
+**Pre-landing review (2026-11-22):** a numbering answer is checked whole before anything changes (no half-applied starts); "No" puts back to 1 every type without documents, so a corrected answer can't leave an earlier "yes" in place; a logo that fails at print time is logged (`logoFailed`), not just dropped; the portal shows an error with Try again instead of an endless skeleton, keeps a form as typed after a version conflict, never sets the letterhead's state while rendering, and lets only an owner see the introduction and the forms (anyone else reads the letterhead).
+
+**Consequences:** existing issuing tests answer the numbering question first; a profile issuing on dev before this lands must answer it once. Logos sit in Postgres (no blob storage, no cost); they are kept with the documents under MUT-644's retention.
+
+**Alternatives rejected:** a soft gate (a banner only) — S1-a chose the hard one; storing the logo as an attachment (its bucket object could be deleted or replaced under an issued document).
+

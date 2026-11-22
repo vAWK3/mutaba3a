@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.117.0-mut642
+  version: 1.118.0-mut646
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9494,6 +9494,17 @@ components:
           type: string
         pricesIncludeVat:
           type: boolean
+        defaultLanguage:
+          type: string
+        paymentTermsDays:
+          type: integer
+          nullable: true
+        bankDetails:
+          type: string
+          nullable: true
+        footerNote:
+          type: string
+          nullable: true
         version:
           type: integer
       required:
@@ -9508,6 +9519,10 @@ components:
         - ink
         - documentStyle
         - pricesIncludeVat
+        - defaultLanguage
+        - paymentTermsDays
+        - bankDetails
+        - footerNote
         - version
     DealerType:
       type: string
@@ -9558,6 +9573,143 @@ components:
         - legalName
         - vatId
         - dealerType
+    IssuerDefaultsRequest:
+      type: object
+      properties:
+        documentStyle:
+          type: string
+          enum:
+            - PROFESSIONAL
+            - MODERN
+            - MINIMAL
+          description: The layout new documents print in
+        ink:
+          type: string
+          enum:
+            - BLACK
+            - BLUE
+          description: Black or blue ink on white paper
+        defaultLanguage:
+          $ref: "#/components/schemas/DocumentLanguage"
+        pricesIncludeVat:
+          type: boolean
+        paymentTermsDays:
+          type: integer
+          nullable: true
+          minimum: 0
+          maximum: 365
+          description: A tax invoice’s default due date, in days after its date
+        bankDetails:
+          type: string
+          nullable: true
+          maxLength: 300
+          description: Printed for paying by transfer
+        footerNote:
+          type: string
+          nullable: true
+          maxLength: 300
+          description: Printed at the foot of every document
+      required:
+        - documentStyle
+        - ink
+        - defaultLanguage
+        - pricesIncludeVat
+    DocumentLanguage:
+      type: string
+      enum:
+        - ar
+        - he
+        - en
+    IssuingSetup:
+      type: object
+      properties:
+        steps:
+          type: object
+          properties:
+            details:
+              type: string
+              enum:
+                - done
+                - todo
+                - later
+            logo:
+              type: string
+              enum:
+                - done
+                - todo
+                - later
+            defaults:
+              type: string
+              enum:
+                - done
+                - todo
+                - later
+            numbering:
+              type: string
+              enum:
+                - done
+                - todo
+                - later
+            taxAuthority:
+              type: string
+              enum:
+                - done
+                - todo
+                - later
+          required:
+            - details
+            - logo
+            - defaults
+            - numbering
+            - taxAuthority
+        canIssue:
+          type: boolean
+        missing:
+          type: array
+          items:
+            type: string
+            enum:
+              - DETAILS
+              - NUMBERING
+          description: What blocks issuing (empty when canIssue)
+        introSeen:
+          type: boolean
+        hasLogo:
+          type: boolean
+      required:
+        - steps
+        - canIssue
+        - missing
+        - introSeen
+        - hasLogo
+    IssuingNumberingRequest:
+      type: object
+      properties:
+        alreadyIssuing:
+          type: boolean
+        starts:
+          type: object
+          properties:
+            TAX_INVOICE:
+              type: integer
+              minimum: 1
+              maximum: 999999999
+            TAX_INVOICE_RECEIPT:
+              type: integer
+              minimum: 1
+              maximum: 999999999
+            CREDIT_NOTE:
+              type: integer
+              minimum: 1
+              maximum: 999999999
+            RECEIPT:
+              type: integer
+              minimum: 1
+              maximum: 999999999
+          additionalProperties: false
+          description: The next number per document type, when moving from another tool
+      required:
+        - alreadyIssuing
     IssuingSettings:
       type: object
       properties:
@@ -9802,12 +9954,6 @@ components:
         - currency
         - language
         - lines
-    DocumentLanguage:
-      type: string
-      enum:
-        - ar
-        - he
-        - en
     IssuedDocument:
       allOf:
         - $ref: "#/components/schemas/IssuedDocumentPreview"
@@ -23836,6 +23982,345 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuer/defaults:
+    put:
+      tags:
+        - Issuing
+      summary: Set the defaults new documents start with
+      description: "MUT-646: the style, ink, language, VAT pricing, payment terms, bank details and footer. Needs the business details first (422 ISSUER_DETAILS_REQUIRED) and their version in If-Match. Issued documents keep what they were issued with."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssuerDefaultsRequest"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuerDetails"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuer/logo:
+    put:
+      tags:
+        - Issuing
+      summary: Set the logo printed on documents
+      description: "MUT-646: the raw PNG or JPEG file, at most 256 KB (413 beyond). The type is read from the file itself (422 LOGO_NOT_AN_IMAGE). Each upload is kept unchanged, so documents already issued go on printing the logo they were issued with."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      requestBody:
+        required: true
+        content:
+          image/png:
+            schema:
+              type: string
+              format: binary
+          image/jpeg:
+            schema:
+              type: string
+              format: binary
+      responses:
+        "204":
+          description: Saved
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "413":
+          description: PAYLOAD_TOO_LARGE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    get:
+      tags:
+        - Issuing
+      summary: The logo printed on new documents
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The image
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    delete:
+      tags:
+        - Issuing
+      summary: Print new documents without a logo
+      description: "MUT-646: issued documents keep theirs."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "204":
+          description: Removed
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/numbering:
+    put:
+      tags:
+        - Issuing
+      summary: Answer “already issuing documents elsewhere?”
+      description: "MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssuingNumberingRequest"
+      responses:
+        "200":
+          description: Answered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingSetup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/setup:
+    get:
+      tags:
+        - Issuing
+      summary: Where this profile stands in the invoicing setup
+      description: "MUT-646: the five steps; `canIssue` once the business details and the numbering answer are in (`missing` says which is not). The Tax Authority step stays `later` until the connection exists (MUT-571)."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The setup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingSetup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/setup/intro-seen:
+    post:
+      tags:
+        - Issuing
+      summary: The introduction to issuing was read
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The setup
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingSetup"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
   /v1/issuing/settings:
     get:
       tags:
@@ -24000,7 +24485,7 @@ paths:
       tags:
         - Issuing
       summary: Issue a tax invoice, invoice-receipt, receipt or credit note
-      description: "Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document."
+      description: "Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document. MUT-646: 409 ISSUING_SETUP_INCOMPLETE (`details.missing`) until the business details and the numbering answer are in."
       security:
         - session: []
         - deviceSession: []
@@ -24042,6 +24527,12 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:

@@ -1,5 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import { bodyLimit } from 'hono/body-limit';
+import { createHash } from 'node:crypto';
 import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
@@ -9,12 +11,13 @@ import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { copyLabel } from '../issuing/copies.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
-import { ISSUED_DOC_TYPES } from '../issuing/types.js';
+import { ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
+  ErrorEnvelopeSchema,
   IssueDocumentRequestSchema,
   IssuedCopyRequestSchema,
   IssuedDocTypeParamSchema,
@@ -22,10 +25,13 @@ import {
   IssuedDocumentPageSchema,
   IssuedDocumentPreviewSchema,
   IssuedDocumentSchema,
+  IssuerDefaultsRequestSchema,
   IssuerDetailsRequestSchema,
   IssuerDetailsSchema,
   IssuingCounterSchema,
   IssuingGapsSchema,
+  IssuingNumberingRequestSchema,
+  IssuingSetupSchema,
   IssuingSettingsSchema,
   ListIssuedDocumentsQuerySchema,
   StartingNumberRequestSchema,
@@ -39,8 +45,56 @@ import { PERSON_OR_MALAFAT } from './security.js';
 const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
   customer ? { name: customer.name, ...(customer.taxId ? { taxId: customer.taxId } : {}), ...(customer.address ? { address: customer.address } : {}) } : {};
 
-/** The business details printed on a document, frozen on it at issue. */
-const issuerSnapshot = (issuer: IssuerDetailsRecord): JsonObject => ({ legalName: issuer.legalName, vatId: issuer.vatId, dealerType: issuer.dealerType, address: issuer.address, city: issuer.city, phone: issuer.phone, email: issuer.email, website: issuer.website });
+/** The business details printed on a document, frozen on it at issue (MUT-646: with the logo it prints, by id). */
+const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): JsonObject => ({
+  legalName: issuer.legalName,
+  vatId: issuer.vatId,
+  dealerType: issuer.dealerType,
+  address: issuer.address,
+  city: issuer.city,
+  phone: issuer.phone,
+  email: issuer.email,
+  website: issuer.website,
+  ...(issuer.bankDetails ? { bankDetails: issuer.bankDetails } : {}),
+  ...(issuer.footerNote ? { footerNote: issuer.footerNote } : {}),
+  ...(logoId ? { logoId } : {}),
+});
+
+/** MUT-646: a logo is a PNG or a JPEG of at most this size, told apart by its first bytes (never the header's word). */
+export const ISSUER_LOGO_MAX_BYTES = 256 * 1024;
+const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+const logoTypeOf = (bytes: Uint8Array): 'image/png' | 'image/jpeg' | null => {
+  const at = (i: number) => bytes[i] ?? -1;
+  // A PNG: its signature, then an IHDR chunk with a width and height, and an IEND at the end.
+  if (PNG_SIGNATURE.every((b, i) => at(i) === b)) {
+    const ihdr = String.fromCharCode(at(12), at(13), at(14), at(15)) === 'IHDR';
+    const size = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    const sized = bytes.length > 24 && size.getUint32(16) > 0 && size.getUint32(20) > 0;
+    const end = String.fromCharCode(at(bytes.length - 8), at(bytes.length - 7), at(bytes.length - 6), at(bytes.length - 5)) === 'IEND';
+    return ihdr && sized && end ? 'image/png' : null;
+  }
+  // A JPEG: its start marker, a frame header (SOF0-2) and its end marker.
+  if (at(0) === 0xff && at(1) === 0xd8 && at(bytes.length - 2) === 0xff && at(bytes.length - 1) === 0xd9) {
+    for (let i = 2; i < bytes.length - 1; i++) if (at(i) === 0xff && at(i + 1) >= 0xc0 && at(i + 1) <= 0xc2) return 'image/jpeg';
+  }
+  return null;
+};
+
+/** MUT-646 (S1-a): what still blocks issuing. The logo and the defaults are optional; the Tax Authority waits for MUT-571. */
+export function setupMissing(issuer: IssuerDetailsRecord | null, setup: IssuingSetupRecord | null): ('DETAILS' | 'NUMBERING')[] {
+  return [...(issuer ? [] : ['DETAILS' as const]), ...(setup?.numberingAnsweredAt ? [] : ['NUMBERING' as const])];
+}
+
+/** The details' defaults before the defaults step is saved. */
+const DEFAULTS: Pick<IssuerDetailsInput, 'ink' | 'documentStyle' | 'defaultLanguage' | 'paymentTermsDays' | 'bankDetails' | 'footerNote' | 'pricesIncludeVat'> = {
+  ink: 'BLACK',
+  documentStyle: 'PROFESSIONAL',
+  defaultLanguage: 'he',
+  paymentTermsDays: null,
+  bankDetails: null,
+  footerNote: null,
+  pricesIncludeVat: false,
+};
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const json = <T>(description: string, schema: T) => ({ description, content: { 'application/json': { schema } } });
@@ -58,9 +112,16 @@ type IssueRequest = z.infer<typeof IssueDocumentRequestSchema>;
  * these routes in the browser, where Node's fonts and files don't exist: it passes none, and the PDF routes aren't
  * registered there (it has no issuing either). Typed here so the browser bundle never imports the renderer.
  */
-export type IssuedPdfRenderer = (doc: IssuedDocumentRecord, options: { mark: 'ORIGINAL' | 'COPY' | 'DRAFT'; originalNumber: number | null; logo: null }) => Promise<Uint8Array>;
+export type IssuedPdfRenderer = (doc: IssuedDocumentRecord, options: { mark: 'ORIGINAL' | 'COPY' | 'DRAFT'; originalNumber: number | null; logo: Uint8Array | null }) => Promise<Uint8Array>;
+export interface IssuedPdf {
+  render: IssuedPdfRenderer;
+  /** MUT-646: whether the PDF engine can draw this logo (checked once, at upload). */
+  logoPrints(bytes: Uint8Array): Promise<boolean>;
+  /** MUT-646: told when a document printed without its logo because the logo could not be drawn. */
+  logoFailed?(details: { organizationId: string; documentId: string; error: unknown }): void;
+}
 
-export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: IssuedPdfRenderer | null = null): OpenAPIHono<AppEnv> {
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   /** The selected profile, if issuing is on for it. The feature is the owner's, so co-owners and accountants see the same. */
@@ -83,6 +144,35 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
     const issuer = await store.issuing.getIssuer(organizationId);
     if (!issuer) throw new ApiError('VALIDATION_FAILED', 'Add the business details printed on documents first', { reason: 'ISSUER_DETAILS_REQUIRED' });
     return issuer;
+  }
+
+  /** The If-Match version, or null when the header is absent. */
+  function ifMatch(c: Context<AppEnv>): number | null {
+    const header = c.req.header('if-match');
+    const expected = header === undefined ? null : Number(header.replace(/"/g, ''));
+    if (expected !== null && !Number.isInteger(expected)) throw new ApiError('VALIDATION_FAILED', 'If-Match must be a version number', { field: 'If-Match' });
+    return expected;
+  }
+
+  /** MUT-646: the logo a document prints: the one its snapshot names, else (a draft) the profile's current one. */
+  async function logoBytes(organizationId: string, logoId: unknown): Promise<Uint8Array | null> {
+    if (typeof logoId !== 'string') return null;
+    return (await store.issuing.getLogo(organizationId, logoId))?.bytes ?? null;
+  }
+
+  /**
+   * MUT-646: a document always prints. A logo the PDF engine can't read (it passed the upload's checks but is broken
+   * inside) costs the logo, never the copy the customer is owed.
+   */
+  async function renderPdf(render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>): Promise<Uint8Array> {
+    const logo = await logoBytes(doc.organizationId, doc.issuer.logoId);
+    if (!logo) return render(doc, { ...options, logo: null });
+    try {
+      return await render(doc, { ...options, logo });
+    } catch (error) {
+      issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
+      return render(doc, { ...options, logo: null });
+    }
   }
 
   /** The request's shape rules per type, then the pure compose (both the preview and the issue run this). */
@@ -164,15 +254,203 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
     async (c) => {
       const organization = await issuingProfile(c, true);
       const body = c.req.valid('json');
-      const header = c.req.header('if-match');
-      const expectedVersion = header === undefined ? null : Number(header.replace(/"/g, ''));
-      if (expectedVersion !== null && !Number.isInteger(expectedVersion)) throw new ApiError('VALIDATION_FAILED', 'If-Match must be a version number', { field: 'If-Match' });
-      const input = { legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? false };
+      const expectedVersion = ifMatch(c);
+      // MUT-646: the defaults have their own step (PUT /v1/issuer/defaults); saving the details keeps them.
+      const current = expectedVersion === null ? null : await store.issuing.getIssuer(organization.id);
+      const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote } : DEFAULTS;
+      const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No business details yet; send them without If-Match');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
       await audit(c, 'issuer_details.saved', 'issuer_details', organization.id);
       return c.json(serializeIssuer(result.record), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/issuer/defaults',
+      tags: ['Issuing'],
+      summary: 'Set the defaults new documents start with',
+      description: 'MUT-646: the style, ink, language, VAT pricing, payment terms, bank details and footer. Needs the business details first (422 ISSUER_DETAILS_REQUIRED) and their version in If-Match. Issued documents keep what they were issued with.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:write')] as const,
+      request: { body: jsonBody(IssuerDefaultsRequestSchema) },
+      responses: { 200: json('Saved', IssuerDetailsSchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      const body = c.req.valid('json');
+      const expectedVersion = ifMatch(c);
+      if (expectedVersion === null) throw new ApiError('VALIDATION_FAILED', 'Send the details’ version in If-Match', { field: 'If-Match' });
+      const current = await mustIssuer(organization.id);
+      const details = { legalName: current.legalName, vatId: current.vatId, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
+      const input: IssuerDetailsInput = { ...details, documentStyle: body.documentStyle, ink: body.ink, defaultLanguage: body.defaultLanguage, pricesIncludeVat: body.pricesIncludeVat, paymentTermsDays: body.paymentTermsDays ?? null, bankDetails: body.bankDetails || null, footerNote: body.footerNote || null };
+      const now = c.get('now')();
+      const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, now);
+      if (result.kind === 'not_found') throw new ApiError('VALIDATION_FAILED', 'Add the business details printed on documents first', { reason: 'ISSUER_DETAILS_REQUIRED' });
+      if (result.kind === 'stale') throw versionMismatch(result.record.version);
+      await store.issuing.markSetup(organization.id, 'defaultsSavedAt', now);
+      await audit(c, 'issuer_details.defaults_saved', 'issuer_details', organization.id);
+      return c.json(serializeIssuer(result.record), 200);
+    },
+  );
+
+  const logoError = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
+  app.use(
+    '/v1/issuer/logo',
+    bodyLimit({
+      maxSize: ISSUER_LOGO_MAX_BYTES,
+      onError: (c) => {
+        const err = new ApiError('PAYLOAD_TOO_LARGE', `A logo is at most ${ISSUER_LOGO_MAX_BYTES / 1024} KB`);
+        return c.json(err.toEnvelope(c.get('requestId')), err.status);
+      },
+    }),
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/issuer/logo',
+      tags: ['Issuing'],
+      summary: 'Set the logo printed on documents',
+      description: `MUT-646: the raw PNG or JPEG file, at most ${ISSUER_LOGO_MAX_BYTES / 1024} KB (413 beyond). The type is read from the file itself (422 LOGO_NOT_AN_IMAGE). Each upload is kept unchanged, so documents already issued go on printing the logo they were issued with.`,
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:write')] as const,
+      request: { body: { required: true, content: { 'image/png': { schema: z.string().openapi({ format: 'binary' }) }, 'image/jpeg': { schema: z.string().openapi({ format: 'binary' }) } } } },
+      responses: { 204: { description: 'Saved' }, 413: logoError('PAYLOAD_TOO_LARGE'), ...validationResponse, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      const bytes = new Uint8Array(await c.req.arrayBuffer());
+      if (bytes.length > ISSUER_LOGO_MAX_BYTES) throw new ApiError('PAYLOAD_TOO_LARGE', `A logo is at most ${ISSUER_LOGO_MAX_BYTES / 1024} KB`);
+      const contentType = logoTypeOf(bytes);
+      if (!contentType || (issuedPdf && !(await issuedPdf.logoPrints(bytes)))) throw new ApiError('VALIDATION_FAILED', 'A logo is a PNG or a JPEG file', { field: 'body', reason: 'LOGO_NOT_AN_IMAGE' });
+      const logo = await store.issuing.addLogo(organization.id, { contentType, bytes, sha256: createHash('sha256').update(bytes).digest('hex') }, c.get('now')());
+      await audit(c, 'issuer_logo.saved', 'issuer_details', organization.id, { logoId: logo.id, bytes: bytes.length });
+      return c.body(null, 204);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issuer/logo',
+      tags: ['Issuing'],
+      summary: 'The logo printed on new documents',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      responses: { 200: { description: 'The image', content: { 'image/png': { schema: z.string().openapi({ format: 'binary' }) }, 'image/jpeg': { schema: z.string().openapi({ format: 'binary' }) } } }, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, false);
+      const setup = await store.issuing.getSetup(organization.id);
+      const logo = setup?.logoId ? await store.issuing.getLogo(organization.id, setup.logoId) : null;
+      if (!logo) throw new ApiError('NOT_FOUND', 'No logo');
+      return c.body(logo.bytes as Uint8Array<ArrayBuffer>, 200, { 'Content-Type': logo.contentType, 'Cache-Control': 'private, no-cache', 'X-Content-Type-Options': 'nosniff' });
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/v1/issuer/logo',
+      tags: ['Issuing'],
+      summary: 'Print new documents without a logo',
+      description: 'MUT-646: issued documents keep theirs.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:write')] as const,
+      responses: { 204: { description: 'Removed' }, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      await store.issuing.clearLogo(organization.id, c.get('now')());
+      await audit(c, 'issuer_logo.removed', 'issuer_details', organization.id);
+      return c.body(null, 204);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/issuing/numbering',
+      tags: ['Issuing'],
+      summary: 'Answer “already issuing documents elsewhere?”',
+      description:
+        'MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:write')] as const,
+      request: { body: jsonBody(IssuingNumberingRequestSchema) },
+      responses: { 200: json('Answered', IssuingSetupSchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      const { alreadyIssuing, starts } = c.req.valid('json');
+      const entries = (Object.entries(starts ?? {}) as [IssuedDocType, number | undefined][]).filter((e): e is [IssuedDocType, number] => e[1] !== undefined);
+      if (alreadyIssuing && entries.length === 0) throw new ApiError('VALIDATION_FAILED', 'Say where the numbering continues for at least one document type', { field: 'starts', reason: 'STARTS_REQUIRED' });
+      if (!alreadyIssuing && entries.length > 0) throw new ApiError('VALIDATION_FAILED', 'Starting numbers go with alreadyIssuing: true', { field: 'starts', reason: 'FIELD_NOT_ALLOWED' });
+      // Review fix: refuse before changing anything, so a refused answer is never half applied.
+      const counters = await store.issuing.counters(organization.id);
+      const issued = new Set(counters.filter((k) => k.next > k.start).map((k) => k.docType));
+      const fixed = entries.find(([docType]) => issued.has(docType));
+      if (fixed) throw new ApiError('CONFLICT', 'Documents of this type were already issued; their numbering is fixed', { reason: 'HAS_DOCUMENTS', docType: fixed[0] });
+      // "No" puts every type without documents back to 1, so a corrected answer never leaves an earlier "yes" behind.
+      const sets: [IssuedDocType, number][] = alreadyIssuing ? entries : counters.filter((k) => !issued.has(k.docType) && k.start !== 1).map((k) => [k.docType, 1]);
+      for (const [docType, start] of sets) {
+        const result = await store.issuing.setStartingNumber(organization.id, docType, start);
+        if (result.kind === 'has_documents') throw new ApiError('CONFLICT', 'Documents of this type were already issued; their numbering is fixed', { reason: 'HAS_DOCUMENTS', docType });
+      }
+      await store.issuing.markSetup(organization.id, 'numberingAnsweredAt', c.get('now')());
+      await audit(c, 'issuing.numbering_answered', 'issuer_details', organization.id, { alreadyIssuing, ...(entries.length ? { starts: Object.fromEntries(entries) } : {}) });
+      return c.json(await setupOf(organization.id), 200);
+    },
+  );
+
+  async function setupOf(organizationId: string) {
+    const [issuer, setup] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId)]);
+    const missing = setupMissing(issuer, setup);
+    const done = (ok: boolean) => (ok ? ('done' as const) : ('todo' as const));
+    return {
+      steps: { details: done(!!issuer), logo: done(!!setup?.logoId), defaults: done(!!setup?.defaultsSavedAt), numbering: done(!!setup?.numberingAnsweredAt), taxAuthority: 'later' as const },
+      canIssue: missing.length === 0,
+      missing,
+      introSeen: !!setup?.introSeenAt,
+      hasLogo: !!setup?.logoId,
+    };
+  }
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issuing/setup',
+      tags: ['Issuing'],
+      summary: 'Where this profile stands in the invoicing setup',
+      description: 'MUT-646: the five steps; `canIssue` once the business details and the numbering answer are in (`missing` says which is not). The Tax Authority step stays `later` until the connection exists (MUT-571).',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      responses: { 200: json('The setup', IssuingSetupSchema), ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, false);
+      return c.json(await setupOf(organization.id), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/issuing/setup/intro-seen',
+      tags: ['Issuing'],
+      summary: 'The introduction to issuing was read',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:write')] as const,
+      responses: { 200: json('The setup', IssuingSetupSchema), ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      await store.issuing.markSetup(organization.id, 'introSeenAt', c.get('now')());
+      return c.json(await setupOf(organization.id), 200);
     },
   );
 
@@ -253,18 +531,22 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
       tags: ['Issuing'],
       summary: 'Issue a tax invoice, invoice-receipt, receipt or credit note',
       description:
-        'Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document.',
+        'Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document. MUT-646: 409 ISSUING_SETUP_INCOMPLETE (`details.missing`) until the business details and the numbering answer are in.',
       security: PERSON_OR_MALAFAT,
       middleware: [requireScope('issuing:write'), idempotent(store, 'issued_document.issue')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(IssueDocumentRequestSchema) },
-      responses: { 201: json('Issued', IssuedDocumentSchema), ...validationResponse, ...notFoundResponse, ...errorResponses },
+      responses: { 201: json('Issued', IssuedDocumentSchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),
     async (c) => {
       const organization = await issuingProfile(c, true);
       const { user } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const issuer = await mustIssuer(organization.id);
+      // MUT-646 (S1-a): nothing is issued until the business details and the numbering answer are in.
+      const [current, setup] = await Promise.all([store.issuing.getIssuer(organization.id), store.issuing.getSetup(organization.id)]);
+      const missing = setupMissing(current, setup);
+      if (missing.length > 0) throw new ApiError('CONFLICT', 'Finish the invoicing setup before issuing', { reason: 'ISSUING_SETUP_INCOMPLETE', missing });
+      const issuer = current!;
       const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
       if (body.customerId && !customer) throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
@@ -282,7 +564,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
         documentDate,
         currency: body.currency,
         composed,
-        issuer: issuerSnapshot(issuer),
+        issuer: issuerSnapshot(issuer, setup?.logoId ?? null),
         customerId: customer?.id ?? null,
         customer: customerSnapshot(customer),
         language: body.language,
@@ -413,7 +695,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
           vatMinor: composed.vatMinor,
           grossMinor: composed.grossMinor,
           pricesIncludeVat: composed.pricesIncludeVat,
-          issuer: issuerSnapshot(issuer),
+          issuer: issuerSnapshot(issuer, (await store.issuing.getSetup(organization.id))?.logoId ?? null),
           customerId: customer?.id ?? null,
           customer: customerSnapshot(customer),
           language: body.language,
@@ -432,7 +714,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
           lines: composed.lines.map((l) => ({ index: l.index, description: l.description.trim(), kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
         };
         const paid = body.appliesToDocumentId ? await store.issuing.getById(organization.id, body.appliesToDocumentId) : null;
-        const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? paid?.number ?? null, logo: null });
+        const bytes = await renderPdf(renderIssuedDocumentPdf, draft, { mark: 'DRAFT', originalNumber: original?.number ?? paid?.number ?? null });
         return pdf(c, bytes, 'draft.pdf');
       },
     );
@@ -453,7 +735,7 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
         const organization = await issuingProfile(c, false);
         const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
         if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-        const bytes = await renderIssuedDocumentPdf(doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+        const bytes = await renderPdf(renderIssuedDocumentPdf, doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc) });
         return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
       },
     );
@@ -479,13 +761,13 @@ export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: Issue
         if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
         const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel, requestKey: c.req.valid('header')['idempotency-key'] }, c.get('now')());
         if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
-        const bytes = await renderIssuedDocumentPdf(doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+        const bytes = await renderPdf(renderIssuedDocumentPdf, doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc) });
         return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
       },
     );
   }
 
-  if (renderIssuedDocumentPdf) registerPdfRoutes(renderIssuedDocumentPdf);
+  if (issuedPdf) registerPdfRoutes(issuedPdf.render);
 
   app.openapi(
     createRoute({

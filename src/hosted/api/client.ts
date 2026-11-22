@@ -94,6 +94,12 @@ export type Customer = Schemas['Customer'];
 export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
 export type UpdateCustomerRequest = Schemas['UpdateCustomerRequest'];
 export type BusinessLookup = Schemas['BusinessLookup'];
+export type IssuerDetails = Schemas['IssuerDetails'];
+export type IssuerDetailsRequest = Schemas['IssuerDetailsRequest'];
+export type IssuerDefaultsRequest = Schemas['IssuerDefaultsRequest'];
+export type IssuingSetup = Schemas['IssuingSetup'];
+export type IssuingNumberingRequest = Schemas['IssuingNumberingRequest'];
+export type IssuingSettings = Schemas['IssuingSettings'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
@@ -366,6 +372,8 @@ interface RequestOptions {
   idempotencyKey?: string;
   /** The `version` read before an optimistic PATCH; sent as `If-Match`, refused with 409 on a stale value. */
   ifMatchVersion?: string;
+  /** MUT-646: a file sent as it is (the logo), in place of a JSON `body`. */
+  file?: Blob;
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
@@ -542,6 +550,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export async function send(method: Method, path: string, options: RequestOptions & { accept?: string } = {}): Promise<Response> {
   const headers: Record<string, string> = { Accept: options.accept ?? 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.file) headers['Content-Type'] = options.file.type;
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
@@ -553,7 +562,7 @@ export async function send(method: Method, path: string, options: RequestOptions
     method,
     credentials: 'same-origin',
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.file ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     signal: options.signal,
   };
   const isAbort = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
@@ -753,6 +762,22 @@ export const api = {
   /** MUT-642: a company or nonprofit by its number (hosted only: the signed-out portal has no lookup). */
   businessLookup: (profileId: string, number: string) =>
     request<BusinessLookup>('GET', '/v1/business-lookup', { profileId, query: { number } }),
+  /** MUT-646: the invoicing setup. Every call is 404 where issuing is off for the profile (and always signed out). */
+  issuingSetup: (profileId: string, signal?: AbortSignal) => request<IssuingSetup>('GET', '/v1/issuing/setup', { profileId, signal }),
+  issuingIntroSeen: (profileId: string) => request<IssuingSetup>('POST', '/v1/issuing/setup/intro-seen', { profileId }),
+  issuer: (profileId: string, signal?: AbortSignal) => request<IssuerDetails>('GET', '/v1/issuer', { profileId, signal }),
+  /** No version creates the details; a version replaces them (409 VERSION_MISMATCH when stale). */
+  saveIssuer: (profileId: string, version: number | null, body: IssuerDetailsRequest) =>
+    request<IssuerDetails>('PUT', '/v1/issuer', { profileId, body, ...(version === null ? {} : { ifMatchVersion: String(version) }) }),
+  saveIssuerDefaults: (profileId: string, version: number, body: IssuerDefaultsRequest) =>
+    request<IssuerDetails>('PUT', '/v1/issuer/defaults', { profileId, body, ifMatchVersion: String(version) }),
+  issuingSettings: (profileId: string, signal?: AbortSignal) => request<IssuingSettings>('GET', '/v1/issuing/settings', { profileId, signal }),
+  answerNumbering: (profileId: string, body: IssuingNumberingRequest) => request<IssuingSetup>('PUT', '/v1/issuing/numbering', { profileId, body }),
+  /** The current logo's bytes; 404 when there is none. */
+  issuerLogo: async (profileId: string, signal?: AbortSignal) => (await send('GET', '/v1/issuer/logo', { profileId, signal, accept: 'image/png, image/jpeg' })).blob(),
+  /** A PNG or JPEG of at most 256 KB (413 beyond; 422 LOGO_NOT_AN_IMAGE when it isn't one). */
+  saveIssuerLogo: (profileId: string, file: Blob) => request<void>('PUT', '/v1/issuer/logo', { profileId, file }),
+  removeIssuerLogo: (profileId: string) => request<void>('DELETE', '/v1/issuer/logo', { profileId }),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>

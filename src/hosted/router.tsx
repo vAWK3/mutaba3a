@@ -35,6 +35,7 @@ import { ExpenseGroupDetail } from './pages/views/ExpenseGroupDetail';
 import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
+import { InvoicingSetupPage } from './pages/invoicing/InvoicingSetupPage';
 import { SharingPage } from './pages/sharing/SharingPage';
 import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
@@ -429,6 +430,17 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
+  /** MUT-646: the open profile's invoicing setup, from You › Profiles (a business profile whose owner issues documents). */
+  const invoicingRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/you/invoicing',
+    validateSearch: (raw: Raw) => pickShellOverlay(raw),
+    component: function Invoicing() {
+      return <InvoicingSetupPage profile={useProfile()} />;
+    },
+  });
+
   /**
    * MUT-460 (ADR-213, design 6A): the operator console, outside any profile. Only an operator (/v1/me says so) sees it;
    * anyone else gets the not-found answer every unknown path gets, and the server's gate refuses them regardless.
@@ -550,6 +562,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         conversionsRoute,
         ...youRoutes.map((route) => route.inProfile),
         sharingRoute,
+        invoicingRoute,
       ]),
     ]),
   ]);

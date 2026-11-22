@@ -51,6 +51,8 @@ export interface Logged {
   query: URLSearchParams;
   body: Json | null;
   headers: Record<string, string>;
+  /** MUT-646: a file sent as it is (the logo). */
+  raw: Buffer | null;
 }
 
 export type OnceAnswer = { status: number; body?: unknown } | 'abort';
@@ -519,7 +521,21 @@ export interface FakeApiSeed {
   shareLinks?: Record<string, StubShareLink[]>;
   /** MUT-561 + MUT-314: period downloads on (the ticket and the stream answer); absent = off, every call 404. */
   periodDownloads?: boolean;
+  /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
+  invoicing?: boolean;
 }
+
+/** MUT-646: one profile's invoicing setup, as the server keeps it. */
+interface StubIssuing {
+  issuer: (Record<string, Json> & { version: number }) | null;
+  logo: { type: string; bytes: Buffer } | null;
+  introSeen: boolean;
+  numbering: boolean;
+  defaults: boolean;
+  starts: Record<string, number>;
+}
+const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null };
+const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
 export interface StubShareLink {
@@ -774,6 +790,8 @@ export class FakeApi {
   readonly shareLinks: Map<string, StubShareLink[]> | null;
   /** MUT-561 + MUT-314: period downloads on or off. */
   readonly periodDownloads: boolean;
+  /** MUT-646: per profile; null = issuing off. */
+  readonly issuing: Map<string, StubIssuing> | null;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -807,6 +825,7 @@ export class FakeApi {
     this.accountantAccess = seed.accountantAccess ?? true;
     this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
     this.periodDownloads = seed.periodDownloads ?? false;
+    this.issuing = seed.invoicing ? new Map() : null;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -921,7 +940,7 @@ export class FakeApi {
     } catch {
       body = null;
     }
-    const entry = { method: request.method(), path: url.pathname, query: url.searchParams, body, headers: request.headers() };
+    const entry = { method: request.method(), path: url.pathname, query: url.searchParams, body, headers: request.headers(), raw: request.postDataBuffer() };
     this.log.push(entry);
     return entry;
   }
@@ -1004,6 +1023,7 @@ export class FakeApi {
       this.customers.push(created);
       return json(created, 201);
     }
+    if (resource === 'issuer' || resource === 'issuing') return this.issuingAnswer(e, resource, id, sub);
     if (resource === 'business-lookup' && method === 'GET') {
       const found = this.registry.get(q('number') ?? '');
       return found ? json(found) : json({ error: { code: 'NOT_FOUND', message: 'Not in the registry', details: { reason: 'NOT_IN_REGISTRY' } } }, 404);
@@ -1158,6 +1178,74 @@ export class FakeApi {
 
   /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */
   /** MUT-333: 30 days from now, as the server counts it. */
+  /** MUT-646: the invoicing setup's routes, the way the server answers them (the gate's own rules: details and numbering). */
+  private issuingAnswer(e: Logged, resource: string, id: string | undefined, sub: string | undefined) {
+    const profileId = e.headers['x-mutaba3a-profile'];
+    const profile = this.profiles.find((p) => p.stub.id === profileId);
+    if (!this.issuing || !profile || profile.stub.type === 'PERSONAL') return notFound();
+    let state = this.issuing.get(profileId!);
+    if (!state) {
+      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {} };
+      this.issuing.set(profileId!, state);
+    }
+    const body = (e.body ?? {}) as Record<string, Json>;
+    const ifMatch = e.headers['if-match'] === undefined ? null : Number(e.headers['if-match']);
+    const setup = () => {
+      const missing = [...(state.issuer ? [] : ['DETAILS']), ...(state.numbering ? [] : ['NUMBERING'])];
+      const done = (ok: boolean) => (ok ? 'done' : 'todo');
+      return json({
+        steps: { details: done(!!state.issuer), logo: done(!!state.logo), defaults: done(state.defaults), numbering: done(state.numbering), taxAuthority: 'later' },
+        canIssue: missing.length === 0,
+        missing,
+        introSeen: state.introSeen,
+        hasLogo: !!state.logo,
+      });
+    };
+    const { method } = e;
+    if (resource === 'issuing') {
+      if (id === 'setup' && !sub && method === 'GET') return setup();
+      if (id === 'setup' && sub === 'intro-seen' && method === 'POST') {
+        state.introSeen = true;
+        return setup();
+      }
+      if (id === 'numbering' && method === 'PUT') {
+        state.numbering = true;
+        state.starts = { ...state.starts, ...((body.starts ?? {}) as Record<string, number>) };
+        return setup();
+      }
+      if (id === 'settings' && method === 'GET') {
+        return json({ counters: ISSUED_DOC_TYPES.map((docType) => ({ docType, start: state.starts[docType] ?? 1, next: state.starts[docType] ?? 1, hasDocuments: false })) });
+      }
+      return notFound();
+    }
+    if (!id && method === 'GET') return state.issuer ? json(state.issuer) : json({ error: { code: 'NOT_FOUND', message: 'No business details yet', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 404);
+    if (!id && method === 'PUT') {
+      if ((ifMatch === null) !== !state.issuer || (state.issuer && state.issuer.version !== ifMatch)) return conflict('VERSION_MISMATCH');
+      const kept = state.issuer ?? ISSUER_DEFAULTS;
+      state.issuer = { ...ISSUER_DEFAULTS, ...kept, address: null, city: null, phone: null, email: null, website: null, ...body, version: (state.issuer?.version ?? 0) + 1 };
+      return json(state.issuer);
+    }
+    if (id === 'defaults' && method === 'PUT') {
+      if (!state.issuer) return json({ error: { code: 'VALIDATION_FAILED', message: 'details first', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 422);
+      if (state.issuer.version !== ifMatch) return conflict('VERSION_MISMATCH');
+      state.issuer = { ...state.issuer, paymentTermsDays: null, bankDetails: null, footerNote: null, ...body, version: state.issuer.version + 1 };
+      state.defaults = true;
+      return json(state.issuer);
+    }
+    if (id === 'logo') {
+      if (method === 'PUT') {
+        state.logo = { type: e.headers['content-type'] ?? 'image/png', bytes: e.raw ?? PNG_1PX };
+        return { status: 204, body: '' };
+      }
+      if (method === 'DELETE') {
+        state.logo = null;
+        return { status: 204, body: '' };
+      }
+      if (method === 'GET') return state.logo ? { status: 200, contentType: state.logo.type, body: state.logo.bytes } : notFound();
+    }
+    return notFound();
+  }
+
   private closeAnswer(body: { password?: string } | null) {
     if (body?.password !== this.currentPassword) return json({ error: { code: 'CURRENT_PASSWORD_WRONG', message: 'Current password is wrong' } }, 403);
     const now = new Date();

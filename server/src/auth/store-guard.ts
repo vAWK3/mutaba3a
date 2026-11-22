@@ -371,6 +371,12 @@ export const STORE_ACCESS: StoreAccess = {
   issuing: {
     getIssuer: { read: 'issuing' },
     putIssuer: { write: 'issuing' },
+    // MUT-646: the invoicing setup.
+    getSetup: { read: 'issuing' },
+    markSetup: { write: 'issuing' },
+    addLogo: { write: 'issuing' },
+    clearLogo: { write: 'issuing' },
+    getLogo: { read: 'issuing' },
     counters: { read: 'issuing' },
     setStartingNumber: { write: 'issuing' },
     issue: { write: 'issuing' },
