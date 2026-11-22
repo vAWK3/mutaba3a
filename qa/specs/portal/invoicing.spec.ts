@@ -2,7 +2,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
-import { OFFICE_A, office } from '../../support/portal';
+import { OFFICE_A, customer, office } from '../../support/portal';
 import { FakeApi } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
@@ -12,6 +12,7 @@ import { openYou } from '../../support/you';
  */
 const LOGO = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../fixtures/invoicing/logo.png');
 const setupPath = `/p/${OFFICE_A}/you/invoicing`;
+const C1 = customer(0).id;
 const iso = (text: string) => `⁨${text}⁩`;
 
 const seeded = () =>
@@ -130,5 +131,103 @@ test('only a business profile whose owner issues documents has the way in', { ta
     const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
     await off.open(page, setupPath);
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you$`));
+  });
+});
+
+/** MUT-570: issuing, on a profile whose setup is done (details and numbering). */
+const ready = () =>
+  new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 1,
+    invoicing: 'ready',
+  });
+
+test('issue a tax invoice: client, lines, live totals, then the document with its number and what is still owed', { tag: '@portal.invoicing.issue-invoice' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+
+  await step('Open Documents › Issued and choose Issue a document', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await expect(page.getByRole('navigation', { name: 'Documents' }).getByRole('link', { name: 'Issued' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByTestId('issued-empty')).toBeVisible();
+    await page.getByTestId('issue-open').click();
+    await expect(drawer).toBeVisible();
+  });
+
+  await step('Choose Client 1, describe two lines; the totals come from the server as they are typed', async () => {
+    await drawer.getByLabel('Client').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await drawer.getByLabel('Description').fill('Flutter development, sprint 3');
+    await drawer.getByLabel('Quantity').fill('40');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('450');
+    await drawer.getByRole('button', { name: '+ Add a line' }).click();
+    await drawer.getByLabel('Description').nth(1).fill('Hosting');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).nth(1).fill('1300');
+    await expect(drawer.getByTestId('issue-totals')).toContainText('19,300.00');
+    await expect(drawer.getByTestId('issue-totals')).toContainText('22,774.00');
+    expect(api.last('POST', /^\/v1\/issued-documents\/preview$/)).toBeTruthy();
+    await expect(drawer.getByText('An issued document cannot be edited; it is corrected by a credit note.')).toBeVisible();
+  });
+
+  await step('AC1 Issue the tax invoice: it takes number 1, its page shows the moment and what is still owed', async () => {
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-moment')).toContainText('Tax invoice 1 was issued');
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 1');
+    await expect(page.getByTestId('issued-outstanding')).toContainText('22,774.00');
+    const issued = api.last('POST', /^\/v1\/issued-documents$/);
+    expect(issued?.body).toMatchObject({ docType: 'TAX_INVOICE', currency: 'ILS', lines: [{ description: 'Flutter development, sprint 3', quantity: '40', unitPrice: '450.00' }, { description: 'Hosting', unitPrice: '1300.00' }] });
+    expect(issued?.headers['idempotency-key']).toBeTruthy();
+  });
+
+  await step('AC2 Record a payment: a receipt for part of it lowers what is still owed', async () => {
+    await page.getByTestId('issued-receipt').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('10000');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Receipt 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'RECEIPT', appliesToDocumentId: expect.any(String), payment: { method: 'BANK' } });
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Tax invoice 1/ }).click();
+    await expect(page.getByTestId('issued-outstanding')).toContainText('12,774.00');
+  });
+
+  await step('AC3 A credit note from the tax invoice, prefilled with its lines, credits what is still owed', async () => {
+    await page.getByTestId('issued-credit').click();
+    await expect(drawer.getByLabel('Description').first()).toHaveValue('Flutter development, sprint 3');
+    await drawer.getByRole('button', { name: 'Remove' }).first().click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', originalId: expect.any(String) });
+  });
+
+  await step('The list shows all three, newest first; in Arabic it reads right to left', async () => {
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await expect(page.locator('.hp-issued-table tbody tr')).toHaveCount(3);
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('link', { name: /إشعار دائن 1/ })).toBeVisible();
+  });
+});
+
+test('issuing waits for the setup; a client page issues for that client', { tag: '@portal.invoicing.issue-gate' }, async ({ page, step }) => {
+  await step('AC1 (MUT-646) With the setup not done, the drawer says what is missing and links to it', async () => {
+    const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: true });
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await page.getByTestId('issue-open').click();
+    await expect(page.getByTestId('issue-blocked')).toContainText('Business details · Numbering');
+    await expect(page.getByRole('link', { name: 'Open the invoicing setup' })).toBeVisible();
+  });
+
+  await step('E2 A client page offers Issue a document for this client, the client already chosen', async () => {
+    const api = ready();
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    await page.getByTestId('issue-open').click();
+    await expect(page.getByRole('dialog', { name: 'Issue a document' }).getByLabel('Client')).toHaveValue('Client 1');
+  });
+
+  await step('AC5 Without issuing (or on a personal profile) there is no Issued tab', async () => {
+    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
+    await off.open(page, `/p/${OFFICE_A}/documents`);
+    await expect(page.getByRole('link', { name: 'Issued' })).toHaveCount(0);
   });
 });
