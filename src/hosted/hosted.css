@@ -1658,3 +1658,28 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-business-rename { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-label); }
 .hp-business-actions { display: flex; gap: var(--space-2); }
 @media (max-width: 480px) { .hp-business-list { grid-template-columns: 1fr; } }
+
+/* MUT-646: You › Profiles › Invoicing — the letterhead as the map of the setup (round 3, variant 2). */
+.hp-setup { max-width: 1120px; margin-inline: auto; }
+.hp-setup-intro { max-width: 760px; }
+.hp-setup-intro h2 { margin: 0 0 var(--space-4); font-size: var(--text-headline); }
+.hp-setup-cards { margin: 0 0 var(--space-6); padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); counter-reset: setup-card; }
+.hp-setup-card { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); counter-increment: setup-card; }
+.hp-setup-card h3 { margin: 0 0 var(--space-2); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.hp-setup-card h3::before { content: counter(setup-card) ". "; color: var(--muted); }
+.hp-setup-card p { margin: 0; color: var(--muted); font-size: var(--text-label); }
+.hp-setup-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.hp-setup-panel { min-width: 0; }
+.hp-setup-panel h2 { margin: 0 0 var(--space-4); font-size: var(--text-headline); }
+.hp-setup-progress { margin: 0 0 var(--space-2); font-size: var(--text-label); color: var(--muted); }
+.hp-setup-eyebrow { margin: var(--space-4) 0 var(--space-1); font-size: var(--text-label); color: var(--accent-text); }
+.hp-setup-blocked { margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); border: 1px solid var(--border); font-size: var(--text-label); }
+.hp-setup-ready { display: grid; gap: var(--space-1); padding: var(--space-3); border-radius: var(--radius-md); background: var(--accent-subtle); font-size: var(--text-label); }
+.hp-setup-form { display: grid; gap: var(--space-3); }
+.hp-setup-label { font-size: var(--text-label); font-weight: var(--weight-medium); }
+.hp-setup-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.hp-setup-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+
+@media (max-width: 760px) {
+  .hp-setup-columns, .hp-setup-cards, .hp-setup-pair { grid-template-columns: minmax(0, 1fr); }
+}

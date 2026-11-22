@@ -2795,6 +2795,131 @@
       "onButton": "Turn it back on",
       "onDone": "The monthly summary is on.",
       "linkBroken": "This link no longer works. You can turn it off in You › Account."
+    },
+    "invoicing": {
+      "entryRow": "Invoicing",
+      "entrySub": "Set up issuing tax invoices and receipts",
+      "entryReady": "Ready to issue documents",
+      "title": "Invoicing · {profile}",
+      "note": "The details printed on every document this profile issues.",
+      "intro": {
+        "title": "Issuing documents from MTB3A",
+        "whatTitle": "What you can issue",
+        "whatBody": "Tax invoices, tax invoice-receipts, receipts and credit notes, each type numbered in its own sequence.",
+        "finalTitle": "Issued documents are final",
+        "finalBody": "A document cannot be edited or deleted once issued. A tax invoice is corrected by issuing a credit note.",
+        "allocationTitle": "Allocation numbers",
+        "allocationBody": "Once the profile is connected to the Tax Authority, each invoice that requires an allocation number receives one.",
+        "begin": "Begin setup"
+      },
+      "progress": "{done} of 5 complete",
+      "stepOf": "Step {n} of 5",
+      "required": "Required",
+      "optional": "Optional",
+      "complete": "Complete",
+      "region": "Step {n}: {title}",
+      "steps": {
+        "details": "Business details",
+        "logo": "Logo",
+        "defaults": "Style and defaults",
+        "numbering": "Numbering",
+        "taxAuthority": "Tax Authority"
+      },
+      "next": "Next",
+      "later": "Later",
+      "saveFailed": "The changes could not be saved. Please try again.",
+      "changedElsewhere": "These details were changed elsewhere and have been reloaded. Please save again.",
+      "readOnly": "Only the profile's owner can change the invoicing setup.",
+      "details": {
+        "vatId": "VAT file or company number",
+        "vatIdHint": "9 digits. A company or nonprofit is looked up in the public registry.",
+        "invalid": "This number is not valid. Please check the digits.",
+        "found": "Found in the registry: {name}",
+        "legalName": "Legal name",
+        "legalNameRequired": "Enter the legal name.",
+        "dealerType": "Business type",
+        "dealer": {
+          "LICENSED": "Licensed dealer",
+          "EXEMPT": "Exempt dealer",
+          "COMPANY": "Company",
+          "NONPROFIT": "Nonprofit"
+        },
+        "address": "Address",
+        "city": "City",
+        "phone": "Phone",
+        "email": "Email",
+        "emailInvalid": "Enter a valid email address."
+      },
+      "logo": {
+        "hint": "A PNG or JPEG file, up to 256 KB.",
+        "choose": "Choose a file",
+        "replace": "Replace the logo",
+        "remove": "Remove the logo",
+        "tooLarge": "The file is larger than 256 KB.",
+        "notImage": "This file is not a PNG or JPEG image that can be printed.",
+        "kept": "Documents already issued keep the logo they were issued with.",
+        "uploading": "Uploading…"
+      },
+      "defaults": {
+        "needsDetails": "Complete the business details first.",
+        "style": "Style",
+        "styles": {
+          "PROFESSIONAL": "Professional",
+          "MODERN": "Modern",
+          "MINIMAL": "Minimal"
+        },
+        "ink": "Ink",
+        "inks": {
+          "BLACK": "Black",
+          "BLUE": "Blue"
+        },
+        "language": "Document language",
+        "languages": {
+          "he": "Hebrew",
+          "ar": "Arabic",
+          "en": "English"
+        },
+        "pricesIncludeVat": "Prices include VAT",
+        "yes": "Yes",
+        "no": "No",
+        "paymentTerms": "Payment terms, in days",
+        "paymentTermsHint": "The due date a new tax invoice suggests.",
+        "paymentTermsInvalid": "Enter a number of days from 0 to 365.",
+        "bankDetails": "Bank details",
+        "footerNote": "Footer note"
+      },
+      "numbering": {
+        "question": "Are you already issuing documents from another system?",
+        "no": "No, start from 1",
+        "yes": "Yes, continue my numbering",
+        "fromOne": "Each document type is numbered in its own sequence, starting from 1.",
+        "nextOf": "{type}: next number",
+        "atLeastOne": "Enter the next number for at least one document type.",
+        "fixed": "Documents of this type were already issued here; their numbering is fixed.",
+        "answered": "Answered: {answer}"
+      },
+      "docTypes": {
+        "TAX_INVOICE": "Tax invoice",
+        "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
+        "RECEIPT": "Receipt",
+        "CREDIT_NOTE": "Credit note"
+      },
+      "taxAuthority": {
+        "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
+        "status": "When needed"
+      },
+      "ready": {
+        "title": "Your letterhead is ready",
+        "body": "You can change any part later. Documents already issued stay as they were issued."
+      },
+      "blocked": "Issuing opens once these are complete: {steps}",
+      "paper": {
+        "label": "Live preview of the letterhead",
+        "logo": "Logo",
+        "legalName": "Legal name",
+        "number": "Number",
+        "address": "Address"
+      }
     }
   }
 }

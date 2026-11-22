@@ -13535,6 +13535,557 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/issuer/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the defaults new documents start with
+         * @description MUT-646: the style, ink, language, VAT pricing, payment terms, bank details and footer. Needs the business details first (422 ISSUER_DETAILS_REQUIRED) and their version in If-Match. Issued documents keep what they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuerDefaultsRequest"];
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuer/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The logo printed on new documents */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The image */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                        "image/jpeg": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Set the logo printed on documents
+         * @description MUT-646: the raw PNG or JPEG file, at most 256 KB (413 beyond). The type is read from the file itself (422 LOGO_NOT_AN_IMAGE). Each upload is kept unchanged, so documents already issued go on printing the logo they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            responses: {
+                /** @description Saved */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PAYLOAD_TOO_LARGE */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Print new documents without a logo
+         * @description MUT-646: issued documents keep theirs.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/numbering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer “already issuing documents elsewhere?”
+         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingNumberingRequest"];
+                };
+            };
+            responses: {
+                /** @description Answered */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where this profile stands in the invoicing setup
+         * @description MUT-646: the five steps; `canIssue` once the business details and the numbering answer are in (`missing` says which is not). The Tax Authority step stays `later` until the connection exists (MUT-571).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The setup */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/setup/intro-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The introduction to issuing was read */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The setup */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/issuing/settings": {
         parameters: {
             query?: never;
@@ -13877,7 +14428,7 @@ export interface paths {
         put?: never;
         /**
          * Issue a tax invoice, invoice-receipt, receipt or credit note
-         * @description Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document.
+         * @description Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document. MUT-646: 409 ISSUING_SETUP_INCOMPLETE (`details.missing`) until the business details and the numbering answer are in.
          */
         post: {
             parameters: {
@@ -13924,6 +14475,15 @@ export interface paths {
                 };
                 /** @description No such entity in this organization */
                 404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -27877,6 +28437,10 @@ export interface components {
             ink: string;
             documentStyle: string;
             pricesIncludeVat: boolean;
+            defaultLanguage: string;
+            paymentTermsDays: number | null;
+            bankDetails: string | null;
+            footerNote: string | null;
             version: number;
         };
         /**
@@ -27897,6 +28461,57 @@ export interface components {
             website?: string | null;
             /** @description V1-a: the default for new documents (default false) */
             pricesIncludeVat?: boolean;
+        };
+        IssuerDefaultsRequest: {
+            /**
+             * @description The layout new documents print in
+             * @enum {string}
+             */
+            documentStyle: "PROFESSIONAL" | "MODERN" | "MINIMAL";
+            /**
+             * @description Black or blue ink on white paper
+             * @enum {string}
+             */
+            ink: "BLACK" | "BLUE";
+            defaultLanguage: components["schemas"]["DocumentLanguage"];
+            pricesIncludeVat: boolean;
+            /** @description A tax invoice’s default due date, in days after its date */
+            paymentTermsDays?: number | null;
+            /** @description Printed for paying by transfer */
+            bankDetails?: string | null;
+            /** @description Printed at the foot of every document */
+            footerNote?: string | null;
+        };
+        /** @enum {string} */
+        DocumentLanguage: "ar" | "he" | "en";
+        IssuingSetup: {
+            steps: {
+                /** @enum {string} */
+                details: "done" | "todo" | "later";
+                /** @enum {string} */
+                logo: "done" | "todo" | "later";
+                /** @enum {string} */
+                defaults: "done" | "todo" | "later";
+                /** @enum {string} */
+                numbering: "done" | "todo" | "later";
+                /** @enum {string} */
+                taxAuthority: "done" | "todo" | "later";
+            };
+            canIssue: boolean;
+            /** @description What blocks issuing (empty when canIssue) */
+            missing: ("DETAILS" | "NUMBERING")[];
+            introSeen: boolean;
+            hasLogo: boolean;
+        };
+        IssuingNumberingRequest: {
+            alreadyIssuing: boolean;
+            /** @description The next number per document type, when moving from another tool */
+            starts?: {
+                TAX_INVOICE?: number;
+                TAX_INVOICE_RECEIPT?: number;
+                CREDIT_NOTE?: number;
+                RECEIPT?: number;
+            };
         };
         IssuingSettings: {
             counters: components["schemas"]["IssuingCounter"][];
@@ -28008,8 +28623,6 @@ export interface components {
                 vatExempt?: boolean;
             }[];
         };
-        /** @enum {string} */
-        DocumentLanguage: "ar" | "he" | "en";
         IssuedDocument: components["schemas"]["IssuedDocumentPreview"] & {
             /** Format: uuid */
             id: string;

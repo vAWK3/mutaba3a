@@ -902,6 +902,10 @@ describe('accent-text guard', () => {
  * data (category and business colours), listed here with the reason.
  */
 const ALLOWED_LITERAL_FILES: Record<string, string> = {
+  // MUT-646: the letterhead preview keeps the printed page's colours (white paper, black or blue ink) in both themes.
+  'src/hosted/pages/invoicing/letterhead.css': 'the printed page: white paper, black or blue ink, paper type sizes',
+  // MUT-646: BLACK and BLUE are the issuing API's ink values, not colours the portal paints with.
+  'src/hosted/pages/invoicing/setupSteps.ts': "the API's ink values (BLACK, BLUE)",
 };
 
 /**

@@ -6,6 +6,7 @@ import type { HostedProfile } from '../../api/client';
 import { ProfileKindLine } from '../../components/ProfileKindLine';
 import { RowButton, RowGroup } from '../../components/YouRows';
 import { SharingEntryRow } from '../../components/SharingEntryRow';
+import { InvoicingEntryRow } from '../../components/InvoicingEntryRow';
 import { atProfileCap, canCreateProfile } from '../../data/profileRules';
 import { useMe } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
@@ -65,6 +66,8 @@ export function YouProfiles({ active, from }: { active: HostedProfile | null; fr
       </RowGroup>
       {/* MUT-561: the open profile's Sharing page, for its owner on a server with accountant access */}
       {active && <SharingEntryRow profile={active} place="you" />}
+      {/* MUT-646: the open profile's invoicing setup, where issuing is on for it */}
+      {active && <InvoicingEntryRow profile={active} />}
       {/* MUT-596: the open firm's members, read-only, when Malafat manages them */}
       {active?.managedInMalafat && !local && <MalafatMembersSection profileId={active.id} />}
       <RowGroup>
