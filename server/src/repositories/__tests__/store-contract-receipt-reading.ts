@@ -217,8 +217,12 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       for (const id of [unfinished.id, notMine.id, complete.id]) expect((await store.expenseReceipts.getById(w.a.id, id))?.readStatus ?? 'NONE').toBe('NONE');
       expect((await store.expenseReceipts.getById(w.a.id, already.id))?.readRequestedAt).toEqual(at(1));
       // MUT-659: with no userId, everyone's never-asked receipts (here: the other person's) move too.
-      expect(await store.expenseReceipts.markBacklogPending({}, at(80))).toEqual([notMine.id]);
-      expect(await store.expenseReceipts.markBacklogPending({}, at(90))).toEqual([]);
+      // The Postgres contract shares one database across tests, so other tests' never-asked receipts can move here too:
+      // assert on this world's receipts only.
+      const mine = new Set([waiting.id, otherProfile.id, unfinished.id, notMine.id, already.id, complete.id]);
+      const everyone = await store.expenseReceipts.markBacklogPending({}, at(80));
+      expect(everyone.filter((id) => mine.has(id))).toEqual([notMine.id]);
+      expect((await store.expenseReceipts.markBacklogPending({}, at(90))).filter((id) => mine.has(id))).toEqual([]);
     });
 
     it('MUT-557 (A2): a never-read receipt with every field that reads as a big ILS invoice without an allocation number is picked once', async () => {
