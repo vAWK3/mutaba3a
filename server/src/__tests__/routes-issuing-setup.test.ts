@@ -153,6 +153,12 @@ describe('invoicing setup (MUT-646)', () => {
     expect(pdf.headers.get('content-type')).toBe('application/pdf');
   }, 30_000);
 
+  it('MUT-570: lists the styles from the server', async () => {
+    const h = accountantHarness();
+    const w = await profile(h);
+    expect(await read(await h.app.request('/v1/issuing/styles', { headers: w.on }))).toEqual({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
+  });
+
   it('remembers that the introduction was read', async () => {
     const h = accountantHarness();
     const w = await profile(h);

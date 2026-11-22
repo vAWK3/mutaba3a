@@ -522,7 +522,7 @@ export interface FakeApiSeed {
   /** MUT-561 + MUT-314: period downloads on (the ticket and the stream answer); absent = off, every call 404. */
   periodDownloads?: boolean;
   /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
-  invoicing?: boolean;
+  invoicing?: boolean | 'ready';
 }
 
 /** MUT-646: one profile's invoicing setup, as the server keeps it. */
@@ -533,6 +533,9 @@ interface StubIssuing {
   numbering: boolean;
   defaults: boolean;
   starts: Record<string, number>;
+  /** MUT-570: what this profile issued, newest first, and each Owed it posted (outstanding, in minor units). */
+  docs: Record<string, Json>[];
+  owed: Map<string, { gross: number; outstanding: number; customerId: string | null }>;
 }
 const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null };
 const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
@@ -792,6 +795,8 @@ export class FakeApi {
   readonly periodDownloads: boolean;
   /** MUT-646: per profile; null = issuing off. */
   readonly issuing: Map<string, StubIssuing> | null;
+  /** MUT-570: the setup done (details and numbering), so issuing is open. */
+  private readonly invoicingReady: boolean;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -826,6 +831,7 @@ export class FakeApi {
     this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
     this.periodDownloads = seed.periodDownloads ?? false;
     this.issuing = seed.invoicing ? new Map() : null;
+    this.invoicingReady = seed.invoicing === 'ready';
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -1023,7 +1029,9 @@ export class FakeApi {
       this.customers.push(created);
       return json(created, 201);
     }
-    if (resource === 'issuer' || resource === 'issuing') return this.issuingAnswer(e, resource, id, sub);
+    if (resource === 'issuer' || resource === 'issuing' || resource === 'issued-documents') return this.issuingAnswer(e, resource, id, sub);
+    // MUT-570: the Owed an issued tax invoice posted, as GET /v1/receivables/{id} reads it.
+    if (resource === 'receivables' && method === 'GET' && id && this.issuedOwed(id)) return json(this.issuedOwed(id));
     if (resource === 'business-lookup' && method === 'GET') {
       const found = this.registry.get(q('number') ?? '');
       return found ? json(found) : json({ error: { code: 'NOT_FOUND', message: 'Not in the registry', details: { reason: 'NOT_IN_REGISTRY' } } }, 404);
@@ -1185,13 +1193,18 @@ export class FakeApi {
     if (!this.issuing || !profile || profile.stub.type === 'PERSONAL') return notFound();
     let state = this.issuing.get(profileId!);
     if (!state) {
-      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {} };
+      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {}, docs: [], owed: new Map() };
+      if (this.invoicingReady) {
+        state.issuer = { ...ISSUER_DEFAULTS, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
+        Object.assign(state, { introSeen: true, numbering: true, defaults: true });
+      }
       this.issuing.set(profileId!, state);
     }
     const body = (e.body ?? {}) as Record<string, Json>;
     const ifMatch = e.headers['if-match'] === undefined ? null : Number(e.headers['if-match']);
+    const missingOf = () => [...(state.issuer ? [] : ['DETAILS']), ...(state.numbering ? [] : ['NUMBERING'])];
     const setup = () => {
-      const missing = [...(state.issuer ? [] : ['DETAILS']), ...(state.numbering ? [] : ['NUMBERING'])];
+      const missing = missingOf();
       const done = (ok: boolean) => (ok ? 'done' : 'todo');
       return json({
         steps: { details: done(!!state.issuer), logo: done(!!state.logo), defaults: done(state.defaults), numbering: done(state.numbering), taxAuthority: 'later' },
@@ -1202,6 +1215,7 @@ export class FakeApi {
       });
     };
     const { method } = e;
+    if (resource === 'issued-documents') return this.issuedAnswer(e, state, id, sub, missingOf());
     if (resource === 'issuing') {
       if (id === 'setup' && !sub && method === 'GET') return setup();
       if (id === 'setup' && sub === 'intro-seen' && method === 'POST') {
@@ -1213,6 +1227,7 @@ export class FakeApi {
         state.starts = { ...state.starts, ...((body.starts ?? {}) as Record<string, number>) };
         return setup();
       }
+      if (id === 'styles' && method === 'GET') return json({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
       if (id === 'settings' && method === 'GET') {
         return json({ counters: ISSUED_DOC_TYPES.map((docType) => ({ docType, start: state.starts[docType] ?? 1, next: state.starts[docType] ?? 1, hasDocuments: false })) });
       }
@@ -1244,6 +1259,70 @@ export class FakeApi {
       if (method === 'GET') return state.logo ? { status: 200, contentType: state.logo.type, body: state.logo.bytes } : notFound();
     }
     return notFound();
+  }
+
+  /** MUT-570: issued documents as the server answers them: 18% VAT, gap-free numbers per type, an Owed per tax invoice. */
+  private issuedAnswer(e: Logged, state: StubIssuing, id: string | undefined, sub: string | undefined, missing: string[]) {
+    const { method } = e;
+    const pdf = { status: 200, contentType: 'application/pdf', body: '%PDF-1.4 qa' };
+    if (method === 'GET' && !id) {
+      const customerId = e.query.get('customerId');
+      return page(state.docs.filter((d) => !customerId || d.customerId === customerId));
+    }
+    if (id === 'preview' && method === 'POST') return sub === 'pdf' ? pdf : json(this.composeDoc(e.body as Record<string, Json>));
+    if (method === 'GET' && id && !sub) return json(state.docs.find((d) => d.id === id) ?? null, state.docs.some((d) => d.id === id) ? 200 : 404);
+    if (id && sub === 'pdf') return pdf;
+    if (method === 'POST' && !id) {
+      if (missing.length) return json({ error: { code: 'CONFLICT', message: 'setup', details: { reason: 'ISSUING_SETUP_INCOMPLETE', missing } } }, 409);
+      const body = e.body as Record<string, Json>;
+      const docType = String(body.docType);
+      const totals = this.composeDoc(body);
+      const count = state.docs.filter((d) => d.docType === docType).length;
+      const number = (state.starts[docType] ?? 1) + count;
+      const customer = this.customers.find((c) => c.id === body.customerId);
+      const docId = uid(0xd0, state.docs.length + 1);
+      const gross = toMinor(totals.gross);
+      let receivableId: string | null = null;
+      if (docType === 'TAX_INVOICE') {
+        receivableId = uid(0xe0, state.docs.length + 1);
+        state.owed.set(receivableId, { gross, outstanding: gross, customerId: (body.customerId as string) ?? null });
+      }
+      const target = (body.originalId ?? body.appliesToDocumentId) as string | undefined;
+      if (target) {
+        const original = state.docs.find((d) => d.id === target);
+        const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+        if (owed) {
+          if (gross > owed.outstanding) return json({ error: { code: 'VALIDATION_FAILED', message: 'too much', details: { reason: docType === 'CREDIT_NOTE' ? 'ORIGINAL_PAID' : 'EXCEEDS_OUTSTANDING' } } }, 422);
+          owed.outstanding -= gross;
+        }
+      }
+      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber: null, receivableId, paymentId: null, coreVersion: '1.0.0' };
+      state.docs.unshift(doc);
+      return json(doc, 201);
+    }
+    return notFound();
+  }
+
+  /** The issued-document Owed for GET /v1/receivables/{id}, or undefined. */
+  private issuedOwed(receivableId: string) {
+    for (const state of this.issuing?.values() ?? []) {
+      const owed = state.owed.get(receivableId);
+      if (owed) return { id: receivableId, customerId: owed.customerId, origin: 'ISSUED_DOCUMENT', currency: 'ILS', gross: toDecimal(owed.gross), outstanding: toDecimal(owed.outstanding), paid: toDecimal(owed.gross - owed.outstanding), credited: '0.00', status: owed.outstanding === 0 ? 'PAID' : 'OPEN', version: 1 };
+    }
+    return undefined;
+  }
+
+  /** The server's preview math for the QA: lines at 18% VAT, prices before VAT unless the document says they include it. */
+  private composeDoc(body: Record<string, Json>) {
+    const lines = ((body.lines ?? []) as Record<string, string>[]).map((l, index) => {
+      const net = Math.round(Number(l.quantity) * toMinor(l.unitPrice)) - (l.discount ? toMinor(l.discount) : 0);
+      return { index, description: l.description, kind: l.kind, quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount ?? '0.00', net: toDecimal(net), pricesIncludeVat: !!body.pricesIncludeVat, vatRateBasisPoints: 1800, vat: '0.00' };
+    });
+    const sum = lines.reduce((acc, l) => acc + toMinor(l.net), 0);
+    const exempt = body.docType === 'RECEIPT';
+    const net = body.pricesIncludeVat && !exempt ? Math.round(sum / 1.18) : sum;
+    const vat = exempt ? 0 : Math.round(net * 0.18);
+    return { subtotal: toDecimal(net), discount: '0.00', net: toDecimal(net), vatRateBasisPoints: exempt ? 0 : 1800, vat: toDecimal(vat), gross: toDecimal(net + vat), pricesIncludeVat: !!body.pricesIncludeVat, lines };
   }
 
   private closeAnswer(body: { password?: string } | null) {

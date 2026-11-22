@@ -36,6 +36,7 @@ import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { InvoicingSetupPage } from './pages/invoicing/InvoicingSetupPage';
+import { IssuedDocumentPage, IssuedDocumentsPage } from './pages/views/IssuedDocuments';
 import { SharingPage } from './pages/sharing/SharingPage';
 import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
@@ -251,6 +252,28 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     validateSearch: parseDocuments,
     component: function Documents() {
       return <DocumentsPage filters={omitShellOverlay(documentsRoute.useSearch())} setFilters={useReplaceSearch()} />;
+    },
+  });
+
+  /** MUT-570: issued documents, a tab of Documents where issuing is on for the profile. */
+  const issuedRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/documents/issued',
+    validateSearch: (raw: Raw) => pickShellOverlay(raw),
+    component: function Issued() {
+      return <IssuedDocumentsPage profile={useProfile()} />;
+    },
+  });
+
+  const issuedDocumentRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/documents/issued/$documentId',
+    validateSearch: (raw: Raw) => ({ ...pickShellOverlay(raw), ...(raw.issued === true || raw.issued === 'true' ? { issued: true as const } : {}) }),
+    component: function IssuedDocument() {
+      const { documentId } = issuedDocumentRoute.useParams();
+      return <IssuedDocumentPage key={documentId} profile={useProfile()} documentId={documentId} justIssued={issuedDocumentRoute.useSearch().issued === true} />;
     },
   });
 
@@ -554,6 +577,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         receivablesRoute,
         paymentsRoute,
         documentsRoute,
+        issuedRoute,
+        issuedDocumentRoute,
         expensesRoute,
         groupsRoute,
         groupRoute,

@@ -42,6 +42,7 @@ const ALLOWED_GETS = [
   'GET /v1/issuing/setup',
   // MUT-571: whether the profile is connected to the Tax Authority.
   'GET /v1/issuing/tax-authority',
+  'GET /v1/issuing/styles',
   'GET /v1/issuing/gaps',
   'GET /v1/issuing/settings',
   'GET /v1/payments',

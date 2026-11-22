@@ -11,7 +11,7 @@ import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { copyLabel } from '../issuing/copies.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
-import { ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
+import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
@@ -32,6 +32,7 @@ import {
   IssuingGapsSchema,
   IssuingNumberingRequestSchema,
   IssuingSetupSchema,
+  IssuingStylesSchema,
   IssuingSettingsSchema,
   ListIssuedDocumentsQuerySchema,
   StartingNumberRequestSchema,
@@ -443,6 +444,23 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       hasLogo: !!setup?.logoId,
     };
   }
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issuing/styles',
+      tags: ['Issuing'],
+      summary: 'The document styles a business can pick',
+      description: 'MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      responses: { 200: json('The styles', IssuingStylesSchema), ...notFoundResponse, ...errorResponses },
+    }),
+    async (c) => {
+      await issuingProfile(c, false);
+      return c.json({ styles: DOCUMENT_STYLES.map((key) => ({ key })) }, 200);
+    },
+  );
 
   app.openapi(
     createRoute({

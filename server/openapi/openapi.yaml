@@ -9711,6 +9711,21 @@ components:
           description: The next number per document type, when moving from another tool
       required:
         - alreadyIssuing
+    IssuingStyles:
+      type: object
+      properties:
+        styles:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+                description: The value PUT /v1/issuer/defaults takes as documentStyle
+            required:
+              - key
+      required:
+        - styles
     IssuingSettings:
       type: object
       properties:
@@ -24293,6 +24308,47 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issuing/styles:
+    get:
+      tags:
+        - Issuing
+      summary: The document styles a business can pick
+      description: "MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      responses:
+        "200":
+          description: The styles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingStyles"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
           content:
             application/json:
               schema:

@@ -91,6 +91,8 @@ const ISSUING_OPERATIONS = [
   'DELETE /v1/issuer/logo',
   'PUT /v1/issuing/numbering',
   'GET /v1/issuing/setup',
+  // MUT-570: the styles list.
+  'GET /v1/issuing/styles',
   'POST /v1/issuing/setup/intro-seen',
   // MUT-571/572: the Tax Authority connection and a held allocation's choice.
   'GET /v1/issuing/tax-authority',

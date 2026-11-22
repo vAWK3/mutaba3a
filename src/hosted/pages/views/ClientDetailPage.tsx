@@ -11,6 +11,7 @@ import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../.
 import { canAddClient, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { ClientBusinessDetails } from '../../components/ClientBusinessDetails';
+import { IssuedDocumentsPage } from './IssuedDocuments';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -77,6 +78,8 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
           {tab === 'summary' && (
             <>
               <ClientBusinessDetails profileId={profile.id} client={client} writable={canAddClient(profile, writable)} />
+              {/* MUT-570: the client's issued documents and Issue a document for them, where issuing is on */}
+              {profile.type !== 'PERSONAL' && <IssuedDocumentsPage profile={profile} customerId={client.id} />}
               <ClientSummary customerId={customerId} notFound={notFound} />
             </>
           )}

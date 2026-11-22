@@ -6819,4 +6819,21 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Alternatives rejected:**
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
+## ADR-266: Issuing in the Portal Lives Under Documents, in a Drawer (MUT-570)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-570-portal-issue.md`; wireframes round 2, direction B).
+
+**Decision:**
+1. Issued documents are a tab of Documents (Issued · Files), shown where `GET /v1/issuing/setup` answers. A client's page shows that client's documents. The wireframe's top-level "Documents" nav item is a shell change, left for Basel to decide.
+2. Issuing happens in a drawer over the list, never a page. The totals are the server's preview (debounced; nothing written). Issue uses one Idempotency-Key per attempt. The button names the type, and one line says a credit note is the only correction.
+3. What follows a document comes from its page, and the document itself never changes:
+   - a receipt for what's still owed (appliesToDocumentId; the amount defaults to the remainder);
+   - a credit note prefilled with its lines (originalId);
+   - a similar document.
+
+   Downloading makes a produced, counted copy (the first is the original). Viewing counts nothing.
+4. The draft PDF downloads; it isn't embedded, so no `blob:` frame source is needed.
+5. Style choices come from `GET /v1/issuing/styles` (Basel: new styles appear without a portal release).
+
+**Consequences:** the issue drawer is reusable by MUT-648 (offer after saving income) and MUT-647. Paid status per row is read on the document page only (no request per row).
 

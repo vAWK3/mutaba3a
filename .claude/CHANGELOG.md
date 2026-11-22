@@ -37,6 +37,26 @@
 
 ### Technical
 - Table `tax_authority_connections` (migration `20261122170000_mut571_tax_authority_connection`); tokens sealed with AES-256-GCM (`israel/tax-authority/token-box.ts`); config `TAX_AUTHORITY_*` (off unless `TAX_AUTHORITY_ENV`).
+## [Unreleased] - 2026-11-22 — Issue documents in the portal (MUT-570, ADR-266, API 1.119.0-mut570)
+
+### Added
+- Documents › **Issued** (where issuing is on): the list of issued documents and **Issue a document**.
+  - A drawer: client (recent and search, or add), type, lines with one "prices include VAT" switch and per-line options, payment for an invoice-receipt or receipt, live totals from the server's preview, a draft PDF, and Issue (final; corrected by a credit note).
+  - Until the setup is done, the drawer says what's missing and links to it.
+- The document page (`/p/:id/documents/issued/:documentId`):
+  - the issued moment (Claude Design batch 2);
+  - what's still owed;
+  - the original PDF to download (a produced, counted copy) or view;
+  - Record a payment and issue a receipt, Issue a credit note (prefilled from its lines), Issue a similar document.
+- A client's page lists the client's issued documents, with **Issue a document for this client**.
+- `GET /v1/issuing/styles`: the style picker reads the server's list.
+- Document-type icons in the M family (tax invoice, invoice-receipt, receipt, credit note, allocation badge).
+- QA `portal.invoicing.issue-invoice`, `portal.invoicing.issue-gate`.
+
+### Out (stated)
+- Send by email waits for MUT-641 (signed PDFs).
+- Allocation-number states are MUT-572/574.
+- Documents as its own top-level nav item is flagged to Basel.
 
 ## [Unreleased] - 2026-11-22 — Invoicing setup: details, logo, defaults, numbering, and nothing issued before them (MUT-646, ADR-263, API 1.118.0-mut646)
 

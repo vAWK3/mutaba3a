@@ -14,7 +14,7 @@ vi.mock('../../../api/client', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../api/client')>();
   return {
     ...real,
-    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo },
+    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo, issuingStyles: async () => ({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] }) },
   };
 });
 
