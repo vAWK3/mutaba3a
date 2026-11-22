@@ -25,7 +25,8 @@ import { dayText } from '../../operator/time';
  */
 type Tier = EntitlementGrant['tier'];
 
-const TIERS: readonly Tier[] = ['FREELANCER', 'FIRM'];
+/** MUT-702 (ADR-270): the three plans on sale, cheapest first, then legacy Freelancer (still grantable, labelled as legacy). */
+const TIERS: readonly Tier[] = ['SOLO', 'BUSINESS', 'FIRM', 'FREELANCER'];
 
 interface BillingSectionProps {
   account: OperatorAccount;
@@ -140,7 +141,7 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
   const run = useOperatorRun(stepUpUntil);
   const formId = useId();
   const tierLabel = useId();
-  const [tier, setTier] = useState<Tier>('FREELANCER');
+  const [tier, setTier] = useState<Tier>('SOLO');
   const [reason, setReason] = useState('');
   const [day, setDay] = useState(() => presetDay(GRANT_PRESET_DAYS[0], new Date()));
   const [errors, setErrors] = useState<{ reason?: string; day?: string }>({});

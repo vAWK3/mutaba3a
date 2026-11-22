@@ -210,9 +210,23 @@ features:
     expect:
       - The drawer and the account page fit a 375 px phone with no sideways scroll
       - The drawer opens at ?grant=new and closes after granting, with the toast "Coverage granted to <email>"
-      - The grant is listed as Freelancer · Pilot comp for Khatib Law, until a day 30 days out
+      - The grant is listed as Freelancer (legacy) · Pilot comp for Khatib Law, until a day 30 days out
       - The CLI's own list shows the grant, granted by operator:<the operator's id>
       - After revoking, the row says Revoked and offers no Revoke; the CLI's list shows it revoked
+  - id: billing-grant-business
+    title: Grant a person the Business plan
+    tickets: [MUT-702]
+    paths:
+      - src/hosted/pages/operator/OperatorBillingSection.tsx
+      - server/src/billing/plans.ts
+    steps:
+      - On a 375 px phone, open their account and press Grant coverage
+      - Choose Business, give the reason "Business pilot", choose No end date, and grant with the passkey
+    expect:
+      - The drawer offers Solo, Business, Firm and Freelancer (legacy), in that order, with Solo chosen, and fits a 375 px phone
+      - The toast says "Coverage granted to <email>" and the drawer closes
+      - The grant is listed as Business · Business pilot
+      - The CLI's own list shows a BUSINESS grant with no end, granted by operator:<the operator's id>
   - id: feature-grant-revoke
     title: Turn Connect Claude on for a person, then off with a confirm
     tickets: [MUT-462]
