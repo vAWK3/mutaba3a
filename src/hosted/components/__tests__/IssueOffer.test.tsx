@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, renderHook, screen } from '@testing-library/react';
 import { useState } from 'react';
 import type { HostedProfile } from '../../api/client';
 import type { IssueStart } from '../IssueDocumentDrawer';
@@ -65,12 +65,6 @@ describe('the after-save Issue offer (MUT-648 follow-up)', () => {
   });
 
   it('offers nothing outside a profile', () => {
-    let seen: unknown = 'unset';
-    function Probe() {
-      seen = useOfferIssue();
-      return null;
-    }
-    render(<Probe />);
-    expect(seen).toBeNull();
+    expect(renderHook(() => useOfferIssue()).result.current).toBeNull();
   });
 });
