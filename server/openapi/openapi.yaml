@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.127.0-mut709
+  version: 1.128.0-mut709
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -4234,6 +4234,8 @@ components:
           $ref: "#/components/schemas/VatTreatment"
         vatRateBasisPoints:
           type: integer
+        notForInvoice:
+          type: boolean
         dueDate:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -4277,6 +4279,7 @@ components:
         - outstanding
         - vatTreatment
         - vatRateBasisPoints
+        - notForInvoice
         - dueDate
         - postingDate
         - postedAt
@@ -5650,6 +5653,8 @@ components:
         address:
           type: string
           nullable: true
+        documentsPreference:
+          $ref: "#/components/schemas/DocumentsPreference"
         status:
           $ref: "#/components/schemas/EntityStatus"
         archivedAt:
@@ -5676,12 +5681,23 @@ components:
         - vatTreatment
         - taxId
         - address
+        - documentsPreference
         - status
         - archivedAt
         - externalReference
         - version
         - createdAt
         - updatedAt
+    DocumentsPreference:
+      type: string
+      nullable: true
+      enum:
+        - TAX_INVOICE_FIRST
+        - PAYMENT_REQUEST_FIRST
+        - ON_PAYMENT
+        - NO_DOCUMENT
+        - null
+      description: "TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice)."
     EntityStatus:
       type: string
       enum:
@@ -5776,6 +5792,8 @@ components:
           type: string
           nullable: true
           maxLength: 300
+        documentsPreference:
+          $ref: "#/components/schemas/DocumentsPreference"
       additionalProperties: false
     CustomerStatement:
       type: object
@@ -6392,6 +6410,8 @@ components:
         receiptNumber:
           type: string
           nullable: true
+        notForInvoice:
+          type: boolean
         notes:
           type: string
           nullable: true
@@ -6445,6 +6465,7 @@ components:
         - method
         - reference
         - receiptNumber
+        - notForInvoice
         - notes
         - status
         - reversedAt
@@ -7721,6 +7742,11 @@ components:
             - byCustomer
             - samples
           description: Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries
+        invoiceSplit:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceSplitRow"
+          description: "MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received"
       required:
         - from
         - to
@@ -7732,6 +7758,28 @@ components:
         - currencies
         - history
         - daysToPaid
+    InvoiceSplitRow:
+      type: object
+      properties:
+        currency:
+          $ref: "#/components/schemas/Currency"
+        invoiceIncome:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        notForInvoice:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        all:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+      required:
+        - currency
+        - invoiceIncome
+        - notForInvoice
+        - all
     Verdict:
       type: object
       properties:
@@ -9511,6 +9559,10 @@ components:
         offerAfterSave:
           type: boolean
           description: "MUT-648: offer to issue a document after saving income"
+        defaultDocumentsPreference:
+          allOf:
+            - $ref: "#/components/schemas/DocumentsPreference"
+            - description: "MUT-660: the documents a client with no preference of its own is due"
         version:
           type: integer
       required:
@@ -9530,6 +9582,7 @@ components:
         - bankDetails
         - footerNote
         - offerAfterSave
+        - defaultDocumentsPreference
         - version
     DealerType:
       type: string
@@ -9619,6 +9672,10 @@ components:
         offerAfterSave:
           type: boolean
           description: "MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)"
+        defaultDocumentsPreference:
+          allOf:
+            - $ref: "#/components/schemas/DocumentsPreference"
+            - description: "MUT-660: the documents a client with no preference is due (unchanged when omitted)"
       required:
         - documentStyle
         - ink
@@ -10268,6 +10325,233 @@ components:
               - missing
       required:
         - types
+    DocumentsDue:
+      type: object
+      properties:
+        view:
+          type: string
+          enum:
+            - to-issue
+            - not-for-invoice
+        groups:
+          type: array
+          items:
+            type: object
+            properties:
+              customerId:
+                type: string
+                nullable: true
+                format: uuid
+              items:
+                type: array
+                items:
+                  $ref: "#/components/schemas/DueItem"
+            required:
+              - customerId
+              - items
+        counts:
+          type: object
+          properties:
+            total:
+              type: integer
+            byKind:
+              type: object
+              additionalProperties:
+                type: integer
+          required:
+            - total
+            - byKind
+      required:
+        - view
+        - groups
+        - counts
+    DueItem:
+      type: object
+      properties:
+        kind:
+          $ref: "#/components/schemas/DueKind"
+        entry:
+          allOf:
+            - $ref: "#/components/schemas/DueEntryRef"
+            - type: object
+              properties:
+                number:
+                  type: string
+              required:
+                - number
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        amount:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        currency:
+          $ref: "#/components/schemas/Currency"
+        date:
+          type: string
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The Owed’s posting date or the Received’s date
+        issuable:
+          type: boolean
+        reason:
+          $ref: "#/components/schemas/DueReason"
+        appliesToDocumentId:
+          type: string
+          nullable: true
+          format: uuid
+          description: "A receipt: the tax invoice it pays"
+      required:
+        - kind
+        - entry
+        - customerId
+        - amount
+        - currency
+        - date
+        - issuable
+        - reason
+        - appliesToDocumentId
+    DueKind:
+      type: string
+      nullable: true
+      enum:
+        - TAX_INVOICE
+        - PAYMENT_REQUEST
+        - RECEIPT
+        - TAX_INVOICE_RECEIPT
+        - null
+      description: The document due; null in the not-for-invoice view
+    DueEntryRef:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - owed
+            - received
+        id:
+          type: string
+          format: uuid
+      required:
+        - kind
+        - id
+    DueReason:
+      type: string
+      nullable: true
+      enum:
+        - PAYMENT_REQUEST_PENDING
+        - CURRENCY_NOT_ILS
+        - MIXED_ALLOCATION
+        - RECORDED_ELSEWHERE
+        - null
+      description: Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice
+    DocumentsDueCount:
+      type: object
+      properties:
+        total:
+          type: integer
+      required:
+        - total
+    IssueDueResult:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: object
+            properties:
+              entry:
+                $ref: "#/components/schemas/DueEntryRef"
+              status:
+                type: string
+                enum:
+                  - issued
+                  - held
+                  - refused
+              reason:
+                type: string
+                nullable: true
+                description: Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason)
+              document:
+                $ref: "#/components/schemas/IssuedDocument"
+            required:
+              - entry
+              - status
+              - reason
+              - document
+        issued:
+          type: integer
+      required:
+        - results
+        - issued
+    IssueDueRequest:
+      type: object
+      properties:
+        customerId:
+          type: string
+          nullable: true
+          format: uuid
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DueEntryRef"
+          minItems: 1
+          maxItems: 25
+      required:
+        - customerId
+        - items
+      additionalProperties: false
+    NotForInvoiceResult:
+      type: object
+      properties:
+        changed:
+          type: integer
+      required:
+        - changed
+    NotForInvoiceRequest:
+      type: object
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/DueEntryRef"
+          minItems: 1
+          maxItems: 500
+        value:
+          type: boolean
+      required:
+        - items
+        - value
+      additionalProperties: false
+    NotForInvoiceEntry:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum:
+            - owed
+            - received
+        id:
+          type: string
+          format: uuid
+        notForInvoice:
+          type: boolean
+        version:
+          type: integer
+      required:
+        - kind
+        - id
+        - notForInvoice
+        - version
+    SetNotForInvoiceRequest:
+      type: object
+      properties:
+        value:
+          type: boolean
+      required:
+        - value
+      additionalProperties: false
     FxRatesResponse:
       type: object
       properties:
@@ -14610,6 +14894,11 @@ components:
               - total
               - count
           description: Received payments per currency (reversed ones left out), never summed across currencies.
+        invoiceSplit:
+          type: array
+          items:
+            $ref: "#/components/schemas/InvoiceSplitRow"
+          description: "MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency"
       required:
         - from
         - to
@@ -25652,6 +25941,393 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/documents-due:
+    get:
+      tags:
+        - Issuing
+      summary: Documents due, grouped by client
+      description: "MUT-660: what each income entry is due, derived from the client’s documents preference (else the profile default) and what is issued or attached; never stored. view=not-for-invoice lists the entries marked not for invoice instead (kind null). olderThanMonths keeps items dated before today minus N months. Groups are by customerId (null: no client), in the order the items sort; the client’s name is the caller’s. 404 unless invoicing is on."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            enum:
+              - to-issue
+              - not-for-invoice
+            default: to-issue
+          required: false
+          name: view
+          in: query
+        - schema:
+            type: integer
+            nullable: true
+            minimum: 0
+            maximum: 120
+            default: 0
+            description: Only items dated before today minus N months (0 = all)
+          required: false
+          description: Only items dated before today minus N months (0 = all)
+          name: olderThanMonths
+          in: query
+      responses:
+        "200":
+          description: The documents due
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentsDue"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/documents-due/count:
+    get:
+      tags:
+        - Issuing
+      summary: How many documents are due (Home’s To issue)
+      description: "MUT-660: every listed item counts (N2), including those that can’t be issued in MTB3A yet (they can be attached or marked). 404 unless invoicing is on."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The count
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DocumentsDueCount"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/documents-due/issue:
+    post:
+      tags:
+        - Issuing
+      summary: "Issue all: one client’s due documents, each with its type and amount"
+      description: "MUT-660: issues each item (at most 25, one client per call) in turn, through the same single issue as POST /v1/issued-documents: a tax invoice, receipt or invoice-receipt linked to its entry, dated today, one line for its amount with VAT included. Each item answers issued, held (the Tax Authority held its allocation number: issue it on its own to choose) or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue’s own reason). Irreversible per item. The same Idempotency-Key returns the same answer, and an item is never issued twice. 409 ISSUING_SETUP_INCOMPLETE before the setup is done."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssueDueRequest"
+      responses:
+        "200":
+          description: What happened to each item
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssueDueResult"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/documents-due/not-for-invoice:
+    post:
+      tags:
+        - Issuing
+      summary: Mark entries not for invoice, or bring them back (bulk)
+      description: "MUT-660: all or nothing, in one transaction. A marked entry is due no document and counts outside Invoice income (it stays in All income, the accountant’s view and exports). An entry already at `value` is left alone, so a replay changes nothing (`changed` counts what changed). Marking an entry with a tax document (a live tax invoice or an invoice-receipt; a receipt doesn’t count) is 409 HAS_TAX_DOCUMENT and changes nothing: a credit note comes first."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NotForInvoiceRequest"
+      responses:
+        "200":
+          description: Done
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotForInvoiceResult"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/receivables/{receivableId}/not-for-invoice:
+    put:
+      tags:
+        - Issuing
+      summary: Mark an Owed entry not for invoice, or bring it back
+      description: "MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: receivableId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNotForInvoiceRequest"
+      responses:
+        "200":
+          description: Set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotForInvoiceEntry"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/payments/{paymentId}/not-for-invoice:
+    put:
+      tags:
+        - Issuing
+      summary: Mark a Received entry not for invoice, or bring it back
+      description: "MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there."
+      security:
+        - session: []
+        - deviceSession: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: paymentId
+          in: path
+        - schema:
+            type: string
+            description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          required: true
+          description: The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH.
+          name: if-match
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetNotForInvoiceRequest"
+      responses:
+        "200":
+          description: Set
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NotForInvoiceEntry"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
           content:
             application/json:
               schema:

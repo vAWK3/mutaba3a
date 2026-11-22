@@ -737,25 +737,27 @@ model UserIdempotencyKey {
 /// The party money is owed by. Thin on purpose: Malafat holds the rich client
 /// record and names ours through an ExternalReference (M2 brief §2.1).
 model Customer {
-  id             String        @id @default(uuid()) @db.Uuid
-  organizationId String        @db.Uuid
-  organization   Organization  @relation(fields: [organizationId], references: [id])
-  name           String
-  email          String?
-  phone          String?
-  notes          String?
+  id                  String               @id @default(uuid()) @db.Uuid
+  organizationId      String               @db.Uuid
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  name                String
+  email               String?
+  phone               String?
+  notes               String?
   /// Default VAT treatment for this customer's items (e.g. OUT_OF_SCOPE for a foreign client).
-  vatTreatment   VatTreatment?
+  vatTreatment        VatTreatment?
   /// MUT-642: VAT, company or ID number (9 digits, check digit validated); printed on issued documents.
-  taxId          String?       @db.VarChar(9)
+  taxId               String?              @db.VarChar(9)
   /// MUT-642: the address printed on issued documents.
-  address        String?
-  status         EntityStatus  @default(ACTIVE)
-  archivedAt     DateTime?
+  address             String?
+  /// MUT-660: which documents this client is due; null follows the profile default (IssuerDetails.defaultDocumentsPreference).
+  documentsPreference DocumentsPreference?
+  status              EntityStatus         @default(ACTIVE)
+  archivedAt          DateTime?
   /// Optimistic concurrency: PATCH sends If-Match: <version>.
-  version        Int           @default(1)
-  createdAt      DateTime      @default(now())
-  updatedAt      DateTime      @default(now())
+  version             Int                  @default(1)
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @default(now())
 
   projects   Project[]
   agreements Agreement[]
@@ -996,6 +998,8 @@ model Receivable {
   createdByUserId    String?             @db.Uuid
   /// Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt.
   deletedAt          DateTime?
+  /// MUT-660: marked "not for invoice": due no document, counted outside Invoice income.
+  notForInvoice      Boolean             @default(false)
   /// MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of postingDate (receivable_counters).
   number             String
   version            Int                 @default(1)
@@ -1075,6 +1079,8 @@ model Payment {
   origin             PaymentOrigin @default(INTEGRATION)
   /// MUT-61: the surface a capture came from (CaptureSourceSchema: app, siri, …); null when not sent, and always for INTEGRATION.
   captureSource      String?       @db.VarChar(20)
+  /// MUT-660: marked "not for invoice": due no document, counted outside Invoice income.
+  notForInvoice      Boolean       @default(false)
   createdBy          User?         @relation(fields: [createdByUserId], references: [id], onDelete: SetNull)
   version            Int           @default(1)
   createdAt          DateTime      @default(now())
@@ -2121,6 +2127,14 @@ enum IssuedDocType {
   RECEIPT
 }
 
+/// MUT-660 (ADR-270): which documents a client is due.
+enum DocumentsPreference {
+  TAX_INVOICE_FIRST
+  PAYMENT_REQUEST_FIRST
+  ON_PAYMENT
+  NO_DOCUMENT
+}
+
 enum DealerType {
   LICENSED
   EXEMPT
@@ -2130,32 +2144,34 @@ enum DealerType {
 
 /// The business details printed on a profile's documents; snapshotted onto each document at issue.
 model IssuerDetails {
-  organizationId   String     @id @db.Uuid
-  legalName        String
-  vatId            String     @db.VarChar(9)
-  dealerType       DealerType
-  address          String?
-  city             String?
-  phone            String?
-  email            String?
-  website          String?
+  organizationId             String              @id @db.Uuid
+  legalName                  String
+  vatId                      String              @db.VarChar(9)
+  dealerType                 DealerType
+  address                    String?
+  city                       String?
+  phone                      String?
+  email                      String?
+  website                    String?
   /// BLACK | BLUE: the only print colours (Basel, 2026-11-22).
-  ink              String     @default("BLACK") @db.VarChar(5)
+  ink                        String              @default("BLACK") @db.VarChar(5)
   /// A key in issuing/styles (PROFESSIONAL | MODERN | MINIMAL); a string so a new style needs no migration.
-  documentStyle    String     @default("PROFESSIONAL") @db.VarChar(32)
+  documentStyle              String              @default("PROFESSIONAL") @db.VarChar(32)
   /// V1-a: the default for new documents (each document and line may differ).
-  pricesIncludeVat Boolean    @default(false)
+  pricesIncludeVat           Boolean             @default(false)
   /// MUT-646: he | ar | en, the language new documents start in.
-  defaultLanguage  String     @default("he") @db.VarChar(2)
+  defaultLanguage            String              @default("he") @db.VarChar(2)
   /// MUT-646: printed as the due date's default on a tax invoice (days after the document date).
-  paymentTermsDays Int?
-  bankDetails      String?
-  footerNote       String?
+  paymentTermsDays           Int?
+  bankDetails                String?
+  footerNote                 String?
   /// MUT-648: after saving an Owed or a Received, offer to issue its document (on by default).
-  offerAfterSave   Boolean    @default(true)
-  version          Int        @default(1)
-  createdAt        DateTime   @default(now())
-  updatedAt        DateTime   @updatedAt
+  offerAfterSave             Boolean             @default(true)
+  /// MUT-660: the documents a client with no preference is due.
+  defaultDocumentsPreference DocumentsPreference @default(ON_PAYMENT)
+  version                    Int                 @default(1)
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
 
   @@map("issuer_details")
 }
@@ -2263,6 +2279,9 @@ model IssuedDocument {
   @@index([organizationId, customerId, documentDate])
   @@index([organizationId, documentDate])
   @@index([originalId])
+  /// MUT-660: what is due joins documents to their entries.
+  @@index([organizationId, receivableId])
+  @@index([organizationId, paymentId])
   @@map("issued_documents")
 }
 

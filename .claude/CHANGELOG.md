@@ -28,13 +28,30 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.127.0-mut709)
+## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.128.0-mut709)
 
 ### Fixed
 - A retry after a 5xx could record a payment twice: the 5xx releases the Idempotency-Key, so the handler ran again. `POST /v1/receivables/{id}/settle`, `POST /v1/income` (Received) and `POST /v1/payments` now store `sha256(claim key + "payment")` as `Payment.clientRequestKey` (unique per organization, migration `20261123000000_mut709_payment_client_request_key`) and answer a retry with the payment the first attempt committed, before checks it would now fail (nothing outstanding, a stale preview token). Why: found planning MUT-661 (R1). Files: `idempotency.ts` `paymentRequestKey`, the three routes, both stores, `payments.findByClientRequestKey`.
 - Reversing (`POST /v1/payments/{id}/reverse`), correcting (`/correct` and its preview) or undoing (`DELETE /v1/income/{id}`) a payment an issued receipt or invoice-receipt stands on is refused with 409 CONFLICT `HAS_DOCUMENT` (details `documentId`, `docType`, `number`); the way out is a credit note. Why: an issued document is final, so its money must stay (MUT-661 R2). Files: `payments/document-guard.ts`, `issuing.moneyDocumentOn` (store-guard `read`, so a key can be refused too). The portal's correction pane says so (`hosted.correct.errors.hasDocument`).
 
 ---
+
+## [Unreleased] - 2026-11-22 — Documents due per client, To issue, "not for invoice", invoice income in the books (MUT-660, ADR-270, API 1.127.0-mut660)
+
+### Added
+- Server: `documentsDue` (`server/src/issuing/documents-due.ts`), `splitIncome`/`invoiceStatusOf` (`server/src/income/invoice-class.ts`), `invoiceSplitOf` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`). Routes in `routes/documents-due.ts`: GET /v1/documents-due (by client; view=not-for-invoice; olderThanMonths), GET /v1/documents-due/count, POST /v1/documents-due/issue, POST /v1/documents-due/not-for-invoice, PUT /v1/{receivables,payments}/{id}/not-for-invoice. Store: `issuing.dueInputs`, `incomeContext`, `setNotForInvoice` (memory + Prisma, contract-tested).
+- Migration `20261122230000_mut660_documents_due`: `DocumentsPreference` enum, `customers.documentsPreference`, `issuer_details.defaultDocumentsPreference`, `receivables/payments.notForInvoice`, `issued_documents (organizationId, receivableId|paymentId)` indexes.
+- Portal: Documents › To issue (`DocumentsDuePage`), Home's `ToIssueGroup`, `NotForInvoiceAction` on Owed and Paid rows, `DocumentsPreferenceField` on the client page, the profile default in the invoicing defaults step, Reports' `InvoiceSplitCard`; `documentsDueQueries`. i18n ar+en.
+- Books: `invoiceSplit` on GET /v1/summaries/activity and the share-link summary; two lines in the monthly summary; `invoice_status` in the Excel Income sheet.
+- Release-QA: `portal.invoicing.to-issue-issue-all`, `to-issue-bulk-not-for-invoice`, `not-for-invoice-refused`, `client-documents-preference`, `portal.reports.invoice-split`.
+
+### Changed
+- Issuing for an entry decides take vs link (`fromEntryMode`): agreements' charges, credited Owed, allocated payments and no-client invoice-receipts are issued linked only (nothing posted). A no-client 320 is accepted for a Received entry.
+- `issueOne` extracted from POST /v1/issued-documents and reused by Issue all. Receivables and payments carry `notForInvoice`; customers `documentsPreference`; issuer details `defaultDocumentsPreference`.
+- This device's snapshot 21 → 22 (`addDocumentsFields`).
+
+### Why
+- Home's To issue box, MUT-661 and the books all need to know what each income entry is due, per client, without a stored flag that can drift.
 
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 

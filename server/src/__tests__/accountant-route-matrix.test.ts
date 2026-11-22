@@ -32,6 +32,9 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/streak',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-660: documents due, read under the grant when the owner holds `invoicing`.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
   // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
   'GET /v1/issued-documents',
   'GET /v1/issued-documents/{documentId}',

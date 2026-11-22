@@ -14,6 +14,7 @@ const at = (iso: string) => new Date(`${iso}T09:00:00Z`);
 function receivable(o: Partial<ReceivableRecord> & { gross: bigint; postingDate: string }): ReceivableRecord {
   const { gross, ...rest } = o;
   return {
+    notForInvoice: false,
     id: uuid(),
     organizationId: ORG,
     customerId: CUST,

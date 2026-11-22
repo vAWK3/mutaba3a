@@ -106,6 +106,17 @@ export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
 export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
 export type IssuedDocType = Schemas['IssuedDocType'];
 export type IssuingStyles = Schemas['IssuingStyles'];
+// MUT-660: documents due.
+export type DocumentsDue = Schemas['DocumentsDue'];
+export type DueItem = Schemas['DueItem'];
+export type DueKind = Schemas['DueKind'];
+export type DueReason = Schemas['DueReason'];
+export type DueEntryRef = Schemas['DueEntryRef'];
+export type IssueDueResult = Schemas['IssueDueResult'];
+/** The component is nullable where a client has none of its own; a choice itself never is. */
+export type DocumentsPreference = NonNullable<Schemas['DocumentsPreference']>;
+export type InvoiceSplitRow = Schemas['InvoiceSplitRow'];
+export type NotForInvoiceEntry = Schemas['NotForInvoiceEntry'];
 export type ExternalInvoice = Schemas['ExternalInvoice'];
 export type ExternalInvoiceReading = Schemas['ExternalInvoiceReading'];
 export type ExternalEntryKind = Schemas['ExternalEntryKind'];
@@ -814,6 +825,17 @@ export const api = {
   /** Irreversible: the document takes the next number. A retry with the same key returns the same document. */
   issueDocument: (profileId: string, body: IssueDocumentRequest, idempotencyKey: string) =>
     request<IssuedDocument>('POST', '/v1/issued-documents', { profileId, body, idempotencyKey }),
+  /** MUT-660: what each income entry is due, grouped by client (or the entries marked not for invoice). */
+  documentsDue: (profileId: string, query: { view: 'to-issue' | 'not-for-invoice'; olderThanMonths: number }, signal?: AbortSignal) =>
+    request<DocumentsDue>('GET', '/v1/documents-due', { profileId, query, signal }),
+  documentsDueCount: (profileId: string, signal?: AbortSignal) => request<{ total: number }>('GET', '/v1/documents-due/count', { profileId, signal }),
+  /** Irreversible per item: one client's due documents, each issued in turn. */
+  issueDue: (profileId: string, body: { customerId: string | null; items: DueEntryRef[] }, idempotencyKey: string) =>
+    request<IssueDueResult>('POST', '/v1/documents-due/issue', { profileId, body, idempotencyKey }),
+  markNotForInvoice: (profileId: string, body: { items: DueEntryRef[]; value: boolean }, idempotencyKey: string) =>
+    request<{ changed: number }>('POST', '/v1/documents-due/not-for-invoice', { profileId, body, idempotencyKey }),
+  setEntryNotForInvoice: (profileId: string, entry: DueEntryRef, value: boolean, version: number) =>
+    request<NotForInvoiceEntry>('PUT', `/v1/${entry.kind === 'owed' ? 'receivables' : 'payments'}/${encodeURIComponent(entry.id)}/not-for-invoice`, { profileId, body: { value }, ifMatchVersion: String(version) }),
   /** The draft PDF (watermarked), as a file. */
   draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
     (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),

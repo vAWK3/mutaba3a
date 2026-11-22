@@ -98,6 +98,48 @@ function requireCustomer(input: IssueDocumentInput): string {
   return input.customerId;
 }
 
+/** What a store reads of the entry a document is issued for (MUT-660). */
+export interface EntryState {
+  kind: 'receivable' | 'payment';
+  origin: string;
+  deleted: boolean;
+  /** A Received that is POSTED (an Owed is always true). */
+  posted: boolean;
+  customerId: string | null;
+  currency: string;
+  /** An Owed's gross, a Received's amount. */
+  grossMinor: bigint;
+  creditedMinor: bigint;
+  allocatedMinor: bigint;
+  /** A document is already linked to it (`receivableId` / `paymentId`; credit notes aside). */
+  documented: boolean;
+}
+
+/**
+ * MUT-660 (ADR-270): `take` = the document takes the entry over and its money becomes the document's (I1-a, MUT-648):
+ * an untouched recorded Owed, an unallocated captured Received. `link` = the document is numbered and linked to the
+ * entry, nothing is posted or changed: an agreement's charge or a credited Owed (taking it over would cut the agreement
+ * or the credit), an allocated Received (a partial payment would rewrite its Owed), and no-client money taking an
+ * invoice-receipt (no Owed can be posted without a client). Null = it can't take a document. Both stores ask this.
+ */
+export function fromEntryMode(entry: EntryState | null, docType: IssueDocumentInput['docType']): 'take' | 'link' | null {
+  if (!entry || entry.documented || entry.origin === 'ISSUED_DOCUMENT') return null;
+  if (entry.kind === 'receivable') {
+    if (entry.deleted || entryAmount(entry) <= 0n) return null;
+    if (entry.origin === 'ADJUSTMENT' && entry.creditedMinor === 0n) return 'take';
+    return docType === 'TAX_INVOICE' ? 'link' : null;
+  }
+  if (!entry.posted || entry.origin !== 'CAPTURE') return null;
+  if (docType !== 'TAX_INVOICE_RECEIPT' && docType !== 'RECEIPT') return null;
+  if (entry.allocatedMinor === 0n && (entry.customerId || docType === 'RECEIPT')) return 'take';
+  return 'link';
+}
+
+/** The amount a document for this entry must carry. */
+export function entryAmount(entry: Pick<EntryState, 'kind' | 'grossMinor' | 'creditedMinor'>): bigint {
+  return entry.kind === 'receivable' ? entry.grossMinor - entry.creditedMinor : entry.grossMinor;
+}
+
 /** I1-a: why a recorded entry can't become this document's, or null when it can. Both stores ask this. */
 export function fromEntryRefusal(
   entry: { ok: boolean; customerId: string | null; currency: string; amountMinor: bigint },

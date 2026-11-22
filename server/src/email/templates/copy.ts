@@ -696,6 +696,13 @@ const monthlySummary: Copy<'monthly-summary'> = {
       title: p.name,
       rows: [
         { label: `Came in during ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'Nothing recorded' },
+        // MUT-660: invoicing profiles only.
+        ...(p.invoiceSplit
+          ? [
+              { label: 'Invoice income', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'None' },
+              { label: 'Not for invoice', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'None' },
+            ]
+          : []),
         { label: 'Still owed', value: p.owed.length > 0 ? amounts(p.owed) : 'Nothing owed' },
         { label: 'Overdue', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${enEntries(p.overdueCount)})` : 'Nothing overdue' },
       ],
@@ -720,6 +727,12 @@ const monthlySummary: Copy<'monthly-summary'> = {
       title: p.name,
       rows: [
         { label: `المستلَم في ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'لا شيء مسجّل' },
+        ...(p.invoiceSplit
+          ? [
+              { label: 'دخل مفوتر', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'لا شيء' },
+              { label: 'خارج الفوترة', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'لا شيء' },
+            ]
+          : []),
         { label: 'المستحق', value: p.owed.length > 0 ? amounts(p.owed) : 'لا شيء مستحق' },
         { label: 'المتأخر', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${arEntries(p.overdueCount)})` : 'لا شيء متأخر' },
       ],
