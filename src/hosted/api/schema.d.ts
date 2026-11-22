@@ -13852,7 +13852,7 @@ export interface paths {
         get?: never;
         /**
          * Answer “already issuing documents elsewhere?”
-         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless.
+         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless.
          */
         put: {
             parameters: {
@@ -14697,7 +14697,7 @@ export interface paths {
         };
         /**
          * View a document as a PDF (a copy, not counted)
-         * @description D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).
+         * @description D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original). MUT-641: digitally signed.
          */
         get: {
             parameters: {
@@ -14764,12 +14764,21 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description MUT-641: the document could not be signed (SIGNING_UNAVAILABLE) or this server has no signer (SIGNING_NOT_CONFIGURED); nothing was sent */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
             };
         };
         put?: never;
         /**
          * Produce a copy of a document as a PDF (download, email, share)
-         * @description Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.
+         * @description Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes.
          */
         post: {
             parameters: {
@@ -14836,6 +14845,15 @@ export interface paths {
                 };
                 /** @description Rate limited */
                 429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description MUT-641: the document could not be signed (SIGNING_UNAVAILABLE) or this server has no signer (SIGNING_NOT_CONFIGURED); nothing was sent */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };

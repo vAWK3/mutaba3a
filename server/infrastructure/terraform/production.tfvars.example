@@ -34,6 +34,14 @@ live_label          = false
 # sentry_state_bucket = "malafat-production-terraform-state"
 # MUT-360: Stripe webhook and nightly reconcile. Set true only after both Stripe secrets hold a version (server/DEPLOYMENT.md §6e).
 # stripe_enabled      = false
+# MUT-641 (ADR-265): the issued-document signing key, then (after `npm run signing:interim-cert`) its certificate.
+# issuing_signing_key        = true
+# issuing_signing_cert_chain = <<-EOT
+# -----BEGIN CERTIFICATE-----
+# ...
+# -----END CERTIFICATE-----
+# EOT
+# issuing_tsa_url            = "http://timestamp.digicert.com"
 # MUT-148: error reports to Sentry. Set true only after server/DEPLOYMENT.md §1.5 has applied the Sentry stack.
 # sentry_enabled      = false
 # MUT-389: the receipts library. Set true when MUT-260 or MUT-258 ships, and leave it on (server/DEPLOYMENT.md).

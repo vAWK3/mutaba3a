@@ -341,6 +341,34 @@ const envSchema = z.object({
    * and a cold start, so the release-QA spec can see the portal's "Reading…" state. Refused in production and staging.
    */
   QA_READ_DELAY_MS: z.coerce.number().int().min(0).max(60_000).optional(),
+  /**
+   * MUT-641 (ADR-265): who signs issued-document PDFs. Unset = `dev` outside production (a throwaway authority made in
+   * the process, nothing on disk) and `off` in production, where the PDF routes answer 503 SIGNING_NOT_CONFIGURED
+   * until the certificate is in place: a document is never handed out unsigned. `dev` is refused in production.
+   * `kms` signs with a Cloud KMS key and needs its key version, its certificate chain and a time-stamp authority.
+   */
+  ISSUING_SIGNER: z.enum(['dev', 'kms', 'off']).optional(),
+  ISSUING_SIGNING_KMS_KEY: z
+    .string()
+    .regex(/^projects\/[^/]+\/locations\/[^/]+\/keyRings\/[^/]+\/cryptoKeys\/[^/]+\/cryptoKeyVersions\/\d+$/, 'must be a Cloud KMS key version: projects/…/cryptoKeyVersions/N')
+    .optional(),
+  /** The certificate the certifying authority issued for the KMS key, then its issuers (PEM). Public: never a key. */
+  ISSUING_SIGNING_CERT_CHAIN: z
+    .string()
+    .refine((pem) => pem.includes('-----BEGIN CERTIFICATE-----'), 'must hold PEM certificates')
+    .refine((pem) => !/PRIVATE KEY/.test(pem), 'holds a private key: the signing key stays in Cloud KMS and never travels in configuration')
+    .optional(),
+  /**
+   * An RFC 3161 time-stamp authority: the certifying authority's, or a public one (DigiCert, Sectigo) until then.
+   * Unset outside `kms` = the development authority's. Plain http is allowed, as those services serve it: the token
+   * is signed by the authority and checked against this request's nonce and digest.
+   */
+  ISSUING_TSA_URL: z
+    .string()
+    .url()
+    .refine((value) => /^https?:\/\//.test(value), 'must be an http(s) URL')
+    .optional(),
+  ISSUING_SIGNING_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -428,6 +456,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError('Invalid configuration:\n  BILLING_STAY_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
   }
   receiptReadingConfig(config);
+  issuingSignerConfig(config);
   if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     throw new ConfigError(`Invalid configuration:\n  QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only, never ${config.NODE_ENV}`);
   }
@@ -439,6 +468,21 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     }
   }
   return { ...config, ...attachments, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
+}
+
+/** MUT-641 (ADR-265): production signs only with a real certificate, and a KMS signer has everything it needs. */
+function issuingSignerConfig(config: z.infer<typeof envSchema>): void {
+  const refuse = (name: string, why: string): never => {
+    throw new ConfigError(`Invalid configuration:\n  ${name}: ${why}`);
+  };
+  if (config.ISSUING_SIGNER === 'dev' && config.NODE_ENV === 'production') {
+    refuse('ISSUING_SIGNER', 'the development authority signs for development, tests and QA only; production signs with the certificate in Cloud KMS (kms) or not at all (off)');
+  }
+  if (config.ISSUING_SIGNER === 'kms') {
+    for (const name of ['ISSUING_SIGNING_KMS_KEY', 'ISSUING_SIGNING_CERT_CHAIN', 'ISSUING_TSA_URL'] as const) {
+      if (!config[name]) refuse(name, 'ISSUING_SIGNER=kms needs the key version, its certificate chain and a time-stamp authority');
+    }
+  }
 }
 
 /** MUT-441: the refusals for the server's receipt reader (the kill switch, the queue and the job's OIDC check). */

@@ -478,3 +478,54 @@ variable "budget_currency" {
     error_message = "budget_currency is a three-letter ISO 4217 code, such as GBP."
   }
 }
+
+# ----------------------------------------------------------------------------
+# MUT-641 (ADR-265): issued-document signing (signing.tf)
+# ----------------------------------------------------------------------------
+
+variable "issuing_signing_key" {
+  description = "MUT-641: creates the Cloud KMS key ring and HSM signing key for issued-document PDFs, and lets the API's service account sign with it (roles/cloudkms.signer on that key only). Nothing signs until issuing_signing_cert_chain is set too."
+  type        = bool
+  default     = false
+}
+
+variable "issuing_signing_algorithm" {
+  description = "MUT-641: the key's algorithm, one the API's signer speaks. RSA 3072 is the widest-accepted choice for certifying authorities and PDF readers. Changing it after the key exists replaces the key (and its certificate)."
+  type        = string
+  default     = "RSA_SIGN_PKCS1_3072_SHA256"
+  validation {
+    condition     = contains(["RSA_SIGN_PKCS1_2048_SHA256", "RSA_SIGN_PKCS1_3072_SHA256", "RSA_SIGN_PKCS1_4096_SHA256", "EC_SIGN_P256_SHA256"], var.issuing_signing_algorithm)
+    error_message = "issuing_signing_algorithm must be RSA_SIGN_PKCS1_{2048,3072,4096}_SHA256 or EC_SIGN_P256_SHA256 (what the API's CMS signer declares)."
+  }
+}
+
+variable "issuing_signing_key_version" {
+  description = "MUT-641: which version of the key signs (KMS creates version 1 with the key). Move it only with a certificate for the new version."
+  type        = number
+  default     = 1
+}
+
+variable "issuing_signing_cert_chain" {
+  description = "MUT-641: the PEM certificate for the signing key, then its issuers: the interim self-issued one (`npm run signing:interim-cert`), later the certifying authority's. Public, never a key. Null (default) = the API doesn't sign and its PDF routes answer 503."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.issuing_signing_cert_chain == null || (strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "-----BEGIN CERTIFICATE-----") && !strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "PRIVATE KEY"))
+    error_message = "issuing_signing_cert_chain must hold PEM certificates and no private key: the signing key stays in Cloud KMS."
+  }
+  validation {
+    condition     = var.issuing_signing_cert_chain == null || var.issuing_signing_key
+    error_message = "issuing_signing_cert_chain needs issuing_signing_key = true: the certificate is for that KMS key."
+  }
+}
+
+variable "issuing_tsa_url" {
+  description = "MUT-641: the RFC 3161 time-stamp authority on every signature: DigiCert's public service until the certifying authority's (checked 2026-11-22)."
+  type        = string
+  default     = "http://timestamp.digicert.com"
+  validation {
+    condition     = can(regex("^https?://", var.issuing_tsa_url))
+    error_message = "issuing_tsa_url must be an http(s) URL."
+  }
+}
+

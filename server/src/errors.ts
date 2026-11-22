@@ -127,6 +127,10 @@ export const ERROR_CODES = {
   OAUTH_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
+  /** MUT-641 (ADR-265): this server has no document signer (production until the certificate is in place); nothing was sent. */
+  SIGNING_NOT_CONFIGURED: 503,
+  /** MUT-641: the signing key or the time-stamp authority failed; nothing was sent, a retry with the same key may work. */
+  SIGNING_UNAVAILABLE: 503,
   /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */
   APP_UPDATE_REQUIRED: 426,
   /** MUT-551 (release gate RF-2): MAINTENANCE_MODE is on; every phone request (X-App-Platform) answers this until it's off. */

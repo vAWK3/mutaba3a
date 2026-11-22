@@ -123,6 +123,8 @@ resource "google_project_service" "apis" {
     local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
     # MUT-511: the budget (budget.tf) takes its quota from this project.
     var.billing_account_id == null ? [] : ["billingbudgets.googleapis.com"],
+    # MUT-641: the issued-document signing key (signing.tf).
+    var.issuing_signing_key ? ["cloudkms.googleapis.com"] : [],
   ))
   project            = var.project_id
   service            = each.key
@@ -672,6 +674,16 @@ resource "google_cloud_run_v2_service" "api" {
         }
         dynamic "env" {
           for_each = var.sentry_enabled ? { SENTRY_ENVIRONMENT = var.environment } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-641 (ADR-265): issued-document PDFs are signed with the KMS key once its certificate is set (signing.tf).
+        # Without it ISSUING_SIGNER stays unset, which the API reads as off in production (the PDF routes answer 503).
+        dynamic "env" {
+          for_each = local.issuing_signing_env
           content {
             name  = env.key
             value = env.value

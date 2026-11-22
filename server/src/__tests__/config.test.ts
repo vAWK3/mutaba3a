@@ -670,3 +670,34 @@ describe('loadConfig — local QA profile cap (MUT-474)', () => {
     expect(() => loadConfig({ ...base, NODE_ENV: env, QA_MAX_OWNED_PROFILES: '100' })).toThrow(/QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only/);
   });
 });
+
+describe('loadConfig — the issued-document signer (MUT-641, ADR-265)', () => {
+  const CERT = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
+  const KEY = 'projects/p/locations/europe-west1/keyRings/issuing/cryptoKeys/documents/cryptoKeyVersions/1';
+  const kms = { ISSUING_SIGNER: 'kms', ISSUING_SIGNING_KMS_KEY: KEY, ISSUING_SIGNING_CERT_CHAIN: CERT, ISSUING_TSA_URL: 'https://tsa.example/' };
+
+  it('is unset by default (dev outside production, off in production) with a 10 s timeout', () => {
+    expect(loadConfig(base).ISSUING_SIGNER).toBeUndefined();
+    expect(loadConfig(base).ISSUING_SIGNING_TIMEOUT_MS).toBe(10_000);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).ISSUING_SIGNER).toBeUndefined();
+  });
+
+  it('refuses the development authority in production', () => {
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', ISSUING_SIGNER: 'dev' })).toThrow(/ISSUING_SIGNER: the development authority signs for development, tests and QA only/);
+    expect(loadConfig({ ...base, NODE_ENV: 'staging', ISSUING_SIGNER: 'dev' }).ISSUING_SIGNER).toBe('dev');
+  });
+
+  it('a kms signer needs its key version, certificate chain and time-stamp authority', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'production', ...kms })).toMatchObject(kms);
+    for (const name of ['ISSUING_SIGNING_KMS_KEY', 'ISSUING_SIGNING_CERT_CHAIN', 'ISSUING_TSA_URL']) {
+      expect(() => loadConfig({ ...base, ...kms, [name]: undefined })).toThrow(new RegExp(`${name}: ISSUING_SIGNER=kms needs`));
+    }
+  });
+
+  it('never takes key material or a malformed key name; a time-stamp authority is http(s)', () => {
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_CERT_CHAIN: `${CERT}-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----\n` })).toThrow(/holds a private key/);
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_KMS_KEY: 'documents' })).toThrow(/ISSUING_SIGNING_KMS_KEY/);
+    expect(loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'http://timestamp.digicert.com' }).ISSUING_TSA_URL).toBe('http://timestamp.digicert.com');
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'ftp://tsa.example/' })).toThrow(/ISSUING_TSA_URL/);
+  });
+});

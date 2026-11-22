@@ -22,6 +22,7 @@ import type {
   IssuerDetailsRecord,
   IssuingRepository,
   IssuerLogoRecord,
+  IssuedOriginalPdfRecord,
   IssuingSetupRecord,
   AccountClosureRecord,
   AccountPurgeRepository,
@@ -385,6 +386,7 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-646 */
   private readonly issuingSetupMap = new Map<string, IssuingSetupRecord>();
   private readonly issuerLogoMap = new Map<string, IssuerLogoRecord>();
+  private readonly issuedOriginals = new Map<string, IssuedOriginalPdfRecord>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
@@ -1000,6 +1002,17 @@ export class MemoryLedgerStore implements LedgerStore {
       copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: again ? null : (copy.requestKey ?? null) });
       this.issuedCopies.set(documentId, copies);
       return { copyIndex: copies.length - 1 };
+    },
+    getOriginalPdf: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? { ...r, bytes: new Uint8Array(r.bytes) } : null;
+    },
+    keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return null;
+      const kept = this.issuedOriginals.get(documentId) ?? { documentId, organizationId, bytes: new Uint8Array(pdf.bytes), sha256: pdf.sha256, createdAt: at };
+      this.issuedOriginals.set(documentId, kept);
+      return { ...kept, bytes: new Uint8Array(kept.bytes) };
     },
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);

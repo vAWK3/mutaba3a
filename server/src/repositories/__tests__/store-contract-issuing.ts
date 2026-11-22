@@ -187,6 +187,24 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, dayLater)).toEqual({ copyIndex: 6 });
     });
 
+    it('keeps a signed original once: the first kept is what every later call gets (MUT-641)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const doc = await w.issued(store, w.issue());
+      expect(await store.issuing.getOriginalPdf(w.a.id, doc.id)).toBeNull();
+      const first = { bytes: new Uint8Array([0x25, 0x50, 0x44, 0x46, 1]), sha256: '1'.repeat(64) };
+      const kept = await store.issuing.keepOriginalPdf(w.a.id, doc.id, first, at(30));
+      expect(kept).toMatchObject({ documentId: doc.id, organizationId: w.a.id, sha256: first.sha256 });
+      expect([...kept!.bytes]).toEqual([...first.bytes]);
+      // A racing twin (or a later call) never replaces it: it gets the first one back.
+      const twin = await store.issuing.keepOriginalPdf(w.a.id, doc.id, { bytes: new Uint8Array([9]), sha256: '2'.repeat(64) }, at(31));
+      expect(twin!.sha256).toBe(first.sha256);
+      expect([...(await store.issuing.getOriginalPdf(w.a.id, doc.id))!.bytes]).toEqual([...first.bytes]);
+      // Another profile sees nothing and can keep nothing.
+      expect(await store.issuing.getOriginalPdf(w.b.id, doc.id)).toBeNull();
+      expect(await store.issuing.keepOriginalPdf(w.b.id, doc.id, first, at(32))).toBeNull();
+    });
+
     it('lists newest first, paginated, filtered by type and customer, inside one profile only', async () => {
       const store = await makeStore();
       const w = await world(store);

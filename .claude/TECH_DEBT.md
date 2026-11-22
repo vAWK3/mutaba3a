@@ -41,6 +41,14 @@
 - **What:** `min_confident_chars` 80, `turn_gain` 1.25, `min_turn_gain_chars` 20, `sideways_keep` 0.8, and the 6°/2° torn-edge rule were set on the synthetic photos turned four ways and one real sideways photo (Maxi), the same receipts the bench then checks: nothing held out. An upside-down page whose first read still scores 80 confident characters or more is never turned.
 - **Fix:** recheck them on MUT-541's approved receipts once there are some, and on any new sideways or upside-down production photo.
 
+### TD-316: Signed PDFs are PAdES B-T, not long-term validated (B-LT)
+**Status**: Open (2026-11-22, MUT-641 S1)
+- **What:** the signature carries a time-stamp but no revocation data (no DSS dictionary with OCSP/CRL), so once the certificate expires a validator can't prove it was valid at signing without the CA's online services. Add the DSS (and a document time-stamp for B-LTA) once the production CA, its OCSP responder and TSA are known.
+
+### TD-317: The customer's consent to receive documents digitally isn't recorded yet
+**Status**: Open (2026-11-22, MUT-641 S4)
+- **What:** Instruction 18B wants the recipient's prior agreement to digital documents. Its shape and retention wait for the accountant's answer (MUT-567 Q3); the field and UI belong to MUT-570/573, which send documents. Until then nothing records it.
+
 ### TD-310: Malafat's connect and revoke are audited as an agent's
 **Status**: Open (MUT-593, 2026-11-12; ADR-254)
 - **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".

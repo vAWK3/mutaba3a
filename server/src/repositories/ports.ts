@@ -4476,6 +4476,16 @@ export interface IssuerLogoRecord {
   createdAt: Date;
 }
 
+/** MUT-641 (ADR-265): an issued document's signed original ("מקור"), kept once and handed out as is. */
+export interface IssuedOriginalPdfRecord {
+  documentId: string;
+  organizationId: string;
+  bytes: Uint8Array;
+  /** The SHA-256 of `bytes` (hex). */
+  sha256: string;
+  createdAt: Date;
+}
+
 export interface IssuedDocumentCounterRecord {
   organizationId: string;
   docType: IssuedDocType;
@@ -4628,5 +4638,12 @@ export interface IssuingRepository {
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
+  /** MUT-641: the signed original, or null until it was first produced. */
+  getOriginalPdf(organizationId: string, documentId: string): Promise<IssuedOriginalPdfRecord | null>;
+  /**
+   * MUT-641: keeps the signed original. The first one kept wins and is what every caller gets back (a racing twin
+   * gets the winner's bytes); it is never replaced. Null for an unknown document.
+   */
+  keepOriginalPdf(organizationId: string, documentId: string, pdf: Pick<IssuedOriginalPdfRecord, 'bytes' | 'sha256'>, at: Date): Promise<IssuedOriginalPdfRecord | null>;
   gaps(organizationId: string): Promise<IssuedNumberGap[]>;
 }
