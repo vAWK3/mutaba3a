@@ -13,7 +13,7 @@ file from the Tax Authority's simulator. This folder holds what you upload and, 
 | `fixture/report.html` | the summary MTB3A prints after producing the file |
 | `simulator-report-<date>.*` | **you add this:** the simulator's result file |
 
-The fixture is a made-up business, "ברמג׳יאת בע״מ", VAT 515151512, with a year of documents. It covers:
+The fixture is a made-up business, "סטודיו לדוגמה בע״מ", VAT 515151512, with a year of documents. Its software house (A000 1009/1010) is the registering owner, Narabnd Studio Ltd, 517108775 (MUT-700), passed in through config. It covers:
 
 - customers and lines in Hebrew, Arabic and English (Arabic is written in Hebrew letters, decision D2);
 - discounts, VAT-inclusive prices and exempt lines;
@@ -23,8 +23,10 @@ The fixture is a made-up business, "ברמג׳יאת בע״מ", VAT 515151512, w
 To make it again:
 
 ```bash
-cd server && UNIFORM_FILE_FIXTURE_OUT="$PWD/../docs/operations/tax-authority/uniform-file/fixture" npx vitest run src/__tests__/uniform-file-fixture.test.ts
+cd server && UNIFORM_FILE_FIXTURE_OUT="$PWD/../docs/operations/tax-authority/uniform-file/fixture" SOFTWARE_HOUSE_VAT_ID=517108775 SOFTWARE_HOUSE_NAME='נאראבנד סטודיו בע"מ' npx vitest run src/__tests__/uniform-file-fixture.test.ts
 ```
+
+Add `UNIFORM_FILE_REGISTRATION_NUMBER=<8 digits>` once MUT-567 issues the certificate.
 
 ## Run the simulator (you, about 5 minutes)
 
@@ -38,5 +40,5 @@ cd server && UNIFORM_FILE_FIXTURE_OUT="$PWD/../docs/operations/tax-authority/uni
 ## Before the real registration
 
 - **The registration number (A000 1006)** is `00000000` in the fixture. Set `UNIFORM_FILE_REGISTRATION_NUMBER` once MUT-567 issues the certificate.
-- **The software house (A000 1009/1010)** is a placeholder (`000000000`, `Barmajiyat`). Set `SOFTWARE_HOUSE_VAT_ID` to Barmajiyat's Israeli company number and `SOFTWARE_HOUSE_NAME` to its registered name (up to 20 characters) in the API's config, then make the fixture again before you upload. The simulator check doesn't need them, but the registration does.
+- **The software house (A000 1009/1010)** is Narabnd Studio Ltd, 517108775 (MUT-700), in the fixture and, once `production.tfvars` sets `software_house_vat_id` and `software_house_name`, in production. See `docs/operations/before-release.md`.
 - **Open questions for the accountant** are in the MUT-567 ticket: whether B100/B110 journal records are needed (D1; MTB3A writes none, A000 1013 = 0) and whether Arabic written in Hebrew letters is acceptable (D2).

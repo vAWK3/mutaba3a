@@ -51,13 +51,13 @@ function doc(docType: IssuedDocType, number: number, over: Partial<Omit<UniformF
 }
 
 const input = (documents: UniformFileDocument[], over: Partial<UniformFileInput> = {}): UniformFileInput => ({
-  issuer: { vatId: '515151515', legalName: 'ברמג׳יאת בע״מ', address: 'יפו 1', city: 'ירושלים', dealerType: 'COMPANY' },
+  issuer: { vatId: '515151515', legalName: 'סטודיו לדוגמה בע״מ', address: 'יפו 1', city: 'ירושלים', dealerType: 'COMPANY' },
   documents,
   originals: new Map(),
   range: { from: '2026-01-01', to: '2026-12-31' },
   producedAt: new Date('2026-11-22T16:30:00Z'),
   primaryId: '123456789012345',
-  software: { registrationNumber: '00000000', name: 'MTB3A', version: '1.0.0', houseVatId: '516000000', houseName: 'Barmajiyat' },
+  software: { registrationNumber: '00000000', name: 'MTB3A', version: '1.0.0', houseVatId: '517108775', houseName: 'נאראבנד סטודיו בע"מ' },
   ...over,
 });
 
@@ -115,6 +115,8 @@ describe('buildUniformFile', () => {
     expect(field(a000, 25, 9)).toBe('515151515');
     expect(field(a000, 49, 8)).toBe('&OF1.31&');
     expect(field(a000, 65, 20).trim()).toBe('MTB3A');
+    expect(field(a000, 105, 9)).toBe('517108775');
+    expect(Buffer.from(field(a000, 114, 20).trim(), 'latin1')).toEqual(Buffer.from([0xf0, 0xe0, 0xf8, 0xe0, 0xe1, 0xf0, 0xe3, 0x20, 0xf1, 0xe8, 0xe5, 0xe3, 0xe9, 0xe5, 0x20, 0xe1, 0xf2, 0x22, 0xee]));
     expect(field(a000, 134, 1)).toBe('2');
     expect(field(a000, 135, 50).trim()).toBe('OPENFRMT\\51515151.26\\11221830');
     expect(field(a000, 185, 2)).toBe('00');

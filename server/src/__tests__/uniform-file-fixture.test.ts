@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
+import { UNIFORM_FILE_HOUSE_PLACEHOLDER } from '../issuing/uniform-file/export.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type AccountantHarness } from './helpers/accountants.js';
 
 /**
@@ -10,11 +11,20 @@ import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type Ac
  * Arabic and English customers and lines, discounts, VAT-inclusive and exempt lines, cash and bank payments, receipts
  * with no customer and credit notes. With UNIFORM_FILE_FIXTURE_OUT=<dir> the files are written there for the upload:
  *
- *   UNIFORM_FILE_FIXTURE_OUT="$PWD/../docs/operations/tax-authority/uniform-file/fixture" npx vitest run src/__tests__/uniform-file-fixture.test.ts
+ *   UNIFORM_FILE_FIXTURE_OUT="$PWD/../docs/operations/tax-authority/uniform-file/fixture" \
+ *   SOFTWARE_HOUSE_VAT_ID=517108775 SOFTWARE_HOUSE_NAME='נאראבנד סטודיו בע"מ' npx vitest run src/__tests__/uniform-file-fixture.test.ts
+ *
+ * The software house fields come from the same variables the API reads (config.ts), so the file carries the registering
+ * owner (Narabnd Studio Ltd, MUT-700) without the code naming it; unset, the placeholders.
  */
 const OUT = process.env.UNIFORM_FILE_FIXTURE_OUT;
+const HOUSE = {
+  registrationNumber: process.env.UNIFORM_FILE_REGISTRATION_NUMBER ?? UNIFORM_FILE_HOUSE_PLACEHOLDER.registrationNumber,
+  houseVatId: process.env.SOFTWARE_HOUSE_VAT_ID ?? UNIFORM_FILE_HOUSE_PLACEHOLDER.houseVatId,
+  houseName: process.env.SOFTWARE_HOUSE_NAME ?? UNIFORM_FILE_HOUSE_PLACEHOLDER.houseName,
+};
 const DAYS = 365;
-const ISSUER = { legalName: 'ברמג׳יאת בע״מ', vatId: '515151512', dealerType: 'COMPANY', address: 'שדרות יפו 12', city: 'נצרת' };
+const ISSUER = { legalName: 'סטודיו לדוגמה בע״מ', vatId: '515151512', dealerType: 'COMPANY', address: 'שדרות יפו 12', city: 'נצרת' };
 const CUSTOMERS = [
   { name: 'שירותי ענן הגליל בע״מ', taxId: '514713288' },
   { name: 'شركة النور للتطوير', taxId: '039337761' },
@@ -30,7 +40,7 @@ const line = (i: number, over: Record<string, unknown> = {}) => ({ description: 
 async function business(h: AccountantHarness) {
   const owner = await person(h);
   expect((await h.app.request(`/admin/v1/users/${owner.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
-  const on = owner.on(await businessOf(h, owner, 'Barmajiyat'));
+  const on = owner.on(await businessOf(h, owner, 'Sample Studio'));
   expect((await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT'))).status).toBe(200);
   expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
   const customers: string[] = [];
@@ -44,7 +54,7 @@ async function business(h: AccountantHarness) {
 
 describe('uniform file simulator fixture (MUT-569, AC1)', () => {
   it('a year of every document type passes 2,000 records and stays under 4 MB', { timeout: 120_000 }, async () => {
-    const h = accountantHarness();
+    const h = accountantHarness({ uniformFileSoftware: HOUSE });
     h.setNow(new Date('2026-11-06T09:00:00Z'));
     const { on, customers } = await business(h);
     const issue = async (body: Record<string, unknown>) => {

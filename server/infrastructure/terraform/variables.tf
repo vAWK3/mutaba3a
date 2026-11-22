@@ -525,3 +525,33 @@ variable "issuing_tsa_url" {
   }
 }
 
+variable "uniform_file_registration_number" {
+  description = "MUT-569 (ADR-270): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.uniform_file_registration_number == null || can(regex("^[0-9]{8}$", var.uniform_file_registration_number))
+    error_message = "uniform_file_registration_number is 8 digits."
+  }
+}
+
+variable "software_house_vat_id" {
+  description = "MUT-569 (ADR-270): SOFTWARE_HOUSE_VAT_ID, the registering software house's 9-digit company number in the uniform file (A000 1009). The owner is Narabnd Studio Ltd, 517108775 (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_vat_id == null || can(regex("^[0-9]{9}$", var.software_house_vat_id))
+    error_message = "software_house_vat_id is a 9-digit company number."
+  }
+}
+
+variable "software_house_name" {
+  description = "MUT-569 (ADR-270): SOFTWARE_HOUSE_NAME, the software house's registered name in the uniform file (A000 1010, at most 20 characters), e.g. נאראבנד סטודיו בע\"מ (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_name == null || (length(var.software_house_name) >= 1 && length(var.software_house_name) <= 20)
+    error_message = "software_house_name is 1 to 20 characters."
+  }
+}
+

@@ -6,6 +6,13 @@ record the date where the item says.
 
 ## server
 
+- **MUT-569 (API 1.127.0-mut569, ADR-270): the uniform file names the software house from config.** No migration. With nothing set, the file's A000 carries placeholders (`00000000`, `000000000`, "MTB3A"). The registering owner is Narabnd Studio Ltd (MUT-700). Add these to `production.tfvars` and `make release server`:
+  - `software_house_vat_id = "517108775"`;
+  - `software_house_name = "נאראבנד סטודיו בע\"מ"`;
+  - once MUT-567 issues the certificate, `uniform_file_registration_number = "<8 digits>"`.
+
+  Check: download a uniform file from You › Invoicing; `INI.TXT` positions 105–113 read 517108775. Delete this item when the registration number is set, and record the date on MUT-567.
+
 - **MUT-641 (API 1.124.0-mut641, ADR-265): issued-document PDFs are signed, and production refuses them until a certificate is in place.** The release migrates `20261122200000_mut641_issued_document_originals` (additive, INSERT-only table). With nothing set, `ISSUING_SIGNER` is off in production: `GET`/`POST /v1/issued-documents/{id}/pdf` answer 503 `SIGNING_NOT_CONFIGURED` and the draft preview still prints (issuing is behind the operator's `invoicing` feature anyway).
   **Turning signing on (interim v1, Basel 2026-11-22: sign before a certifying authority does).** Project `mtb3a-production`, region `europe-west1` (config/gcp.json). `production.tfvars` is the git-ignored file at `server/infrastructure/terraform/production.tfvars` in the checkout you release from. Three steps, each its own release:
   1. **Create the key.** Add `issuing_signing_key = true` to `production.tfvars`, then `make release server`. Terraform enables the Cloud KMS API and creates key ring `mutaba3a-issuing` with the HSM key `issued-documents` (RSA_SIGN_PKCS1_3072_SHA256, about $2.50 a month). It gives the API's service account `roles/cloudkms.signer` on that key only. Nothing signs yet: no `ISSUING_` variable reaches Cloud Run. Check: `gcloud kms keys versions list --project mtb3a-production --location europe-west1 --keyring mutaba3a-issuing --key issued-documents` lists version 1 as ENABLED. Leave the line in `production.tfvars` from now on: a release whose file lacks it fails, because Terraform refuses to destroy the key (`prevent_destroy`).

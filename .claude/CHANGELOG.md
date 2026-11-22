@@ -41,7 +41,7 @@
   - `export.ts`: documents → C100/D110/D120 and the counts; no B100/B110 (A000 1013 = 0).
   - `report.ts`, `zip.ts`.
 - `IssuingRepository.inRange` (memory + Prisma, the existing `(organizationId, documentDate)` index; lines fetched in chunks of 5,000).
-- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`.
+- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`. The defaults are placeholders; Terraform's `software_house_*` and `uniform_file_registration_number` set the registering owner, Narabnd Studio Ltd, 517108775 (MUT-700). The operator step is in before-release.md.
 - Portal: You › Invoicing's "Uniform file (מבנה אחיד)" card (`UniformFileExport`). Last year, This year or Other dates; download; the counts or "no documents"; failure toast with Try again. The phone has none (D6).
 - `docs/operations/tax-authority/uniform-file/`: the simulator fixture (2,345 records, every type, Hebrew and Arabic) and Basel's run steps.
 

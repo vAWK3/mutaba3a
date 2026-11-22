@@ -134,8 +134,7 @@ Reuse:
 - **D2: Arabic is written in Hebrew letters** in the file (above), rather than `?`. *Rec.* **Question for openformat@mh.shaam.gov.il / the accountant:** is transliteration acceptable for an Arabic-language business?
 - **D3: registration fields from config.**
   - 1006 (8 digits) stays `00000000` until MUT-567 gives the number. The simulator accepts it for a registration test.
-  - 1009 is Barmajiyat's Israeli company number. **Basel: which number should go there?**
-  - 1010 is the name as registered, e.g. `ברמג'יאת בע"מ`. **Basel: confirm the exact name.**
+  - 1009/1010 are the registering software house. **Corrected 2026-11-22 (Basel, MUT-700):** that's Narabnd Studio Ltd, ח.פ. 517108775, נאראבנד סטודיו בע"מ, not Barmajiyat (Barmajiyat UK is the outsourced developer). It comes from config (Terraform `software_house_vat_id`/`software_house_name`) and is never in code.
 - **D4: a 400 covers its payment only (C100 + D120, no D110)**, as in the spec's §4.5 example. A 320 gets D110 lines and a D120. *Rec.*
 - **D5: the range is document dates, both ends inclusive, and may end at today at the latest.** No cap: a business's whole history builds in memory (about 1 KB per document). *Rec.* If a profile ever has more than 100k documents, the export becomes a streamed job; TD entry.
 - **D6: where it lives:** You › Invoicing, available to the owner and to an accountant with a grant. The phone isn't in v1 (a file download is a desk task). *Rec.*
@@ -224,3 +223,4 @@ The specs go in `qa/specs/portal/invoicing.spec.ts`, tagged and run once until t
 - **QA:** two features, not three. `uniform-file` takes in the bad-range case; `uniform-file-empty` is the second.
 - **The fixture's VAT numbers** pass the Israeli check digit (the API refuses others): 515151512, 514713288, 039337761.
 - **Prisma `inRange`** runs in CI's `test:db`. The shared local test database was behind main's schema, so it wasn't run locally (TD-320).
+- **Software house (MUT-700):** Terraform `software_house_vat_id`, `software_house_name` and `uniform_file_registration_number` set the env (`tests/uniform_file.tftest.hcl`). The fixture reads the same variables, so the simulator file carries Narabnd. The API's defaults are placeholders (zeros, "MTB3A").

@@ -94,3 +94,10 @@ live_label          = false
 # Phone maintenance switch (MUT-551): every phone request answers 503 MAINTENANCE and the app shows its maintenance
 # screen. Ships with ALLOW_MIN_BUILD_CHANGE=MAINTENANCE_MODE; delete the line (absent is off) to end it the same way.
 # maintenance_mode = true
+
+# MUT-569 (ADR-270): the uniform file's software house is the registering owner, Narabnd Studio Ltd (MUT-700).
+# Add the registration number once MUT-567 issues the certificate.
+# software_house_vat_id            = "517108775"
+# software_house_name              = "נאראבנד סטודיו בע\"מ"
+# uniform_file_registration_number = "00000000"
+

@@ -48,15 +48,15 @@ export interface UniformFileSoftware {
   registrationNumber: string;
   name: string;
   version: string;
-  /** A000 1009/1010: the software house (Barmajiyat). */
+  /** A000 1009/1010: the registering software house (Narabnd Studio Ltd, MUT-700; from config). */
   houseVatId: string;
   houseName: string;
 }
 
 /** What config supplies (the rest is the product's own name and the issuing core's version). */
 export type UniformFileHouse = Pick<UniformFileSoftware, 'registrationNumber' | 'houseVatId' | 'houseName'>;
-/** Until MUT-567: no registration number yet, and the house's company number unset (config fills both). */
-export const UNIFORM_FILE_HOUSE_PLACEHOLDER: UniformFileHouse = { registrationNumber: '00000000', houseVatId: '000000000', houseName: 'Barmajiyat' };
+/** Placeholders only: config (Terraform software_house_*, uniform_file_registration_number) supplies the real values. */
+export const UNIFORM_FILE_HOUSE_PLACEHOLDER: UniformFileHouse = { registrationNumber: '00000000', houseVatId: '000000000', houseName: 'MTB3A' };
 
 export interface UniformFileInput {
   issuer: { vatId: string; legalName: string; address: string | null; city: string | null; dealerType: DealerType };

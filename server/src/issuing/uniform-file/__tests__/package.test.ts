@@ -21,7 +21,7 @@ const file: UniformFile = {
 };
 
 const meta = {
-  businessName: 'ברמג׳יאת <בע״מ>',
+  businessName: 'סטודיו לדוגמה <בע״מ>',
   vatId: '515151515',
   range: { from: '2026-01-01', to: '2026-12-31' },
   producedAt: new Date('2026-11-22T16:30:00Z'),
