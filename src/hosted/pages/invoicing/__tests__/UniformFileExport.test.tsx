@@ -4,7 +4,8 @@ import userEvent from '@testing-library/user-event';
 import type { HostedProfile } from '../../../api/client';
 import { ToastProvider } from '../../../components/Toast';
 import { HostedLanguageProvider, PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
-import { rangeOf, UniformFileExport } from '../UniformFileExport';
+import { UniformFileExport } from '../UniformFileExport';
+import { rangeOf } from '../uniformFileRange';
 
 /** MUT-569: You › Invoicing's uniform-file card: a range, one download, and what came of it. */
 

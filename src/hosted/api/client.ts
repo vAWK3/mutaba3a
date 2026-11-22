@@ -827,8 +827,11 @@ export const api = {
     return {
       blob: await response.blob(),
       filename,
-      documents: Number(response.headers.get('x-uniform-file-documents') ?? 0),
-      records: Number(response.headers.get('x-uniform-file-records') ?? 0),
+      // Not amounts: whole counts of documents and records.
+      // eslint-disable-next-line no-restricted-syntax
+      documents: Number.parseInt(response.headers.get('x-uniform-file-documents') ?? '0', 10),
+      // eslint-disable-next-line no-restricted-syntax
+      records: Number.parseInt(response.headers.get('x-uniform-file-records') ?? '0', 10),
     };
   },
   /** A view copy: counts nothing (the original or a copy, as the record stands). */

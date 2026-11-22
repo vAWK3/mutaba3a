@@ -7,6 +7,7 @@ import { api, type HostedProfile } from '../../api/client';
 import { useToast } from '../../components/Toast';
 import { saveBlobAs } from '../../data/download';
 import { todayInZone } from '../../format/dates';
+import { rangeOf, type Preset } from './uniformFileRange';
 import './uniform-file.css';
 
 /**
@@ -14,12 +15,7 @@ import './uniform-file.css';
  * Last year by default (the tax year), this year, or other dates; the download is the OPENFRMT zip with its printable
  * report. The owner and an accountant with access both see it; the phone has none (D6).
  */
-type Preset = 'lastYear' | 'thisYear' | 'custom';
 
-export function rangeOf(preset: Exclude<Preset, 'custom'>, today: string): { from: string; to: string } {
-  const year = Number(today.slice(0, 4));
-  return preset === 'lastYear' ? { from: `${year - 1}-01-01`, to: `${year - 1}-12-31` } : { from: `${year}-01-01`, to: today };
-}
 
 type Outcome = { kind: 'done'; filename: string; documents: number; records: number } | null;
 
