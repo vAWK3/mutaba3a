@@ -165,23 +165,24 @@ describe('resolveEntitlement', () => {
     });
   });
 
+  // MUT-702 (ADR-270): a trial gets Business, in every trial state.
   describe('TRIAL (D3: 14 days active, read-only until day 30, then locked)', () => {
     const started = (days: number) => facts({ trialStarts: new Map([[OWNER, daysFromNow(-days)]]) });
     const end = (days: number) => daysFromNow(TRIAL_DAYS - days);
     const lock = (days: number) => daysFromNow(TRIAL_LOCK_DAYS - days);
 
     it('is ACTIVE from the start until just before day 14', () => {
-      expect(resolveEntitlement(BUSINESS, started(0), NOW)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: end(0) });
+      expect(resolveEntitlement(BUSINESS, started(0), NOW)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: end(0) });
       expect(resolveEntitlement(BUSINESS, started(13.99), NOW)).toMatchObject({ state: 'ACTIVE', source: 'TRIAL' });
     });
 
     it('is READ_ONLY from day 14 until the lock on day 30', () => {
-      expect(resolveEntitlement(BUSINESS, started(14), NOW)).toEqual({ state: 'READ_ONLY', source: 'TRIAL', tier: 'FREELANCER', until: lock(14) });
+      expect(resolveEntitlement(BUSINESS, started(14), NOW)).toEqual({ state: 'READ_ONLY', source: 'TRIAL', tier: 'BUSINESS', until: lock(14) });
       expect(resolveEntitlement(BUSINESS, started(29.99), NOW)).toMatchObject({ state: 'READ_ONLY', source: 'TRIAL' });
     });
 
     it('is LOCKED from day 30', () => {
-      expect(resolveEntitlement(BUSINESS, started(TRIAL_LOCK_DAYS), NOW)).toEqual({ state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null });
+      expect(resolveEntitlement(BUSINESS, started(TRIAL_LOCK_DAYS), NOW)).toEqual({ state: 'LOCKED', source: 'TRIAL', tier: 'BUSINESS', until: null });
     });
 
     it('a person who once paid is never LOCKED, however old their trial (AC2)', () => {
@@ -201,6 +202,46 @@ describe('resolveEntitlement', () => {
 
     it('an operator firm with no owner never trials', () => {
       expect(resolveEntitlement(FIRM_BY_OPERATOR, facts(), NOW)).toEqual({ state: 'READ_ONLY', source: 'NONE', tier: null, until: null });
+    });
+  });
+
+  // MUT-702 Part A (ADR-270): plans.ts RANK orders grants and subscriptions: Firm > Business > Solo = Freelancer.
+  describe('plan rank (MUT-702)', () => {
+    it('bestGrant prefers Firm, then Business, then Solo', () => {
+      const grants = [grant({ tier: 'SOLO' }), grant({ tier: 'FIRM', expiresAt: daysFromNow(3) }), grant({ tier: 'BUSINESS' })];
+      expect(resolveEntitlement(BUSINESS, facts({ grants }), NOW)).toMatchObject({ source: 'OPERATOR', tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ grants: [grant({ tier: 'SOLO' }), grant({ tier: 'BUSINESS', expiresAt: daysFromNow(3) })] }), NOW)).toMatchObject({ tier: 'BUSINESS' });
+    });
+
+    it('Solo and Freelancer grants rank the same: the longer one wins', () => {
+      const result = resolveEntitlement(BUSINESS, facts({ grants: [grant({ tier: 'SOLO', expiresAt: daysFromNow(3) }), grant({ tier: 'FREELANCER' })] }), NOW);
+      expect(result).toMatchObject({ tier: 'FREELANCER', until: null });
+    });
+
+    it('bestSubscription prefers Firm, then Business, then Solo, before the later period end', () => {
+      const solo = sub({ tier: 'SOLO', currentPeriodEnd: daysFromNow(30) });
+      const business = sub({ tier: 'BUSINESS', currentPeriodEnd: daysFromNow(10) });
+      const firm = sub({ tier: 'FIRM', currentPeriodEnd: daysFromNow(5) });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [solo, business, firm] }), NOW)).toMatchObject({ source: 'STRIPE', tier: 'FIRM' });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [solo, business] }), NOW)).toMatchObject({ tier: 'BUSINESS', until: daysFromNow(10) });
+    });
+
+    it('Solo and Freelancer subscriptions rank the same: the later period end wins', () => {
+      const solo = sub({ tier: 'SOLO', currentPeriodEnd: daysFromNow(5) });
+      const freelancer = sub({ tier: 'FREELANCER', currentPeriodEnd: daysFromNow(25) });
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [solo, freelancer] }), NOW)).toMatchObject({ tier: 'FREELANCER', until: daysFromNow(25) });
+    });
+
+    it('a legacy Freelancer subscription still covers every profile its owner created', () => {
+      for (const profile of [PERSONAL, BUSINESS]) {
+        expect(resolveEntitlement(profile, facts({ subscriptions: [sub({ tier: 'FREELANCER' })] }), NOW)).toMatchObject({ state: 'ACTIVE', source: 'STRIPE', tier: 'FREELANCER' });
+      }
+    });
+
+    it('an Accountant plan is still never a profile’s: it neither covers nor outranks', () => {
+      const accountant = { tier: 'ACCOUNTANT' as const };
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [sub(accountant)], grants: [grant(accountant)] }), NOW).source).toBe('NONE');
+      expect(resolveEntitlement(BUSINESS, facts({ subscriptions: [sub(accountant), sub({ tier: 'SOLO' })] }), NOW)).toMatchObject({ tier: 'SOLO' });
     });
   });
 

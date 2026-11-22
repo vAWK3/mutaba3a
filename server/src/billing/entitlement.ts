@@ -15,15 +15,19 @@
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
  *
  * MUT-361 enforces it at the door (billing/gate.ts, ADR-181).
+ * MUT-702 (ADR-270): tiers rank by plans.ts `RANK` (Firm > Business > Solo = legacy Freelancer); a trial is Business.
  */
+import { RANK, type ProfilePlanTier } from './plans.js';
 
 /**
  * MUT-565 (ADR-251): ACCOUNTANT is a person's plan for client books, never a profile's. It lives in the same tables
  * (one mirror, one grant path) and is kept out of every profile reading by `profileFacts` / `profilePlanSubscriptions`.
  */
-export type BillingTier = 'FREELANCER' | 'FIRM' | 'ACCOUNTANT';
+export type BillingTier = ProfilePlanTier | 'ACCOUNTANT';
 /** The tiers a profile can be entitled by. */
 export type ProfileBillingTier = Exclude<BillingTier, 'ACCOUNTANT'>;
+/** MUT-702 (ADR-270): what a running trial, and the trial's read-only and locked ends, resolve to. */
+export const TRIAL_TIER: ProfileBillingTier = 'BUSINESS';
 export type EntitlementState = 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED';
 export type EntitlementSource = 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE';
 
@@ -144,7 +148,7 @@ export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts
 
   const trialStartedAt = profile.ownerUserId ? (facts.trialStarts.get(profile.ownerUserId) ?? null) : null;
   const trialEnd = trialStartedAt && trialTimelineOf(trialStartedAt).endsAt;
-  if (trialEnd && now < trialEnd) return { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: trialEnd };
+  if (trialEnd && now < trialEnd) return { state: 'ACTIVE', source: 'TRIAL', tier: TRIAL_TIER, until: trialEnd };
 
   // MUT-532: before the lapse and the trial lock, so a pause is never LOCKED and says when it restarts.
   const paused = bestSubscription(subscriptions.filter((s) => pausedNow(s, now)));
@@ -157,8 +161,8 @@ export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts
   if (trialStartedAt && !everPaid) {
     const { lockAt } = trialTimelineOf(trialStartedAt);
     return now < lockAt
-      ? { state: 'READ_ONLY', source: 'TRIAL', tier: 'FREELANCER', until: lockAt }
-      : { state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null };
+      ? { state: 'READ_ONLY', source: 'TRIAL', tier: TRIAL_TIER, until: lockAt }
+      : { state: 'LOCKED', source: 'TRIAL', tier: TRIAL_TIER, until: null };
   }
   return { state: 'READ_ONLY', source: 'NONE', tier: null, until: null };
 }
@@ -172,7 +176,7 @@ export function grantIsLive(grant: Pick<GrantFact, 'revokedAt' | 'expiresAt'>, n
   return grant.revokedAt === null && (grant.expiresAt === null || grant.expiresAt > now);
 }
 
-/** The Firm tier, then the one that lasts longest (no expiry beats any expiry). */
+/** The highest-ranked tier (plans.ts RANK), then the one that lasts longest (no expiry beats any expiry). */
 function bestGrant<G extends GrantFact>(grants: readonly G[]): G | undefined {
   const lasts = (g: G) => g.expiresAt?.getTime() ?? Number.POSITIVE_INFINITY;
   return [...grants].sort((a, b) => tierRank(b.tier) - tierRank(a.tier) || lasts(b) - lasts(a))[0];
@@ -189,7 +193,7 @@ function subscriptionCovers(subscription: SubscriptionFact, profile: ProfileFact
   return paidByOwner;
 }
 
-/** ACTIVE before GRACE, then the Firm tier, then the later period end. */
+/** ACTIVE before GRACE, then the highest-ranked tier (plans.ts RANK), then the later period end. */
 export function bestSubscription<S extends SubscriptionFact>(subscriptions: readonly S[]): S | undefined {
   const stateRank = (s: S) => (coveringState(s) === 'ACTIVE' ? 1 : 0);
   return [...subscriptions].sort(
@@ -214,8 +218,9 @@ export function coveringState(subscription: Pick<SubscriptionFact, 'status'>): '
   return COVERING_STATUSES.get(subscription.status);
 }
 
+/** MUT-702: plans.ts RANK; ACCOUNTANT is never a profile's plan (profileFacts leaves it out), so it ranks below all. */
 function tierRank(tier: BillingTier): number {
-  return tier === 'FIRM' ? 1 : 0;
+  return tier === 'ACCOUNTANT' ? 0 : RANK[tier];
 }
 
 function addDays(date: Date, days: number): Date {

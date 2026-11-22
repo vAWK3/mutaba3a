@@ -36,7 +36,7 @@ const CATALOG: Catalog = {
 };
 const DAY = 24 * 60 * 60 * 1000;
 const LATER = new Date(NOW.getTime() + 20 * DAY);
-const trial: Entitlement = { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date('2026-11-10T00:00:00.000Z') };
+const trial: Entitlement = { state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: new Date('2026-11-10T00:00:00.000Z') };
 const malafat: Entitlement = { state: 'ACTIVE', source: 'MALAFAT', tier: null, until: null };
 const foreverGrant: Entitlement = { state: 'ACTIVE', source: 'OPERATOR', tier: 'FREELANCER', until: null };
 const expiringGrant: Entitlement = { state: 'ACTIVE', source: 'OPERATOR', tier: 'FREELANCER', until: new Date('2026-12-01T00:00:00.000Z') };
