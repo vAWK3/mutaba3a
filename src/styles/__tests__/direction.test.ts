@@ -55,6 +55,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/invoicing/InvoicingSteps.tsx': { ltr: 5, auto: 5 },
   // MUT-646: the letterhead reads in the document's language, not the portal's: English left to right, Hebrew and Arabic right to left
   'src/hosted/pages/invoicing/Letterhead.tsx': { ltr: 1, rtl: 1 },
+  // MUT-569: the file names (OPENFRMT…zip, INI.TXT, BKMVDATA.zip, report.html) read left to right.
+  'src/hosted/pages/invoicing/UniformFileExport.tsx': { ltr: 4 },
   // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
   'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 4, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
