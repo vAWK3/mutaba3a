@@ -28,7 +28,17 @@ interface Picked {
   file: File | null;
 }
 
-export function useExternalInvoiceColumn<Row extends ExternalRow>(kind: ExternalEntryKind, rows: readonly Row[] | undefined, amountOf: (row: Row) => string, eligible: (row: Row) => boolean = () => true) {
+/**
+ * `extra` (MUT-648's Issue a tax invoice on Owed) shares the column: it shows beside Attach, and goes with it once an
+ * invoice issued elsewhere is attached (the server would refuse the issue then: EXTERNAL_INVOICE_ATTACHED).
+ */
+export function useExternalInvoiceColumn<Row extends ExternalRow>(
+  kind: ExternalEntryKind,
+  rows: readonly Row[] | undefined,
+  amountOf: (row: Row) => string,
+  eligible: (row: Row) => boolean = () => true,
+  extra?: (row: Row) => ReactNode,
+) {
   const profile = useProfile();
   const local = useIsLocalMode();
   const { writable } = useWriteGate();
@@ -67,7 +77,7 @@ export function useExternalInvoiceColumn<Row extends ExternalRow>(kind: External
                   </button>
                 );
               }
-              return writable ? (
+              const attach = writable ? (
                 <Button
                   variant="ghost"
                   size="sm"
@@ -82,10 +92,19 @@ export function useExternalInvoiceColumn<Row extends ExternalRow>(kind: External
                   {t('hosted.external.attachShort')}
                 </Button>
               ) : null;
+              const offered = extra?.(row);
+              return offered ? (
+                <span className="hp-row-actions">
+                  {offered}
+                  {attach}
+                </span>
+              ) : (
+                attach
+              );
             },
           }
         : undefined,
-    [shown, t, eligible, byId, writable],
+    [shown, t, eligible, byId, writable, extra],
   );
 
   const canDrop = writable && shown;

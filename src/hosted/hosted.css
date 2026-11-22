@@ -1740,3 +1740,8 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-external-chip { display: inline-flex; gap: var(--space-1); align-items: center; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: var(--text-label); white-space: nowrap; cursor: pointer; }
 .hp-external-glyph { flex: none; }
 :is(.data-table, .table) tr.hp-drop-target > td { background: var(--accent-subtle); }
+
+/* MUT-648: the save toast's second document choice, quieter than the first. */
+.hp-toast-action--quiet { margin-inline-start: 0; color: var(--muted); }
+/* MUT-647 + MUT-648: Issue a tax invoice and Attach share the Owed row's Document cell. */
+.hp-row-actions { display: inline-flex; gap: var(--space-2); align-items: center; }

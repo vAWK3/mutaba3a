@@ -107,3 +107,25 @@ features:
       - The entry shows "Issued elsewhere"; it opens with "Invoice 3382" and its date, its file opens, and it says MTB3A issues no document for the entry while it is attached
       - A file dropped on a Received row is read and attached the same way (entryKind RECEIVED)
       - After Remove the row offers Attach again; in Arabic the badge reads صادرة من جهة أخرى, right to left, with no sideways scroll
+  - id: offer-after-save
+    title: Saving an Owed offers its tax invoice, linked to the entry; the setting turns it off; no invoicing, no change (MUT-648)
+    tier: secondary
+    tickets: [MUT-648]
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/issueOffers.ts
+      - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/Toast.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - On Owed, record 1,180 from Client 1
+      - Choose Issue a tax invoice on the save toast, then Issue
+      - Reopen Owed
+      - With "offer to issue after saving" off, record another Owed
+      - On a profile without invoicing, record an Owed
+    expect:
+      - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
+      - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - An Owed with no document offers Issue a tax invoice on its row
+      - With the setting off the toast offers nothing
+      - Without invoicing the toast has no action and nothing asks for the setup

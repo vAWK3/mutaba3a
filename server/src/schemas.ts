@@ -5029,6 +5029,7 @@ export const IssuerDetailsSchema = z
     paymentTermsDays: z.number().int().nullable(),
     bankDetails: z.string().nullable(),
     footerNote: z.string().nullable(),
+    offerAfterSave: z.boolean().openapi({ description: 'MUT-648: offer to issue a document after saving income' }),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
@@ -5110,6 +5111,7 @@ export const IssuerDefaultsRequestSchema = z
     paymentTermsDays: z.number().int().min(0).max(365).nullable().optional().openapi({ description: 'A tax invoice’s default due date, in days after its date' }),
     bankDetails: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed for paying by transfer' }),
     footerNote: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed at the foot of every document' }),
+    offerAfterSave: z.boolean().optional().openapi({ description: 'MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)' }),
   })
   .openapi('IssuerDefaultsRequest');
 

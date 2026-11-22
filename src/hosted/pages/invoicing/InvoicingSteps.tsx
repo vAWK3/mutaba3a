@@ -229,6 +229,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
     paymentTermsDays: issuer?.paymentTermsDays == null ? '' : String(issuer.paymentTermsDays),
     bankDetails: issuer?.bankDetails ?? '',
     footerNote: issuer?.footerNote ?? '',
+    offerAfterSave: issuer?.offerAfterSave ?? true,
   });
   if (!issuer) return <p className="hp-muted">{t('hosted.invoicing.defaults.needsDetails')}</p>;
 
@@ -242,7 +243,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (daysInvalid) return;
-    const body = { documentStyle: form.documentStyle, ink: form.ink, defaultLanguage: form.defaultLanguage, pricesIncludeVat: form.pricesIncludeVat, paymentTermsDays: days, bankDetails: form.bankDetails.trim() || null, footerNote: form.footerNote.trim() || null };
+    const body = { documentStyle: form.documentStyle, ink: form.ink, defaultLanguage: form.defaultLanguage, pricesIncludeVat: form.pricesIncludeVat, paymentTermsDays: days, bankDetails: form.bankDetails.trim() || null, footerNote: form.footerNote.trim() || null, offerAfterSave: form.offerAfterSave };
     save.mutate({ version: issuer.version, body }, { onSuccess: onDone });
   };
 
@@ -292,6 +293,16 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
       />
       <Textarea id="issuer-bank" label={t('hosted.invoicing.defaults.bankDetails')} value={form.bankDetails} dir="auto" maxLength={300} rows={2} onChange={(e) => change('bankDetails', e.target.value, { bankDetails: e.target.value })} />
       <Textarea id="issuer-footer" label={t('hosted.invoicing.defaults.footerNote')} value={form.footerNote} dir="auto" maxLength={300} rows={2} onChange={(e) => change('footerNote', e.target.value, { footerNote: e.target.value })} />
+      {labelled('issuer-offer-label', t('hosted.invoicing.defaults.offerAfterSave'))}
+      <SegmentedControl
+        labelledBy="issuer-offer-label"
+        value={form.offerAfterSave ? 'yes' : 'no'}
+        options={[
+          { value: 'yes', label: t('hosted.invoicing.defaults.yes') },
+          { value: 'no', label: t('hosted.invoicing.defaults.no') },
+        ]}
+        onChange={(value) => change('offerAfterSave', value === 'yes')}
+      />
       <SaveError error={save.error} />
       <StepActions pending={save.isPending} onLater={onDone} />
     </form>

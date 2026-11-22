@@ -1,7 +1,7 @@
 # MUT-647 — Attach an invoice issued elsewhere to an income entry
 
 Epic MUT-566. Design: round 3, attach A+B (Claude Design batch 3: `invoicing-empty-attach`, `invoicing-reading`).
-ADR-267. API `1.122.0-mut647`. Server and portal here; the phone half waits for MUT-573.
+ADR-267. API `1.125.0-mut647`. Server and portal here; the phone half waits for MUT-573.
 
 ## Acceptance criteria
 

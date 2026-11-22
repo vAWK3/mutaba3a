@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.122.0-mut647)
+## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.125.0-mut647)
 
 ### Added
 - `POST /v1/issuing/external-invoices/read` (number, date, total; nothing stored), `POST /v1/issuing/external-invoices` (raw PDF/JPEG/PNG body, the confirmed number and date in the query), `GET /v1/issuing/external-invoices?entryKind&entryIds`, `GET …/{id}/file`, `DELETE …/{id}`.
@@ -39,6 +39,22 @@
 ### Technical
 - Table `external_invoices` (migration `20261122190000_mut647_external_invoices`), one live per entry; the file is the entry's INVOICE attachment, written by the issuing store. `AttachmentStorage.write`.
 - QA: `portal.invoicing.attach-external`.
+
+## [Unreleased] - 2026-11-22 — Offer to issue after saving income (MUT-648, ADR-268, API 1.123.0-mut648)
+
+### Added
+- After saving income on an invoicing profile (the person holds `invoicing`, the setup is done), the save toast offers the document it takes:
+  - an Owed: **Issue a tax invoice**;
+  - a Received: **Issue a tax invoice-receipt** (with a client) and **Issue a receipt**.
+
+  The issue drawer opens prefilled (client, one line for the amount with VAT included) and linked to the entry (`fromEntry`, I1-a), so the document takes it over: no second Owed or Received. The toast gained a quieter second action for the other document.
+- An Owed with no document yet offers **Issue a tax invoice** on its row (E4).
+- `issuer_details.offerAfterSave` (on by default), set in the setup's defaults step ("After saving income, offer to issue its document").
+
+### Out (stated)
+- The phone half waits for MUT-573's wizard.
+- A receipt applied to the client's open invoice of the same amount (the wireframe's first choice for a Received) is a follow-up: it combines `fromEntry` with `appliesToDocumentId`.
+- The same row action on Received is a follow-up too.
 
 ## [Unreleased] - 2026-11-22 — Connect to the Tax Authority; allocation numbers on issued invoices (MUT-571, MUT-572, ADR-264, API 1.120.0-mut571)
 

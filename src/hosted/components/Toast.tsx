@@ -26,6 +26,8 @@ export interface ToastOptions {
   tone?: ToastTone;
   /** MUT-268: one button (Undo, Retry). Using it closes the toast; hovering or focusing the toast holds it open. */
   action?: ToastAction;
+  /** MUT-648: a second, quieter choice beside the action (the other document after saving income). */
+  secondaryAction?: ToastAction;
   /** MUT-338: overrides the tone's default icon (e.g. SaveFeedbackIcon instead of InfoIcon). None by default. */
   icon?: ReactNode;
 }
@@ -37,6 +39,7 @@ interface ToastState {
   message: string;
   tone: ToastTone;
   action?: ToastAction;
+  secondaryAction?: ToastAction;
   icon?: ReactNode;
   /** Bumped on every show, so an identical second message re-renders and is announced again. */
   id: number;
@@ -57,6 +60,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         message,
         tone: options?.tone ?? 'error',
         action: options?.action,
+        secondaryAction: options?.secondaryAction,
         icon: options?.icon,
         id: (current?.id ?? 0) + 1,
       }));
@@ -70,18 +74,24 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const info = toast?.tone === 'info' ? toast : null;
   // While the pointer or focus is on a toast with an action, it stays (craft spec 2: until the next action).
   const hold = { onPointerEnter: () => clearTimeout(timer.current), onPointerLeave: startTimer, onFocus: () => clearTimeout(timer.current), onBlur: startTimer };
+  const button = (action: ToastAction, quiet: boolean) => (
+    <button
+      type="button"
+      className={quiet ? 'hp-link-button press hp-toast-action hp-toast-action--quiet' : 'hp-link-button press hp-toast-action'}
+      onClick={() => {
+        setToast(null);
+        action.onAction();
+      }}
+    >
+      {action.label}
+    </button>
+  );
   const actionButton = (current: ToastState) =>
     current.action && (
-      <button
-        type="button"
-        className="hp-link-button press hp-toast-action"
-        onClick={() => {
-          setToast(null);
-          current.action?.onAction();
-        }}
-      >
-        {current.action.label}
-      </button>
+      <>
+        {button(current.action, false)}
+        {current.secondaryAction && button(current.secondaryAction, true)}
+      </>
     );
 
   return (

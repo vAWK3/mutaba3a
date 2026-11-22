@@ -7,6 +7,9 @@ import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
 import type { Currency, HostedProfile } from '../api/client';
+import { useIssueAfterSave } from '../data/issuedQueries';
+import type { IssueStart } from './IssueDocumentDrawer';
+import { issueOffers } from './issueOffers';
 import { useAttemptKey } from '../data/attemptKey';
 import { canAddClient, incomeAffordancesFor, type IncomeKind } from '../data/incomeAffordances';
 import { useCreateIncome } from '../data/incomeQueries';
@@ -55,6 +58,8 @@ export interface IncomeCaptureDrawerProps {
   onClose: () => void;
   /** Called after a successful save, before the drawer closes; the page decides where focus goes (review #4). */
   onSaved?: () => void;
+  /** MUT-648: open the issue drawer for the entry just saved (the save toast offers it). */
+  onOfferIssue?: (start: IssueStart) => void;
   /** MUT-361: the lapse gate on this profile (IncomeDrawerHost's `useWritableFor`). */
   writable?: boolean;
 }
@@ -65,11 +70,13 @@ function defaultCurrency(profile: HostedProfile): Currency {
   return (INCOME_CURRENCIES as readonly string[]).includes(profile.defaultCurrency) ? profile.defaultCurrency : 'USD';
 }
 
-export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose, onSaved, writable = true }: IncomeCaptureDrawerProps) {
+export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, onClose, onSaved, onOfferIssue, writable = true }: IncomeCaptureDrawerProps) {
   const { t, language } = useLanguage();
   const showToast = useToast();
   const attempt = useAttemptKey();
   const create = useCreateIncome(profile.id);
+  const issueAfterSave = useIssueAfterSave(profile);
+  const offerIssue = issueAfterSave.offer && !!onOfferIssue;
   const customers = useCustomerDirectory(profile.id);
   // MUT-361 (review): the host opens this only on a writable profile (`writable` from it); the gate still shapes Add client.
   const { kinds, customer: customerRule } = incomeAffordancesFor(profile, writable);
@@ -139,11 +146,19 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
     if (create.isPending) return;
     const body = toCreateIncomeRequest(values);
     try {
-      await create.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
+      const saved = await create.mutateAsync({ body, idempotencyKey: attempt.keyFor(body) });
       attempt.succeeded();
       // Opt-in usage counts (MUT-155): the kind and currency only, never the amount or client
       void trackPortal('income_recorded', { currency: values.currency, paid: values.kind === 'received' });
-      showToast(savedMessage(values, body.amount), { tone: 'info', icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} /> });
+      // MUT-648 (round 3, variant 1): the save toast offers the document this amount takes, linked to the entry.
+      const offers = offerIssue && saved.currency === 'ILS' ? issueOffers(saved, t('hosted.issue.offer.line'), issueAfterSave.exempt) : [];
+      const toAction = (offer: (typeof offers)[number]) => ({ label: t(`hosted.issue.offer.${offer.docType}`), onAction: () => onOfferIssue?.(offer) });
+      showToast(savedMessage(values, body.amount), {
+        tone: 'info',
+        icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} />,
+        ...(offers[0] ? { action: toAction(offers[0]) } : {}),
+        ...(offers[1] ? { secondaryAction: toAction(offers[1]) } : {}),
+      });
       onSaved?.();
       onClose();
     } catch (error) {

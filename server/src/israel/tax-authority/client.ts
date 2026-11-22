@@ -33,6 +33,8 @@ export interface ApprovalItem {
 }
 
 export interface ApprovalRequest {
+  /** Who issues it (the service requires user_id or user_name). */
+  userName: string;
   /** Our unique id for this request; the same id asked again returns the same answer. */
   invoiceId: string;
   /** 305 tax invoice, 320 tax invoice-receipt. */
@@ -96,7 +98,8 @@ export interface TaxAuthorityClientOptions {
  * spec, so the sandbox's held test dealer (777777723) is how they are learned. Until then a 400 whose only errors carry
  * these codes is read as held; anything else as refused (fix and send again).
  */
-export const HELD_ERROR_CODES: ReadonlySet<number> = new Set<number>();
+// 460 "Invoice not approved" (param vat_number): the sandbox's held dealer 777777723 answers it (live check, 2026-11-22).
+export const HELD_ERROR_CODES: ReadonlySet<number> = new Set<number>([460]);
 
 const DECISION_PATH: Record<DecisionChoice, string> = { CANCEL: 'Cancel', CONTINUE: 'Continue', FURTHER_OBJECTION: 'FurtherObjection' };
 
@@ -215,6 +218,8 @@ export function approvalBody(r: ApprovalRequest) {
     invoice_date: r.invoiceDate,
     invoice_issuance_date: r.invoiceIssuanceDate,
     accounting_software_number: r.accountingSoftwareNumber,
+    // Error 446 (sandbox, 2026-11-22): one of user_id or user_name is required.
+    user_name: r.userName.slice(0, 25),
     amount_before_discount: r.amountBeforeDiscount,
     discount: r.discount,
     payment_amount: r.paymentAmount,

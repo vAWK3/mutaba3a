@@ -2888,7 +2888,8 @@
         "paymentTermsHint": "The due date a new tax invoice suggests.",
         "paymentTermsInvalid": "Enter a number of days from 0 to 365.",
         "bankDetails": "Bank details",
-        "footerNote": "Footer note"
+        "footerNote": "Footer note",
+        "offerAfterSave": "After saving income, offer to issue its document"
       },
       "numbering": {
         "question": "Are you already issuing documents from another system?",
@@ -2999,6 +3000,7 @@
         "DISCOUNT_INVALID": "A discount can't be more than the line's amount.",
         "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
         "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only.",
+        "ENTRY_MISMATCH": "The document must keep the entry's client and amount; change the entry first if it was recorded wrong.",
         "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here."
       },
       "backToList": "Issued documents",
@@ -3015,7 +3017,14 @@
       "finalNote": "This document stays as it was issued. A credit note corrects it.",
       "pdfFailed": "The PDF could not be prepared. Please try again.",
       "notFound": "This document could not be found.",
-      "creditLine": "Credit for {document}"
+      "creditLine": "Credit for {document}",
+      "offer": {
+        "line": "Services",
+        "TAX_INVOICE": "Issue a tax invoice",
+        "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
+        "RECEIPT": "Issue a receipt",
+        "column": "Document"
+      }
     },
     "external": {
       "title": "Attach an invoice issued elsewhere",

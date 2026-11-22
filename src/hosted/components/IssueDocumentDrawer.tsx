@@ -36,6 +36,8 @@ export interface IssueStart {
   amount?: string;
   /** The original's "prices include VAT" (a credit note or a similar document keeps it). */
   pricesIncludeVat?: boolean;
+  /** MUT-648 (I1-a): the recorded Owed or Received this document is for; it takes the entry over (no second one). */
+  fromEntry?: { kind: 'owed' | 'received'; id: string };
 }
 
 export interface Line {
@@ -125,7 +127,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
           ...(docType === 'TAX_INVOICE' && dueDate ? { dueDate } : {}),
           ...(start.originalId && docType === 'CREDIT_NOTE' ? { originalId: start.originalId } : {}),
           ...(start.appliesToDocumentId && docType === 'RECEIPT' ? { appliesToDocumentId: start.appliesToDocumentId } : {}),
-          ...(takesPayment ? { payment: { method, reference: reference.trim() || null, receivedOn } } : {}),
+          // A Received this document takes over already says how the money came in.
+          ...(takesPayment && start.fromEntry?.kind !== 'received' ? { payment: { method, reference: reference.trim() || null, receivedOn } } : {}),
+          ...(start.fromEntry ? { fromEntry: start.fromEntry } : {}),
           pricesIncludeVat,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           lines: lines.map((l) => ({
@@ -190,7 +194,11 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   };
 
   const typeLabel = (type: IssuedDocType) => t(`hosted.issue.types.${type}`);
-  const allowedTypes = exempt ? (['RECEIPT'] as IssuedDocType[]) : TYPES.filter((type) => type !== 'CREDIT_NOTE' || start.originalId);
+  // Linked to an entry (I1-a): an Owed takes a tax invoice, a Received an invoice-receipt or a receipt (review fix).
+  const entryTypes: IssuedDocType[] | null = start.fromEntry ? (start.fromEntry.kind === 'owed' ? ['TAX_INVOICE'] : ['TAX_INVOICE_RECEIPT', 'RECEIPT']) : null;
+  const allowedTypes = exempt ? (['RECEIPT'] as IssuedDocType[]) : (entryTypes ?? TYPES.filter((type) => type !== 'CREDIT_NOTE' || start.originalId));
+  // The entry fixes the client and the amount: those stay as they are (the server refuses a mismatch).
+  const linked = !!start.fromEntry;
   const blocked = setup.data ? !setup.data.canIssue : false;
 
   return (
@@ -229,7 +237,15 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
               <label htmlFor={`${formId}-client`} className="hp-issue-label">
                 {t('hosted.issue.client')}
               </label>
-              <ClientPicker id={`${formId}-client`} profileId={profile.id} value={customerId} onChange={setCustomerId} placeholder={t('hosted.issue.clientPlaceholder')} canCreate={canAddClient(profile, writable)} />
+              <ClientPicker
+                id={`${formId}-client`}
+                profileId={profile.id}
+                value={customerId}
+                onChange={setCustomerId}
+                disabled={linked}
+                placeholder={t('hosted.issue.clientPlaceholder')}
+                canCreate={canAddClient(profile, writable)}
+              />
               {tried && !customerId && <p className="input-error-message">{t('hosted.issue.clientRequired')}</p>}
             </div>
           )}
@@ -245,16 +261,42 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
             <div className="hp-issue-lines-head">
               <h3 id={`${formId}-lines`}>{t('hosted.issue.lines')}</h3>
               <label className="hp-issue-switch">
-                <input type="checkbox" checked={pricesIncludeVat} onChange={(e) => setVatIncluded(e.target.checked)} />
+                <input type="checkbox" checked={pricesIncludeVat} disabled={linked} onChange={(e) => setVatIncluded(e.target.checked)} />
                 <span>{t('hosted.issue.pricesIncludeVat')}</span>
               </label>
             </div>
             {lines.map((line, i) => (
               <div key={i} className="hp-issue-line" data-testid={`issue-line-${i}`}>
-                <Input label={t('hosted.issue.description')} id={`${formId}-desc-${i}`} value={line.description} dir="auto" maxLength={DESCRIPTION_MAX} onChange={(e) => setLine(i, { description: e.target.value })} error={tried && !line.description.trim() ? t('hosted.issue.descriptionRequired') : undefined} />
+                <Input
+                  label={t('hosted.issue.description')}
+                  id={`${formId}-desc-${i}`}
+                  value={line.description}
+                  dir="auto"
+                  maxLength={DESCRIPTION_MAX}
+                  onChange={(e) => setLine(i, { description: e.target.value })}
+                  error={tried && !line.description.trim() ? t('hosted.issue.descriptionRequired') : undefined}
+                />
                 <div className="hp-issue-line-numbers">
-                  <Input label={t('hosted.issue.quantity')} id={`${formId}-qty-${i}`} value={line.quantity} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { quantity: e.target.value })} error={tried && !positiveQuantity(line.quantity) ? t('hosted.issue.numberInvalid') : undefined} />
-                  <Input label={t('hosted.issue.price')} id={`${formId}-price-${i}`} value={line.unitPrice} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { unitPrice: e.target.value })} error={tried && money(line.unitPrice) === null ? t('hosted.issue.numberInvalid') : undefined} />
+                  <Input
+                    label={t('hosted.issue.quantity')}
+                    id={`${formId}-qty-${i}`}
+                    value={line.quantity}
+                    dir="ltr"
+                    inputMode="decimal"
+                    readOnly={linked}
+                    onChange={(e) => setLine(i, { quantity: e.target.value })}
+                    error={tried && !positiveQuantity(line.quantity) ? t('hosted.issue.numberInvalid') : undefined}
+                  />
+                  <Input
+                    label={t('hosted.issue.price')}
+                    id={`${formId}-price-${i}`}
+                    value={line.unitPrice}
+                    dir="ltr"
+                    inputMode="decimal"
+                    readOnly={linked}
+                    onChange={(e) => setLine(i, { unitPrice: e.target.value })}
+                    error={tried && money(line.unitPrice) === null ? t('hosted.issue.numberInvalid') : undefined}
+                  />
                   <span className="hp-issue-line-net" aria-live="polite">
                     {preview.data?.lines[i] ? formatDecimal(preview.data.lines[i].net, 'ILS', language) : ''}
                   </span>
@@ -275,7 +317,15 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
                       <option value="SERVICE">{t('hosted.issue.kinds.SERVICE')}</option>
                       <option value="GOODS">{t('hosted.issue.kinds.GOODS')}</option>
                     </Select>
-                    <Input label={t('hosted.issue.lineDiscount')} id={`${formId}-disc-${i}`} value={line.discount} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { discount: e.target.value })} error={discountInvalid(line) ? t('hosted.issue.numberInvalid') : undefined} />
+                    <Input
+                      label={t('hosted.issue.lineDiscount')}
+                      id={`${formId}-disc-${i}`}
+                      value={line.discount}
+                      dir="ltr"
+                      inputMode="decimal"
+                      onChange={(e) => setLine(i, { discount: e.target.value })}
+                      error={discountInvalid(line) ? t('hosted.issue.numberInvalid') : undefined}
+                    />
                     <label className="hp-issue-switch">
                       <input type="checkbox" checked={line.pricesIncludeVat ?? pricesIncludeVat} onChange={(e) => setLine(i, { pricesIncludeVat: e.target.checked })} />
                       <span>{t('hosted.issue.linePriceIncludesVat')}</span>
@@ -288,9 +338,11 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
                 )}
               </div>
             ))}
-            <Button type="button" variant="secondary" size="sm" onClick={() => setLines([...lines, { ...EMPTY_LINE }])}>
-              {t('hosted.issue.addLine')}
-            </Button>
+            {!linked && (
+              <Button type="button" variant="secondary" size="sm" onClick={() => setLines([...lines, { ...EMPTY_LINE }])}>
+                {t('hosted.issue.addLine')}
+              </Button>
+            )}
           </section>
 
           <div className="hp-issue-dates">
@@ -298,7 +350,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
             {docType === 'TAX_INVOICE' && <Input label={t('hosted.issue.dueDate')} id={`${formId}-due`} type="date" value={dueDate} min={documentDate} onChange={(e) => setDueDate(e.target.value)} />}
           </div>
 
-          {takesPayment && (
+          {takesPayment && start.fromEntry?.kind !== 'received' && (
             <section className="hp-issue-payment" aria-labelledby={`${formId}-payment`}>
               <h3 id={`${formId}-payment`}>{t('hosted.issue.payment')}</h3>
               <SegmentedControl
@@ -355,7 +407,18 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
   const reason = apiErrorReason(error);
   // MUT-647: the entry already has an invoice issued elsewhere; MTB3A issues none for it while it is attached.
   if (reason === 'EXTERNAL_INVOICE_ATTACHED') return t('hosted.issue.refusals.EXTERNAL_INVOICE_ATTACHED', { number: String((error.details as { number?: unknown }).number ?? '') });
-  const known = ['DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL', 'QUANTITY_INVALID', 'DISCOUNT_INVALID', 'TOTAL_NOT_POSITIVE', 'EXEMPT_DEALER_TAX_INVOICE'];
+  const known = [
+    'ENTRY_MISMATCH',
+    'DATE_BEFORE_LAST_DOCUMENT',
+    'ORIGINAL_PAID',
+    'EXCEEDS_OUTSTANDING',
+    'ISSUING_SETUP_INCOMPLETE',
+    'DATE_BEFORE_ORIGINAL',
+    'QUANTITY_INVALID',
+    'DISCOUNT_INVALID',
+    'TOTAL_NOT_POSITIVE',
+    'EXEMPT_DEALER_TAX_INVOICE',
+  ];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');
 }
