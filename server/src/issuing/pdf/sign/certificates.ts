@@ -18,6 +18,8 @@ export interface CertificateName {
   organization: string;
   /** ISO 3166 two letters; Israel by default. */
   country?: string;
+  /** The registration number (Israeli company number, ח.פ.), as certifying authorities ask for it in a request. */
+  serialNumber?: string;
 }
 
 export interface CertificateRequest {
@@ -42,6 +44,7 @@ export function nameOf(name: CertificateName): pkijs.RelativeDistinguishedNames 
     value: [
       rdn('2.5.4.6', new asn1js.PrintableString({ value: name.country ?? 'IL' })),
       rdn('2.5.4.10', new asn1js.Utf8String({ value: name.organization })),
+      ...(name.serialNumber ? [rdn('2.5.4.5', new asn1js.PrintableString({ value: name.serialNumber }))] : []),
       rdn('2.5.4.3', new asn1js.Utf8String({ value: name.commonName })),
     ],
   });
@@ -99,3 +102,39 @@ export function toPem(certificate: Uint8Array): string {
   const body = Buffer.from(certificate).toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
   return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
 }
+
+const SIGNER_KEY_USAGE = KEY_USAGE.digitalSignature | KEY_USAGE.nonRepudiation;
+
+export interface CertificateRequestInput {
+  subject: CertificateName;
+  /** The key's public key (SubjectPublicKeyInfo, DER). */
+  publicKey: Uint8Array;
+  keyAlgorithm: 'RSA' | 'EC';
+  /** A SHA-256 signature over the request, with the key itself (proof that whoever asks holds it). */
+  sign(tbs: Uint8Array): Promise<Uint8Array>;
+}
+
+/**
+ * MUT-641: a PKCS #10 certificate request for a document-signing key, asking for digitalSignature + nonRepudiation.
+ * What a certifying authority needs to certify a key it never sees: the KMS key signs its own request.
+ */
+export async function certificateRequest(input: CertificateRequestInput): Promise<Uint8Array> {
+  const request = new pkijs.CertificationRequest();
+  request.version = 0;
+  request.subject = nameOf(input.subject);
+  request.subjectPublicKeyInfo = pkijs.PublicKeyInfo.fromBER(toArrayBuffer(input.publicKey));
+  const extensions = new pkijs.Extensions({
+    extensions: [extension('2.5.29.15', true, new asn1js.BitString({ valueHex: toArrayBuffer(new Uint8Array([SIGNER_KEY_USAGE])), unusedBits: Math.log2(SIGNER_KEY_USAGE & -SIGNER_KEY_USAGE) }))],
+  });
+  request.attributes = [new pkijs.Attribute({ type: '1.2.840.113549.1.9.14', values: [extensions.toSchema()] })];
+  request.signatureAlgorithm = signatureAlgorithm(input.keyAlgorithm);
+  request.tbsView = der((request as unknown as { encodeTBS(): asn1js.Sequence }).encodeTBS());
+  request.signatureValue = new asn1js.BitString({ valueHex: toArrayBuffer(await input.sign(request.tbsView)) });
+  return der(request.toSchema(false));
+}
+
+export function requestToPem(request: Uint8Array): string {
+  const body = Buffer.from(request).toString('base64').replace(/(.{64})/g, '$1\n').replace(/\n$/, '');
+  return `-----BEGIN CERTIFICATE REQUEST-----\n${body}\n-----END CERTIFICATE REQUEST-----\n`;
+}
+

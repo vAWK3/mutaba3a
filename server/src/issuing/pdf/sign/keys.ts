@@ -1,7 +1,7 @@
 import { createPublicKey, generateKeyPair, sign as signBytes, X509Certificate, type KeyObject } from 'node:crypto';
 import { promisify } from 'node:util';
 import { GoogleAuth } from 'google-auth-library';
-import { issueCertificate, toPem } from './certificates.js';
+import { certificateRequest, issueCertificate, requestToPem, toPem } from './certificates.js';
 import { pemCertificates, sha256, type SigningKey } from './cms.js';
 
 /**
@@ -135,6 +135,15 @@ export interface InterimCertificateOptions {
   kms: KmsApi;
 }
 
+/** The KMS key's public key and which of this signer's algorithms it uses. */
+async function kmsPublicKey(kms: KmsApi, keyVersion: string): Promise<{ publicKey: KeyObject; keyAlgorithm: 'RSA' | 'EC'; algorithm: string }> {
+  const key = (await kms.get(`${KMS}/${keyVersion}/publicKey`)) as { pem?: unknown; algorithm?: unknown } | null;
+  if (typeof key?.pem !== 'string' || typeof key.algorithm !== 'string') throw new Error('Cloud KMS answered without the public key');
+  const keyAlgorithm = KMS_ALGORITHMS[key.algorithm];
+  if (!keyAlgorithm) throw new Error(`The key's algorithm ${key.algorithm} isn't one this signer uses (${Object.keys(KMS_ALGORITHMS).join(', ')})`);
+  return { publicKey: createPublicKey(key.pem), keyAlgorithm, algorithm: key.algorithm };
+}
+
 /**
  * MUT-641 (ADR-265, Basel 2026-11-22): the interim certificate. Until a registered certifying authority certifies the
  * KMS key, the key certifies itself: a self-issued document-signing certificate in the business's name, signed inside
@@ -142,11 +151,7 @@ export interface InterimCertificateOptions {
  * certificate arrives (from a CSR of the same key), only ISSUING_SIGNING_CERT_CHAIN changes.
  */
 export async function interimCertificate(options: InterimCertificateOptions): Promise<{ pem: string; fingerprint: string; algorithm: string }> {
-  const key = (await options.kms.get(`${KMS}/${options.keyVersion}/publicKey`)) as { pem?: unknown; algorithm?: unknown } | null;
-  if (typeof key?.pem !== 'string' || typeof key.algorithm !== 'string') throw new Error('Cloud KMS answered without the public key');
-  const keyAlgorithm = KMS_ALGORITHMS[key.algorithm];
-  if (!keyAlgorithm) throw new Error(`The key's algorithm ${key.algorithm} isn't one this signer uses (${Object.keys(KMS_ALGORITHMS).join(', ')})`);
-  const publicKey = createPublicKey(key.pem);
+  const { publicKey, keyAlgorithm, algorithm } = await kmsPublicKey(options.kms, options.keyVersion);
   const certificate = await issueCertificate({
     subject: { commonName: `${options.organization} document signing (self-issued)`, organization: options.organization },
     publicKey: new Uint8Array(publicKey.export({ type: 'spki', format: 'der' })),
@@ -159,5 +164,31 @@ export async function interimCertificate(options: InterimCertificateOptions): Pr
   });
   const x509 = new X509Certificate(certificate);
   if (!x509.verify(publicKey)) throw new Error('Cloud KMS signed the certificate with another key');
-  return { pem: toPem(certificate), fingerprint: x509.fingerprint256, algorithm: key.algorithm };
+  return { pem: toPem(certificate), fingerprint: x509.fingerprint256, algorithm };
+}
+
+export interface KmsCertificateRequestOptions {
+  keyVersion: string;
+  /** The legal name the authority certifies (O and, unless commonName says otherwise, CN). */
+  organization: string;
+  commonName?: string;
+  /** The company number (ח.פ.), in the subject's serialNumber. */
+  companyNumber?: string;
+  kms: KmsApi;
+}
+
+/**
+ * MUT-641 (ADR-265): the certificate request (CSR) a certifying authority needs to certify the production KMS key. KMS
+ * signs it, so the request proves the key is held without the key ever leaving. When the authority answers, its
+ * certificate (then its chain) replaces the interim one in ISSUING_SIGNING_CERT_CHAIN; nothing else changes.
+ */
+export async function kmsCertificateRequest(options: KmsCertificateRequestOptions): Promise<{ pem: string; algorithm: string }> {
+  const { publicKey, keyAlgorithm, algorithm } = await kmsPublicKey(options.kms, options.keyVersion);
+  const request = await certificateRequest({
+    subject: { commonName: options.commonName ?? options.organization, organization: options.organization, ...(options.companyNumber ? { serialNumber: options.companyNumber } : {}) },
+    publicKey: new Uint8Array(publicKey.export({ type: 'spki', format: 'der' })),
+    keyAlgorithm,
+    sign: (tbs) => kmsSign(options.kms, options.keyVersion, tbs),
+  });
+  return { pem: requestToPem(request), algorithm };
 }

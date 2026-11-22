@@ -1,11 +1,11 @@
-import { constants, generateKeyPairSync, privateEncrypt, sign as signBytes, X509Certificate } from 'node:crypto';
+import { constants, generateKeyPairSync, privateEncrypt, sign as signBytes, verify as verifyBytes, X509Certificate } from 'node:crypto';
 import * as asn1js from 'asn1js';
 import * as pkijs from 'pkijs';
 import { describe, expect, it } from 'vitest';
 import { printPdf } from '../../../../pdf/print.js';
 import { buildSignedData, der, OID, sha256, toArrayBuffer, type SigningKey } from '../cms.js';
 import { documentSigner, documentSignerFrom, devDocumentSigner, signatureDetailsOf } from '../index.js';
-import { devSigningAuthority, interimCertificate, kmsSigningKey, type KmsApi } from '../keys.js';
+import { devSigningAuthority, interimCertificate, kmsCertificateRequest, kmsSigningKey, type KmsApi } from '../keys.js';
 import { issueCertificate } from '../certificates.js';
 import { signPdf } from '../pdf.js';
 import { localTimestamper, rfc3161Timestamper, type BinaryPost, type Timestamper } from '../timestamp.js';
@@ -236,6 +236,20 @@ describe('the interim self-issued certificate for a KMS key (MUT-641, ADR-265)',
     expect(new X509Certificate(cert).verify(ec.publicKey)).toBe(true);
     const signed = await signPdf(await pdfOnce, DETAILS, { chain: [cert], sign }, devTsa);
     expect(checkSignedPdf(signed).problems).toEqual([]);
+  });
+
+  it('the certificate request (CSR) for the authority: the KMS key signs it, in the business name with its company number', async () => {
+    const { api, calls } = fakeKms('RSA_SIGN_PKCS1_2048_SHA256');
+    const request = await kmsCertificateRequest({ keyVersion: KEY, organization: 'Barmajiyat Ltd.', companyNumber: '515123456', kms: api });
+    expect(calls).toEqual([`GET https://cloudkms.googleapis.com/v1/${KEY}/publicKey`, `POST https://cloudkms.googleapis.com/v1/${KEY}:asymmetricSign`]);
+    expect(request.pem).toMatch(/^-----BEGIN CERTIFICATE REQUEST-----\n[\s\S]+\n-----END CERTIFICATE REQUEST-----\n$/);
+    const der = Buffer.from(request.pem.replace(/-----[A-Z ]+-----|\s/g, ''), 'base64');
+    const csr = pkijs.CertificationRequest.fromBER(toArrayBuffer(new Uint8Array(der)));
+    const subject = Object.fromEntries(csr.subject.typesAndValues.map((t) => [t.type, t.value.valueBlock.value]));
+    expect(subject).toEqual({ '2.5.4.6': 'IL', '2.5.4.10': 'Barmajiyat Ltd.', '2.5.4.5': '515123456', '2.5.4.3': 'Barmajiyat Ltd.' });
+    const publicKey = new X509Certificate(await interimCertificate({ keyVersion: KEY, organization: 'x', validFrom: new Date(), validTo: new Date(Date.now() + 1e9), kms: api }).then((c) => c.pem)).publicKey;
+    expect(verifyBytes('sha256', csr.tbsView, publicKey, new Uint8Array(csr.signatureValue.valueBlock.valueHexView))).toBe(true);
+    expect(csr.attributes?.[0]?.type).toBe('1.2.840.113549.1.9.14');
   });
 
   it('refuses a key algorithm the signer does not speak, and a KMS that signs with another key', async () => {
