@@ -1693,7 +1693,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-issued-head h2 { margin: 0; font-size: var(--text-headline); }
 .hp-issued-table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
 .hp-issued-table th, .hp-issued-table td { padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--divider); text-align: start; }
-.hp-issued-table .hp-num { text-align: end; font-variant-numeric: tabular-nums; }
+.hp-issued-table .hp-num { text-align: end; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .hp-issued-doc { display: inline-flex; gap: var(--space-2); align-items: center; }
 .hp-doc-icon { flex: none; }
 [dir="rtl"] .hp-doc-icon--mirror { transform: scaleX(-1); }
@@ -1711,7 +1711,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-issue-lines-head h3, .hp-issue-payment h3 { margin: 0; font-size: var(--text-body); }
 .hp-issue-line { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
 .hp-issue-line-numbers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); align-items: end; }
-.hp-issue-line-net { text-align: end; font-variant-numeric: tabular-nums; padding-block-end: var(--space-2); }
+.hp-issue-line-net { text-align: end; font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding-block-end: var(--space-2); }
 .hp-issue-line-actions { display: flex; gap: var(--space-2); }
 .hp-issue-line-options { display: grid; gap: var(--space-2); }
 .hp-issue-switch { display: inline-flex; gap: var(--space-2); align-items: center; font-size: var(--text-label); }
@@ -1719,7 +1719,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-issue-payment { display: grid; gap: var(--space-2); }
 .hp-issue-totals { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); }
 .hp-issue-totals div { display: flex; justify-content: space-between; gap: var(--space-3); }
-.hp-issue-totals dd { margin: 0; font-variant-numeric: tabular-nums; }
+.hp-issue-totals dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
 .hp-issue-gross { font-weight: var(--weight-medium); }
 .hp-issue-footer { display: grid; gap: var(--space-2); width: 100%; }
 .hp-issue-final { margin: 0; font-size: var(--text-label); color: var(--muted); }
