@@ -2236,8 +2236,11 @@ model IssuedDocumentCopy {
   producedByUserId String   @db.Uuid
   /// DOWNLOAD | EMAIL | SHARE
   channel          String   @db.VarChar(8)
+  /// MUT-640: the request that produced it: a retried download gets the same copy (and its mark) back.
+  requestKey       String?  @db.VarChar(128)
 
   @@id([documentId, copyIndex])
+  @@unique([documentId, requestKey])
   @@index([organizationId])
   @@map("issued_document_copies")
 }

@@ -180,8 +180,8 @@ describe('every route sits inside the matrix', () => {
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
-    // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568).
-    expect(SESSION_READS.length).toBe(47);
+    // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) and the PDF view (MUT-640).
+    expect(SESSION_READS.length).toBe(48);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {

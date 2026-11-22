@@ -134,18 +134,6 @@ describe('issuing routes (MUT-568)', () => {
     expect(await read(receipt)).toMatchObject({ number: 1, vat: '0.00', gross: '500.00' });
   });
 
-  it('copies: the first is the original, then copies, and a retried copy keeps its label (AC4)', async () => {
-    const h = accountantHarness();
-    const w = await invoicing(h);
-    const doc = await read(await issue(h, w.on, invoiceBody(w.customerId)));
-    const copy = (key = idem()) => h.app.request(`/v1/issued-documents/${doc.id}/copies`, json({ channel: 'DOWNLOAD' }, { ...w.on, ...key }));
-    const key = idem();
-    expect(await read(await copy(key))).toEqual({ copyIndex: 0, label: 'ORIGINAL' });
-    expect(await read(await copy(key))).toEqual({ copyIndex: 0, label: 'ORIGINAL' });
-    expect(await read(await copy())).toEqual({ copyIndex: 1, label: 'COPY' });
-    expect(await read(await copy())).toEqual({ copyIndex: 2, label: 'COPY' });
-  });
-
   it('starting numbers until the first document, and no gaps (D3, AC5)', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);

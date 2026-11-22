@@ -5094,7 +5094,6 @@ export const ListIssuedDocumentsQuerySchema = z.object({
 });
 export const IssuedDocumentIdParamSchema = z.object({ documentId: uuid });
 export const IssuedCopyRequestSchema = z.object({ channel: z.enum(['DOWNLOAD', 'EMAIL', 'SHARE']) }).openapi('IssuedCopyRequest');
-export const IssuedCopySchema = z.object({ copyIndex: z.number().int(), label: z.enum(['ORIGINAL', 'COPY']) }).openapi('IssuedCopy');
 export const IssuingGapsSchema = z
   .object({ types: z.array(z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), last: z.number().int(), missing: z.array(z.number().int()) })) })
   .openapi('IssuingGaps');

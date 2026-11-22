@@ -2,13 +2,13 @@
   "name": "@mutaba3a/api",
   "private": true,
   "version": "0.18.0",
-  "description": "Mutaba3a hosted financial API — organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
+  "description": "Mutaba3a hosted financial API \u2014 organization-scoped ledger service consumed by Malafat (MUT/MAL Money v1)",
   "type": "module",
   "engines": {
     "node": ">=22"
   },
   "scripts": {
-    "postinstall": "prisma generate",
+    "postinstall": "patch-package --error-on-fail && prisma generate",
     "dev": "SENTRY_ENABLED=${SENTRY_ENABLED:-false} tsx watch --env-file-if-exists=.env src/index.ts",
     "build": "tsc -p tsconfig.build.json && cp src/email/domains/*.txt dist/email/domains/",
     "start": "node dist/index.js",
@@ -80,12 +80,14 @@
     "openapi:json": "tsx src/scripts/export-openapi.ts --json"
   },
   "dependencies": {
+    "@digicole/pdfmake-rtl": "2.1.2",
     "@google-cloud/storage": "8.3.0",
     "@google-cloud/tasks": "7.3.0",
     "@hono/node-server": "2.1.4",
     "@hono/zod-openapi": "1.6.3",
     "@modelcontextprotocol/sdk": "1.32.1",
     "@node-rs/argon2": "2.2.1",
+    "@pdf-lib/fontkit": "1.1.1",
     "@prisma/client": "6.19.3",
     "@sentry/node-core": "10.76.2",
     "@simplewebauthn/server": "13.3.3",
@@ -104,6 +106,9 @@
     "eslint": "^9.39.2",
     "exceljs": "^4.4.0",
     "globals": "^16.5.0",
+    "patch-package": "8.0.0",
+    "pdf-lib": "1.17.1",
+    "pdfjs-dist": "5.4.624",
     "prisma": "6.19.3",
     "tsx": "4.23.15",
     "typescript": "~5.9.3",

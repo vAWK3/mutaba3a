@@ -6727,3 +6727,22 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** a rollback past MUT-568 is harmless until the first document is issued, then roll-forward only (rollback hazard). Document-owned Owed rows stay out of the entries feed until MUT-570 gives them their own rows; their Received rows appear as `origin: 'issued_document'`. Customer VAT numbers and addresses come with MUT-642.
 
 **Alternatives rejected:** partner APIs (Basel, 2026-11-06); issued documents as locked ledger rows (every ledger edit path would need a lock, and the record would not be INSERT-only); per-year numbering; a refund on a paid invoice in v1 (MUT-643).
+
+## ADR-261: Issued Documents Print Server-Side With Malafat's Tri-Script Engine, in the Business's Own Style and Ink (MUT-640)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-640-issued-document-pdf.md`; styles approved by Basel on the canvas https://claude.ai/artifact/EevXQWU3AyFvJxugLTGrNC).
+
+**Context:** one PDF of an issued document (ADR-260) serves the portal, the phone, email and links, in Hebrew, Arabic or English, with the other scripts quoted inside. Malafat already prints three scripts reliably in pure Node (its ADR-168, MAL-64).
+
+**Decision:**
+1. **Engine:** Malafat's per-character font coverage and `@digicole/pdfmake-rtl@2.1.2` with its patch (here through `patch-package`, `server/patches/`). No Chromium. Every node declares its direction, every table its `rtl`; numbers, ids, dates and amounts are their own left-to-right nodes.
+2. **Styles** (`server/src/issuing/pdf/styles.ts`): Professional (Frank Ruhl Libre), Modern (IBM Plex Sans + Hebrew), Minimal (Assistant); one view model, different layout, typeface, size and information architecture; **black or blue ink only**. A document prints in the style and ink snapshotted on it; an unknown style prints as Professional.
+3. **Arabic is Thmanyah** in every style (serif display for Professional, sans for the others): Noto Naskh, Noto Sans Arabic and IBM Plex Sans Arabic draw correctly but don't extract word for word; IBM Plex Sans Hebrew is the last fallback for Latin, Hebrew and ₪.
+4. **Copies:** `POST /v1/issued-documents/{id}/pdf` records a produced copy (download, email, share) and prints its mark, the first ever the original ("מקור"); its Idempotency-Key is stored on the copy (`issued_document_copies.requestKey`), so a retry returns the same copy and mark. `GET …/pdf` is a view copy ("העתק") and records nothing. `POST /v1/issued-documents/preview/pdf` is a draft ("טיוטה") with the next number; nothing is written.
+5. D-PDF1 Arabic and English documents carry the Hebrew legal title as a second line (until the accountant answers); D-PDF3 A4, the table header repeats; D-PDF4 dates DD/MM/YYYY, ₪ after the amount in he/ar and before it in en; D-PDF5 the business details sit at the start side (RTL text keeps to its start edge in pdfmake-rtl), the logo at the end side.
+
+**Consequences:** the image carries 3.1 MB of fonts (`server/assets/fonts/pdf`, OFL licences beside them). The logo prints once MUT-646 uploads it (`IssuerDetails.logoAttachmentId`); the customer's VAT number and address once MUT-642 snapshots them.
+
+**Alternatives rejected:** headless Chromium (≈200 MB image, cold starts); Noto Naskh for Arabic (scrambled extraction, Malafat MAL-1008); the idempotency middleware for the PDF POST (it replays JSON only).
+
+**Pre-landing review (2026-11-22):** copies are produced only through `POST …/pdf` (the JSON `POST …/copies` is removed, so no copy is ever counted without being printed); a request key replays for the same person within 24 h only; an all-inclusive document's subtotal and discount print as typed; exempt and taxable amounts print apart; at most two renders run at once; `postinstall` is `patch-package --error-on-fail && prisma generate`.

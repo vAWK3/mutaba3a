@@ -6,7 +6,7 @@ import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { attachmentRoutes } from './attachments.js';
 import { conversionRoutes } from './conversions.js';
-import { issuingRoutes } from './issuing.js';
+import { issuingRoutes, type IssuedPdfRenderer } from './issuing.js';
 import { expenseCategoryRoutes } from './expense-categories.js';
 import { expenseGroupRoutes } from './expense-groups.js';
 import { expenseRoutes } from './expenses.js';
@@ -36,6 +36,8 @@ import { vendorRoutes } from './vendors.js';
  */
 export interface PortalRouteDependencies {
   store: LedgerStore;
+  /** MUT-640: the issued-document PDF renderer; the hosted server's only (the signed-out portal has none). */
+  issuedPdf?: IssuedPdfRenderer | null;
   attachments: { storage: AttachmentStorage | null; urlTtlSeconds: number };
   fxRates: CachedFxRates | null;
   /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */
@@ -66,7 +68,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),
   // MUT-568 (ADR-260): issued documents.
-  (deps) => issuingRoutes(deps.store),
+  (deps) => issuingRoutes(deps.store, deps.issuedPdf ?? null),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
   // MUT-596: who is on the profile, read-only (a Malafat firm's seats).

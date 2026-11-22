@@ -28,6 +28,16 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Issued documents as PDFs in Hebrew, Arabic and English, three styles (MUT-640, ADR-261, API 1.116.0-mut640)
+
+### Added
+- `GET /v1/issued-documents/{id}/pdf` (a view copy), `POST /v1/issued-documents/{id}/pdf` (a produced, counted copy: the first is the original), `POST /v1/issued-documents/preview/pdf` (a draft with the next number).
+- Three styles (Professional, Modern, Minimal), black or blue ink, the document's own style and ink.
+
+### Technical
+- Port of Malafat's PDF engine (`server/src/pdf/`), `@digicole/pdfmake-rtl` patched via `patch-package` (`server/patches/`), fonts in `server/assets/fonts/pdf` (Dockerfile copies both). Migration `20261122140000_mut640_copy_request_key`.
+- Gate test (`server/src/issuing/pdf/__tests__/gate.test.ts`): 3 styles × he/ar/en, zero `.notdef`, every word extractable, RTL order, ink-only colours; PDFs written to `server/.pdf-e2e/` for a human look.
+
 ## [Unreleased] - 2026-11-22 — The monthly summary mail: last month per profile and per currency, ar + en (MUT-535, ADR-259)
 
 ### Added
