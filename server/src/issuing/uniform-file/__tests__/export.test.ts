@@ -189,6 +189,14 @@ describe('buildUniformFile', () => {
     expect(field(out[3]!, 50, 1)).toBe('4');
   });
 
+  it('a payment request (MUT-662) is record type 300 with its lines', () => {
+    const [c100, ...d110] = lines(buildUniformFile(input([doc('PAYMENT_REQUEST', 7)])).bkmv).slice(1, -1);
+    expect(field(c100!, 23, 3)).toBe('300');
+    expect(field(c100!, 26, 20).trim()).toBe('7');
+    expect(d110.length).toBeGreaterThan(0);
+    for (const l of d110) expect(field(l, 23, 3)).toBe('300');
+  });
+
   it('writes the customer key, VAT number and an Arabic name in Hebrew letters', () => {
     const c100 = lines(buildUniformFile(input([doc('TAX_INVOICE', 1, { customer: { name: 'محمد', taxId: '039337766' } })])).bkmv)[1]!;
     expect(field(c100, 375, 15)).toBe('a1b2c3d4e5f64a7');
@@ -199,6 +207,7 @@ describe('buildUniformFile', () => {
   it('totals each document type for the documents report', () => {
     const file = buildUniformFile(input([doc('TAX_INVOICE', 1), doc('TAX_INVOICE', 2), doc('RECEIPT', 1)]));
     expect(file.byType).toEqual([
+      { docType: 'PAYMENT_REQUEST', count: 0, grossMinor: 0n },
       { docType: 'TAX_INVOICE', count: 2, grossMinor: shekels(1180) * 2n },
       { docType: 'TAX_INVOICE_RECEIPT', count: 0, grossMinor: 0n },
       { docType: 'CREDIT_NOTE', count: 0, grossMinor: 0n },

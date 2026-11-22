@@ -69,6 +69,7 @@
   - VAT-inclusive unit prices round up, so every D110 line adds up to the agora.
   - The documents report lists every type, with zero where none.
   - `from`/`to` must be real calendar days from 2000.
+- Merged after MUT-662: a payment request is written as record type 300 (C100 and its D110 lines), and the documents report lists it; ADR-271's "wired by whichever merges second" is this.
 
 ---
 ## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
