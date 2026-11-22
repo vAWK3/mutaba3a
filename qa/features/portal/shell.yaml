@@ -74,18 +74,22 @@ features:
       - Switching lands on the other profile's home, whose figures are fetched with its own header
       - An unknown profile reads "This profile isn't available" and its button opens the first profile's home
   - id: client-detail
-    title: A client opens to its summary (last payment, per-currency strip, matters), then its own receivables, payments and documents
+    title: A client opens to its ledger card (newest first, running balance, Client in credit), then its documents and its details
     tier: secondary
+    tickets: [MUT-664]
     paths:
       - src/hosted/pages/views/ClientDetailPage.tsx
       - src/hosted/pages/views/ClientsPage.tsx
+      - src/hosted/components/ledger/LedgerCard.tsx
+      - src/hosted/data/statementQueries.ts
+      - src/hosted/format/ledger.ts
     steps:
       - Open Clients and choose a client
-      - Read the summary
-      - Open the Receivables, Payments and Documents tabs, then All clients
+      - Read the ledger card
+      - Open the Documents and Details tabs, then All clients
     expect:
-      - The summary shows Last payment, the ILS strip and each matter with its status
-      - Each tab lists only this client's records, without a client column, and asks the server with that customerId
+      - The ledger card lists only this client's movements, newest first, asks the statement with order=desc in ILS, and a balance below zero reads "Client in credit" without a minus (D15)
+      - Documents lists only this client's files; Details shows Last payment, the ILS strip and each matter with its status
       - All clients returns to the list
   - id: client-business
     title: A client's VAT or company number and address, filled from the companies registry by its number (MUT-642)
