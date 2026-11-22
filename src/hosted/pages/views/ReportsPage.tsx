@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { InvoiceSplitCard } from './InvoiceSplitCard';
 import { Link } from '@tanstack/react-router';
 import { getLocale, useLanguage } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
@@ -228,6 +229,8 @@ export function ReportsPage({ search, setSearch }: ReportsPageProps) {
         )}
         {all && <CombinedLines view={view} profile={profile} unit={unit} />}
         {!holdForRates && <OwedLine owed={owed} unit={unit} profileId={profile.id} />}
+        {/* MUT-660: one profile at a time, where invoicing is on (the server sends the split only there). */}
+        {!all && view[0]?.data?.invoiceSplit && <InvoiceSplitCard rows={view[0].data.invoiceSplit} />}
         {insights.length > 0 && <InsightList insights={insights} unit={unit.currency} singleCurrency={unit.singleCurrency} today={today} teaser={teaser} />}
         {empty ? (
           <div className="hp-empty">

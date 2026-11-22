@@ -2919,6 +2919,8 @@ export const ReceivableSchema = z
     outstanding: AmountSchema,
     vatTreatment: VatTreatmentSchema,
     vatRateBasisPoints: z.number().int(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     dueDate: IsoDateSchema,
     postingDate: IsoDateSchema,
     postedAt: z.string().datetime(),
@@ -3300,6 +3302,8 @@ export const PaymentSchema = z
     reference: z.string().nullable(),
     /** MUT-481: the legal receipt's number; null when none was given, and always on person-made payments. */
     receiptNumber: z.string().nullable(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     notes: z.string().nullable(),
     status: PaymentStatusSchema,
     reversedAt: z.string().datetime().nullable(),

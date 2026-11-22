@@ -27904,6 +27904,7 @@ export interface components {
             outstanding: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
+            notForInvoice: boolean;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -28741,6 +28742,7 @@ export interface components {
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
             receiptNumber: string | null;
+            notForInvoice: boolean;
             notes: string | null;
             status: components["schemas"]["PaymentStatus"];
             /** Format: date-time */

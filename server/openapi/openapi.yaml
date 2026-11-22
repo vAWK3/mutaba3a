@@ -4234,6 +4234,8 @@ components:
           $ref: "#/components/schemas/VatTreatment"
         vatRateBasisPoints:
           type: integer
+        notForInvoice:
+          type: boolean
         dueDate:
           type: string
           pattern: ^\d{4}-\d{2}-\d{2}$
@@ -4277,6 +4279,7 @@ components:
         - outstanding
         - vatTreatment
         - vatRateBasisPoints
+        - notForInvoice
         - dueDate
         - postingDate
         - postedAt
@@ -6407,6 +6410,8 @@ components:
         receiptNumber:
           type: string
           nullable: true
+        notForInvoice:
+          type: boolean
         notes:
           type: string
           nullable: true
@@ -6460,6 +6465,7 @@ components:
         - method
         - reference
         - receiptNumber
+        - notForInvoice
         - notes
         - status
         - reversedAt
