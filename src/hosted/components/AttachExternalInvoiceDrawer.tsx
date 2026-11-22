@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type DragEvent, type FormEvent } from 'react';
+import { useEffect, useId, useRef, useState, type DragEvent, type FormEvent } from 'react';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useDirection, useLanguage } from '../../lib/i18n/core';
@@ -79,18 +79,20 @@ export function AttachExternalInvoiceDrawer({ profile, entry, existing, initialF
       setReading(false);
     }
   };
-  // A file dropped on the entry's row arrives here once.
-  const [started, setStarted] = useState(false);
-  if (initialFile && !started) {
-    setStarted(true);
+  // A file dropped on the entry's row is read once, on opening (the ref keeps a strict-mode remount from reading it twice).
+  const dropped = useRef(false);
+  useEffect(() => {
+    if (!initialFile || dropped.current) return;
+    dropped.current = true;
     void take(initialFile);
-  }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only the file the drawer opened with
+  }, [initialFile]);
 
   const onDrop = (event: DragEvent) => {
     event.preventDefault();
     setDragging(false);
-    const dropped = event.dataTransfer.files[0];
-    if (dropped) void take(dropped);
+    const file = event.dataTransfer.files[0];
+    if (file) void take(file);
   };
 
   const date = isoDateOf(fields.date);
@@ -149,9 +151,9 @@ export function AttachExternalInvoiceDrawer({ profile, entry, existing, initialF
               {t('hosted.external.remove')}
             </Button>
           </div>
-          {openFailed && (
+          {(openFailed || remove.isError) && (
             <p className="input-error-message" role="alert">
-              {t('hosted.external.openFailed')}
+              {t(openFailed ? 'hosted.external.openFailed' : 'hosted.external.removeFailed')}
             </p>
           )}
           <p className="hp-muted">{t('hosted.external.noIssueWhileAttached')}</p>

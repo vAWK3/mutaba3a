@@ -160,11 +160,17 @@ export function registerExternalInvoiceRoutes(app: OpenAPIHono<AppEnv>, deps: Ex
       const attachmentId = randomUUID();
       const key = storageKey(organization.id, attachmentId);
       await files.write(key, bytes, mimeType);
-      const result = await store.issuing.attachExternal(
-        { organizationId: organization.id, entryKind: q.entryKind, entryId: q.entryId, attachmentId, number: q.number, documentDate: q.documentDate, createdByUserId: user.id, createdAt: now },
-        // The attachment is linked to exactly one of customer or payment, like every attachment.
-        { filename: q.filename, mimeType, sizeBytes: bytes.length, storageKey: key, customerId: q.entryKind === 'OWED' ? entry.customerId : null, paymentId: q.entryKind === 'RECEIVED' ? q.entryId : null, requestId: c.get('requestId') },
-      );
+      const result = await store.issuing
+        .attachExternal(
+          { organizationId: organization.id, entryKind: q.entryKind, entryId: q.entryId, attachmentId, number: q.number, documentDate: q.documentDate, createdByUserId: user.id, createdAt: now },
+          // The attachment is linked to exactly one of customer or payment, like every attachment.
+          { filename: q.filename, mimeType, sizeBytes: bytes.length, storageKey: key, customerId: q.entryKind === 'OWED' ? entry.customerId : null, paymentId: q.entryKind === 'RECEIVED' ? q.entryId : null, requestId: c.get('requestId') },
+        )
+        .catch(async (error: unknown) => {
+          // Nothing was written: the file would be kept by no row.
+          await files.remove(key).catch(() => undefined);
+          throw error;
+        });
       if (result.kind === 'exists') {
         // Lost a race with another attach: this file goes, the first stays.
         await files.remove(key);

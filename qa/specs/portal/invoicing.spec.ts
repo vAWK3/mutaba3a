@@ -281,7 +281,9 @@ test('attach an invoice issued elsewhere to an Owed and, by dropping it on its r
     await expect(attached).toContainText('2026-10-12');
     const popup = page.context().waitForEvent('page');
     await attached.getByTestId('external-open').click();
-    expect((await popup).url()).toContain('/external/');
+    // The signed URL opens in a new tab (noopener: it starts at about:blank), and the bucket serves the file inline.
+    await expect.poll(() => api.storage.some((r) => r.url.includes('/external/') && r.url.includes('disposition=inline'))).toBe(true);
+    await (await popup).close();
   });
 
   await step('AC3 While it is attached, the drawer says MTB3A issues no document for this entry', async () => {

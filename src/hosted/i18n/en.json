@@ -3049,7 +3049,8 @@
       "column": "Document",
       "attachRow": "Attach an invoice for {client}",
       "attachShort": "Attach",
-      "showRow": "Invoice {number}, issued elsewhere, for {client}"
+      "showRow": "Invoice {number}, issued elsewhere, for {client}",
+      "removeFailed": "The invoice could not be removed. Try again."
     }
   }
 }

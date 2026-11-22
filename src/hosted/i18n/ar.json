@@ -3200,7 +3200,8 @@
       "column": "المستند",
       "attachRow": "إرفاق فاتورة لـ {client}",
       "attachShort": "إرفاق",
-      "showRow": "الفاتورة {number}، صادرة من جهة أخرى، لـ {client}"
+      "showRow": "الفاتورة {number}، صادرة من جهة أخرى، لـ {client}",
+      "removeFailed": "تعذّرت إزالة الفاتورة. حاول مجدداً."
     }
   }
 }

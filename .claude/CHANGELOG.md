@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.122.0-mut647)
+
+### Added
+- `POST /v1/issuing/external-invoices/read` (number, date, total; nothing stored), `POST /v1/issuing/external-invoices` (raw PDF/JPEG/PNG body, the confirmed number and date in the query), `GET /v1/issuing/external-invoices?entryKind&entryIds`, `GET …/{id}/file`, `DELETE …/{id}`.
+- Issuing from an entry with an attached invoice is refused: 409 `EXTERNAL_INVOICE_ATTACHED`.
+- Portal: a Document column on Owed and Paid (Attach, or drop a file on the row; "Issued elsewhere" opens it), the attach drawer (read → confirm → attach; an amount mismatch is said, never blocking).
+- `HostedTable` takes `onRowFileDrop` / `canDropFile`.
+
+### Technical
+- Table `external_invoices` (migration `20261122190000_mut647_external_invoices`), one live per entry; the file is the entry's INVOICE attachment, written by the issuing store. `AttachmentStorage.write`.
+- QA: `portal.invoicing.attach-external`.
+
 ## [Unreleased] - 2026-11-22 — Connect to the Tax Authority; allocation numbers on issued invoices (MUT-571, MUT-572, ADR-264, API 1.120.0-mut571)
 
 ### Added
