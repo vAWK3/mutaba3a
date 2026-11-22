@@ -8,6 +8,7 @@ import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
 import { isPlainAddress } from './email/ports.js';
+import { DOCUMENTS_PREFERENCES } from './issuing/documents-due.js';
 import { ERROR_CODES } from './errors.js';
 import { DOCUMENT_STYLES, INK_COLOURS } from './issuing/types.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
@@ -2100,6 +2101,11 @@ export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').opena
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
 
+/** MUT-660 (ADR-270): which documents a client is due on an invoicing profile. */
+export const DocumentsPreferenceSchema = z.enum(DOCUMENTS_PREFERENCES).openapi('DocumentsPreference', {
+  description: 'TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).',
+});
+
 export const CustomerSchema = z
   .object({
     id: uuid,
@@ -2112,6 +2118,8 @@ export const CustomerSchema = z
     /** MUT-642: VAT, company or ID number, 9 digits; printed on issued documents. */
     taxId: z.string().nullable(),
     address: z.string().nullable(),
+    /** MUT-660: null follows the profile default (issuer details’ defaultDocumentsPreference, else ON_PAYMENT). */
+    documentsPreference: DocumentsPreferenceSchema.nullable(),
     status: EntityStatusSchema,
     archivedAt: z.string().datetime().nullable(),
     externalReference: ExternalReferenceSchema.nullable(),
@@ -2146,6 +2154,8 @@ export const UpdateCustomerRequestSchema = z
     vatTreatment: VatTreatmentSchema.nullable().optional(),
     taxId: z.string().max(20).nullable().optional(),
     address: z.string().trim().max(300).nullable().optional(),
+    /** MUT-660: invoicing profiles only, from a person (404 elsewhere); null = the profile default. */
+    documentsPreference: DocumentsPreferenceSchema.nullable().optional(),
   })
   .strict()
   .openapi('UpdateCustomerRequest');
@@ -2909,6 +2919,8 @@ export const ReceivableSchema = z
     outstanding: AmountSchema,
     vatTreatment: VatTreatmentSchema,
     vatRateBasisPoints: z.number().int(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     dueDate: IsoDateSchema,
     postingDate: IsoDateSchema,
     postedAt: z.string().datetime(),
@@ -3290,6 +3302,8 @@ export const PaymentSchema = z
     reference: z.string().nullable(),
     /** MUT-481: the legal receipt's number; null when none was given, and always on person-made payments. */
     receiptNumber: z.string().nullable(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     notes: z.string().nullable(),
     status: PaymentStatusSchema,
     reversedAt: z.string().datetime().nullable(),
@@ -4315,6 +4329,9 @@ const currencyActivity = z.object({
   byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })).openapi({ description: 'Received per client, largest first; null = no client, last' }),
 });
 const daysToPaid = { median: z.number().int(), n: z.number().int() };
+/** MUT-660 (ADR-270): one currency's received money, split. */
+export const InvoiceSplitRowSchema = z.object({ currency: CurrencySchema, invoiceIncome: AmountSchema, notForInvoice: AmountSchema, all: AmountSchema }).openapi('InvoiceSplitRow');
+
 export const ActivitySummarySchema = z
   .object({
     from: IsoDateSchema,
@@ -4333,6 +4350,7 @@ export const ActivitySummarySchema = z
         samples: z.array(z.number().int()).openapi({ description: 'Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median' }),
       })
       .openapi({ description: 'Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received' }),
   })
   .openapi('ActivitySummary');
 
@@ -4834,6 +4852,7 @@ export const ShareLinkSummarySchema = z
       )
       .openapi({ description: 'Per currency, never summed across currencies; breakdowns by name.' }),
     received: z.array(z.object({ currency: CurrencySchema, ...visitorBucket })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency' }),
   })
   .openapi('ShareLinkSummary');
 
@@ -5030,6 +5049,7 @@ export const IssuerDetailsSchema = z
     bankDetails: z.string().nullable(),
     footerNote: z.string().nullable(),
     offerAfterSave: z.boolean().openapi({ description: 'MUT-648: offer to issue a document after saving income' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.openapi({ description: 'MUT-660: the documents a client with no preference of its own is due' }),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
@@ -5112,6 +5132,7 @@ export const IssuerDefaultsRequestSchema = z
     bankDetails: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed for paying by transfer' }),
     footerNote: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed at the foot of every document' }),
     offerAfterSave: z.boolean().optional().openapi({ description: 'MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.optional().openapi({ description: 'MUT-660: the documents a client with no preference is due (unchanged when omitted)' }),
   })
   .openapi('IssuerDefaultsRequest');
 
@@ -5219,3 +5240,57 @@ export const IssuedCopyRequestSchema = z.object({ channel: z.enum(['DOWNLOAD', '
 export const IssuingGapsSchema = z
   .object({ types: z.array(z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), last: z.number().int(), missing: z.array(z.number().int()) })) })
   .openapi('IssuingGaps');
+
+// ---- MUT-660 (ADR-270): documents due, Issue all, not for invoice ----
+const DueEntryKindSchema = z.enum(['owed', 'received']);
+const DueEntryRefSchema = z.object({ kind: DueEntryKindSchema, id: uuid }).openapi('DueEntryRef');
+export const DueKindSchema = z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).openapi('DueKind');
+export const DueReasonSchema = z
+  .enum(['PAYMENT_REQUEST_PENDING', 'CURRENCY_NOT_ILS', 'MIXED_ALLOCATION', 'RECORDED_ELSEWHERE'])
+  .openapi('DueReason', { description: 'Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice' });
+export const DueItemSchema = z
+  .object({
+    kind: DueKindSchema.nullable().openapi({ description: 'The document due; null in the not-for-invoice view' }),
+    entry: DueEntryRefSchema.extend({ number: z.string() }),
+    customerId: uuid.nullable(),
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    date: IsoDateSchema.openapi({ description: 'The Owed’s posting date or the Received’s date' }),
+    issuable: z.boolean(),
+    reason: DueReasonSchema.nullable(),
+    appliesToDocumentId: uuid.nullable().openapi({ description: 'A receipt: the tax invoice it pays' }),
+  })
+  .openapi('DueItem');
+export const DocumentsDueQuerySchema = z.object({
+  view: z.enum(['to-issue', 'not-for-invoice']).default('to-issue'),
+  olderThanMonths: z.coerce.number().int().min(0).max(120).default(0).openapi({ description: 'Only items dated before today minus N months (0 = all)' }),
+});
+export const DocumentsDueSchema = z
+  .object({
+    view: z.enum(['to-issue', 'not-for-invoice']),
+    groups: z.array(z.object({ customerId: uuid.nullable(), items: z.array(DueItemSchema) })),
+    counts: z.object({ total: z.number().int(), byKind: z.record(z.string(), z.number().int()) }),
+  })
+  .openapi('DocumentsDue');
+export const DocumentsDueCountSchema = z.object({ total: z.number().int() }).openapi('DocumentsDueCount');
+export const IssueDueRequestSchema = z
+  .object({ customerId: uuid.nullable(), items: z.array(DueEntryRefSchema).min(1).max(25) })
+  .strict()
+  .openapi('IssueDueRequest');
+export const IssueDueResultSchema = z
+  .object({
+    results: z.array(
+      z.object({
+        entry: DueEntryRefSchema,
+        status: z.enum(['issued', 'held', 'refused']),
+        reason: z.string().nullable().openapi({ description: 'Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason)' }),
+        document: IssuedDocumentSchema.nullable(),
+      }),
+    ),
+    issued: z.number().int(),
+  })
+  .openapi('IssueDueResult');
+export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefSchema).min(1).max(500), value: z.boolean() }).strict().openapi('NotForInvoiceRequest');
+export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
+export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');
+export const NotForInvoiceEntrySchema = z.object({ kind: DueEntryKindSchema, id: uuid, notForInvoice: z.boolean(), version: z.number().int() }).openapi('NotForInvoiceEntry');

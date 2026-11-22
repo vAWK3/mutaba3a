@@ -6,7 +6,7 @@ record the date where the item says.
 
 ## server
 
-- **MUT-569 (API 1.127.0-mut569, ADR-270): the uniform file names the software house from config.** No migration. With nothing set, the file's A000 carries placeholders (`00000000`, `000000000`, "MTB3A"). The registering owner is Narabnd Studio Ltd (MUT-700). Add these to `production.tfvars` and `make release server`:
+- **MUT-569 (API 1.128.0-mut569, ADR-271): the uniform file names the software house from config.** No migration. With nothing set, the file's A000 carries placeholders (`00000000`, `000000000`, "MTB3A"). The registering owner is Narabnd Studio Ltd (MUT-700). Add these to `production.tfvars` and `make release server`:
   - `software_house_vat_id = "517108775"`;
   - `software_house_name = "נאראבנד סטודיו בע\"מ"`;
   - once MUT-567 issues the certificate, `uniform_file_registration_number = "<8 digits>"`.

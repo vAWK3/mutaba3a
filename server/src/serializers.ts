@@ -200,6 +200,7 @@ export function serializeCustomer(c: CustomerRecord, reference?: ExternalReferen
     vatTreatment: c.vatTreatment,
     taxId: c.taxId,
     address: c.address,
+    documentsPreference: c.documentsPreference,
     status: c.status,
     archivedAt: iso(c.archivedAt),
     externalReference: serializeReference(reference),
@@ -341,6 +342,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     outstanding: amt(r.grossMinor - r.paidMinor - r.creditedMinor, r.currency),
     vatTreatment: r.vatTreatment,
     vatRateBasisPoints: r.vatRateBasisPoints,
+    notForInvoice: r.notForInvoice,
     dueDate: r.dueDate,
     postingDate: r.postingDate,
     postedAt: r.postedAt.toISOString(),
@@ -422,6 +424,7 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
     method: p.method,
     reference: p.reference,
     receiptNumber: p.receiptNumber,
+    notForInvoice: p.notForInvoice,
     notes: p.notes,
     status: p.status,
     reversedAt: iso(p.reversedAt),
@@ -869,5 +872,5 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord) {
 }
 
 export function serializeIssuer(r: IssuerDetailsRecord) {
-  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, defaultLanguage: r.defaultLanguage, paymentTermsDays: r.paymentTermsDays, bankDetails: r.bankDetails, footerNote: r.footerNote, offerAfterSave: r.offerAfterSave, version: r.version };
+  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, defaultLanguage: r.defaultLanguage, paymentTermsDays: r.paymentTermsDays, bankDetails: r.bankDetails, footerNote: r.footerNote, offerAfterSave: r.offerAfterSave, defaultDocumentsPreference: r.defaultDocumentsPreference, version: r.version };
 }

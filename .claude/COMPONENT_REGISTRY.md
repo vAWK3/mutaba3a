@@ -2513,3 +2513,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `overdueClientCount` / `overdueClients` — `src/hosted/data/homeTodo.ts`: pure, from an `OrganizationSummary`.
 - `ReceiptCard` gained `showAmount` (default true). `useReceipts(profileId, status, limit = 24)` keys by limit. `parseHome` / `legacyOwedSearch` in `data/filters.ts`. `sectionPath` in `shell/youRoutes.ts`.
 
+### Documents due — MUT-660 (ADR-270)
+- `DocumentsDuePage` — `src/hosted/pages/views/DocumentsDuePage.tsx`: `profile`. Documents › To issue: segmented To issue / Not for invoice, Older than (`OLDER_THAN_MONTHS` 0/1/3/6/12), groups by client (No client last) with Issue all (in-place confirm), rows with Issue (the issue drawer, filled in) or Attach + Not for invoice with the reason, the bulk bar (in-place confirm with the count, Undo).
+- `ToIssueGroup` — `src/hosted/pages/home/ToIssueGroup.tsx`: `profileId`, `count`, `names`. Home's Waiting-lane group: the count and up to three clients (`TO_ISSUE_CLIENTS_SHOWN`).
+- `NotForInvoiceAction` — `src/hosted/components/NotForInvoiceAction.tsx`: `kind`, `id`, `version`, `marked`, `client`. A row's Not for invoice / Back to invoice (If-Match), with a neutral badge when marked; Undo; the credit-note message on 409.
+- `DocumentsPreferenceField` — `src/hosted/components/DocumentsPreferenceField.tsx`: `profileId`, `client`, `writable`, `profileDefault`. A self-saving select (If-Match) with what is due; invoicing profiles only.
+- `InvoiceSplitCard` — `src/hosted/pages/views/InvoiceSplitCard.tsx`: `rows` (InvoiceSplitRow[]). Reports' Invoice income / Not for invoice / All income per currency.
+- `documentsDueQueries` — `src/hosted/data/documentsDueQueries.ts`: `useDocumentsDue`, `useDocumentsDueCount` (null on 404), `useIssueDue` (chunks of 25), `useMarkNotForInvoice`, `useSetEntryNotForInvoice`, `refreshAfterDue`, `markRefusal`.
+- Server: `documentsDue`/`olderThan`/`preferenceOf` (`issuing/documents-due.ts`), `splitPayment`/`splitIncome`/`invoiceStatusOf` (`income/invoice-class.ts`), `invoiceSplitOf`/`serializeInvoiceSplit` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`), `issuingProfileOf` (`routes/issuing.ts`), `registerDocumentsDueRoutes` (`routes/documents-due.ts`).
+

@@ -10,6 +10,7 @@ import type { CreditReasonCode } from '../payments/credit.js';
 import type { ShareLinkPeriod } from '../share-links/period.js';
 import type { ComposedDocument } from '../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../issuing/types.js';
+import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -647,6 +648,8 @@ export interface CustomerRecord {
   /** MUT-642: VAT, company or ID number (9 digits, validated); printed on issued documents. */
   taxId: string | null;
   address: string | null;
+  /** MUT-660: which documents this client is due; null follows the profile default. */
+  documentsPreference: DocumentsPreference | null;
   status: EntityStatus;
   archivedAt: Date | null;
   /** Optimistic-concurrency version; starts at 1, +1 per write. */
@@ -675,6 +678,8 @@ export interface UpdateCustomerPatch {
   vatTreatment?: VatTreatment | null;
   taxId?: string | null;
   address?: string | null;
+  /** MUT-660: set on invoicing profiles only (the route checks). */
+  documentsPreference?: DocumentsPreference | null;
 }
 
 export interface ProjectRecord {
@@ -942,6 +947,8 @@ export interface ReceivableRecord {
   createdByUserId: string | null;
   /** Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt. Null for every receivable this ticket does not create. */
   deletedAt: Date | null;
+  /** MUT-660: marked "not for invoice" (due no document, outside Invoice income). */
+  notForInvoice: boolean;
   /** MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of `postingDate`, assigned when it posts (`receivable_counters`). */
   number: string;
   version: number;
@@ -1371,6 +1378,8 @@ export interface PaymentRecord {
   origin: PaymentOrigin;
   /** MUT-61: the capture surface (CaptureSourceSchema), or null — always null for INTEGRATION. */
   captureSource: string | null;
+  /** MUT-660: marked "not for invoice" (due no document, outside Invoice income). */
+  notForInvoice: boolean;
   version: number;
   createdAt: Date;
   updatedAt: Date;
@@ -4449,6 +4458,8 @@ export interface IssuerDetailsInput {
   footerNote: string | null;
   /** MUT-648: offer to issue a document after saving income. */
   offerAfterSave: boolean;
+  /** MUT-660: the documents a client with no preference is due. */
+  defaultDocumentsPreference: DocumentsPreference;
 }
 
 export interface IssuerDetailsRecord extends IssuerDetailsInput {
@@ -4732,4 +4743,39 @@ export interface IssuingRepository {
   getExternal(organizationId: string, id: string): Promise<ExternalInvoiceRecord | null>;
   /** Marks it removed and its file's attachment deleted (both rows stay); null when there is no live one with that id. */
   removeExternal(organizationId: string, id: string, at: Date): Promise<ExternalInvoiceRecord | null>;
+  /**
+   * MUT-660: the rows `documentsDue` reads, in a few indexed reads: Owed entries that aren't deleted or document-made,
+   * POSTED Received with no linked document, their live allocations and the Owed those reach, every client's
+   * preference, and the issuer's default and dealer type (ON_PAYMENT and null with no issuer details).
+   */
+  dueInputs(organizationId: string): Promise<DocumentsDueInput>;
+  /** MUT-660: what the books split needs for these payments (`splitIncome`): their links, allocations and preferences. */
+  incomeContext(organizationId: string, paymentIds: readonly string[]): Promise<IncomeContextRecord>;
+  /**
+   * MUT-660: marks or unmarks entries "not for invoice", all or nothing, in one transaction. An entry already at `value`
+   * is left alone and not counted (so a replay changes nothing). Refuses the whole set when one has a tax document
+   * (a live 305, or a 320; a receipt doesn't block), is another version than expected, or isn't there.
+   */
+  setNotForInvoice(organizationId: string, items: readonly NotForInvoiceItem[], value: boolean, at: Date): Promise<NotForInvoiceResult>;
+}
+
+export interface NotForInvoiceItem {
+  kind: 'receivable' | 'payment';
+  id: string;
+  /** If-Match on a single entry; absent on a bulk action. */
+  expectedVersion?: number;
+}
+
+export type NotForInvoiceResult =
+  | { kind: 'done'; changed: number; receivables: ReceivableRecord[]; payments: PaymentRecord[] }
+  | { kind: 'has_tax_document'; item: NotForInvoiceItem }
+  | { kind: 'stale'; item: NotForInvoiceItem; version: number }
+  | { kind: 'not_found'; item: NotForInvoiceItem };
+
+export interface IncomeContextRecord {
+  defaultPreference: DocumentsPreference;
+  preferences: Map<string, DocumentsPreference | null>;
+  receivables: Map<string, { customerId: string; notForInvoice: boolean }>;
+  /** paymentId → a document is linked / a live external invoice is attached / its live allocations. */
+  payments: Map<string, { documented: boolean; externalInvoice: boolean; allocations: Array<{ receivableId: string; amountMinor: bigint }> }>;
 }

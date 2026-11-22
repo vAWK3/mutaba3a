@@ -1,6 +1,6 @@
 # MUT-569: export the uniform file (מבנה אחיד 1.31) for the Tax Authority simulator
 
-Status: **Approved 2026-11-22 (D1–D7, wireframe; the phone gets nothing); built the same day (ADR-270, API 1.127.0-mut569).** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
+Status: **Approved 2026-11-22 (D1–D7, wireframe; the phone gets nothing); built the same day (ADR-271, API 1.128.0-mut569).** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
 
 Tracker: Jira · barmajiyat · MUT via `atlassian-barmajiyat` · Backlog is the default · a finished ticket goes to In Review, and only Basel moves it to Done.
 
@@ -222,5 +222,5 @@ The specs go in `qa/specs/portal/invoicing.spec.ts`, tagged and run once until t
 - **Audit:** a member's export is recorded as `issuing.uniform_file_exported` on `issuer_details`, which keeps it out of Malafat's feed. An accountant's export isn't recorded: accountants run under the read-only store, like every issuing read.
 - **QA:** two features, not three. `uniform-file` takes in the bad-range case; `uniform-file-empty` is the second.
 - **The fixture's VAT numbers** pass the Israeli check digit (the API refuses others): 515151512, 514713288, 039337761.
-- **Prisma `inRange`** runs in CI's `test:db`. The shared local test database was behind main's schema, so it wasn't run locally (TD-320).
+- **Prisma `inRange`** runs in CI's `test:db`. The shared local test database was behind main's schema, so it wasn't run locally (TD-323).
 - **Software house (MUT-700):** Terraform `software_house_vat_id`, `software_house_name` and `uniform_file_registration_number` set the env (`tests/uniform_file.tftest.hcl`). The fixture reads the same variables, so the simulator file carries Narabnd. The API's defaults are placeholders (zeros, "MTB3A").

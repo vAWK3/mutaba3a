@@ -93,7 +93,7 @@ locals {
     var.accountant_plan_enabled ? { ACCOUNTANT_PLAN = "true" } : {},
   )
 
-  # MUT-569 (ADR-270): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
+  # MUT-569 (ADR-271): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
   # its placeholders (zeros, "MTB3A"). The software house is the registering owner: Narabnd Studio Ltd (MUT-700).
   uniform_file_env = merge(
     var.uniform_file_registration_number == null ? {} : { UNIFORM_FILE_REGISTRATION_NUMBER = var.uniform_file_registration_number },

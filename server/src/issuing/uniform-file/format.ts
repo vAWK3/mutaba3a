@@ -1,5 +1,5 @@
 /**
- * MUT-569 (ADR-270): the uniform file's field formats (spec 1.31 §2.3–2.4) and its character set. Pure.
+ * MUT-569 (ADR-271): the uniform file's field formats (spec 1.31 §2.3–2.4) and its character set. Pure.
  *
  * The file is ISO-8859-8 in logical order (A000 1029 = 1), one byte per character, so a field's width in characters is
  * its width in bytes. Every text value goes through `toFileText` first: ASCII and Hebrew letters stay; Hebrew points

@@ -1,7 +1,7 @@
 import { alpha, amount, FieldOverflowError, numeric, quantity } from './format.js';
 
 /**
- * MUT-569 (ADR-270): the uniform file's records as the spec 1.31 tables give them (§3.1–3.2, §4.1–4.5): field number,
+ * MUT-569 (ADR-271): the uniform file's records as the spec 1.31 tables give them (§3.1–3.2, §4.1–4.5): field number,
  * kind and width, in order, so a position is the sum of the widths before it. Cancelled fields (width 0) are left out.
  *
  * Kinds: X alphanumeric; N numeric (dates YYYYMMDD and times HHMM too); A signed amount, two implied decimals

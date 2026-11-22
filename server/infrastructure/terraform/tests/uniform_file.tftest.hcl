@@ -1,4 +1,4 @@
-# MUT-569 (ADR-270): the uniform file's software fields reach Cloud Run only when set; unset, the API writes its
+# MUT-569 (ADR-271): the uniform file's software fields reach Cloud Run only when set; unset, the API writes its
 # placeholders. Providers are mocked:
 #   terraform init -backend=false && terraform test -filter=tests/uniform_file.tftest.hcl
 

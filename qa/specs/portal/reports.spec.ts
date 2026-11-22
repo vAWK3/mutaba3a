@@ -445,3 +445,17 @@ test('Where it went names a seeded category in the portal’s language, and swit
   });
 });
 
+
+test('On an invoicing profile Reports splits income into Invoice income and Not for invoice', { tag: '@portal.reports.invoice-split' }, async ({ page, step }) => {
+  const api = world({ reports: { [OFFICE_A]: thisMonth() }, invoicing: 'ready', invoiceSplit: [{ currency: 'ILS', invoiceIncome: '1000.00', notForInvoice: '250.00', all: '1250.00' }] });
+
+  await step('Open Reports on Nour Studio', async () => {
+    await api.open(page, reportsPath());
+  });
+
+  await step('The income card shows the split and its sum', async () => {
+    const card = page.getByTestId('invoice-split');
+    await expect(card.getByRole('heading', { name: 'Income and invoices' })).toBeVisible();
+    await expect(card.getByRole('definition')).toHaveText(['₪1,000.00', '₪250.00', '₪1,250.00']);
+  });
+});

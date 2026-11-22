@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
+import { documentsDue } from '../../issuing/documents-due.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
-const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
+const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
 /** MUT-568 (ADR-260) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
 export function describeLedgerStoreIssuingContract(name: string, makeStore: () => Promise<LedgerStore>): void {
@@ -310,6 +311,140 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.issuing.removeExternal(w.a.id, first.record.id, at(3))).toBeNull();
       const again = await store.issuing.attachExternal(input('00000000-0000-4000-8000-00000000a003', '3390'), fileFor('00000000-0000-4000-8000-00000000a003'));
       expect(again.kind).toBe('attached');
+    });
+
+    /** MUT-660: an Owed / Received the tests below issue for, mark and read. */
+    async function recorded(store: LedgerStore, w: Awaited<ReturnType<typeof world>>, gross: number, credit = 0) {
+      const owed = await store.receivables.createAdjustment(
+        { organizationId: w.a.id, customerId: w.customer.id, projectId: null, currency: 'ILS', netMinor: shekels(gross), vatMinor: 0n, grossMinor: shekels(gross), vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: 'Sprint 3', dueDate: '2026-12-01', postingDate: '2026-11-20', postedAt: at(0), createdByUserId: w.user.id, requestId: null },
+        at(0),
+      );
+      if (credit) await store.receivables.credit(w.a.id, owed.id, { amountMinor: shekels(credit), netMinor: shekels(credit), vatMinor: 0n, reason: 'discount', reasonCode: 'OTHER', effectiveDate: '2026-11-21', requestId: null }, at(0));
+      return owed;
+    }
+    const captured = async (store: LedgerStore, w: Awaited<ReturnType<typeof world>>, amount: number, customerId: string | null = w.customer.id) =>
+      (await store.payments.capture({ organizationId: w.a.id, customerId, projectId: null, currency: 'ILS', amountMinor: shekels(amount), receivedOn: '2026-11-21', method: 'BANK', notes: null, createdByUserId: w.user.id, requestId: null, captureSource: null }, at(0))).payment;
+
+    it('MUT-660: a tax invoice for a credited Owed is linked: the Owed keeps its origin and money, and takes no second document', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 1_416, 236);
+      const before = (await store.receivables.getById(w.a.id, owed.id))!;
+      const doc = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
+      expect(doc.receivableId).toBe(owed.id);
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ origin: 'ADJUSTMENT', grossMinor: shekels(1_416), creditedMinor: shekels(236), version: before.version + 1 });
+      expect((await store.receivables.statementSources(w.a.id, w.customer.id, 'ILS')).receivables).toHaveLength(1);
+      expect(await store.issuing.issue(w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }), at(2))).toEqual({ kind: 'entry_not_found' });
+    });
+
+    it('MUT-660: an invoice-receipt for an allocated Received (a partial payment) is linked: nothing is posted, its Owed keeps its money', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 3_400);
+      const payment = await captured(store, w, 1_180);
+      await store.payments.allocate(w.a.id, payment.id, [{ receivableId: owed.id, amountMinor: shekels(1_180) }], at(0));
+      const doc = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT', fromEntry: { kind: 'payment', id: payment.id } }));
+      expect(doc).toMatchObject({ paymentId: payment.id, receivableId: null });
+      expect(await store.payments.getById(w.a.id, payment.id)).toMatchObject({ origin: 'CAPTURE', allocatedMinor: shekels(1_180) });
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ origin: 'ADJUSTMENT', grossMinor: shekels(3_400), paidMinor: shekels(1_180) });
+      const sources = await store.receivables.statementSources(w.a.id, w.customer.id, 'ILS');
+      expect([sources.receivables.length, sources.payments.length]).toEqual([1, 1]);
+      expect(await store.issuing.issue(w.issue({ docType: 'RECEIPT', fromEntry: { kind: 'payment', id: payment.id } }), at(2))).toEqual({ kind: 'entry_not_found' });
+    });
+
+    it('MUT-660: a receipt for a Received allocated to a tax-invoiced Owed is linked and keeps its invoice; nothing is allocated twice', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 1_416, 236);
+      const invoice = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
+      const payment = await captured(store, w, 500);
+      await store.payments.allocate(w.a.id, payment.id, [{ receivableId: owed.id, amountMinor: shekels(500) }], at(0));
+      const receipt = await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 500, appliesToDocumentId: invoice.id, fromEntry: { kind: 'payment', id: payment.id } }), 2);
+      expect(receipt).toMatchObject({ originalId: invoice.id, paymentId: payment.id });
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ paidMinor: shekels(500) });
+    });
+
+    it('MUT-660: money received with no client takes a linked invoice-receipt (no Owed without a client)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const payment = await captured(store, w, 1_180, null);
+      const doc = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT', customerId: null, customer: {}, fromEntry: { kind: 'payment', id: payment.id } }));
+      expect(doc).toMatchObject({ customerId: null, paymentId: payment.id, receivableId: null });
+      expect(await store.payments.getById(w.a.id, payment.id)).toMatchObject({ origin: 'CAPTURE', allocatedMinor: 0n });
+    });
+
+    it('MUT-660: dueInputs hands documentsDue what it needs; issuing and the client preference change what is due', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      expect(await store.issuing.dueInputs(w.a.id)).toMatchObject({ dealerType: null, defaultPreference: 'ON_PAYMENT', receivables: [], payments: [] });
+      const owed = await recorded(store, w, 1_180);
+      const payment = await captured(store, w, 300);
+      await store.customers.update(w.a.id, w.customer.id, w.customer.version, { documentsPreference: 'TAX_INVOICE_FIRST' }, at(1));
+      const due = async () => documentsDue(await store.issuing.dueInputs(w.a.id)).map((d) => `${d.entry.kind}:${d.kind}`);
+      expect(await due()).toEqual(['receivable:TAX_INVOICE', 'payment:TAX_INVOICE_RECEIPT']);
+      const invoice = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
+      const inputs = await store.issuing.dueInputs(w.a.id);
+      expect(inputs.payments.map((p) => [p.id, p.documented, p.allocations.length])).toEqual([[payment.id, false, 0]]);
+      expect(inputs.receivables.find((r) => r.id === owed.id)).toMatchObject({ origin: 'ISSUED_DOCUMENT', documented: true, taxInvoiceId: invoice.id });
+      expect(await due()).toEqual(['payment:RECEIPT']);
+      expect(await store.issuing.dueInputs(w.b.id)).toMatchObject({ receivables: [], payments: [] });
+    });
+
+    it('MUT-660: setNotForInvoice marks and unmarks all or nothing, is idempotent, checks versions and refuses a tax document', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 2_000);
+      const payment = await captured(store, w, 300);
+      const items = [{ kind: 'receivable' as const, id: owed.id }, { kind: 'payment' as const, id: payment.id }];
+      const done = await store.issuing.setNotForInvoice(w.a.id, items, true, at(1));
+      expect(done).toMatchObject({ kind: 'done', changed: 2 });
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ notForInvoice: true, version: owed.version + 1 });
+      expect(await store.payments.getById(w.a.id, payment.id)).toMatchObject({ notForInvoice: true, version: payment.version + 1 });
+      expect(await store.issuing.setNotForInvoice(w.a.id, items, true, at(2))).toMatchObject({ kind: 'done', changed: 0 });
+      expect(await store.issuing.setNotForInvoice(w.a.id, [{ kind: 'payment', id: payment.id, expectedVersion: payment.version }], false, at(3))).toMatchObject({ kind: 'stale', version: payment.version + 1 });
+      expect(await store.issuing.setNotForInvoice(w.b.id, items, false, at(3))).toMatchObject({ kind: 'not_found' });
+      expect(await store.issuing.setNotForInvoice(w.a.id, items, false, at(4))).toMatchObject({ kind: 'done', changed: 2 });
+      const linked = await recorded(store, w, 1_416, 236);
+      await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: linked.id } }));
+      // One refused: nothing changes (all or nothing).
+      expect(await store.issuing.setNotForInvoice(w.a.id, [...items, { kind: 'receivable', id: linked.id }], true, at(5))).toMatchObject({ kind: 'has_tax_document', item: { id: linked.id } });
+      expect(await store.payments.getById(w.a.id, payment.id)).toMatchObject({ notForInvoice: false });
+      // A receipt doesn't block the mark; an invoice-receipt does.
+      const receiptPaid = await captured(store, w, 100, null);
+      await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 100, customerId: null, customer: {}, fromEntry: { kind: 'payment', id: receiptPaid.id } }), 6);
+      expect(await store.issuing.setNotForInvoice(w.a.id, [{ kind: 'payment', id: receiptPaid.id }], true, at(7))).toMatchObject({ kind: 'done', changed: 1 });
+      const invoicePaid = await captured(store, w, 1_180);
+      await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT', fromEntry: { kind: 'payment', id: invoicePaid.id } }), 8);
+      expect(await store.issuing.setNotForInvoice(w.a.id, [{ kind: 'payment', id: invoicePaid.id }], true, at(9))).toMatchObject({ kind: 'has_tax_document' });
+    });
+
+    it('MUT-660: a credit note cancelling the whole tax invoice lets its Owed be marked again', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 1_416, 236);
+      const invoice = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
+      await w.issued(store, w.issue({ docType: 'CREDIT_NOTE', originalId: invoice.id, dueDate: null }), 2);
+      expect(await store.issuing.setNotForInvoice(w.a.id, [{ kind: 'receivable', id: owed.id }], true, at(3))).toMatchObject({ kind: 'done', changed: 1 });
+    });
+
+    it('MUT-660: incomeContext gives the split its links, allocations and preferences', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const owed = await recorded(store, w, 2_000);
+      const loose = await captured(store, w, 300);
+      const allocated = await captured(store, w, 500);
+      await store.payments.allocate(w.a.id, allocated.id, [{ receivableId: owed.id, amountMinor: shekels(500) }], at(0));
+      const invoiced = await captured(store, w, 1_180);
+      await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT', fromEntry: { kind: 'payment', id: invoiced.id } }));
+      await store.customers.update(w.a.id, w.customer.id, w.customer.version, { documentsPreference: 'NO_DOCUMENT' }, at(1));
+      const ctx = await store.issuing.incomeContext(w.a.id, [loose.id, allocated.id, invoiced.id]);
+      expect(ctx.defaultPreference).toBe('ON_PAYMENT');
+      expect(ctx.preferences.get(w.customer.id)).toBe('NO_DOCUMENT');
+      expect(ctx.receivables.get(owed.id)).toEqual({ customerId: w.customer.id, notForInvoice: false });
+      expect(ctx.payments.get(loose.id)).toEqual({ documented: false, externalInvoice: false, allocations: [] });
+      expect(ctx.payments.get(allocated.id)).toEqual({ documented: false, externalInvoice: false, allocations: [{ receivableId: owed.id, amountMinor: shekels(500) }] });
+      expect(ctx.payments.get(invoiced.id)?.documented).toBe(true);
+      expect((await store.issuing.incomeContext(w.b.id, [loose.id])).payments.size).toBe(0);
     });
 
     it('MUT-646: keeps every logo; clearing only drops the current one', async () => {

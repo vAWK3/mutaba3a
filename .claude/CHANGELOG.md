@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-270, API 1.127.0-mut569)
+## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-271, API 1.128.0-mut569)
 
 ### Added
 - `GET /v1/issuing/uniform-file?from&to&lang`: every document dated in the range (inclusive, `to` ≤ today) as the OPENFRMT zip: `OPENFRMT/<VAT 8>.<YY>/<MMDDhhmm>/INI.TXT`, `…/BKMVDATA.zip` (holding `BKMVDATA.TXT`) and `report.html` (the printable production summary and documents report, ar | en).
@@ -56,6 +56,23 @@
   - `from`/`to` must be real calendar days from 2000.
 
 ---
+## [Unreleased] - 2026-11-22 — Documents due per client, To issue, "not for invoice", invoice income in the books (MUT-660, ADR-270, API 1.127.0-mut660)
+
+### Added
+- Server: `documentsDue` (`server/src/issuing/documents-due.ts`), `splitIncome`/`invoiceStatusOf` (`server/src/income/invoice-class.ts`), `invoiceSplitOf` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`). Routes in `routes/documents-due.ts`: GET /v1/documents-due (by client; view=not-for-invoice; olderThanMonths), GET /v1/documents-due/count, POST /v1/documents-due/issue, POST /v1/documents-due/not-for-invoice, PUT /v1/{receivables,payments}/{id}/not-for-invoice. Store: `issuing.dueInputs`, `incomeContext`, `setNotForInvoice` (memory + Prisma, contract-tested).
+- Migration `20261122230000_mut660_documents_due`: `DocumentsPreference` enum, `customers.documentsPreference`, `issuer_details.defaultDocumentsPreference`, `receivables/payments.notForInvoice`, `issued_documents (organizationId, receivableId|paymentId)` indexes.
+- Portal: Documents › To issue (`DocumentsDuePage`), Home's `ToIssueGroup`, `NotForInvoiceAction` on Owed and Paid rows, `DocumentsPreferenceField` on the client page, the profile default in the invoicing defaults step, Reports' `InvoiceSplitCard`; `documentsDueQueries`. i18n ar+en.
+- Books: `invoiceSplit` on GET /v1/summaries/activity and the share-link summary; two lines in the monthly summary; `invoice_status` in the Excel Income sheet.
+- Release-QA: `portal.invoicing.to-issue-issue-all`, `to-issue-bulk-not-for-invoice`, `not-for-invoice-refused`, `client-documents-preference`, `portal.reports.invoice-split`.
+
+### Changed
+- Issuing for an entry decides take vs link (`fromEntryMode`): agreements' charges, credited Owed, allocated payments and no-client invoice-receipts are issued linked only (nothing posted). A no-client 320 is accepted for a Received entry.
+- `issueOne` extracted from POST /v1/issued-documents and reused by Issue all. Receivables and payments carry `notForInvoice`; customers `documentsPreference`; issuer details `defaultDocumentsPreference`.
+- This device's snapshot 21 → 22 (`addDocumentsFields`).
+
+### Why
+- Home's To issue box, MUT-661 and the books all need to know what each income entry is due, per client, without a stored flag that can drift.
+
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

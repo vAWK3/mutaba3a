@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import type { DocumentsPreference } from '../../api/client';
 import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { Input, Select, Textarea } from '../../../components/ui/Input';
@@ -10,6 +11,9 @@ import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
 import { useIssuingStyles } from '../../data/issuedQueries';
 import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuerLogo } from '../../data/issuingQueries';
 import { DEFAULT_INK, INKS, wholeNumber, type PaperModel } from './setupSteps';
+
+/** MUT-660: the documents preference choices, in the order the client page offers them. */
+const DOCUMENTS_PREFERENCES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
 
 /**
  * MUT-646: the five steps' forms. Each saves on its own (AC2) and moves on; each reports what it holds while typed
@@ -230,6 +234,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
     bankDetails: issuer?.bankDetails ?? '',
     footerNote: issuer?.footerNote ?? '',
     offerAfterSave: issuer?.offerAfterSave ?? true,
+    defaultDocumentsPreference: (issuer?.defaultDocumentsPreference ?? 'ON_PAYMENT') as DocumentsPreference,
   });
   if (!issuer) return <p className="hp-muted">{t('hosted.invoicing.defaults.needsDetails')}</p>;
 
@@ -243,7 +248,7 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
   const submit = (event: FormEvent) => {
     event.preventDefault();
     if (daysInvalid) return;
-    const body = { documentStyle: form.documentStyle, ink: form.ink, defaultLanguage: form.defaultLanguage, pricesIncludeVat: form.pricesIncludeVat, paymentTermsDays: days, bankDetails: form.bankDetails.trim() || null, footerNote: form.footerNote.trim() || null, offerAfterSave: form.offerAfterSave };
+    const body = { documentStyle: form.documentStyle, ink: form.ink, defaultLanguage: form.defaultLanguage, pricesIncludeVat: form.pricesIncludeVat, paymentTermsDays: days, bankDetails: form.bankDetails.trim() || null, footerNote: form.footerNote.trim() || null, offerAfterSave: form.offerAfterSave, defaultDocumentsPreference: form.defaultDocumentsPreference };
     save.mutate({ version: issuer.version, body }, { onSuccess: onDone });
   };
 
@@ -303,6 +308,18 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
         ]}
         onChange={(value) => change('offerAfterSave', value === 'yes')}
       />
+      {/* MUT-660: the documents a client with no preference of its own is due. */}
+      <label htmlFor="issuer-documents-preference" className="hp-filter-label">
+        {t('hosted.invoicing.defaults.documentsPreference')}
+      </label>
+      <Select id="issuer-documents-preference" value={form.defaultDocumentsPreference} onChange={(e) => change('defaultDocumentsPreference', e.target.value as DocumentsPreference)}>
+        {DOCUMENTS_PREFERENCES.map((p) => (
+          <option key={p} value={p}>
+            {t(`hosted.client.documents.choices.${p}`)}
+          </option>
+        ))}
+      </Select>
+      <p className="hp-muted">{t('hosted.invoicing.defaults.documentsPreferenceHint')}</p>
       <SaveError error={save.error} />
       <StepActions pending={save.isPending} onLater={onDone} />
     </form>

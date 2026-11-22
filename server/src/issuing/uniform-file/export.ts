@@ -5,7 +5,7 @@ import { encodeLine, FieldOverflowError, isoDate } from './format.js';
 import { renderRecord, type FieldValue, type RecordCode } from './layout.js';
 
 /**
- * MUT-569 (ADR-270): issued documents → the uniform file (מבנה אחיד 1.31): INI.TXT and BKMVDATA.TXT. Pure: the route
+ * MUT-569 (ADR-271): issued documents → the uniform file (מבנה אחיד 1.31): INI.TXT and BKMVDATA.TXT. Pure: the route
  * reads the documents and passes the clock and the primary id in.
  *
  * - BKMVDATA: A100, then per document its C100, its D110 lines (305, 320, 330) and its D120 payment (320, 400; D4),

@@ -22,6 +22,7 @@ import {
   UpdateCustomerRequestSchema,
 } from '../schemas.js';
 import { serializeCustomer } from '../serializers.js';
+import { issuingProfileOf } from './issuing.js';
 import {
   conflictResponse,
   encodeNextCursor,
@@ -182,6 +183,11 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       if (body.vatTreatment !== undefined) patch.vatTreatment = body.vatTreatment;
       if (body.taxId !== undefined) patch.taxId = body.taxId?.trim() ? validTaxId(body.taxId) : null;
       if (body.address !== undefined) patch.address = body.address?.trim() || null;
+      // MUT-660: a person sets it, on an invoicing profile only (an API key or Malafat gets 404, as the issuing routes do).
+      if (body.documentsPreference !== undefined) {
+        await issuingProfileOf(store, c, false);
+        patch.documentsPreference = body.documentsPreference;
+      }
 
       const result = await store.customers.update(organization.id, c.req.valid('param').customerId, c.get('expectedVersion'), patch, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No such customer');

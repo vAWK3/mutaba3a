@@ -104,7 +104,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const language_ = (issuer.data?.defaultLanguage ?? 'he') as IssueDocumentRequest['language'];
   const takesPayment = docType === 'TAX_INVOICE_RECEIPT' || docType === 'RECEIPT';
   // An exempt dealer issues receipts only (the issuer is loaded before this form renders, so the first type is right).
-  const needsCustomer = docType !== 'RECEIPT';
+  // MUT-660 (N1): money received with no client takes its invoice-receipt with no client (linked to the entry).
+  const noClientEntry = start.fromEntry?.kind === 'received' && !start.customerId;
+  const needsCustomer = docType !== 'RECEIPT' && !noClientEntry;
 
   // The due date follows the profile's payment terms once the issuer is read.
   const terms = issuer.data?.paymentTermsDays;

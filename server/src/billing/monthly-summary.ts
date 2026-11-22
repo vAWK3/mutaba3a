@@ -2,6 +2,7 @@ import { addMonths, compareIsoDates, endOfMonth, monthOf, todayIn, type IsoDate 
 import { isSupportedCurrency, parseMoney } from '../money.js';
 import type { MonthlySummaryChoice } from '../repositories/ports.js';
 import type { ProfileFigures } from '../summaries/profile-figures.js';
+import { serializeInvoiceSplit } from '../income/invoice-split.js';
 
 /**
  * MUT-535 (plan D3, D4, D7, D10): the monthly summary mail's rules, pure. The job (monthly-summary-mail.ts) reads;
@@ -32,6 +33,8 @@ export interface ProfileBlock {
   overdue: SummaryMoney[];
   /** Overdue entries across the profile's currencies, as the Glance counts them. */
   overdueCount: number;
+  /** MUT-660: invoicing profiles only (absent elsewhere): came in, split. */
+  invoiceSplit?: { invoiceIncome: SummaryMoney[]; notForInvoice: SummaryMoney[] };
 }
 
 /** D3: the calendar month before the run's month in Jerusalem. */
@@ -56,7 +59,9 @@ export function profileBlockOf(profile: { id: string; name: string }, figures: P
   const owed = nonZero(figures.owed.currencies.map((c) => ({ currency: c.currency, amount: c.outstanding })));
   const overdue = nonZero(figures.owed.currencies.map((c) => ({ currency: c.currency, amount: c.overdue })));
   if (cameIn.length === 0 && owed.length === 0) return null;
-  return { profileId: profile.id, name: profile.name, cameIn, owed, overdue, overdueCount: figures.owed.overdueCount };
+  const split = figures.invoiceSplit ? serializeInvoiceSplit(figures.invoiceSplit) : null;
+  const invoiceSplit = split ? { invoiceIncome: nonZero(split.map((r) => ({ currency: r.currency, amount: r.invoiceIncome }))), notForInvoice: nonZero(split.map((r) => ({ currency: r.currency, amount: r.notForInvoice }))) } : null;
+  return { profileId: profile.id, name: profile.name, cameIn, owed, overdue, overdueCount: figures.owed.overdueCount, ...(invoiceSplit ? { invoiceSplit } : {}) };
 }
 
 function nonZero(rows: readonly SummaryMoney[]): SummaryMoney[] {
