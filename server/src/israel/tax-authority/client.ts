@@ -98,7 +98,8 @@ export interface TaxAuthorityClientOptions {
  * spec, so the sandbox's held test dealer (777777723) is how they are learned. Until then a 400 whose only errors carry
  * these codes is read as held; anything else as refused (fix and send again).
  */
-export const HELD_ERROR_CODES: ReadonlySet<number> = new Set<number>();
+// 460 "Invoice not approved" (param vat_number): the sandbox's held dealer 777777723 answers it (live check, 2026-11-22).
+export const HELD_ERROR_CODES: ReadonlySet<number> = new Set<number>([460]);
 
 const DECISION_PATH: Record<DecisionChoice, string> = { CANCEL: 'Cancel', CONTINUE: 'Continue', FURTHER_OBJECTION: 'FurtherObjection' };
 
