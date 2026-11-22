@@ -457,6 +457,9 @@ test('a range with no documents still downloads a valid file, and the card says 
     await expect(card.getByRole('status')).toContainText('No documents in these dates.');
     await expect(card.getByRole('status')).toContainText('The file is still valid');
     expect(api.last('GET', /^\/v1\/issuing\/uniform-file$/)?.query.get('to')).toMatch(/-12-31$/);
+  });
+});
+
 // ---- MUT-660: documents due (To issue), Issue all, not for invoice, a client's documents preference ----
 
 const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
