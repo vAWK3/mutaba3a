@@ -1,6 +1,6 @@
 # MUT-660: documents due per client, To issue, "not for invoice", invoice income in the books
 
-Status: **plan; N1 to N3 decided, waiting for Basel's changes and approval** (2026-11-22). Jira MUT-660, epic MUT-566. Blocks MUT-661. Relates to MUT-662, MUT-657, MUT-648, MUT-647, MUT-568, MUT-663.
+Status: **built** (2026-11-22; plan and wireframes approved by Basel; ADR-270). Canvas D21 (older than 1/3/6/12) and D24 (English invoice_status codes) applied. Jira MUT-660, epic MUT-566. Blocks MUT-661. Relates to MUT-662, MUT-657, MUT-648, MUT-647, MUT-568, MUT-663.
 Design: round 2, alternative B (https://claude.ai/artifact/PpXdTXqS8RQucM8pGiQ5Wi#page-r2). Wireframes of every UI element, web and phone: `mut-660-wireframes.html` (https://claude.ai/artifact/QwmSbRBxnjGiTQpEGd8Sta).
 Source: `~/.gstack/projects/vAWK3-mutaba3a/mut-660-plan.md`, written and engineering-reviewed on 2026-11-22. This brief takes that plan with the review's corrections folded in. It re-checks every code reference against main at 61375c4b (MUT-657 and MUT-659 merged), and keeps to this repo.
 
