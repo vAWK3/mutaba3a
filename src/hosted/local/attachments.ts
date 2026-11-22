@@ -61,6 +61,11 @@ export class LocalAttachmentStorage implements AttachmentStorage {
     throw new Error('Receipts are not moved between profiles on this device');
   }
 
+  /** MUT-647: invoices issued elsewhere are attached signed in only (issuing is hosted). */
+  async write(): Promise<void> {
+    throw new Error('Invoices issued elsewhere are attached when signed in');
+  }
+
   /** After the snapshot saved. A failed delete only leaves an orphan, which the next boot sweeps. */
   async flushRemovals(): Promise<void> {
     const keys = [...this.staged];
@@ -116,6 +121,10 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
   }
 
   /** The interface's, for moving a receipt between profiles (MUT-503); the carry-over never calls it. */
+  async write(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    this.stored.set(key, { bytes: bytes.slice().buffer, type: contentType });
+  }
+
   async copy(from: string, to: string): Promise<void> {
     const file = this.stored.get(from);
     if (!file) throw new Error(`No file at ${from}`);

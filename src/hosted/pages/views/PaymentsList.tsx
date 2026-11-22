@@ -7,6 +7,7 @@ import { ClientFilter, DateFilter, FilterBar } from '../../components/FilterCont
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
+import { useExternalInvoiceColumn } from '../../components/ExternalInvoiceColumn';
 import { isNarrowed, splitIncomeDrawer, type PaymentFilters, type PaymentsPageSearch, type PaymentStatusFilter } from '../../data/filters';
 import { canOpenPayment, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
@@ -40,6 +41,10 @@ interface PaymentRow {
   /** MUT-224: the user's own posted capture on a profile they own: its date can be changed. */
   redatable: boolean;
 }
+
+// MUT-647: a reversed payment takes no invoice issued elsewhere.
+const takesExternal = (r: PaymentRow) => r.status === 'POSTED';
+const amountOf = (r: PaymentRow) => r.amount;
 
 function shape(items: Payment[], customers: Map<string, Customer>, language: 'en' | 'ar', methodLabel: (method: string) => string, redatable: (p: Payment) => boolean): PaymentRow[] {
   return items.map((p) => ({
@@ -85,6 +90,7 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
         : undefined,
     [list.data, customers.data, language, t, profile, userId, writable],
   );
+  const external = useExternalInvoiceColumn('RECEIVED', rows, amountOf, takesExternal);
 
   const toggle = useCallback(
     (id: string) =>
@@ -133,8 +139,9 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
           </span>
         ),
       },
+      ...(external.column ? [external.column] : []),
     ],
-    [t, fixedCustomerId, open, toggle],
+    [t, fixedCustomerId, open, toggle, external.column],
   );
 
   const status = filters.status ?? 'ALL';
@@ -181,11 +188,14 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
               // The first cell holds the expander, and a button can't nest a button (eng review R5).
               linkColumn="received"
               canOpen={(row) => row.redatable}
+              onRowFileDrop={external.onRowFileDrop}
+              canDropFile={external.canDropFile}
             />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      {external.drawer}
     </>
   );
 }

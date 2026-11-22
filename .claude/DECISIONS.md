@@ -6869,6 +6869,21 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** the issue drawer is reusable by MUT-648 (offer after saving income) and MUT-647. Paid status per row is read on the document page only (no request per row).
 
+
+## ADR-267: An Invoice Issued Elsewhere Is Kept Beside Its Entry, Never Numbered Here (MUT-647)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-647-external-invoice.md`; wireframes round 3, A+B).
+
+**Decision:**
+1. An invoice another system issued is attached to the Owed or Received it belongs to: one live one per entry (`external_invoices`, a partial unique index on the live row). It is never numbered by MTB3A, never counted in its numbering, and never goes in the uniform file.
+2. The file is the entry's INVOICE attachment, written by the issuing store in the same transaction as the link (sessions can't write the attachments domain: attachments are Malafat's). The server writes the bytes itself (the bucket has no CORS for a browser PUT). Removing it soft-deletes both.
+3. `POST /v1/issuing/external-invoices/read` reads the number, date and total with the receipts reader (ADR-199) plus a number reader for Hebrew, Arabic and English invoices. Nothing is stored; nothing read is an error, the person types it. No upload-day window: an old invoice is fine.
+4. The person confirms or corrects every field. An amount that differs from the entry's is said, never blocking.
+5. While an entry has one, issuing a MTB3A document from that entry is refused (409 `EXTERNAL_INVOICE_ATTACHED`, with the number). An Owed MTB3A issued takes none (409 `ISSUED_HERE`).
+6. Same gate as issuing: the owner's `invoicing` feature; owner writes, accountants read and open.
+
+**Consequences:** a separate table, not new attachment columns, so the signed-out portal's local format needs no migration (signed out, nothing is attached). The phone half (share a file to an entry) follows MUT-573.
+
 ## ADR-268: After Saving Income, the Toast Offers Its Document, Linked to the Entry (MUT-648)
 
 **Status:** Accepted (2026-11-22; wireframe round 3, variant 1; Basel P2-a).

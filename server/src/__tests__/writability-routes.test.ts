@@ -181,8 +181,9 @@ describe('every route sits inside the matrix', () => {
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
     // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) the PDF view (MUT-640), the business lookup (MUT-642),
-    // the invoicing setup and its logo (MUT-646), the styles list (MUT-570) and the Tax Authority connection's status (MUT-571).
-    expect(SESSION_READS.length).toBe(53);
+    // the invoicing setup and its logo (MUT-646), the styles list (MUT-570), the Tax Authority connection's status (MUT-571),
+    // and the invoices issued elsewhere and their files (MUT-647).
+    expect(SESSION_READS.length).toBe(55);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
