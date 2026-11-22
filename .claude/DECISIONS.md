@@ -6868,3 +6868,17 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. Style choices come from `GET /v1/issuing/styles` (Basel: new styles appear without a portal release).
 
 **Consequences:** the issue drawer is reusable by MUT-648 (offer after saving income) and MUT-647. Paid status per row is read on the document page only (no request per row).
+
+## ADR-268: After Saving Income, the Toast Offers Its Document, Linked to the Entry (MUT-648)
+
+**Status:** Accepted (2026-11-22; wireframe round 3, variant 1; Basel P2-a).
+
+**Decision:**
+1. The offer appears only where the person holds `invoicing`, on an owned Business profile with the setup done, in shekels, and with the business's `offerAfterSave` on (default true, in the defaults step). Nobody else pays for a request: the setup is read only for `invoicing` holders.
+2. An Owed suggests a tax invoice. A Received suggests an invoice-receipt (with a client), then a receipt.
+3. Each opens the MUT-570 drawer linked to the entry (`fromEntry`), with one line for the entry's amount, VAT included. The VAT is taken out of the amount, so the document's gross equals the entry and the server's ENTRY_MISMATCH rule holds.
+4. The portal toast carries the suggested document as its action and the other as a quieter second action. This replaces the wireframe's split-button menu; both choices stay visible and reachable by keyboard.
+5. An Owed with no document yet offers its tax invoice from its row (E4).
+
+**Consequences:** the issue drawer now takes `fromEntry`. When a Received is taken over, the drawer leaves out the payment section, since the entry already says how the money came in. The phone half follows MUT-573.
+

@@ -4447,6 +4447,8 @@ export interface IssuerDetailsInput {
   paymentTermsDays: number | null;
   bankDetails: string | null;
   footerNote: string | null;
+  /** MUT-648: offer to issue a document after saving income. */
+  offerAfterSave: boolean;
 }
 
 export interface IssuerDetailsRecord extends IssuerDetailsInput {

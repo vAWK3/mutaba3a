@@ -1,6 +1,6 @@
 # MUT-641 — Signed issued-document PDFs (Instruction 18B)
 
-Status: **Built 2026-11-22** (epic MUT-566 lane, Basel's priority run) · Server only · Builds on MUT-640 (ADR-261) and MUT-646 · ADR-265 · API 1.121.0-mut641
+Status: **Built 2026-11-22** (epic MUT-566 lane, Basel's priority run) · Server only · Builds on MUT-640 (ADR-261) and MUT-646 · ADR-265 · API 1.124.0-mut641
 
 ## Problem
 

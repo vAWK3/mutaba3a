@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Issued-document PDFs leave signed: PAdES with a time-stamp, the original kept once (MUT-641, ADR-265, API 1.121.0-mut641)
+## [Unreleased] - 2026-11-22 — Issued-document PDFs leave signed: PAdES with a time-stamp, the original kept once (MUT-641, ADR-265, API 1.124.0-mut641)
 
 ### Added
 - Every issued-document PDF that leaves is digitally signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp): `GET` and `POST /v1/issued-documents/{id}/pdf`. The draft preview stays unsigned.
@@ -49,6 +49,22 @@
 
 ### Technical
 - `server/src/issuing/pdf/sign/` (cms, pdf, timestamp, keys, verify). Dependencies `pkijs` 3.4.3, `asn1js` 3.1.0; `pdf-lib` moved to runtime. Migration `20261122180000_mut641_issued_document_originals` (additive). Purge catalog: originals kept with the documents (MUT-644). The MUT-640 gate also runs on the signed files.
+
+## [Unreleased] - 2026-11-22 — Offer to issue after saving income (MUT-648, ADR-268, API 1.123.0-mut648)
+
+### Added
+- After saving income on an invoicing profile (the person holds `invoicing`, the setup is done), the save toast offers the document it takes:
+  - an Owed: **Issue a tax invoice**;
+  - a Received: **Issue a tax invoice-receipt** (with a client) and **Issue a receipt**.
+
+  The issue drawer opens prefilled (client, one line for the amount with VAT included) and linked to the entry (`fromEntry`, I1-a), so the document takes it over: no second Owed or Received. The toast gained a quieter second action for the other document.
+- An Owed with no document yet offers **Issue a tax invoice** on its row (E4).
+- `issuer_details.offerAfterSave` (on by default), set in the setup's defaults step ("After saving income, offer to issue its document").
+
+### Out (stated)
+- The phone half waits for MUT-573's wizard.
+- A receipt applied to the client's open invoice of the same amount (the wireframe's first choice for a Received) is a follow-up: it combines `fromEntry` with `appliesToDocumentId`.
+- The same row action on Received is a follow-up too.
 
 ## [Unreleased] - 2026-11-22 — Connect to the Tax Authority; allocation numbers on issued invoices (MUT-571, MUT-572, ADR-264, API 1.120.0-mut571)
 

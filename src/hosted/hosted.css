@@ -1727,3 +1727,6 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 @media (max-width: 760px) {
   .hp-issue-line-numbers, .hp-issue-dates { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* MUT-648: the save toast's second document choice, quieter than the first. */
+.hp-toast-action--quiet { margin-inline-start: 0; color: var(--muted); }

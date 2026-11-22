@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.121.0-mut641
+  version: 1.124.0-mut641
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9508,6 +9508,9 @@ components:
         footerNote:
           type: string
           nullable: true
+        offerAfterSave:
+          type: boolean
+          description: "MUT-648: offer to issue a document after saving income"
         version:
           type: integer
       required:
@@ -9526,6 +9529,7 @@ components:
         - paymentTermsDays
         - bankDetails
         - footerNote
+        - offerAfterSave
         - version
     DealerType:
       type: string
@@ -9612,6 +9616,9 @@ components:
           nullable: true
           maxLength: 300
           description: Printed at the foot of every document
+        offerAfterSave:
+          type: boolean
+          description: "MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)"
       required:
         - documentStyle
         - ink

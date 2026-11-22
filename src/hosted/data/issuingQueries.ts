@@ -20,8 +20,9 @@ export function useIssuingSetup(profileId: string, enabled = true) {
 }
 
 /** The details, or null before the first save (the server answers 404 ISSUER_DETAILS_REQUIRED). */
-export function useIssuer(profileId: string) {
+export function useIssuer(profileId: string, enabled = true) {
   return useQuery({
+    enabled,
     queryKey: issuerKey(profileId),
     queryFn: async ({ signal }): Promise<IssuerDetails | null> => {
       try {
