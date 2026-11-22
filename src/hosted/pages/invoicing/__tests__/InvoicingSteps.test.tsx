@@ -94,7 +94,7 @@ describe('invoicing setup steps (MUT-646)', () => {
     expect(paper).toHaveTextContent('Tax invoice 1');
     await userEvent.type(screen.getByLabelText('Payment terms, in days'), '30');
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(api.saveDefaults).toHaveBeenCalledWith('p1', 1, { documentStyle: 'MODERN', ink: 'BLUE', defaultLanguage: 'en', pricesIncludeVat: false, paymentTermsDays: 30, bankDetails: null, footerNote: null, offerAfterSave: true });
+    expect(api.saveDefaults).toHaveBeenCalledWith('p1', 1, { documentStyle: 'MODERN', ink: 'BLUE', defaultLanguage: 'en', pricesIncludeVat: false, paymentTermsDays: 30, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' });
   });
 
   it('defaults: waits for the details', () => {

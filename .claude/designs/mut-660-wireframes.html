@@ -1,0 +1,654 @@
+<title>Documents Due Wireframes</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+Arabic:wght@400;500;700&family=Noto+Serif:wght@700&display=swap" rel="stylesheet">
+<style>
+/* Brand primitives (src/styles/brand/mutaba3a-theme.css), named by DESIGN.md role */
+:root {
+  --bg: #FCF6ED; --surface: #FFFCF7; --surface-2: #F4F2FB; --line: #E6E2ED;
+  --text: #392F4B; --muted: #564E68; --faint: #8a8299;
+  --accent: #795DBA; --accent-solid: #5E439E; --accent-text: #5E439E;
+  --sel: #E0D7FF; --on-sel: #4D387E;
+  --ok: #00513E; --ok-bg: #BAEBD4; --warn: #67450A; --warn-bg: #F6E8B3; --err: #742B35; --err-bg: #FFCED5;
+  --on-fill: #FCF6ED; --frame: 0 30px 60px -30px rgba(57,47,75,.35), 0 0 0 1px rgba(57,47,75,.08);
+  --glass: rgba(255,252,247,.78); --lift: 0 8px 30px rgba(57,47,75,.12), 0 1px 3px rgba(57,47,75,.08);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #221B2D; --surface: #2E273C; --surface-2: #3B334C; --line: #4B435A;
+    --text: #F4EEE4; --muted: #BAB3C8; --faint: #8f879e;
+    --accent: #BCA9F7; --accent-solid: #C8B7FF; --accent-text: #C8B7FF;
+    --sel: #453A64; --on-sel: #DBCEFF;
+    --ok: #A5E9CA; --ok-bg: #134E39; --warn: #F0DE99; --warn-bg: #57451E; --err: #FFC2CB; --err-bg: #62313A;
+    --on-fill: #221B2D; --frame: 0 30px 60px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08);
+    --glass: rgba(46,39,60,.78); --lift: 0 8px 30px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #221B2D; --surface: #2E273C; --surface-2: #3B334C; --line: #4B435A;
+  --text: #F4EEE4; --muted: #BAB3C8; --faint: #8f879e;
+  --accent: #BCA9F7; --accent-solid: #C8B7FF; --accent-text: #C8B7FF;
+  --sel: #453A64; --on-sel: #DBCEFF;
+  --ok: #A5E9CA; --ok-bg: #134E39; --warn: #F0DE99; --warn-bg: #57451E; --err: #FFC2CB; --err-bg: #62313A;
+  --on-fill: #221B2D; --frame: 0 30px 60px -30px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.08);
+  --glass: rgba(46,39,60,.78); --lift: 0 8px 30px rgba(0,0,0,.5), 0 1px 3px rgba(0,0,0,.4);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--bg); color: var(--text); font: 100%/1.55 "Noto Sans Arabic", system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+button, select { font: inherit; color: inherit; }
+button { cursor: pointer; border: 0; background: none; padding: 0; }
+.num, bdi.m { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 48px 16px 120px; }
+
+/* document */
+.eyebrow { font-size: .8125rem; color: var(--muted); margin: 0 0 8px; }
+h1.doc { font-family: "Noto Serif", "Noto Sans Arabic", serif; font-size: clamp(1.9rem, 4.2vw, 2.75rem); line-height: 1.1; margin: 0; }
+.lede { font-size: 1.0625rem; color: var(--muted); max-width: 780px; margin: 14px 0 0; }
+.lede b { color: var(--text); }
+.toggles { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 24px; position: sticky; top: 10px; z-index: 20; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
+.seg button { padding: 6px 14px; border-radius: 999px; font-size: .875rem; color: var(--muted); min-height: 32px; }
+.seg button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.12); }
+.toc { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 18px; font-size: .875rem; }
+.toc a { color: var(--accent-text); text-decoration: none; }
+.screen-sec { margin-top: 88px; scroll-margin-top: 70px; }
+.screen-sec .n { font-size: .8125rem; color: var(--muted); }
+.screen-sec h2 { font-family: "Noto Serif", "Noto Sans Arabic", serif; font-size: 1.6rem; margin: 2px 0 8px; line-height: 1.2; }
+.screen-sec .idea { color: var(--muted); max-width: 820px; margin: 0; }
+.screen-sec .idea b { color: var(--text); }
+.stage { display: flex; gap: 36px; align-items: flex-start; flex-wrap: wrap; margin-top: 24px; }
+.desk-wrap { flex: 1 1 760px; min-width: 0; overflow-x: auto; padding: 4px 4px 28px; margin: -4px; }
+.phone-wrap { flex: 0 0 auto; margin-inline: auto; padding-bottom: 28px; }
+.cap { text-align: center; font-size: .8125rem; color: var(--muted); margin-top: 10px; max-width: 375px; }
+.notes { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 28px; max-width: 980px; margin-top: 4px; }
+.notes h3 { font-size: .8125rem; color: var(--muted); margin: 0 0 4px; }
+.notes ul { margin: 0; padding-inline-start: 18px; font-size: .9375rem; }
+.notes li + li { margin-top: 4px; }
+@media (max-width: 860px) { .notes { grid-template-columns: 1fr; gap: 14px; } }
+
+/* frames */
+.desk { width: 100%; min-width: 760px; border-radius: 14px; overflow: hidden; background: var(--bg); box-shadow: var(--frame); }
+.desk .bar { height: 34px; display: flex; align-items: center; gap: 7px; padding: 0 14px; background: var(--surface-2); border-bottom: 1px solid var(--line); direction: ltr; }
+.desk .bar i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); display: block; }
+.desk .bar .url { margin-inline: auto; font-size: .75rem; color: var(--muted); background: var(--surface); padding: 2px 14px; border-radius: 7px; font-family: "IBM Plex Mono", monospace; }
+.desk .scr { height: 620px; overflow: auto; position: relative; }
+.desk.short .scr { height: auto; min-height: 380px; }
+.chrome { position: sticky; top: 0; z-index: 3; display: flex; align-items: center; gap: 12px; padding: 12px 22px; }
+.pill { margin-inline: auto; display: flex; gap: 2px; padding: 4px; border-radius: 999px; background: var(--glass); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); box-shadow: var(--lift); }
+.pill span { padding: 6px 14px; border-radius: 999px; font-size: .8125rem; color: var(--muted); white-space: nowrap; }
+.pill span.on { background: var(--surface); color: var(--text); font-weight: 700; }
+.island, .corner { display: grid; place-items: center; height: 36px; min-width: 36px; padding: 0 4px; border-radius: 999px; background: var(--glass); box-shadow: var(--lift); font-size: .75rem; color: var(--muted); }
+.av { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; font-size: .6875rem; font-weight: 700; color: var(--on-fill); background: var(--accent); }
+.page { padding: 4px 36px 48px; }
+.ph { display: flex; align-items: baseline; gap: 12px; margin: 6px 0 14px; flex-wrap: wrap; }
+.ph h3 { margin: 0; font-family: "Noto Serif", "Noto Sans Arabic", serif; font-size: 1.75rem; line-height: 1.15; }
+.ph .sub { color: var(--muted); font-size: .875rem; }
+.ph .end { margin-inline-start: auto; }
+.tabs { display: flex; gap: 22px; border-bottom: 1px solid var(--line); margin-bottom: 16px; font-size: .9375rem; }
+.tabs span { padding: 8px 0; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.tabs span.on { color: var(--accent-text); border-color: var(--accent); font-weight: 700; }
+.tabs .new { font-size: .6875rem; font-weight: 700; color: var(--on-sel); background: var(--sel); border-radius: 999px; padding: 1px 7px; margin-inline-start: 6px; }
+
+/* controls */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 36px; padding: 6px 16px; border-radius: 999px; font-size: .875rem; font-weight: 700; background: var(--accent-solid); color: var(--on-fill); white-space: nowrap; }
+.btn.sec { background: var(--surface); color: var(--text); box-shadow: inset 0 0 0 1px var(--line); }
+.btn.danger { background: var(--err); color: var(--on-fill); }
+.btn[disabled] { opacity: .45; cursor: not-allowed; }
+.lb { color: var(--accent-text); font-size: .8125rem; font-weight: 700; min-height: 44px; padding: 0 6px; display: inline-flex; align-items: center; white-space: nowrap; }
+.lb.danger { color: var(--err); }
+.lb[disabled] { color: var(--faint); cursor: not-allowed; }
+.segc { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface-2); box-shadow: 0 0 0 1px var(--line); }
+.segc button { padding: 5px 14px; border-radius: 999px; font-size: .8125rem; color: var(--muted); min-height: 32px; }
+.segc button[aria-pressed="true"] { background: var(--surface); color: var(--text); font-weight: 700; box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.sel { appearance: none; -webkit-appearance: none; min-height: 36px; padding: 6px 14px; padding-inline-end: 32px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-2) no-repeat; background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%); background-size: 5px 5px; background-position: calc(100% - 16px) 50%, calc(100% - 11px) 50%; font-size: .875rem; }
+[dir="rtl"] .sel { background-position: 16px 50%, 11px 50%; }
+.chk { width: 18px; height: 18px; accent-color: var(--accent-solid); margin: 0; flex: none; }
+.badge { font-size: .6875rem; font-weight: 700; padding: 2px 9px; border-radius: 999px; white-space: nowrap; display: inline-block; }
+.b-neutral { background: var(--surface-2); color: var(--muted); box-shadow: inset 0 0 0 1px var(--line); }
+.b-acc { background: var(--sel); color: var(--on-sel); }
+.b-ok { background: var(--ok-bg); color: var(--ok); }
+.b-warn { background: var(--warn-bg); color: var(--warn); }
+.b-err { background: var(--err-bg); color: var(--err); }
+.banner { display: flex; gap: 10px; align-items: flex-start; padding: 10px 14px; border-radius: 14px; font-size: .875rem; margin: 0 0 14px; }
+.banner.err { background: var(--err-bg); color: var(--err); }
+.banner.info { background: var(--sel); color: var(--on-sel); }
+.banner .lb { min-height: 0; padding: 0; color: inherit; text-decoration: underline; }
+
+/* to-issue list */
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.toolbar .lbl { font-size: .8125rem; color: var(--muted); }
+.toolbar .end { margin-inline-start: auto; display: flex; gap: 10px; align-items: center; }
+.grp { background: var(--surface); border-radius: 18px; box-shadow: 0 0 0 1px var(--line); margin-bottom: 14px; overflow: hidden; }
+.grp-h { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--line); min-height: 52px; }
+.grp-h h4 { margin: 0; font-size: 1rem; }
+.grp-h .pref { font-size: .75rem; color: var(--muted); }
+.grp-h .end { margin-inline-start: auto; display: flex; gap: 8px; align-items: center; }
+.row { display: flex; align-items: center; gap: 12px; padding: 6px 16px; min-height: 56px; }
+.row + .row { border-top: 1px solid var(--line); }
+.row .what { flex: 1; min-width: 0; font-size: .9375rem; }
+.row .what small { display: block; color: var(--muted); font-size: .8125rem; }
+.row .amt { font-weight: 500; min-width: 92px; text-align: end; }
+.row.inert .what small.why { color: var(--warn); }
+.row.gone { display: none; }
+.bulk { position: sticky; bottom: 14px; z-index: 4; margin: 10px auto 0; max-width: 640px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 10px 14px; border-radius: 18px; background: var(--surface); box-shadow: var(--lift), 0 0 0 1px var(--line); }
+.bulk .t { flex: 1; font-size: .875rem; min-width: 180px; }
+.bulk .t b { display: block; font-size: .9375rem; }
+.empty { text-align: center; padding: 48px 16px; border-radius: 18px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); }
+.empty .art { width: 64px; height: 64px; border-radius: 50%; margin: 0 auto 12px; background: var(--sel); display: grid; place-items: center; position: relative; }
+.empty .art::after { content: ""; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); }
+.empty h4 { margin: 0 0 4px; font-size: 1.0625rem; } .empty p { margin: 0; color: var(--muted); font-size: .875rem; }
+
+/* drawer */
+.overlay { position: absolute; inset: 0; background: rgba(34,27,45,.32); z-index: 8; display: none; }
+.drawer { position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: 400px; max-width: 100%; z-index: 9; background: var(--surface); box-shadow: var(--lift); display: none; flex-direction: column; }
+.show .overlay, .show .drawer { display: flex; }
+.drawer .dh { display: flex; align-items: center; gap: 10px; padding: 16px 18px; border-bottom: 1px solid var(--line); font-weight: 700; }
+.drawer .dh .x { margin-inline-start: auto; width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--surface-2); }
+.drawer .db { flex: 1; padding: 16px 18px; overflow: auto; font-size: .875rem; }
+.drawer .df { display: flex; justify-content: flex-end; gap: 8px; padding: 12px 18px; border-top: 1px solid var(--line); background: var(--bg); }
+.field { margin-bottom: 12px; } .field label { display: block; font-size: .8125rem; color: var(--muted); margin-bottom: 4px; }
+.field .v { min-height: 38px; padding: 8px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--line); }
+.linked { font-size: .8125rem; color: var(--on-sel); background: var(--sel); border-radius: 12px; padding: 8px 12px; margin-bottom: 12px; }
+
+/* toast */
+.toast { position: absolute; inset-inline: 0; bottom: 18px; margin: 0 auto; width: max-content; max-width: 92%; z-index: 12; display: flex; gap: 14px; align-items: center; padding: 10px 16px; border-radius: 14px; background: var(--text); color: var(--bg); font-size: .875rem; box-shadow: var(--lift); }
+.toast button { color: var(--sel); font-weight: 700; }
+:root[data-theme="dark"] .toast button { color: var(--accent-solid); }
+
+/* home */
+.lanes { display: grid; grid-template-columns: 260px minmax(0,1fr); gap: 22px; align-items: start; }
+.addbox { background: var(--surface); border-radius: 18px; padding: 14px; box-shadow: 0 0 0 1px var(--line); font-size: .875rem; }
+.addbox .dz { border: 1.5px dashed var(--line); border-radius: 14px; padding: 18px 10px; text-align: center; color: var(--muted); margin-bottom: 10px; }
+.addbox .dz b { display: block; color: var(--text); }
+.hg { background: var(--surface); border-radius: 18px; padding: 12px 16px; box-shadow: 0 0 0 1px var(--line); margin-bottom: 12px; }
+.hg.new { box-shadow: 0 0 0 2px var(--accent); }
+.hg-h { display: flex; align-items: baseline; gap: 8px; margin-bottom: 6px; }
+.hg-h h4 { margin: 0; font-size: 1rem; }
+.hg-h .c { font-size: .75rem; font-weight: 700; color: var(--on-sel); background: var(--sel); border-radius: 999px; padding: 1px 8px; }
+.hg-h a { margin-inline-start: auto; font-size: .8125rem; color: var(--accent-text); text-decoration: none; font-weight: 700; }
+.thumbs { display: flex; gap: 10px; } .thumbs i { width: 74px; height: 56px; border-radius: 10px; background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line); display: block; }
+.plist { list-style: none; margin: 0; padding: 0; font-size: .875rem; }
+.plist li { display: flex; justify-content: space-between; gap: 8px; padding: 7px 0; }
+.plist li + li { border-top: 1px solid var(--line); }
+.plist .late { color: var(--err); }
+.plist .k { color: var(--muted); }
+.youtag { position: absolute; font-size: .6875rem; font-weight: 700; color: var(--on-fill); background: var(--accent-solid); border-radius: 999px; padding: 2px 8px; transform: translateY(-50%); }
+
+/* tables */
+.tbl { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 18px; overflow: hidden; box-shadow: 0 0 0 1px var(--line); font-size: .875rem; }
+.tbl th { text-align: start; font-size: .75rem; color: var(--muted); font-weight: 500; padding: 10px 14px; border-bottom: 1px solid var(--line); }
+.tbl td { padding: 8px 14px; border-top: 1px solid var(--line); vertical-align: middle; }
+.tbl tr:first-child td { border-top: 0; }
+.tbl td.amt { text-align: end; }
+.tbl .acts { display: flex; gap: 2px; justify-content: flex-end; flex-wrap: wrap; }
+.tbl tr.flash td { background: var(--sel); }
+.card { background: var(--surface); border-radius: 18px; padding: 16px 18px; box-shadow: 0 0 0 1px var(--line); margin-bottom: 14px; }
+.card h4 { margin: 0 0 10px; font-size: 1.0625rem; }
+.kv { display: grid; grid-template-columns: 160px minmax(0,1fr); gap: 8px 16px; align-items: center; font-size: .875rem; }
+.kv .k { color: var(--muted); }
+.help { font-size: .8125rem; color: var(--muted); margin-top: 6px; }
+.due-preview { margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); font-size: .8125rem; }
+.due-preview b { display: block; margin-bottom: 2px; font-size: .75rem; color: var(--muted); font-weight: 500; }
+.split { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 14px; }
+.split .col { background: var(--surface); border-radius: 18px; padding: 14px 16px; box-shadow: 0 0 0 1px var(--line); }
+.split .cur { font-size: .75rem; color: var(--muted); margin-bottom: 6px; }
+.line3 { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; font-size: .9375rem; }
+.line3 + .line3 { border-top: 1px solid var(--line); }
+.line3.sum { font-weight: 700; border-top: 2px solid var(--line); }
+.line3 .k small { display: block; font-size: .75rem; color: var(--muted); font-weight: 400; }
+.bar2 { height: 8px; border-radius: 4px; overflow: hidden; display: flex; background: var(--surface-2); margin: 4px 0 8px; }
+.bar2 i { display: block; background: var(--accent); } .bar2 i + i { background: var(--line); }
+.minitbl { font-family: "IBM Plex Mono", monospace; font-size: .75rem; }
+.minitbl td, .minitbl th { padding: 6px 10px; }
+
+/* phone */
+.phone { width: 375px; height: 760px; border-radius: 46px; padding: 12px; background: #1d1d1f; box-shadow: var(--frame); }
+.phone .ps { width: 100%; height: 100%; border-radius: 36px; overflow: hidden; background: var(--bg); position: relative; display: flex; flex-direction: column; }
+.phone .status { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font-size: .8125rem; font-weight: 700; direction: ltr; }
+.phone .pb { flex: 1; overflow: auto; padding: 2px 16px 100px; }
+.phone .ttl { font-family: "Noto Serif", "Noto Sans Arabic", serif; font-size: 1.6rem; margin: 4px 0 10px; line-height: 1.15; }
+.phone .back { font-size: .9375rem; color: var(--accent-text); min-height: 44px; display: inline-flex; align-items: center; gap: 4px; font-weight: 700; }
+.phone .tabbar { position: absolute; inset-inline: 0; bottom: 0; height: 78px; padding: 8px 18px 22px; display: flex; justify-content: space-around; background: var(--glass); backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px); border-top: 1px solid var(--line); font-size: .6875rem; color: var(--muted); }
+.phone .tabbar span { display: grid; justify-items: center; gap: 2px; }
+.phone .tabbar span::before { content: ""; width: 22px; height: 22px; border-radius: 7px; background: var(--line); }
+.phone .tabbar span.on { color: var(--accent-text); font-weight: 700; } .phone .tabbar span.on::before { background: var(--accent); }
+.strip { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 16px; background: var(--surface); box-shadow: 0 0 0 1px var(--line); margin-bottom: 10px; min-height: 56px; width: 100%; text-align: start; font-size: .9375rem; }
+.strip .dot { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; background: var(--sel); color: var(--on-sel); font-weight: 700; font-size: .8125rem; }
+.strip .tx { flex: 1; } .strip .tx small { display: block; color: var(--muted); font-size: .75rem; }
+.strip .chev { color: var(--faint); }
+.strip.new { box-shadow: 0 0 0 2px var(--accent); }
+.day { font-size: .75rem; color: var(--muted); font-weight: 700; margin: 14px 0 6px; }
+.prow { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line); font-size: .875rem; }
+.prow .ic { width: 30px; height: 30px; border-radius: 9px; background: var(--ok-bg); color: var(--ok); display: grid; place-items: center; flex: none; font-size: .75rem; }
+.prow .tx { flex: 1; min-width: 0; } .prow .tx small { display: block; color: var(--muted); font-size: .75rem; }
+.pg { background: var(--surface); border-radius: 16px; box-shadow: 0 0 0 1px var(--line); margin-bottom: 12px; overflow: hidden; }
+.pg-h { padding: 10px 14px; font-weight: 700; font-size: .9375rem; border-bottom: 1px solid var(--line); display: flex; align-items: baseline; gap: 8px; }
+.pg-h small { color: var(--muted); font-weight: 400; font-size: .75rem; }
+.pr { padding: 10px 14px; } .pr + .pr { border-top: 1px solid var(--line); }
+.pr .top { display: flex; justify-content: space-between; gap: 8px; font-size: .875rem; }
+.pr .top small { display: block; color: var(--muted); font-size: .75rem; }
+.pr .why { font-size: .75rem; color: var(--warn); margin-top: 4px; }
+.pr .acts { display: flex; gap: 8px; margin-top: 8px; }
+.pr .acts .btn { min-height: 40px; flex: 1; font-size: .8125rem; }
+.sheet { position: absolute; inset-inline: 0; bottom: 0; z-index: 9; background: var(--surface); border-radius: 22px 22px 0 0; padding: 8px 16px 30px; box-shadow: var(--lift); display: none; }
+.sheet::before { content: ""; display: block; width: 36px; height: 5px; border-radius: 3px; background: var(--line); margin: 0 auto 10px; }
+.psh .sheet, .psh .overlay { display: block; }
+.sheet h5 { margin: 0 0 8px; font-size: 1rem; }
+.sheet .opt { display: flex; align-items: center; min-height: 48px; border-top: 1px solid var(--line); font-size: .9375rem; width: 100%; text-align: start; }
+.sheet .opt.acc { color: var(--accent-text); font-weight: 700; }
+.sheet .opt[disabled] { color: var(--faint); }
+.sheet .msg { font-size: .8125rem; color: var(--err); background: var(--err-bg); border-radius: 12px; padding: 10px 12px; margin: 8px 0; }
+.ph-note { margin-top: 18px; border: 1.5px dashed var(--line); border-radius: 16px; padding: 16px; font-size: .875rem; color: var(--muted); }
+.ph-note b { color: var(--text); display: block; margin-bottom: 4px; }
+.mail { background: var(--surface); border-radius: 16px; box-shadow: 0 0 0 1px var(--line); padding: 14px; font-size: .875rem; }
+.mail .from { font-size: .75rem; color: var(--muted); }
+.mail h6 { margin: 6px 0 10px; font-size: 1.0625rem; }
+.final { margin-top: 96px; max-width: 820px; padding: 26px; border-radius: 22px; background: var(--surface); box-shadow: var(--frame); }
+.final h2 { margin: 0 0 8px; font-size: 1.4rem; font-family: "Noto Serif", "Noto Sans Arabic", serif; }
+.final li { color: var(--muted); } .final li b { color: var(--text); }
+@media (prefers-reduced-motion: no-preference) { .drawer, .sheet { animation: rise .22s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(8px); } } }
+</style>
+<div class="wrap" id="app"></div>
+<script>
+/* ---------- copy (Arabic first; formal MSA; portal terms from src/hosted/i18n) ---------- */
+const MONTHS = {
+  ar: ['كانون الثاني','شباط','آذار','نيسان','أيار','حزيران','تموز','آب','أيلول','تشرين الأول','تشرين الثاني','كانون الأول'],
+  en: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
+};
+const T = {
+  ar: {
+    langName: 'العربية', eyebrow: 'MUT-660 · مخططات أولية · ويب وهاتف', title: 'المستندات المستحقة لكل عميل',
+    lede: 'كل عنصر واجهة في خطة MUT-660، على الويب (البوابة) وعلى الهاتف جنبًا إلى جنب. <b>جرّبها:</b> حدّد صفوفًا، أصدر، علّم «خارج الفوترة»، غيّر تفضيل العميل. لا شيء هنا يُحفظ.',
+    lang: 'اللغة', theme: 'المظهر', auto: 'تلقائي', light: 'فاتح', dark: 'داكن', reset: 'إعادة البيانات',
+    s1: 'الرئيسية: صندوق «للإصدار»', s2: 'قائمة «للإصدار»', s3: '«خارج الفوترة» على قيد واحد', s4: 'تفضيل مستندات العميل', s5: 'الافتراضي للملف', s6: 'الدفاتر: دخل مفوتر وخارج الفوترة',
+    // shell
+    navHome: 'الرئيسية', navOwed: 'المستحق', navPaid: 'المدفوع', navSpent: 'المصروف', navClients: 'العملاء', navDocs: 'المستندات', profile: 'برمجيات',
+    // home
+    waiting: 'بانتظارك', toReview: 'للمراجعة', overdue: 'عملاء متأخرون في الدفع', seeAll: 'عرض الكل', toIssue: 'للإصدار',
+    homeIssueLine: (n, c) => `${n} ${n === 1 ? 'مستند' : 'مستندات'} للإصدار لـ ${c} ${c === 1 ? 'عميل' : 'عملاء'}`,
+    addTitle: 'أفلت الإيصالات هنا', addHint: 'PDF أو JPEG أو PNG، حتى 10 ميغابايت', addR: 'إضافة إيصال', addI: 'إضافة دخل', daysLate: n => `متأخر ${n} يومًا`,
+    clearT: 'لا شيء بانتظارك الآن.', clearS: 'ستظهر هنا الإيصالات الجديدة والدفعات المتأخرة.', newHere: 'جديد',
+    // documents
+    docs: 'المستندات', tabIssued: 'الصادرة', tabToIssue: 'للإصدار', tabFiles: 'الملفات',
+    segToIssue: n => `للإصدار · ${n}`, segNfi: n => `خارج الفوترة · ${n}`,
+    older: 'أقدم من', any: 'أي تاريخ', months: n => `${n} أشهر`, months12: '12 شهرًا', selectShown: 'تحديد كل الظاهر',
+    issueAll: 'إصدار الكل', issue: 'إصدار', attach: 'إرفاق', nfi: 'خارج الفوترة', back: 'إعادة إلى الفوترة', noClient: 'بلا عميل',
+    types: { TAX_INVOICE: 'فاتورة ضريبية', TAX_INVOICE_RECEIPT: 'فاتورة ضريبية وإيصال', RECEIPT: 'إيصال', PAYMENT_REQUEST: 'طلب دفع' },
+    forOwed: (no) => `للمستحق ${no}`, forPaid: (no) => `للدفعة ${no}`, appliesTo: (d) => `على ${d}`,
+    whyPR: 'طلب الدفع غير متاح للإصدار بعد (MUT-662). أرفق طلبًا صادرًا من جهة أخرى أو علّمه خارج الفوترة.',
+    whyCur: 'تُصدَر المستندات بالشيكل فقط. أرفق فاتورة صادرة من جهة أخرى أو علّمها خارج الفوترة.',
+    selected: n => `${n} محدد`, clear: 'إلغاء التحديد',
+    confirmNfi: n => `تعليم ${n} ${n === 1 ? 'قيد' : 'قيود'} خارج الفوترة؟`, confirmNfiS: 'تخرج من «للإصدار» وتُحتسب خارج الدخل المفوتر. يمكنك إعادتها لاحقًا.',
+    confirmBack: n => `إعادة ${n} ${n === 1 ? 'قيد' : 'قيود'} إلى الفوترة؟`, confirmBackS: 'تعود إلى «للإصدار» إن كانت تحتاج مستندًا.',
+    markN: n => `تعليم ${n}`, backN: n => `إعادة ${n}`, cancel: 'إلغاء', undo: 'تراجع',
+    toastNfi: n => `عُلّم ${n} خارج الفوترة`, toastBack: n => `أُعيد ${n} إلى الفوترة`, toastIssued: (n, c) => `صدر ${n} ${n === 1 ? 'مستند' : 'مستندات'} لـ ${c}`, toastOne: t => `صدرت ${t}`,
+    emptyT: 'لا شيء للإصدار.', emptyS: 'كل دخل يحتاج مستندًا له مستنده.', emptyNfiT: 'لا قيود خارج الفوترة.', emptyNfiS: 'القيود التي تعلّمها خارج الفوترة تظهر هنا.',
+    prefOf: { TAX_INVOICE_FIRST: 'فاتورة ضريبية أولًا', PAYMENT_REQUEST_FIRST: 'طلب دفع أولًا', ON_PAYMENT: 'عند الدفع', NO_DOCUMENT: 'بلا مستند', DEFAULT: 'الافتراضي للملف (عند الدفع)' },
+    drawerTitle: 'إصدار مستند', linked: n => `مرتبط بـ ${n}: يصبح القيد للمستند، بلا قيد ثانٍ.`, fType: 'نوع المستند', fClient: 'العميل', fAmount: 'المبلغ شاملًا الضريبة', fDate: 'تاريخ المستند', today: 'اليوم، 22 تشرين الثاني 2026', issueBtn: 'إصدار',
+    // phone
+    recent: 'الأخيرة', recentToIssue: n => `${n} مستندات للإصدار`, recentToIssueS: 'مجمّعة حسب العميل', toFile: 'قيدان للتصنيف', toFileS: 'بلا ملف بعد', today2: 'اليوم', yest: 'أمس',
+    phGuide: 'كل دفعة تحتاج مستندها. أصدره أو علّمه خارج الفوترة.', settings: 'الإعدادات', capture: 'إضافة',
+    // entry mark
+    paidTitle: 'المدفوع', colDate: 'التاريخ', colClient: 'العميل', colAmount: 'المبلغ', colDoc: 'المستند', colActs: 'إجراءات',
+    hasTI: n => `فاتورة ضريبية وإيصال ${n}`, none: '—', nfiChip: 'خارج الفوترة', toIssueChip: 'للإصدار', edit: 'تعديل',
+    refused: 'لهذا القيد فاتورة ضريبية. أصدر إشعارًا دائنًا أولًا، ثم علّمه خارج الفوترة.', creditNote: 'إصدار إشعار دائن',
+    sheetTitle: 'دفعة من نور للتصميم', sEdit: 'تعديل', sRedate: 'تغيير التاريخ', sAttach: 'إرفاق فاتورة صادرة من جهة أخرى', sNfi: 'خارج الفوترة', sBack: 'إعادة إلى الفوترة', sIssue: 'إصدار فاتورة ضريبية وإيصال',
+    // client
+    clientsT: 'العملاء', business: 'تفاصيل العمل', vat: 'الرقم الضريبي', vatT: 'المعاملة الضريبية', vatV: 'مرخّص', docsPref: 'المستندات', docsHelp: 'تحدد المستندات المستحقة لهذا العميل، وطريقة احتساب دخله السابق في الدفاتر.',
+    dueFor: 'ما يستحق لهذا العميل',
+    dueText: { TAX_INVOICE_FIRST: 'فاتورة ضريبية عند تسجيل مبلغ مستحق، ثم إيصال لكل دفعة.', PAYMENT_REQUEST_FIRST: 'طلب دفع عند تسجيل مبلغ مستحق، ثم فاتورة ضريبية وإيصال لكل دفعة.', ON_PAYMENT: 'فاتورة ضريبية وإيصال لكل دفعة، والدفعات الجزئية كذلك.', NO_DOCUMENT: 'لا شيء. يبقى دخله في «كل الدخل» وفي عرض المحاسب والتصدير، ويُحتسب خارج الفوترة.' },
+    saved: 'حُفظ', phClientNote: 'على الهاتف: لاحقًا', phClientNoteS: 'يُضبط التفضيل على البوابة الآن. شاشة تفاصيل العميل على الهاتف (كرتسة، MUT-663) ستحمله، ولها مخططاتها الخاصة.',
+    phClientGroup: 'في شاشة «للإصدار» على الهاتف يظهر العميل عنوانًا للمجموعة فقط، بلا إجراء.',
+    // default
+    setupT: 'الفوترة', step3: '3 · الإعدادات الافتراضية', offer: 'اقتراح مستند بعد حفظ الدخل', defPref: 'المستندات لعميل بلا تفضيل', defHelp: 'العملاء الذين ضبطت لهم تفضيلًا يتبعون تفضيلهم.', on: 'مفعّل',
+    phDefNote: 'الافتراضي للملف على البوابة فقط', phDefNoteS: 'الهاتف يقرأ ما يستحق من الخادم، فيتبع الافتراضي دون إعداد خاص به.',
+    // books
+    reportsT: 'التقارير', nov: 'تشرين الثاني 2026', income: 'الدخل', invIncome: 'دخل مفوتر', invIncomeS: 'صدر له مستند أو يستحقه', nfiIncome: 'خارج الفوترة', nfiIncomeS: 'معلّم، أو عميل «بلا مستند»', allIncome: 'كل الدخل',
+    reconcile: 'كل الدخل = دخل مفوتر + خارج الفوترة، لكل عملة.', exportT: 'التصدير (CSV)', colStatus: 'invoice_status',
+    mailFrom: 'MTB3A · ملخص الشهر', mailT: 'برمجيات في تشرين الثاني', mailRecv: 'المقبوض', mailSpent: 'المصروف',
+    phMail: 'ملخص الشهر بالبريد، مقروءًا على الهاتف',
+    // notes
+    what: 'ما الذي تراه', why: 'قرارات وملاحظات',
+    final: 'ما أحتاجه منك', finalItems: ['<b>موافقة</b> على هذه الشاشات كما هي، أو', '<b>تغييرات</b>: اكتب رقم الشاشة وما تريد تغييره.', 'بعد موافقتك أبدأ البناء (اختبارات أولًا) على البوابة والخادم. الهاتف في جلسة منفصلة بعد الدمج.'],
+  },
+  en: {
+    langName: 'English', eyebrow: 'MUT-660 · wireframes · web and phone', title: 'Documents due per client',
+    lede: 'Every UI element in the MUT-660 plan, the web portal and the phone side by side. <b>Try it:</b> select rows, issue, mark “not for invoice”, change a client’s preference. Nothing here is saved.',
+    lang: 'Language', theme: 'Theme', auto: 'Auto', light: 'Light', dark: 'Dark', reset: 'Reset data',
+    s1: 'Home: the “To issue” box', s2: 'The “To issue” list', s3: '“Not for invoice” on one entry', s4: 'A client’s documents preference', s5: 'The profile default', s6: 'The books: invoice income and not for invoice',
+    navHome: 'Home', navOwed: 'Owed', navPaid: 'Paid', navSpent: 'Spent', navClients: 'Clients', navDocs: 'Documents', profile: 'Barmajiyat',
+    waiting: 'Waiting for you', toReview: 'To review', overdue: 'Clients overdue', seeAll: 'See all', toIssue: 'To issue',
+    homeIssueLine: (n, c) => `${n} document${n === 1 ? '' : 's'} to issue for ${c} client${c === 1 ? '' : 's'}`,
+    addTitle: 'Drop receipts here', addHint: 'PDF, JPEG or PNG, up to 10 MB', addR: 'Add receipt', addI: 'Add income', daysLate: n => `${n} days late`,
+    clearT: 'Nothing needs you right now.', clearS: 'New receipts and late payments will show up here.', newHere: 'New',
+    docs: 'Documents', tabIssued: 'Issued', tabToIssue: 'To issue', tabFiles: 'Files',
+    segToIssue: n => `To issue · ${n}`, segNfi: n => `Not for invoice · ${n}`,
+    older: 'Older than', any: 'Any date', months: n => `${n} months`, months12: '12 months', selectShown: 'Select all shown',
+    issueAll: 'Issue all', issue: 'Issue', attach: 'Attach', nfi: 'Not for invoice', back: 'Back to invoice', noClient: 'No client',
+    types: { TAX_INVOICE: 'Tax invoice', TAX_INVOICE_RECEIPT: 'Tax invoice-receipt', RECEIPT: 'Receipt', PAYMENT_REQUEST: 'Payment request' },
+    forOwed: (no) => `for Owed ${no}`, forPaid: (no) => `for payment ${no}`, appliesTo: (d) => `on ${d}`,
+    whyPR: 'Payment requests can’t be issued yet (MUT-662). Attach one issued elsewhere, or mark it not for invoice.',
+    whyCur: 'Documents are issued in shekels only. Attach an invoice issued elsewhere, or mark it not for invoice.',
+    selected: n => `${n} selected`, clear: 'Clear',
+    confirmNfi: n => `Mark ${n} item${n === 1 ? '' : 's'} not for invoice?`, confirmNfiS: 'They leave To issue and count outside Invoice income. You can bring them back.',
+    confirmBack: n => `Bring ${n} item${n === 1 ? '' : 's'} back to invoice?`, confirmBackS: 'They return to To issue if they need a document.',
+    markN: n => `Mark ${n}`, backN: n => `Bring back ${n}`, cancel: 'Cancel', undo: 'Undo',
+    toastNfi: n => `${n} marked not for invoice`, toastBack: n => `${n} back to invoice`, toastIssued: (n, c) => `${n} document${n === 1 ? '' : 's'} issued for ${c}`, toastOne: t => `${t} issued`,
+    emptyT: 'Nothing to issue.', emptyS: 'Every income that needs a document has one.', emptyNfiT: 'Nothing marked not for invoice.', emptyNfiS: 'Entries you mark not for invoice show here.',
+    prefOf: { TAX_INVOICE_FIRST: 'Tax invoice first', PAYMENT_REQUEST_FIRST: 'Payment request first', ON_PAYMENT: 'On payment', NO_DOCUMENT: 'No document', DEFAULT: 'Profile default (On payment)' },
+    drawerTitle: 'Issue a document', linked: n => `Linked to ${n}: the entry becomes the document’s, no second entry.`, fType: 'Document type', fClient: 'Client', fAmount: 'Amount, VAT included', fDate: 'Document date', today: 'Today, 22 Nov 2026', issueBtn: 'Issue',
+    recent: 'Recent', recentToIssue: n => `${n} documents to issue`, recentToIssueS: 'Grouped by client', toFile: '2 entries to file', toFileS: 'No file yet', today2: 'Today', yest: 'Yesterday',
+    phGuide: 'Each payment needs its document. Issue it, or mark it not for invoice.', settings: 'Settings', capture: 'Add',
+    paidTitle: 'Paid', colDate: 'Date', colClient: 'Client', colAmount: 'Amount', colDoc: 'Document', colActs: 'Actions',
+    hasTI: n => `Tax invoice-receipt ${n}`, none: '—', nfiChip: 'Not for invoice', toIssueChip: 'To issue', edit: 'Edit',
+    refused: 'This entry has a tax invoice. Issue a credit note first, then mark it not for invoice.', creditNote: 'Issue a credit note',
+    sheetTitle: 'Payment from Nour Design', sEdit: 'Edit', sRedate: 'Change date', sAttach: 'Attach an invoice issued elsewhere', sNfi: 'Not for invoice', sBack: 'Back to invoice', sIssue: 'Issue a tax invoice-receipt',
+    clientsT: 'Clients', business: 'Business details', vat: 'VAT number', vatT: 'VAT treatment', vatV: 'Licensed', docsPref: 'Documents', docsHelp: 'Sets which documents are due for this client, and how their past income counts in the books.',
+    dueFor: 'What’s due for this client',
+    dueText: { TAX_INVOICE_FIRST: 'A tax invoice when an amount is owed, then a receipt for each payment.', PAYMENT_REQUEST_FIRST: 'A payment request when an amount is owed, then a tax invoice-receipt for each payment.', ON_PAYMENT: 'A tax invoice-receipt for each payment, partial ones included.', NO_DOCUMENT: 'Nothing. Their income stays in All income, the accountant’s view and exports, and counts as not for invoice.' },
+    saved: 'Saved', phClientNote: 'On the phone: later', phClientNoteS: 'The preference is set on the portal for now. The phone’s client details screen (client ledger card, MUT-663) will carry it, with its own wireframes.',
+    phClientGroup: 'On the phone’s To issue screen the client is only a group heading, with no action.',
+    setupT: 'Invoicing', step3: '3 · Defaults', offer: 'Offer a document after saving income', defPref: 'Documents for clients with no preference', defHelp: 'Clients with their own preference follow it.', on: 'On',
+    phDefNote: 'The profile default is portal-only', phDefNoteS: 'The phone reads what’s due from the server, so it follows the default with no setting of its own.',
+    reportsT: 'Reports', nov: 'November 2026', income: 'Income', invIncome: 'Invoice income', invIncomeS: 'Has a document, or is due one', nfiIncome: 'Not for invoice', nfiIncomeS: 'Marked, or a “No document” client', allIncome: 'All income',
+    reconcile: 'All income = Invoice income + Not for invoice, per currency.', exportT: 'Export (CSV)', colStatus: 'invoice_status',
+    mailFrom: 'MTB3A · Monthly summary', mailT: 'Barmajiyat in November', mailRecv: 'Received', mailSpent: 'Spent',
+    phMail: 'The monthly summary mail, read on the phone',
+    what: 'What you see', why: 'Decisions and notes',
+    final: 'What I need from you', finalItems: ['<b>Approve</b> these screens as they are, or', '<b>Changes</b>: name the screen number and what to change.', 'On your yes I build the portal and server (tests first). The phone runs in its own session after the merge.'],
+  },
+};
+const NOTES = {
+  ar: {
+    s1: [['مجموعة «للإصدار» في عمود «بانتظارك» تحت «عملاء متأخرون»، مكان TODO الذي تركه MUT-657.', 'العدد يساوي كل بند في القائمة (قرار N2)، ويتغير مباشرة حين تُصدر أو تعلّم في الشاشة 2.', 'على الهاتف: شريط «للإصدار · N» في «الأخيرة» بنمط شريط «للتصنيف» (D3).'], ['الكلمة «للإصدار» لا «بلا فاتورة»، لأن بعض المستحق إيصال.', 'تختفي المجموعة عند الصفر، ويظهر «لا شيء بانتظارك» حين يفرغ كل شيء.', 'لا تظهر على ملف بلا فوترة، ولا للمحاسب.']],
+    s2: [['تبويب ثالث في «المستندات»: الصادرة · للإصدار · الملفات.', 'مجموعات حسب العميل، «بلا عميل» آخرها. «إصدار الكل» لكل عميل، و«إصدار» لكل صف يفتح درج الإصدار جاهزًا بالنوع والمبلغ.', 'صفوف لا تُصدر هنا (طلب دفع، عملة غير الشيكل) تقول السبب وتعرض «إرفاق» و«خارج الفوترة».', 'التحديد يفتح شريطًا بتأكيد واحد في مكانه يذكر العدد، ثم «تراجع».'], ['«أقدم من N أشهر» يحدد القديم ليعلَّم دفعة واحدة (D1).', 'قسم «خارج الفوترة» يتيح «إعادة» جماعية.', 'رامي حداد مثال الشرط 2: فاتورة 3,400 أولًا؛ دفعة 1,000 تستحق إيصالًا عليها.', 'الهاتف: صف واحد في كل مرة، «إصدار» و«خارج الفوترة» (D3). جرّب «خارج الفوترة».']],
+    s3: [['في «المدفوع» و«المستحق»: إجراء نصي ظاهر دائمًا في الصف (لا في قائمة مخفية).', 'المعلَّم يحمل شارة محايدة «خارج الفوترة» و«إعادة إلى الفوترة».', 'قيد له فاتورة ضريبية: الرفض يظهر في شريط الخطأ أعلى الصفحة مع رابط الإشعار الدائن (الشرط 5).'], ['لا سبب مطلوب (كما في التذكرة).', 'الإيصال وحده لا يمنع التعليم؛ الفاتورة الضريبية أو الفاتورة/الإيصال تمنع.', 'الهاتف: الإجراء في ورقة إجراءات القيد، والرفض داخل الورقة.']],
+    s4: [['حقل «المستندات» في «تفاصيل العمل» على صفحة العميل، قائمة اختيار تحفظ بنفسها (If-Match).', 'أسفلها سطر يشرح ما يستحق لهذا العميل، ويتغير مع الاختيار.'], ['«الافتراضي للملف» يعني بلا قيمة، فيتبع الإعداد في الشاشة 5.', 'تغيير التفضيل يعيد تصنيف الأشهر السابقة في الدفاتر، والنص يقول ذلك.', 'الهاتف خارج هذه التذكرة (D4).']],
+    s5: [['في خطوة الإعدادات الافتراضية في إعداد الفوترة، بجانب «اقتراح مستند بعد الحفظ».'], ['القيمة الافتراضية «عند الدفع»، كما في التذكرة.']],
+    s6: [['بطاقة الدخل في التقارير: دخل مفوتر، خارج الفوترة، كل الدخل، لكل عملة.', 'ملخص الشهر بالبريد يزيد سطرين.', 'التصدير يزيد عمود invoice_status.'], ['على ملفات الفوترة فقط؛ غيرها لا يتغير بايتًا واحدًا (الشرط 10).', 'الدخل نقدي (المقبوض)، فالمستحق غير المدفوع لا يُصنَّف.', 'عرض المحاسب يقرأ الأرقام نفسها.']],
+  },
+  en: {
+    s1: [['A “To issue” group in the Waiting lane under Clients overdue, where MUT-657 left its TODO.', 'The count is every listed item (decision N2), and it changes live as you issue or mark on screen 2.', 'Phone: a “To issue · N” strip in Recent, the to-file strip pattern (D3).'], ['The word is “To issue”, not “To invoice”: some of what’s due is a receipt.', 'At zero the group is gone, and the calm line shows when everything is clear.', 'Hidden on profiles without invoicing, and for accountants.']],
+    s2: [['A third tab in Documents: Issued · To issue · Files.', 'Grouped by client, No client last. Issue all per client; Issue per row opens the issue drawer prefilled with type and amount.', 'Rows that can’t be issued here (payment request, non-₪) say why, and offer Attach and Not for invoice.', 'Selecting opens a bar with one in-place confirmation that gives the count, then Undo.'], ['“Older than N months” selects old items to mark in one action (D1).', 'The Not for invoice segment allows a bulk Back.', 'Rami Haddad is AC2: tax invoice 3,400 first; a payment of 1,000 is due a receipt on it.', 'Phone: one row at a time, Issue and Not for invoice (D3). Try Not for invoice.']],
+    s3: [['On Paid and Owed: a text action always visible in the row (not hidden in a menu).', 'A marked entry carries a neutral “Not for invoice” badge and “Back to invoice”.', 'An entry with a tax invoice: the refusal shows in the page’s error banner, with the credit-note link (AC5).'], ['No reason is asked (as the ticket says).', 'A receipt alone doesn’t block the mark; a tax invoice or invoice-receipt does.', 'Phone: the action is in the entry’s action sheet, and the refusal shows inside the sheet.']],
+    s4: [['A “Documents” field in Business details on the client page, a select that saves on its own (If-Match).', 'Under it, one line explains what’s due for this client, and changes with the choice.'], ['“Profile default” means no value, so it follows screen 5.', 'Changing it reclassifies past months in the books, and the help text says so.', 'The phone is out of this ticket (D4).']],
+    s5: [['In the Defaults step of the invoicing setup, beside “Offer a document after saving”.'], ['Its default is “On payment”, as the ticket says.']],
+    s6: [['Reports’ income card: Invoice income, Not for invoice, All income, per currency.', 'The monthly summary mail gets two lines.', 'Exports get an invoice_status column.'], ['Invoicing profiles only; every other profile is byte-identical (AC10).', 'Income is cash basis (received), so unpaid Owed isn’t classified.', 'The accountant’s view reads the same figures.']],
+  },
+};
+
+/* ---------- data ---------- */
+const TODAY = '2026-11-22';
+const seed = () => ({
+  items: [
+    { id: 'r1', client: 'rami', kind: 'TAX_INVOICE', entry: 'owed', no: 'O-0412', amt: 3400, cur: '₪', date: '2026-11-02' },
+    { id: 'p1', client: 'rami', kind: 'RECEIPT', entry: 'paid', no: 'P-0881', amt: 1000, cur: '₪', date: '2026-11-15', on: '305 · 0007' },
+    { id: 'p2', client: 'nour', kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0874', amt: 2500, cur: '₪', date: '2026-10-28' },
+    { id: 'p3', client: 'nour', kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0889', amt: 700, cur: '₪', date: '2026-11-19' },
+    { id: 'r2', client: 'quds', kind: 'PAYMENT_REQUEST', entry: 'owed', no: 'O-0409', amt: 5000, cur: '₪', date: '2026-10-30', why: 'PR' },
+    { id: 'p4', client: 'quds', kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0866', amt: 1200, cur: '$', date: '2026-10-12', why: 'CUR' },
+    { id: 'p5', client: null, kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0702', amt: 450, cur: '₪', date: '2026-03-12' },
+    { id: 'p6', client: null, kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0611', amt: 300, cur: '₪', date: '2025-12-04' },
+    { id: 'p7', client: null, kind: 'TAX_INVOICE_RECEIPT', entry: 'paid', no: 'P-0540', amt: 180, cur: '₪', date: '2025-09-20' },
+  ],
+  status: {}, // id -> 'issued' | 'nfi'
+  sel: new Set(), seg: 'due', older: 0, confirm: null, drawer: null, toast: null, undo: null,
+  phoneScreen: 'recent', phoneToast: null,
+  entryState: { e1: 'none', e2: 'nfi', e3: 'doc' }, entryBanner: false, sheetOpen: false, sheetMsg: false, sheetNfi: false,
+  pref: 'TAX_INVOICE_FIRST', prefSaved: false, defPref: 'ON_PAYMENT',
+});
+const CLIENTS = { rami: { ar: 'رامي حداد', en: 'Rami Haddad', pref: 'TAX_INVOICE_FIRST' }, nour: { ar: 'نور للتصميم', en: 'Nour Design', pref: null }, quds: { ar: 'مكتب القدس للمحاماة', en: 'Al-Quds Legal', pref: 'PAYMENT_REQUEST_FIRST' } };
+let S = seed();
+const ui = { lang: 'ar', theme: 'auto' };
+const L = () => T[ui.lang];
+const fmtDate = iso => { const [y, m, d] = iso.split('-').map(Number); return ui.lang === 'ar' ? `${d} ${MONTHS.ar[m - 1]} ${y}` : `${d} ${MONTHS.en[m - 1]} ${y}`; };
+const money = (n, cur = '₪') => `<bdi class="m">${cur}${n.toLocaleString('en-US')}</bdi>`;
+const clientName = c => c ? CLIENTS[c][ui.lang] : L().noClient;
+const issuable = it => !it.why;
+const monthsBefore = n => { const d = new Date(TODAY + 'T00:00:00'); d.setMonth(d.getMonth() - n); return d.toISOString().slice(0, 10); };
+const due = () => S.items.filter(it => !S.status[it.id]);
+const nfi = () => S.items.filter(it => S.status[it.id] === 'nfi');
+const shown = () => (S.seg === 'due' ? due() : nfi()).filter(it => !S.older || it.date < monthsBefore(S.older));
+const groups = list => { const order = ['rami', 'nour', 'quds', null]; return order.map(c => ({ c, items: list.filter(i => i.client === c) })).filter(g => g.items.length); };
+const typeLabel = k => L().types[k];
+const entryLabel = it => it.entry === 'owed' ? L().forOwed(it.no) : L().forPaid(it.no);
+const prefLabel = c => c && CLIENTS[c].pref ? L().prefOf[CLIENTS[c].pref] : L().prefOf.ON_PAYMENT;
+
+/* ---------- pieces ---------- */
+const chrome = on => `<div class="chrome"><span class="corner" aria-hidden="true">▤</span><nav class="pill">${['navHome', 'navOwed', 'navPaid', 'navSpent', 'navClients'].map(k => `<span class="${k === on ? 'on' : ''}">${L()[k]}</span>`).join('')}</nav><span class="island"><span class="av">ب</span></span></div>`;
+const desk = (url, inner, extra = '', cls = '') => `<div class="desk ${cls}"><div class="bar"><i></i><i></i><i></i><span class="url">${url}</span></div><div class="scr ${extra}">${inner}</div></div>`;
+const phone = (inner, extra = '') => `<div class="phone"><div class="ps ${extra}"><div class="status"><span>9:41</span><span>●●● ▮</span></div>${inner}</div></div>`;
+const tabbar = on => `<div class="tabbar">${[['recent', L().recent], ['capture', L().capture], ['settings', L().settings]].map(([k, v]) => `<span class="${k === on ? 'on' : ''}">${v}</span>`).join('')}</div>`;
+const notes = key => { const [a, b] = NOTES[ui.lang][key]; return `<div class="notes"><div><h3>${L().what}</h3><ul>${a.map(x => `<li>${x}</li>`).join('')}</ul></div><div><h3>${L().why}</h3><ul>${b.map(x => `<li>${x}</li>`).join('')}</ul></div></div>`; };
+const section = (id, n, title, idea, stage, key) => `<section class="screen-sec" id="${id}"><div class="n">${n}</div><h2>${title}</h2>${idea ? `<p class="idea">${idea}</p>` : ''}<div class="stage">${stage}</div>${notes(key)}</section>`;
+
+/* ---------- 1. home ---------- */
+function home() {
+  const n = due().length, c = new Set(due().map(i => i.client ?? 'none')).size;
+  const top = groups(due()).slice(0, 3);
+  const issueGroup = n ? `<div class="hg new"><div class="hg-h"><h4>${L().toIssue}</h4><span class="c num">${n}</span><a href="#s2" data-act="goto-list">${L().seeAll}</a></div>
+      <div style="font-size:.875rem;color:var(--muted);margin-bottom:4px">${L().homeIssueLine(n, c)}</div>
+      <ul class="plist">${top.map(g => `<li><span dir="auto">${clientName(g.c)}</span><span class="k num">${g.items.length}</span></li>`).join('')}</ul></div>` : '';
+  const waiting = `<div class="hg"><div class="hg-h"><h4>${L().toReview}</h4><span class="c num">3</span><a href="#">${L().seeAll}</a></div><div class="thumbs"><i></i><i></i><i></i></div></div>
+    <div class="hg"><div class="hg-h"><h4>${L().overdue}</h4><span class="c num">2</span><a href="#">${L().seeAll}</a></div><ul class="plist"><li><span dir="auto">${CLIENTS.quds[ui.lang]}</span><span class="late">${L().daysLate(12)}</span></li><li><span dir="auto">${CLIENTS.nour[ui.lang]}</span><span class="late">${L().daysLate(5)}</span></li></ul></div>
+    ${issueGroup}`;
+  const d = desk('app.mtb3a.com/p/barmajiyat', `${chrome('navHome')}<div class="page"><div class="ph"><h3>${L().navHome}</h3><span class="sub">${ui.lang === 'ar' ? 'الأحد 22 تشرين الثاني' : 'Sunday 22 November'}</span></div>
+    <div class="lanes"><section class="addbox"><div class="dz"><b>${L().addTitle}</b>${L().addHint}</div><span class="btn" style="width:100%">＋ ${L().addR}</span><span class="btn sec" style="width:100%;margin-top:8px">＋ ${L().addI}</span></section><section aria-label="${L().waiting}">${waiting}</section></div></div>`);
+  const p = phone(`<div class="pb"><h3 class="ttl">${L().recent}</h3>
+      ${n ? `<button class="strip new" data-act="ph-open"><span class="dot num">${n}</span><span class="tx">${L().recentToIssue(n)}<small>${L().recentToIssueS}</small></span><span class="chev">${ui.lang === 'ar' ? '‹' : '›'}</span></button>` : ''}
+      <div class="strip"><span class="dot num" style="background:var(--warn-bg);color:var(--warn)">2</span><span class="tx">${L().toFile}<small>${L().toFileS}</small></span><span class="chev">${ui.lang === 'ar' ? '‹' : '›'}</span></div>
+      <div class="day">${L().today2}</div>
+      <div class="prow"><span class="ic">＋</span><span class="tx" dir="auto">${CLIENTS.nour[ui.lang]}<small>${typeLabel('TAX_INVOICE_RECEIPT')} · ${L().toIssueChip}</small></span>${money(700)}</div>
+      <div class="prow"><span class="ic">＋</span><span class="tx" dir="auto">${CLIENTS.rami[ui.lang]}<small>${L().forPaid('P-0881')}</small></span>${money(1000)}</div>
+      <div class="day">${L().yest}</div>
+      <div class="prow"><span class="ic" style="background:var(--surface-2);color:var(--muted)">−</span><span class="tx" dir="auto">Cellcom<small>${ui.lang === 'ar' ? 'اتصالات' : 'Phone'}</small></span>${money(129)}</div>
+    </div>${tabbar('recent')}`);
+  return `<div class="desk-wrap">${d}</div><div class="phone-wrap">${p}<div class="cap">${ui.lang === 'ar' ? 'اضغط الشريط لفتح شاشة «للإصدار» في الشاشة 2' : 'Tap the strip to open the To issue screen (screen 2)'}</div></div>`;
+}
+
+/* ---------- 2. list ---------- */
+function rowHtml(it) {
+  const L_ = L(), checked = S.sel.has(it.id);
+  const why = it.why === 'PR' ? L_.whyPR : it.why === 'CUR' ? L_.whyCur : '';
+  const sub = `${entryLabel(it)} · ${fmtDate(it.date)}${it.on ? ' · ' + L_.appliesTo(it.on) : ''}`;
+  let acts;
+  if (S.seg === 'nfi') acts = `<button class="lb" data-act="back-one" data-id="${it.id}">${L_.back}</button>`;
+  else if (issuable(it)) acts = `<button class="btn sec" data-act="issue-one" data-id="${it.id}">${L_.issue}</button>`;
+  else acts = `<button class="lb" data-act="noop">${L_.attach}</button><button class="lb" data-act="nfi-one" data-id="${it.id}">${L_.nfi}</button>`;
+  return `<div class="row ${issuable(it) || S.seg === 'nfi' ? '' : 'inert'}"><input type="checkbox" class="chk" data-act="sel" data-id="${it.id}" ${checked ? 'checked' : ''} aria-label="${typeLabel(it.kind)} ${it.no}">
+    <span class="what"><span class="badge ${it.kind === 'PAYMENT_REQUEST' ? 'b-warn' : 'b-acc'}">${typeLabel(it.kind)}</span>
+    <small>${sub}</small>${why && S.seg === 'due' ? `<small class="why">${why}</small>` : ''}</span>
+    <span class="amt">${money(it.amt, it.cur)}</span><span style="display:flex;gap:2px;align-items:center">${acts}</span></div>`;
+}
+function list() {
+  const L_ = L(), list = shown(), nSel = [...S.sel].filter(id => list.some(i => i.id === id)).length;
+  const gs = groups(list);
+  const body = gs.length ? gs.map(g => {
+    const iss = g.items.filter(issuable).length;
+    const allSel = g.items.every(i => S.sel.has(i.id));
+    return `<div class="grp"><div class="grp-h"><input type="checkbox" class="chk" data-act="sel-group" data-c="${g.c}" ${allSel ? 'checked' : ''} aria-label="${clientName(g.c)}"><h4 dir="auto">${clientName(g.c)}</h4><span class="pref">${prefLabel(g.c)}</span>
+      <span class="end">${S.seg === 'due' ? `<button class="btn" data-act="issue-all" data-c="${g.c}" ${iss ? '' : 'disabled'}>${L_.issueAll}${iss && iss < g.items.length ? ` · <span class="num">${iss}</span>` : ''}</button>` : ''}</span></div>${g.items.map(rowHtml).join('')}</div>`;
+  }).join('') : `<div class="empty"><div class="art" aria-hidden="true"></div><h4>${S.seg === 'due' ? L_.emptyT : L_.emptyNfiT}</h4><p>${S.seg === 'due' ? L_.emptyS : L_.emptyNfiS}</p></div>`;
+  let bulk = '';
+  if (nSel) {
+    if (S.confirm) {
+      const back = S.seg === 'nfi';
+      bulk = `<div class="bulk" role="group" aria-label="${back ? L_.confirmBack(nSel) : L_.confirmNfi(nSel)}"><span class="t"><b>${back ? L_.confirmBack(nSel) : L_.confirmNfi(nSel)}</b>${back ? L_.confirmBackS : L_.confirmNfiS}</span><button class="btn sec" data-act="confirm-cancel">${L_.cancel}</button><button class="btn" data-act="confirm-go">${back ? L_.backN(nSel) : L_.markN(nSel)}</button></div>`;
+    } else bulk = `<div class="bulk"><span class="t"><b class="num">${L_.selected(nSel)}</b></span><button class="lb" data-act="clear">${L_.clear}</button><button class="btn" data-act="bulk">${S.seg === 'due' ? L_.nfi : L_.back}</button></div>`;
+  }
+  const drawerIt = S.drawer && S.items.find(i => i.id === S.drawer);
+  const drawer = drawerIt ? `<div class="overlay" data-act="drawer-close"></div><aside class="drawer" role="dialog" aria-label="${L_.drawerTitle}"><div class="dh">${L_.drawerTitle}<button class="x" data-act="drawer-close" aria-label="${L_.cancel}">✕</button></div>
+    <div class="db"><div class="linked">${L_.linked(drawerIt.no)}</div>
+    <div class="field"><label>${L_.fType}</label><div class="v">${typeLabel(drawerIt.kind)}${drawerIt.on ? ` · ${L_.appliesTo(drawerIt.on)}` : ''}</div></div>
+    <div class="field"><label>${L_.fClient}</label><div class="v" dir="auto">${clientName(drawerIt.client)}</div></div>
+    <div class="field"><label>${L_.fAmount}</label><div class="v">${money(drawerIt.amt, drawerIt.cur)}</div></div>
+    <div class="field"><label>${L_.fDate}</label><div class="v">${L_.today}</div></div></div>
+    <div class="df"><button class="btn sec" data-act="drawer-close">${L_.cancel}</button><button class="btn" data-act="drawer-issue">${L_.issueBtn}</button></div></aside>` : '';
+  const toast = S.toast ? `<div class="toast" role="status">${S.toast}${S.undo ? `<button data-act="undo">${L_.undo}</button>` : ''}</div>` : '';
+  const page = `${chrome('')}<div class="page"><div class="ph"><h3>${L_.docs}</h3></div>
+    <div class="tabs"><span>${L_.tabIssued}</span><span class="on">${L_.tabToIssue}<span class="new">${L_.newHere}</span></span><span>${L_.tabFiles}</span></div>
+    <div class="toolbar"><div class="segc" role="group"><button data-act="seg" data-v="due" aria-pressed="${S.seg === 'due'}">${L_.segToIssue(due().length)}</button><button data-act="seg" data-v="nfi" aria-pressed="${S.seg === 'nfi'}">${L_.segNfi(nfi().length)}</button></div>
+      <span class="end"><span class="lbl">${L_.older}</span><select class="sel" data-act="older" aria-label="${L_.older}">${[0, 3, 6, 12].map(m => `<option value="${m}" ${S.older === m ? 'selected' : ''}>${m === 0 ? L_.any : m === 12 ? L_.months12 : L_.months(m)}</option>`).join('')}</select>
+      <button class="lb" data-act="sel-all">${L_.selectShown}</button></span></div>
+    ${body}${bulk}</div>`;
+  const d = desk('app.mtb3a.com/p/barmajiyat/documents/to-issue', page + drawer + toast, drawerIt ? 'show' : '');
+
+  // phone to-issue screen
+  const pd = due();
+  const pgs = groups(pd);
+  const phoneBody = S.phoneScreen === 'recent'
+    ? `<div class="pb"><h3 class="ttl">${L_.recent}</h3>${pd.length ? `<button class="strip new" data-act="ph-open"><span class="dot num">${pd.length}</span><span class="tx">${L_.recentToIssue(pd.length)}<small>${L_.recentToIssueS}</small></span><span class="chev">${ui.lang === 'ar' ? '‹' : '›'}</span></button>` : ''}<div class="ph-note">${ui.lang === 'ar' ? 'اضغط الشريط.' : 'Tap the strip.'}</div></div>${tabbar('recent')}`
+    : `<div class="pb"><button class="back" data-act="ph-back">${ui.lang === 'ar' ? '›' : '‹'} ${L_.recent}</button><h3 class="ttl">${L_.toIssue}</h3><p style="font-size:.8125rem;color:var(--muted);margin:-4px 0 12px">${L_.phGuide}</p>
+      ${pgs.length ? pgs.map(g => `<div class="pg"><div class="pg-h" dir="auto">${clientName(g.c)}<small>${prefLabel(g.c)}</small></div>${g.items.map(it => `<div class="pr"><div class="top"><span>${typeLabel(it.kind)}<small>${entryLabel(it)} · ${fmtDate(it.date)}</small></span>${money(it.amt, it.cur)}</div>${it.why ? `<div class="why">${it.why === 'PR' ? L_.whyPR : L_.whyCur}</div>` : ''}<div class="acts">${issuable(it) ? `<button class="btn" data-act="ph-issue" data-id="${it.id}">${L_.issue}</button>` : ''}<button class="btn sec" data-act="ph-nfi" data-id="${it.id}">${L_.nfi}</button></div></div>`).join('')}</div>`).join('') : `<div class="empty"><div class="art"></div><h4>${L_.emptyT}</h4><p>${L_.emptyS}</p></div>`}
+      </div>${S.phoneToast ? `<div class="toast" style="bottom:96px">${S.phoneToast}<button data-act="ph-undo">${L_.undo}</button></div>` : ''}${tabbar('recent')}`;
+  const p = phone(phoneBody);
+  return `<div class="desk-wrap">${d}</div><div class="phone-wrap">${p}<div class="cap">${ui.lang === 'ar' ? 'Flutter: شاشة «للإصدار» من شريط «الأخيرة»' : 'Flutter: the To issue screen, opened from Recent’s strip'}</div></div>`;
+}
+
+/* ---------- 3. entry mark ---------- */
+function entry() {
+  const L_ = L(), es = S.entryState;
+  const rows = [
+    ['e1', '2026-11-19', 'nour', 700, es.e1],
+    ['e2', '2026-11-12', null, 260, es.e2],
+    ['e3', '2026-11-04', 'rami', 3400, es.e3],
+  ];
+  const docCell = (id, st) => st === 'doc' ? `<span class="badge b-ok">${L_.hasTI('0007')}</span>` : st === 'nfi' ? `<span class="badge b-neutral">${L_.nfiChip}</span>` : `<span class="badge b-acc">${L_.toIssueChip}</span>`;
+  const act = (id, st) => st === 'nfi' ? `<button class="lb" data-act="e-back" data-id="${id}">${L_.back}</button>` : `<button class="lb" data-act="e-nfi" data-id="${id}">${L_.nfi}</button>`;
+  const page = `${chrome('navPaid')}<div class="page"><div class="ph"><h3>${L_.paidTitle}</h3></div>
+    ${S.entryBanner ? `<div class="banner err" role="alert"><span aria-hidden="true">⚠</span><span>${L_.refused} <button class="lb">${L_.creditNote}</button></span></div>` : ''}
+    <table class="tbl"><thead><tr><th>${L_.colDate}</th><th>${L_.colClient}</th><th>${L_.colDoc}</th><th style="text-align:end">${L_.colAmount}</th><th style="text-align:end">${L_.colActs}</th></tr></thead>
+    <tbody>${rows.map(([id, d, c, a, st]) => `<tr><td>${fmtDate(d)}</td><td dir="auto">${clientName(c)}</td><td>${docCell(id, st)}</td><td class="amt">${money(a)}</td><td><div class="acts"><button class="lb">${L_.edit}</button>${act(id, st)}</div></td></tr>`).join('')}</tbody></table></div>`;
+  const d = desk('app.mtb3a.com/p/barmajiyat/payments', page, '', 'short');
+  const sheet = `<div class="overlay" data-act="sheet-close"></div><div class="sheet"><h5 dir="auto">${L_.sheetTitle} · ${money(700)}</h5>
+    ${S.sheetMsg ? `<div class="msg">${L_.refused}</div>` : ''}
+    <button class="opt acc">${L_.sIssue}</button><button class="opt">${L_.sEdit}</button><button class="opt">${L_.sRedate}</button><button class="opt">${L_.sAttach}</button>
+    <button class="opt" data-act="sheet-nfi">${S.sheetNfi ? L_.sBack : L_.sNfi}</button>
+    <button class="opt" data-act="sheet-try" style="color:var(--muted);font-size:.8125rem">${ui.lang === 'ar' ? '(جرّب على قيد له فاتورة ضريبية)' : '(try on an entry with a tax invoice)'}</button></div>`;
+  const p = phone(`<div class="pb"><h3 class="ttl">${L_.recent}</h3><div class="day">${L_.today2}</div>
+    <button class="prow" style="width:100%;text-align:start" data-act="sheet-open"><span class="ic">＋</span><span class="tx" dir="auto">${CLIENTS.nour[ui.lang]}<small>${S.sheetNfi ? L_.nfiChip : typeLabel('TAX_INVOICE_RECEIPT') + ' · ' + L_.toIssueChip}</small></span>${money(700)}</button>
+    <div class="prow"><span class="ic">＋</span><span class="tx" dir="auto">${CLIENTS.rami[ui.lang]}<small>${L_.hasTI('0007')}</small></span>${money(3400)}</div></div>${tabbar('recent')}${S.sheetOpen ? sheet : ''}`, S.sheetOpen ? 'psh' : '');
+  return `<div class="desk-wrap">${d}<div class="cap" style="max-width:none">${ui.lang === 'ar' ? 'جرّب «خارج الفوترة» على صف رامي حداد (له فاتورة ضريبية).' : 'Try “Not for invoice” on Rami Haddad’s row (it has a tax invoice).'}</div></div><div class="phone-wrap">${p}<div class="cap">${ui.lang === 'ar' ? 'اضغط قيد نور للتصميم لفتح ورقة الإجراءات' : 'Tap Nour Design’s entry to open its action sheet'}</div></div>`;
+}
+
+/* ---------- 4. client preference ---------- */
+function client() {
+  const L_ = L(), opts = ['DEFAULT', 'TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
+  const eff = S.pref === 'DEFAULT' ? 'ON_PAYMENT' : S.pref;
+  const page = `${chrome('navClients')}<div class="page"><div class="ph"><h3 dir="auto">${CLIENTS.rami[ui.lang]}</h3><span class="sub">${L_.clientsT}</span></div>
+    <div class="card"><h4>${L_.business}</h4><div class="kv"><span class="k">${L_.vat}</span><span class="num" dir="ltr" style="text-align:start">514 228 913</span><span class="k">${L_.vatT}</span><span>${L_.vatV}</span>
+    <span class="k">${L_.docsPref}</span><span><select class="sel" data-act="pref" aria-label="${L_.docsPref}">${opts.map(o => `<option value="${o}" ${S.pref === o ? 'selected' : ''}>${L_.prefOf[o]}</option>`).join('')}</select> ${S.prefSaved ? `<span class="badge b-ok" role="status">${L_.saved}</span>` : ''}
+      <div class="help">${L_.docsHelp}</div><div class="due-preview"><b>${L_.dueFor}</b>${L_.dueText[eff]}</div></span></div></div></div>`;
+  const d = desk('app.mtb3a.com/p/barmajiyat/clients/rami', page, '', 'short');
+  const p = phone(`<div class="pb"><button class="back">${ui.lang === 'ar' ? '›' : '‹'} ${L_.recent}</button><h3 class="ttl">${L_.toIssue}</h3>
+    <div class="pg"><div class="pg-h" dir="auto">${CLIENTS.rami[ui.lang]}<small>${L_.prefOf[eff]}</small></div><div class="pr"><div class="top"><span>${typeLabel(eff === 'TAX_INVOICE_FIRST' ? 'TAX_INVOICE' : eff === 'PAYMENT_REQUEST_FIRST' ? 'PAYMENT_REQUEST' : 'TAX_INVOICE_RECEIPT')}<small>${L_.forOwed('O-0412')}</small></span>${money(3400)}</div></div></div>
+    <div class="ph-note"><b>${L_.phClientNote}</b>${L_.phClientNoteS}<br><br>${L_.phClientGroup}</div></div>${tabbar('recent')}`);
+  return `<div class="desk-wrap">${d}</div><div class="phone-wrap">${p}</div>`;
+}
+
+/* ---------- 5. profile default ---------- */
+function defaults() {
+  const L_ = L(), opts = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
+  const page = `${chrome('')}<div class="page"><div class="ph"><h3>${L_.setupT}</h3></div>
+    <div class="card"><h4>${L_.step3}</h4><div class="kv"><span class="k">${L_.offer}</span><span><span class="badge b-ok">${L_.on}</span></span>
+    <span class="k">${L_.defPref}</span><span><select class="sel" data-act="defpref" aria-label="${L_.defPref}">${opts.map(o => `<option value="${o}" ${S.defPref === o ? 'selected' : ''}>${L_.prefOf[o]}</option>`).join('')}</select><div class="help">${L_.defHelp}</div></span></div></div></div>`;
+  const d = desk('app.mtb3a.com/p/barmajiyat/you/invoicing', page, '', 'short');
+  const p = phone(`<div class="pb"><h3 class="ttl">${L_.settings}</h3><div class="ph-note"><b>${L_.phDefNote}</b>${L_.phDefNoteS}</div></div>${tabbar('settings')}`);
+  return `<div class="desk-wrap">${d}</div><div class="phone-wrap">${p}</div>`;
+}
+
+/* ---------- 6. books ---------- */
+function books() {
+  const L_ = L();
+  const ils = { inv: 14200, nfi: 3260 }, usd = { inv: 0, nfi: 1200 };
+  const col = (cur, v) => { const all = v.inv + v.nfi, pct = all ? Math.round(v.inv / all * 100) : 0;
+    return `<div class="col"><div class="cur">${cur === '₪' ? (ui.lang === 'ar' ? 'شيكل' : 'ILS') : (ui.lang === 'ar' ? 'دولار' : 'USD')}</div><div class="bar2"><i style="width:${pct}%"></i><i style="width:${100 - pct}%"></i></div>
+      <div class="line3"><span class="k">${L_.invIncome}<small>${L_.invIncomeS}</small></span>${money(v.inv, cur)}</div>
+      <div class="line3"><span class="k">${L_.nfiIncome}<small>${L_.nfiIncomeS}</small></span>${money(v.nfi, cur)}</div>
+      <div class="line3 sum"><span class="k">${L_.allIncome}</span>${money(all, cur)}</div></div>`; };
+  const page = `${chrome('')}<div class="page"><div class="ph"><h3>${L_.reportsT}</h3><span class="sub">${L_.nov}</span></div>
+    <div class="card"><h4>${L_.income}</h4><div class="split">${col('₪', ils)}${col('$', usd)}</div><div class="help">${L_.reconcile}</div></div>
+    <div class="card"><h4>${L_.exportT}</h4><table class="tbl minitbl" dir="ltr"><thead><tr><th>date</th><th>client</th><th>amount</th><th>currency</th><th>${L_.colStatus}</th></tr></thead>
+      <tbody><tr><td>2026-11-19</td><td>Nour Design</td><td>700.00</td><td>ILS</td><td>to_issue</td></tr><tr><td>2026-11-12</td><td></td><td>260.00</td><td>ILS</td><td>not_for_invoice</td></tr><tr><td>2026-11-04</td><td>Rami Haddad</td><td>3400.00</td><td>ILS</td><td>issued</td></tr><tr><td>2026-11-02</td><td>Zaid Coffee</td><td>900.00</td><td>ILS</td><td>no_document</td></tr></tbody></table></div></div>`;
+  const d = desk('app.mtb3a.com/p/barmajiyat/reports', page, '', 'short');
+  const p = phone(`<div class="pb"><div class="mail"><div class="from">${L_.mailFrom}</div><h6>${L_.mailT}</h6>
+    <div class="line3"><span class="k">${L_.mailRecv}</span>${money(17460)}</div>
+    <div class="line3" style="padding-inline-start:14px;font-size:.875rem"><span class="k">${L_.invIncome}</span>${money(14200)}</div>
+    <div class="line3" style="padding-inline-start:14px;font-size:.875rem"><span class="k">${L_.nfiIncome}</span>${money(3260)}</div>
+    <div class="line3"><span class="k">${L_.mailSpent}</span>${money(4120)}</div></div></div>`);
+  return `<div class="desk-wrap">${d}</div><div class="phone-wrap">${p}<div class="cap">${L_.phMail}</div></div>`;
+}
+
+/* ---------- page ---------- */
+function render() {
+  const L_ = L();
+  document.documentElement.lang = ui.lang; document.documentElement.dir = ui.lang === 'ar' ? 'rtl' : 'ltr';
+  const secs = [['s1', home, L_.s1, 's1'], ['s2', list, L_.s2, 's2'], ['s3', entry, L_.s3, 's3'], ['s4', client, L_.s4, 's4'], ['s5', defaults, L_.s5, 's5'], ['s6', books, L_.s6, 's6']];
+  const y = window.scrollY;
+  document.getElementById('app').innerHTML = `<p class="eyebrow">${L_.eyebrow}</p><h1 class="doc">${L_.title}</h1><p class="lede">${L_.lede}</p>
+    <div class="toggles"><div class="seg" role="group" aria-label="${L_.lang}"><button data-ui="lang" data-v="ar" aria-pressed="${ui.lang === 'ar'}">العربية</button><button data-ui="lang" data-v="en" aria-pressed="${ui.lang === 'en'}">English</button></div>
+    <div class="seg" role="group" aria-label="${L_.theme}">${['auto', 'light', 'dark'].map(v => `<button data-ui="theme" data-v="${v}" aria-pressed="${ui.theme === v}">${L_[v]}</button>`).join('')}</div>
+    <div class="seg"><button data-act="reset">${L_.reset}</button></div></div>
+    <nav class="toc">${secs.map(([id, , title], i) => `<a href="#${id}">${i + 1}. ${title}</a>`).join('')}</nav>
+    ${secs.map(([id, fn, title, key], i) => section(id, `${i + 1} / 6`, title, '', fn(), key)).join('')}
+    <div class="final"><h2>${L_.final}</h2><ul>${L_.finalItems.map(x => `<li>${x}</li>`).join('')}</ul></div>`;
+  window.scrollTo(0, y);
+}
+
+/* ---------- interaction ---------- */
+let toastTimer, phTimer;
+function flash(msg, undo) { S.toast = msg; S.undo = undo || null; clearTimeout(toastTimer); toastTimer = setTimeout(() => { S.toast = null; S.undo = null; render(); }, 6000); }
+function setStatus(ids, v) { const prev = ids.map(id => [id, S.status[id]]); ids.forEach(id => { if (v) S.status[id] = v; else delete S.status[id]; }); return () => prev.forEach(([id, p]) => { if (p) S.status[id] = p; else delete S.status[id]; }); }
+
+document.addEventListener('click', e => {
+  const u = e.target.closest('[data-ui]');
+  if (u) { ui[u.dataset.ui] = u.dataset.v; if (u.dataset.ui === 'theme') { if (u.dataset.v === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.dataset.theme = u.dataset.v; } render(); return; }
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act, id = a.dataset.id, L_ = L();
+  if (a.tagName === 'SELECT' || a.type === 'checkbox') return;
+  switch (act) {
+    case 'reset': S = seed(); break;
+    case 'goto-list': e.preventDefault(); document.getElementById('s2').scrollIntoView({ behavior: 'smooth' }); return;
+    case 'seg': S.seg = a.dataset.v; S.sel.clear(); S.confirm = null; break;
+    case 'sel-all': shown().forEach(i => S.sel.add(i.id)); S.confirm = null; break;
+    case 'clear': S.sel.clear(); S.confirm = null; break;
+    case 'bulk': S.confirm = true; break;
+    case 'confirm-cancel': S.confirm = null; break;
+    case 'confirm-go': { const ids = shown().filter(i => S.sel.has(i.id)).map(i => i.id); const back = S.seg === 'nfi'; const u2 = setStatus(ids, back ? null : 'nfi'); S.sel.clear(); S.confirm = null; flash(back ? L_.toastBack(ids.length) : L_.toastNfi(ids.length), u2); break; }
+    case 'undo': if (S.undo) S.undo(); S.toast = null; S.undo = null; break;
+    case 'issue-all': { const c = a.dataset.c === 'null' ? null : a.dataset.c; const ids = due().filter(i => i.client === c && issuable(i)).map(i => i.id); setStatus(ids, 'issued'); ids.forEach(x => S.sel.delete(x)); flash(L_.toastIssued(ids.length, clientName(c))); break; }
+    case 'issue-one': S.drawer = id; break;
+    case 'drawer-close': S.drawer = null; break;
+    case 'drawer-issue': { const it = S.items.find(i => i.id === S.drawer); setStatus([it.id], 'issued'); S.sel.delete(it.id); S.drawer = null; flash(L_.toastOne(typeLabel(it.kind))); break; }
+    case 'nfi-one': { const u2 = setStatus([id], 'nfi'); S.sel.delete(id); flash(L_.toastNfi(1), u2); break; }
+    case 'back-one': { const u2 = setStatus([id], null); flash(L_.toastBack(1), u2); break; }
+    case 'ph-open': S.phoneScreen = 'list'; if (a.closest('#s1')) { render(); document.getElementById('s2').scrollIntoView({ behavior: 'smooth' }); return; } break;
+    case 'ph-back': S.phoneScreen = 'recent'; break;
+    case 'ph-issue': { const it = S.items.find(i => i.id === id); const u2 = setStatus([id], 'issued'); S.phoneToast = L_.toastOne(typeLabel(it.kind)); S._phUndo = u2; clearTimeout(phTimer); phTimer = setTimeout(() => { S.phoneToast = null; render(); }, 5000); break; }
+    case 'ph-nfi': { const u2 = setStatus([id], 'nfi'); S.phoneToast = L_.toastNfi(1); S._phUndo = u2; clearTimeout(phTimer); phTimer = setTimeout(() => { S.phoneToast = null; render(); }, 5000); break; }
+    case 'ph-undo': if (S._phUndo) S._phUndo(); S.phoneToast = null; break;
+    case 'e-nfi': if (S.entryState[id] === 'doc') S.entryBanner = true; else { S.entryState[id] = 'nfi'; S.entryBanner = false; } break;
+    case 'e-back': S.entryState[id] = 'none'; S.entryBanner = false; break;
+    case 'sheet-open': S.sheetOpen = true; S.sheetMsg = false; break;
+    case 'sheet-close': S.sheetOpen = false; break;
+    case 'sheet-nfi': S.sheetNfi = !S.sheetNfi; S.sheetOpen = false; break;
+    case 'sheet-try': S.sheetMsg = true; break;
+    default: return;
+  }
+  render();
+});
+document.addEventListener('change', e => {
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act;
+  if (act === 'sel') { a.checked ? S.sel.add(a.dataset.id) : S.sel.delete(a.dataset.id); S.confirm = null; }
+  else if (act === 'sel-group') { const c = a.dataset.c === 'null' ? null : a.dataset.c; shown().filter(i => i.client === c).forEach(i => a.checked ? S.sel.add(i.id) : S.sel.delete(i.id)); S.confirm = null; }
+  else if (act === 'older') { S.older = Number(a.value); S.sel.clear(); S.confirm = null; }
+  else if (act === 'pref') { S.pref = a.value; S.prefSaved = true; CLIENTS.rami.pref = a.value === 'DEFAULT' ? null : a.value; setTimeout(() => { S.prefSaved = false; render(); }, 2500); }
+  else if (act === 'defpref') { S.defPref = a.value; }
+  else return;
+  render();
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && (S.drawer || S.confirm || S.sheetOpen)) { S.drawer = null; S.confirm = null; S.sheetOpen = false; render(); } });
+render();
+</script>

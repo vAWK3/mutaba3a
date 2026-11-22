@@ -38,6 +38,7 @@ import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { InvoicingSetupPage } from './pages/invoicing/InvoicingSetupPage';
 import { IssuedDocumentPage, IssuedDocumentsPage } from './pages/views/IssuedDocuments';
+import { DocumentsDuePage } from './pages/views/DocumentsDuePage';
 import { SharingPage } from './pages/sharing/SharingPage';
 import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
@@ -295,6 +296,17 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     component: function IssuedDocument() {
       const { documentId } = issuedDocumentRoute.useParams();
       return <IssuedDocumentPage key={documentId} profile={useProfile()} documentId={documentId} justIssued={issuedDocumentRoute.useSearch().issued === true} />;
+    },
+  });
+
+  /** MUT-660: documents due, a tab of Documents where issuing is on for the profile. */
+  const toIssueRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/documents/to-issue',
+    validateSearch: (raw: Raw) => pickShellOverlay(raw),
+    component: function ToIssue() {
+      return <DocumentsDuePage profile={useProfile()} />;
     },
   });
 
@@ -601,6 +613,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         documentsRoute,
         issuedRoute,
         issuedDocumentRoute,
+        toIssueRoute,
         expensesRoute,
         groupsRoute,
         groupRoute,

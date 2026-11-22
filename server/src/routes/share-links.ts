@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import { invoiceSplitOf, serializeInvoiceSplit } from '../income/invoice-split.js';
 import { randomUUID } from 'node:crypto';
 import { displayNameOf } from '../accountants/grants.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
@@ -506,7 +507,9 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         if (row.kind === 'payment' && row.record.status !== 'REVERSED') received.push(row.record);
       }
       const ctx = await visitorContext(access, rows.filter((row) => row.kind === 'expense'), lang);
-      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received) }, 200);
+      // MUT-660: the accountant's link shows the books split too (invoicing profiles only).
+      const split = await invoiceSplitOf(store, organization, received, range);
+      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received), ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
 

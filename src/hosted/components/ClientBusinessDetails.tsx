@@ -5,6 +5,8 @@ import { useLanguage } from '../../lib/i18n/core';
 import { ApiError, apiErrorReason, type BusinessLookup, type Customer } from '../api/client';
 import { completeNumber, useBusinessLookup, useUpdateCustomer } from '../data/customerQueries';
 import { useIsLocalMode } from '../session/mode';
+import { useIssuer } from '../data/issuingQueries';
+import { DocumentsPreferenceField } from './DocumentsPreferenceField';
 
 /**
  * MUT-642: a client's VAT or company number and address, the two lines a tax
@@ -17,6 +19,8 @@ import { useIsLocalMode } from '../session/mode';
 export function ClientBusinessDetails({ profileId, client, writable }: { profileId: string; client: Customer; writable: boolean }) {
   const { t } = useLanguage();
   const [editing, setEditing] = useState(false);
+  const local = useIsLocalMode();
+  const issuer = useIssuer(profileId, !local);
 
   return (
     <section className="hp-card hp-business" aria-label={t('hosted.client.business.title')}>
@@ -38,6 +42,8 @@ export function ClientBusinessDetails({ profileId, client, writable }: { profile
           <dd dir="auto">{client.address ?? '—'}</dd>
         </dl>
       )}
+      {/* MUT-660: invoicing profiles only. */}
+      <DocumentsPreferenceField profileId={profileId} client={client} writable={writable} profileDefault={issuer.data?.defaultDocumentsPreference ?? 'ON_PAYMENT'} />
     </section>
   );
 }

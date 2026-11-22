@@ -655,3 +655,12 @@ mini-crm/
 - **Suggestion (MUT-370, ADR-191):** after a sign-in, Home shows "Add a passkey: the more secure way to sign in" while `/v1/me` `user.passkeyPrompt.due` (no passkey, fewer than 3 Not nows, not hidden 30 days; stored on `users.passkeyPrompt`, `PATCH /v1/me/passkey-prompt`). It waits for the trial's first-run step. The phone half reads the same field.
 - **At setup (MUT-619, ADR-257):** right after `/setup` sets the password and signs in, a device that can make a passkey is offered one before Home ("Create a passkey" / Not now). Same `passkeyPrompt` rules (`passkeyOfferable`): Not now spends one of the three offers, so Home doesn't ask again for 30 days. The password stays required (ADR-159 d9). `/accountant-invite` doesn't offer it yet.
 - Accountant pages (MUT-562, ADR-250): `/client-books` (the desk of profiles shared with an accountant, outside any profile, with a corner beside Reports) and `/client-books/$profileId` (one client read-only by whole months, totals per currency, receipts); the public `/accountant-invite` (accept, or sign up then sign in) and `/share` (a share link opened with a PIN). Public pages count cookieless only.
+
+## MUT-660 — Documents due per client (2026-11-22, ADR-270)
+
+- **What is due** is derived on each read from the client's documents preference (else the profile default, On payment) and what is issued or attached: `server/src/issuing/documents-due.ts`. Served by GET /v1/documents-due (grouped by client) and /count; Issue all is POST /v1/documents-due/issue (one client, ≤25, through the single issue).
+- **Not for invoice** is a mark on an Owed or a Received (bulk or If-Match on one), refused while a tax document is linked. It takes the entry out of documents due and out of Invoice income; the income stays in All income and every export.
+- **Take over or link**: a document takes over an untouched recorded Owed or an unallocated captured Received; anything else is issued linked only (`fromEntryMode`).
+- **Books split** on invoicing profiles only: Reports (`invoiceSplit`), the monthly summary, share links, the Excel `invoice_status` column.
+- **Portal**: Documents › To issue (Issued · To issue · Files), Home's To issue group, the row mark on Owed and Paid, the client's Documents field, the profile default in the invoicing setup, Reports' income card. Hidden where invoicing is off and on this device.
+

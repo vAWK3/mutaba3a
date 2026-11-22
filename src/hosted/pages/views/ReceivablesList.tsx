@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { NotForInvoiceAction } from '../../components/NotForInvoiceAction';
 import { useNavigate } from '@tanstack/react-router';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
@@ -48,6 +49,9 @@ interface ReceivableRow {
   issuable: boolean;
   customerId: string;
   title: string | null;
+  /** MUT-660: marked not for invoice, and the version a mark sends (If-Match). */
+  notForInvoice: boolean;
+  version: number;
 }
 
 const takesExternal = (r: ReceivableRow) => !r.issuedHere;
@@ -74,6 +78,8 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     issuable: r.origin === 'ADJUSTMENT' && r.currency === 'ILS' && r.paid === '0.00' && r.credited === '0.00',
     customerId: r.customerId,
     title: r.title,
+    notForInvoice: r.notForInvoice,
+    version: r.version,
   }));
 }
 
@@ -113,8 +119,9 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   // MUT-648 (E4): an Owed with no document yet offers its tax invoice, in the Document column beside Attach (MUT-647);
   // an entry with an invoice issued elsewhere attached offers neither.
   const issueOffer = useCallback(
-    (r: ReceivableRow) =>
-      canIssue && r.issuable ? (
+    (r: ReceivableRow) => (
+      <>
+      {canIssue && r.issuable && !r.notForInvoice ? (
         <Button
           variant="ghost"
           size="sm"
@@ -133,7 +140,11 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
         >
           {t('hosted.issue.offer.TAX_INVOICE')}
         </Button>
-      ) : null,
+      ) : null}
+      {/* MUT-660: an Owed recorded here, with no document of MTB3A's, can be marked not for invoice. */}
+      {canIssue && !r.issuedHere && <NotForInvoiceAction kind="owed" id={r.id} version={r.version} marked={r.notForInvoice} client={r.client} />}
+      </>
+    ),
     [canIssue, t],
   );
   const external = useExternalInvoiceColumn('OWED', rows, grossOf, takesExternal, issueOffer);
