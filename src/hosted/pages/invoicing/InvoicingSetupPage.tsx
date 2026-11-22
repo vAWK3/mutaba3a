@@ -11,6 +11,7 @@ import { isolate } from '../sharing/sharingRules';
 import { DefaultsStep, DetailsStep, LogoStep, NumberingStep, TaxAuthorityStep } from './InvoicingSteps';
 import { IntroArt, ReadyArt } from './InvoicingArt';
 import { Letterhead } from './Letterhead';
+import { UniformFileExport } from './UniformFileExport';
 import { DEFAULT_INK, REQUIRED_STEPS, SETUP_STEPS, type PaperModel, type SetupStep } from './setupSteps';
 
 /**
@@ -58,7 +59,11 @@ export function InvoicingSetupPage({ profile }: { profile: HostedProfile }) {
       ) : owner && !setup.data.introSeen ? (
         <Intro profileId={profile.id} />
       ) : (
-        <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} owner={owner} />
+        <>
+          <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} owner={owner} />
+          {/* MUT-569: the uniform file, once the business details it carries exist. */}
+          {issuer.data && <UniformFileExport profile={profile} />}
+        </>
       )}
     </div>
   );

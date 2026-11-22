@@ -6,6 +6,13 @@ record the date where the item says.
 
 ## server
 
+- **MUT-569 (API 1.134.0-mut569, ADR-272): the uniform file names the software house from config.** No migration. With nothing set, the file's A000 carries placeholders (`00000000`, `000000000`, "MTB3A"). The registering owner is Narabnd Studio Ltd (MUT-700). Add these to `production.tfvars` and `make release server`:
+  - `software_house_vat_id = "517108775"`;
+  - `software_house_name = "נאראבנד סטודיו בע\"מ"`;
+  - once MUT-567 issues the certificate, `uniform_file_registration_number = "<8 digits>"`.
+
+  Check: download a uniform file from You › Invoicing; `INI.TXT` positions 105–113 read 517108775. Delete this item when the registration number is set, and record the date on MUT-567.
+
 - **MUT-571 AC3 (API 1.130.0-followups): the Tax Authority re-consent reminder ships dark.** No migration. The release adds `POST /jobs/v1/issuing/tax-authority-reminders` (and the operator's `POST /admin/v1/issuing/tax-authority-reminders`); the `tax_authority_reminders` Cloud Scheduler job (daily, 09:00 Jerusalem) is created only with `mailer = "resend"` and `tax_authority_reminders_enabled = true` (default false). Production has no Tax Authority connection yet (MUT-638/567), so leave it off. **When `TAX_AUTHORITY_ENV` is set on the service:** (1) read who the next run would mail: `curl -sX POST "$URL/admin/v1/issuing/tax-authority-reminders" -H "x-admin-token: $MUTABA3A_ADMIN_TOKEN" -H 'content-type: application/json' -d '{"dryRun":true}'` (one row per connected profile whose consent ends within 10 days or ended within 7; no addresses); (2) add `tax_authority_reminders_enabled = true` to `production.tfvars` and `make release server`. Each owner gets at most two mails per consent. Delete this item when the job is on, and record the date on MUT-571.
 
 - **MUT-641 (API 1.124.0-mut641, ADR-265): issued-document PDFs are signed, and production refuses them until a certificate is in place.** The release migrates `20261122200000_mut641_issued_document_originals` (additive, INSERT-only table). With nothing set, `ISSUING_SIGNER` is off in production: `GET`/`POST /v1/issued-documents/{id}/pdf` answer 503 `SIGNING_NOT_CONFIGURED` and the draft preview still prints (issuing is behind the operator's `invoicing` feature anyway).

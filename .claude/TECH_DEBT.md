@@ -3307,3 +3307,9 @@ When resolving debt:
 1. Move to "Resolved Debt" section
 2. Add resolution date and description
 3. Update status to "Resolved"
+
+### TD-323: The uniform file is built in memory (MUT-569)
+- **What:** `GET /v1/issuing/uniform-file` reads every document in the range with its lines and builds INI, BKMVDATA, the report and the zip in memory. That's about 1 KB per document, so a 10k-document history is about 10 MB for a moment.
+- **When to pay:** a profile nearing 100k issued documents, or exports showing up in memory alerts. Stream BKMVDATA in document pages (keyset on type and number) into a streamed zip, as `period-pack/receipts-zip.ts` does.
+- **Also:** the Prisma side of `inRange` runs in server CI's `test:db`. The shared local test database was behind main's schema on 2026-11-22, so it wasn't run locally.
+

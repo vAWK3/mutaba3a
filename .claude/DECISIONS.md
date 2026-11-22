@@ -6949,6 +6949,28 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences.** One live request per Owed (a cancelled one doesn't count). Old phone builds skip the unknown type. The uniform-file mapping (record 300) is wired by whichever of MUT-569 / MUT-662 merges second.
 
+## ADR-272: The Uniform File Is the Issued Documents Only, Written in ISO-8859-8 With Arabic in Hebrew Letters (MUT-569)
+
+**Status:** Accepted (2026-11-22; Basel approved the plan D1–D7 and the wireframe).
+
+**Context:** The Instruction 36 registration (MUT-567) declares the uniform-file module, version 1.31, and attaches the Tax Authority simulator's result. The spec (10.05.2009) separates the bookkeeping module (B100/B110, trial balance) from the document module (C100/D110/D120, documents report), and the file's character set (ISO-8859-8 or CP-862) holds no Arabic.
+
+**Decision:**
+1. **Documents only (D1).**
+   - The file holds what MTB3A issued: C100 per document, D110 per line of a 305/320/330, and D120 for the payment of a 320/400 (a 400 has no D110, D4). A000 1013 = 0 ("not relevant").
+   - No B100/B110/M100: MTB3A keeps no journal or chart of accounts.
+   - Documents issued elsewhere (ADR-267) and plain Owed/Received entries are never in it.
+   - The accountant's answer (MUT-567 Q2) may add a single-entry B100/B110 follow-up; nothing here changes then.
+2. **ISO-8859-8, logical order, one byte per character (A000 1029 = 1).**
+   - Every text field goes through `toFileText`: Hebrew points and direction marks are dropped, typographic punctuation becomes ASCII, Arabic letters are written in Hebrew letters with final forms (D2), Arabic-Indic digits become ASCII, and anything else is `?`.
+   - `encodeLine` refuses any other character, so a field that skipped `toFileText` fails loudly.
+   - The PDF keeps the original script.
+3. **Amounts in agorot and positive, with the type carrying the meaning** (a 330 is positive). Discounts are negative (spec §2.4 יב). D110 1265 is the unit price before VAT, and 1266 is the discount that makes quantity × price − discount equal the line net to the agora, so lines add up to C100 1219.
+4. **INI summary lines** only for the document record types present (the spec's §2.5 table). A100 and Z900 are counted in A000 1002, which equals Z900 1155.
+5. **Times are Israel time** (1206, 1026/1027, the folder). The range is document dates (1230), multi-year software (1011 = 2), and one random 15-digit primary id per export.
+6. **Built on request, never stored.** A 10k-document history is a few MB in memory (TD-323 for streaming).
+7. **Same gate as the issuing reads.** An accountant may export; only a member's export is audited (an accountant runs under the read-only store).
+
 ## ADR-273: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
 
 **Status:** Accepted (2026-11-22; wireframe A "Number first, then issue", chosen by Basel; canvas https://claude.ai/artifact/Ev11vFMKsFAuXVXVp2nx4e).

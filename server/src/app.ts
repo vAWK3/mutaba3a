@@ -96,6 +96,7 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
+import type { UniformFileHouse } from './issuing/uniform-file/export.js';
 import type { RegistryLookup } from './israel/registry.js';
 import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
@@ -209,6 +210,8 @@ export interface AppDependencies {
    * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
    */
   documentSigner?: DocumentSigner | null;
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, Barmajiyat). */
+  uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -390,7 +393,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.133.0-mut711';
+export const API_VERSION = '1.134.0-mut569';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -624,6 +627,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.
     ocr: deps.receiptReading?.ocr ?? null,
+    uniformFileSoftware: deps.uniformFileSoftware ?? null,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
     issuedPdf: {
       render: renderIssuedDocumentPdf,

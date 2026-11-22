@@ -39,6 +39,39 @@
 
 ### Changed
 - With the Tax Authority off on a server, a tax invoice that needs an allocation number is refused until one is entered (it used to issue without one).
+
+
+---
+
+## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-272, API 1.134.0-mut569)
+
+### Added
+- `GET /v1/issuing/uniform-file?from&to&lang`: every document dated in the range (inclusive, `to` ≤ today) as the OPENFRMT zip: `OPENFRMT/<VAT 8>.<YY>/<MMDDhhmm>/INI.TXT`, `…/BKMVDATA.zip` (holding `BKMVDATA.TXT`) and `report.html` (the printable production summary and documents report, ar | en).
+  - Owner, or an accountant with a grant, on the `invoicing` gate.
+  - `X-Uniform-File-Documents` / `X-Uniform-File-Records` carry the counts.
+  - A member's export is audited (`issuing.uniform_file_exported`, `issuer_details`).
+- `server/src/issuing/uniform-file/` (pure):
+  - `layout.ts`: the spec's record tables: A000 466, summary 19, A100 95, C100 444, D110 339, D120 222, Z900 110.
+  - `format.ts`: field formats, and `toFileText`/`encodeLine` for ISO-8859-8, with Arabic in Hebrew letters.
+  - `export.ts`: documents → C100/D110/D120 and the counts; no B100/B110 (A000 1013 = 0).
+  - `report.ts`, `zip.ts`.
+- `IssuingRepository.inRange` (memory + Prisma, the existing `(organizationId, documentDate)` index; lines fetched in chunks of 5,000).
+- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`. The defaults are placeholders; Terraform's `software_house_*` and `uniform_file_registration_number` set the registering owner, Narabnd Studio Ltd, 517108775 (MUT-700). The operator step is in before-release.md.
+- Portal: You › Invoicing's "Uniform file (מבנה אחיד)" card (`UniformFileExport`). Last year, This year or Other dates; download; the counts or "no documents"; failure toast with Try again. The phone has none (D6).
+- `docs/operations/tax-authority/uniform-file/`: the simulator fixture (2,345 records, every type, Hebrew and Arabic) and Basel's run steps.
+
+### Technical
+- QA: `portal.invoicing.uniform-file`, `portal.invoicing.uniform-file-empty`; the FakeApi answers the route.
+- Route lists (`route-security`, `accountant-route-matrix`) name the route; no migration.
+- Pre-landing review fixes:
+  - The uniform-file code uses no Node `Buffer` or `randomInt`, because these routes also run in the signed-out portal's shims. `build:hosted` passes.
+  - A document too large for the file answers 422 `UNIFORM_FILE_AMOUNT_TOO_LARGE`, naming the document.
+  - VAT-inclusive unit prices round up, so every D110 line adds up to the agora.
+  - The documents report lists every type, with zero where none.
+  - `from`/`to` must be real calendar days from 2000.
+- Merged after MUT-662: a payment request is written as record type 300 (C100 and its D110 lines), and the documents report lists it; ADR-271's "wired by whichever merges second" is this.
+
+---
 ## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
 
 ### Added

@@ -4772,6 +4772,8 @@ export interface IssuingRepository {
    */
   moneyDocumentOn(organizationId: string, paymentId: string): Promise<{ id: string; docType: IssuedDocType; number: number } | null>;
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
+  /** MUT-569: every document dated `from`…`to` (both inclusive), with its lines, by type code then number (the uniform file). */
+  inRange(organizationId: string, from: IsoDate, to: IsoDate): Promise<IssuedDocumentRecord[]>;
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
   /** MUT-641: the signed original, or null until it was first produced. */

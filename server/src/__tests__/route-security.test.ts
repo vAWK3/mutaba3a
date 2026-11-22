@@ -108,6 +108,8 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issuing/settings',
   'PUT /v1/issuing/starting-numbers/{docType}',
   'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
   'POST /v1/issued-documents/preview',
   'POST /v1/issued-documents',
   'GET /v1/issued-documents',

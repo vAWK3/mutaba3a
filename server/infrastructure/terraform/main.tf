@@ -95,6 +95,14 @@ locals {
     var.accountant_plan_enabled ? { ACCOUNTANT_PLAN = "true" } : {},
   )
 
+  # MUT-569 (ADR-272): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
+  # its placeholders (zeros, "MTB3A"). The software house is the registering owner: Narabnd Studio Ltd (MUT-700).
+  uniform_file_env = merge(
+    var.uniform_file_registration_number == null ? {} : { UNIFORM_FILE_REGISTRATION_NUMBER = var.uniform_file_registration_number },
+    var.software_house_vat_id == null ? {} : { SOFTWARE_HOUSE_VAT_ID = var.software_house_vat_id },
+    var.software_house_name == null ? {} : { SOFTWARE_HOUSE_NAME = var.software_house_name },
+  )
+
   # MUT-487 (R2): the new project keeps its jobs paused until the cutover; behind the forwarder the old ones would
   # reach the new service a second time, so they stay paused whatever scheduler_paused says.
   scheduler_paused = var.scheduler_paused || var.legacy_forwarder
@@ -740,6 +748,15 @@ resource "google_cloud_run_v2_service" "api" {
         # MUT-558: accountant access, share links, period downloads and the (dormant) Accountant plan.
         dynamic "env" {
           for_each = local.accountant_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-569: the uniform file's software house and registration number (locals.uniform_file_env).
+        dynamic "env" {
+          for_each = local.uniform_file_env
           content {
             name  = env.key
             value = env.value

@@ -850,6 +850,23 @@ export const api = {
   /** The draft PDF (watermarked), as a file. */
   draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
     (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),
+  /**
+   * MUT-569: the uniform file (מבנה אחיד 1.31) for the documents dated `from`…`to`, as the OPENFRMT zip, with its counts
+   * and file name from the response headers.
+   */
+  uniformFile: async (profileId: string, query: { from: string; to: string; lang: 'ar' | 'en' }) => {
+    const response = await send('GET', '/v1/issuing/uniform-file', { profileId, query, accept: 'application/zip' });
+    const filename = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? `OPENFRMT-${query.from}_${query.to}.zip`;
+    return {
+      blob: await response.blob(),
+      filename,
+      // Not amounts: whole counts of documents and records.
+      // eslint-disable-next-line no-restricted-syntax
+      documents: Number.parseInt(response.headers.get('x-uniform-file-documents') ?? '0', 10),
+      // eslint-disable-next-line no-restricted-syntax
+      records: Number.parseInt(response.headers.get('x-uniform-file-records') ?? '0', 10),
+    };
+  },
   /** A view copy: counts nothing (the original or a copy, as the record stands). */
   viewPdf: async (profileId: string, documentId: string) =>
     (await send('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, accept: 'application/pdf' })).blob(),

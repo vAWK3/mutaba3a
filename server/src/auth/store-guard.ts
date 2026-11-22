@@ -398,6 +398,7 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-709: whether a receipt stands on a payment; asked by every route that may reverse one, whoever calls it.
     moneyDocumentOn: 'read',
     list: { read: 'issuing' },
+    inRange: { read: 'issuing' },
     recordCopy: { write: 'issuing' },
     // MUT-641: the signed original, kept once.
     getOriginalPdf: { read: 'issuing' },

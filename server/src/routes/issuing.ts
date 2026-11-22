@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
@@ -11,6 +11,9 @@ import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { DOC_TYPE_TITLES, documentNumberLabel } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
+import { buildUniformFile, DocumentTooLargeError, UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFile, type UniformFileHouse } from '../issuing/uniform-file/export.js';
+import { uniformFileReport } from '../issuing/uniform-file/report.js';
+import { UNIFORM_FILE_MIME, uniformFileZip } from '../issuing/uniform-file/zip.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
 import { settlementOf } from '../issuing/settlement.js';
 import { formatMoney, type Currency } from '../money.js';
@@ -70,6 +73,31 @@ const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): Jso
   ...(issuer.bankDetails ? { bankDetails: issuer.bankDetails } : {}),
   ...(issuer.footerNote ? { footerNote: issuer.footerNote } : {}),
   ...(logoId ? { logoId } : {}),
+});
+
+/** MUT-569: the product's name in the uniform file (A000 1007). */
+const UNIFORM_FILE_SOFTWARE_NAME = 'MTB3A';
+
+/**
+ * A000 1004: 15 random digits, one per export, the first never zero (appendix 5, note 2). From randomBytes, which the
+ * signed-out portal's crypto shim also has (no randomInt there).
+ */
+const UNIFORM_FILE_ID_FLOOR = 10n ** 14n;
+/** No document predates this (the issuing core shipped in 2026; the spec's dates are 8 digits). */
+const UNIFORM_FILE_EARLIEST = '2000-01-01';
+const uniformFilePrimaryId = () => String(UNIFORM_FILE_ID_FLOOR + (BigInt(`0x${randomBytes(8).toString('hex')}`) % (9n * UNIFORM_FILE_ID_FLOOR)));
+
+/** A real calendar day (the regex lets 2026-02-31 through). */
+const isCalendarDay = (iso: string) => {
+  const day = new Date(`${iso}T00:00:00Z`);
+  return !Number.isNaN(day.getTime()) && day.toISOString().slice(0, 10) === iso;
+};
+
+const UniformFileQuerySchema = z.object({
+  from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'from is a date, YYYY-MM-DD').openapi({ example: '2025-01-01' }),
+  to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'to is a date, YYYY-MM-DD').openapi({ example: '2025-12-31' }),
+  /** The printable report's language. */
+  lang: z.enum(['ar', 'en']).default('ar'),
 });
 
 /** MUT-646: a logo is a PNG or a JPEG of at most this size, told apart by its first bytes (never the header's word). */
@@ -191,7 +219,7 @@ export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, w
   return organization;
 }
 
-export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }): OpenAPIHono<AppEnv> {
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }, uniformFileHouse: UniformFileHouse = UNIFORM_FILE_HOUSE_PLACEHOLDER): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
@@ -1070,6 +1098,66 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     const issuer = await store.issuing.getIssuer(id);
     return issuer ? Number(issuer.vatId) : null;
   } });
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issuing/uniform-file',
+      tags: ['Issuing'],
+      summary: 'Download the uniform file (מבנה אחיד 1.31) for a date range',
+      description:
+        'MUT-569 (ADR-272): every document dated `from`…`to` (inclusive; `to` no later than today) as the Tax Authority’s uniform file: a zip with `OPENFRMT/<vat>.<YY>/<MMDDhhmm>/INI.TXT` and `BKMVDATA.zip`, and `report.html` (the printable summary, in `lang`). Documents only (C100, D110, D120); no journal records. `X-Uniform-File-Documents` and `X-Uniform-File-Records` carry the counts.',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      request: { query: UniformFileQuerySchema },
+      responses: {
+        200: { description: 'The zip', content: { [UNIFORM_FILE_MIME]: { schema: z.string().openapi({ format: 'binary' }) } } },
+        ...notFoundResponse,
+        ...validationResponse,
+        ...errorResponses,
+      },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, false);
+      const { from, to, lang } = c.req.valid('query');
+      const now = c.get('now')();
+      for (const [field, day] of [['from', from], ['to', to]] as const) {
+        if (!isCalendarDay(day) || day < UNIFORM_FILE_EARLIEST) throw new ApiError('VALIDATION_FAILED', `${field} is not a date MTB3A could have issued on`, { reason: 'PERIOD_RANGE', field });
+      }
+      if (from > to) throw new ApiError('VALIDATION_FAILED', 'to comes before from', { reason: 'PERIOD_RANGE', field: 'to' });
+      if (to > todayFor(organization, now)) throw new ApiError('VALIDATION_FAILED', 'A range can’t reach past today', { reason: 'PERIOD_RANGE', field: 'to' });
+      const issuer = await mustIssuer(organization.id);
+      const documents = await store.issuing.inRange(organization.id, from, to);
+      const originals = await originalsOf(organization.id, documents);
+      const software = { ...uniformFileHouse, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
+      let file: UniformFile;
+      try {
+        file = buildUniformFile({ issuer, documents, originals, range: { from, to }, producedAt: now, primaryId: uniformFilePrimaryId(), software });
+      } catch (err) {
+        if (!(err instanceof DocumentTooLargeError)) throw err;
+        throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
+      }
+      const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range: { from, to }, producedAt: now, software }, lang);
+      const zip = uniformFileZip(file, report);
+      // A member's export is recorded; an accountant reads under a read-only store, like every issuing read (no audit).
+      if (sessionAuth(c).access === 'member') await audit(c, 'issuing.uniform_file_exported', 'issuer_details', organization.id, { from, to, documents: documents.length, records: file.totalRecords });
+      return c.body(new Uint8Array(zip), 200, {
+        'content-type': UNIFORM_FILE_MIME,
+        'content-disposition': `attachment; filename="OPENFRMT-${issuer.vatId}-${from}_${to}.zip"`,
+        'cache-control': 'no-store',
+        'x-uniform-file-documents': String(documents.length),
+        'x-uniform-file-records': String(file.totalRecords),
+      });
+    },
+  );
+
+  /** A credit note's tax invoice, which may be dated before the range: id → type and number. */
+  async function originalsOf(organizationId: string, documents: readonly IssuedDocumentRecord[]) {
+    const inFile = new Map(documents.map((d) => [d.id, d]));
+    const ids = [...new Set(documents.flatMap((d) => (d.docType === 'CREDIT_NOTE' && d.originalId ? [d.originalId] : [])))];
+    const found = await Promise.all(ids.map(async (id) => inFile.get(id) ?? (await store.issuing.getById(organizationId, id))));
+    return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
+  }
 
   app.openapi(
     createRoute({
