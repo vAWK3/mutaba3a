@@ -2931,7 +2931,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "taxAuthority": {
         "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
@@ -2973,7 +2974,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "client": "Client",
       "clientPlaceholder": "Search by name or number",
@@ -3050,6 +3052,28 @@
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
         "column": "Document"
+      },
+      "colStatus": "Status",
+      "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
+      "paymentRequest": {
+        "issued": "Issued",
+        "status": {
+          "UNPAID": "Unpaid",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid in full",
+          "CANCELLED": "Cancelled"
+        },
+        "covered": "{covered} of {gross}",
+        "notTax": "A payment request is not a tax document. The invoice-receipts that follow it are.",
+        "linkedTitle": "Documents for its payments",
+        "cancelledLine": "Cancelled {number} on {date}",
+        "cancel": "Cancel payment request…",
+        "cancelTitle": "Cancel {document}?",
+        "cancelBody": "The request is kept and marked cancelled with a number of its own. What the client owes doesn’t change. This can’t be undone.",
+        "reason": "Reason (optional)",
+        "cancelConfirm": "Cancel payment request",
+        "cancelled": "{number} cancelled ({cancellation})",
+        "cancelBlocked": "An invoice-receipt refers to this request. Cancel the invoice-receipt with a credit note first."
       }
     },
     "home": {

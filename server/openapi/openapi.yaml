@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.128.0-mut709
+  version: 1.129.0-mut662
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9773,6 +9773,10 @@ components:
               type: integer
               minimum: 1
               maximum: 999999999
+            PAYMENT_REQUEST:
+              type: integer
+              minimum: 1
+              maximum: 999999999
           additionalProperties: false
           description: The next number per document type, when moving from another tool
       required:
@@ -9824,7 +9828,8 @@ components:
         - TAX_INVOICE_RECEIPT
         - CREDIT_NOTE
         - RECEIPT
-      description: 305, 320, 330 and 400 in the Tax Authority's codes
+        - PAYMENT_REQUEST
+      description: "305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know."
     StartingNumberRequest:
       type: object
       properties:
@@ -9946,7 +9951,7 @@ components:
         appliesToDocumentId:
           type: string
           format: uuid
-          description: "A receipt: the open tax invoice it pays"
+          description: "A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted)."
         payment:
           type: object
           properties:
@@ -10122,6 +10127,11 @@ components:
               format: uuid
             coreVersion:
               type: string
+            displayNumber:
+              type: string
+              description: "The number as shown: PR-0007 for a payment request, the plain number otherwise"
+            paymentRequest:
+              $ref: "#/components/schemas/PaymentRequestFacts"
           required:
             - id
             - docType
@@ -10142,6 +10152,69 @@ components:
             - receivableId
             - paymentId
             - coreVersion
+            - displayNumber
+            - paymentRequest
+    PaymentRequestFacts:
+      type: object
+      nullable: true
+      properties:
+        status:
+          type: string
+          enum:
+            - UNPAID
+            - PARTLY_PAID
+            - PAID
+            - CANCELLED
+        covered:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: What the referring invoice-receipts and receipts cover, after their credit notes
+        linked:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+                format: uuid
+              docType:
+                $ref: "#/components/schemas/IssuedDocType"
+              number:
+                type: integer
+              gross:
+                type: string
+                pattern: ^-?\d+(\.\d+)?$
+                description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            required:
+              - id
+              - docType
+              - number
+              - gross
+        cancellation:
+          type: object
+          nullable: true
+          properties:
+            number:
+              type: integer
+            displayNumber:
+              type: string
+            cancelledAt:
+              type: string
+              format: date-time
+            reason:
+              type: string
+              nullable: true
+          required:
+            - number
+            - displayNumber
+            - cancelledAt
+            - reason
+      required:
+        - status
+        - covered
+        - linked
+        - cancellation
+      description: "MUT-662: a payment request's derived status; null for other types"
     IssuedDocumentPage:
       type: object
       properties:
@@ -10155,6 +10228,13 @@ components:
       required:
         - items
         - nextCursor
+    CancelPaymentRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+          nullable: true
+          maxLength: 300
     IssuedCopyRequest:
       type: object
       properties:
@@ -24874,7 +24954,7 @@ paths:
         - schema:
             $ref: "#/components/schemas/IssuedDocType"
           required: true
-          description: 305, 320, 330 and 400 in the Tax Authority's codes
+          description: "305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know."
           name: docType
           in: path
       requestBody:
@@ -25060,7 +25140,7 @@ paths:
         - schema:
             $ref: "#/components/schemas/IssuedDocType"
           required: false
-          description: 305, 320, 330 and 400 in the Tax Authority's codes
+          description: "305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know."
           name: docType
           in: query
         - schema:
@@ -25156,6 +25236,81 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "404":
           description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation or idempotency-key failure
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Rate limited
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/issued-documents/{documentId}/cancel:
+    post:
+      tags:
+        - Issuing
+      summary: Cancel a payment request (MUT-662)
+      description: "D18: a payment request is cancelled by a record of its own (CX series); the document and its Owed never change, and the Owed goes back to documents due. Refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while an invoice-receipt or receipt refers to it (cancel that with a credit note first), 409 ALREADY_CANCELLED, 422 NOT_A_PAYMENT_REQUEST. Owner only. The same Idempotency-Key returns the same cancellation."
+      security:
+        - session: []
+        - deviceSession: []
+        - delegated: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: documentId
+          in: path
+        - schema:
+            type: string
+            minLength: 8
+            maxLength: 128
+            description: Client-generated key, unique per operation attempt (plan §14.2).
+          required: true
+          description: Client-generated key, unique per operation attempt (plan §14.2).
+          name: idempotency-key
+          in: header
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelPaymentRequest"
+      responses:
+        "200":
+          description: Cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuedDocument"
+        "401":
+          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: Key lacks the required scope
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: No such entity in this organization
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: Conflict; `details.reason` says which (see the API description)
           content:
             application/json:
               schema:

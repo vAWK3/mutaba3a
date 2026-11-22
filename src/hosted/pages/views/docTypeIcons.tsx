@@ -18,6 +18,9 @@ export function DocTypeIcon({ type }: { type: IssuedDocType }) {
       return <IssuedReceiptIcon className="hp-doc-icon" />;
     case 'CREDIT_NOTE':
       return <CreditNoteIcon className="hp-doc-icon hp-doc-icon--mirror" />;
+    // MUT-662: the tax invoice's sheet until Claude Design draws the payment request's own icon (follow-up).
+    case 'PAYMENT_REQUEST':
+      return <TaxInvoiceIcon className="hp-doc-icon" />;
   }
 }
 

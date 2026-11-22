@@ -116,6 +116,8 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/preview/pdf',
+  // MUT-662: cancelling a payment request (owner only).
+  'POST /v1/issued-documents/{documentId}/cancel',
   // MUT-660: documents due, Issue all and the not-for-invoice marks.
   'GET /v1/documents-due',
   'GET /v1/documents-due/count',

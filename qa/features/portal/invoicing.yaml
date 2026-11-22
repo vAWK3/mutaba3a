@@ -72,6 +72,26 @@ features:
       - The receipt pays the tax invoice (appliesToDocumentId, payment) and what is still owed drops to 12,774.00
       - After the part payment, the credit note starts as one line for what is still owed (12,774.00, prices include VAT) and names its tax invoice (originalId)
       - The list shows the three documents; in Arabic it reads right to left
+  - id: payment-request
+    title: A payment request — issued as PR-0001, settled by invoice-receipts, cancelled by record (MUT-662)
+    tier: secondary
+    tickets: [MUT-662]
+    steps:
+      - Open Documents › Issued, choose Issue a document, Client 1 and the Payment request type, one line of 1,000
+      - Issue it
+      - Record a payment of 400 from its page
+      - Try to cancel it
+      - Record the rest
+      - Issue another payment request of 500 and cancel it with a reason
+      - Open the list in Arabic
+    expect:
+      - The type says it is not a tax document (no allocation number, not counted in VAT) and the totals show 1,180.00
+      - It takes PR-0001 and reads Unpaid
+      - The payment is an invoice-receipt that refers to the request (appliesToDocumentId) and the request reads Partly paid, listing it
+      - Cancel is not offered while an invoice-receipt refers to it; the panel says to credit the invoice-receipt first
+      - The request reads Paid in full and offers no further payment
+      - The second request reads Cancelled with CX-0001, and the list shows Cancelled
+      - In Arabic the list reads right to left with "طلب دفع PR-0001"
   - id: issue-gate
     title: Issuing waits for the setup; a client page issues for that client; no issuing, no Issued tab (MUT-570)
     tier: secondary
