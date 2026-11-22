@@ -48,6 +48,12 @@
 ### Technical
 - QA: `portal.invoicing.uniform-file`, `portal.invoicing.uniform-file-empty`; the FakeApi answers the route.
 - Route lists (`route-security`, `accountant-route-matrix`) name the route; no migration.
+- Pre-landing review fixes:
+  - The uniform-file code uses no Node `Buffer` or `randomInt`, because these routes also run in the signed-out portal's shims. `build:hosted` passes.
+  - A document too large for the file answers 422 `UNIFORM_FILE_AMOUNT_TOO_LARGE`, naming the document.
+  - VAT-inclusive unit prices round up, so every D110 line adds up to the agora.
+  - The documents report lists every type, with zero where none.
+  - `from`/`to` must be real calendar days from 2000.
 
 ---
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
