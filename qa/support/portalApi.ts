@@ -1287,6 +1287,17 @@ export class FakeApi {
         return setup();
       }
       if (id === 'styles' && method === 'GET') return json({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
+      // MUT-569: the uniform file: the documents dated in the range, counted as the API counts them; the zip is a stand-in.
+      if (id === 'uniform-file' && method === 'GET') {
+        const from = e.query.get('from') ?? '';
+        const to = e.query.get('to') ?? '';
+        if (!state.issuer) return json({ error: { code: 'VALIDATION_FAILED', message: 'Add the business details printed on documents first', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 422);
+        if (from > to) return json({ error: { code: 'VALIDATION_FAILED', message: 'to comes before from', details: { reason: 'PERIOD_RANGE', field: 'to' } } }, 422);
+        const docs = state.docs.filter((d) => String(d.documentDate) >= from && String(d.documentDate) <= to);
+        const records = 2 + docs.reduce((sum, d) => sum + 1 + (d.docType === 'RECEIPT' ? 0 : ((d.lines as Json[] | undefined)?.length ?? 1)) + (d.paymentDetails ? 1 : 0), 0);
+        const filename = `OPENFRMT-${String(state.issuer.vatId)}-${from}_${to}.zip`;
+        return { status: 200, contentType: 'application/zip', headers: { 'Content-Disposition': `attachment; filename="${filename}"`, 'X-Uniform-File-Documents': String(docs.length), 'X-Uniform-File-Records': String(records) }, body: 'PK qa' };
+      }
       if (id === 'settings' && method === 'GET') {
         return json({ counters: ISSUED_DOC_TYPES.map((docType) => ({ docType, start: state.starts[docType] ?? 1, next: state.starts[docType] ?? 1, hasDocuments: false })) });
       }

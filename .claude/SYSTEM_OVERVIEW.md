@@ -397,6 +397,10 @@ Signed in, Your data › Download my records writes the chosen profiles to the s
 - MUT-568 (ADR-260): issued invoices, receipts and credit notes are a separate INSERT-only record (database triggers
   refuse UPDATE, DELETE and TRUNCATE), numbered gap-free per type, kept 7 years after an account closes, and corrected
   only by a credit note. Behind the `invoicing` feature on business profiles; server only until MUT-570.
+- MUT-569 (ADR-270): the uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors: You › Invoicing downloads
+  the OPENFRMT zip for a date range (`GET /v1/issuing/uniform-file`; INI.TXT, BKMVDATA, a printable report). Documents
+  only (C100/D110/D120), ISO-8859-8 with Arabic in Hebrew letters; the simulator fixture is in
+  `docs/operations/tax-authority/uniform-file/`.
 - MUT-640 (ADR-261): issued documents print server-side as PDFs (Hebrew, Arabic, English; Professional, Modern or Minimal; black
   or blue ink), with Malafat's tri-script engine; the first produced copy is the original, later ones copies.
 - MUT-641 (ADR-265): every issued-document PDF that leaves is signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp);

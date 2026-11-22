@@ -387,3 +387,73 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
     expect(plain.last('GET', /^\/v1\/issuing\/setup$/)).toBeFalsy();
   });
 });
+
+test('download the uniform file (מבנה אחיד) for this year: the zip, and how many documents and records it holds', { tag: '@portal.invoicing.uniform-file' }, async ({ page, step }) => {
+  const api = ready();
+  const card = page.getByRole('region', { name: 'Uniform file (מבנה אחיד)' });
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+
+  await step('Issue a tax invoice for Client 1', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await page.getByTestId('issue-open').click();
+    await drawer.getByLabel('Client').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await drawer.getByLabel('Description').fill('Flutter development, sprint 3');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('450');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 1');
+  });
+
+  await step('Open You › Invoicing: the uniform-file card offers last year by default', async () => {
+    await api.open(page, setupPath);
+    await expect(card).toBeVisible();
+    await expect(card.getByRole('radio', { name: 'Last year' })).toBeChecked();
+    await expect(card.getByLabel('From')).toBeDisabled();
+  });
+
+  await step('Choose Other dates and put To before From: it is refused in place and nothing downloads', async () => {
+    await card.getByRole('radio', { name: 'Other dates' }).click();
+    await card.getByLabel('From').fill('2026-12-01');
+    await card.getByLabel('To').fill('2026-11-01');
+    await expect(card.getByText('“To” comes before “From”.')).toBeVisible();
+    await expect(card.getByRole('button', { name: 'Download the file' })).toBeDisabled();
+    expect(api.last('GET', /^\/v1\/issuing\/uniform-file$/)).toBeFalsy();
+  });
+
+  await step('Choose This year and Download the file: the OPENFRMT zip downloads and the card counts the document', async () => {
+    await card.getByRole('radio', { name: 'This year' }).click();
+    const download = page.waitForEvent('download');
+    await card.getByRole('button', { name: 'Download the file' }).click();
+    const file = await download;
+    expect(file.suggestedFilename()).toMatch(/^OPENFRMT-516123452-2026-01-01_2026-\d{2}-\d{2}\.zip$/);
+    const call = api.last('GET', /^\/v1\/issuing\/uniform-file$/);
+    expect(call?.query.get('from')).toBe('2026-01-01');
+    expect(call?.query.get('lang')).toBe('en');
+    await expect(card.getByRole('status')).toContainText('Documents: 1 · Records: 4');
+  });
+
+  await step('In Arabic the card reads right to left with no sideways scroll', async () => {
+    await api.open(page, setupPath, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('region', { name: 'الملف الموحّد (מבנה אחיד)' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+test('a range with no documents still downloads a valid file, and the card says there were none', { tag: '@portal.invoicing.uniform-file-empty' }, async ({ page, step }) => {
+  const api = ready();
+  const card = page.getByRole('region', { name: 'Uniform file (מבנה אחיד)' });
+
+  await step('Open You › Invoicing on a profile with no documents and Download the file for last year', async () => {
+    await api.open(page, setupPath);
+    const download = page.waitForEvent('download');
+    await card.getByRole('button', { name: 'Download the file' }).click();
+    await download;
+  });
+
+  await step('The card says there are no documents in these dates, and that the file is still valid', async () => {
+    await expect(card.getByRole('status')).toContainText('No documents in these dates.');
+    await expect(card.getByRole('status')).toContainText('The file is still valid');
+    expect(api.last('GET', /^\/v1\/issuing\/uniform-file$/)?.query.get('to')).toMatch(/-12-31$/);
+  });
+});

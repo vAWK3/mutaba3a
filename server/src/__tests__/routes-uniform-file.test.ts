@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /**
- * MUT-569 (ADR-269): GET /v1/issuing/uniform-file. Every document dated in the range as the uniform file (1.31), in the
+ * MUT-569 (ADR-270): GET /v1/issuing/uniform-file. Every document dated in the range as the uniform file (1.31), in the
  * OPENFRMT zip with its report. Same gate as the other issuing reads: the owner's `invoicing` feature on a business
  * profile; an accountant with a grant reads it too.
  */

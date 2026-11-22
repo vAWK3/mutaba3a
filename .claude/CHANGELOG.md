@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-270, API 1.127.0-mut569)
+
+### Added
+- `GET /v1/issuing/uniform-file?from&to&lang`: every document dated in the range (inclusive, `to` ≤ today) as the OPENFRMT zip: `OPENFRMT/<VAT 8>.<YY>/<MMDDhhmm>/INI.TXT`, `…/BKMVDATA.zip` (holding `BKMVDATA.TXT`) and `report.html` (the printable production summary and documents report, ar | en).
+  - Owner, or an accountant with a grant, on the `invoicing` gate.
+  - `X-Uniform-File-Documents` / `X-Uniform-File-Records` carry the counts.
+  - A member's export is audited (`issuing.uniform_file_exported`, `issuer_details`).
+- `server/src/issuing/uniform-file/` (pure):
+  - `layout.ts`: the spec's record tables: A000 466, summary 19, A100 95, C100 444, D110 339, D120 222, Z900 110.
+  - `format.ts`: field formats, and `toFileText`/`encodeLine` for ISO-8859-8, with Arabic in Hebrew letters.
+  - `export.ts`: documents → C100/D110/D120 and the counts; no B100/B110 (A000 1013 = 0).
+  - `report.ts`, `zip.ts`.
+- `IssuingRepository.inRange` (memory + Prisma, the existing `(organizationId, documentDate)` index; lines fetched in chunks of 5,000).
+- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`.
+- Portal: You › Invoicing's "Uniform file (מבנה אחיד)" card (`UniformFileExport`). Last year, This year or Other dates; download; the counts or "no documents"; failure toast with Try again. The phone has none (D6).
+- `docs/operations/tax-authority/uniform-file/`: the simulator fixture (2,345 records, every type, Hebrew and Arabic) and Basel's run steps.
+
+### Technical
+- QA: `portal.invoicing.uniform-file`, `portal.invoicing.uniform-file-empty`; the FakeApi answers the route.
+- Route lists (`route-security`, `accountant-route-matrix`) name the route; no migration.
+
+---
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

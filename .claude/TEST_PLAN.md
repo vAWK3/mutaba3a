@@ -4667,6 +4667,21 @@ Not run: `test:db` (no store change: the report only reads through existing repo
 
 No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
 
+## MUT-569 — the uniform file (מבנה אחיד 1.31) (2026-11-22, ADR-270)
+
+| Layer | File | Covers |
+|---|---|---|
+| Formats | `server/src/issuing/uniform-file/__tests__/format.test.ts` | record widths add up to the spec (466/19/95/444/339/222/110) and the spec's start positions; alpha/numeric padding; signed amounts and quantities; ISO-8859-8 text: Hebrew kept, points and bidi marks dropped, punctuation to ASCII, Arabic in Hebrew letters with final forms, Arabic-Indic digits; `encodeLine` refuses anything else |
+| Writer | `…/__tests__/export.test.ts` | AC2 INI summary = BKMVDATA counts, A000 1002 = Z900 1155, running record numbers, one primary id in three places; AC3 no documents → A100 + Z900; CRLF and widths; the A000 header fields; Israel time across DST; a 305 with a document discount adds up (lines → 1219, 1219 + 1220 = 1221, + 1222 = 1223, each line qty × 1265 + 1266 = 1267); 330 names its 305; 400 is C100 + D120 (walk-in key 0); 320 has D110 + D120 (bank 4); customer key, VAT number and an Arabic name |
+| Package | `…/__tests__/package.test.ts` | the zip's OPENFRMT folder, inner BKMVDATA.zip and report; the report in ar/en, escaped, empty case |
+| Routes | `server/src/__tests__/routes-uniform-file.test.ts` | every type in range with headers and audit; out of range and another profile left out; AC3 empty; reversed, future and malformed ranges 422; accountant 200; personal and feature-off 404 |
+| Store | `store-contract-issuing.ts` | `inRange` inclusive bounds, order, lines, per profile (memory locally; Prisma in CI, TD-320) |
+| Fixture | `server/src/__tests__/uniform-file-fixture.test.ts` | AC1 ≥ 2,000 records (2,345), < 4 MB, every type, Hebrew and Arabic; writes the simulator files with `UNIFORM_FILE_FIXTURE_OUT` |
+| Portal | `src/hosted/pages/invoicing/__tests__/UniformFileExport.test.tsx` | last year by default, download call and counts, empty, reversed dates refused, failure toast and retry, reader copy |
+| Release QA | `qa/specs/portal/invoicing.spec.ts` | `@portal.invoicing.uniform-file`, `@portal.invoicing.uniform-file-empty` |
+
+The simulator pass itself (AC1) is Basel's step: `docs/operations/tax-authority/uniform-file/README.md`.
+
 ## MUT-641 — signed issued-document PDFs (2026-11-22, ADR-265)
 
 | Layer | File | Covers |

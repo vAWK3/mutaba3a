@@ -1,6 +1,6 @@
 # MUT-569: export the uniform file (מבנה אחיד 1.31) for the Tax Authority simulator
 
-Status: **Planned 2026-11-22, waiting for Basel's approval of D1–D7.** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
+Status: **Approved 2026-11-22 (D1–D7, wireframe; the phone gets nothing); built the same day (ADR-270, API 1.127.0-mut569).** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
 
 Tracker: Jira · barmajiyat · MUT via `atlassian-barmajiyat` · Backlog is the default · a finished ticket goes to In Review, and only Basel moves it to Done.
 
@@ -215,3 +215,12 @@ The specs go in `qa/specs/portal/invoicing.spec.ts`, tagged and run once until t
 - The last piece of code before Basel can file the Instruction 36 registration (MUT-567). Registration unlocks production allocation numbers and lets MTB3A issue invoices for other businesses, the v2 invoicing epic MUT-566.
 - Every business that issues documents in MTB3A can hand its auditor the file the law requires, from the portal.
 - Low risk: it's read-only, with no migration and no third-party calls. Its one real risk, a simulator rejection, is found before filing and fixed in the same ticket.
+
+## As built (2026-11-22)
+
+- **INI summary (O1):** the spec's §2.5 table lists summary lines only for B100/B110/C100/D110/D120/M100, so A100 and Z900 aren't summarised. They're counted in A000 1002, which equals Z900 1155.
+- **No `UNIFORM_FILE_REQUIRE_REGISTRATION` switch** (YAGNI): the three config values default to placeholders, and the README says to set them before the real registration.
+- **Audit:** a member's export is recorded as `issuing.uniform_file_exported` on `issuer_details`, which keeps it out of Malafat's feed. An accountant's export isn't recorded: accountants run under the read-only store, like every issuing read.
+- **QA:** two features, not three. `uniform-file` takes in the bad-range case; `uniform-file-empty` is the second.
+- **The fixture's VAT numbers** pass the Israeli check digit (the API refuses others): 515151512, 514713288, 039337761.
+- **Prisma `inRange`** runs in CI's `test:db`. The shared local test database was behind main's schema, so it wasn't run locally (TD-320).

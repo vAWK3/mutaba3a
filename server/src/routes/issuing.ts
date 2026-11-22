@@ -949,7 +949,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       tags: ['Issuing'],
       summary: 'Download the uniform file (מבנה אחיד 1.31) for a date range',
       description:
-        'MUT-569 (ADR-269): every document dated `from`…`to` (inclusive; `to` no later than today) as the Tax Authority’s uniform file: a zip with `OPENFRMT/<vat>.<YY>/<MMDDhhmm>/INI.TXT` and `BKMVDATA.zip`, and `report.html` (the printable summary, in `lang`). Documents only (C100, D110, D120); no journal records. `X-Uniform-File-Documents` and `X-Uniform-File-Records` carry the counts.',
+        'MUT-569 (ADR-270): every document dated `from`…`to` (inclusive; `to` no later than today) as the Tax Authority’s uniform file: a zip with `OPENFRMT/<vat>.<YY>/<MMDDhhmm>/INI.TXT` and `BKMVDATA.zip`, and `report.html` (the printable summary, in `lang`). Documents only (C100, D110, D120); no journal records. `X-Uniform-File-Documents` and `X-Uniform-File-Records` carry the counts.',
       security: PERSON_OR_MALAFAT,
       middleware: [requireScope('issuing:read')] as const,
       request: { query: UniformFileQuerySchema },

@@ -10,7 +10,7 @@ import { todayInZone } from '../../format/dates';
 import './uniform-file.css';
 
 /**
- * MUT-569 (ADR-269): You › Invoicing's uniform-file card (wireframe `.claude/designs/mut-569-uniform-file-wireframe.html`).
+ * MUT-569 (ADR-270): You › Invoicing's uniform-file card (wireframe `.claude/designs/mut-569-uniform-file-wireframe.html`).
  * Last year by default (the tax year), this year, or other dates; the download is the OPENFRMT zip with its printable
  * report. The owner and an accountant with access both see it; the phone has none (D6).
  */

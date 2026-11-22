@@ -129,3 +129,31 @@ features:
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup
+  - id: uniform-file
+    title: Download the uniform file (מבנה אחיד 1.31) for a date range from You › Invoicing; a bad range is refused in place (MUT-569)
+    tier: secondary
+    tickets: [MUT-569]
+    paths:
+      - src/hosted/pages/invoicing/UniformFileExport.tsx
+      - src/hosted/pages/invoicing/uniform-file.css
+    steps:
+      - Issue a tax invoice for Client 1
+      - Open You › Invoicing
+      - Choose Other dates with To before From
+      - Choose This year and Download the file
+      - Open it in Arabic
+    expect:
+      - The card offers Last year by default, with the dates shown and locked
+      - To before From says so under the field and Download stays disabled; nothing is requested
+      - The download is OPENFRMT-<VAT number>-<from>_<to>.zip, asked for in the person's language, and the card says Documents 1 · Records 4
+      - In Arabic the card reads right to left with no sideways scroll
+  - id: uniform-file-empty
+    title: A range with no documents downloads a valid uniform file and says there were none (MUT-569, AC3)
+    tier: secondary
+    tickets: [MUT-569]
+    paths:
+      - src/hosted/pages/invoicing/UniformFileExport.tsx
+    steps:
+      - On a profile with no documents, open You › Invoicing and Download the file for last year
+    expect:
+      - The file downloads, and the card says there are no documents in these dates and the file is still valid (opening and closing records only)
