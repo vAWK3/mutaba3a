@@ -159,6 +159,19 @@ describe('invoicing setup (MUT-646)', () => {
     expect(await read(await h.app.request('/v1/issuing/styles', { headers: w.on }))).toEqual({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
   });
 
+  it('MUT-648: offers to issue after saving income unless the business turns it off', async () => {
+    const h = accountantHarness();
+    const w = await profile(h);
+    const details = await read(await h.app.request('/v1/issuer', json(ISSUER, w.on, 'PUT')));
+    expect(details.offerAfterSave).toBe(true);
+    const off = await read(await h.app.request('/v1/issuer/defaults', json({ ...DEFAULTS, offerAfterSave: false }, { ...w.on, 'if-match': String(details.version) }, 'PUT')));
+    expect(off.offerAfterSave).toBe(false);
+    // Saving the defaults again without it, or the details, keeps the choice.
+    const again = await read(await h.app.request('/v1/issuer/defaults', json(DEFAULTS, { ...w.on, 'if-match': String(off.version) }, 'PUT')));
+    expect(again.offerAfterSave).toBe(false);
+    expect((await read(await h.app.request('/v1/issuer', json(ISSUER, { ...w.on, 'if-match': String(again.version) }, 'PUT')))).offerAfterSave).toBe(false);
+  });
+
   it('remembers that the introduction was read', async () => {
     const h = accountantHarness();
     const w = await profile(h);

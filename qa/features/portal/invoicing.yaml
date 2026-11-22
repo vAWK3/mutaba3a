@@ -81,3 +81,24 @@ features:
       - The drawer says issuing opens once Business details and Numbering are complete, with a link to the setup
       - The drawer opens with Client 1 already chosen
       - There is no Issued tab
+  - id: offer-after-save
+    title: Saving an Owed offers its tax invoice, linked to the entry; the setting turns it off; no invoicing, no change (MUT-648)
+    tier: secondary
+    tickets: [MUT-648]
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/Toast.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - On Owed, record 1,180 from Client 1
+      - Choose Issue a tax invoice on the save toast, then Issue
+      - Reopen Owed
+      - With "offer to issue after saving" off, record another Owed
+      - On a profile without invoicing, record an Owed
+    expect:
+      - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
+      - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - An Owed with no document offers Issue a tax invoice on its row
+      - With the setting off the toast offers nothing
+      - Without invoicing the toast has no action and nothing asks for the setup

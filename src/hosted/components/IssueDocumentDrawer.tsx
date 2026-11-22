@@ -36,6 +36,8 @@ export interface IssueStart {
   amount?: string;
   /** The original's "prices include VAT" (a credit note or a similar document keeps it). */
   pricesIncludeVat?: boolean;
+  /** MUT-648 (I1-a): the recorded Owed or Received this document is for; it takes the entry over (no second one). */
+  fromEntry?: { kind: 'owed' | 'received'; id: string };
 }
 
 export interface Line {
@@ -125,7 +127,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
           ...(docType === 'TAX_INVOICE' && dueDate ? { dueDate } : {}),
           ...(start.originalId && docType === 'CREDIT_NOTE' ? { originalId: start.originalId } : {}),
           ...(start.appliesToDocumentId && docType === 'RECEIPT' ? { appliesToDocumentId: start.appliesToDocumentId } : {}),
-          ...(takesPayment ? { payment: { method, reference: reference.trim() || null, receivedOn } } : {}),
+          // A Received this document takes over already says how the money came in.
+          ...(takesPayment && start.fromEntry?.kind !== 'received' ? { payment: { method, reference: reference.trim() || null, receivedOn } } : {}),
+          ...(start.fromEntry ? { fromEntry: start.fromEntry } : {}),
           pricesIncludeVat,
           ...(notes.trim() ? { notes: notes.trim() } : {}),
           lines: lines.map((l) => ({
@@ -298,7 +302,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
             {docType === 'TAX_INVOICE' && <Input label={t('hosted.issue.dueDate')} id={`${formId}-due`} type="date" value={dueDate} min={documentDate} onChange={(e) => setDueDate(e.target.value)} />}
           </div>
 
-          {takesPayment && (
+          {takesPayment && start.fromEntry?.kind !== 'received' && (
             <section className="hp-issue-payment" aria-labelledby={`${formId}-payment`}>
               <h3 id={`${formId}-payment`}>{t('hosted.issue.payment')}</h3>
               <SegmentedControl
@@ -353,7 +357,7 @@ function addDays(isoDate: string, days: number): string {
 /** The server's refusals the person can act on, in words; anything else is the general failure. */
 function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, string>) => string): string {
   const reason = apiErrorReason(error);
-  const known = ['DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL', 'QUANTITY_INVALID', 'DISCOUNT_INVALID', 'TOTAL_NOT_POSITIVE', 'EXEMPT_DEALER_TAX_INVOICE'];
+  const known = ['ENTRY_MISMATCH', 'DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL', 'QUANTITY_INVALID', 'DISCOUNT_INVALID', 'TOTAL_NOT_POSITIVE', 'EXEMPT_DEALER_TAX_INVOICE'];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');
 }

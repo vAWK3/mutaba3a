@@ -1,4 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useState } from 'react';
+import { IssueDocumentDrawer, type IssueStart } from './IssueDocumentDrawer';
 import { useNavigate } from '@tanstack/react-router';
 import type { HostedProfile, SettleReceivableResponse } from '../api/client';
 import { incomeAffordancesFor, redateAffordancesFor } from '../data/incomeAffordances';
@@ -77,7 +79,23 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   const redate = redateAffordancesFor(profile, writable);
   const navigate = useNavigate();
   const userId = useMe().user.id;
+  // MUT-648: the save toast's "Issue …" opens the issue drawer for the entry just saved, after its own drawer closed.
+  const [issueStart, setIssueStart] = useState<IssueStart | null>(null);
+  const onOfferIssue = (start: IssueStart) => setIssueStart(start);
   const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
+  if (issueStart) {
+    return (
+      <IssueDocumentDrawer
+        profile={profile}
+        start={issueStart}
+        onClose={() => setIssueStart(null)}
+        onIssued={(doc) => {
+          setIssueStart(null);
+          void navigate({ to: `/p/${profile.id}/documents/issued/${doc.id}`, search: { issued: true } } as never);
+        }}
+      />
+    );
+  }
   if (drawer.settle && canSettle) {
     const receivableId = drawer.settle;
     return (
@@ -96,7 +114,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   }
   if (drawer.newIncome && kinds.length > 0) {
     return (
-      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} writable={writable} />
+      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} onOfferIssue={onOfferIssue} writable={writable} />
     );
   }
   const redateTarget = drawer.income && redate.owed ? { kind: 'owed' as const, id: drawer.income } : drawer.payment && redate.payments ? { kind: 'payment' as const, id: drawer.payment } : null;

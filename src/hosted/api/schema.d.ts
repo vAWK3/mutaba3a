@@ -28868,6 +28868,8 @@ export interface components {
             paymentTermsDays: number | null;
             bankDetails: string | null;
             footerNote: string | null;
+            /** @description MUT-648: offer to issue a document after saving income */
+            offerAfterSave: boolean;
             version: number;
         };
         /**
@@ -28908,6 +28910,8 @@ export interface components {
             bankDetails?: string | null;
             /** @description Printed at the foot of every document */
             footerNote?: string | null;
+            /** @description MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted) */
+            offerAfterSave?: boolean;
         };
         /** @enum {string} */
         DocumentLanguage: "ar" | "he" | "en";

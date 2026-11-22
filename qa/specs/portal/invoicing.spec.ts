@@ -232,3 +232,68 @@ test('issuing waits for the setup; a client page issues for that client', { tag:
     await expect(page.getByRole('link', { name: 'Issued' })).toHaveCount(0);
   });
 });
+
+/** MUT-648: after saving income, the save toast offers its document, linked to the entry. */
+test('saving an Owed offers its tax invoice, which takes the Owed over; the setting turns the offer off', { tag: '@portal.invoicing.offer-after-save' }, async ({ page, step }) => {
+  const api = ready();
+  const income = page.getByRole('dialog', { name: 'New income' });
+  const issue = page.getByRole('dialog', { name: 'Issue a document' });
+  const toast = page.getByTestId('toast-live');
+
+  await step('Record an Owed of 1,180 from Client 1 on Owed', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill('1180');
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(income).toHaveCount(0);
+  });
+
+  await step('AC1 The save toast offers Issue a tax invoice; it opens prefilled and linked to the Owed', async () => {
+    await expect(toast).toContainText('Saved');
+    await toast.getByRole('button', { name: 'Issue a tax invoice' }).click();
+    await expect(issue).toBeVisible();
+    await expect(issue.getByLabel('Client')).toHaveValue('Client 1');
+    await expect(issue.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('1180.00');
+    await expect(issue.getByRole('checkbox', { name: 'Prices include VAT' })).toBeChecked();
+    await expect(issue.getByTestId('issue-totals')).toContainText('1,180.00');
+  });
+
+  await step('AC1 Issue: the tax invoice names the Owed it takes over (no second Owed)', async () => {
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 1');
+    expect(api.calls('POST', /^\/v1\/income$/)).toHaveLength(1);
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'TAX_INVOICE', fromEntry: { kind: 'owed', id: expect.any(String) }, pricesIncludeVat: true, lines: [{ unitPrice: '1180.00', pricesIncludeVat: true }] });
+  });
+
+  await step('E4 An Owed recorded earlier offers its tax invoice from its row', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await expect(page.locator('[data-testid^="issue-from-"]').first()).toBeVisible();
+  });
+
+  await step('AC2 With "offer to issue after saving" off, the toast offers nothing', async () => {
+    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', offerAfterSave: false });
+    await off.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill('590');
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(toast).toContainText('Saved');
+    await expect(toast.getByRole('button', { name: 'Issue a tax invoice' })).toHaveCount(0);
+  });
+
+  await step('AC3 A profile without invoicing sees no change', async () => {
+    const plain = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
+    await plain.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill('590');
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(toast).toContainText('Saved');
+    await expect(toast.getByRole('button')).toHaveCount(0);
+    expect(plain.last('GET', /^\/v1\/issuing\/setup$/)).toBeFalsy();
+  });
+});

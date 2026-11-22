@@ -523,6 +523,8 @@ export interface FakeApiSeed {
   periodDownloads?: boolean;
   /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
   invoicing?: boolean | 'ready';
+  /** MUT-648: the business's "offer to issue after saving" (on unless false). */
+  offerAfterSave?: boolean;
 }
 
 /** MUT-646: one profile's invoicing setup, as the server keeps it. */
@@ -537,7 +539,7 @@ interface StubIssuing {
   docs: Record<string, Json>[];
   owed: Map<string, { gross: number; outstanding: number; customerId: string | null }>;
 }
-const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null };
+const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
 const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
@@ -797,6 +799,7 @@ export class FakeApi {
   readonly issuing: Map<string, StubIssuing> | null;
   /** MUT-570: the setup done (details and numbering), so issuing is open. */
   private readonly invoicingReady: boolean;
+  private readonly offerAfterSave: boolean;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -832,6 +835,7 @@ export class FakeApi {
     this.periodDownloads = seed.periodDownloads ?? false;
     this.issuing = seed.invoicing ? new Map() : null;
     this.invoicingReady = seed.invoicing === 'ready';
+    this.offerAfterSave = seed.offerAfterSave ?? true;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -898,7 +902,7 @@ export class FakeApi {
     return {
       ...body,
       // MUT-577: seeding accountants also gives this person the operator's accountant_access feature
-      user: { ...body.user, closure: this.closure, ...(this.accountants && this.accountantAccess ? { features: [...body.user.features, 'accountant_access'] } : {}) },
+      user: { ...body.user, closure: this.closure, features: [...body.user.features, ...(this.accountants && this.accountantAccess ? ['accountant_access'] : []), ...(this.issuing ? ['invoicing'] : [])] },
       // MUT-559: present only while the server has accountant access on (the portal's gate, MUT-561 D8)
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
@@ -1195,7 +1199,7 @@ export class FakeApi {
     if (!state) {
       state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {}, docs: [], owed: new Map() };
       if (this.invoicingReady) {
-        state.issuer = { ...ISSUER_DEFAULTS, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
+        state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
         Object.assign(state, { introSeen: true, numbering: true, defaults: true });
       }
       this.issuing.set(profileId!, state);
