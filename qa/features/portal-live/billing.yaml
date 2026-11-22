@@ -91,7 +91,7 @@ features:
     tier: secondary
     paths:
       - src/hosted/components/TrialBanner.tsx
-      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/components/LandingNotices.tsx
       - src/hosted/data/trialPrompt.ts
     steps:
       - Sign up and finish the account in Arabic on a 375 px screen

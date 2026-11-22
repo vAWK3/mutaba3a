@@ -387,7 +387,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.125.0-mut647';
+export const API_VERSION = '1.126.0-mut659';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -682,12 +682,6 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       : null;
   if (receiptReader && deps.receiptReading?.dispatcher instanceof InlineDispatcher) deps.receiptReading.dispatcher.bind((id) => receiptReader.readOne(id));
   app.route('/', receiptReadingRoutes({ reader: receiptReader, verifier: deps.receiptReadVerifier ?? null }));
-  // R5: granting receipt_reading queues the person's To-review receipts that were never read.
-  const onGranted = receiptReader
-    ? async (userId: string, feature: string) => {
-        if (feature === 'receipt_reading') await receiptReader.backlog(userId);
-      }
-    : undefined;
   // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
   const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
   // MUT-642: the registry lookup calls data.gov.il, so it's hosted only, outside PORTAL_ROUTES.
@@ -709,12 +703,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe

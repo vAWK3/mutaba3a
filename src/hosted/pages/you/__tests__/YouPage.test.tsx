@@ -5,8 +5,8 @@ import { ORG_A, ORG_B, emptyProfileRoutes, locationOf, me, ok, profile, renderPo
 
 /**
  * MUT-425: the You page replaces the profile switcher and the account menu. Every item from both is here (the
- * wireframe's "Nothing lost" table), each row opens today's drawer by its URL key, and switching keeps the section
- * the person came from (`?from=`, eng review D3/D4).
+ * wireframe's "Nothing lost" table), and each row opens today's drawer by its URL key. MUT-657 (E-3): switching
+ * always lands on the picked profile's home; `?from=` stays only for the island's way back.
  */
 
 const TERMS_URL = 'https://mutaba3a.example/terms';
@@ -70,11 +70,11 @@ describe('the You page (MUT-425)', () => {
     expect(await screen.findByRole('button', { name: /New profile/ })).toHaveTextContent('Subscribe to add a profile: your plan has ended.');
   });
 
-  describe('switching keeps the section (eng review D3, D4)', () => {
-    it('goes to the section the person came from, in the picked profile', async () => {
+  describe('switching lands on home (MUT-657 E-3, replacing eng review D3/D4)', () => {
+    it('goes to the picked profile home, whatever section the person came from', async () => {
       const { user, router } = portal(`/p/${ORG_A}/you?from=payments`);
       await user.click(await screen.findByRole('button', { name: /Nour Studio/ }));
-      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/payments`));
+      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
     });
 
     it('goes to the profile home without a from, or with one it does not know', async () => {
@@ -83,11 +83,11 @@ describe('the You page (MUT-425)', () => {
       await waitFor(() => expect(locationOf(router)).toMatch(new RegExp(`^/p/${ORG_B}/?$`)));
     });
 
-    it('the open profile goes back to its section the same way, never through history', async () => {
+    it('the open profile goes to its home the same way, never through history', async () => {
       const { user, router } = portal(`/p/${ORG_B}/you?from=clients`);
       const back = vi.spyOn(router.history, 'back');
       await user.click(await screen.findByRole('button', { name: /Nour Studio/ }));
-      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/clients`));
+      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
       expect(back).not.toHaveBeenCalled();
     });
 
@@ -101,7 +101,7 @@ describe('the You page (MUT-425)', () => {
       await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?from=expenses`));
       await user.click(screen.getByRole('link', { name: 'Profiles' }));
       await user.click(await screen.findByRole('button', { name: /Nour Studio/ }));
-      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/expenses`));
+      await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
     });
 
     it('the island carries the section the person is in, and the part tabs pass it on (MUT-426, C3)', async () => {

@@ -49,10 +49,15 @@ describe('youRoutes', () => {
     expect(parseYouSearch({})).toEqual({});
   });
 
-  it('switches to the kept section, or the profile home without one', () => {
-    expect(switchTarget('B', 'payments')).toBe('/p/B/payments');
-    expect(switchTarget('B', undefined)).toBe('/p/B');
-    expect(switchTarget('B', 'reports')).toBe('/p/B/reports');
+  /** MUT-657 (E-3, replaces MUT-426 D8): picking a profile always lands on its home, whatever page it came from. */
+  it('switches to the profile home, always', () => {
+    expect(switchTarget('B')).toBe('/p/B');
+  });
+
+  it('knows Owed as a section (MUT-657: its overview is /owed now)', () => {
+    expect(sectionOf(`/p/${P}/owed`)).toBe('owed');
+    expect(sectionOf(`/p/${P}`)).toBeUndefined();
+    expect(parseYouSearch({ from: 'owed' })).toEqual({ from: 'owed' });
   });
 
   /** MUT-426 D7: the island's second press returns to the exact page, path only, never out of the profile. */

@@ -309,7 +309,7 @@ if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_
 else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
-if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; receipts are read for uploaders granted receipt_reading');
+if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; every uploader\'s receipts are read');
 if (!receiptReadVerifier) logger.info('READ_OIDC_AUDIENCE/API_ORIGIN or READ_INVOKER_SA/SWEEP_INVOKER_SA are not set; POST /jobs/v1/receipts/read answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
 if (!documentSigner) logger.info('ISSUING_SIGNER is off; issued-document PDFs answer 503 SIGNING_NOT_CONFIGURED (the draft preview still prints)');

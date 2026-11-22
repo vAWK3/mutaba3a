@@ -22,7 +22,7 @@ features:
       - src/hosted/lib/receiptSuggestion.ts
       - server/src/expenses/receipts-compose.ts
     steps:
-      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Open Expenses › Receipts as any person (MUT-659: reading needs no grant)
       - Upload a photo of a bookshop receipt
       - Open the new receipt while the server reads it
       - Wait for the reading to finish
@@ -39,7 +39,7 @@ features:
       - server/ocr/app/pipeline.py
       - server/ocr/app/preprocess.py
     steps:
-      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Open Expenses › Receipts as any person (MUT-659: reading needs no grant)
       - Upload the bookshop receipt photo turned 90° (lying on its side)
       - Open the new receipt and wait for the reading to finish
     expect:
@@ -56,7 +56,7 @@ features:
       - server/src/receipts/extract/extract.ts
       - server/src/receipts/extract/rows.ts
     steps:
-      - Open Expenses › Receipts as a person the operator has granted receipt reading
+      - Open Expenses › Receipts as any person (MUT-659: reading needs no grant)
       - Upload a design studio's invoice PDF (its "Total due" and the amount printed far apart on one line)
       - Open the new receipt and wait for the reading to finish
     expect:

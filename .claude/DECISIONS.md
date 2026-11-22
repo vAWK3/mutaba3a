@@ -5823,6 +5823,9 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Extraction inside the Python service (D2 B). Not taken: rules split from the rest of the stack; raw text crosses to the API in memory only and is never stored or logged.
 - An LLM or a third-party OCR API. Rejected, as in ADR-199.
 
+
+**Amendment (MUT-659, Basel 2026-11-22): reading is for everyone.** Override log: replaces the per-user half of decision 6 (D3) and MUT-514's R11 gate ("score the next ~15 production reads before granting anyone else"), which Basel waived knowingly. While `SERVER_OCR` is on, every uploader's receipts are read; `receipt_reading` leaves `FEATURES` and its open grants are revoked by migration `20261122220000_mut659_receipt_reading_for_everyone` (rows kept for history). The kill switch stays the deploy flag. Never-read To-review receipts are asked for once after the deploy with `npm run receipts:reread -- --backlog --apply`. `RECEIPTS_LIBRARY` and Terraform `receipts_library_enabled` default to on. Open reading bugs (MUT-586, MUT-632, MUT-637) are fixed as they come; a read only fills a To-review suggestion the person checks before filing.
+
 ## ADR-221: A New Expense's Receipts Upload in Its Edit Drawer After Save (MUT-491)
 
 **Status:** Accepted (2026-10-28, MUT-491; epic MUT-252). Plan and eng review: `.claude/designs/mut-491-receipt-on-create.md`. ADR-220 is reserved by MUT-441.
@@ -6896,4 +6899,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. An Owed with no document yet offers its tax invoice from its row (E4).
 
 **Consequences:** the issue drawer now takes `fromEntry`. When a Received is taken over, the drawer leaves out the payment section, since the entry already says how the money came in. The phone half follows MUT-573.
+
+## ADR-269: Home Takes the Profile's Root; Owed Moves to /owed (MUT-657, addendum to ADR-192)
+
+**Status:** Accepted (2026-11-22; plan `~/.gstack/projects/vAWK3-mutaba3a/mut-657-plan.md`, wireframe `.claude/designs/portal-home-hub.html` concept 2 "Two lanes", chosen by Basel). Amends ADR-192 (E1, the four destinations) and replaces MUT-426 D8 (a profile switch keeps the section).
+
+**Decision:**
+1. **Home is the bare `/p/:id`** and the first item in the pill (`DESTINATIONS` starts with `{ key: 'home', path: '' }`). On a desktop it is the word; on a phone its icon, named by `aria-label`, so five items and the island fit 375 px in Arabic. Every inbound bare link (Stripe returns, the phone's Recent "website" row, first run, restore, a new profile, a lost profile) now lands on home without changing.
+2. **Owed's overview moves to `/p/:id/owed`.** `?currency=` was the overview's only key, so a bare `/p/:id?currency=X` is an old Owed link: it redirects to `/owed?currency=X` (`replace: true`), keeping every `SHELL_OVERLAY_KEYS` key (`legacyOwedSearch`). Receivables' back link and DeeperLinks follow `destinationPath`.
+3. **Switching profile always lands on home** (`switchTarget(id)` returns the bare path, the open profile too). The You island's second press still returns to the exact page (`islandTarget`, `?back=`), else the kept section (`sectionPath`).
+4. **Home has two views; the view lives only in the URL.** Receipts & to-dos (no key) and In & out (`?view=in-out`). Coming back to home opens Receipts & to-dos. In & out's currency is component state, never `?currency=` (point 2 owns it).
+5. **No totals on Receipts & to-dos.** Receipt cards show status and day (`ReceiptCard showAmount={false}`); Clients overdue shows names and "N days late" only. Clients overdue is computed in the portal from the org summary by Owed's rule (`overdueClientCount`, distinct across currencies). No new endpoint.
+6. **The monthly summary mail links each profile to `/p/:id?view=in-out`** (the month the mail sums up). Bare-path PostHog page views now mean home, not Owed.
+
+**Consequences:** the one-time notices (Trial, Passkey, Second way in, Malafat created, Firm on) moved from Owed to home (`LandingNotices`). The To invoice group waits for MUT-648 and a not-for-invoice flag (`TODO(blocked-by …)` in `HomeTodo`); MUT-604's period cards will sit under the Waiting lane. AASA claims neither path.
 

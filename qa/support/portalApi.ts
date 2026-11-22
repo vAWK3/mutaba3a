@@ -379,7 +379,7 @@ export const FX_RATES_ILS = {
 /** A per-currency block of the organization summary (OverviewPage, ClientsPage). */
 export function currencyBlock(
   currency: Currency,
-  b: { outstanding: string; overdue: string; proposed?: string; customers: { customerId: string; outstanding: string; overdue: string; lastPaymentOn?: string | null; status: string }[] },
+  b: { outstanding: string; overdue: string; proposed?: string; customers: { customerId: string; outstanding: string; overdue: string; lastPaymentOn?: string | null; status: string; daysOverdue?: number | null }[] },
 ) {
   return {
     currency,
@@ -398,6 +398,9 @@ export function currencyBlock(
       notYetDue: '0.00',
       unallocated: '0.00',
       lastPaymentOn: c.lastPaymentOn ?? null,
+      // MUT-657: home's Clients overdue says how late, as the server's row does
+      daysOverdue: c.daysOverdue ?? null,
+      oldestOverdueDueDate: null,
       status: c.status,
       proposals: [],
     })),

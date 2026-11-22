@@ -173,14 +173,13 @@ const envSchema = z.object({
    */
   PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
-   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). Off,
-   * the server behaves as before MUT-255, so main can deploy before any screen shows the library (decision P4: on
-   * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
+   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). MUT-659:
+   * on by default for everyone (dev, QA and every deploy); only "false" turns it off, the way back to before MUT-255.
    */
-  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   /**
-   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, a receipt reads only for an
-   * uploader granted `receipt_reading`. Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
+   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, every uploader's receipts are
+   * read (MUT-659 dropped the per-person grant). Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
    * server_ocr_enabled). Only "true" turns it on, as above.
    */
   SERVER_OCR: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),

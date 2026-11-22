@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../../attachments/storage.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { receipt, REG_VALID_COMPANY, REG_VALID_DEALER } from '../extract/__tests__/fixtures.js';
@@ -34,7 +34,6 @@ const noDispatch: ReadDispatcher = { enqueue: async () => {} };
 
 function harness() {
   const store = new MemoryLedgerStore();
-  vi.spyOn(store.features, 'activeFor').mockResolvedValue(['receipt_reading']);
   const storage = new MemoryAttachmentStorage();
   const ocr = new QueueOcr();
   const reader = createReceiptReader({ store, storage, ocr, dispatcher: noDispatch, logger: pino({ level: 'silent' }), now: () => AT });
