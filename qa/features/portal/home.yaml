@@ -1,0 +1,74 @@
+app: portal
+area: home
+title: Home, the profile's first page (Receipts & to-dos, In & out)
+tier: secondary
+# MUT-657: the bare /p/:id. Every signed-in visit and every profile switch lands here.
+paths:
+  - src/hosted/pages/views/HomePage.tsx
+  - src/hosted/pages/home/HomeViewSwitch.tsx
+  - src/hosted/components/LandingNotices.tsx
+features:
+  - id: waiting
+    title: Signed in, the portal opens on home with an Add lane beside what is waiting (receipts to review, clients overdue by name), and no totals (MUT-657)
+    tier: core # every signed-in visit lands here
+    tickets: [MUT-657]
+    paths:
+      - src/hosted/pages/home/HomeTodo.tsx
+      - src/hosted/pages/home/HomeGroup.tsx
+      - src/hosted/pages/home/ToReviewGroup.tsx
+      - src/hosted/pages/home/OverdueGroup.tsx
+      - src/hosted/data/homeTodo.ts
+      - src/hosted/data/filters.ts
+    steps:
+      - Sign in and open the portal at /
+      - Look at the Add lane and the Waiting lane
+      - Open a receipt to review from the strip, then come back with Home in the pill
+      - Open an overdue client, then come back and choose See all under Clients overdue
+    expect:
+      - / lands on the first profile's home, titled Home, with Home lit first in the pill
+      - The Add lane has Drop receipts here, Add receipt and Add income; the Waiting lane has To review (2) as a strip of cards and Clients overdue (2) with the most late client first and "N days late"
+      - No amount shows anywhere on the page (no totals on home)
+      - A receipt card opens its review page; a client opens its page; See all opens Owed at /owed
+  - id: clear
+    title: With nothing waiting, home says one calm sentence; the old ?currency= address still opens Owed (MUT-657)
+    tier: secondary
+    tickets: [MUT-657]
+    paths:
+      - src/hosted/router.tsx
+    steps:
+      - Sign in on a profile with no receipts to review and nobody overdue
+      - Open the old Owed address /p/:id?currency=USD
+    expect:
+      - Home's Waiting lane reads "Nothing needs you right now." and shows no group
+      - The old address lands on Owed at /p/:id/owed?currency=USD with the USD block, replacing the history entry
+  - id: upload
+    title: Drop or pick receipts on home; they land in To review with the gallery's rules and messages (MUT-657)
+    tier: secondary
+    tickets: [MUT-657]
+    paths:
+      - src/hosted/pages/home/ReceiptDropZone.tsx
+      - src/hosted/data/useReceiptFiles.ts
+    steps:
+      - Open home on a profile with one receipt to review
+      - Pick a text file with Add receipt, then a PNG
+      - Drop a PDF on the drop zone
+    expect:
+      - The text file is refused with its name and the reason, and nothing is sent
+      - The PNG is started, PUT to the bucket and completed; "1 receipt added to To review" is announced and To review counts 2
+      - The dropped PDF lands too and To review counts 3
+  - id: in-out
+    title: Home's In & out shows this month's money in and out per currency with the ways to Owed, Spent and Reports, from ?view=in-out (MUT-657)
+    tier: secondary
+    tickets: [MUT-657]
+    paths:
+      - src/hosted/pages/home/HomeInOut.tsx
+    steps:
+      - Open home and choose In & out
+      - Switch the currency to USD
+      - Leave for Paid and come back with Home
+      - Open /p/:id?view=in-out (the monthly summary mail's link)
+    expect:
+      - The address reads ?view=in-out; Money in shows this month's received with Owed now and Overdue now; Money out shows spent with its categories
+      - USD shows the USD figures and the address keeps no currency
+      - Coming back to home opens Receipts & to-dos
+      - The mail's link opens In & out, with Open Owed, Open Spent and Compare months in Reports linking on

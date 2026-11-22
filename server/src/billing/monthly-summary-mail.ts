@@ -190,7 +190,8 @@ async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummary
   const origin = options.portalOrigin.replace(/\/+$/, '');
   const [year, monthNumber] = month.key.split('-').map(Number) as [number, number];
   const [asOfYear, asOfMonth, asOfDay] = todayIn(SUMMARY_ZONE, options.now).split('-').map(Number) as [number, number, number];
-  const profiles: MailSummaryProfile[] = blocks.map((b) => ({ name: b.name, link: `${origin}/p/${b.profileId}`, cameIn: b.cameIn, owed: b.owed, overdue: b.overdue, overdueCount: b.overdueCount }));
+  // MUT-657 (E-5): each profile's link opens its home on In & out, the portal's view of the month the mail sums up
+  const profiles: MailSummaryProfile[] = blocks.map((b) => ({ name: b.name, link: `${origin}/p/${b.profileId}?view=in-out`, cameIn: b.cameIn, owed: b.owed, overdue: b.overdue, overdueCount: b.overdueCount }));
   return options.mailer.send({
     to: candidate.email,
     locale: candidate.locale,

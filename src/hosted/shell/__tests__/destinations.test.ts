@@ -3,11 +3,17 @@ import { DESTINATIONS, NO_DESTINATION, destinationOf, destinationPath } from '..
 
 const P = '11111111-1111-4111-8111-111111111111';
 
-/** MUT-424 (E2): which of the four destinations a portal path belongs to, with every URL unchanged (E1). */
+/**
+ * MUT-424 (E2): which destination a portal path belongs to. MUT-657 (E-1/E-2): home takes the bare profile path and
+ * is the pill's first item; Owed's overview moved to `/owed`.
+ */
 describe('destinationOf', () => {
   it.each([
-    [`/p/${P}`, 'owed'],
-    [`/p/${P}/`, 'owed'],
+    [`/p/${P}`, 'home'],
+    [`/p/${P}/`, 'home'],
+    [`/p/${P}?view=in-out`, 'home'],
+    [`/p/${P}/owed`, 'owed'],
+    [`/p/${P}/owed?currency=USD`, 'owed'],
     [`/p/${P}/receivables`, 'owed'],
     [`/p/${P}/receivables?status=OPEN`, 'owed'],
     [`/p/${P}/payments`, 'paid'],
@@ -30,8 +36,8 @@ describe('destinationOf', () => {
     expect([...NO_DESTINATION].sort()).toEqual(['reports', 'you']);
   });
 
-  it('lists the four destinations in the pill order, each at a URL that already exists', () => {
-    expect(DESTINATIONS.map((d) => d.key)).toEqual(['owed', 'paid', 'spent', 'clients']);
-    expect(DESTINATIONS.map((d) => destinationPath(P, d.key))).toEqual([`/p/${P}`, `/p/${P}/payments`, `/p/${P}/expenses`, `/p/${P}/clients`]);
+  it('lists home first, then the four destinations, in the pill order', () => {
+    expect(DESTINATIONS.map((d) => d.key)).toEqual(['home', 'owed', 'paid', 'spent', 'clients']);
+    expect(DESTINATIONS.map((d) => destinationPath(P, d.key))).toEqual([`/p/${P}`, `/p/${P}/owed`, `/p/${P}/payments`, `/p/${P}/expenses`, `/p/${P}/clients`]);
   });
 });

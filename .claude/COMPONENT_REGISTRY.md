@@ -2500,3 +2500,16 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `sharingRules.ts` (slice B): `isolate`, `periodRange`, `monthsLabel`, `rangeLine`, `foldDigits`, `pinOf`, `linkRow`, `liveLinks`, `linkErrorOf`, `periodEvent`. `sharingQueries.ts`: `useShareLinks` (404 → `{ off: true }`), `useCreateShareLink`, `useRevokeShareLink`, `refetchAfterRefusal`; revokes share `useOptimisticItem` (per-item undo, one read after the last).
 - `DownloadPeriodRow` — `src/hosted/pages/sharing/DownloadPeriodRow.tsx`: `profile`. The owner's Download a period (MUT-314). `data/periodDownload.ts`: `postDownload(ticket)` (hidden form POST to the stream), `periodDownloadsOn`, `usePeriodDownloadsOn`; rules `monthOptions`, `monthSpan`, `monthName`, `downloadErrorOf`. MUT-562's desk download can reuse `postDownload`.
 
+### Portal home — MUT-657 (ADR-269)
+- `HomePage` — `src/hosted/pages/views/HomePage.tsx`: the bare `/p/$profileId`; `search` (`HomeSearch`: `view?: 'in-out'` plus the income drawer keys), `setSearch`. Header with `HomeViewSwitch`, `LandingNotices`, then `HomeTodo` or `HomeInOut`; mounts `IncomeDrawerHost` for Add income.
+- `HomeViewSwitch` — `src/hosted/pages/home/HomeViewSwitch.tsx`: `view: 'todo' | 'in-out'`, `onChange`. A `role="group"` of `aria-pressed` buttons; full width at 760 px.
+- `HomeTodo` — `src/hosted/pages/home/HomeTodo.tsx`: `profile`, `onAddIncome`. The Add lane and the Waiting lane (`.hp-home-lanes`), the calm line, the library-off copy (`ReceiptsUnavailable`, plus Sign in signed out).
+- `HomeGroup` — `src/hosted/pages/home/HomeGroup.tsx`: `title`, `count`, `countLabel` (screen-reader sentence), `seeAll` (`to`, `label`, `name`), `children`. One `<section>` named by its `h2`. Reuse it for the To invoice group (MUT-648) and MUT-604's cards.
+- `ToReviewGroup` / `OverdueGroup` — `src/hosted/pages/home/`: the strip of To review cards (`useReceipts(…, 'to_review', 8)`, `ReceiptCard showAmount={false}`) and up to three overdue clients (no amounts).
+- `ReceiptDropZone` — `src/hosted/pages/home/ReceiptDropZone.tsx`: `profileId`. Drop zone (hidden at 760 px), Add receipt, Take a photo (`capture="environment"`, shown under `(pointer: coarse)`).
+- `HomeInOut` — `src/hosted/pages/home/HomeInOut.tsx`: `profile`. This month's money in and out per currency (component-state currency), from the org summary and `useReportActivity`.
+- `LandingNotices` — `src/hosted/components/LandingNotices.tsx`: `heading` ref. Trial, Passkey, Second way in, Malafat created, Firm on, in that order.
+- `useReceiptFiles` — `src/hosted/data/useReceiptFiles.ts`: `(profileId, { onLanded? })` → `{ onFiles, uploading, pending }`. The library upload with the gallery's rules, toasts and "added to To review"; the gallery and home share it.
+- `overdueClientCount` / `overdueClients` — `src/hosted/data/homeTodo.ts`: pure, from an `OrganizationSummary`.
+- `ReceiptCard` gained `showAmount` (default true). `useReceipts(profileId, status, limit = 24)` keys by limit. `parseHome` / `legacyOwedSearch` in `data/filters.ts`. `sectionPath` in `shell/youRoutes.ts`.
+

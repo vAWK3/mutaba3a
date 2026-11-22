@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { omitShellOverlay, parseClientDetail, parseReports, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseGlance, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
+import { legacyOwedSearch, omitShellOverlay, parseClientDetail, parseHome, parseReports, parseGroupDetail, parseGroupsPage, parseConversionsPage, parseGlance, parseIncomeDrawer, parsePaymentsPage, parseProfileDrawer, parseReceivablesPage, pickShellOverlay, splitIncomeDrawer } from '../filters';
 
 const R = 'b1111111-1111-4111-8111-111111111111';
 
@@ -151,5 +151,21 @@ describe('Glance search (MUT-448): period, day and the page the Reports icon was
       expect(parseGlance({ back })).toEqual({});
     }
     expect(parseGlance({ scope: 'all', period: 'quarter' })).toEqual({});
+  });
+});
+
+/** MUT-657: home's view lives only in the URL; a bare `?currency=` was the old overview's and now means Owed. */
+describe('home search (MUT-657)', () => {
+  it('keeps only the In & out view and the income drawer keys', () => {
+    expect(parseHome({ view: 'in-out' })).toEqual({ view: 'in-out' });
+    expect(parseHome({ view: 'todo' })).toEqual({});
+    expect(parseHome({ view: 'in-out', newIncome: 'owed', currency: 'USD', bogus: 1 })).toEqual({ view: 'in-out', newIncome: 'owed' });
+    expect(parseHome({})).toEqual({});
+  });
+
+  it('sends a bare currency to Owed with every shell key, and nothing else', () => {
+    expect(legacyOwedSearch({ currency: 'USD', billing: 'true', checkout: 'success', view: 'in-out' })).toEqual({ currency: 'USD', billing: 'true', checkout: 'success' });
+    expect(legacyOwedSearch({ currency: 'XYZ' })).toBeNull();
+    expect(legacyOwedSearch({ billing: true })).toBeNull();
   });
 });

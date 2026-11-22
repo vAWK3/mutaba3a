@@ -60,9 +60,9 @@ test('A valid setup link opens in the account’s language, sets the password an
     await typeAndSave(page, PASSWORD);
   });
 
-  await step('Signed in with it, on the first profile’s Overview', async () => {
+  await step('Signed in with it, on the first profile’s home', async () => {
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     // MUT-324: the terms version the check named, in the page's language, travel with the password; MUT-354: with the web release
     expect(api.last('POST', REDEEM)?.body).toEqual({
       token: TOKEN,
@@ -167,10 +167,10 @@ test('A save whose answer was lost but went through signs in on the retry, not "
     api.markSetupLink('used');
   });
 
-  await step('Save again: signed in with the typed password, on Overview', async () => {
+  await step('Save again: signed in with the typed password, on home', async () => {
     await page.getByRole('button', { name: 'Save and sign in' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     expect(api.last('POST', /^\/v1\/sessions$/)?.body).toEqual({ email: EMAIL, password: PASSWORD });
   });
 });

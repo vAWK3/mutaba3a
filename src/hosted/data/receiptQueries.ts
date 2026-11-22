@@ -29,10 +29,14 @@ export function filingStatusOf(status: ReceiptStatusFilter): 'TO_REVIEW' | 'FILE
   return undefined;
 }
 
-export function useReceipts(profileId: string, status: ReceiptStatusFilter) {
+/**
+ * A page of receipts. `limit` (MUT-657) is in the key as well as the request, so home's short To review strip never
+ * shares, or cuts, the gallery's pages.
+ */
+export function useReceipts(profileId: string, status: ReceiptStatusFilter, limit: number = RECEIPT_PAGE_LIMIT) {
   const filingStatus = filingStatusOf(status);
-  return useCursorList<ReceiptListItem>(receiptsKey(profileId, 'list', status), (cursor) =>
-    api.listReceipts(profileId, { limit: RECEIPT_PAGE_LIMIT, ...(filingStatus ? { filingStatus } : {}), ...(cursor ? { cursor } : {}) }),
+  return useCursorList<ReceiptListItem>(receiptsKey(profileId, 'list', status, limit), (cursor) =>
+    api.listReceipts(profileId, { limit, ...(filingStatus ? { filingStatus } : {}), ...(cursor ? { cursor } : {}) }),
   );
 }
 

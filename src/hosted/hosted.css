@@ -362,6 +362,8 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 }
 .hp-pill a:hover { color: var(--text); }
 .hp-pill a.hp-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+/* MUT-657 (E-2): home is a word on a desktop and its icon on a phone, where five items and the island share 375px */
+.hp-tab-icon { display: none; }
 .hp-island {
   position: absolute;
   top: var(--hp-chrome-gap);
@@ -660,6 +662,9 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
   }
   .hp-pill { position: static; translate: none; min-width: 0; }
   .hp-pill a { padding: 0 var(--space-2-5); font-size: var(--text-label); }
+  .hp-pill a.hp-tab-home { padding: 0 var(--space-2); }
+  .hp-tab-home .hp-tab-icon { display: grid; place-items: center; }
+  .hp-tab-home .hp-tab-label { display: none; }
   /* D5: ring only; the name stays in the island's label */
   .hp-island { position: static; flex: none; padding: var(--space-1); }
   .hp-island-name { display: none; }
@@ -1743,5 +1748,67 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 
 /* MUT-648: the save toast's second document choice, quieter than the first. */
 .hp-toast-action--quiet { margin-inline-start: 0; color: var(--muted); }
+
+/* ---------- Home (MUT-657, "Two lanes"): an Add lane beside a Waiting lane of groups; one column at 760px ---------- */
+.hp-home-lanes { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.hp-home-lanes > * { min-width: 0; }
+.hp-home-add, .hp-home-group, .hp-home-calm { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); }
+.hp-home-add { display: flex; flex-direction: column; gap: var(--space-2-5); }
+.hp-home-drop { display: flex; flex-direction: column; gap: var(--space-0-5); align-items: center; text-align: center; padding: var(--space-4) var(--space-3); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); color: var(--muted); font-size: var(--text-label); }
+.hp-home-drop strong { color: var(--text); font-size: var(--text-body); font-weight: var(--weight-medium); }
+.hp-home-drop-over { border-color: var(--accent); background: var(--accent-subtle); }
+.hp-home-add-row { display: flex; gap: var(--space-2); }
+.hp-home-add-row > * { flex: 1; }
+/* Take a photo only where there is a camera to hand: a coarse pointer (a phone, a tablet). Scoped to the row so it
+   outranks `.btn`'s display, which loads after this file */
+.hp-home-add-row .hp-home-photo { display: none; }
+@media (pointer: coarse) { .hp-home-add-row .hp-home-photo { display: inline-flex; } }
+.hp-home-waiting { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-home-group-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2-5); }
+.hp-home-group-head h2 { margin: 0; font-size: var(--text-body); font-family: inherit; font-weight: var(--weight-semibold); }
+.hp-home-count { color: var(--muted); font-size: var(--text-label); font-variant-numeric: tabular-nums; }
+.hp-home-see-all { margin-inline-start: auto; color: var(--link); font-size: var(--text-label); font-weight: var(--weight-semibold); text-decoration: none; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+.hp-home-strip { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 112px; gap: var(--space-2-5); overflow-x: auto; overscroll-behavior-inline: contain; }
+.hp-home-strip .hp-receipt-thumb { aspect-ratio: 4 / 3; }
+.hp-home-people { list-style: none; margin: 0; padding: 0; }
+.hp-home-people li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2-5); min-height: 44px; }
+.hp-home-people li + li { border-top: 1px solid var(--divider); }
+.hp-home-people a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; }
+.hp-home-late { flex: none; color: var(--error); font-size: var(--text-label); }
+.hp-home-calm { text-align: center; padding: var(--space-8) var(--space-4); color: var(--muted); }
+.hp-home-calm p { margin: 0; }
+.hp-home-calm-title { color: var(--text); font-weight: var(--weight-semibold); }
+.hp-home-calm p.hp-home-calm-title { margin-bottom: var(--space-1); }
+.hp-page-header:has(.hp-home-switch) h1 { flex-basis: auto; }
+.hp-home-switch { display: inline-flex; gap: var(--space-0-5); padding: var(--space-0-5); border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); }
+.hp-home-switch button { min-height: 36px; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-pill); background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-label); cursor: pointer; }
+.hp-home-switch button[aria-pressed='true'] { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-home-switch button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-home-currency { margin-bottom: var(--space-3); }
+.hp-home-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.hp-home-io-col { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); min-width: 0; }
+.hp-home-io-col h2 { margin: 0 0 var(--space-1-5); font-size: var(--text-body); font-family: inherit; font-weight: var(--weight-semibold); }
+.hp-home-io-figure { margin: 0; font-family: var(--font-mono); font-size: var(--text-figure-fluid, var(--text-headline)); font-weight: var(--weight-medium); line-height: 1.1; }
+.hp-home-io-in { color: var(--success); }
+.hp-home-io-caption { margin: var(--space-1) 0 var(--space-2-5); color: var(--muted); font-size: var(--text-label); }
+.hp-home-io-kv { margin: 0; }
+.hp-home-io-kv > div, .hp-home-io-bars li { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1-5) 0; border-top: 1px solid var(--divider); }
+.hp-home-io-kv dt { color: var(--text); }
+.hp-home-io-kv dd { margin: 0; }
+.hp-home-io-bars { list-style: none; margin: 0; padding: 0; }
+.hp-home-io-bars li { flex-wrap: wrap; }
+.hp-home-io-track { flex-basis: 100%; height: 5px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.hp-home-io-track span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--muted); }
+.hp-home-io-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--link); font-size: var(--text-label); font-weight: var(--weight-semibold); text-decoration: none; }
+.hp-home-io-more { margin: var(--space-2) 0 0; }
+@media (max-width: 760px) {
+  .hp-home-switch { display: flex; width: 100%; }
+  .hp-home-switch button { flex: 1; min-height: 44px; }
+  .hp-home-io { grid-template-columns: minmax(0, 1fr); }
+  .hp-home-lanes { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  /* Nothing is dragged on a phone: the zone gives way to the buttons */
+  .hp-home-drop { display: none; }
+  .hp-home-strip { grid-auto-columns: 96px; }
+}
 /* MUT-647 + MUT-648: Issue a tax invoice and Attach share the Owed row's Document cell. */
 .hp-row-actions { display: inline-flex; gap: var(--space-2); align-items: center; }

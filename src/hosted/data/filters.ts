@@ -378,3 +378,22 @@ export function pickShellOverlay(search: Raw): Partial<ProfileDrawerSearch> {
   for (const key of SHELL_OVERLAY_KEYS) if (search[key] !== undefined) picked[key] = search[key];
   return picked as Partial<ProfileDrawerSearch>;
 }
+
+/**
+ * Home (MUT-657): its view (`?view=in-out`; Receipts & to-dos has no key, so coming back opens it) and the income
+ * drawer its Add income opens. Nothing else: a bare `?currency=` belongs to Owed (`legacyOwedSearch`).
+ */
+export interface HomeSearch extends IncomeDrawerSearch {
+  view?: 'in-out';
+}
+export const parseHome = (raw: Raw): HomeSearch => compact({ view: raw.view === 'in-out' ? ('in-out' as const) : undefined, ...parseIncomeDrawer(raw) });
+
+/**
+ * MUT-657 (E-1): Owed's overview moved from the bare `/p/:id` to `/owed`, and `?currency=` was its only key, so a bare
+ * address that carries one is an old Owed link. Its search for `/owed`: the currency and every shell key (a Stripe
+ * return's `?checkout=`, `?billing=`, …); null when the address is home's.
+ */
+export function legacyOwedSearch(raw: Raw): (OverviewFilters & Partial<ProfileDrawerSearch>) | null {
+  const currency = oneOf(raw.currency, CURRENCIES);
+  return currency ? { ...pickShellOverlay(raw), currency } : null;
+}

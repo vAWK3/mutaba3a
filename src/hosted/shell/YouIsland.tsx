@@ -4,7 +4,7 @@ import { useT } from '../../lib/i18n/core';
 import type { HostedProfile } from '../api/client';
 import { useMe } from '../session/me';
 import { initialsOf } from './initials';
-import { islandTarget, isYouPath, parseYouSearch, sectionOf, switchTarget, youPath } from './youRoutes';
+import { islandTarget, isYouPath, parseYouSearch, sectionOf, sectionPath, youPath } from './youRoutes';
 
 /**
  * The six ring colours (MUT-426 eng D2): theme tokens over the brand's `--m-ring1…6` primitives, each at least 3:1
@@ -55,7 +55,7 @@ export function YouIsland({ profile }: { profile: HostedProfile | null }) {
   const from = sectionOf(pathname);
   // Only a page deeper than its section needs `back`: the section's own page is where the island returns anyway
   const page = profileId ? parseYouSearch({ back: pathname }).back : undefined;
-  const back = profileId && page !== switchTarget(profileId, from) ? page : undefined;
+  const back = profileId && page !== sectionPath(profileId, from) ? page : undefined;
   const label = profile ? t('hosted.shell.island', { name: profile.name }) : t('hosted.you.title');
 
   return (

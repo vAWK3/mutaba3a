@@ -51,8 +51,8 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
     month: { year: 2026, month: 11 },
     asOf: { year: 2026, month: 12, day: 1 },
     profiles: [
-      { name: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile`, cameIn: [{ currency: 'ILS', amount: '12400.00' }, { currency: 'USD', amount: '900.00' }], owed: [{ currency: 'ILS', amount: '3200.00' }], overdue: [{ currency: 'ILS', amount: '1100.00' }], overdueCount: 2 },
-      { name: 'Personal', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-personal`, cameIn: [{ currency: 'ILS', amount: '850.00' }], owed: [], overdue: [], overdueCount: 0 },
+      { name: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile?view=in-out`, cameIn: [{ currency: 'ILS', amount: '12400.00' }, { currency: 'USD', amount: '900.00' }], owed: [{ currency: 'ILS', amount: '3200.00' }], overdue: [{ currency: 'ILS', amount: '1100.00' }], overdueCount: 2 },
+      { name: 'Personal', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-personal?view=in-out`, cameIn: [{ currency: 'ILS', amount: '850.00' }], owed: [], overdue: [], overdueCount: 0 },
     ],
     yearly: { savings: 5800, currency: 'ILS', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=switch` },
     offLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/mail-off#sample-token`,

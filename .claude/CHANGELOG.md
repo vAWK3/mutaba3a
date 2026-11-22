@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Portal home: receipts and what is waiting first, In & out behind a switch (MUT-657, ADR-269)
+
+### Added
+- **Home** at the bare `/p/:id`, first in the pill (an icon on a phone). Receipts & to-dos, "Two lanes":
+  - an **Add** lane: drop zone, Add receipt, Take a photo (coarse pointers), Add income (the income drawer over home);
+  - a **Waiting** lane: To review (a strip of up to 8 cards, See all → Expenses › Receipts) and Clients overdue (up to 3 names, most days late first, "N days late", See all → Owed). Each group hides at 0; nothing waiting is one calm sentence. No totals.
+  - With the receipts library off (signed out, or the flag off) the receipt parts give way to the unavailable copy; Clients overdue still shows.
+- **In & out** (`?view=in-out`): this month's money in (received; owed and overdue now) and out (spent, top categories), one currency at a time, with Open Owed, Open Spent and Compare months in Reports.
+
+### Changed
+- Owed's overview moved to `/p/:id/owed`; a bare `/p/:id?currency=X` redirects there with the shell's keys.
+- Switching profile always lands on the profile's home.
+- The one-time notices moved from Owed to home (`LandingNotices`).
+- The monthly summary mail links to `/p/:id?view=in-out` (server, no API change).
+
+### Technical
+- `useReceiptFiles` (the gallery's upload, shared with home), `useReceipts(…, limit)` with the limit in the key, `ReceiptCard showAmount`, `overdueClientCount` / `overdueClients`, `parseHome` / `legacyOwedSearch`. Files: `src/hosted/pages/home/**`, `src/hosted/pages/views/HomePage.tsx`, `src/hosted/router.tsx`, `src/hosted/shell/{destinations,youRoutes,HostedShell,YouIsland}.ts(x)`, `server/src/billing/monthly-summary-mail.ts`.
+- QA: `qa/features/portal/home.yaml` (`waiting` core, `clear`, `upload`, `in-out`), `qa/specs/portal/home.spec.ts`; shell, terms, setup, session, profiles and the self-service/live specs that landed on Owed now land on home.
+
+---
+
 ## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.125.0-mut647)
 
 ### Added
