@@ -16,6 +16,13 @@ export const ISSUED_DOC_TYPES = Object.keys(DOC_TYPE_CODES) as IssuedDocType[];
 export const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
 export type DealerType = (typeof DEALER_TYPES)[number];
 
+/** MUT-640: the document styles (layouts in pdf/styles). Kept here so the API schema doesn't load the PDF code. */
+export const DOCUMENT_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'] as const;
+export type DocumentStyle = (typeof DOCUMENT_STYLES)[number];
+
+/** MUT-640: the only print colours. */
+export const INK_COLOURS = ['BLACK', 'BLUE'] as const;
+
 /** Goods or service, per line: the allocation API's item category starts with it. */
 export const LINE_KINDS = ['GOODS', 'SERVICE'] as const;
 export type LineKind = (typeof LINE_KINDS)[number];

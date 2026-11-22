@@ -84,6 +84,14 @@ const BUSINESS_LOOKUP_OPERATIONS = ['GET /v1/business-lookup'];
 const ISSUING_OPERATIONS = [
   'GET /v1/issuer',
   'PUT /v1/issuer',
+  // MUT-646: the setup.
+  'PUT /v1/issuer/defaults',
+  'PUT /v1/issuer/logo',
+  'GET /v1/issuer/logo',
+  'DELETE /v1/issuer/logo',
+  'PUT /v1/issuing/numbering',
+  'GET /v1/issuing/setup',
+  'POST /v1/issuing/setup/intro-seen',
   'GET /v1/issuing/settings',
   'PUT /v1/issuing/starting-numbers/{docType}',
   'GET /v1/issuing/gaps',

@@ -21,6 +21,8 @@ import type {
   IssuedDocumentRecord,
   IssuerDetailsRecord,
   IssuingRepository,
+  IssuerLogoRecord,
+  IssuingSetupRecord,
   AccountClosureRecord,
   AccountPurgeRepository,
   BillingAccountRecord,
@@ -380,6 +382,9 @@ export class MemoryLedgerStore implements LedgerStore {
    */
   private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
   private readonly issuedCounterMap = new Map<string, IssuedDocumentCounterRecord>();
+  /** MUT-646 */
+  private readonly issuingSetupMap = new Map<string, IssuingSetupRecord>();
+  private readonly issuerLogoMap = new Map<string, IssuerLogoRecord>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
@@ -914,6 +919,15 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-568 (ADR-260): the issuing core. `issue` checks everything before it writes anything, so a refusal leaves no
    * trace and takes no number (the Prisma store gets the same by rolling its transaction back).
    */
+  private setupRow(organizationId: string): IssuingSetupRecord {
+    let r = this.issuingSetupMap.get(organizationId);
+    if (!r) {
+      r = { organizationId, logoId: null, numberingAnsweredAt: null, introSeenAt: null, defaultsSavedAt: null };
+      this.issuingSetupMap.set(organizationId, r);
+    }
+    return r;
+  }
+
   readonly issuing: IssuingRepository = {
     getIssuer: async (organizationId) => {
       const r = this.issuerMap.get(organizationId);
@@ -923,7 +937,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const existing = this.issuerMap.get(organizationId);
       if (expectedVersion === null) {
         if (existing) return { kind: 'stale', record: { ...existing } };
-        const record: IssuerDetailsRecord = { organizationId, ...input, logoAttachmentId: null, ink: 'BLACK', documentStyle: 'PROFESSIONAL', version: 1, createdAt: at, updatedAt: at };
+        const record: IssuerDetailsRecord = { organizationId, ...input, version: 1, createdAt: at, updatedAt: at };
         this.issuerMap.set(organizationId, record);
         return { kind: 'created', record: { ...record } };
       }
@@ -931,6 +945,29 @@ export class MemoryLedgerStore implements LedgerStore {
       if (existing.version !== expectedVersion) return { kind: 'stale', record: { ...existing } };
       Object.assign(existing, input, { version: existing.version + 1, updatedAt: at });
       return { kind: 'updated', record: { ...existing } };
+    },
+    getSetup: async (organizationId) => {
+      const r = this.issuingSetupMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    markSetup: async (organizationId, mark, at) => {
+      const r = this.setupRow(organizationId);
+      r[mark] ??= at;
+      return { ...r };
+    },
+    addLogo: async (organizationId, logo, at) => {
+      const record: IssuerLogoRecord = { id: randomUUID(), organizationId, ...logo, bytes: new Uint8Array(logo.bytes), createdAt: at };
+      this.issuerLogoMap.set(record.id, record);
+      this.setupRow(organizationId).logoId = record.id;
+      return { ...record };
+    },
+    clearLogo: async (organizationId) => {
+      const r = this.issuingSetupMap.get(organizationId);
+      if (r) r.logoId = null;
+    },
+    getLogo: async (organizationId, logoId) => {
+      const r = this.issuerLogoMap.get(logoId);
+      return r && r.organizationId === organizationId ? { ...r } : null;
     },
     counters: async (organizationId) =>
       [...this.issuedCounterMap.values()].filter((c) => c.organizationId === organizationId).sort((a, b) => (a.docType < b.docType ? -1 : 1)).map((c) => ({ ...c })),

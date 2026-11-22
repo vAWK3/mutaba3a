@@ -15,7 +15,7 @@ export interface PdfRenderOptions {
   /** The tax invoice a credit note credits or a receipt pays, by number. */
   originalNumber: number | null;
   /** The business's logo (PNG or JPEG), when it has one. */
-  logo: Buffer | null;
+  logo: Uint8Array | null;
 }
 
 export interface LabelValue {
@@ -136,7 +136,7 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
     number: String(doc.number),
     mark: options.mark === 'ORIGINAL' ? l.original : options.mark === 'COPY' ? l.copy : l.draft,
     isDraft: options.mark === 'DRAFT',
-    logo: options.logo,
+    logo: options.logo ? Buffer.from(options.logo) : null,
     issuer: {
       name: str(issuer['legalName']) ?? '',
       idLine: str(issuer['vatId']) ? `${dealer ? l.issuerId[dealer] : l.customerId} ${str(issuer['vatId'])}` : null,

@@ -44,6 +44,8 @@ export const PURGE_PROFILE_TABLES = [
   'share_links',
   // MUT-594: the firm's Malafat seats (also ON DELETE CASCADE).
   'external_identities',
+  // MUT-646: where the invoicing setup stood (the details and logos it points at are kept, below).
+  'issuing_setup',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */
@@ -57,6 +59,7 @@ export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   issued_documents: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
+  issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
 };
 
 /**

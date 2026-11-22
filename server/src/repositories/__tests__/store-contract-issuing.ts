@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
+const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null };
+
 /** MUT-568 (ADR-260) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
 export function describeLedgerStoreIssuingContract(name: string, makeStore: () => Promise<LedgerStore>): void {
   const unique = () => Math.random().toString(36).slice(2, 10);
@@ -207,7 +209,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
     it('keeps issuer details with If-Match versions', async () => {
       const store = await makeStore();
       const w = await world(store);
-      const input = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY' as const, address: null, city: 'Nazareth', phone: null, email: null, website: null, pricesIncludeVat: false };
+      const input = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY' as const, address: null, city: 'Nazareth', phone: null, email: null, website: null, pricesIncludeVat: false, ...ISSUER_DEFAULTS };
       const created = await store.issuing.putIssuer(w.a.id, input, null, at(1));
       expect(created).toMatchObject({ kind: 'created', record: { legalName: 'Barmajiyat Ltd.', ink: 'BLACK', documentStyle: 'PROFESSIONAL', version: 1 } });
       expect(await store.issuing.putIssuer(w.a.id, input, null, at(2))).toMatchObject({ kind: 'stale' });
@@ -215,6 +217,36 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.issuing.putIssuer(w.a.id, input, 1, at(4))).toMatchObject({ kind: 'stale', record: { version: 2 } });
       expect(await store.issuing.putIssuer(w.b.id, input, 1, at(5))).toEqual({ kind: 'not_found' });
       expect(await store.issuing.getIssuer(w.a.id)).toMatchObject({ city: 'Haifa' });
+      expect(await store.issuing.putIssuer(w.a.id, { ...input, ink: 'BLUE', documentStyle: 'MINIMAL', defaultLanguage: 'ar', paymentTermsDays: 30, bankDetails: 'Bank Leumi 10-800-123456', footerNote: 'Thank you' }, 2, at(6))).toMatchObject({
+        kind: 'updated',
+        record: { ink: 'BLUE', documentStyle: 'MINIMAL', defaultLanguage: 'ar', paymentTermsDays: 30, bankDetails: 'Bank Leumi 10-800-123456', footerNote: 'Thank you', version: 3 },
+      });
+    });
+
+    it('MUT-646: stamps each setup step once, per profile', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      expect(await store.issuing.getSetup(w.a.id)).toBeNull();
+      expect(await store.issuing.markSetup(w.a.id, 'introSeenAt', at(1))).toMatchObject({ introSeenAt: at(1), numberingAnsweredAt: null, logoId: null });
+      expect(await store.issuing.markSetup(w.a.id, 'introSeenAt', at(2))).toMatchObject({ introSeenAt: at(1) });
+      expect(await store.issuing.markSetup(w.a.id, 'numberingAnsweredAt', at(3))).toMatchObject({ introSeenAt: at(1), numberingAnsweredAt: at(3), defaultsSavedAt: null });
+      expect(await store.issuing.getSetup(w.b.id)).toBeNull();
+    });
+
+    it('MUT-646: keeps every logo; clearing only drops the current one', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+      const first = await store.issuing.addLogo(w.a.id, { contentType: 'image/png', bytes: png, sha256: 'a'.repeat(64) }, at(1));
+      expect((await store.issuing.getSetup(w.a.id))?.logoId).toBe(first.id);
+      const second = await store.issuing.addLogo(w.a.id, { contentType: 'image/jpeg', bytes: new Uint8Array([0xff, 0xd8, 0xff, 9]), sha256: 'b'.repeat(64) }, at(2));
+      expect((await store.issuing.getSetup(w.a.id))?.logoId).toBe(second.id);
+      await store.issuing.clearLogo(w.a.id, at(3));
+      expect((await store.issuing.getSetup(w.a.id))?.logoId).toBeNull();
+      const kept = await store.issuing.getLogo(w.a.id, first.id);
+      expect(kept).toMatchObject({ contentType: 'image/png', sha256: 'a'.repeat(64) });
+      expect([...kept!.bytes]).toEqual([...png]);
+      expect(await store.issuing.getLogo(w.b.id, first.id)).toBeNull();
     });
 
     it('a tax invoice from a recorded Owed takes it over: no second Owed, the document’s VAT split (I1-a)', async () => {

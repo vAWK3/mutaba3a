@@ -6,7 +6,7 @@ import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { attachmentRoutes } from './attachments.js';
 import { conversionRoutes } from './conversions.js';
-import { issuingRoutes, type IssuedPdfRenderer } from './issuing.js';
+import { issuingRoutes, type IssuedPdf } from './issuing.js';
 import { expenseCategoryRoutes } from './expense-categories.js';
 import { expenseGroupRoutes } from './expense-groups.js';
 import { expenseRoutes } from './expenses.js';
@@ -37,7 +37,7 @@ import { vendorRoutes } from './vendors.js';
 export interface PortalRouteDependencies {
   store: LedgerStore;
   /** MUT-640: the issued-document PDF renderer; the hosted server's only (the signed-out portal has none). */
-  issuedPdf?: IssuedPdfRenderer | null;
+  issuedPdf?: IssuedPdf | null;
   attachments: { storage: AttachmentStorage | null; urlTtlSeconds: number };
   fxRates: CachedFxRates | null;
   /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */

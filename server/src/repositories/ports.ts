@@ -4438,16 +4438,42 @@ export interface IssuerDetailsInput {
   website: string | null;
   /** V1-a: the default for new documents. */
   pricesIncludeVat: boolean;
+  /** MUT-646: the defaults step. BLACK | BLUE. */
+  ink: string;
+  /** A key in issuing/pdf/styles. */
+  documentStyle: string;
+  /** he | ar | en. */
+  defaultLanguage: string;
+  paymentTermsDays: number | null;
+  bankDetails: string | null;
+  footerNote: string | null;
 }
 
 export interface IssuerDetailsRecord extends IssuerDetailsInput {
   organizationId: string;
-  logoAttachmentId: string | null;
-  ink: string;
-  documentStyle: string;
   version: number;
   createdAt: Date;
   updatedAt: Date;
+}
+
+/** MUT-646: where a profile stands in the invoicing setup (no row = nothing done yet). */
+export interface IssuingSetupRecord {
+  organizationId: string;
+  logoId: string | null;
+  numberingAnsweredAt: Date | null;
+  introSeenAt: Date | null;
+  defaultsSavedAt: Date | null;
+}
+
+export type IssuingSetupMark = 'numberingAnsweredAt' | 'introSeenAt' | 'defaultsSavedAt';
+
+export interface IssuerLogoRecord {
+  id: string;
+  organizationId: string;
+  contentType: 'image/png' | 'image/jpeg';
+  bytes: Uint8Array;
+  sha256: string;
+  createdAt: Date;
 }
 
 export interface IssuedDocumentCounterRecord {
@@ -4584,6 +4610,15 @@ export interface IssuingRepository {
   getIssuer(organizationId: string): Promise<IssuerDetailsRecord | null>;
   /** Creates the details (expectedVersion null) or updates them (If-Match); `stale` on a version mismatch. */
   putIssuer(organizationId: string, input: IssuerDetailsInput, expectedVersion: number | null, at: Date): Promise<UpdateResult<IssuerDetailsRecord> | { kind: 'created'; record: IssuerDetailsRecord }>;
+  /** MUT-646: the setup's progress; null before any step was taken. */
+  getSetup(organizationId: string): Promise<IssuingSetupRecord | null>;
+  /** MUT-646: stamps a setup step (first time only: a repeat keeps the first stamp). */
+  markSetup(organizationId: string, mark: IssuingSetupMark, at: Date): Promise<IssuingSetupRecord>;
+  /** MUT-646: a new logo row (never changed later) that becomes the current one. */
+  addLogo(organizationId: string, logo: Pick<IssuerLogoRecord, 'contentType' | 'bytes' | 'sha256'>, at: Date): Promise<IssuerLogoRecord>;
+  /** MUT-646: no current logo; the rows stay for the documents that print them. */
+  clearLogo(organizationId: string, at: Date): Promise<void>;
+  getLogo(organizationId: string, logoId: string): Promise<IssuerLogoRecord | null>;
   counters(organizationId: string): Promise<IssuedDocumentCounterRecord[]>;
   /** D3: sets a type's first number; `has_documents` once one of that type exists. */
   setStartingNumber(organizationId: string, docType: IssuedDocType, start: number): Promise<{ kind: 'set'; counter: IssuedDocumentCounterRecord } | { kind: 'has_documents' }>;

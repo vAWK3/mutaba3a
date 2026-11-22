@@ -869,5 +869,5 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord) {
 }
 
 export function serializeIssuer(r: IssuerDetailsRecord) {
-  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, version: r.version };
+  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, defaultLanguage: r.defaultLanguage, paymentTermsDays: r.paymentTermsDays, bankDetails: r.bankDetails, footerNote: r.footerNote, version: r.version };
 }

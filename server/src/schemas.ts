@@ -9,6 +9,7 @@ import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
 import { isPlainAddress } from './email/ports.js';
 import { ERROR_CODES } from './errors.js';
+import { DOCUMENT_STYLES, INK_COLOURS } from './issuing/types.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
 import { DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT } from './agreements/compose.js';
 import { GROUP_NAME_MAX, MAX_GROUP_SPAN_DAYS } from './expenses/groups.js';
@@ -5024,9 +5025,49 @@ export const IssuerDetailsSchema = z
     ink: z.string(),
     documentStyle: z.string(),
     pricesIncludeVat: z.boolean(),
+    defaultLanguage: z.string(),
+    paymentTermsDays: z.number().int().nullable(),
+    bankDetails: z.string().nullable(),
+    footerNote: z.string().nullable(),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
+
+/** MUT-646: the setup's defaults step. Replaces all of them; If-Match is the details' version. */
+export const IssuerDefaultsRequestSchema = z
+  .object({
+    documentStyle: z.enum(DOCUMENT_STYLES).openapi({ description: 'The layout new documents print in' }),
+    ink: z.enum(INK_COLOURS).openapi({ description: 'Black or blue ink on white paper' }),
+    defaultLanguage: DocumentLanguageSchema,
+    pricesIncludeVat: z.boolean(),
+    paymentTermsDays: z.number().int().min(0).max(365).nullable().optional().openapi({ description: 'A tax invoice’s default due date, in days after its date' }),
+    bankDetails: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed for paying by transfer' }),
+    footerNote: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed at the foot of every document' }),
+  })
+  .openapi('IssuerDefaultsRequest');
+
+/** MUT-646: "already issuing elsewhere?" — answered once; the numbers follow D3 (refused once that type has documents). */
+export const IssuingNumberingRequestSchema = z
+  .object({
+    alreadyIssuing: z.boolean(),
+    starts: z
+      .object(Object.fromEntries(IssuedDocTypeSchema.options.map((t) => [t, z.number().int().min(1).max(999_999_999).optional()])) as Record<z.infer<typeof IssuedDocTypeSchema>, z.ZodOptional<z.ZodNumber>>)
+      .strict()
+      .optional()
+      .openapi({ description: 'The next number per document type, when moving from another tool' }),
+  })
+  .openapi('IssuingNumberingRequest');
+
+const SetupStepSchema = z.enum(['done', 'todo', 'later']);
+export const IssuingSetupSchema = z
+  .object({
+    steps: z.object({ details: SetupStepSchema, logo: SetupStepSchema, defaults: SetupStepSchema, numbering: SetupStepSchema, taxAuthority: SetupStepSchema }),
+    canIssue: z.boolean(),
+    missing: z.array(z.enum(['DETAILS', 'NUMBERING'])).openapi({ description: 'What blocks issuing (empty when canIssue)' }),
+    introSeen: z.boolean(),
+    hasLogo: z.boolean(),
+  })
+  .openapi('IssuingSetup');
 
 export const IssuingCounterSchema = z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), next: z.number().int(), hasDocuments: z.boolean() }).openapi('IssuingCounter');
 export const IssuingSettingsSchema = z.object({ counters: z.array(IssuingCounterSchema) }).openapi('IssuingSettings');
