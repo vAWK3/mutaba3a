@@ -746,6 +746,10 @@ model Customer {
   notes          String?
   /// Default VAT treatment for this customer's items (e.g. OUT_OF_SCOPE for a foreign client).
   vatTreatment   VatTreatment?
+  /// MUT-642: VAT, company or ID number (9 digits, check digit validated); printed on issued documents.
+  taxId          String?       @db.VarChar(9)
+  /// MUT-642: the address printed on issued documents.
+  address        String?
   status         EntityStatus  @default(ACTIVE)
   archivedAt     DateTime?
   /// Optimistic concurrency: PATCH sends If-Match: <version>.

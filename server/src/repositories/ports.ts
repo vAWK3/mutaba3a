@@ -644,6 +644,9 @@ export interface CustomerRecord {
   notes: string | null;
   /** Default VAT treatment for this customer's items (M3; e.g. OUT_OF_SCOPE for a foreign client). Null = inherit STANDARD_RATED. */
   vatTreatment: VatTreatment | null;
+  /** MUT-642: VAT, company or ID number (9 digits, validated); printed on issued documents. */
+  taxId: string | null;
+  address: string | null;
   status: EntityStatus;
   archivedAt: Date | null;
   /** Optimistic-concurrency version; starts at 1, +1 per write. */
@@ -659,6 +662,8 @@ export interface CreateCustomerInput {
   phone: string | null;
   notes: string | null;
   vatTreatment?: VatTreatment | null;
+  taxId?: string | null;
+  address?: string | null;
 }
 
 /** Absent key = unchanged; null = cleared. */
@@ -668,6 +673,8 @@ export interface UpdateCustomerPatch {
   phone?: string | null;
   notes?: string | null;
   vatTreatment?: VatTreatment | null;
+  taxId?: string | null;
+  address?: string | null;
 }
 
 export interface ProjectRecord {

@@ -308,6 +308,17 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(await store.receivables.getById(w.a.id, doc.receivableId!)).toMatchObject({ vatTreatment: 'EXEMPT', vatMinor: 0n, grossMinor: shekels(50) });
     });
 
+    it('a customer keeps a VAT number and address, updates and clears them (MUT-642)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const c = await store.customers.create({ organizationId: w.a.id, name: 'Acme', email: null, phone: null, notes: null, taxId: '516123452', address: '5 Herzl St' }, at(1));
+      expect(c).toMatchObject({ taxId: '516123452', address: '5 Herzl St' });
+      const updated = await store.customers.update(w.a.id, c.id, c.version, { address: 'Haifa' }, at(2));
+      expect(updated).toMatchObject({ kind: 'updated', record: { taxId: '516123452', address: 'Haifa' } });
+      if (updated.kind !== 'updated') return;
+      expect(await store.customers.update(w.a.id, c.id, updated.record.version, { taxId: null, address: null }, at(3))).toMatchObject({ kind: 'updated', record: { taxId: null, address: null } });
+    });
+
     it('a document read back is a copy: changing it changes nothing stored', async () => {
       const store = await makeStore();
       const w = await world(store);

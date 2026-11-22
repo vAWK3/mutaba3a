@@ -198,6 +198,8 @@ export function serializeCustomer(c: CustomerRecord, reference?: ExternalReferen
     phone: c.phone,
     notes: c.notes,
     vatTreatment: c.vatTreatment,
+    taxId: c.taxId,
+    address: c.address,
     status: c.status,
     archivedAt: iso(c.archivedAt),
     externalReference: serializeReference(reference),

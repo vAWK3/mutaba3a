@@ -180,8 +180,8 @@ describe('every route sits inside the matrix', () => {
     // The portal's 20 ledger reads (MUT-38), 5 expense reads (MUT-42), 2 conversion reads (MUT-161), 3 expense-group reads (MUT-267)
     // and 4 receipts-library reads (MUT-255), the streak (MUT-339), the vendor typeahead (MUT-254), Reports' activity (MUT-175)
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
-    // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) and the PDF view (MUT-640).
-    expect(SESSION_READS.length).toBe(48);
+    // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) the PDF view (MUT-640) and the business lookup (MUT-642).
+    expect(SESSION_READS.length).toBe(49);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -238,7 +238,8 @@ describe('a session on a key-only operation (hosted-portal.md §5 layer 2)', () 
 
   /** MUT-339: the streak is personal-profile only, so on this firm it is 409 NOT_PERSONAL (its 200: streak-routes.test.ts). */
   // MUT-568: issuing is switched off (404) on a profile whose owner lacks `invoicing`, as on this operator firm (its 200: routes-issuing.test.ts).
-  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : /^\/v1\/(issuer|issuing|issued-documents)/.test(op.path) ? 404 : 200);
+  // MUT-642: the business lookup needs ?number=, so sent bare it is a 422 before anything else.
+  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : /^\/v1\/(issuer|issuing|issued-documents)/.test(op.path) ? 404 : op.path === '/v1/business-lookup' ? 422 : 200);
 
   it.each(SESSION_READS.filter((op) => !op.path.includes(':')).map((op) => [op.key, op] as const))('%s answers 200 to a session (a read row)', async (_key, op) => {
     expect((await send(h, op, as(a.org.id))).status).toBe(okOn(op));
@@ -432,7 +433,7 @@ describe('switching profiles never leaks one profile’s figures into another (a
         const res = await send(h, op, as(mine.org.id), ids);
         // MUT-339: the streak refuses a firm profile with 409 NOT_PERSONAL, before any store read. MUT-589: the move
         // preview needs ?profileId= (the target, which it reads by design), so sent bare it is a 422 before any read.
-        expect([200, 404, ...(op.path === '/v1/expenses/streak' ? [409] : []), ...(op.path.endsWith('/move-preview') ? [422] : [])], op.key).toContain(res.status);
+        expect([200, 404, ...(op.path === '/v1/expenses/streak' ? [409] : []), ...(op.path.endsWith('/move-preview') || op.path === '/v1/business-lookup' ? [422] : [])], op.key).toContain(res.status);
         const leaked = h.calls.filter((call) => bigintSafe(call.args).includes(theirs.org.id)).map((call) => `${call.repo}.${call.method}`);
         expect(leaked).toEqual([]);
       }

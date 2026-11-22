@@ -94,6 +94,8 @@ import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { renderIssuedDocumentPdf } from './issuing/pdf/render.js';
+import type { RegistryLookup } from './israel/registry.js';
+import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
 import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, UsedTickets, type DownloadLimits } from './period-pack/index.js';
@@ -145,6 +147,9 @@ export interface AppDependencies {
   appAssociation?: AppAssociationConfig | null;
   /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
   fxRates?: CachedFxRates | null;
+  /** MUT-642: the company/nonprofit registry lookup; absent in tests unless given (the route then answers 502 REGISTRY_UNAVAILABLE). */
+  registry?: RegistryLookup | null;
+  businessLookupLimiter?: RateLimiter;
   /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
   publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
@@ -373,7 +378,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.116.0-mut640';
+export const API_VERSION = '1.117.0-mut642';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -665,6 +670,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     : undefined;
   // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
   const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
+  // MUT-642: the registry lookup calls data.gov.il, so it's hosted only, outside PORTAL_ROUTES.
+  app.route('/', businessLookupRoutes({ registry: deps.registry ?? null, limiter: deps.businessLookupLimiter ?? new SlidingWindowRateLimiter(30) }));
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
   // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
   if (deps.receiptsLibrary) {

@@ -248,7 +248,7 @@ import { numberGaps } from '../issuing/gaps.js';
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  * 19 (MUT-596): `people` gained `passwordChosen`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 20;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 21;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -2193,7 +2193,7 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly customers: CustomerRepository = {
     create: async (input: CreateCustomerInput, at, reference?: ExternalReferenceInput) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('customers.organizationId');
-      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, taxId: input.taxId ?? null, address: input.address ?? null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
       if (reference) {
         // "atomic": the reference is checked before the customer is stored
         await this.externalReferences.link({ organizationId: input.organizationId, entityType: 'CUSTOMER', entityId: record.id, ...reference }, at);
@@ -2221,6 +2221,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (patch.phone !== undefined) c.phone = patch.phone;
       if (patch.notes !== undefined) c.notes = patch.notes;
       if (patch.vatTreatment !== undefined) c.vatTreatment = patch.vatTreatment;
+      if (patch.taxId !== undefined) c.taxId = patch.taxId;
+      if (patch.address !== undefined) c.address = patch.address;
       c.version += 1;
       c.updatedAt = at;
       return { kind: 'updated', record: { ...c } };
