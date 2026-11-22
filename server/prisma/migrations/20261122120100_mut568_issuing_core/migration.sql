@@ -1,4 +1,4 @@
--- MUT-568 (ADR-259): the issuing core. Issued documents are legal records kept 7 years even after the account
+-- MUT-568 (ADR-260): the issuing core. Issued documents are legal records kept 7 years even after the account
 -- closes (MUT-644): no foreign keys, and documents, lines and copies are INSERT-only.
 
 -- CreateEnum

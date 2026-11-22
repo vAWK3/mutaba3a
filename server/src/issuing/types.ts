@@ -1,5 +1,5 @@
 /**
- * MUT-568 (ADR-259): the issuing core's vocabulary. Codes are the Tax Authority's: the uniform file (מבנה אחיד 1.31)
+ * MUT-568 (ADR-260): the issuing core's vocabulary. Codes are the Tax Authority's: the uniform file (מבנה אחיד 1.31)
  * and the allocation API use the same numbers.
  */
 export const DOC_TYPE_CODES = {

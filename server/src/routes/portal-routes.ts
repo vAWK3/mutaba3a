@@ -65,7 +65,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => incomeRoutes(deps.store),
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),
-  // MUT-568 (ADR-259): issued documents.
+  // MUT-568 (ADR-260): issued documents.
   (deps) => issuingRoutes(deps.store),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),

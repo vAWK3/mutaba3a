@@ -42,7 +42,7 @@ const json = <T>(description: string, schema: T) => ({ description, content: { '
 type IssueRequest = z.infer<typeof IssueDocumentRequestSchema>;
 
 /**
- * MUT-568 (ADR-259): issuing invoices, invoice-receipts, receipts and credit notes. Session only, on a business profile
+ * MUT-568 (ADR-260): issuing invoices, invoice-receipts, receipts and credit notes. Session only, on a business profile
  * whose owner holds the `invoicing` feature (D1); a person's own personal profile, a Malafat firm or a Malafat-connected
  * profile gets the switched-off 404. Writes need the profile's owner (creator or co-owner); an accountant reads under
  * their grant. Issued documents are never changed or removed: a credit note corrects a tax invoice.

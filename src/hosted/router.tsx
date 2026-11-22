@@ -39,6 +39,7 @@ import { SharingPage } from './pages/sharing/SharingPage';
 import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
 import { AcceptInvitePage } from './pages/accountant-invite/AcceptInvitePage';
+import { MailOffPage } from './pages/mail-off/MailOffPage';
 import { ShareLinkPage } from './pages/share-link/ShareLinkPage';
 import { ClientBooksPage } from './pages/client-books/ClientBooksPage';
 import { ClientBookPage } from './pages/client-books/ClientBookPage';
@@ -151,6 +152,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
    */
   const acceptInviteRoute = createRoute({ getParentRoute: () => rootRoute, path: '/accountant-invite', component: AcceptInvitePage });
   const shareLinkRoute = createRoute({ getParentRoute: () => rootRoute, path: '/share', component: ShareLinkPage });
+  /** MUT-535 (D8): the monthly summary mail's turn-it-off page; its signed token names the person. */
+  const mailOffRoute = createRoute({ getParentRoute: () => rootRoute, path: '/mail-off', component: MailOffPage });
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
@@ -516,6 +519,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     welcomeRoute,
     acceptInviteRoute,
     shareLinkRoute,
+    mailOffRoute,
     authedRoute.addChildren([
       homeRoute,
       captureRoute,

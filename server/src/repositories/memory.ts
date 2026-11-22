@@ -247,7 +247,7 @@ import { numberGaps } from '../issuing/gaps.js';
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  * 19 (MUT-596): `people` gained `passwordChosen`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 19;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 20;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -374,7 +374,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
   private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
   /**
-   * MUT-568 (ADR-259): the issuing core, outside the snapshot too: the signed-out portal can't issue (its profiles are
+   * MUT-568 (ADR-260): the issuing core, outside the snapshot too: the signed-out portal can't issue (its profiles are
    * personal and have no feature grants), and a new snapshot map would change the shipped local format.
    */
   private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
@@ -633,6 +633,12 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
+    },
+    setMonthlySummaryMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { monthlySummaryMail: choice, updatedAt: at });
+      return { ...u };
     },
     updateTrialPrompt: async (id, action, at) => {
       const u = this.people.get(id);
@@ -904,7 +910,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   /**
-   * MUT-568 (ADR-259): the issuing core. `issue` checks everything before it writes anything, so a refusal leaves no
+   * MUT-568 (ADR-260): the issuing core. `issue` checks everything before it writes anything, so a refusal leaves no
    * trace and takes no number (the Prisma store gets the same by rolling its transaction back).
    */
   readonly issuing: IssuingRepository = {
@@ -1646,6 +1652,7 @@ export class MemoryLedgerStore implements LedgerStore {
       trialPrompt: null,
       closure: null,
       operatorAt: null,
+      monthlySummaryMail: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
@@ -4034,6 +4041,21 @@ export class MemoryLedgerStore implements LedgerStore {
             ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, endedAt: sub.endedAt!, tier: sub.tier, currency: account.currency as 'ILS' | 'USD', userId: account.userId!, email: person.email, locale: person.locale }]
             : [];
         }),
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+      const covering = new Set(['active', 'trialing', 'past_due']);
+      const payers = new Set(
+        [...this.billingSubs.values()].filter((s) => s.tier !== 'ACCOUNTANT' && covering.has(s.status)).flatMap((s) => this.billingAccounts.get(s.billingAccountId)?.userId ?? []),
+      );
+      const granted = new Set([...this.grants.values()].filter((g) => g.userId && g.tier !== 'ACCOUNTANT' && !g.revokedAt && (!g.expiresAt || g.expiresAt > now)).map((g) => g.userId!));
+      const malafatOrgs = new Set([...this.ints.values()].filter((i) => i.provider === 'MALAFAT' && i.status === 'CONNECTED').map((i) => i.organizationId));
+      const malafatOwners = new Set([...this.members.values()].filter((m) => m.role === 'OWNER' && malafatOrgs.has(m.organizationId)).map((m) => m.userId));
+      return [...this.people.values()]
+        .filter((p) => p.status === 'ACTIVE' && !p.closure && (after === null || p.id > after))
+        .filter((p) => payers.has(p.id) || granted.has(p.id) || malafatOwners.has(p.id) || (this.trialStarts.get(p.id) ?? new Date(0)) > trialStartedAfter)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((p) => ({ userId: p.id, email: p.email, locale: p.locale, choice: p.monthlySummaryMail }));
+    },
     pastDueCandidates: async () =>
       [...this.billingSubs.values()]
         .filter((sub) => sub.status === 'past_due')

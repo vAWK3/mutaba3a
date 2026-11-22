@@ -64,6 +64,14 @@ const vars = {
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
+  // MUT-535: one profile, no yearly line.
+  'monthly-summary': {
+    month: { year: 2026, month: 11 },
+    asOf: { year: 2026, month: 12, day: 1 },
+    profiles: [{ name: 'Sader Studio', link: 'https://portal.example.test/p/p1', cameIn: [{ currency: 'ILS', amount: '400.00' }], owed: [], overdue: [], overdueCount: 0 }],
+    yearly: null,
+    offLink: 'https://portal.example.test/mail-off#tok_ABC123def',
+  },
 } as const;
 let seq = 0;
 const signup = (to: string) => ({ to, template: 'finish-signup' as const, locale: 'en' as const, vars: vars['finish-signup'], idempotencyKey: `signup-${++seq}` });

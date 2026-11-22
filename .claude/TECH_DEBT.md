@@ -2844,6 +2844,14 @@ empty option and list the profiles only), with a drawer test for each.
 
 ## Resolved Debt
 
+### TD-314: The monthly summary's catch-up days re-read everyone already mailed
+**Status**: Open (2026-11-22, MUT-535 D12, eng review R14)
+- **What:** each run walks every candidate from the start; someone mailed on the 1st is read again on days 2-7 (their profiles' figures and billing), and the mailer answers `duplicate`. Fine at tens to a few hundred people; past that, ask the send log which `monthly-summary:<id>:<month>` keys are SENT before reading (an `email.sentKeys` read, counting UNCERTAIN as sent).
+
+### TD-315: Operator-made accounts get no monthly summary until they prove their address
+**Status**: Resolved (2026-11-22, Basel: "include them". The summary no longer looks at `emailVerifiedAt`; ADR-259 decision 3)
+- **What:** the summary first mailed only `emailVerifiedAt` addresses, and an account the operator made (setup link handed over, not mailed) stays unverified until it redeems a mailed link, so pilot people were skipped.
+
 ### TD-309: An abandoned upload on an expense blocks moving it
 **Status**: Resolved (2026-11-20, MUT-589: the move soft-deletes an upload left PENDING_UPLOAD past the 24 h pending window, in its transaction; a newer one still answers 409 RECEIPT_NOT_READY)
 - **What:** a MUT-44 upload started on an expense and never completed left a PENDING_UPLOAD receipt on it; the move answered 409 `RECEIPT_NOT_READY` until that receipt was deleted.

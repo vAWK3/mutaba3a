@@ -10,7 +10,7 @@ Basel, 2026-11-22: direction **B (one sheet that grows / a drawer of cards)** is
 
 1. **Set up once, then issue in seconds.** Nothing is issued until the business details the law requires are complete; after that, an invoice takes a customer, a line and one tap.
 2. **One ledger, no double entry.** An amount recorded in Mutaba3a and the invoice for it are the same money. Issuing from an existing income entry links to it; it never creates a second Owed or Received.
-3. **The document is the record.** Issued documents never change; a credit note corrects a tax invoice (ADR-259).
+3. **The document is the record.** Issued documents never change; a credit note corrects a tax invoice (ADR-260).
 4. **Minimal.** One primary action per screen. Advanced fields (discount, goods/service, due date, notes, language) sit folded until needed.
 5. **Formal copy.** Examples: «اختر العميل» / «בחירת לקוח» / "Choose a customer"; «هل ترغب في إصدار فاتورة ضريبية لهذا المبلغ؟» / «להפיק חשבונית מס עבור סכום זה?» / "Issue a tax invoice for this amount?"
 

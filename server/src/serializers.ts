@@ -808,7 +808,7 @@ export function serializeBillingAccount(a: BillingAccountRecord) {
   };
 }
 
-// ---- MUT-568 (ADR-259): the issuing core ----------------------------------------------------------------------------
+// ---- MUT-568 (ADR-260): the issuing core ----------------------------------------------------------------------------
 
 /** A quantity in thousandths as the shortest decimal ("40", "1.5"). */
 export function formatQuantity(milli: bigint): string {

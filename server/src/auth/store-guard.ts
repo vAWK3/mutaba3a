@@ -76,6 +76,9 @@ export const STORE_ACCESS: StoreAccess = {
     updateMalafatSuggestions: { write: 'identity' },
     // MUT-418: the person's answers to the trial's card prompt, the same identity-row write.
     updateTrialPrompt: { write: 'identity' },
+    // MUT-535: the person's monthly summary choice from You › Account (identity row); the signed opt-out link writes
+    // through the unguarded store, its token standing in for the session.
+    setMonthlySummaryMail: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.
@@ -364,7 +367,7 @@ export const STORE_ACCESS: StoreAccess = {
     run: 'sessionOnly',
   },
   // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
-  // MUT-568 (ADR-259): the issuing core. `issue` posts its own Owed/Received/credit inside the issuing domain's write.
+  // MUT-568 (ADR-260): the issuing core. `issue` posts its own Owed/Received/credit inside the issuing domain's write.
   issuing: {
     getIssuer: { read: 'issuing' },
     putIssuer: { write: 'issuing' },
@@ -412,6 +415,8 @@ export const STORE_ACCESS: StoreAccess = {
     pastDueCandidates: 'operator',
     // MUT-534: the daily come-back run.
     comebackCandidates: 'operator',
+    // MUT-535: the monthly summary run only (a job on the unguarded store).
+    monthlySummaryCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',
@@ -614,7 +619,7 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * (`unguarded`), as for every session.
  */
 /**
- * MUT-568 (ADR-259): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
+ * MUT-568 (ADR-260): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
  * issuing routes read the owner's flags under the accountant's guard. A read of flags only; listed, never derived.
  */
 export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);

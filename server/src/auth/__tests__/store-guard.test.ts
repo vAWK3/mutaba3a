@@ -114,6 +114,8 @@ describe('STORE_ACCESS', () => {
       'billing.linkAccount',
       'billing.listAccounts',
       'billing.listGrants',
+      // MUT-535: the monthly summary run, on the unguarded store.
+      'billing.monthlySummaryCandidates',
       'billing.offerRenewalCandidates',
       'billing.pastDueCandidates',
       'billing.pruneStripeEvents',
@@ -395,7 +397,7 @@ describe('the inbox (MUT-66)', () => {
 
   it('mints no new matrix domain for the inbox', () => {
     expect(WRITABILITY_MATRIX.map((r) => r.domain)).not.toContain('inbox');
-    // MUT-61 minted `capture` and MUT-568 (ADR-259) `issuing` on purpose; anything else appearing here is a new row nobody decided on.
+    // MUT-61 minted `capture` and MUT-568 (ADR-260) `issuing` on purpose; anything else appearing here is a new row nobody decided on.
     expect(WRITABILITY_MATRIX.map((r) => r.domain)).toEqual(['integration', 'customers', 'projects', 'agreements', 'payments', 'attachments', 'summaries', 'audit', 'expenses', 'capture', 'identity', 'conversions', 'issuing']);
   });
 });

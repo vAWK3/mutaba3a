@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
-/** MUT-568 (ADR-259) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
+/** MUT-568 (ADR-260) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
 export function describeLedgerStoreIssuingContract(name: string, makeStore: () => Promise<LedgerStore>): void {
   const unique = () => Math.random().toString(36).slice(2, 10);
   const at = (ms: number) => new Date(Date.UTC(2026, 10, 22, 10, 0, 0, ms));

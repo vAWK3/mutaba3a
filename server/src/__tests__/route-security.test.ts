@@ -78,7 +78,7 @@ const CORRECTION_OPERATIONS = ['POST /v1/payments/{paymentId}/reverse', 'POST /v
 
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];
-/** MUT-568 (ADR-259): issuing — session-only. */
+/** MUT-568 (ADR-260): issuing — session-only. */
 const ISSUING_OPERATIONS = [
   'GET /v1/issuer',
   'PUT /v1/issuer',
@@ -273,6 +273,9 @@ const SESSION_OPERATIONS = [
   'DELETE /v1/passkeys/{passkeyId}',
   // MUT-370: the person's answer to the passkey suggestion
   'PATCH /v1/me/passkey-prompt',
+  // MUT-535: the person's monthly summary switch (organization-independent, like GET /v1/me)
+  'GET /v1/me/monthly-summary-mail',
+  'PATCH /v1/me/monthly-summary-mail',
   'GET /v1/payments',
   'GET /v1/payments/{paymentId}',
   'GET /v1/projects',
@@ -307,12 +310,14 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   // MUT-314: the period download's stream (the ticket is its credential) and a share link's mint.
   'POST /v1/period-downloads/stream', 'POST /v1/share-links/download-ticket',
   // MUT-595: Sign in with Malafat; the person is not signed in yet.
-  'GET /v1/auth/malafat/office', 'GET /v1/auth/malafat/start', 'GET /v1/auth/malafat/callback', 'POST /v1/auth/malafat/exchange', 'POST /v1/auth/malafat/link', 'POST /v1/auth/malafat/consent'];
+  'GET /v1/auth/malafat/office', 'GET /v1/auth/malafat/start', 'GET /v1/auth/malafat/callback', 'POST /v1/auth/malafat/exchange', 'POST /v1/auth/malafat/link', 'POST /v1/auth/malafat/consent',
+  // MUT-535 (D8): the monthly summary's opt-out page; the signed token in the body is its credential and it changes one switch.
+  'POST /v1/mail-preferences/monthly-summary'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
 
 interface Operation {
   key: string;

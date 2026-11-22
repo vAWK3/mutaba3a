@@ -2932,6 +2932,14 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 **Where**: `src/lib/i18n/core.tsx` `getLocale` / `ARABIC_LOCALE`; server `server/src/dates.ts` `ARABIC_LOCALE`.
 **Rule**: every `Intl` date (and number) formatter takes `getLocale(language)` (server: `ARABIC_LOCALE` for Arabic). Never write `'ar'` by hand (it brings back يناير) and never append `-u-nu-…` (the tag already sets Latin digits; a second one throws). Machine-readable `en-CA` parts are not display and stay. The lint guard `DATE_LOCALE_SYNTAX` catches literals and templates; a variable holding a locale is on you.
 
+## Pattern: a mail's opt-out link is a signed, single-purpose token in the fragment, and the page asks before it acts (MUT-535, ADR-259)
+**Where**: `server/src/email/mail-off-token.ts`, `server/src/routes/monthly-summary-mail.ts` (`POST /v1/mail-preferences/monthly-summary`), `src/hosted/pages/mail-off/MailOffPage.tsx`.
+**Rule**: a link that changes a person's setting without a sign-in carries `<id>.<HMAC(purpose:v1:id)>` under a key derived (HKDF) from an existing server secret, never a stored row: it can't expire unnoticed and it does one thing. The token rides in the URL fragment (never a server log), the page strips it at once, and nothing changes until the person presses (link scanners open links, some run scripts). The API door is same-origin and IP-budgeted, and answers one 404 for anything it doesn't accept.
+
+## Pattern: a job that reads what a screen shows calls the screen's own reader (MUT-535 D5)
+**Where**: `server/src/summaries/profile-figures.ts` (`readProfileFigures`), called by `GET /v1/summaries/verdict` and the monthly summary job.
+**Rule**: when a mail or a job states figures the app also shows, extract the route's read into one function and call it from both, with the request's posting door or the job's (unguarded store, SYSTEM). Pin it with a parity test that runs the route and the function on the same records. A second query "that should give the same numbers" is how the mail and the app come to disagree.
+
 ### Pattern: A legal record is INSERT-only in the database, not just in code (MUT-568)
 Issued documents get a row trigger that refuses UPDATE and DELETE and a statement trigger that refuses TRUNCATE (row triggers don't fire on TRUNCATE). The only bypass is a transaction-local setting (`SET LOCAL mutaba3a.issuing_bypass = 'on'`) that one named job sets. Such tables hold no foreign keys to rows that can be deleted, keep JSON snapshots of what they print, and are listed as kept in the purge catalog. A row lock (`SELECT … FOR UPDATE`) still works: it doesn't fire the trigger.
 
