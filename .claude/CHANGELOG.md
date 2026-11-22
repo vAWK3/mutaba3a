@@ -48,7 +48,7 @@
 - Interim v1: `npm run signing:interim-cert` has the production KMS key certify itself in Barmajiyat's name, so production can sign before a certifying authority does; the authority later certifies the same key. `ISSUING_TSA_URL` accepts the public http time-stamp services.
 
 ### Technical
-- `server/src/issuing/pdf/sign/` (cms, pdf, timestamp, keys, verify). Dependencies `pkijs` 3.4.3, `asn1js` 3.1.0; `pdf-lib` moved to runtime. Migration `20261122180000_mut641_issued_document_originals` (additive). Purge catalog: originals kept with the documents (MUT-644). The MUT-640 gate also runs on the signed files.
+- `server/src/issuing/pdf/sign/` (cms, pdf, timestamp, keys, verify). Dependencies `pkijs` 3.4.3, `asn1js` 3.1.0; `pdf-lib` moved to runtime. Migration `20261122200000_mut641_issued_document_originals` (additive). Purge catalog: originals kept with the documents (MUT-644). The MUT-640 gate also runs on the signed files.
 
 ## [Unreleased] - 2026-11-22 — Offer to issue after saving income (MUT-648, ADR-268, API 1.123.0-mut648)
 
