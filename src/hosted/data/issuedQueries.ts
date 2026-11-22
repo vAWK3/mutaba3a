@@ -79,10 +79,11 @@ export function openPdf(blob: Blob, filename: string) {
  * `invoicing` feature (so nobody else pays for a request), on a Business profile they own, with the setup done and the
  * business's "Offer to issue after saving" on.
  */
-export function useIssueAfterSave(profile: HostedProfile): boolean {
+export function useIssueAfterSave(profile: HostedProfile): { offer: boolean; exempt: boolean } {
   const me = useMeOrNull();
   const eligible = !!me?.user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS';
   const setup = useIssuingSetup(profile.id, eligible);
   const issuer = useIssuer(profile.id, eligible && !!setup.data?.canIssue);
-  return eligible && !!setup.data?.canIssue && issuer.data?.offerAfterSave === true;
+  // An exempt dealer issues receipts only (review fix).
+  return { offer: eligible && !!setup.data?.canIssue && issuer.data?.offerAfterSave === true, exempt: issuer.data?.dealerType === 'EXEMPT' };
 }

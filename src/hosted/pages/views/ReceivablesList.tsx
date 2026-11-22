@@ -12,7 +12,7 @@ import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type Receivab
 import { canOpenOwed, incomeAffordancesFor, isCancelledOwed, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { IssueDocumentDrawer, type IssueStart } from '../../components/IssueDocumentDrawer';
-import { useIssuingSetup } from '../../data/issuingQueries';
+import { useIssuer, useIssuingSetup } from '../../data/issuingQueries';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -63,7 +63,8 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     settleable: isSettleable(r),
     // MUT-453: opens to change its date, to correct it, or to show its payments and credits.
     redatable: canOpenOwed(profile, r, userId, writable),
-    issuable: r.origin !== 'ISSUED_DOCUMENT' && r.currency === 'ILS' && r.status !== 'PAID' && !isCancelledOwed(r) && r.paid === '0.00',
+    // The server takes over only an Owed recorded by hand, with nothing paid or credited (review fix).
+    issuable: r.origin === 'ADJUSTMENT' && r.currency === 'ILS' && r.paid === '0.00' && r.credited === '0.00',
     customerId: r.customerId,
     title: r.title,
   }));
@@ -98,7 +99,8 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
 
   // MUT-648 (E4): where issuing is open, an Owed with no document yet offers its tax invoice.
   const setup = useIssuingSetup(profile.id, useMe().user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS');
-  const canIssue = writable && !!setup.data?.canIssue;
+  const issuer = useIssuer(profile.id, !!setup.data?.canIssue);
+  const canIssue = writable && !!setup.data?.canIssue && issuer.data != null && issuer.data.dealerType !== 'EXEMPT';
   const [issueStart, setIssueStart] = useState<IssueStart | null>(null);
   const navigate = useNavigate();
   const columns = useMemo<Column<ReceivableRow>[]>(

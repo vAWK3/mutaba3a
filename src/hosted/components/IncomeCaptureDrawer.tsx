@@ -74,7 +74,8 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   const showToast = useToast();
   const attempt = useAttemptKey();
   const create = useCreateIncome(profile.id);
-  const offerIssue = useIssueAfterSave(profile) && !!onOfferIssue;
+  const issueAfterSave = useIssueAfterSave(profile);
+  const offerIssue = issueAfterSave.offer && !!onOfferIssue;
   const customers = useCustomerDirectory(profile.id);
   // MUT-361 (review): the host opens this only on a writable profile (`writable` from it); the gate still shapes Add client.
   const { kinds, customer: customerRule } = incomeAffordancesFor(profile, writable);
@@ -149,7 +150,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       // Opt-in usage counts (MUT-155): the kind and currency only, never the amount or client
       void trackPortal('income_recorded', { currency: values.currency, paid: values.kind === 'received' });
       // MUT-648 (round 3, variant 1): the save toast offers the document this amount takes, linked to the entry.
-      const offers = offerIssue && saved.currency === 'ILS' ? issueOffers(saved, t('hosted.issue.offer.line')) : [];
+      const offers = offerIssue && saved.currency === 'ILS' ? issueOffers(saved, t('hosted.issue.offer.line'), issueAfterSave.exempt) : [];
       const toAction = (offer: (typeof offers)[number]) => ({ label: t(`hosted.issue.offer.${offer.docType}`), onAction: () => onOfferIssue?.(offer) });
       showToast(savedMessage(values, body.amount), {
         tone: 'info',
@@ -397,9 +398,11 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
  * an invoice-receipt (when it has a client) or a receipt. Each is linked to the entry (I1-a: it takes the entry over,
  * so no second Owed or Received), with one line for the amount, VAT included, so the totals equal the entry.
  */
-function issueOffers(saved: IncomeResponse, defaultLine: string): IssueStart[] {
+export function issueOffers(saved: IncomeResponse, defaultLine: string, exempt: boolean): IssueStart[] {
   const lines = [{ description: saved.title?.trim() || defaultLine, kind: 'SERVICE' as const, quantity: '1', unitPrice: saved.amount, discount: '', pricesIncludeVat: true }];
   const base = { customerId: saved.customerId ?? undefined, lines, pricesIncludeVat: true, fromEntry: { kind: saved.kind === 'owed' ? ('owed' as const) : ('received' as const), id: saved.id } };
+  // An exempt dealer issues receipts only: nothing for an Owed (it can't take a receipt), a receipt for a Received.
+  if (exempt) return saved.kind === 'owed' ? [] : [{ ...base, docType: 'RECEIPT' }];
   if (saved.kind === 'owed') return saved.customerId ? [{ ...base, docType: 'TAX_INVOICE' }] : [];
   return saved.customerId ? [{ ...base, docType: 'TAX_INVOICE_RECEIPT' }, { ...base, docType: 'RECEIPT' }] : [{ ...base, docType: 'RECEIPT' }];
 }
