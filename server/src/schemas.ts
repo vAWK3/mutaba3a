@@ -8,6 +8,7 @@ import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
 import { isPlainAddress } from './email/ports.js';
+import { DOCUMENTS_PREFERENCES } from './issuing/documents-due.js';
 import { ERROR_CODES } from './errors.js';
 import { DOCUMENT_STYLES, INK_COLOURS } from './issuing/types.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
@@ -2100,6 +2101,11 @@ export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').opena
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
 
+/** MUT-660 (ADR-270): which documents a client is due on an invoicing profile. */
+export const DocumentsPreferenceSchema = z.enum(DOCUMENTS_PREFERENCES).openapi('DocumentsPreference', {
+  description: 'TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).',
+});
+
 export const CustomerSchema = z
   .object({
     id: uuid,
@@ -2112,6 +2118,8 @@ export const CustomerSchema = z
     /** MUT-642: VAT, company or ID number, 9 digits; printed on issued documents. */
     taxId: z.string().nullable(),
     address: z.string().nullable(),
+    /** MUT-660: null follows the profile default (issuer details’ defaultDocumentsPreference, else ON_PAYMENT). */
+    documentsPreference: DocumentsPreferenceSchema.nullable(),
     status: EntityStatusSchema,
     archivedAt: z.string().datetime().nullable(),
     externalReference: ExternalReferenceSchema.nullable(),
@@ -2146,6 +2154,8 @@ export const UpdateCustomerRequestSchema = z
     vatTreatment: VatTreatmentSchema.nullable().optional(),
     taxId: z.string().max(20).nullable().optional(),
     address: z.string().trim().max(300).nullable().optional(),
+    /** MUT-660: invoicing profiles only, from a person (404 elsewhere); null = the profile default. */
+    documentsPreference: DocumentsPreferenceSchema.nullable().optional(),
   })
   .strict()
   .openapi('UpdateCustomerRequest');
@@ -5030,6 +5040,7 @@ export const IssuerDetailsSchema = z
     bankDetails: z.string().nullable(),
     footerNote: z.string().nullable(),
     offerAfterSave: z.boolean().openapi({ description: 'MUT-648: offer to issue a document after saving income' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.openapi({ description: 'MUT-660: the documents a client with no preference of its own is due' }),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
@@ -5112,6 +5123,7 @@ export const IssuerDefaultsRequestSchema = z
     bankDetails: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed for paying by transfer' }),
     footerNote: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed at the foot of every document' }),
     offerAfterSave: z.boolean().optional().openapi({ description: 'MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.optional().openapi({ description: 'MUT-660: the documents a client with no preference is due (unchanged when omitted)' }),
   })
   .openapi('IssuerDefaultsRequest');
 

@@ -11,6 +11,7 @@ import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
+import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
@@ -91,7 +92,7 @@ export function setupMissing(issuer: IssuerDetailsRecord | null, setup: IssuingS
 }
 
 /** The details' defaults before the defaults step is saved. */
-const DEFAULTS: Pick<IssuerDetailsInput, 'ink' | 'documentStyle' | 'defaultLanguage' | 'paymentTermsDays' | 'bankDetails' | 'footerNote' | 'pricesIncludeVat' | 'offerAfterSave'> = {
+const DEFAULTS: Pick<IssuerDetailsInput, 'ink' | 'documentStyle' | 'defaultLanguage' | 'paymentTermsDays' | 'bankDetails' | 'footerNote' | 'pricesIncludeVat' | 'offerAfterSave' | 'defaultDocumentsPreference'> = {
   ink: 'BLACK',
   documentStyle: 'PROFESSIONAL',
   defaultLanguage: 'he',
@@ -99,6 +100,7 @@ const DEFAULTS: Pick<IssuerDetailsInput, 'ink' | 'documentStyle' | 'defaultLangu
   bankDetails: null,
   footerNote: null,
   offerAfterSave: true,
+  defaultDocumentsPreference: DEFAULT_DOCUMENTS_PREFERENCE,
   pricesIncludeVat: false,
 };
 
@@ -162,19 +164,31 @@ export interface IssuingExternalInvoices {
   urlTtlSeconds: number;
 }
 
+/**
+ * The selected profile, if issuing is on for it; 404 otherwise. The feature is the owner's, so co-owners and accountants
+ * see the same. `write` also needs the profile's owner. MUT-660: shared with the routes that set documents preferences.
+ */
+export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, write: boolean): Promise<Organization> {
+  const { organization, user, membershipRole, writerOfRecord, via } = sessionAuth(c);
+  const owner = profileOwnerOf(organization);
+  const off = () => new ApiError('NOT_FOUND', 'Not found');
+  if (via || writerOfRecord === 'MALAFAT' || isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') throw off();
+  if (!(await hasFeature(store, owner, 'invoicing'))) throw off();
+  if (write && !ownsProfile(organization, user.id, membershipRole)) throw notOwner();
+  return organization;
+}
+
+/** Whether issuing is on for the profile (the same rule as `issuingProfileOf`, without a session: summaries, mail). */
+export async function invoicingOn(store: LedgerStore, organization: Organization): Promise<boolean> {
+  const owner = profileOwnerOf(organization);
+  if (isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') return false;
+  return hasFeature(store, owner, 'invoicing');
+}
+
 export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
-  /** The selected profile, if issuing is on for it. The feature is the owner's, so co-owners and accountants see the same. */
-  async function issuingProfile(c: Context<AppEnv>, write: boolean): Promise<Organization> {
-    const { organization, user, membershipRole, writerOfRecord, via } = sessionAuth(c);
-    const owner = profileOwnerOf(organization);
-    const off = () => new ApiError('NOT_FOUND', 'Not found');
-    if (via || writerOfRecord === 'MALAFAT' || isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') throw off();
-    if (!(await hasFeature(store, owner, 'invoicing'))) throw off();
-    if (write && !ownsProfile(organization, user.id, membershipRole)) throw notOwner();
-    return organization;
-  }
+  const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
 
   function audit(c: Context<AppEnv>, action: string, entityType: string, entityId: string, metadata?: JsonObject) {
     const { organization, user } = sessionAuth(c);
@@ -298,7 +312,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const expectedVersion = ifMatch(c);
       // MUT-646: the defaults have their own step (PUT /v1/issuer/defaults); saving the details keeps them.
       const current = expectedVersion === null ? null : await store.issuing.getIssuer(organization.id);
-      const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote, offerAfterSave: current.offerAfterSave } : DEFAULTS;
+      const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote, offerAfterSave: current.offerAfterSave, defaultDocumentsPreference: current.defaultDocumentsPreference } : DEFAULTS;
       const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No business details yet; send them without If-Match');
@@ -327,7 +341,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       if (expectedVersion === null) throw new ApiError('VALIDATION_FAILED', 'Send the details’ version in If-Match', { field: 'If-Match' });
       const current = await mustIssuer(organization.id);
       const details = { legalName: current.legalName, vatId: current.vatId, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
-      const input: IssuerDetailsInput = { ...details, documentStyle: body.documentStyle, ink: body.ink, defaultLanguage: body.defaultLanguage, pricesIncludeVat: body.pricesIncludeVat, paymentTermsDays: body.paymentTermsDays ?? null, bankDetails: body.bankDetails || null, footerNote: body.footerNote || null, offerAfterSave: body.offerAfterSave ?? current.offerAfterSave };
+      const input: IssuerDetailsInput = { ...details, documentStyle: body.documentStyle, ink: body.ink, defaultLanguage: body.defaultLanguage, pricesIncludeVat: body.pricesIncludeVat, paymentTermsDays: body.paymentTermsDays ?? null, bankDetails: body.bankDetails || null, footerNote: body.footerNote || null, offerAfterSave: body.offerAfterSave ?? current.offerAfterSave, defaultDocumentsPreference: body.defaultDocumentsPreference ?? current.defaultDocumentsPreference };
       const now = c.get('now')();
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, now);
       if (result.kind === 'not_found') throw new ApiError('VALIDATION_FAILED', 'Add the business details printed on documents first', { reason: 'ISSUER_DETAILS_REQUIRED' });

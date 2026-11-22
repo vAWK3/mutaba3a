@@ -171,7 +171,8 @@ function unallocatedDue(input: DocumentsDueInput, p: DuePaymentInput): DueItem[]
     if (p.receiptNumber) return [];
     return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, false, paymentReason(p)), appliesToDocumentId: open }];
   }
-  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, false, paymentReason(p))];
+  // No client: an invoice-receipt can't post an Owed, so it is linked (fromEntryMode).
+  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, !p.customerId, paymentReason(p))];
 }
 
 /** The client's oldest open tax invoice that still covers the payment (the receipt allocates to it). */

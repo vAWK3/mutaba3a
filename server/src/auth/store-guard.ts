@@ -377,6 +377,10 @@ export const STORE_ACCESS: StoreAccess = {
     addLogo: { write: 'issuing' },
     clearLogo: { write: 'issuing' },
     getLogo: { read: 'issuing' },
+    // MUT-660: documents due (reads), the books split (reads) and the not-for-invoice mark (an issuing write).
+    dueInputs: { read: 'issuing' },
+    incomeContext: { read: 'issuing' },
+    setNotForInvoice: { write: 'issuing' },
     // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
     getTaxConnection: { read: 'issuing' },
     putTaxConnection: { write: 'issuing' },

@@ -166,7 +166,7 @@ describe('documentsDue: payments (Received)', () => {
   });
 
   it('N1: money received with no client is due an invoice-receipt', () => {
-    expect(documentsDue(input({ payments: [paid({ customerId: null })] }))[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', customerId: null });
+    expect(documentsDue(input({ payments: [paid({ customerId: null })] }))[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', customerId: null, linkOnly: true, issuable: true });
   });
 
   it('AC4: no document, and not for invoice (the payment or its Owed), are due nothing', () => {
