@@ -23,7 +23,8 @@ import { onModeChangedElsewhere, useIsLocalMode } from './mode';
 // would pull the receiver to Overview, losing its done screen or, worse, a summary not saved yet.
 // MUT-562: an accountant invite and a share link too: a stranger is mid-way through accepting or reading.
 // MUT-596: Sign in with Malafat too: the return page holds a single-use code or ticket mid-way through linking.
-const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup', '/malafat', '/malafat/return', '/signup', '/recover', '/carry-over', '/carry-over/receive', '/accountant-invite', '/share']);
+// MUT-535: the monthly summary's turn-it-off page too: its token is in memory only, once the URL drops it.
+const SIGNED_OUT_PAGES = new Set(['/sign-in', '/setup', '/malafat', '/malafat/return', '/signup', '/recover', '/carry-over', '/carry-over/receive', '/accountant-invite', '/share', '/mail-off']);
 
 export function SessionBridge() {
   const queryClient = useQueryClient();

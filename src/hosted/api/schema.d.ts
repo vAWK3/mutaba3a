@@ -22362,6 +22362,323 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monthly summary mails (Cloud Scheduler, days 1–7)
+         * @description MUT-535 (ADR-259). Mails each person who pays or trials, in their language, one summary of the month before: per profile their plan covers and per currency, what came in, what is still owed and what is overdue, read as Reports reads them. Sends at most `MONTHLY_SUMMARY_DAILY_SENDS` per run and stops at the first mail the daily cap refuses; each person is mailed once a month. Answers counts only. Always 200 once it ran; `incomplete` means the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the monthly summary mails now, or see who they would mail
+         * @description The same run as the job, for the operator, with one row per person looked at: how many panels it mails, or why not. `dryRun` mails and writes nothing (it doesn’t post due installments, so owed can lag by them). In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether the monthly summary mail reaches you (MUT-535)
+         * @description `on` is true when next month’s run would mail you, given a month with something to show: you haven’t turned it off and your plan covers a profile (Malafat-covered profiles only if you turned it on yourself). Person-level: no X-Mutaba3a-Profile.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The switch */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Turn the monthly summary mail on or off (MUT-535)
+         * @description Off stops it. On returns to the default (every profile your plan covers except Malafat-covered ones), or includes Malafat-covered profiles when they are all you have. Idempotent, so no Idempotency-Key; writes no audit row (a preference, not an event a firm sees).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MonthlySummaryMailChange"];
+                };
+            };
+            responses: {
+                /** @description The switch now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/mail-preferences/monthly-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn the monthly summary mail off (or back on) from its link (MUT-535)
+         * @description D8: the token from the mail link’s fragment, in the body; it names one person and does nothing but this switch. The page asks for a press first, so a link scanner opening the mail changes nothing. An unknown or voided token (the session pepper rotated) answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailOffRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -28730,6 +29047,66 @@ export interface components {
              * @enum {string|null}
              */
             outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        MonthlySummaryMailSummary: {
+            dryRun: boolean;
+            /** @description The month reported (YYYY-MM): the one before the run’s month in Jerusalem */
+            month: string;
+            /** @description People whose own billing facts may cover a profile, looked at in this run */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description Already mailed this month (an earlier run) */
+            duplicate: number;
+            /** @description Due but the mailer did not send it: mail off, capped, refused or suppressed */
+            notSent: number;
+            /** @description A read or the mailer threw; the next run tries again */
+            failed: number;
+            skipped: {
+                optedOut: number;
+                suppressed: number;
+                /** @description No profile their plan covers today, or only Malafat-covered ones by default */
+                nothingCovered: number;
+                /** @description A profile whose own today is still in the month (west of UTC); the next run mails */
+                monthNotOver: number;
+                /** @description No profile had an entry dated in the month with something to show */
+                nothingToShow: number;
+            };
+            /** @description The time or send budget ran out, or the mail cap was met; the next run continues */
+            incomplete: boolean;
+        };
+        MonthlySummaryMailRun: {
+            summary: components["schemas"]["MonthlySummaryMailSummary"];
+            rows: components["schemas"]["MonthlySummaryMailRow"][];
+        };
+        MonthlySummaryMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            /** @description Panels in the mail */
+            profiles: number;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "opted-out" | "suppressed" | "nothing-covered" | "month-not-over" | "nothing-to-show" | null;
+            /**
+             * @description The mailer's answer, or failed; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        MonthlySummaryMail: {
+            on: boolean;
+        };
+        MonthlySummaryMailChange: {
+            on: boolean;
+        };
+        MailOffRequest: {
+            token: string;
+            on: boolean;
         };
         AccountPurgeSummary: {
             dryRun: boolean;

@@ -6,7 +6,7 @@ Status: **Planned — D1–D7 accepted by Basel 2026-11-22**; eng review runs at
 
 Registered invoicing software must keep every issued document forever: no edits, no deletes, gap-free automatic numbering per document type, corrections only by a new document (credit note). Ledger rows are editable (ADR-083, ADR-075), so issued documents are a separate, append-only record that *posts* to the ledger.
 
-This reverses ADR-067 (MUT-145, "document generation is retired") for issuing — Basel, 2026-11-06. A new **ADR-259** supersedes ADR-067 for issuing only; filed receipts and `/documents` attachments are unaffected.
+This reverses ADR-067 (MUT-145, "document generation is retired") for issuing — Basel, 2026-11-06. A new **ADR-260** supersedes ADR-067 for issuing only; filed receipts and `/documents` attachments are unaffected.
 
 ## Acceptance criteria (from the ticket)
 
@@ -199,12 +199,12 @@ Screens, PDF, allocation numbers (MUT-572), unified-file export (MUT-569), forei
 6. **Ledger lock:** the person-side edit/delete/settle/credit/reverse/correct routes already refuse rows that aren't ADJUSTMENT/CAPTURE (404); tests assert 404, and the store refuses document-owned rows in `undoCapture`/`softDeleteAdjustment`/`credit` as defence in depth.
 7. **Credit reason:** `reasonCode 'OTHER'`, reason "חשבונית זיכוי <n>", linked by `IssuedDocument.creditId` (the published enum is unchanged).
 8. **Customer required** for 305/320/330; only a 400 may have none.
-9. **VAT source:** the statutory table in `issuing/vat-rate.ts` is deliberate: the issuing core is the registered version and a business can't edit the national rate (ADR-259).
+9. **VAT source:** the statutory table in `issuing/vat-rate.ts` is deliberate: the issuing core is the registered version and a business can't edit the national rate (ADR-260).
 10. **Memory store** implements every new port method; issuing maps stay out of `snapshot()` (like `featureGrants`); local profiles have no grants, so they 404 without special code.
 11. **Style/ink/language** columns on `IssuedDocument` with defaults now (immutable rows can't be backfilled); `IssuerDetails` keeps `documentStyle`/`ink`/`logoAttachmentId` columns but no editing UI until MUT-570/640.
 12. Records export and restore leave issued documents out (the unified file is MUT-569).
 13. Gaps: from the starting number to `next − 1`.
 
-**Build order:** (1) compose ✔ · (2) enum migration · (3) issuing tables + triggers + purge catalog · (4) origin touchpoints + `createReceivableTx` · (5) store issue transaction, Prisma + memory, with test:db concurrency/rollback/trigger tests · (6) credit note + copies · (7) routes, gating, scopes, matrix, audit, idempotency, API 1.115.0-mut568, OpenAPI · (8) gaps + ADR-259 + knowledge files.
+**Build order:** (1) compose ✔ · (2) enum migration · (3) issuing tables + triggers + purge catalog · (4) origin touchpoints + `createReceivableTx` · (5) store issue transaction, Prisma + memory, with test:db concurrency/rollback/trigger tests · (6) credit note + copies · (7) routes, gating, scopes, matrix, audit, idempotency, API 1.115.0-mut568, OpenAPI · (8) gaps + ADR-260 + knowledge files.
 
 **Build note (2026-11-22):** document-owned Owed rows stay out of the entries feed in 568: the feed's income rows carry no origin, so the portal and phone would offer edit/delete that 404. Received rows from 320/400 do appear, as `origin: 'issued_document'` (the phone already treats an unknown origin as not editable). MUT-570 adds document rows to the feed with their own UI.

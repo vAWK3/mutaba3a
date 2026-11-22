@@ -328,6 +328,8 @@ model User {
   passkeyPrompt      Json?
   /// MUT-459 (ADR-212): when the CLI made this person an operator (the portal's operator console); NULL = not one.
   operatorAt         DateTime?
+  /// MUT-535 (D6): the monthly summary mail: 'OFF' | 'ON_ALL'; NULL = the default (on, without Malafat-covered profiles).
+  monthlySummaryMail String?    @db.VarChar(8)
   createdAt          DateTime
   updatedAt          DateTime
 
@@ -2099,7 +2101,7 @@ model SignInCode {
   @@map("sign_in_codes")
 }
 
-// ─── MUT-568 (ADR-259): the issuing core ─────────────────────────────────────────────────────────────────────────
+// ─── MUT-568 (ADR-260): the issuing core ─────────────────────────────────────────────────────────────────────────
 // Issued documents are legal records: kept 7 years even after the account closes (MUT-644), so these tables hold no
 // foreign keys (the purge leaves them; the customer and issuer are snapshots). Documents, lines and copies are
 // INSERT-only: a trigger refuses UPDATE, DELETE and TRUNCATE (migration 20261122120100_mut568_issuing_core).

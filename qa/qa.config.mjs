@@ -111,7 +111,9 @@ export default {
         // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
         '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts',
         // MUT-596: Sign in with Malafat and its account screens need the live API and the Malafat stub: portal-selfservice's.
-        '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx'],
+        '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
+        // MUT-535: the monthly summary's switch and turn-it-off page are read through the live API's job and outbox: portal-live's.
+        '!src/hosted/components/MonthlySummarySwitchRow.tsx', '!src/hosted/pages/mail-off/**'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -148,6 +150,15 @@ export default {
         'src/hosted/data/trialPromptQueries.ts',
         'src/hosted/shell/TrialWelcomeOpener.tsx',
         'src/hosted/session/trialWelcomeOffer.ts',
+        // MUT-535: the monthly summary mail (the job, its figures, the template) and its switch and turn-it-off page.
+        'server/src/billing/monthly-summary.ts',
+        'server/src/billing/monthly-summary-mail.ts',
+        'server/src/billing/yearly-switch-line.ts',
+        'server/src/summaries/profile-figures.ts',
+        'server/src/routes/monthly-summary-mail.ts',
+        'server/src/email/mail-off-token.ts',
+        'src/hosted/components/MonthlySummarySwitchRow.tsx',
+        'src/hosted/pages/mail-off/**',
         'server/src/billing/trial-prompt.ts',
         // MUT-361: the lapse gate, enforced by the API and shown by the portal.
         'server/src/billing/gate.ts',

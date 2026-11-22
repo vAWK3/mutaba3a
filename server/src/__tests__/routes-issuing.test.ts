@@ -4,7 +4,7 @@ import { SESSION_ONLY_ENTITY_TYPES } from '../routes/audit.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness, type Person } from './helpers/accountants.js';
 
 /**
- * MUT-568 (ADR-259): /v1/issuer, /v1/issuing/*, /v1/issued-documents*. Gated on the profile owner's `invoicing` feature
+ * MUT-568 (ADR-260): /v1/issuer, /v1/issuing/*, /v1/issued-documents*. Gated on the profile owner's `invoicing` feature
  * and a business profile (D1); issued documents are immutable; the ledger rows they post are a person's to see, not edit.
  */
 const grantInvoicing = (h: AccountantHarness, p: Person) => h.app.request(`/admin/v1/users/${p.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN });

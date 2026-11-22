@@ -2766,6 +2766,17 @@
         "one": "Too many tries. Try again in {count} minute.",
         "other": "Too many tries. Try again in {count} minutes."
       }
+    },
+    "monthlySummary": {
+      "row": "Monthly summary email",
+      "rowSub": "On the 1st: what came in and what's owed",
+      "saveFailed": "Couldn't save. Try again.",
+      "offAsk": "Turn off the monthly summary?",
+      "offButton": "Turn it off",
+      "offDone": "The monthly summary is off.",
+      "onButton": "Turn it back on",
+      "onDone": "The monthly summary is on.",
+      "linkBroken": "This link no longer works. You can turn it off in You › Account."
     }
   }
 }

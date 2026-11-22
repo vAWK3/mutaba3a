@@ -13244,6 +13244,160 @@ components:
         - action
         - skip
         - outcome
+    MonthlySummaryMailSummary:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          description: "The month reported (YYYY-MM): the one before the run’s month in Jerusalem"
+        checked:
+          type: integer
+          description: People whose own billing facts may cover a profile, looked at in this run
+        due:
+          type: integer
+          description: Mailed, or in a dry run would be
+        sent:
+          type: integer
+        duplicate:
+          type: integer
+          description: Already mailed this month (an earlier run)
+        notSent:
+          type: integer
+          description: "Due but the mailer did not send it: mail off, capped, refused or suppressed"
+        failed:
+          type: integer
+          description: A read or the mailer threw; the next run tries again
+        skipped:
+          type: object
+          properties:
+            optedOut:
+              type: integer
+            suppressed:
+              type: integer
+            nothingCovered:
+              type: integer
+              description: No profile their plan covers today, or only Malafat-covered ones by default
+            monthNotOver:
+              type: integer
+              description: A profile whose own today is still in the month (west of UTC); the next run mails
+            nothingToShow:
+              type: integer
+              description: No profile had an entry dated in the month with something to show
+          required:
+            - optedOut
+            - suppressed
+            - nothingCovered
+            - monthNotOver
+            - nothingToShow
+        incomplete:
+          type: boolean
+          description: The time or send budget ran out, or the mail cap was met; the next run continues
+      required:
+        - dryRun
+        - month
+        - checked
+        - due
+        - sent
+        - duplicate
+        - notSent
+        - failed
+        - skipped
+        - incomplete
+    MonthlySummaryMailRun:
+      type: object
+      properties:
+        summary:
+          $ref: "#/components/schemas/MonthlySummaryMailSummary"
+        rows:
+          type: array
+          items:
+            $ref: "#/components/schemas/MonthlySummaryMailRow"
+      required:
+        - summary
+        - rows
+    MonthlySummaryMailRow:
+      type: object
+      properties:
+        userId:
+          type: string
+          format: uuid
+        email:
+          type: string
+        locale:
+          type: string
+          enum:
+            - en
+            - ar
+        profiles:
+          type: integer
+          description: Panels in the mail
+        action:
+          type: string
+          enum:
+            - send
+            - skip
+        skip:
+          type: string
+          nullable: true
+          enum:
+            - opted-out
+            - suppressed
+            - nothing-covered
+            - month-not-over
+            - nothing-to-show
+            - null
+        outcome:
+          type: string
+          nullable: true
+          enum:
+            - sent
+            - duplicate
+            - suppressed
+            - refused
+            - capped
+            - disabled
+            - failed
+            - null
+          description: The mailer's answer, or failed; null on a skip or a dry run
+      required:
+        - userId
+        - email
+        - locale
+        - profiles
+        - action
+        - skip
+        - outcome
+    MonthlySummaryMail:
+      type: object
+      properties:
+        on:
+          type: boolean
+      required:
+        - on
+    MonthlySummaryMailChange:
+      type: object
+      properties:
+        on:
+          type: boolean
+      required:
+        - on
+      additionalProperties: false
+    MailOffRequest:
+      type: object
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 200
+        on:
+          type: boolean
+      required:
+        - token
+        - on
+      additionalProperties: false
     AccountPurgeSummary:
       type: object
       properties:
@@ -29312,6 +29466,183 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: BILLING_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/billing/monthly-summary-mail:
+    post:
+      tags:
+        - Billing
+      summary: Monthly summary mails (Cloud Scheduler, days 1–7)
+      description: "MUT-535 (ADR-259). Mails each person who pays or trials, in their language, one summary of the month before: per profile their plan covers and per currency, what came in, what is still owed and what is overdue, read as Reports reads them. Sends at most `MONTHLY_SUMMARY_DAILY_SENDS` per run and stops at the first mail the daily cap refuses; each person is mailed once a month. Answers counts only. Always 200 once it ran; `incomplete` means the next run continues."
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: The run’s counts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummaryMailSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/billing/monthly-summary-mail:
+    post:
+      tags:
+        - Admin
+      summary: Run the monthly summary mails now, or see who they would mail
+      description: "The same run as the job, for the operator, with one row per person looked at: how many panels it mails, or why not. `dryRun` mails and writes nothing (it doesn’t post due installments, so owed can lag by them). In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK)."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TrialMailRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummaryMailRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: LINK_ORIGIN_LOOPBACK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/me/monthly-summary-mail:
+    get:
+      tags:
+        - Sessions
+      summary: Whether the monthly summary mail reaches you (MUT-535)
+      description: "`on` is true when next month’s run would mail you, given a month with something to show: you haven’t turned it off and your plan covers a profile (Malafat-covered profiles only if you turned it on yourself). Person-level: no X-Mutaba3a-Profile."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: The switch
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummaryMail"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+    patch:
+      tags:
+        - Sessions
+      summary: Turn the monthly summary mail on or off (MUT-535)
+      description: Off stops it. On returns to the default (every profile your plan covers except Malafat-covered ones), or includes Malafat-covered profiles when they are all you have. Idempotent, so no Idempotency-Key; writes no audit row (a preference, not an event a firm sees).
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MonthlySummaryMailChange"
+      responses:
+        "200":
+          description: The switch now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummaryMail"
+        "401":
+          description: No valid session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "403":
+          description: PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Invalid body
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/mail-preferences/monthly-summary:
+    post:
+      tags:
+        - Sessions
+      summary: Turn the monthly summary mail off (or back on) from its link (MUT-535)
+      description: "D8: the token from the mail link’s fragment, in the body; it names one person and does nothing but this switch. The page asks for a press first, so a link scanner opening the mail changes nothing. An unknown or voided token (the session pepper rotated) answers 404."
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/MailOffRequest"
+      responses:
+        "200":
+          description: The switch now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MonthlySummaryMail"
+        "403":
+          description: CROSS_SITE_REQUEST
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: the link no longer works"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: Validation failed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "429":
+          description: Too many attempts from this address
           content:
             application/json:
               schema:

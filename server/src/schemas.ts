@@ -865,6 +865,48 @@ export const ComebackMailRowSchema = z
 
 export const ComebackMailRunSchema = z.object({ summary: ComebackMailSummarySchema, rows: z.array(ComebackMailRowSchema) }).openapi('ComebackMailRun');
 
+/** MUT-535: the monthly summary run's counts. */
+export const MonthlySummaryMailSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    month: z.string().regex(/^\d{4}-\d{2}$/).openapi({ description: 'The month reported (YYYY-MM): the one before the run’s month in Jerusalem' }),
+    checked: z.number().int().openapi({ description: 'People whose own billing facts may cover a profile, looked at in this run' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'Already mailed this month (an earlier run)' }),
+    notSent: z.number().int().openapi({ description: 'Due but the mailer did not send it: mail off, capped, refused or suppressed' }),
+    failed: z.number().int().openapi({ description: 'A read or the mailer threw; the next run tries again' }),
+    skipped: z.object({
+      optedOut: z.number().int(),
+      suppressed: z.number().int(),
+      nothingCovered: z.number().int().openapi({ description: 'No profile their plan covers today, or only Malafat-covered ones by default' }),
+      monthNotOver: z.number().int().openapi({ description: 'A profile whose own today is still in the month (west of UTC); the next run mails' }),
+      nothingToShow: z.number().int().openapi({ description: 'No profile had an entry dated in the month with something to show' }),
+    }),
+    incomplete: z.boolean().openapi({ description: 'The time or send budget ran out, or the mail cap was met; the next run continues' }),
+  })
+  .openapi('MonthlySummaryMailSummary');
+
+export const MonthlySummaryMailRowSchema = z
+  .object({
+    userId: z.string().uuid(),
+    email: z.string(),
+    locale: z.enum(['en', 'ar']),
+    profiles: z.number().int().openapi({ description: 'Panels in the mail' }),
+    action: z.enum(['send', 'skip']),
+    skip: z.enum(['opted-out', 'suppressed', 'nothing-covered', 'month-not-over', 'nothing-to-show']).nullable(),
+    outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
+  })
+  .openapi('MonthlySummaryMailRow');
+
+export const MonthlySummaryMailRunSchema = z.object({ summary: MonthlySummaryMailSummarySchema, rows: z.array(MonthlySummaryMailRowSchema) }).openapi('MonthlySummaryMailRun');
+
+/** MUT-535 (D7): whether the monthly summary would reach this person; what You › Account's switch shows. */
+export const MonthlySummaryMailSchema = z.object({ on: z.boolean() }).openapi('MonthlySummaryMail');
+export const MonthlySummaryMailChangeSchema = z.object({ on: z.boolean() }).strict().openapi('MonthlySummaryMailChange');
+/** MUT-535 (D8): the opt-out page's request; the token comes from the mail link's fragment. */
+export const MailOffRequestSchema = z.object({ token: z.string().min(1).max(200), on: z.boolean() }).strict().openapi('MailOffRequest');
+
 export const CardFailedMailRunSchema = z.object({ summary: CardFailedMailSummarySchema, rows: z.array(CardFailedMailRowSchema) }).openapi('CardFailedMailRun');
 
 // ---- Admin: operator-provisioned users (MUT-37, ADR-037) --------------------
@@ -4941,7 +4983,7 @@ export const PeriodDownloadStreamRequestSchema = z
 
 export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type: downloadType, lang: downloadLang, asOf: downloadAsOf }).strict().openapi('ShareLinkDownloadTicketRequest');
 
-// ---- MUT-568 (ADR-259): the issuing core ---------------------------------------------------------------------------
+// ---- MUT-568 (ADR-260): the issuing core ---------------------------------------------------------------------------
 
 export const IssuedDocTypeSchema = z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']).openapi('IssuedDocType', { description: '305, 320, 330 and 400 in the Tax Authority\'s codes' });
 export const DealerTypeSchema = z.enum(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']).openapi('DealerType', { description: 'עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה' });

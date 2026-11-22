@@ -41,6 +41,7 @@ import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-bill
 import { trialMailRoutes } from './routes/trial-mail.js';
 import { cardFailedMailRoutes } from './routes/card-failed-mail.js';
 import { comebackMailRoutes } from './routes/comeback-mail.js';
+import { MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, monthlySummaryMailRoutes } from './routes/monthly-summary-mail.js';
 import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
@@ -186,6 +187,8 @@ export interface AppDependencies {
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
   trialMail?: { refuseLoopbackLinks: boolean };
+  /** MUT-535 (D12): sends per monthly summary run (MONTHLY_SUMMARY_DAILY_SENDS). Absent = the default, 40. */
+  monthlySummaryDailySends?: number;
   /** MUT-533 (D3): BILLING_RETRY_WINDOW_DAYS, the Smart Retries window the failed-card reminder is timed in. Default 14. */
   retryWindowDays?: number;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
@@ -287,7 +290,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -753,6 +756,23 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
       ...(deps.offers ? { offers: deps.offers } : {}),
+    }),
+  );
+  // MUT-535: the monthly summary mails (job + operator) and their switch (You › Account, the opt-out page). The job and
+  // the token door on the unguarded store like the trial mails; the session switch on the guarded one.
+  app.route(
+    '/',
+    monthlySummaryMailRoutes({
+      store: deps.store,
+      sessionStore: store,
+      mailer,
+      logger: deps.logger,
+      settings: sessions,
+      ipLimiter: signInIpLimiter,
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      plan: deps.stripe?.planGateway ?? null,
+      ...(deps.monthlySummaryDailySends ? { sendBudget: deps.monthlySummaryDailySends } : {}),
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );
   // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.

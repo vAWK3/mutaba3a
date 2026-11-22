@@ -327,7 +327,7 @@ export async function outboxOf(email: string): Promise<Array<{ template: string;
 }
 
 /** MUT-533: runs a mail job now, as the operator's `npm run billing:…-mail` does, through the admin door. */
-export async function runMailJob(job: 'card-failed-mail' | 'comeback-mail', dryRun = false): Promise<Json> {
+export async function runMailJob(job: 'card-failed-mail' | 'comeback-mail' | 'monthly-summary-mail', dryRun = false): Promise<Json> {
   const { apiOrigin, adminToken } = liveState();
   const res = await fetch(`${apiOrigin}/admin/v1/billing/${job}`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-admin-token': adminToken }, body: JSON.stringify({ dryRun }) });
   expect(res.status, `${job} ${await res.clone().text()}`).toBe(200);

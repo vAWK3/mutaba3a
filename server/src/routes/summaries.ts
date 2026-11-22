@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { crossRates, type CachedFxRates, type FxRate } from '../fx-rates.js';
 import { verdictProfilesOf } from '../personal-profile.js';
-import { baseProfileOf, composeVerdict, owedOf, type VerdictProfileInput } from '../summaries/verdict.js';
+import { baseProfileOf, composeVerdict, type VerdictProfileInput } from '../summaries/verdict.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import type { VerdictUnavailableCode } from '../schemas.js';
 import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
@@ -11,15 +11,17 @@ import { addDays, addMonths, compareIsoDates, daysBetween, endOfMonth, monthOf, 
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
-import type { AgreementRecord, ExpenseCursor, ExpenseRecord, FeeProposalRecord, PageCursor, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, VerdictQuerySchema, VerdictSchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, PeriodSummaryQuerySchema, PeriodSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import type { Logger } from '../logger.js';
 import { ledgerEntries } from '../statements/lines.js';
 import { summarizePeriod } from '../statements/period.js';
+import { listAll } from '../repositories/list-all.js';
+import { readActivityWindow, readProfileFigures } from '../summaries/profile-figures.js';
 import { serializePeriodSummary } from '../statements/serialize.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
-import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
+import { summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, oldestOverdueDueDate, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
@@ -31,6 +33,9 @@ const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
  * MUT-447: the verdict reads across the person's profiles, so it carries no `X-Mutaba3a-Profile`, like
  * `GET /v1/entries`. Merged into `app.ts`'s and the local app's organization-independent sets.
  */
+/** MUT-535: moved to repositories/list-all.ts; re-exported for the statement tests that import it from here. */
+export { listAll };
+
 export const SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/summaries/verdict']);
 
 /**
@@ -243,7 +248,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const today = todayFor(organization, c.get('now')());
       const { from, to } = reportRange(q, today);
       const bucket = q.bucket;
-      const { payments, expenses, earlierData } = await readActivityWindow(organization.id, from, to);
+      const { payments, expenses, earlierData } = await readActivityWindow(store, organization.id, from, to);
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
       const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
@@ -287,12 +292,8 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       // LOCKED profiles are dropped above, before any posting (eng review A1); posting is SYSTEM through the one door (D3/D7).
       const posting = lazyPostingOf(c, store);
       const read = await settledWithLimit(held, VERDICT_PROFILE_CONCURRENCY, async ({ organization, kind, shared }): Promise<VerdictProfileInput> => {
-        const today = todayFor(organization, now);
-        await postDueItems(posting.store, organization, today, now, posting.actor);
-        const [window, receivables] = await Promise.all([
-          readActivityWindow(organization.id, from, to),
-          listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor })),
-        ]);
+        // MUT-535 (D5): the monthly summary mail reads each profile through this same function.
+        const figures = await readProfileFigures(store, organization, { from, to }, now, posting);
         return {
           profileId: organization.id,
           name: organization.name,
@@ -301,9 +302,9 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
           createdAt: organization.createdAt,
           defaultCurrency: organization.defaultCurrency as Currency,
           timezone: organization.timezone,
-          earlierData: window.earlierData,
-          activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
-          owed: owedOf(receivables, today),
+          earlierData: figures.earlierData,
+          activity: figures.activity,
+          owed: figures.owed,
         };
       });
       const profiles: VerdictProfileInput[] = [];
@@ -334,23 +335,6 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       if (!(err instanceof ApiError && err.code === 'FX_RATES_UNAVAILABLE')) reportError(err);
       return { rates: null, meta: null };
     }
-  }
-
-  /**
-   * MUT-175 (shared with MUT-447): one profile's POSTED payments and expenses over the read window — from (or the 12
-   * months ending with to's month, if earlier) through the end of to's month — and whether records exist before it.
-   */
-  async function readActivityWindow(organizationId: string, from: IsoDate, to: IsoDate) {
-    const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
-    const end = historyEnd(to);
-    const before = addDays(start, -1);
-    const [payments, expenses, paidEarlier, spentEarlier] = await Promise.all([
-      listAll((cursor) => store.payments.list(organizationId, { status: 'POSTED', receivedAfter: start, receivedBefore: end }, { limit: 200, cursor })),
-      listAll<ExpenseRecord, ExpenseCursor>((cursor) => store.expenses.list(organizationId, { from: start, to: end }, { limit: 200, cursor })),
-      store.payments.list(organizationId, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null }),
-      store.expenses.list(organizationId, { to: before }, { limit: 1, cursor: null }),
-    ]);
-    return { payments, expenses, earlierData: paidEarlier.items.length > 0 || spentEarlier.items.length > 0 };
   }
 
   async function projectSummary(organization: Organization, project: ProjectRecord, receivables: ReceivableRecord[], today: string): Promise<ProjectView> {
@@ -456,16 +440,4 @@ function reportRange(q: { from?: string | undefined; to?: string | undefined }, 
   return { from, to };
 }
 
-/** Walks every page of a keyset-paginated list, whatever its cursor's shape. */
-export async function listAll<T, C = PageCursor>(fetchPage: (cursor: C | null) => Promise<{ items: T[]; nextCursor: C | null }>): Promise<T[]> {
-  const all: T[] = [];
-  let cursor: C | null = null;
-  for (let i = 0; i < 1000; i += 1) {
-    const page = await fetchPage(cursor);
-    all.push(...page.items);
-    if (!page.nextCursor) break;
-    cursor = page.nextCursor;
-  }
-  return all;
-}
 
