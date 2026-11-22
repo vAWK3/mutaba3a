@@ -2135,6 +2135,8 @@ model IssuerDetails {
   ink              String     @default("BLACK") @db.VarChar(5)
   /// A key in issuing/styles (PROFESSIONAL | MODERN | MINIMAL); a string so a new style needs no migration.
   documentStyle    String     @default("PROFESSIONAL") @db.VarChar(32)
+  /// V1-a: the default for new documents (each document and line may differ).
+  pricesIncludeVat Boolean    @default(false)
   version          Int        @default(1)
   createdAt        DateTime   @default(now())
   updatedAt        DateTime   @updatedAt
@@ -2168,6 +2170,8 @@ model IssuedDocument {
   vatRateBasisPoints Int
   vatMinor           BigInt
   grossMinor         BigInt
+  /// V1-a: whether the document's prices were typed including VAT (lines may override).
+  pricesIncludeVat   Boolean
   /// Snapshot of IssuerDetails at issue.
   issuer             Json
   customerId         String?       @db.Uuid
@@ -2201,16 +2205,18 @@ model IssuedDocument {
 }
 
 model IssuedDocumentLine {
-  documentId         String @db.Uuid
+  documentId         String  @db.Uuid
   index              Int
-  organizationId     String @db.Uuid
+  organizationId     String  @db.Uuid
   description        String
   /// GOODS | SERVICE
-  kind               String @db.VarChar(7)
+  kind               String  @db.VarChar(7)
   quantityMilli      BigInt
   unitPriceMinor     BigInt
   discountMinor      BigInt
   netMinor           BigInt
+  /// V1-a: this line's price included VAT; an exempt line has vatRateBasisPoints 0.
+  pricesIncludeVat   Boolean
   vatRateBasisPoints Int
   vatMinor           BigInt
 

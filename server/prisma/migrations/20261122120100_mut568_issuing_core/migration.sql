@@ -23,6 +23,7 @@ CREATE TABLE "issuer_details" (
     "logoAttachmentId" UUID,
     "ink" VARCHAR(5) NOT NULL DEFAULT 'BLACK',
     "documentStyle" VARCHAR(32) NOT NULL DEFAULT 'PROFESSIONAL',
+    "pricesIncludeVat" BOOLEAN NOT NULL DEFAULT false,
     "version" INTEGER NOT NULL DEFAULT 1,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "updatedAt" TIMESTAMP(3) NOT NULL,
@@ -55,6 +56,7 @@ CREATE TABLE "issued_documents" (
     "vatRateBasisPoints" INTEGER NOT NULL,
     "vatMinor" BIGINT NOT NULL,
     "grossMinor" BIGINT NOT NULL,
+    "pricesIncludeVat" BOOLEAN NOT NULL,
     "issuer" JSONB NOT NULL,
     "customerId" UUID,
     "customer" JSONB NOT NULL,
@@ -86,6 +88,7 @@ CREATE TABLE "issued_document_lines" (
     "unitPriceMinor" BIGINT NOT NULL,
     "discountMinor" BIGINT NOT NULL,
     "netMinor" BIGINT NOT NULL,
+    "pricesIncludeVat" BOOLEAN NOT NULL,
     "vatRateBasisPoints" INTEGER NOT NULL,
     "vatMinor" BIGINT NOT NULL,
 

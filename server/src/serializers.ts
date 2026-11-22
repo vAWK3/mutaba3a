@@ -817,7 +817,7 @@ export function formatQuantity(milli: bigint): string {
   return fraction ? `${whole}.${fraction}` : `${whole}`;
 }
 
-export function serializeComposedTotals(d: { currency: string; subtotalMinor: bigint; discountMinor: bigint; netMinor: bigint; vatRateBasisPoints: number; vatMinor: bigint; grossMinor: bigint; lines: IssuedDocumentLineRecord[] }) {
+export function serializeComposedTotals(d: { currency: string; subtotalMinor: bigint; discountMinor: bigint; netMinor: bigint; vatRateBasisPoints: number; vatMinor: bigint; grossMinor: bigint; pricesIncludeVat: boolean; lines: IssuedDocumentLineRecord[] }) {
   return {
     subtotal: amt(d.subtotalMinor, d.currency),
     discount: amt(d.discountMinor, d.currency),
@@ -825,6 +825,7 @@ export function serializeComposedTotals(d: { currency: string; subtotalMinor: bi
     vatRateBasisPoints: d.vatRateBasisPoints,
     vat: amt(d.vatMinor, d.currency),
     gross: amt(d.grossMinor, d.currency),
+    pricesIncludeVat: d.pricesIncludeVat,
     lines: d.lines.map((l) => ({
       index: l.index,
       description: l.description,
@@ -833,6 +834,7 @@ export function serializeComposedTotals(d: { currency: string; subtotalMinor: bi
       unitPrice: amt(l.unitPriceMinor, d.currency),
       discount: amt(l.discountMinor, d.currency),
       net: amt(l.netMinor, d.currency),
+      pricesIncludeVat: l.pricesIncludeVat,
       vatRateBasisPoints: l.vatRateBasisPoints,
       vat: amt(l.vatMinor, d.currency),
     })),
@@ -865,5 +867,5 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord) {
 }
 
 export function serializeIssuer(r: IssuerDetailsRecord) {
-  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, version: r.version };
+  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, version: r.version };
 }

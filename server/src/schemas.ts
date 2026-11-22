@@ -4957,6 +4957,7 @@ export const IssuerDetailsRequestSchema = z
     phone: z.string().trim().max(40).nullable().optional(),
     email: z.string().trim().email().max(200).nullable().optional(),
     website: z.string().trim().max(200).nullable().optional(),
+    pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: the default for new documents (default false)' }),
   })
   .openapi('IssuerDetailsRequest');
 
@@ -4972,6 +4973,7 @@ export const IssuerDetailsSchema = z
     website: z.string().nullable(),
     ink: z.string(),
     documentStyle: z.string(),
+    pricesIncludeVat: z.boolean(),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
@@ -4987,6 +4989,8 @@ const IssueLineRequestSchema = z.object({
   quantity: z.string().openapi({ description: 'Positive, up to 3 decimals, e.g. "40" or "1.5"' }),
   unitPrice: AmountSchema,
   discount: AmountSchema.optional(),
+  pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: overrides the document for this line' }),
+  vatExempt: z.boolean().optional().openapi({ description: 'No VAT on this line' }),
 });
 
 export const IssueDocumentRequestSchema = z
@@ -5000,16 +5004,21 @@ export const IssueDocumentRequestSchema = z
     originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
     appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice it pays' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
-    discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, before VAT' }),
+    discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
+    pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: whether the prices typed include VAT; default from the business details' }),
+    fromEntry: z
+      .object({ kind: z.enum(['owed', 'received']), id: uuid })
+      .optional()
+      .openapi({ description: 'I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH).' }),
     notes: z.string().max(1000).nullable().optional(),
     lines: z.array(IssueLineRequestSchema).min(1).max(200),
   })
   .openapi('IssueDocumentRequest');
 
-const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema });
+const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
 
 export const IssuedDocumentPreviewSchema = z
-  .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, lines: z.array(IssuedLineSchema) })
+  .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
   .openapi('IssuedDocumentPreview');
 
 export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({

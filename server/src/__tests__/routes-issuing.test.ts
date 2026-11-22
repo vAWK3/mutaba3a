@@ -170,6 +170,42 @@ describe('issuing routes (MUT-568)', () => {
     expect((await issue(h, acc.on(w.profileId), invoiceBody(w.customerId))).status).toBe(403);
   });
 
+  it('prices that include VAT: the customer pays exactly the typed total; a line may be exempt (V1-a)', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const body = invoiceBody(w.customerId, { pricesIncludeVat: true, discount: undefined, lines: [{ description: 'All in', kind: 'SERVICE', quantity: '1', unitPrice: '1180.00' }, { description: 'Fee', kind: 'SERVICE', quantity: '1', unitPrice: '50.00', vatExempt: true }] });
+    const preview = await read(await h.app.request('/v1/issued-documents/preview', json(body, w.on)));
+    expect(preview).toMatchObject({ net: '1050.00', vat: '180.00', gross: '1230.00', pricesIncludeVat: true });
+    expect(preview.lines.map((l: { pricesIncludeVat: boolean; vatRateBasisPoints: number }) => [l.pricesIncludeVat, l.vatRateBasisPoints])).toEqual([[true, 1800], [false, 0]]);
+    const doc = await read(await issue(h, w.on, body));
+    expect(doc).toMatchObject({ gross: '1230.00', pricesIncludeVat: true });
+  });
+
+  it('issues a tax invoice for a recorded Owed, taking it over with no second Owed (I1-a)', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const owed = await read(await h.app.request('/v1/income', json({ kind: 'owed', amount: '1180.00', currency: 'ILS', occurredOn: '2026-11-04', customerId: w.customerId }, { ...w.on, ...idem() })));
+    const body = invoiceBody(w.customerId, { discount: undefined, pricesIncludeVat: true, fromEntry: { kind: 'owed', id: owed.id }, lines: [{ description: 'Sprint 3', kind: 'SERVICE', quantity: '1', unitPrice: '1180.00' }] });
+    const res = await issue(h, w.on, body);
+    expect(res.status, await res.clone().text()).toBe(201);
+    const doc = await read(res);
+    expect(doc.receivableId).toBe(owed.id);
+    expect(await h.store.receivables.getById(w.profileId, owed.id)).toMatchObject({ origin: 'ISSUED_DOCUMENT', vatMinor: 18_000n });
+    // The person's Owed routes no longer reach it, and a second document can't take it.
+    expect((await h.app.request(`/v1/income/${owed.id}`, { method: 'DELETE', headers: { ...w.on, ...idem() } })).status).toBe(404);
+    expect((await issue(h, w.on, body)).status).toBe(404);
+  });
+
+  it('refuses an entry whose amount differs, or the wrong document type for it (I1-a)', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const owed = await read(await h.app.request('/v1/income', json({ kind: 'owed', amount: '999.00', currency: 'ILS', occurredOn: '2026-11-04', customerId: w.customerId }, { ...w.on, ...idem() })));
+    const mismatch = await read(await issue(h, w.on, invoiceBody(w.customerId, { fromEntry: { kind: 'owed', id: owed.id } })));
+    expect(mismatch.error.details).toMatchObject({ reason: 'ENTRY_MISMATCH', mismatch: 'amount' });
+    const wrongType = await read(await issue(h, w.on, invoiceBody(w.customerId, { docType: 'TAX_INVOICE_RECEIPT', fromEntry: { kind: 'owed', id: owed.id } })));
+    expect(wrongType.error.details.reason).toBe('FIELD_NOT_ALLOWED_FOR_TYPE');
+  });
+
   it('audits the issue as session-only activity', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);

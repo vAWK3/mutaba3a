@@ -33,6 +33,7 @@
 ### Added
 - **Issuing (server only):** `/v1/issuer`, `/v1/issuing/settings`, `/v1/issuing/starting-numbers/{docType}`, `/v1/issued-documents/preview`, `/v1/issued-documents` (issue, list, one), `/v1/issued-documents/{id}/copies`, `/v1/issuing/gaps`. Tax invoice (305), invoice-receipt (320), receipt (400) and credit note (330), gap-free numbers per type, the matching Owed/Received/credit posted in the same transaction, "מקור" for the first copy and "העתק" after. Behind the operator feature `invoicing` on business profiles.
 - Feature `invoicing`; session-only scopes `issuing:read`/`issuing:write`; matrix domain `issuing`.
+- **Issue from a recorded entry** (`fromEntry`: an Owed for a tax invoice, a Received for an invoice-receipt or receipt): the document takes the entry over, no second Owed/Received. **Prices including VAT** per document and per line, and VAT-exempt lines (MUT-566 decisions I1-a, V1-a).
 
 ### Technical
 - Migrations `20261122120000_mut568_issued_document_origin` (`ISSUED_DOCUMENT` on `ReceivableOrigin`/`PaymentOrigin`) and `20261122120100_mut568_issuing_core` (tables, immutability triggers, counter guard). Purge leaves the issuing tables (kept 7 years, MUT-644). Rollback hazard MUT-568 and DEPLOYMENT §6 row.

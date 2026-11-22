@@ -6,8 +6,13 @@ import { standardVatRateOn } from './vat-rate.js';
 
 /**
  * MUT-568: what a document will say, computed before anything is written: the issue route and the stateless preview
- * (D7) both call this. Integer arithmetic on agorot; a quantity is in thousandths. VAT is computed once on the
- * document's net (after both discounts) and then spread over the lines, so the lines always add up to the document.
+ * (D7) both call this. Integer arithmetic on agorot; a quantity is in thousandths.
+ *
+ * V1-a (Basel, 2026-11-22): prices include VAT or not per document, overridable per line, and a line may be VAT-exempt.
+ * An inclusive line keeps the amount typed and its VAT is taken out of it (net = gross ÷ (1 + rate), half up), so an
+ * all-inclusive invoice totals exactly what was typed. Exclusive lines are taxed together on their net, half up, and
+ * that VAT is spread over them. The document discount is entered in the document's terms and spread over the lines by
+ * their amounts, each share converted to its line's terms. Lines always add up to the document.
  */
 
 export interface ComposeLineInput {
@@ -16,6 +21,10 @@ export interface ComposeLineInput {
   quantityMilli: bigint;
   unitPriceMinor: bigint;
   discountMinor: bigint;
+  /** Overrides the document's `pricesIncludeVat` for this line. */
+  pricesIncludeVat?: boolean;
+  /** No VAT on this line (e.g. a reimbursed fee). */
+  vatExempt?: boolean;
 }
 
 export interface ComposeInput {
@@ -23,14 +32,19 @@ export interface ComposeInput {
   currency: string;
   documentDate: string;
   dealerType: DealerType;
+  /** In the document's terms (`pricesIncludeVat`). */
   documentDiscountMinor: bigint;
+  pricesIncludeVat: boolean;
   lines: ComposeLineInput[];
 }
 
 export interface ComposedLine extends ComposeLineInput {
   /** 1-based, the order printed. */
   index: number;
-  /** Quantity × price less the line's own discount (the allocation API's item Total_Amount). */
+  /** Resolved: the document's setting unless the line overrides it; false on an exempt line or a document without VAT. */
+  pricesIncludeVat: boolean;
+  vatExempt: boolean;
+  /** Quantity × price less the line's own discount, before VAT (the allocation API's item Total_Amount). */
   netMinor: bigint;
   vatRateBasisPoints: number;
   vatMinor: bigint;
@@ -45,9 +59,11 @@ export interface ComposedDocument {
   vatRateBasisPoints: number;
   vatMinor: bigint;
   grossMinor: bigint;
+  pricesIncludeVat: boolean;
 }
 
 const MILLI = 1000n;
+const BP = 10_000n;
 const QUANTITY_PATTERN = /^\d{1,9}(\.\d{1,3})?$/;
 
 export function parseQuantity(text: string): bigint {
@@ -61,24 +77,51 @@ export function parseQuantity(text: string): bigint {
 export function composeDocument(input: ComposeInput): ComposedDocument {
   assertWhoMayIssue(input);
   assertLines(input.lines);
-  const nets = input.lines.map(lineNet);
-  const subtotalMinor = nets.reduce((sum, n) => sum + n, 0n);
-  if (input.documentDiscountMinor < 0n || input.documentDiscountMinor > subtotalMinor) {
+  const rate = VAT_BEARING.has(input.docType) ? standardVatRateOn(input.documentDate) : 0;
+  const documentInclusive = input.pricesIncludeVat && rate > 0;
+  const lines = input.lines.map((line) => {
+    const vatExempt = rate > 0 && line.vatExempt === true;
+    const inclusive = rate > 0 && !vatExempt && (line.pricesIncludeVat ?? input.pricesIncludeVat);
+    return { line, vatExempt, inclusive, amount: lineAmount(line) };
+  });
+  const toNet = (gross: bigint) => roundHalfUpDiv(gross * BP, BP + BigInt(rate));
+  const toGross = (net: bigint) => roundHalfUpDiv(net * (BP + BigInt(rate)), BP);
+  const subtotalMinor = lines.reduce((sum, l) => sum + (l.inclusive ? toNet(l.amount) : l.amount), 0n);
+  const typedTotal = lines.reduce((sum, l) => sum + l.amount, 0n);
+  if (input.documentDiscountMinor < 0n || input.documentDiscountMinor > typedTotal) {
     throw validationError('DISCOUNT_INVALID', 'the document discount must be between zero and the subtotal', { field: 'discount' });
   }
-  const netMinor = subtotalMinor - input.documentDiscountMinor;
+  const shares = spread(input.documentDiscountMinor, lines.map((l) => l.amount));
+  const after = lines.map((l, i) => {
+    const share = shares[i]!;
+    const own = l.vatExempt || l.inclusive === documentInclusive ? share : documentInclusive ? toNet(share) : toGross(share);
+    return l.amount - (own > l.amount ? l.amount : own);
+  });
+  const nets = lines.map((l, i) => (l.inclusive ? toNet(after[i]!) : after[i]!));
+  const exclusiveIdx = lines.flatMap((l, i) => (!l.inclusive && !l.vatExempt && rate > 0 ? [i] : []));
+  const exclusiveNet = exclusiveIdx.reduce((sum, i) => sum + nets[i]!, 0n);
+  const exclusiveVat = spread(roundHalfUpDiv(exclusiveNet * BigInt(rate), BP), exclusiveIdx.map((i) => nets[i]!));
+  const lineVat = lines.map((l, i) => (l.inclusive ? after[i]! - nets[i]! : l.vatExempt || rate === 0 ? 0n : exclusiveVat[exclusiveIdx.indexOf(i)]!));
+  const netMinor = nets.reduce((sum, n) => sum + n, 0n);
   if (netMinor <= 0n) throw validationError('TOTAL_NOT_POSITIVE', 'a document must be for more than zero');
-  const vatRateBasisPoints = VAT_BEARING.has(input.docType) ? standardVatRateOn(input.documentDate) : 0;
-  const vatMinor = roundHalfUpDiv(netMinor * BigInt(vatRateBasisPoints), 10_000n);
-  const lineVat = spread(vatMinor, nets);
+  const vatMinor = lineVat.reduce((sum, v) => sum + v, 0n);
   return {
-    lines: input.lines.map((line, i) => ({ ...line, index: i + 1, netMinor: nets[i]!, vatRateBasisPoints, vatMinor: lineVat[i]! })),
+    lines: lines.map((l, i) => ({
+      ...l.line,
+      index: i + 1,
+      pricesIncludeVat: l.inclusive,
+      vatExempt: l.vatExempt,
+      netMinor: l.inclusive ? toNet(l.amount) : l.amount,
+      vatRateBasisPoints: l.vatExempt ? 0 : rate,
+      vatMinor: lineVat[i]!,
+    })),
     subtotalMinor,
-    discountMinor: input.documentDiscountMinor,
+    discountMinor: subtotalMinor - netMinor,
     netMinor,
-    vatRateBasisPoints,
+    vatRateBasisPoints: rate,
     vatMinor,
     grossMinor: netMinor + vatMinor,
+    pricesIncludeVat: documentInclusive,
   };
 }
 
@@ -105,7 +148,8 @@ function assertLines(lines: ComposeLineInput[]): void {
   }
 }
 
-function lineNet(line: ComposeLineInput): bigint {
+/** Quantity × price less the line's own discount, in the line's own terms (VAT included or not). */
+function lineAmount(line: ComposeLineInput): bigint {
   const gross = roundHalfUpDiv(line.quantityMilli * line.unitPriceMinor, MILLI);
   if (line.discountMinor < 0n || line.discountMinor > gross) {
     throw validationError('DISCOUNT_INVALID', 'a line discount must be between zero and the line amount', { field: 'discount' });

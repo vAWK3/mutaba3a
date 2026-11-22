@@ -82,20 +82,25 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     needs(body.docType === 'RECEIPT' || !!body.customerId, 'customerId', 'this document needs a customer');
     needs((body.docType === 'CREDIT_NOTE') === !!body.originalId, 'originalId', 'a credit note, and only a credit note, names the tax invoice it credits');
     needs(body.docType === 'RECEIPT' || !body.appliesToDocumentId, 'appliesToDocumentId', 'only a receipt pays an earlier tax invoice');
-    needs(takesPayment === !!body.payment, 'payment', 'an invoice-receipt or a receipt, and only those, says how the money came in');
+    needs(takesPayment === (!!body.payment || body.fromEntry?.kind === 'received'), 'payment', 'an invoice-receipt or a receipt, and only those, says how the money came in');
     needs(body.docType === 'TAX_INVOICE' || !body.dueDate, 'dueDate', 'only a tax invoice has a due date');
+    needs(!body.fromEntry || (body.fromEntry.kind === 'owed') === (body.docType === 'TAX_INVOICE'), 'fromEntry', 'a tax invoice is issued for an Owed entry; an invoice-receipt or a receipt for a Received one');
+    needs(!body.fromEntry || body.docType !== 'CREDIT_NOTE', 'fromEntry', 'a credit note is issued from its tax invoice, not from an entry');
     const input: ComposeInput = {
       docType: body.docType,
       currency: body.currency,
       documentDate,
       dealerType: issuer.dealerType,
       documentDiscountMinor: body.discount ? parseAmount(body.discount, 'ILS', 'discount') : 0n,
+      pricesIncludeVat: body.pricesIncludeVat ?? issuer.pricesIncludeVat,
       lines: body.lines.map((l) => ({
         description: l.description,
         kind: l.kind,
         quantityMilli: parseQuantity(l.quantity),
         unitPriceMinor: parseAmount(l.unitPrice, 'ILS', 'unitPrice'),
         discountMinor: l.discount ? parseAmount(l.discount, 'ILS', 'discount') : 0n,
+        ...(l.pricesIncludeVat !== undefined ? { pricesIncludeVat: l.pricesIncludeVat } : {}),
+        ...(l.vatExempt ? { vatExempt: true } : {}),
       })),
     };
     return { documentDate, composed: composeDocument(input) };
@@ -137,7 +142,7 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const header = c.req.header('if-match');
       const expectedVersion = header === undefined ? null : Number(header.replace(/"/g, ''));
       if (expectedVersion !== null && !Number.isInteger(expectedVersion)) throw new ApiError('VALIDATION_FAILED', 'If-Match must be a version number', { field: 'If-Match' });
-      const input = { legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null };
+      const input = { legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? false };
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No business details yet; send them without If-Match');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
@@ -237,6 +242,14 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now));
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
       if (body.customerId && !customer) throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
+      // I1-a: a document for a captured Received prints how that money came in.
+      const fromPayment = body.fromEntry?.kind === 'received' ? await store.payments.getById(organization.id, body.fromEntry.id) : null;
+      if (body.fromEntry?.kind === 'received' && !fromPayment) throw new ApiError('NOT_FOUND', 'No such entry', { field: 'fromEntry' });
+      const payment = fromPayment
+        ? { method: fromPayment.method, reference: fromPayment.reference, receivedOn: fromPayment.receivedOn }
+        : body.payment
+          ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: pastMoneyDate(body.payment.receivedOn, todayFor(organization, now), 'payment.receivedOn') }
+          : null;
       const input: IssueDocumentInput = {
         organizationId: organization.id,
         docType: body.docType,
@@ -253,8 +266,9 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         notes: body.notes ?? null,
         dueDate: body.docType === 'TAX_INVOICE' ? (body.dueDate ?? null) : null,
         originalId: body.originalId ?? null,
-        payment: body.payment ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: pastMoneyDate(body.payment.receivedOn, todayFor(organization, now), 'payment.receivedOn') } : null,
+        payment,
         appliesToDocumentId: body.appliesToDocumentId ?? null,
+        fromEntry: body.fromEntry ? { kind: body.fromEntry.kind === 'owed' ? 'receivable' : 'payment', id: body.fromEntry.id } : null,
         allocationNumber: null,
         titlePrefix: DOC_TYPE_TITLES[body.language][body.docType],
         coreVersion: ISSUING_CORE_VERSION,
@@ -274,6 +288,10 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           throw new ApiError('VALIDATION_FAILED', 'A credit note credits only what is still owed on its tax invoice', { field: 'lines', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString() });
         case 'exceeds_outstanding':
           throw new ApiError('VALIDATION_FAILED', 'The receipt is more than the tax invoice still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
+        case 'entry_not_found':
+          throw new ApiError('NOT_FOUND', 'No such entry to issue for, or it already has a document', { field: 'fromEntry' });
+        case 'entry_mismatch':
+          throw new ApiError('VALIDATION_FAILED', `The document's ${result.field} must match the entry's`, { field: 'fromEntry', reason: 'ENTRY_MISMATCH', mismatch: result.field });
         case 'issued':
           if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number });
           return c.json(serializeIssuedDocument(result.document), 201);

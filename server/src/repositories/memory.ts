@@ -222,7 +222,7 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
-import { ledgerPlan } from '../issuing/ledger-plan.js';
+import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
 
 /**
@@ -980,6 +980,19 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       originalReceivable = r;
     }
+    const fromReceivable = input.fromEntry?.kind === 'receivable' ? this.recs.get(input.fromEntry.id) : undefined;
+    const fromPayment = input.fromEntry?.kind === 'payment' ? this.pays.get(input.fromEntry.id) : undefined;
+    if (input.fromEntry) {
+      const r = fromReceivable?.organizationId === organizationId ? fromReceivable : undefined;
+      const p = fromPayment?.organizationId === organizationId ? fromPayment : undefined;
+      const entry = r
+        ? { ok: r.origin === 'ADJUSTMENT' && !r.deletedAt && r.creditedMinor === 0n, customerId: r.customerId as string | null, currency: r.currency, amountMinor: r.grossMinor }
+        : p
+          ? { ok: p.origin === 'CAPTURE' && p.status === 'POSTED' && p.allocatedMinor === 0n, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor }
+          : { ok: false, customerId: null, currency: '', amountMinor: 0n };
+      const refusal = fromEntryRefusal(entry, input);
+      if (refusal) return refusal;
+    }
     // Every check passed: from here on nothing refuses, so the number is never wasted.
     const counterKey = `${organizationId}:${input.docType}`;
     const counter = this.issuedCounterMap.get(counterKey) ?? { organizationId, docType: input.docType, start: 1, next: 1 };
@@ -990,11 +1003,22 @@ export class MemoryLedgerStore implements LedgerStore {
     let receivableId: string | null = null;
     let paymentId: string | null = null;
     let creditId: string | null = null;
-    if (plan.receivable) {
+    if (plan.receivable && fromReceivable) {
+      // I1-a: the recorded Owed becomes the document's, with the document's VAT split.
+      const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title } = plan.receivable;
+      Object.assign(fromReceivable, { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, origin: 'ISSUED_DOCUMENT', originId: id, version: fromReceivable.version + 1 });
+      receivableId = fromReceivable.id;
+    } else if (plan.receivable) {
       const { title, ...rest } = plan.receivable;
       receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, origin: 'ISSUED_DOCUMENT', originId: id, postedAt: at, createdByUserId: input.createdByUserId }).id;
     }
-    if (plan.payment) {
+    if (plan.payment && fromPayment) {
+      // I1-a: the captured Received becomes the document's and pays its Owed (320) or the invoice it names (400).
+      const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
+      Object.assign(fromPayment, { origin: 'ISSUED_DOCUMENT', version: fromPayment.version + 1, updatedAt: at });
+      if (target) this.applyAllocations(fromPayment, [{ receivableId: target, amountMinor: fromPayment.amountMinor }], at);
+      paymentId = fromPayment.id;
+    } else if (plan.payment) {
       const { allocate, ...p } = plan.payment;
       const target = allocate === 'own' ? receivableId : allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
       paymentId = this.insertPayment(
@@ -1036,6 +1060,7 @@ export class MemoryLedgerStore implements LedgerStore {
       vatRateBasisPoints: composed.vatRateBasisPoints,
       vatMinor: composed.vatMinor,
       grossMinor: composed.grossMinor,
+      pricesIncludeVat: composed.pricesIncludeVat,
       issuer: input.issuer,
       customerId: input.customerId,
       customer: input.customer,
@@ -1060,6 +1085,7 @@ export class MemoryLedgerStore implements LedgerStore {
         unitPriceMinor: l.unitPriceMinor,
         discountMinor: l.discountMinor,
         netMinor: l.netMinor,
+        pricesIncludeVat: l.pricesIncludeVat,
         vatRateBasisPoints: l.vatRateBasisPoints,
         vatMinor: l.vatMinor,
       })),

@@ -4406,6 +4406,8 @@ export interface IssuerDetailsInput {
   phone: string | null;
   email: string | null;
   website: string | null;
+  /** V1-a: the default for new documents. */
+  pricesIncludeVat: boolean;
 }
 
 export interface IssuerDetailsRecord extends IssuerDetailsInput {
@@ -4435,6 +4437,7 @@ export interface IssuedDocumentLineRecord {
   unitPriceMinor: bigint;
   discountMinor: bigint;
   netMinor: bigint;
+  pricesIncludeVat: boolean;
   vatRateBasisPoints: number;
   vatMinor: bigint;
 }
@@ -4459,6 +4462,7 @@ export interface IssuedDocumentRecord {
   vatRateBasisPoints: number;
   vatMinor: bigint;
   grossMinor: bigint;
+  pricesIncludeVat: boolean;
   issuer: JsonObject;
   customerId: string | null;
   customer: JsonObject;
@@ -4501,6 +4505,11 @@ export interface IssueDocumentInput {
   payment: IssuedPaymentDetails | null;
   /** 400: the open tax invoice this receipt pays, if any. */
   appliesToDocumentId: string | null;
+  /**
+   * I1-a: the recorded entry this document is for. The document takes it over (no new Owed or Received): a 305 an Owed
+   * a person recorded; a 320 or 400 a Received a person captured. Same customer, currency and amount.
+   */
+  fromEntry: { kind: 'receivable' | 'payment'; id: string } | null;
   /** MUT-572 fills it; null until then. */
   allocationNumber: string | null;
   /** The ledger rows' title before the number, e.g. "חשבונית מס"; the store appends the number. */
@@ -4522,7 +4531,10 @@ export type IssueResult =
   /** R-D2: a credit note credits only what is still owed on its tax invoice (MUT-643 for paid ones). */
   | { kind: 'original_paid'; outstandingMinor: bigint }
   /** 400 against a 305: more than it still owes. */
-  | { kind: 'exceeds_outstanding'; outstandingMinor: bigint };
+  | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
+  /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */
+  | { kind: 'entry_not_found' }
+  | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' };
 
 export interface IssuedDocumentFilter {
   docType?: IssuedDocType;

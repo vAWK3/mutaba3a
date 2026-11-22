@@ -9469,6 +9469,8 @@ components:
           type: string
         documentStyle:
           type: string
+        pricesIncludeVat:
+          type: boolean
         version:
           type: integer
       required:
@@ -9482,6 +9484,7 @@ components:
         - website
         - ink
         - documentStyle
+        - pricesIncludeVat
         - version
     DealerType:
       type: string
@@ -9525,6 +9528,9 @@ components:
           type: string
           nullable: true
           maxLength: 200
+        pricesIncludeVat:
+          type: boolean
+          description: "V1-a: the default for new documents (default false)"
       required:
         - legalName
         - vatId
@@ -9596,6 +9602,8 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+        pricesIncludeVat:
+          type: boolean
         lines:
           type: array
           items:
@@ -9621,6 +9629,8 @@ components:
                 type: string
                 pattern: ^-?\d+(\.\d+)?$
                 description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              pricesIncludeVat:
+                type: boolean
               vatRateBasisPoints:
                 type: integer
               vat:
@@ -9635,6 +9645,7 @@ components:
               - unitPrice
               - discount
               - net
+              - pricesIncludeVat
               - vatRateBasisPoints
               - vat
       required:
@@ -9644,6 +9655,7 @@ components:
         - vatRateBasisPoints
         - vat
         - gross
+        - pricesIncludeVat
         - lines
     IssueDocumentRequest:
       type: object
@@ -9701,7 +9713,25 @@ components:
         discount:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: A discount on the whole document, before VAT
+          description: A discount on the whole document, in the document's terms (VAT included or not)
+        pricesIncludeVat:
+          type: boolean
+          description: "V1-a: whether the prices typed include VAT; default from the business details"
+        fromEntry:
+          type: object
+          properties:
+            kind:
+              type: string
+              enum:
+                - owed
+                - received
+            id:
+              type: string
+              format: uuid
+          required:
+            - kind
+            - id
+          description: "I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH)."
         notes:
           type: string
           nullable: true
@@ -9730,6 +9760,12 @@ components:
                 type: string
                 pattern: ^-?\d+(\.\d+)?$
                 description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+              pricesIncludeVat:
+                type: boolean
+                description: "V1-a: overrides the document for this line"
+              vatExempt:
+                type: boolean
+                description: No VAT on this line
             required:
               - description
               - kind

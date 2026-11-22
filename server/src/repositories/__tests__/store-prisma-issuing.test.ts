@@ -25,9 +25,9 @@ if (!url) {
       const org = await store.organizations.create({ name: 'Imm', slug: `imm-${unique()}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' });
       await raw.$executeRaw`INSERT INTO "issued_document_counters" VALUES (${org.id}::uuid, 'RECEIPT', 1, 2)`;
       const id = crypto.randomUUID();
-      await raw.$executeRaw`INSERT INTO "issued_documents" ("id","organizationId","docType","number","documentDate","currency","subtotalMinor","discountMinor","netMinor","vatRateBasisPoints","vatMinor","grossMinor","issuer","customer","language","style","ink","coreVersion","createdByUserId","requestKey")
-        VALUES (${id}::uuid, ${org.id}::uuid, 'RECEIPT', 1, '2026-11-22', 'ILS', 100, 0, 100, 0, 0, 100, '{}', '{}', 'he', 'PROFESSIONAL', 'BLACK', '1.0.0', ${org.id}::uuid, ${unique()})`;
-      await raw.$executeRaw`INSERT INTO "issued_document_lines" VALUES (${id}::uuid, 1, ${org.id}::uuid, 'x', 'GOODS', 1000, 100, 0, 100, 0, 0)`;
+      await raw.$executeRaw`INSERT INTO "issued_documents" ("id","organizationId","docType","number","documentDate","currency","subtotalMinor","discountMinor","netMinor","vatRateBasisPoints","vatMinor","grossMinor","pricesIncludeVat","issuer","customer","language","style","ink","coreVersion","createdByUserId","requestKey")
+        VALUES (${id}::uuid, ${org.id}::uuid, 'RECEIPT', 1, '2026-11-22', 'ILS', 100, 0, 100, 0, 0, 100, false, '{}', '{}', 'he', 'PROFESSIONAL', 'BLACK', '1.0.0', ${org.id}::uuid, ${unique()})`;
+      await raw.$executeRaw`INSERT INTO "issued_document_lines" VALUES (${id}::uuid, 1, ${org.id}::uuid, 'x', 'GOODS', 1000, 100, 0, 100, false, 0, 0)`;
       await raw.$executeRaw`INSERT INTO "issued_document_copies" ("documentId","copyIndex","organizationId","producedByUserId","channel") VALUES (${id}::uuid, 0, ${org.id}::uuid, ${org.id}::uuid, 'DOWNLOAD')`;
       return { org, id };
     }

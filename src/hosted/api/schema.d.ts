@@ -27306,6 +27306,7 @@ export interface components {
             website: string | null;
             ink: string;
             documentStyle: string;
+            pricesIncludeVat: boolean;
             version: number;
         };
         /**
@@ -27324,6 +27325,8 @@ export interface components {
             /** Format: email */
             email?: string | null;
             website?: string | null;
+            /** @description V1-a: the default for new documents (default false) */
+            pricesIncludeVat?: boolean;
         };
         IssuingSettings: {
             counters: components["schemas"]["IssuingCounter"][];
@@ -27354,6 +27357,7 @@ export interface components {
             vat: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             gross: string;
+            pricesIncludeVat: boolean;
             lines: {
                 index: number;
                 description: string;
@@ -27365,6 +27369,7 @@ export interface components {
                 discount: string;
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 net: string;
+                pricesIncludeVat: boolean;
                 vatRateBasisPoints: number;
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
@@ -27405,8 +27410,17 @@ export interface components {
                 /** @description Calendar date in the organization timezone, YYYY-MM-DD */
                 receivedOn: string;
             };
-            /** @description A discount on the whole document, before VAT */
+            /** @description A discount on the whole document, in the document's terms (VAT included or not) */
             discount?: string;
+            /** @description V1-a: whether the prices typed include VAT; default from the business details */
+            pricesIncludeVat?: boolean;
+            /** @description I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH). */
+            fromEntry?: {
+                /** @enum {string} */
+                kind: "owed" | "received";
+                /** Format: uuid */
+                id: string;
+            };
             notes?: string | null;
             lines: {
                 description: string;
@@ -27418,6 +27432,10 @@ export interface components {
                 unitPrice: string;
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 discount?: string;
+                /** @description V1-a: overrides the document for this line */
+                pricesIncludeVat?: boolean;
+                /** @description No VAT on this line */
+                vatExempt?: boolean;
             }[];
         };
         /** @enum {string} */

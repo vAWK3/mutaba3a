@@ -1,5 +1,5 @@
 import type { IsoDate } from '../dates.js';
-import type { CreditInput, IssueDocumentInput, PaymentMethod } from '../repositories/ports.js';
+import type { CreditInput, IssueDocumentInput, IssueResult, PaymentMethod } from '../repositories/ports.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -94,4 +94,16 @@ export function ledgerPlan(input: IssueDocumentInput, number: number): LedgerPla
 function requireCustomer(input: IssueDocumentInput): string {
   if (!input.customerId) throw new Error('a 305, 320 or 330 names its customer (the route checks this first)');
   return input.customerId;
+}
+
+/** I1-a: why a recorded entry can't become this document's, or null when it can. Both stores ask this. */
+export function fromEntryRefusal(
+  entry: { ok: boolean; customerId: string | null; currency: string; amountMinor: bigint },
+  input: Pick<IssueDocumentInput, 'customerId' | 'currency' | 'composed'>,
+): Extract<IssueResult, { kind: 'entry_not_found' | 'entry_mismatch' }> | null {
+  if (!entry.ok) return { kind: 'entry_not_found' };
+  if (entry.customerId !== input.customerId) return { kind: 'entry_mismatch', field: 'customer' };
+  if (entry.currency !== input.currency) return { kind: 'entry_mismatch', field: 'currency' };
+  if (entry.amountMinor !== input.composed.grossMinor) return { kind: 'entry_mismatch', field: 'amount' };
+  return null;
 }

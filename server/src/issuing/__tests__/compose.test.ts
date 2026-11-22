@@ -15,6 +15,7 @@ const base = (over: Partial<ComposeInput> = {}): ComposeInput => ({
   documentDate: '2026-11-22',
   dealerType: 'COMPANY',
   documentDiscountMinor: 0n,
+  pricesIncludeVat: false,
   lines: [{ description: 'Sprint 3', kind: 'SERVICE', quantityMilli: 40_000n, unitPriceMinor: shekels(450), discountMinor: 0n }],
   ...over,
 });
@@ -146,6 +147,44 @@ describe('composeDocument', () => {
   it('refuses a document whose total is zero', () => {
     const line = base().lines[0]!;
     expect(reason(() => composeDocument(base({ lines: [{ ...line, unitPriceMinor: 0n }] })))).toBe('TOTAL_NOT_POSITIVE');
+  });
+});
+
+describe('composeDocument: prices that include VAT (V1-a)', () => {
+  const line = (unit: number, over: Partial<ComposeInput['lines'][number]> = {}) => ({ description: 'x', kind: 'SERVICE' as const, quantityMilli: 1_000n, unitPriceMinor: shekels(unit), discountMinor: 0n, ...over });
+
+  it('takes the VAT out of an inclusive invoice so the customer pays exactly the typed total', () => {
+    const doc = composeDocument(base({ pricesIncludeVat: true, lines: [line(1_180)] }));
+    expect(doc).toMatchObject({ netMinor: shekels(1_000), vatMinor: shekels(180), grossMinor: shekels(1_180), pricesIncludeVat: true });
+    const odd = composeDocument(base({ pricesIncludeVat: true, lines: [line(100), line(33.33), line(0.07)] }));
+    expect(odd.grossMinor).toBe(shekels(133.4));
+    expect(odd.netMinor + odd.vatMinor).toBe(odd.grossMinor);
+  });
+
+  it('lets a line override the invoice: an exclusive line on an inclusive invoice, and the other way round', () => {
+    const mixed = composeDocument(base({ pricesIncludeVat: true, lines: [line(1_180), line(1_000, { pricesIncludeVat: false })] }));
+    expect(mixed).toMatchObject({ netMinor: shekels(2_000), vatMinor: shekels(360), grossMinor: shekels(2_360) });
+    expect(mixed.lines.map((l) => l.pricesIncludeVat)).toEqual([true, false]);
+    const other = composeDocument(base({ pricesIncludeVat: false, lines: [line(1_000), line(1_180, { pricesIncludeVat: true })] }));
+    expect(other).toMatchObject({ netMinor: shekels(2_000), vatMinor: shekels(360), grossMinor: shekels(2_360) });
+  });
+
+  it('charges no VAT on a VAT-exempt line', () => {
+    const doc = composeDocument(base({ lines: [line(1_000), line(250, { vatExempt: true })] }));
+    expect(doc).toMatchObject({ netMinor: shekels(1_250), vatMinor: shekels(180), grossMinor: shekels(1_430) });
+    expect(doc.lines[1]).toMatchObject({ vatRateBasisPoints: 0, vatMinor: 0n, vatExempt: true });
+  });
+
+  it('spreads an inclusive document discount over the lines in each line\'s own terms', () => {
+    const doc = composeDocument(base({ pricesIncludeVat: true, documentDiscountMinor: shekels(118), lines: [line(1_180)] }));
+    expect(doc).toMatchObject({ subtotalMinor: shekels(1_000), discountMinor: shekels(100), netMinor: shekels(900), vatMinor: shekels(162), grossMinor: shekels(1_062) });
+  });
+
+  it('always adds up: line nets and VAT sum to the document', () => {
+    const doc = composeDocument(base({ pricesIncludeVat: true, documentDiscountMinor: 7n, lines: [line(99.99), line(12.34, { pricesIncludeVat: false }), line(5, { vatExempt: true })] }));
+    expect(doc.lines.reduce((s, l) => s + l.vatMinor, 0n)).toBe(doc.vatMinor);
+    expect(doc.subtotalMinor - doc.discountMinor).toBe(doc.netMinor);
+    expect(doc.netMinor + doc.vatMinor).toBe(doc.grossMinor);
   });
 });
 

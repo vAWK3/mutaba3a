@@ -192,7 +192,7 @@ import type {
 import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
-import { ledgerPlan } from '../issuing/ledger-plan.js';
+import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
 import type { IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
@@ -5063,7 +5063,7 @@ function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRec
     issuer: row.issuer as JsonObject,
     customer: row.customer as JsonObject,
     paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
-    lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
+    lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
   };
 }
 
@@ -5086,6 +5086,25 @@ async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: Issue
   return Number(rows[0]!.taken);
 }
 
+/**
+ * I1-a: locks the recorded entry a document takes over and checks it is a person's own, untouched one for the same
+ * customer, currency and amount. Refusals throw IssueRefused (inside the issue transaction, so nothing is kept).
+ */
+async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput): Promise<{ kind: 'receivable' | 'payment'; id: string } | null> {
+  const from = input.fromEntry;
+  if (!from) return null;
+  const table = from.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
+  const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM ${table} WHERE "id" = ${from.id}::uuid AND "organizationId" = ${input.organizationId}::uuid FOR UPDATE`;
+  if (locked.length === 0) throw new IssueRefused({ kind: 'entry_not_found' });
+  const entry =
+    from.kind === 'receivable'
+      ? await tx.receivable.findUniqueOrThrow({ where: { id: from.id } }).then((r) => ({ ok: r.origin === 'ADJUSTMENT' && !r.deletedAt && r.creditedMinor === 0n, customerId: r.customerId as string | null, currency: r.currency, amountMinor: r.grossMinor }))
+      : await tx.payment.findUniqueOrThrow({ where: { id: from.id } }).then((p) => ({ ok: p.origin === 'CAPTURE' && p.status === 'POSTED' && p.allocatedMinor === 0n, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor }));
+  const refusal = fromEntryRefusal(entry, input);
+  if (refusal) throw new IssueRefused(refusal);
+  return from;
+}
+
 async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
   const { organizationId } = input;
   const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
@@ -5106,12 +5125,18 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     }
     originalReceivableId = original.receivableId;
   }
+  const from = await lockFromEntryTx(tx, input);
   const plan = ledgerPlan(input, number);
   const documentId = randomUUID();
   let receivableId: string | null = null;
   let paymentId: string | null = null;
   let creditId: string | null = null;
-  if (plan.receivable) {
+  if (plan.receivable && from?.kind === 'receivable') {
+    // I1-a: the recorded Owed becomes the document's: its money is now the document's VAT split, read-only from here.
+    const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title } = plan.receivable;
+    await tx.receivable.update({ where: { id: from.id }, data: { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, origin: 'ISSUED_DOCUMENT', originId: documentId, version: { increment: 1 } } });
+    receivableId = from.id;
+  } else if (plan.receivable) {
     const receivable = await tx.receivable.create({
       data: {
         ...plan.receivable,
@@ -5128,7 +5153,13 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     });
     receivableId = receivable.id;
   }
-  if (plan.payment) {
+  if (plan.payment && from?.kind === 'payment') {
+    // I1-a: the captured Received becomes the document's, and pays its Owed (320) or the invoice it names (400).
+    const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? originalReceivableId : null;
+    const payment = await tx.payment.update({ where: { id: from.id }, data: { origin: 'ISSUED_DOCUMENT', version: { increment: 1 }, updatedAt: at } });
+    if (target) await applyAllocations(tx, payment, [{ receivableId: target, amountMinor: payment.amountMinor }], at);
+    paymentId = from.id;
+  } else if (plan.payment) {
     const { allocate, ...p } = plan.payment;
     const target = allocate === 'own' ? receivableId : allocate === 'applies' ? originalReceivableId : null;
     const { payment } = await insertPaymentTx(
@@ -5172,6 +5203,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       vatRateBasisPoints: composed.vatRateBasisPoints,
       vatMinor: composed.vatMinor,
       grossMinor: composed.grossMinor,
+      pricesIncludeVat: composed.pricesIncludeVat,
       issuer: input.issuer,
       customerId: input.customerId,
       customer: input.customer,
@@ -5200,6 +5232,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     unitPriceMinor: l.unitPriceMinor,
     discountMinor: l.discountMinor,
     netMinor: l.netMinor,
+    pricesIncludeVat: l.pricesIncludeVat,
     vatRateBasisPoints: l.vatRateBasisPoints,
     vatMinor: l.vatMinor,
   }));
