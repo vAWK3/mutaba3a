@@ -6,9 +6,10 @@ import { PORTAL_LANGUAGE_KEY } from '../../i18n/HostedLanguageProvider';
 import type { Me } from '../../session/me';
 
 /**
- * MUT-426: the floating shell. No sidebar and no header bar: the Reports corner icon, the pill (Owed · Paid · Spent ·
- * Clients) and the You island, in that order, over the page. The island carries MUT-425's contract (C3): `?from=` on
- * the way in, the profile-less `/you`, and the lit state on You; plus the exact page to return to (D7).
+ * MUT-426: the floating shell. No sidebar and no header bar: the Reports corner icon, the pill (Home · Owed · Paid ·
+ * Spent · Clients; MUT-657 put home first) and the You island, in that order, over the page. The island carries
+ * MUT-425's contract (C3): `?from=` on the way in, the profile-less `/you`, and the lit state on You; plus the exact
+ * page to return to (D7).
  */
 
 const EMPTY = ok({ items: [], nextCursor: null });
@@ -50,8 +51,8 @@ describe('the floating shell (MUT-426)', () => {
 
     const chrome = container.querySelector('.hp-chrome') as HTMLElement;
     const order = within(chrome).getAllByRole('link').map((link) => link.getAttribute('aria-label') ?? link.textContent);
-    expect(order).toEqual(['Reports', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Haddad & Partners']);
-    expect(within(pill).getAllByRole('link')).toHaveLength(4);
+    expect(order).toEqual(['Reports', 'Home', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Haddad & Partners']);
+    expect(within(pill).getAllByRole('link')).toHaveLength(5);
   });
 
   it('lights exactly one tab', async () => {

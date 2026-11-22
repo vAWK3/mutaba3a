@@ -5,7 +5,7 @@ import { syncPortalUsage } from '../analytics/portalAnalytics';
 import { setReporterUser } from '../observability/errorReporting';
 import type { HostedProfile } from '../api/client';
 import { ChartIcon } from '../components/Icons';
-import { ClientBooksIcon } from '../../components/icons/generated';
+import { ClientBooksIcon, HomeIcon } from '../../components/icons/generated';
 import { UsagePrompt } from '../components/UsagePrompt';
 import { billingGateOf } from '../data/trialPrompt';
 import { showsClientBooks } from '../pages/client-books/clientBooksRules';
@@ -20,8 +20,8 @@ import { backOf, sectionOf } from './youRoutes';
 
 /**
  * `HostedShell` (hosted-portal.md §7.1, MUT-426): no sidebar and no header bar. Three glass objects float over the
- * page: the Reports corner icon (MUT-424 eng D2), the pill with the four destinations (MUT-424, ADR-192: Owed, Paid,
- * Spent, Clients; everything else one level in) and the You island (the profile, and the way to the You page). DOM
+ * page: the Reports corner icon (MUT-424 eng D2), the pill with home and the four destinations (MUT-424, ADR-192: Owed,
+ * Paid, Spent, Clients; everything else one level in; MUT-657 put home first) and the You island (the profile, and the way to the You page). DOM
  * order is their reading order on both layouts, so the keyboard meets Reports, the tabs, then the island. One DOM for
  * every width: CSS puts the pill at the top on a desktop and at the bottom on a phone. The page still scrolls the
  * document, and reserves the chrome's space, so nothing is hidden at rest. There is no "+ Add" menu: the one create
@@ -103,12 +103,19 @@ export function HostedShell({ profile, children, pill }: { profile: HostedProfil
                   key={destination.key}
                   to={destinationPath(profile.id, destination.key)}
                   // TanStack adds aria-current to any active link; exact keeps that to the destination's own page,
-                  // where `lit` agrees, so Owed's bare /p/:id isn't lit on every page under it.
+                  // where `lit` agrees, so home's bare /p/:id isn't lit on every page under it.
                   activeOptions={{ exact: true, includeSearch: false }}
-                  className={lit === destination.key ? 'hp-tab-on' : undefined}
+                  className={[destination.key === 'home' ? 'hp-tab-home' : '', lit === destination.key ? 'hp-tab-on' : ''].filter(Boolean).join(' ') || undefined}
                   aria-current={lit === destination.key ? 'page' : undefined}
+                  // MUT-657 (E-2): on a phone home is its icon only, so the label names it there
+                  aria-label={destination.key === 'home' ? t('hosted.destinations.home') : undefined}
                 >
-                  {t(`hosted.destinations.${destination.key}`)}
+                  {destination.key === 'home' && (
+                    <span className="hp-tab-icon" aria-hidden="true">
+                      <HomeIcon size={18} />
+                    </span>
+                  )}
+                  <span className="hp-tab-label">{t(`hosted.destinations.${destination.key}`)}</span>
                 </Link>
               ))}
             </nav>

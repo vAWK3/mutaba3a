@@ -12,10 +12,10 @@ export const YOU_PARTS = ['profiles', 'account', 'app'] as const;
 export type YouPart = (typeof YOU_PARTS)[number];
 
 /**
- * The profile's sections, by their first path segment after `/p/:id` (the overview is the bare path). Reports is one
- * too: every profile has its own, so a switch from it lands on the other profile's (MUT-426 D8).
+ * The profile's sections, by their first path segment after `/p/:id` (home is the bare path). Reports is one too:
+ * every profile has its own. MUT-657: Owed's overview is `/owed`.
  */
-export const SECTION_SEGMENTS = ['clients', 'receivables', 'payments', 'documents', 'expenses', 'conversions', 'reports'] as const;
+export const SECTION_SEGMENTS = ['owed', 'clients', 'receivables', 'payments', 'documents', 'expenses', 'conversions', 'reports'] as const;
 export type SectionSegment = (typeof SECTION_SEGMENTS)[number];
 
 const SECTION_SEGMENT_INDEX = 3; // '' / 'p' / ':id' / section
@@ -26,7 +26,7 @@ function isSection(value: unknown): value is SectionSegment {
   return typeof value === 'string' && (SECTION_SEGMENTS as readonly string[]).includes(value);
 }
 
-/** The section a path is in, or undefined for the overview, the You page and anything unknown. */
+/** The section a path is in, or undefined for home, the You page and anything unknown. */
 export function sectionOf(pathname: string): SectionSegment | undefined {
   const segment = pathname.split('/')[SECTION_SEGMENT_INDEX];
   return isSection(segment) ? segment : undefined;
@@ -66,14 +66,22 @@ export function parseYouSearch(raw: Record<string, unknown>): YouSearch {
   return { ...(isSection(raw.from) ? { from: raw.from } : {}), ...(back ? { back } : {}) };
 }
 
-/** Where picking a profile goes: the kept section in that profile, or its home (D4: the open profile too). */
-export function switchTarget(profileId: string, from: SectionSegment | undefined): string {
+/** A section's own page in a profile, or the profile's home without one. */
+export function sectionPath(profileId: string, from: SectionSegment | undefined): string {
   return from ? `/p/${profileId}/${from}` : `/p/${profileId}`;
+}
+
+/**
+ * Where picking a profile goes: always its home, the open profile too (MUT-657 E-3, replacing MUT-426 D8's kept
+ * section). Home is where a visit starts, whichever page the person was on.
+ */
+export function switchTarget(profileId: string): string {
+  return `/p/${profileId}`;
 }
 
 /** Where the island's second press leaves the You page for: the exact page in this profile, else the kept section. */
 export function islandTarget(profileId: string | null, search: YouSearch): string {
   if (!profileId) return '/';
   if (search.back?.split('/')[2] === profileId) return search.back;
-  return switchTarget(profileId, search.from);
+  return sectionPath(profileId, search.from);
 }

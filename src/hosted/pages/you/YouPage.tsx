@@ -29,7 +29,7 @@ export function YouPage({ part, profile, search }: { part: YouPart; profile: Hos
     <div className="hp-you">
       <YouHeader />
       <SectionTabs variant="segmented" label={t('hosted.you.title')} tabs={tabs} />
-      {part === 'profiles' && <YouProfiles active={profile} from={search.from} />}
+      {part === 'profiles' && <YouProfiles active={profile} />}
       {part === 'account' && <YouAccount profile={profile} />}
       {part === 'app' && <YouApp profile={profile} />}
     </div>
