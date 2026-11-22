@@ -1968,6 +1968,7 @@
         "exceedsNow": "That’s more than what’s left now ({outstanding})",
         "nothingLeft": "Nothing is left on this entry any more.",
         "alreadyReversed": "This payment was already reversed. Showing the latest.",
+        "hasDocument": "A receipt was issued for this payment, so it can’t be reversed. Issue a credit note first.",
         "changed": "This changed while you were saving. Showing the latest."
       },
       "owedTitle": "Amount owed",

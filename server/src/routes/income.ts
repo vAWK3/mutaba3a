@@ -9,7 +9,8 @@ import { redateOwnCapture } from './payments.js';
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { loggedAtOf } from '../expenses/streak.js';
-import { idempotent } from '../idempotency.js';
+import { idempotent, paymentRequestKey } from '../idempotency.js';
+import { assertNoMoneyDocument } from '../payments/document-guard.js';
 import { CAPTURE_UNDO_REASON, type LedgerStore } from '../repositories/ports.js';
 import { CreateIncomeRequestSchema, IfMatchHeaderSchema, IncomeCaptureResponseSchema, IncomeIdParamSchema, IncomeResponseSchema, UpdateIncomeRequestSchema } from '../schemas.js';
 import { serializeIncomeEntry } from '../serializers.js';
@@ -39,7 +40,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Capture money received or owed, directly — no agreement, no allocation dance',
       description:
-        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.',
+        'What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future. MUT-709: a Received capture retried with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded (without receivedCount), never a second one.',
       security: PERSON_OR_MALAFAT,
       middleware: [requireScope('capture:write'), idempotent(store, 'income.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateIncomeRequestSchema) },
@@ -61,6 +62,11 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const metadata = { amount: body.amount, currency: body.currency, customerId: links.customerId, projectId: links.projectId, ...(body.kind === 'received' ? { origin: 'CAPTURE' } : {}), ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
 
       if (body.kind === 'received') {
+        // MUT-709: an earlier attempt of this request recorded it and then failed (a 5xx releases the key): answer with
+        // that payment and record nothing. receivedCount is left out: it is the count right after a new capture.
+        const clientRequestKey = paymentRequestKey(c);
+        const earlier = clientRequestKey ? await store.payments.findByClientRequestKey(organization.id, clientRequestKey) : null;
+        if (earlier) return c.json(serializeIncomeEntry({ kind: 'received', payment: earlier }), 201);
         const { payment, postedCount } = await store.payments.capture(
           {
             organizationId: organization.id,
@@ -75,6 +81,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
             createdByUserId: user.id,
             // MUT-596: Malafat acting as the person reads "(via Malafat)".
             captureSource: via ? DELEGATED_CAPTURE_SOURCE : (body.captureSource ?? null),
+            clientRequestKey,
           },
           // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
           loggedAtOf(body.capturedAt, now),
@@ -118,7 +125,7 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Income'],
       summary: 'Undo an income entry this session created',
       description:
-        '204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.',
+        '204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. MUT-709: a Received payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT; issue a credit note instead. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.',
       security: PERSON_OR_MALAFAT,
       middleware: [requireScope('capture:write')] as const,
       request: { params: IncomeIdParamSchema },
@@ -143,6 +150,10 @@ export function incomeRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         return c.body(null, 204);
       }
 
+      // MUT-709: never the money an issued receipt or invoice-receipt stands on. Checked only on this person's own capture,
+      // so the refusal says nothing about anyone else's payment (which stays a 404 below).
+      const own = await store.payments.getById(organization.id, incomeId);
+      if (own && own.status === 'POSTED' && isOwnCapture(own, user.id)) await assertNoMoneyDocument(store, organization.id, own.id);
       // MUT-61: one conditional write — the old read-then-reverse could unwind an allocation Malafat made in between.
       const undone = await store.payments.undoCapture(organization.id, incomeId, user.id, now);
       if (undone.result === 'not-found') throw new ApiError('NOT_FOUND', 'No such income entry');

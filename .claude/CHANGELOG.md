@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.127.0-mut709)
+
+### Fixed
+- A retry after a 5xx could record a payment twice: the 5xx releases the Idempotency-Key, so the handler ran again. `POST /v1/receivables/{id}/settle`, `POST /v1/income` (Received) and `POST /v1/payments` now store `sha256(claim key + "payment")` as `Payment.clientRequestKey` (unique per organization, migration `20261123000000_mut709_payment_client_request_key`) and answer a retry with the payment the first attempt committed, before checks it would now fail (nothing outstanding, a stale preview token). Why: found planning MUT-661 (R1). Files: `idempotency.ts` `paymentRequestKey`, the three routes, both stores, `payments.findByClientRequestKey`.
+- Reversing (`POST /v1/payments/{id}/reverse`), correcting (`/correct` and its preview) or undoing (`DELETE /v1/income/{id}`) a payment an issued receipt or invoice-receipt stands on is refused with 409 CONFLICT `HAS_DOCUMENT` (details `documentId`, `docType`, `number`); the way out is a credit note. Why: an issued document is final, so its money must stay (MUT-661 R2). Files: `payments/document-guard.ts`, `issuing.moneyDocumentOn` (store-guard `read`, so a key can be refused too). The portal's correction pane says so (`hosted.correct.errors.hasDocument`).
+
+---
+
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 
 ### Changed

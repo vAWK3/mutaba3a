@@ -1026,6 +1026,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const d = this.issuedDocMap.get(id);
       return d && d.organizationId === organizationId ? cloneIssued(d) : null;
     },
+    moneyDocumentOn: async (organizationId, paymentId) => {
+      const d = [...this.issuedDocMap.values()]
+        .filter((x) => x.organizationId === organizationId && x.paymentId === paymentId && (x.docType === 'RECEIPT' || x.docType === 'TAX_INVOICE_RECEIPT'))
+        .sort((a, b) => a.issuedAt.getTime() - b.issuedAt.getTime())[0];
+      return d ? { id: d.id, docType: d.docType, number: d.number } : null;
+    },
     list: async (organizationId, filter, page) => {
       const rows = [...this.issuedDocMap.values()]
         .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
@@ -3073,6 +3079,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const created = this.insertPayment(input, new Date(at.getTime() + 1));
       return { reversed: { ...payment }, ...created };
     },
+    findByClientRequestKey: async (organizationId, clientRequestKey) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.clientRequestKey === clientRequestKey)),
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
       const { payment } = await this.payments.create({ ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
@@ -3144,6 +3151,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const seq = (this.counters.get(counterKey) ?? 0) + 1;
     this.counters.set(counterKey, seq);
     const { allocations: requested, ...rest } = input;
+    // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
+    if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
     const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
     const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);

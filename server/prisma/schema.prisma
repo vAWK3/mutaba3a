@@ -1079,10 +1079,14 @@ model Payment {
   version            Int           @default(1)
   createdAt          DateTime      @default(now())
   updatedAt          DateTime      @default(now())
+  /// MUT-709: sha256 of the recording request's Idempotency-Key. A retry after a 5xx (which releases the key) finds
+  /// this payment instead of recording it again. Null for payments recorded before it and for writers with no key.
+  clientRequestKey   String?       @db.VarChar(64)
 
   allocations PaymentAllocation[]
 
   @@unique([organizationId, number])
+  @@unique([organizationId, clientRequestKey])
   @@index([organizationId, customerId])
   @@index([organizationId, projectId])
   /// MUT-481: GET /v1/payments?receiptNumber= (exact match).

@@ -387,7 +387,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.126.0-mut659';
+export const API_VERSION = '1.127.0-mut709';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is

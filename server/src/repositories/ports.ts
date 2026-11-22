@@ -1374,6 +1374,8 @@ export interface PaymentRecord {
   version: number;
   createdAt: Date;
   updatedAt: Date;
+  /** MUT-709: the recording request's key (`paymentRequestKey`); absent or null when it had none. */
+  clientRequestKey?: string | null;
 }
 
 export interface AllocationRecord {
@@ -1414,6 +1416,8 @@ export interface CreatePaymentInput {
   origin: PaymentOrigin;
   captureSource: string | null;
   allocations: AllocationInput[];
+  /** MUT-709: `paymentRequestKey` of the request that records it; unique per organization. */
+  clientRequestKey?: string | null;
 }
 
 /**
@@ -1434,6 +1438,8 @@ export interface CaptureReceivedInput {
   requestId: string | null;
   createdByUserId: string;
   captureSource: string | null;
+  /** MUT-709: as on CreatePaymentInput. */
+  clientRequestKey?: string | null;
 }
 
 /** The reversal reason `payments.undoCapture` records (and the route audits). */
@@ -1533,6 +1539,8 @@ export interface PaymentRepository {
    * InsufficientCapacity / LockConflict as `create` does. Null when no such payment.
    */
   correct(organizationId: string, paymentId: string, input: CorrectPaymentInput, at: Date): Promise<{ reversed: PaymentRecord; payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
+  /** MUT-709: the payment an earlier attempt of the same request recorded (any status), if any. */
+  findByClientRequestKey(organizationId: string, clientRequestKey: string): Promise<PaymentRecord | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
   /**
@@ -4709,6 +4717,11 @@ export interface IssuingRepository {
   /** One transaction: the next gap-free number, the document and its lines, and its ledger rows. */
   issue(input: IssueDocumentInput, at: Date): Promise<IssueResult>;
   getById(organizationId: string, id: string): Promise<IssuedDocumentRecord | null>;
+  /**
+   * MUT-709: the first receipt or invoice-receipt issued for this payment (`IssuedDocument.paymentId`), or null. Only
+   * what a refusal names, so any principal that may reverse a payment can ask, with or without issuing access.
+   */
+  moneyDocumentOn(organizationId: string, paymentId: string): Promise<{ id: string; docType: IssuedDocType; number: number } | null>;
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
