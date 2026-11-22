@@ -5033,6 +5033,26 @@ export const IssuerDetailsSchema = z
   })
   .openapi('IssuerDetails');
 
+/** MUT-571: a profile's connection to the Tax Authority. */
+export const TaxAuthorityStatusSchema = z
+  .object({
+    state: z.enum(['none', 'connected', 'expired']),
+    connectedAt: z.string().datetime().nullable(),
+    until: z.string().datetime().nullable().openapi({ description: 'When the consent ends (90 days after it was given); connect again before it' }),
+    environment: z.string().nullable().openapi({ description: 'sandbox or production' }),
+  })
+  .openapi('TaxAuthorityStatus');
+
+export const TaxAuthorityConnectSchema = z.object({ authorizeUrl: z.string().url().openapi({ description: 'Open it in the browser: the Tax Authority sign-in' }) }).openapi('TaxAuthorityConnect');
+
+/** MUT-572: the choice for a held allocation number, naming the held request by its Idempotency-Key. */
+export const AllocationDecisionRequestSchema = z
+  .object({
+    heldKey: z.string().min(8).max(128).openapi({ description: 'The Idempotency-Key of the issue request that was held' }),
+    choice: z.enum(['CANCEL', 'FURTHER_OBJECTION']),
+  })
+  .openapi('AllocationDecisionRequest');
+
 /** MUT-646: the setup's defaults step. Replaces all of them; If-Match is the details' version. */
 export const IssuerDefaultsRequestSchema = z
   .object({
@@ -5102,6 +5122,10 @@ export const IssueDocumentRequestSchema = z
       .optional()
       .openapi({ description: 'I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH).' }),
     notes: z.string().max(1000).nullable().optional(),
+    withoutAllocation: z
+      .object({ heldKey: z.string().min(8).max(128) })
+      .optional()
+      .openapi({ description: 'MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first.' }),
     lines: z.array(IssueLineRequestSchema).min(1).max(200),
   })
   .openapi('IssueDocumentRequest');

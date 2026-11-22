@@ -15,7 +15,7 @@ import { ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AllocationOutcome, CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   ErrorEnvelopeSchema,
   IssueDocumentRequestSchema,
@@ -40,6 +40,8 @@ import { serializeComposedTotals, serializeIssuedDocument, serializeIssuer } fro
 import { z } from '@hono/zod-openapi';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
+import { registerTaxAuthorityRoutes, reportDecision } from './tax-authority.js';
+import { allocationInvoiceId, allocator, approvalRequest, needsAllocation, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
 
 /** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */
 const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
@@ -121,7 +123,27 @@ export interface IssuedPdf {
   logoFailed?(details: { organizationId: string; documentId: string; error: unknown }): void;
 }
 
-export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null): OpenAPIHono<AppEnv> {
+/** MUT-572: an allocation that didn't come back, as the answer the person can act on. Nothing was issued in any case. */
+function allocationError(outcome: Exclude<AllocationOutcome, { kind: 'allocated' }>): ApiError {
+  switch (outcome.kind) {
+    case 'not_connected':
+      return new ApiError('CONFLICT', 'This invoice needs an allocation number: connect the profile to the Tax Authority first', { reason: 'TAX_AUTHORITY_NOT_CONNECTED' });
+    case 'held':
+      return new ApiError('CONFLICT', 'The Tax Authority held the allocation number for this invoice', { reason: 'ALLOCATION_HELD', choices: ['CANCEL', 'CONTINUE', 'FURTHER_OBJECTION'], message: outcome.message });
+    case 'refused':
+      return new ApiError('VALIDATION_FAILED', 'The Tax Authority refused the allocation request', { reason: 'ALLOCATION_REFUSED', errors: outcome.errors });
+    case 'unavailable':
+      return new ApiError('TAX_AUTHORITY_UNAVAILABLE', 'The Tax Authority did not answer; nothing was issued. Send the same request again.');
+  }
+}
+
+/** MUT-571/572: the Tax Authority connection, when this server has one configured; the portal origin the callback returns to. */
+export interface IssuingTaxAuthority {
+  deps: TaxAuthorityDeps | null;
+  portalOrigin: string | null;
+}
+
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   /** The selected profile, if issuing is on for it. The feature is the owner's, so co-owners and accountants see the same. */
@@ -408,11 +430,13 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   );
 
   async function setupOf(organizationId: string) {
-    const [issuer, setup] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId)]);
+    const [issuer, setup, connection] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId), tax.deps ? store.issuing.getTaxConnection(organizationId) : null]);
+    // MUT-571: the Tax Authority step is done while the connection is good; until then (or without one here) it waits.
+    const connected = !!tax.deps && statusOf(connection, tax.deps.client.environment, new Date()).state === 'connected';
     const missing = setupMissing(issuer, setup);
     const done = (ok: boolean) => (ok ? ('done' as const) : ('todo' as const));
     return {
-      steps: { details: done(!!issuer), logo: done(!!setup?.logoId), defaults: done(!!setup?.defaultsSavedAt), numbering: done(!!setup?.numberingAnsweredAt), taxAuthority: 'later' as const },
+      steps: { details: done(!!issuer), logo: done(!!setup?.logoId), defaults: done(!!setup?.defaultsSavedAt), numbering: done(!!setup?.numberingAnsweredAt), taxAuthority: connected ? ('done' as const) : ('later' as const) },
       canIssue: missing.length === 0,
       missing,
       introSeen: !!setup?.introSeenAt,
@@ -583,6 +607,20 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         requestKey: c.req.valid('header')['idempotency-key'],
         requestId: c.get('requestId'),
       };
+      // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
+      if (tax.deps && needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null })) {
+        const ta = tax.deps;
+        if (body.withoutAllocation) {
+          // Held earlier: the person chose to issue without a number; the Tax Authority hears CONTINUE first.
+          await reportDecision(ta, { vatNumberOf: async () => Number(issuer.vatId) }, organization.id, body.withoutAllocation.heldKey, 'CONTINUE', now);
+        } else {
+          const docType = body.docType as 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT';
+          const invoiceId = allocationInvoiceId(organization.id, input.requestKey);
+          input.allocate = allocator(ta, organization.id, now, (number) =>
+            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber }),
+          );
+        }
+      }
       const result = await store.issuing.issue(input, now);
       switch (result.kind) {
         case 'date_before_last':
@@ -597,6 +635,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           throw new ApiError('VALIDATION_FAILED', 'The receipt is more than the tax invoice still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
         case 'entry_not_found':
           throw new ApiError('NOT_FOUND', 'No such entry to issue for, or it already has a document', { field: 'fromEntry' });
+        case 'allocation_failed':
+          throw allocationError(result.outcome);
         case 'entry_mismatch':
           throw new ApiError('VALIDATION_FAILED', `The document's ${result.field} must match the entry's`, { field: 'fromEntry', reason: 'ENTRY_MISMATCH', mismatch: result.field });
         case 'issued':
@@ -768,6 +808,10 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   }
 
   if (issuedPdf) registerPdfRoutes(issuedPdf.render);
+  registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, vatNumberOf: async (id) => {
+    const issuer = await store.issuing.getIssuer(id);
+    return issuer ? Number(issuer.vatId) : null;
+  } });
 
   app.openapi(
     createRoute({

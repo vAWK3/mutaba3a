@@ -201,6 +201,9 @@ import type { IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
+/** MUT-571 */
+const TAX_CONNECTION_SELECT = { organizationId: true, environment: true, accessTokenSealed: true, accessExpiresAt: true, refreshTokenSealed: true, refreshExpiresAt: true, connectedByUserId: true, connectedAt: true, version: true } as const;
+
 /** MUT-646 */
 const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
 const toLogo = (row: { id: string; organizationId: string; contentType: string; bytes: Uint8Array; sha256: string; createdAt: Date }): IssuerLogoRecord => ({
@@ -835,6 +838,27 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.issuerLogo.findFirst({ where: { id: logoId, organizationId } });
       return row ? toLogo(row) : null;
     },
+    getTaxConnection: (organizationId) => this.prisma.taxAuthorityConnection.findUnique({ where: { organizationId }, select: TAX_CONNECTION_SELECT }),
+    putTaxConnection: (record) =>
+      this.prisma.taxAuthorityConnection.upsert({
+        where: { organizationId: record.organizationId },
+        create: { ...record, version: 1 },
+        update: { ...record, version: { increment: 1 } },
+        select: TAX_CONNECTION_SELECT,
+      }),
+    deleteTaxConnection: async (organizationId) => (await this.prisma.taxAuthorityConnection.deleteMany({ where: { organizationId } })).count > 0,
+    withTaxConnectionLock: (organizationId, fn) =>
+      // The row is locked for the refresh's round trip, so a second caller waits and then sees the new tokens.
+      this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT 1 FROM "tax_authority_connections" WHERE "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          const current = await tx.taxAuthorityConnection.findUnique({ where: { organizationId }, select: TAX_CONNECTION_SELECT });
+          const { update, result } = await fn(current);
+          if (update) await tx.taxAuthorityConnection.update({ where: { organizationId }, data: { ...update, version: { increment: 1 } } });
+          return result;
+        },
+        { timeout: 30_000, maxWait: 30_000 },
+      ),
     counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
     setStartingNumber: (organizationId, docType, start) =>
       this.prisma.$transaction(async (tx) => {
@@ -852,7 +876,8 @@ export class PrismaLedgerStore implements LedgerStore {
       const replay = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
       if (replay) return { kind: 'issued', document: replay, created: false };
       try {
-        return await this.prisma.$transaction((tx) => issueTx(tx, input, at), CORRECT_TX_OPTIONS);
+        // MUT-572: an allocation request waits on the Tax Authority inside the issue (at most its timeout), so it gets longer.
+        return await this.prisma.$transaction((tx) => issueTx(tx, input, at), input.allocate ? ISSUE_WITH_ALLOCATION_TX_OPTIONS : CORRECT_TX_OPTIONS);
       } catch (err) {
         if (err instanceof IssueRefused) return err.result;
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -4299,6 +4324,8 @@ const RECEIPT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
 
 /** MUT-443 (review 1): a correction does a reversal's and a payment's writes in one transaction. */
 const CORRECT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
+/** MUT-572 (ADR-264): an issue that asks for an allocation number holds its counter for the Tax Authority's answer. */
+const ISSUE_WITH_ALLOCATION_TX_OPTIONS = { timeout: 40_000, maxWait: 30_000 } as const;
 
 /**
  * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
@@ -5210,6 +5237,14 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     originalReceivableId = original.receivableId;
   }
   const from = await lockFromEntryTx(tx, input);
+  // MUT-572 (ADR-264): every check has passed and the counter is locked; the Tax Authority is asked now, so a refusal
+  // rolls the whole issue back and takes no number.
+  let allocationNumber = input.allocationNumber;
+  if (input.allocate) {
+    const outcome = await input.allocate(number);
+    if (outcome.kind !== 'allocated') throw new IssueRefused({ kind: 'allocation_failed', outcome });
+    allocationNumber = outcome.number;
+  }
   const plan = ledgerPlan(input, number);
   const documentId = randomUUID();
   let receivableId: string | null = null;
@@ -5300,7 +5335,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       // Review fix 5: a receipt keeps the invoice it pays.
       originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
-      allocationNumber: input.allocationNumber,
+      allocationNumber,
       receivableId,
       paymentId,
       creditId,

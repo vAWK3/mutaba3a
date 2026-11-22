@@ -92,6 +92,11 @@ const ISSUING_OPERATIONS = [
   'PUT /v1/issuing/numbering',
   'GET /v1/issuing/setup',
   'POST /v1/issuing/setup/intro-seen',
+  // MUT-571/572: the Tax Authority connection and a held allocation's choice.
+  'GET /v1/issuing/tax-authority',
+  'POST /v1/issuing/tax-authority/connect',
+  'DELETE /v1/issuing/tax-authority',
+  'POST /v1/issuing/allocation-decisions',
   'GET /v1/issuing/settings',
   'PUT /v1/issuing/starting-numbers/{docType}',
   'GET /v1/issuing/gaps',
@@ -318,6 +323,8 @@ const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DE
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup', 'GET /v1/public/fx-rates', 'POST /v1/billing/stripe/webhook', 'POST /v1/email/resend/webhook', 'POST /v1/signups', 'POST /v1/account-recovery', 'GET /v1/self-service',
   // MUT-115: passkey sign-in and its challenge, public like the password sign-in.
   'POST /v1/passkey-challenges', 'POST /v1/sessions/passkey', 'POST /v1/device-sessions/passkey',
+  // MUT-571: the Tax Authority sends the browser back here; it trusts only its signed state.
+  'GET /v1/issuing/tax-authority/callback',
   // MUT-618 (ADR-256): the emailed sign-in code, asked for and used while signed out.
   'POST /v1/sign-in-codes', 'POST /v1/device-sign-in-codes', 'POST /v1/sessions/code', 'POST /v1/device-sessions/code',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
