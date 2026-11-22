@@ -59,6 +59,17 @@ test('signed in, the portal opens on home: an Add lane beside what is waiting, a
     await expect(addLane(page).getByText('Drop receipts here')).toBeVisible();
     await expect(addLane(page).getByRole('button', { name: 'Add receipt' })).toBeVisible();
     await expect(addLane(page).getByRole('button', { name: 'Add income' })).toBeVisible();
+    // A desktop has a fine pointer: no camera button
+    await expect(addLane(page).getByRole('button', { name: 'Take a photo' })).toBeHidden();
+  });
+
+  await step('At a phone’s width the drop zone gives way to the buttons', async () => {
+    const desktop = page.viewportSize();
+    await page.setViewportSize({ width: 375, height: 812 });
+    await expect(addLane(page).getByText('Drop receipts here')).toBeHidden();
+    await expect(addLane(page).getByRole('button', { name: 'Add receipt' })).toBeVisible();
+    if (desktop) await page.setViewportSize(desktop);
+    await expect(addLane(page).getByText('Drop receipts here')).toBeVisible();
   });
 
   await step('The Waiting lane: receipts to review as cards, overdue clients by name, most late first', async () => {

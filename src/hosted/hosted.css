@@ -1746,9 +1746,10 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-home-drop-over { border-color: var(--accent); background: var(--accent-subtle); }
 .hp-home-add-row { display: flex; gap: var(--space-2); }
 .hp-home-add-row > * { flex: 1; }
-/* Take a photo only where there is a camera to hand: a coarse pointer (a phone, a tablet) */
-.hp-home-photo { display: none; }
-@media (pointer: coarse) { .hp-home-photo { display: inline-flex; } }
+/* Take a photo only where there is a camera to hand: a coarse pointer (a phone, a tablet). Scoped to the row so it
+   outranks `.btn`'s display, which loads after this file */
+.hp-home-add-row .hp-home-photo { display: none; }
+@media (pointer: coarse) { .hp-home-add-row .hp-home-photo { display: inline-flex; } }
 .hp-home-waiting { display: flex; flex-direction: column; gap: var(--space-3); }
 .hp-home-group-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2-5); }
 .hp-home-group-head h2 { margin: 0; font-size: var(--text-body); font-family: inherit; font-weight: var(--weight-semibold); }
