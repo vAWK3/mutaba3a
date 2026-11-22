@@ -1471,16 +1471,17 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(row, { lastUsedStep: step, updatedAt: at });
       return true;
     },
-    recordFailure: async (userId, at, policy) => {
+    reserveTry: async (userId, at, policy) => {
       const row = this.twoFactorRows.get(userId);
-      if (!row) return { lockedUntil: null };
+      if (!row) return { allowed: false, lockedUntil: null };
+      if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
       const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
       row.failures = fresh ? 1 : row.failures + 1;
       row.failuresSince = fresh ? at : row.failuresSince;
-      if (row.failures < policy.lockAfter) return { lockedUntil: null };
+      if (row.failures < policy.lockAfter) return { allowed: true, lockedUntil: null };
       const lockedUntil = new Date(at.getTime() + policy.lockMs);
       Object.assign(row, { lockedUntil, failures: 0, failuresSince: null });
-      return { lockedUntil };
+      return { allowed: true, lockedUntil };
     },
     clearFailures: async (userId) => {
       const row = this.twoFactorRows.get(userId);

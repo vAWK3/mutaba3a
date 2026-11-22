@@ -1404,19 +1404,21 @@ export class PrismaLedgerStore implements LedgerStore {
       });
       return count === 1;
     },
-    recordFailure: (userId, at, policy) =>
+    reserveTry: (userId, at, policy) =>
       this.prisma.$transaction(async (tx) => {
-        const [row] = await tx.$queryRaw<Array<{ failures: number; failuresSince: Date | null }>>`SELECT failures, "failuresSince" FROM two_factor WHERE "userId" = ${userId}::uuid FOR UPDATE`;
-        if (!row) return { lockedUntil: null };
+        // Review 2: the person's two_factor row lock serializes parallel tries, so no more than `lockAfter` pass.
+        const [row] = await tx.$queryRaw<Array<{ failures: number; failuresSince: Date | null; lockedUntil: Date | null }>>`SELECT failures, "failuresSince", "lockedUntil" FROM two_factor WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        if (!row) return { allowed: false, lockedUntil: null };
+        if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
         const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
         const failures = fresh ? 1 : row.failures + 1;
         if (failures < policy.lockAfter) {
           await tx.twoFactor.update({ where: { userId }, data: { failures, failuresSince: fresh ? at : row.failuresSince } });
-          return { lockedUntil: null };
+          return { allowed: true, lockedUntil: null };
         }
         const lockedUntil = new Date(at.getTime() + policy.lockMs);
         await tx.twoFactor.update({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil } });
-        return { lockedUntil };
+        return { allowed: true, lockedUntil };
       }),
     clearFailures: async (userId) => {
       await this.prisma.twoFactor.updateMany({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil: null } });
@@ -1456,13 +1458,12 @@ export class PrismaLedgerStore implements LedgerStore {
     findChallenge: async (tokenDigest, at) =>
       mapNullable(await this.prisma.twoFactorChallenge.findFirst({ where: { tokenDigest, consumedAt: null, expiresAt: { gt: at } } }), toTwoFactorChallenge),
     spendAttempt: async (id, at, maxAttempts) => {
-      const { count } = await this.prisma.twoFactorChallenge.updateMany({
-        where: { id, consumedAt: null, expiresAt: { gt: at }, attempts: { lt: maxAttempts } },
-        data: { attempts: { increment: 1 } },
-      });
-      if (count === 0) return { spent: false, triesLeft: 0 };
-      const after = await this.prisma.twoFactorChallenge.findUnique({ where: { id }, select: { attempts: true } });
-      return { spent: true, triesLeft: Math.max(0, maxAttempts - (after?.attempts ?? maxAttempts)) };
+      // One conditional UPDATE … RETURNING: the count and the tries left come from the same statement.
+      const [row] = await this.prisma.$queryRaw<Array<{ attempts: number }>>`
+        UPDATE two_factor_challenges SET attempts = attempts + 1
+        WHERE id = ${id}::uuid AND "consumedAt" IS NULL AND "expiresAt" > ${at} AND attempts < ${maxAttempts}
+        RETURNING attempts`;
+      return row ? { spent: true, triesLeft: Math.max(0, maxAttempts - Number(row.attempts)) } : { spent: false, triesLeft: 0 };
     },
     consumeChallenge: async (id, at) => {
       const { count } = await this.prisma.twoFactorChallenge.updateMany({ where: { id, consumedAt: null, expiresAt: { gt: at } }, data: { consumedAt: at } });

@@ -6,7 +6,8 @@ import { deleteCookie, getCookie, setCookie } from 'hono/cookie';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
 import { defaultDisplayName } from '../auth/self-service.js';
 import { isSamePortalOrigin, requestClientIp, sessionCookieName, sessionDigest, sessionLifetime, type SignInThrottle } from '../auth/sessions.js';
-import { auditToMembers, invalidCredentials, issueSession, verifyPasskey, verifyPassword } from '../auth/sign-in.js';
+import { auditToMembers, beginOrIssue, invalidCredentials, verifyPasskey, verifyPassword } from '../auth/sign-in.js';
+import type { TwoFactorFlow } from '../auth/two-factor-flow.js';
 import { normalizeEmail, type PasswordHasher } from '../auth/users.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import { ApiError } from '../errors.js';
@@ -71,6 +72,8 @@ export interface MalafatSignInRouteOptions {
   ipLimiter: RateLimiter;
   terms: CurrentTerms;
   webauthn: WebauthnConfig | null;
+  /** MUT-710 (ADR-275 D6): an already-linked person's Malafat sign-in passes the second step like any first step. */
+  twoFactor: TwoFactorFlow;
   config: MalafatSignInConfig | null;
 }
 
@@ -122,7 +125,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
   const digest = (kind: string, value: string) => sessionDigest(settings.pepper, `malafat-${kind}:${value}`);
-  const signInDeps = { store, passwordHasher: options.passwordHasher, throttle: options.throttle, pepper: settings.pepper };
+  const signInDeps = { store, passwordHasher: options.passwordHasher, throttle: options.throttle, pepper: settings.pepper, twoFactor: options.twoFactor };
 
   const configured = (): { client: MalafatSignInClient; config: MalafatSignInConfig } => {
     if (!client || !options.config || !settings.portalOrigin) throw new ApiError('NOT_FOUND', 'Not found');
@@ -147,7 +150,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
   /** A session as the client takes it: the portal's cookie, or the phone's device token (R4). */
   async function signedIn(c: Context<AppEnv>, kind: 'web' | 'app', user: UserRecord) {
     const sessionKind = kind === 'app' ? 'device' : 'cookie';
-    const { user: person, token } = await issueSession(c, signInDeps, user, { sessionKind, method: 'malafat' }, sessionLifetime(sessionKind, settings));
+    const { user: person, token } = await beginOrIssue(c, signInDeps, user, { sessionKind, method: 'malafat' }, sessionLifetime(sessionKind, settings));
     if (kind === 'web') setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
     const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
     return { state: 'signed_in' as const, me, ...(kind === 'app' ? { token } : {}) };
@@ -262,6 +265,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       responses: {
         200: { description: 'Signed in, or the next step', content: { 'application/json': { schema: SignInStateSchema } } },
         401: errorResponse('INVALID_CREDENTIALS: the linked account can no longer sign in'),
+        403: errorResponse('TWO_FACTOR_REQUIRED — the account has two-step sign-in on: finish with POST /v1/sessions/two-factor (web) or /v1/device-sessions/two-factor (app) (MUT-710)'),
         404: errorResponse('NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match'),
         429: errorResponse('RATE_LIMITED'),
       },
@@ -300,6 +304,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       responses: {
         200: { description: 'Proven: consent next', content: { 'application/json': { schema: SignInStateSchema } } },
         401: errorResponse('INVALID_CREDENTIALS (counts toward the account’s lockout)'),
+        403: errorResponse('TWO_FACTOR_LINK_UNAVAILABLE — the account has two-step sign-in on (MUT-710 D6)'),
         404: errorResponse('NOT_FOUND reason MALAFAT_TICKET_INVALID'),
         429: errorResponse('RATE_LIMITED'),
       },
@@ -324,6 +329,11 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       }
       // A passkey of another account proves nothing about this one.
       if (proven.id !== target.id) throw invalidCredentials();
+      // MUT-710 (D6, review 8): consent writes the link before any session exists, so with two-step sign-in on a password
+      // alone could attach an identity. Refused until linking after the second step is built (TECH_DEBT); said only to
+      // whoever just proved the account.
+      if (await store.twoFactor.get(target.id)) throw twoFactorLinkUnavailable();
+      options.throttle.clear(normalizeEmail(target.email));
       await store.malafatSignIns.proveLink({ id: flow.id, userId: target.id, at: now });
       return c.json(ticketState({ ...flow, linkProvenAt: now }, 'needs_consent', body.ticket), 200);
     },
@@ -341,6 +351,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       request: { body: { required: true, content: { 'application/json': { schema: ConsentRequestSchema } } } },
       responses: {
         200: { description: 'Signed in', content: { 'application/json': { schema: SignInStateSchema } } },
+        403: errorResponse('TWO_FACTOR_LINK_UNAVAILABLE — the account turned on two-step sign-in after /link (MUT-710 D6)'),
         404: errorResponse('NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven'),
         409: errorResponse('CONFLICT reason IDENTITY_LINKED_ELSEWHERE (this Malafat person is another account’s) or EMAIL_TAKEN; TERMS_VERSION_STALE'),
         422: errorResponse('VALIDATION_FAILED: a new account without defaultCurrency or timezone'),
@@ -362,6 +373,8 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
       // Refused before anything is written: the Malafat person is already another account's.
       const existing = await store.externalIdentities.findBySubject('MALAFAT', facts.tenantId, facts.subject);
       if (existing?.userId && existing.userId !== flow.userId) throw linkedElsewhere();
+      // MUT-710 (D6): two-step sign-in turned on between /link and /consent.
+      if (!creates && flow.userId && (await store.twoFactor.get(flow.userId))) throw twoFactorLinkUnavailable();
       if (creates && (await store.users.findByEmail(normalizeEmail(facts.email)))) throw new ApiError('CONFLICT', 'An MTB3A account already has this email; sign in to it to connect Malafat', { reason: 'EMAIL_TAKEN' });
       if (!(await store.malafatSignIns.claimCompletion(ticketDigest, now))) throw ticketInvalid();
 
@@ -437,4 +450,8 @@ function sameDigest(a: string, b: string): boolean {
   const left = Buffer.from(a);
   const right = Buffer.from(b);
   return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function twoFactorLinkUnavailable(): ApiError {
+  return new ApiError('TWO_FACTOR_LINK_UNAVAILABLE', 'Your account has two-step sign-in on; connecting Malafat to it isn’t available yet. Sign in with your password instead.');
 }

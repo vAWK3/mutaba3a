@@ -1,3 +1,4 @@
+import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
 import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
 import { TokenBox } from './israel/tax-authority/token-box.js';
 import { RegistryLookup } from './israel/registry.js';
@@ -217,6 +218,9 @@ const app = createApp({
   store,
   logger,
   rateLimiter,
+  // MUT-710 (ADR-275 D4): its own key on production and staging (config refuses to start without it); elsewhere
+  // derived from the session pepper, as the Tax Authority's box is.
+  twoFactorKeys: new TwoFactorKeys(config.TWO_FACTOR_SEAL_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
   // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; while null, the PDF routes answer 503
   // SIGNING_NOT_CONFIGURED. A kms signer whose chain is wrong stops the boot here (documentSignerFrom).
   documentSigner,
@@ -364,6 +368,8 @@ const mailPruneTimer = setInterval(() => {
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
   // MUT-618 (D3): sign-in codes live 10 minutes; rows go a day after they expire.
   void store.signInCodes.prune(new Date(Date.now() - SIGN_IN_CODE_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'sign-in code prune failed'));
+  // MUT-710 (ADR-275 §3): two-step challenges live 10 minutes; rows go a day after they expire.
+  void store.twoFactor.pruneChallenges(new Date(Date.now() - TWO_FACTOR_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'two-step challenge prune failed'));
   // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);

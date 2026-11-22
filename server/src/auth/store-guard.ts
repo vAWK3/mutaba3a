@@ -170,7 +170,7 @@ export const STORE_ACCESS: StoreAccess = {
     enable: { write: 'identity' },
     disable: { write: 'identity' },
     recordStep: 'sessionOnly',
-    recordFailure: 'sessionOnly',
+    reserveTry: 'sessionOnly',
     clearFailures: 'sessionOnly',
     replaceRecoveryCodes: { write: 'identity' },
     useRecoveryCode: 'sessionOnly',

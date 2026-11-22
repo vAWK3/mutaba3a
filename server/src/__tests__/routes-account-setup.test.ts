@@ -86,6 +86,8 @@ describe('POST /v1/account-setup/check (MUT-235)', () => {
       purpose: 'SETUP',
       expiresAt: '2026-10-23T09:00:00.000Z',
       termsVersion: CURRENT_TERMS.version,
+      // MUT-710 (D11): the second step redeeming asks for; off here.
+      twoFactor: null,
     });
   });
 

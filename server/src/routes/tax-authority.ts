@@ -1,6 +1,7 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
 import { TaxAuthorityError, type DecisionChoice } from '../israel/tax-authority/client.js';
 import { accessTokenFor, allocationInvoiceId, connectionFrom, newState, readState, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
@@ -63,7 +64,7 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       summary: 'Start connecting this profile to the Tax Authority',
       description: 'MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only.',
       security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write')] as const,
+      middleware: [requireScope('issuing:write'), requireTwoFactor(deps.store)] as const,
       responses: { 200: json('Where to sign in', TaxAuthorityConnectSchema), ...notFoundResponse, ...errorResponses },
     }),
     async (c) => {
@@ -137,7 +138,7 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       description:
         'MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264).',
       security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write')] as const,
+      middleware: [requireScope('issuing:write'), requireTwoFactor(deps.store)] as const,
       request: { body: { required: true, content: { 'application/json': { schema: AllocationDecisionRequestSchema } } } },
       responses: { 204: { description: 'Reported' }, ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),

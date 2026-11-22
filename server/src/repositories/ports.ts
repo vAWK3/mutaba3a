@@ -548,10 +548,13 @@ export interface TwoFactorRepository {
   /** D4: records a TOTP step only if it is after the last one used; false = already used (replay or a lost race). */
   recordStep(userId: string, step: number, at: Date): Promise<boolean>;
   /**
-   * D3: one wrong second step. Counts within the window; the try that reaches `lockAfter` sets lockedUntil and
-   * restarts the count. Returns the lock's end when this try set it.
+   * D3 (review 2): reserves one second-step try before the code is checked, under the person's row lock, so parallel
+   * tries can't slip past the lock. Counts within the window; the try that reaches `lockAfter` sets lockedUntil and
+   * restarts the count (`lockedUntil` returned: this try set it). While locked, or with two-step sign-in off, nothing
+   * is counted and `allowed` is false (`lockedUntil` = the lock's end, or null when off). A right code then calls
+   * clearFailures, which also lifts a lock its own reservation set.
    */
-  recordFailure(userId: string, at: Date, policy: { lockAfter: number; windowMs: number; lockMs: number }): Promise<{ lockedUntil: Date | null }>;
+  reserveTry(userId: string, at: Date, policy: { lockAfter: number; windowMs: number; lockMs: number }): Promise<{ allowed: boolean; lockedUntil: Date | null }>;
   clearFailures(userId: string): Promise<void>;
   replaceRecoveryCodes(userId: string, digests: string[], at: Date, audit: AuditEventInput[]): Promise<void>;
   /** Uses one unused code; false when no unused code has this digest. Returns the codes left on success. */

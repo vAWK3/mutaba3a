@@ -1504,6 +1504,8 @@ export const SetupLinkCheckResponseSchema = z
       expiresAt: z.string().datetime(),
       /** MUT-324: the terms version the setup page shows and sends back as `acceptedTermsVersion`. */
       termsVersion: TermsVersionSchema,
+      /** MUT-710 (D11): the person's second step, which redeeming this link asks for; null when two-step sign-in is off. */
+      twoFactor: z.object({ method: z.enum(['totp', 'email']) }).nullable().optional(),
     }),
     z.object({
       state: z.enum(['expired', 'used', 'superseded', 'invalid']),
@@ -1536,8 +1538,25 @@ export const SetupLinkRedeemRequestSchema = z
     defaultCurrency: CurrencySchema.optional(),
     /** MUT-366: required for a SIGNUP link (the personal profile's IANA timezone); ignored otherwise. */
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
+    /**
+     * MUT-710 (ADR-275 D11): a person with two-step sign-in on proves it for every person link (setup, reset, an
+     * operator's link after --lock): the challenge from POST /v1/account-setup/two-factor and its code, or a recovery code.
+     */
+    challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+    recoveryCode: z.string().min(8).max(20).optional(),
   })
   .openapi('SetupLinkRedeemRequest');
+
+/** MUT-710 (D11): what a setup link's second step needs, from POST /v1/account-setup/two-factor (the TWO_FACTOR_REQUIRED details). */
+export const SetupLinkTwoFactorResponseSchema = z
+  .object({
+    challengeToken: z.string(),
+    method: z.enum(['totp', 'email']),
+    expiresAt: z.string().datetime(),
+    emailHint: z.string().optional(),
+  })
+  .openapi('SetupLinkTwoFactor');
 
 // ---- MUT-559 (ADR-245): accountant grants ---------------------------------------
 
@@ -1684,6 +1703,23 @@ export const CodeSignInRequestSchema = z
     code: z.string().regex(/^\d{6}$/),
   })
   .openapi('CodeSignInRequest');
+
+/** MUT-710 (ADR-275 D2): the challenge token from TWO_FACTOR_REQUIRED's details (43 base64url characters). */
+export const TwoFactorChallengeTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/** MUT-710 (D2): finishing a sign-in (or a setup link, D11): a 6-digit code, or one recovery code instead. */
+export const TwoFactorFinishRequestSchema = z
+  .object({
+    challengeToken: TwoFactorChallengeTokenSchema,
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional().openapi({ description: 'The authenticator app\'s code, or the emailed one' }),
+    recoveryCode: z.string().min(8).max(20).optional().openapi({ description: 'One of the ten recovery codes (xxxx-xxxx), in place of `code`; works once' }),
+  })
+  .refine((body) => (body.code === undefined) !== (body.recoveryCode === undefined), { message: 'Send either code or recoveryCode' })
+  .openapi('TwoFactorFinishRequest');
+
+/** MUT-710 (D5): POST /v1/two-factor/email-code. */
+export const TwoFactorEmailCodeRequestSchema = z.object({ challengeToken: TwoFactorChallengeTokenSchema }).openapi('TwoFactorEmailCodeRequest');
+export const TwoFactorEmailCodeResponseSchema = z.object({ expiresAt: z.string().datetime() }).openapi('TwoFactorEmailCodeResponse');
 
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');

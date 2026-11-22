@@ -1,9 +1,11 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import { STEP_UP_WINDOW_MS } from '../auth/webauthn.js';
 import { deleteCookie, setCookie } from 'hono/cookie';
 import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
-import { signIn, signInWithCode, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
+import { finishTwoFactor, signIn, signInWithCode, signInWithPasskey, warmDummyHash } from '../auth/sign-in.js';
+import type { TwoFactorFlow } from '../auth/two-factor-flow.js';
 import type { WebauthnConfig } from '../auth/webauthn.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
 import {
@@ -38,6 +40,7 @@ import {
   TermsStatusSchema,
   TrialPromptChangeSchema,
   TrialPromptSchema,
+  TwoFactorFinishRequestSchema,
 } from '../schemas.js';
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit } from '../terms-acceptance.js';
@@ -72,6 +75,8 @@ export interface SessionRouteOptions {
   webauthn?: WebauthnConfig | null;
   /** MUT-434 (D14): a password change that disconnects agents is noted here. Absent = nowhere. */
   reporter?: ErrorReporter;
+  /** MUT-710 (ADR-275): the second step every sign-in passes through when the person has it on. */
+  twoFactor: TwoFactorFlow;
 }
 
 /** Session routes that act on the person rather than an organization: no X-Mutaba3a-Profile. */
@@ -92,7 +97,15 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
   const app = new OpenAPIHono<AppEnv>();
   const cookieName = sessionCookieName(settings.secureCookie);
   const cookieOptions = { path: '/', httpOnly: true, secure: settings.secureCookie, sameSite: 'Strict' } as const;
+  const signInDeps = { store, passwordHasher, throttle, pepper: settings.pepper, twoFactor: options.twoFactor };
   warmDummyHash(passwordHasher);
+  const signInLimit = async (c: Context<AppEnv>) => {
+    const ip = await ipLimiter.check(`sign-in:${requestClientIp((name) => c.req.header(name), settings)}`, c.get('now')());
+    if (!ip.allowed) {
+      c.header('Retry-After', String(ip.retryAfterSeconds));
+      throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+    }
+  };
 
   app.openapi(
     createRoute({
@@ -105,7 +118,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('INVALID_CREDENTIALS — the same answer for every refusal'),
-        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session'),
+        403: errorResponse('CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/sessions/two-factor'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address'),
       },
@@ -124,7 +137,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const { email, password } = c.req.valid('json');
       const { user, token } = await signIn(
         c,
-        { store, passwordHasher, throttle, pepper: settings.pepper },
+        signInDeps,
         { email, password },
         'cookie',
         sessionLifetime('cookie', settings),
@@ -147,7 +160,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('INVALID_CREDENTIALS — the same answer for every refusal'),
-        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in)'),
+        403: errorResponse('CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in)'),
         404: errorResponse('NOT_FOUND — passkeys are not configured on this server'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address'),
@@ -167,7 +180,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const { challengeId, response } = c.req.valid('json');
       const { user, token } = await signInWithPasskey(
         c,
-        { store, passwordHasher, throttle, pepper: settings.pepper, webauthn },
+        { ...signInDeps, webauthn },
         { challengeId, response: response as unknown as AuthenticationResponseJSON },
         'cookie',
         sessionLifetime('cookie', settings),
@@ -190,7 +203,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       responses: {
         201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS'),
-        403: errorResponse('CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in)'),
+        403: errorResponse('CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in), or TWO_FACTOR_USE_PASSWORD — the second step is a code by email, so sign in with the password (MUT-710 D6)'),
         422: errorResponse('Validation failed'),
         429: errorResponse('Too many attempts from this address, or the email is locked out for now'),
       },
@@ -206,7 +219,36 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
       }
       const { email, code } = c.req.valid('json');
-      const { user, token } = await signInWithCode(c, { store, passwordHasher, throttle, pepper: settings.pepper }, { email, code }, 'cookie', sessionLifetime('cookie', settings));
+      const { user, token } = await signInWithCode(c, signInDeps, { email, code }, 'cookie', sessionLifetime('cookie', settings));
+      setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 201);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/sessions/two-factor',
+      tags: ['Sessions'],
+      summary: 'Finish a two-step sign-in (sets the session cookie) (MUT-710)',
+      description:
+        'After a sign-in answered 403 TWO_FACTOR_REQUIRED: send its `challengeToken` with the 6-digit code (authenticator app or email), or one recovery code instead. The challenge works once, for 10 minutes and 5 tries; 5 wrong second steps in 15 minutes lock the second step for 15 minutes (429). Answers what the first step would have: the signed-in person, and the cookie.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: TwoFactorFinishRequestSchema } } } },
+      responses: {
+        201: { description: 'Signed in; the session cookie is set', content: { 'application/json': { schema: MeSchema } } },
+        401: errorResponse('INVALID_CREDENTIALS — the account changed since the first step (disabled, closed)'),
+        403: errorResponse('CROSS_SITE_REQUEST, TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address, or the second step is locked for now (Retry-After)'),
+      },
+    }),
+    async (c) => {
+      if (!isSamePortalOrigin(c.req, settings)) {
+        throw new ApiError('CROSS_SITE_REQUEST', 'Sign in from the MTB3A portal itself');
+      }
+      await signInLimit(c);
+      const { user, token } = await finishTwoFactor(c, signInDeps, c.req.valid('json'), 'cookie', sessionLifetime('cookie', settings));
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
       return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 201);
     },

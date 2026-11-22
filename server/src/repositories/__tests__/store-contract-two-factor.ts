@@ -122,19 +122,39 @@ export function describeLedgerStoreTwoFactorContract(name: string, makeStore: ()
       expect(await store.twoFactor.useRecoveryCode(user.id, fresh, at(8))).toEqual({ used: true, left: 0 });
     });
 
-    it('five wrong second steps in the window lock it; a try outside the window starts over', async () => {
+    it('every second-step try is reserved up front; the fifth in the window locks it, and a locked person reserves nothing', async () => {
       const store = await makeStore();
       const user = await person(store);
       await enable(store, user.id);
-      for (let i = 0; i < 4; i += 1) expect(await store.twoFactor.recordFailure(user.id, at(5), POLICY)).toEqual({ lockedUntil: null });
-      expect(await store.twoFactor.recordFailure(user.id, at(6), POLICY)).toEqual({ lockedUntil: at(21) });
+      for (let i = 0; i < 4; i += 1) expect(await store.twoFactor.reserveTry(user.id, at(5), POLICY)).toEqual({ allowed: true, lockedUntil: null });
+      expect(await store.twoFactor.reserveTry(user.id, at(6), POLICY)).toEqual({ allowed: true, lockedUntil: at(21) });
       expect(await store.twoFactor.get(user.id)).toMatchObject({ lockedUntil: at(21), failures: 0 });
+      // Locked: refused without counting, until the lock ends.
+      expect(await store.twoFactor.reserveTry(user.id, at(7), POLICY)).toEqual({ allowed: false, lockedUntil: at(21) });
+      expect((await store.twoFactor.get(user.id))?.failures).toBe(0);
 
+      // A right code clears the count and the lock.
       await store.twoFactor.clearFailures(user.id);
       expect(await store.twoFactor.get(user.id)).toMatchObject({ lockedUntil: null, failures: 0 });
-      for (let i = 0; i < 4; i += 1) await store.twoFactor.recordFailure(user.id, at(22), POLICY);
-      expect(await store.twoFactor.recordFailure(user.id, at(40), POLICY)).toEqual({ lockedUntil: null });
+      for (let i = 0; i < 4; i += 1) await store.twoFactor.reserveTry(user.id, at(22), POLICY);
+      expect(await store.twoFactor.reserveTry(user.id, at(40), POLICY)).toEqual({ allowed: true, lockedUntil: null });
       expect((await store.twoFactor.get(user.id))?.failures).toBe(1);
+    });
+
+    it('parallel tries can never pass the lock: exactly five are allowed, one of them sets it', async () => {
+      const store = await makeStore();
+      const user = await person(store);
+      await enable(store, user.id);
+      const tries = await Promise.all(Array.from({ length: 12 }, () => store.twoFactor.reserveTry(user.id, at(5), POLICY)));
+      expect(tries.filter((t) => t.allowed)).toHaveLength(5);
+      expect(tries.filter((t) => t.allowed && t.lockedUntil !== null)).toHaveLength(1);
+      expect(tries.filter((t) => !t.allowed).every((t) => t.lockedUntil?.getTime() === at(20).getTime())).toBe(true);
+    });
+
+    it('a person without two-step sign-in reserves nothing', async () => {
+      const store = await makeStore();
+      const user = await person(store);
+      expect(await store.twoFactor.reserveTry(user.id, at(5), POLICY)).toEqual({ allowed: false, lockedUntil: null });
     });
 
     it('a challenge is found by its digest while live, and consumed once', async () => {

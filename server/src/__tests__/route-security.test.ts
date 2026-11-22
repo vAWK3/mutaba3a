@@ -335,6 +335,8 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   'GET /v1/issuing/tax-authority/callback',
   // MUT-618 (ADR-256): the emailed sign-in code, asked for and used while signed out.
   'POST /v1/sign-in-codes', 'POST /v1/device-sign-in-codes', 'POST /v1/sessions/code', 'POST /v1/device-sessions/code',
+  // MUT-710 (ADR-275): finishing a two-step sign-in, a fresh emailed code, and a setup link's second step: signed out, the challenge or link token in the body.
+  'POST /v1/sessions/two-factor', 'POST /v1/device-sessions/two-factor', 'POST /v1/two-factor/email-code', 'POST /v1/account-setup/two-factor',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
   'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
   // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
@@ -552,7 +554,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared session mid-loop; routes-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'session') && o.key !== 'DELETE /v1/sessions/current')) {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });
@@ -562,7 +566,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared device session mid-loop; routes-device-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'deviceSession') && o.key !== 'DELETE /v1/device-sessions/current')) {
       const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });

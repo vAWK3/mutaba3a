@@ -20,7 +20,9 @@ import {
   SetupLinkCheckResponseSchema,
   SetupLinkRedeemRequestSchema,
   SetupLinkRedeemResponseSchema,
+  SetupLinkTwoFactorResponseSchema,
 } from '../schemas.js';
+import { twoFactorRequired, type TwoFactorFlow } from '../auth/two-factor-flow.js';
 import { staleTerms, termsAcceptanceOf, termsAcceptedAudit, termsAcceptedEvent } from '../terms-acceptance.js';
 
 /**
@@ -48,12 +50,14 @@ export interface AccountSetupRouteOptions {
   logger: Logger;
   /** MUT-367: told after a SIGNUP redeem opens an account that waits for review. */
   reviewDigest: ReviewDigest;
+  /** MUT-710 (ADR-275 D11): every person link asks for the second step when the person has it on. */
+  twoFactor: TwoFactorFlow;
 }
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHono<AppEnv> {
-  const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger, reviewDigest } = options;
+  const { store, passwordHasher, settings, ipLimiter, throttle, terms, mailer, logger, reviewDigest, twoFactor } = options;
   const app = new OpenAPIHono<AppEnv>();
 
   async function guard(c: Context<AppEnv>): Promise<Date> {
@@ -109,14 +113,47 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       }
       if (state === 'valid' && found.kind === 'person' && found.link && found.person) {
         const { link, person } = found;
+        // MUT-710 (D11): the method only; the email code is mailed on POST /v1/account-setup/two-factor, never here (every page load checks).
+        const second = await twoFactor.stateOf(store, person.id);
         return c.json(
-          { state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version },
+          { state, email: person.email, locale: person.locale, purpose: link.purpose, expiresAt: link.expiresAt.toISOString(), termsVersion: terms.version, twoFactor: second ? { method: second.method } : null },
           200,
         );
       }
       // MUT-368 (D2): a dead link names what it was for, to its holder only; an unknown token names nothing.
       const purpose = state === 'valid' || state === 'invalid' ? null : found.link?.purpose ?? null;
       return c.json({ state: refusalOf(state), ...(purpose ? { purpose } : {}) }, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/account-setup/two-factor',
+      tags: ['Sessions'],
+      summary: 'Start the second step a setup link needs (MUT-710)',
+      description:
+        'For a valid person link (setup, reset, an operator link) whose person has two-step sign-in on, whatever the link is for. Creates a challenge bound to this link (10 minutes, 5 tries) and, with the email method, mails the code. Send its `challengeToken` with the code (or a recovery code) to POST /v1/account-setup.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SetupLinkCheckRequestSchema } } } },
+      responses: {
+        201: { description: 'The challenge', content: { 'application/json': { schema: SetupLinkTwoFactorResponseSchema } } },
+        403: errorResponse('CROSS_SITE_REQUEST'),
+        409: errorResponse('CONFLICT reason TWO_FACTOR_OFF — this link needs no second step'),
+        410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address, or a code was mailed a moment ago'),
+      },
+    }),
+    async (c) => {
+      const now = await guard(c);
+      const found = await lookUp(c.req.valid('json').token);
+      const state = stateOf(found, now);
+      if (state !== 'valid' || found.kind !== 'person' || !found.link || !found.person) throw unusable(refusalOf(state === 'valid' ? 'invalid' : state));
+      const second = await twoFactor.stateOf(store, found.person.id);
+      if (!second) throw new ApiError('CONFLICT', 'This link needs no second step', { reason: 'TWO_FACTOR_OFF' });
+      const issued = await twoFactor.challenge(c, store, found.person, second, { purpose: 'reset', linkId: found.link.id });
+      return c.json(issued.details, 201);
     },
   );
 
@@ -130,8 +167,8 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       request: { body: { required: true, content: { 'application/json': { schema: SetupLinkRedeemRequestSchema } } } },
       responses: {
         200: { description: 'Password set; sign in with POST /v1/sessions', content: { 'application/json': { schema: SetupLinkRedeemResponseSchema } } },
-        403: errorResponse('CROSS_SITE_REQUEST'),
         409: errorResponse('TERMS_VERSION_STALE — acceptedTermsVersion is missing or not the current terms; details.current names it'),
+        403: errorResponse('CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED'),
         410: errorResponse('SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid'),
         422: errorResponse('Validation failed (the password is 12 to 128 characters)'),
         429: errorResponse('Too many attempts from this address'),
@@ -151,12 +188,13 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     },
   );
 
-  type RedeemBody = { token: string; password: string; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
+  type RedeemBody = { token: string; password: string; challengeToken?: string | undefined; code?: string | undefined; recoveryCode?: string | undefined; termsLocale?: 'en' | 'ar' | undefined; clientRelease?: string | undefined; displayName?: string | undefined; defaultCurrency?: string | undefined; timezone?: string | undefined };
   /** MUT-367 (D22): the account's status after the redeem; PENDING_REVIEW signs in to 403 ACCOUNT_UNDER_REVIEW. */
   type Redeemed = { email: string; status: 'ACTIVE' | 'PENDING_REVIEW' };
   const redeemedStatus = (status: UserRecord['status']): Redeemed['status'] => (status === 'PENDING_REVIEW' ? 'PENDING_REVIEW' : 'ACTIVE');
 
   async function redeemPersonLink(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<Redeemed> {
+    await secondStepFor(c, link, person, body);
     const tokenDigest = sessionDigest(settings.pepper, body.token);
     // Hash before claiming, so the slow part never runs inside the transaction.
     const passwordHash = await passwordHasher.hash(body.password);
@@ -177,6 +215,20 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
       requestId: c.get('requestId'),
     });
     return { email: redeemed.email, status: redeemedStatus(redeemed.status) };
+  }
+
+  /**
+   * MUT-710 (ADR-275 D11, review 4): every person link (setup, reset, an operator's, --lock included) asks for the
+   * second step when the person has it on, whatever its purpose: after an operator --lock nulls the password the next
+   * link is SETUP, and it must not skip the step. The challenge is bound to this link and person, and is consumed here
+   * (single use, by the store's conditional update) before the slow hash; a redeem that then loses its race leaves it
+   * spent, and the person starts the step again.
+   */
+  async function secondStepFor(c: Context<AppEnv>, link: PersonSetupLinkRecord, person: UserRecord, body: RedeemBody): Promise<void> {
+    const second = await twoFactor.stateOf(store, person.id);
+    if (!second) return;
+    if (!body.challengeToken) throw twoFactorRequired(await twoFactor.challenge(c, store, person, second, { purpose: 'reset', linkId: link.id }));
+    await twoFactor.verify(c, store, { challengeToken: body.challengeToken, code: body.code, recoveryCode: body.recoveryCode }, { purpose: 'reset', linkId: link.id, userId: person.id });
   }
 
   /**
