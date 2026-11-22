@@ -101,7 +101,10 @@ export interface StatementPage {
   nextCursor: StatementCursor | null;
 }
 
-export function buildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null }): StatementPage {
+/** MUT-664 (D14): `desc` pages newest first; the running balance is still computed oldest first, so it is the same either way. */
+export type StatementOrder = 'asc' | 'desc';
+
+export function buildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null; order?: StatementOrder }): StatementPage {
   const lines = ledgerLines(sources, view).sort(compareLines);
   let openingMinor = 0n;
   const inPeriod: SortedLine[] = [];
@@ -118,11 +121,14 @@ export function buildStatement(sources: StatementSources, view: StatementView, p
     const line: StatementLine = { ...key, runningMinor: running };
     return { line, key };
   });
-  const start = page.cursor ? withBalance.findIndex((x) => compareLines(x.key, page.cursor!) > 0) : 0;
-  const from = start < 0 ? withBalance.length : start;
-  const slice = withBalance.slice(from, from + page.limit);
+  const desc = page.order === 'desc';
+  const ordered = desc ? [...withBalance].reverse() : withBalance;
+  const after = (key: StatementCursor, cursor: StatementCursor) => (desc ? compareLines(cursor, key) : compareLines(key, cursor)) > 0;
+  const start = page.cursor ? ordered.findIndex((x) => after(x.key, page.cursor!)) : 0;
+  const from = start < 0 ? ordered.length : start;
+  const slice = ordered.slice(from, from + page.limit);
   const last = slice.at(-1)?.key;
-  const more = from + page.limit < withBalance.length;
+  const more = from + page.limit < ordered.length;
   return {
     openingMinor,
     totals,

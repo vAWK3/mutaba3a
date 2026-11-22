@@ -4681,6 +4681,12 @@ export type IssueResult =
 export interface IssuedDocumentFilter {
   docType?: IssuedDocType;
   customerId?: string;
+  /** MUT-664: the client page's Documents tab filters. */
+  currency?: string;
+  /** documentDate on or after. */
+  from?: IsoDate;
+  /** documentDate on or before. */
+  to?: IsoDate;
 }
 
 export interface IssuedNumberGap {

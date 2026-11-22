@@ -7751,6 +7751,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every client's balance per currency
+         * @description MUT-664: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals). Negative: the client is in credit. Clients with no movement are absent; money with no client is not here. Dated installments whose date has arrived are posted first, as on the statement.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The balances */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CustomerBalances"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customers/{customerId}/statement": {
         parameters: {
             query?: never;
@@ -7777,6 +7843,8 @@ export interface paths {
                     limit?: number;
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way. */
+                    order?: "asc" | "desc";
                 };
                 header?: never;
                 path: {
@@ -14435,6 +14503,12 @@ export interface paths {
                     /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
                     docType?: components["schemas"]["IssuedDocType"];
                     customerId?: string;
+                    /** @description MUT-664 */
+                    currency?: components["schemas"]["Currency"] & unknown;
+                    /** @description MUT-664: documentDate on or after */
+                    from?: string;
+                    /** @description MUT-664: documentDate on or before */
+                    to?: string;
                     limit?: number;
                     cursor?: string;
                 };
@@ -28503,6 +28577,17 @@ export interface components {
             address?: string | null;
             documentsPreference?: components["schemas"]["DocumentsPreference"];
         };
+        CustomerBalances: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            asOf: string;
+            balances: {
+                /** Format: uuid */
+                customerId: string;
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                balance: string;
+            }[];
+        };
         CustomerStatement: {
             /** Format: uuid */
             customerId: string;
@@ -28541,6 +28626,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CHARGE";
             /** Format: uuid */
@@ -28571,6 +28659,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CREDIT";
             /** Format: uuid */
@@ -28591,6 +28682,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT";
             /** Format: uuid */
@@ -28615,6 +28709,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT_REVERSAL";
             /** Format: uuid */
@@ -28622,6 +28719,18 @@ export interface components {
             receiptNumber: string | null;
             reason: string | null;
             reasonCode: components["schemas"]["CreditReasonCode"];
+        };
+        StatementDocumentTag: {
+            /**
+             * Format: uuid
+             * @description The issued document; null for one issued elsewhere
+             */
+            id: string | null;
+            /** @enum {string} */
+            source: "ISSUED" | "EXTERNAL";
+            /** @enum {string} */
+            docType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+            number: string;
         };
         StatementChargeOrigin: {
             /** @enum {string} */
@@ -30165,8 +30274,17 @@ export interface components {
             coreVersion: string;
         };
         IssuedDocumentPage: {
-            items: components["schemas"]["IssuedDocument"][];
+            items: components["schemas"]["IssuedDocumentListItem"][];
             nextCursor: string | null;
+        };
+        IssuedDocumentListItem: components["schemas"]["IssuedDocument"] & {
+            /** @description Paid + credited on its Owed, at most its gross; null on a credit note */
+            settled: string | null;
+            /**
+             * @description CANCELLED: credit notes cover its gross. Null on a credit note
+             * @enum {string|null}
+             */
+            settlement: "OPEN" | "PARTLY_PAID" | "PAID" | "CANCELLED" | null;
         };
         IssuedCopyRequest: {
             /** @enum {string} */

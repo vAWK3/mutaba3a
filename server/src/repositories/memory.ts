@@ -1034,6 +1034,7 @@ export class MemoryLedgerStore implements LedgerStore {
     list: async (organizationId, filter, page) => {
       const rows = [...this.issuedDocMap.values()]
         .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
+        .filter((d) => (!filter.currency || d.currency === filter.currency) && (!filter.from || d.documentDate >= filter.from) && (!filter.to || d.documentDate <= filter.to))
         .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime() || (a.id < b.id ? 1 : -1))
         .filter((d) => !page.cursor || d.issuedAt < page.cursor.createdAt || (d.issuedAt.getTime() === page.cursor.createdAt.getTime() && d.id < page.cursor.id));
       const items = rows.slice(0, page.limit);
