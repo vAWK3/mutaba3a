@@ -35,7 +35,7 @@ export function ClientBusinessDetails({ profileId, client, writable }: { profile
           <dt>{t('hosted.client.business.taxId')}</dt>
           <dd dir="ltr">{client.taxId ?? '—'}</dd>
           <dt>{t('hosted.client.business.address')}</dt>
-          <dd>{client.address ?? '—'}</dd>
+          <dd dir="auto">{client.address ?? '—'}</dd>
         </dl>
       )}
     </section>
@@ -51,6 +51,7 @@ function BusinessForm({ profileId, client, onDone }: { profileId: string; client
   const lookup = useBusinessLookup(profileId, local ? null : number);
   const update = useUpdateCustomer(profileId, client.id);
   const [filledFrom, setFilledFrom] = useState<string | null>(null);
+  const [useRegisteredName, setUseRegisteredName] = useState(true);
 
   const found: BusinessLookup | undefined = lookup.data && lookup.data.taxId === number ? lookup.data : undefined;
   // The registry's address fills an empty field once per number (adjusted while rendering); what the person typed stays.
@@ -62,10 +63,13 @@ function BusinessForm({ profileId, client, onDone }: { profileId: string; client
   const invalid = (lookup.error instanceof ApiError && apiErrorReason(lookup.error) === 'TAX_ID_INVALID') || (update.error instanceof ApiError && apiErrorReason(update.error) === 'TAX_ID_INVALID');
   const notInRegistry = lookup.error instanceof ApiError && apiErrorReason(lookup.error) === 'NOT_IN_REGISTRY';
   const registryDown = lookup.error instanceof ApiError && lookup.error.code === 'REGISTRY_UNAVAILABLE';
+  // Changed in another tab: the client refetches (a fresh version), so Save works again.
+  const changedElsewhere = update.error instanceof ApiError && update.error.status === 409;
+  const rename = found && found.name && found.name !== client.name ? found.name : null;
 
   const submit = async (event: FormEvent) => {
     event.preventDefault();
-    await update.mutateAsync({ version: client.version, body: { taxId: number ?? (taxId.trim() || null), address: address.trim() || null } }).then(onDone, () => undefined);
+    await update.mutateAsync({ version: client.version, body: { taxId: number ?? (taxId.trim() || null), address: address.trim() || null, ...(rename && useRegisteredName ? { name: rename } : {}) } }).then(onDone, () => undefined);
   };
 
   return (
@@ -88,6 +92,12 @@ function BusinessForm({ profileId, client, onDone }: { profileId: string; client
           {t(found.kind === 'company' ? 'hosted.client.business.foundCompany' : 'hosted.client.business.foundNonprofit', { name: found.name })}
         </p>
       )}
+      {rename && (
+        <label className="hp-business-rename">
+          <input type="checkbox" checked={useRegisteredName} onChange={(e) => setUseRegisteredName(e.target.checked)} />
+          <span>{t('hosted.client.business.useName', { name: rename })}</span>
+        </label>
+      )}
       {found && !found.active && (
         <p className="hp-business-warning" role="alert">
           {t('hosted.client.business.inactive', { status: found.status })}
@@ -99,10 +109,12 @@ function BusinessForm({ profileId, client, onDone }: { profileId: string; client
         label={t('hosted.client.business.address')}
         id="client-address"
         value={address}
+        dir="auto"
         maxLength={300}
         onChange={(e) => setAddress(e.target.value)}
       />
-      {update.isError && !invalid && <p className="input-error-message" role="alert">{t('hosted.client.business.saveFailed')}</p>}
+      {changedElsewhere && <p className="input-error-message" role="alert">{t('hosted.client.business.changedElsewhere')}</p>}
+      {update.isError && !invalid && !changedElsewhere && <p className="input-error-message" role="alert">{t('hosted.client.business.saveFailed')}</p>}
       <div className="hp-business-actions">
         <Button type="submit" variant="primary" size="sm" disabled={update.isPending}>
           {update.isPending ? t('common.saving') : t('common.save')}

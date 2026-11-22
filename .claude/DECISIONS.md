@@ -6758,7 +6758,9 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 2. `GET /v1/business-lookup` asks data.gov.il's CKAN `datastore_search` (Registrar of Companies `f004176c-…`; nonprofits `be5b7935-…` for 58-prefixed numbers), 2.5 s timeout, answers cached 24 h (LRU 1,000), failures not cached, 30 a minute per person. A sole dealer (עוסק מורשה/פטור) is in no open registry: 404 `NOT_IN_REGISTRY`, and the person types the details.
 3. The lookup is hosted only (outside `PORTAL_ROUTES`); the signed-out portal never calls it. `PATCH /v1/customers/{id}` opens to sessions so the portal can save.
 4. Issued documents snapshot `{ name, taxId, address }` at issue; editing the client later changes no document.
-5. Portal: a Business details card on the client page; a complete number fills the registry's name and an empty address (never overwrites typed text) and warns when the registry's status is not active.
+5. Portal: a Business details card on the client page (shown to whoever may add clients: not accountants, not Malafat-fed profiles); a complete number shows the registry's name with a tick (on) to rename the client to it, fills an empty address (never overwrites typed text) and warns when the registry's status is not active. A version conflict reloads the client and asks to save again.
+
+**Pre-landing review (2026-11-22):** an all-zero number is refused (its check sum is 0); a blank number or address clears the field; the cache is least-recently-answered (a refresh never evicts another number); the nonprofit address includes the house number (`כתובת - מספר דירה`); both registry number columns are `numeric` on the live resources (checked 2026-11-22), so the filter sends a number.
 
 **Consequences:** one outbound dependency (data.gov.il, no key, no cost); an outage degrades to typing by hand.
 

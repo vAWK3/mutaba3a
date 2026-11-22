@@ -26,6 +26,25 @@ describe('RegistryLookup', () => {
     expect(new URL(String(fetch.mock.calls[0]![0])).searchParams.get('resource_id')).toBe('amutot');
   });
 
+  it('a nonprofit prints street, number and town as the live registry spells them', async () => {
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => ok([{ 'מספר עמותה': 580000016, 'שם עמותה בעברית': 'ארץ', 'סטטוס עמותה': 'רשומה', 'כתובת - רחוב': 'זליג', 'כתובת - מספר דירה': '10', 'כתובת - ישוב': 'תל אביב - יפו', 'כתובת - מיקוד': 6969352 }]));
+    expect(await new RegistryLookup({ ...config, fetch }).lookup('580000016')).toMatchObject({ kind: 'found', entry: { address: 'זליג 10, תל אביב - יפו, 6969352' } });
+  });
+
+  it('keeps the most recently answered numbers: a refreshed number never evicts another', async () => {
+    let t = 0;
+    const fetch = vi.fn<typeof globalThis.fetch>(async () => ok([{ 'שם חברה': 'X', 'סטטוס חברה': 'פעילה' }]));
+    const registry = new RegistryLookup({ ...config, ttlMs: 10, fetch, now: () => t });
+    await registry.lookup('516123452');
+    await registry.lookup('510000045');
+    t = 100; // both stale
+    await registry.lookup('516123452'); // refreshed: same size, nothing evicted
+    expect(fetch).toHaveBeenCalledTimes(3);
+    t = 105;
+    await registry.lookup('516123452');
+    expect(fetch).toHaveBeenCalledTimes(3);
+  });
+
   it('a sole dealer or a person is not in any registry and never asks', async () => {
     const fetch = vi.fn();
     expect(await new RegistryLookup({ ...config, fetch }).lookup('000000018')).toEqual({ kind: 'not_found' });

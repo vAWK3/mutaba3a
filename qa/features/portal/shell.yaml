@@ -97,8 +97,8 @@ features:
       - Save, then type a dissolved company's number and a sole dealer's
       - Open it in Arabic
     expect:
-      - The registry's name shows under the number and its registered address fills the empty Address
-      - Save sends PATCH /v1/customers/<id> with the number and address (If-Match the version) and the card shows both
+      - The registry's name shows under the number, ticked to rename the client, and its registered address fills the empty Address
+      - Save sends PATCH /v1/customers/<id> with the number, address and registered name (If-Match the version); the card shows both and the heading the new name
       - A dissolved company shows its registry status as a warning; a sole dealer's number says it is not in the registry and the details are typed by hand
       - The Arabic card reads بيانات المنشأة, right to left, with the number left to right
   - id: no-profiles

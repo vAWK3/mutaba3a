@@ -12,7 +12,7 @@ describe('normalizeTaxId', () => {
     expect(normalizeTaxId(input)).toBe(out);
   });
 
-  it.each(['516123458', '123456789', '', 'abc', '1234567890'])('refuses %j', (input) => {
+  it.each(['516123458', '123456789', '', 'abc', '1234567890', '0', '000000000', '0-0'])('refuses %j', (input) => {
     expect(normalizeTaxId(input)).toBeNull();
   });
 });

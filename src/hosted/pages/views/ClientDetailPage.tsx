@@ -8,7 +8,7 @@ import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../../data/filters';
-import { incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
+import { canAddClient, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
 import { ClientBusinessDetails } from '../../components/ClientBusinessDetails';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
@@ -76,7 +76,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
           />
           {tab === 'summary' && (
             <>
-              <ClientBusinessDetails profileId={profile.id} client={client} writable={writable} />
+              <ClientBusinessDetails profileId={profile.id} client={client} writable={canAddClient(profile, writable)} />
               <ClientSummary customerId={customerId} notFound={notFound} />
             </>
           )}

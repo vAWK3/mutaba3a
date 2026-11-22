@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { afterAll, describe, expect, it, vi } from 'vitest';
 import { PrismaLedgerStore } from '../prisma.js';
-import { insertFirmRow } from './fixtures/raw-rows.js';
+import { insertCustomerRow, insertFirmRow } from './fixtures/raw-rows.js';
 
 /**
  * MUT-100 (eng review D3): the CONTINGENCY enum value arrives alone in one
@@ -67,7 +67,7 @@ if (!url) {
       const at = new Date('2026-10-13T08:00:00Z');
       // A raw row: today's client selects organization columns this older schema lacks (MUT-182).
       const org = await insertFirmRow(db);
-      const customer = await store.customers.create({ organizationId: org.id, name: 'Haddad', email: null, phone: null, notes: null }, at);
+      const customer = await insertCustomerRow(db, org.id, 'Haddad');
       const project = await store.projects.create({ organizationId: org.id, customerId: customer.id, name: 'Lawsuit', currency: 'ILS', vatTreatment: null }, at);
       await store.disconnect();
       const insertAgreement = (type: string, extra = '', values = '') =>

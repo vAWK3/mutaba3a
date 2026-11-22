@@ -283,6 +283,15 @@ describe('the acceptance criteria’s entity writes, refused with nothing writte
     expect(writes(h.calls)).toEqual([]);
   });
 
+  // MUT-642: PATCH /v1/customers/{id} opened to sessions; a Malafat-fed profile still refuses it.
+  it('customer: updating one (VAT number) → 403 READ_ONLY_PROFILE', async () => {
+    h.calls.length = 0;
+    const res = await h.app.request(`/v1/customers/${a.customer.id}`, json({ taxId: '516123452' }, { ...as(a.org.id), 'if-match': '1' }, 'PATCH'));
+    expect(res.status).toBe(403);
+    expect((await read(res)).error).toMatchObject({ code: 'READ_ONLY_PROFILE', details: { domain: 'customers', writerOfRecord: 'MALAFAT' } });
+    expect(writes(h.calls)).toEqual([]);
+  });
+
   // MUT-61's one intended change to this table: Received is no longer refused by the matrix (the capture row admits
   // it), but a Malafat-fed profile's client rule still refuses this body before anything is written.
   it('income: Received, no client → 422 CUSTOMER_REQUIRED, nothing written (was 403 before MUT-61)', async () => {

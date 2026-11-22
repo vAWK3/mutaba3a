@@ -50,6 +50,7 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/MoveToProfileDrawer.tsx': { auto: 1 }, // MUT-503/589: each profile's name in the Move drawer (D)
   'src/hosted/components/MoveExpenseDrawer.tsx': { auto: 2 }, // MUT-589: the expense's title or vendor, and a change's value (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
+  'src/hosted/components/ClientBusinessDetails.tsx': { ltr: 2, auto: 2 }, // MUT-642: the VAT number (B); the address, often Hebrew in an en/ar page (D)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)

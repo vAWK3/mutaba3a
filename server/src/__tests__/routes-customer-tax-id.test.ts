@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { RegistryLookup } from '../israel/registry.js';
-import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type AccountantHarness } from './helpers/accountants.js';
+import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /** MUT-642: a customer's VAT/company number and address, the registry lookup, and both on issued documents. */
 const company = { 'שם חברה': 'אקמי דיגיטל בע״מ', 'שם באנגלית': 'ACME DIGITAL LTD', 'סטטוס חברה': 'פעילה', 'שם רחוב': 'הרצל', 'מספר בית': '5', 'שם עיר': 'חיפה' };
@@ -26,6 +26,27 @@ describe('customer VAT number and address (MUT-642)', () => {
     const cleared = await h.app.request(`/v1/customers/${created.id}`, json({ taxId: null, address: null }, { ...w.on, 'if-match': String(created.version) }, 'PATCH'));
     expect(cleared.status, await cleared.clone().text()).toBe(200);
     expect(await read(cleared)).toMatchObject({ taxId: null, address: null });
+  });
+
+  it('refuses an all-zero or 10-digit number; a blank one clears the field', async () => {
+    const h = harness();
+    const w = await profile(h);
+    for (const taxId of ['000000000', '0', '1234567890']) {
+      expect((await h.app.request('/v1/customers', json({ name: 'Acme', taxId }, { ...w.on, ...idem() }))).status, taxId).toBe(422);
+    }
+    const created = await read(await h.app.request('/v1/customers', json({ name: 'Acme', taxId: '516123452', address: 'Haifa' }, { ...w.on, ...idem() })));
+    const blank = await h.app.request(`/v1/customers/${created.id}`, json({ taxId: '  ', address: ' ' }, { ...w.on, 'if-match': String(created.version) }, 'PATCH'));
+    expect(blank.status).toBe(200);
+    expect(await read(blank)).toMatchObject({ taxId: null, address: null });
+  });
+
+  it('an accountant with a grant cannot change a client’s number', async () => {
+    const h = harness();
+    const w = await profile(h);
+    const created = await read(await h.app.request('/v1/customers', json({ name: 'Acme' }, { ...w.on, ...idem() })));
+    const accountant = await shared(h, w.owner, w.profileId);
+    const res = await h.app.request(`/v1/customers/${created.id}`, json({ taxId: '516123452' }, { ...accountant.on(w.profileId), 'if-match': String(created.version) }, 'PATCH'));
+    expect(res.status).toBe(403);
   });
 
   it('refuses a number with a wrong check digit', async () => {

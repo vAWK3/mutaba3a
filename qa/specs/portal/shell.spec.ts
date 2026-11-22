@@ -298,6 +298,7 @@ test('a client’s VAT or company number fills its name and address from the reg
     await card.getByLabel('VAT or company number').fill('51-612345-2');
     await expect(card.getByText('Registrar of Companies: אקמי דיגיטל בע״מ')).toBeVisible();
     await expect(card.getByLabel('Address')).toHaveValue('הרצל 5, חיפה');
+    await expect(card.getByRole('checkbox', { name: /Rename this client to the registered name/ })).toBeChecked();
     expect(api.last('GET', /^\/v1\/business-lookup$/)?.query.get('number')).toBe('516123452');
   });
 
@@ -306,7 +307,8 @@ test('a client’s VAT or company number fills its name and address from the reg
     await expect(card.getByText('516123452')).toBeVisible();
     await expect(card.getByText('הרצל 5, חיפה')).toBeVisible();
     const patch = api.last('PATCH', new RegExp(`^/v1/customers/${C1}$`));
-    expect(patch?.body).toEqual({ taxId: '516123452', address: 'הרצל 5, חיפה' });
+    expect(patch?.body).toEqual({ taxId: '516123452', address: 'הרצל 5, חיפה', name: 'אקמי דיגיטל בע״מ' });
+    await expect(page.getByRole('heading', { level: 1, name: 'אקמי דיגיטל בע״מ' })).toBeVisible();
     expect(patch?.headers['if-match']).toBe('1');
   });
 

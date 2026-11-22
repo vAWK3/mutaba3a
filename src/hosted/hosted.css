@@ -1655,5 +1655,6 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-business-form { display: flex; flex-direction: column; gap: var(--space-3); }
 .hp-business-form p { margin: 0; font-size: var(--text-label); }
 .hp-business-warning { color: var(--warning); background: var(--warning-subtle); padding: var(--space-2) var(--space-3); border-radius: var(--radius-card); }
+.hp-business-rename { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-label); }
 .hp-business-actions { display: flex; gap: var(--space-2); }
 @media (max-width: 480px) { .hp-business-list { grid-template-columns: 1fr; } }

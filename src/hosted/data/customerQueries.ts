@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type Customer, type UpdateCustomerRequest } from '../api/client';
+import { ApiError, api, type Customer, type UpdateCustomerRequest } from '../api/client';
 import { profileKey } from '../session/me';
 import { useAttemptKey } from './attemptKey';
 
@@ -40,6 +40,10 @@ export function useUpdateCustomer(profileId: string, customerId: string) {
     onSuccess: (saved) => {
       queryClient.setQueryData(profileKey(profileId, 'customer', customerId), saved);
       void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'directory', 'customers') });
+      void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'summary') });
+    },
+    onError: (error) => {
+      if (error instanceof ApiError && error.status === 409) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'customer', customerId) });
     },
   });
 }

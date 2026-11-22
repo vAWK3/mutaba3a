@@ -51,7 +51,7 @@ describe('ClientBusinessDetails', () => {
     await waitFor(() => expect(screen.getByLabelText('Address')).toHaveValue('הרצל 5, חיפה'));
     expect(api.lookup).toHaveBeenCalledTimes(1);
     await userEvent.click(screen.getByRole('button', { name: 'Save' }));
-    expect(api.update).toHaveBeenCalledWith('p1', 'c1', 3, { taxId: '516123452', address: 'הרצל 5, חיפה' });
+    expect(api.update).toHaveBeenCalledWith('p1', 'c1', 3, { taxId: '516123452', address: 'הרצל 5, חיפה', name: 'אקמי דיגיטל בע״מ' });
     await waitFor(() => expect(screen.queryByLabelText('Address')).not.toBeInTheDocument());
   });
 
@@ -62,6 +62,26 @@ describe('ClientBusinessDetails', () => {
     await userEvent.type(screen.getByLabelText('VAT or company number'), '516123452');
     expect(await screen.findByRole('alert')).toHaveTextContent('“מחוקה”');
     expect(screen.getByLabelText('Address')).toHaveValue('My St');
+  });
+
+  it('keeps the client’s own name when the person unticks the registered one', async () => {
+    api.lookup.mockResolvedValue({ taxId: '516123452', kind: 'company', name: 'Acme Digital Ltd', nameEn: null, status: 'פעילה', active: true, address: null });
+    api.update.mockResolvedValue({ ...client, version: 4, taxId: '516123452' });
+    wrap(<ClientBusinessDetails profileId="p1" client={client} writable />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add business details' }));
+    await userEvent.type(screen.getByLabelText('VAT or company number'), '516123452');
+    await userEvent.click(await screen.findByRole('checkbox', { name: /Rename this client to the registered name/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(api.update).toHaveBeenCalledWith('p1', 'c1', 3, { taxId: '516123452', address: null });
+  });
+
+  it('says the client changed elsewhere on a version conflict', async () => {
+    api.update.mockRejectedValue(refused(409, 'CONFLICT', 'VERSION_MISMATCH'));
+    wrap(<ClientBusinessDetails profileId="p1" client={client} writable />);
+    await userEvent.click(screen.getByRole('button', { name: 'Add business details' }));
+    await userEvent.type(screen.getByLabelText('Address'), 'Haifa');
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('This client was changed elsewhere');
   });
 
   it('says a sole dealer is not in the registry, and a bad check digit is not valid', async () => {

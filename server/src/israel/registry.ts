@@ -55,7 +55,7 @@ function nonprofitEntry(r: Row): RegistryEntry {
     nameEn: text(r['שם עמותה באנגלית']),
     status,
     active: status === 'רשומה',
-    address: [text(r['כתובת - רחוב']), text(r['כתובת - ישוב']), text(r['כתובת - מיקוד'])].filter(Boolean).join(', ') || null,
+    address: [[text(r['כתובת - רחוב']), text(r['כתובת - מספר דירה'])].filter(Boolean).join(' ') || null, text(r['כתובת - ישוב']), text(r['כתובת - מיקוד'])].filter(Boolean).join(', ') || null,
   };
 }
 
@@ -89,7 +89,8 @@ export class RegistryLookup {
       return { kind: 'unavailable' };
     }
     const result: RegistryLookupResult = rows[0] ? { kind: 'found', entry: kind === 'company' ? companyEntry(rows[0]) : nonprofitEntry(rows[0]) } : { kind: 'not_found' };
-    if (this.cache.size >= CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value!);
+    // Least recently answered goes first: a refreshed key moves to the end, and only a new key evicts.
+    if (!this.cache.delete(taxId) && this.cache.size >= CACHE_LIMIT) this.cache.delete(this.cache.keys().next().value!);
     this.cache.set(taxId, { at: this.now(), result });
     return result;
   }
