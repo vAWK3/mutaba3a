@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { HttpTaxAuthorityClient, TaxAuthorityError, type ApprovalRequest } from '../client.js';
+import { approvalBody, HttpTaxAuthorityClient, TaxAuthorityError, type ApprovalRequest } from '../client.js';
 
 /** MUT-571/572: the wire shapes the guide, the NodeJsExample and the specs give, against a stubbed fetch. */
 function client(answer: (url: string, init: RequestInit) => Response) {
@@ -15,6 +15,7 @@ const ok = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
 
 const REQUEST: ApprovalRequest = {
   invoiceId: 'abc',
+  userName: 'Basel Sader, Barmajiyat Software Ltd.',
   invoiceType: 305,
   vatNumber: 777777715,
   invoiceReferenceNumber: '1042',
@@ -70,5 +71,11 @@ describe('HttpTaxAuthorityClient', () => {
     expect(await refused.c.approve('tok', REQUEST)).toEqual({ kind: 'refused', errors: [{ code: 434, message: 'Invoice date is too old for approval', param: 'invoice_date' }] });
     expect(await client(() => ok({ status: 500 }, 500)).c.approve('tok', REQUEST)).toEqual({ kind: 'unavailable' });
     expect(await client(() => ok({}, 401)).c.approve('tok', REQUEST)).toEqual({ kind: 'unauthorized' });
+  });
+});
+
+describe('the Approval body (sandbox error 446)', () => {
+  it("names who issues it, cut to the service's 25 characters", () => {
+    expect(approvalBody(REQUEST).user_name).toBe('Basel Sader, Barmajiyat S');
   });
 });
