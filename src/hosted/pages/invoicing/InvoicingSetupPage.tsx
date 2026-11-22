@@ -9,6 +9,7 @@ import { useWritableFor } from '../../session/me';
 import { youPath } from '../../shell/youRoutes';
 import { isolate } from '../sharing/sharingRules';
 import { DefaultsStep, DetailsStep, LogoStep, NumberingStep, TaxAuthorityStep } from './InvoicingSteps';
+import { IntroArt, ReadyArt } from './InvoicingArt';
 import { Letterhead } from './Letterhead';
 import { DEFAULT_INK, REQUIRED_STEPS, SETUP_STEPS, type PaperModel, type SetupStep } from './setupSteps';
 
@@ -67,16 +68,17 @@ function Intro({ profileId }: { profileId: string }) {
   const t = useT();
   const seen = useIntroSeen(profileId);
   const cards = [
-    ['whatTitle', 'whatBody'],
-    ['finalTitle', 'finalBody'],
-    ['allocationTitle', 'allocationBody'],
+    ['issue', 'whatTitle', 'whatBody'],
+    ['final', 'finalTitle', 'finalBody'],
+    ['allocation', 'allocationTitle', 'allocationBody'],
   ] as const;
   return (
     <section className="hp-setup-intro" aria-labelledby="hp-setup-intro-title">
       <h2 id="hp-setup-intro-title">{t('hosted.invoicing.intro.title')}</h2>
       <ol className="hp-setup-cards">
-        {cards.map(([title, body]) => (
+        {cards.map(([art, title, body]) => (
           <li key={title} className="hp-setup-card">
+            <IntroArt name={art} />
             <h3>{t(`hosted.invoicing.intro.${title}`)}</h3>
             <p>{t(`hosted.invoicing.intro.${body}`)}</p>
           </li>
@@ -169,6 +171,7 @@ function Status({ setup }: { setup: IssuingSetup }) {
   if (setup.canIssue) {
     return (
       <div className="hp-setup-ready" role="status" data-testid="setup-ready">
+        <ReadyArt />
         <strong>{t('hosted.invoicing.ready.title')}</strong>
         <span>{t('hosted.invoicing.ready.body')}</span>
       </div>

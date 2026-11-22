@@ -1680,6 +1680,8 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-setup-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
 .hp-setup-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .hp-setup-failed { display: grid; gap: var(--space-3); justify-items: start; }
+.hp-setup-card-art { display: block; margin-block-end: var(--space-3); }
+.hp-setup-ready-art { display: block; justify-self: center; }
 
 @media (max-width: 760px) {
   .hp-setup-columns, .hp-setup-cards, .hp-setup-pair { grid-template-columns: minmax(0, 1fr); }
