@@ -606,7 +606,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
-    issuedPdf: { render: renderIssuedDocumentPdf, logoPrints },
+    issuedPdf: {
+      render: renderIssuedDocumentPdf,
+      logoPrints,
+      logoFailed: ({ organizationId, documentId, error }) => deps.logger.warn({ organizationId, documentId, err: error }, 'issued document printed without its logo'),
+    },
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.

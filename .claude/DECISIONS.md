@@ -6782,6 +6782,8 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Drift from the plan:** the page path is `/you/invoicing` (the You convention) rather than `/settings/invoicing`; progress is a separate table rather than columns on `issuer_details` (point 3); the defaults have their own route rather than extending `PUT /v1/issuer`.
 
+**Pre-landing review (2026-11-22):** a numbering answer is checked whole before anything changes (no half-applied starts); "No" puts back to 1 every type without documents, so a corrected answer can't leave an earlier "yes" in place; a logo that fails at print time is logged (`logoFailed`), not just dropped; the portal shows an error with Try again instead of an endless skeleton, keeps a form as typed after a version conflict, never sets the letterhead's state while rendering, and lets only an owner see the introduction and the forms (anyone else reads the letterhead).
+
 **Consequences:** existing issuing tests answer the numbering question first; a profile issuing on dev before this lands must answer it once. Logos sit in Postgres (no blob storage, no cost); they are kept with the documents under MUT-644's retention.
 
 **Alternatives rejected:** a soft gate (a banner only) — S1-a chose the hard one; storing the logo as an attachment (its bucket object could be deleted or replaced under an issued document).

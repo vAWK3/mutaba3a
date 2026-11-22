@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Link, Navigate } from '@tanstack/react-router';
 import { Button } from '../../../components/ui/Button';
 import { useT } from '../../../lib/i18n/core';
@@ -24,6 +24,10 @@ export function InvoicingSetupPage({ profile }: { profile: HostedProfile }) {
   const issuer = useIssuer(profile.id);
   if (setup.error instanceof ApiError && setup.error.status === 404) return <Navigate to={youPath(profile.id, 'profiles')} replace />;
   const ready = setup.data && issuer.data !== undefined;
+  // Review fix: a failed read says so and offers a retry, never an endless skeleton.
+  const failed = (setup.error && !(setup.error instanceof ApiError && setup.error.status === 404)) || issuer.error;
+  // Only an owner changes the setup (the server refuses anyone else); a reader sees the letterhead, never the intro.
+  const owner = profile.owned === true;
 
   return (
     <div className="hp-setup">
@@ -35,7 +39,26 @@ export function InvoicingSetupPage({ profile }: { profile: HostedProfile }) {
       </Link>
       <h1 className="hp-sharing-title">{t('hosted.invoicing.title', { profile: isolate(profile.name) })}</h1>
       <p className="hp-sharing-note">{t('hosted.invoicing.note')}</p>
-      {!ready ? <Skeleton /> : !setup.data.introSeen ? <Intro profileId={profile.id} /> : <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} />}
+      {failed ? (
+        <div className="hp-setup-failed" role="alert">
+          <p>{t('hosted.invoicing.loadFailed')}</p>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void setup.refetch();
+              void issuer.refetch();
+            }}
+          >
+            {t('hosted.invoicing.retry')}
+          </Button>
+        </div>
+      ) : !ready ? (
+        <Skeleton />
+      ) : owner && !setup.data.introSeen ? (
+        <Intro profileId={profile.id} />
+      ) : (
+        <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} owner={owner} />
+      )}
     </div>
   );
 }
@@ -87,9 +110,9 @@ function paperOf(issuer: IssuerDetails | null, logoUrl: string | null, nextNumbe
   };
 }
 
-function Workspace({ profile, setup, issuer }: { profile: HostedProfile; setup: IssuingSetup; issuer: IssuerDetails | null }) {
+function Workspace({ profile, setup, issuer, owner }: { profile: HostedProfile; setup: IssuingSetup; issuer: IssuerDetails | null; owner: boolean }) {
   const t = useT();
-  const writable = useWritableFor(profile);
+  const writable = useWritableFor(profile) && owner;
   const counters = useIssuingCounters(profile.id);
   const logoUrl = useIssuerLogoUrl(profile.id, setup.hasLogo);
   const done = doneSteps(setup);
@@ -105,7 +128,7 @@ function Workspace({ profile, setup, issuer }: { profile: HostedProfile; setup: 
     setCurrent(step);
   };
   const advance = () => go(SETUP_STEPS[SETUP_STEPS.indexOf(current) + 1] ?? 'taxAuthority');
-  const preview = (patch: Partial<PaperModel>) => setDraft((d) => ({ ...d, ...patch }));
+  const preview = useCallback((patch: Partial<PaperModel>) => setDraft((d) => ({ ...d, ...patch })), []);
   const n = SETUP_STEPS.indexOf(current) + 1;
   const stepProps = { profileId: profile.id, onPreview: preview, onDone: advance };
 
@@ -125,11 +148,11 @@ function Workspace({ profile, setup, issuer }: { profile: HostedProfile; setup: 
         {!writable ? (
           <p className="hp-muted">{t('hosted.invoicing.readOnly')}</p>
         ) : current === 'details' ? (
-          <DetailsStep key={`details-${issuer?.version ?? 0}`} {...stepProps} issuer={issuer} />
+          <DetailsStep {...stepProps} issuer={issuer} />
         ) : current === 'logo' ? (
           <LogoStep {...stepProps} hasLogo={setup.hasLogo} />
         ) : current === 'defaults' ? (
-          <DefaultsStep key={`defaults-${issuer?.version ?? 0}`} {...stepProps} issuer={issuer} />
+          <DefaultsStep {...stepProps} issuer={issuer} />
         ) : current === 'numbering' ? (
           <NumberingStep {...stepProps} answered={setup.steps.numbering === 'done'} counters={counters.data} />
         ) : (

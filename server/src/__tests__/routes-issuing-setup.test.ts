@@ -67,9 +67,16 @@ describe('invoicing setup (MUT-646)', () => {
     const counters = (await read(await h.app.request('/v1/issuing/settings', { headers: w.on }))).counters;
     expect(counters).toEqual(expect.arrayContaining([expect.objectContaining({ docType: 'TAX_INVOICE', next: 1043 }), expect.objectContaining({ docType: 'RECEIPT', next: 88 })]));
     expect((await read(await h.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() })))).number).toBe(1043);
-    const fixed = await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: true, starts: { TAX_INVOICE: 2000 } }, w.on, 'PUT'));
+    const fixed = await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: true, starts: { RECEIPT: 300, TAX_INVOICE: 2000 } }, w.on, 'PUT'));
     expect(fixed.status).toBe(409);
     expect((await read(fixed)).error.details).toMatchObject({ reason: 'HAS_DOCUMENTS', docType: 'TAX_INVOICE' });
+    // Refused as a whole: the receipt's number didn't move either.
+    const after = (await read(await h.app.request('/v1/issuing/settings', { headers: w.on }))).counters;
+    expect(after).toEqual(expect.arrayContaining([expect.objectContaining({ docType: 'RECEIPT', next: 88 })]));
+    // "No" puts back to 1 every type without documents; the tax invoices keep theirs.
+    expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, w.on, 'PUT'))).status).toBe(200);
+    const reset = (await read(await h.app.request('/v1/issuing/settings', { headers: w.on }))).counters;
+    expect(reset).toEqual(expect.arrayContaining([expect.objectContaining({ docType: 'RECEIPT', next: 1 }), expect.objectContaining({ docType: 'TAX_INVOICE', next: 1044 })]));
   });
 
   it('AC2: the defaults save on their own, keep the details, and the details keep the defaults', async () => {

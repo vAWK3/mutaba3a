@@ -2830,6 +2830,8 @@
       "saveFailed": "The changes could not be saved. Please try again.",
       "changedElsewhere": "These details were changed elsewhere and have been reloaded. Please save again.",
       "readOnly": "Only the profile's owner can change the invoicing setup.",
+      "loadFailed": "The invoicing setup could not be loaded. Check the connection and try again.",
+      "retry": "Try again",
       "details": {
         "vatId": "VAT file or company number",
         "vatIdHint": "9 digits. A company or nonprofit is looked up in the public registry.",

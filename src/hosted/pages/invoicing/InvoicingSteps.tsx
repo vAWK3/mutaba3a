@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react';
 import { Button } from '../../../components/ui/Button';
 import { Input, Select, Textarea } from '../../../components/ui/Input';
 import { SegmentedControl } from '../../../components/ui/SegmentedControl';
@@ -71,6 +71,7 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
   const found = number && lookup.data ? lookup.data : null;
   // The registry fills what is still empty, once per number (adjusted while rendering, not in an effect).
   const [filledFrom, setFilledFrom] = useState<string | null>(null);
+  const [filledPatch, setFilledPatch] = useState<Partial<PaperModel> | null>(null);
   if (found && number !== filledFrom) {
     setFilledFrom(number);
     const patch = {
@@ -79,8 +80,12 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
       dealerType: found.kind === 'nonprofit' ? ('NONPROFIT' as const) : ('COMPANY' as const),
     };
     setForm({ ...form, ...patch });
-    onPreview(patch);
+    setFilledPatch(patch);
   }
+  // The letterhead is the page's state: told after this render, never during it (review fix).
+  useEffect(() => {
+    if (filledPatch) onPreview(filledPatch);
+  }, [filledPatch, onPreview]);
 
   const set = (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = event.target.value;
@@ -291,7 +296,8 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
   const [starts, setStarts] = useState<Record<string, string>>({});
   const [tried, setTried] = useState(false);
   const fixed = new Set(counters?.counters.filter((c) => c.hasDocuments).map((c) => c.docType) ?? []);
-  const entries = Object.entries(starts).filter(([, v]) => v.trim() !== '');
+  // A type already issued here keeps its numbering: whatever was typed before the counters arrived isn't sent.
+  const entries = Object.entries(starts).filter(([type, v]) => v.trim() !== '' && !fixed.has(type as never));
   const valid = entries.every(([, v]) => (wholeNumber(v) ?? 0) >= 1);
   const missing = already === 'yes' && entries.length === 0;
 

@@ -117,6 +117,8 @@ export interface IssuedPdf {
   render: IssuedPdfRenderer;
   /** MUT-646: whether the PDF engine can draw this logo (checked once, at upload). */
   logoPrints(bytes: Uint8Array): Promise<boolean>;
+  /** MUT-646: told when a document printed without its logo because the logo could not be drawn. */
+  logoFailed?(details: { organizationId: string; documentId: string; error: unknown }): void;
 }
 
 export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null): OpenAPIHono<AppEnv> {
@@ -167,7 +169,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     if (!logo) return render(doc, { ...options, logo: null });
     try {
       return await render(doc, { ...options, logo });
-    } catch {
+    } catch (error) {
+      issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
       return render(doc, { ...options, logo: null });
     }
   }
@@ -375,7 +378,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       tags: ['Issuing'],
       summary: 'Answer “already issuing documents elsewhere?”',
       description:
-        'MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type at 1; `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS once that type has a document. Sending the same answer again is harmless.',
+        'MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless.',
       security: PERSON_OR_MALAFAT,
       middleware: [requireScope('issuing:write')] as const,
       request: { body: jsonBody(IssuingNumberingRequestSchema) },
@@ -387,7 +390,14 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const entries = (Object.entries(starts ?? {}) as [IssuedDocType, number | undefined][]).filter((e): e is [IssuedDocType, number] => e[1] !== undefined);
       if (alreadyIssuing && entries.length === 0) throw new ApiError('VALIDATION_FAILED', 'Say where the numbering continues for at least one document type', { field: 'starts', reason: 'STARTS_REQUIRED' });
       if (!alreadyIssuing && entries.length > 0) throw new ApiError('VALIDATION_FAILED', 'Starting numbers go with alreadyIssuing: true', { field: 'starts', reason: 'FIELD_NOT_ALLOWED' });
-      for (const [docType, start] of entries) {
+      // Review fix: refuse before changing anything, so a refused answer is never half applied.
+      const counters = await store.issuing.counters(organization.id);
+      const issued = new Set(counters.filter((k) => k.next > k.start).map((k) => k.docType));
+      const fixed = entries.find(([docType]) => issued.has(docType));
+      if (fixed) throw new ApiError('CONFLICT', 'Documents of this type were already issued; their numbering is fixed', { reason: 'HAS_DOCUMENTS', docType: fixed[0] });
+      // "No" puts every type without documents back to 1, so a corrected answer never leaves an earlier "yes" behind.
+      const sets: [IssuedDocType, number][] = alreadyIssuing ? entries : counters.filter((k) => !issued.has(k.docType) && k.start !== 1).map((k) => [k.docType, 1]);
+      for (const [docType, start] of sets) {
         const result = await store.issuing.setStartingNumber(organization.id, docType, start);
         if (result.kind === 'has_documents') throw new ApiError('CONFLICT', 'Documents of this type were already issued; their numbering is fixed', { reason: 'HAS_DOCUMENTS', docType });
       }
