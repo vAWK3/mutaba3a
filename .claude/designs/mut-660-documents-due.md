@@ -120,12 +120,13 @@ Consumers:
   - With If-Match it checks the version (409 VERSION_CONFLICT).
   - An item already at `value` is a no-op that still counts as success, which makes the action idempotent.
   - It returns `{changed}`.
-- **Payment-linked issuing (review C1):** issuing must never post a second Owed.
-  - A 305 for an INSTALLMENT or RETAINER_CHARGE Owed takes that receivable over, as ADJUSTMENT does today. `lockFromEntryTx` (`prisma.ts:5246`) and its memory twin widen `ok` to those origins, still `creditedMinor === 0n`.
-  - A RECEIPT or 320 for an **allocated** payment links `paymentId` and posts nothing new.
-    - A RECEIPT with `appliesToDocumentId` set to the tax invoice.
-    - A 320 adopts the single target receivable (origin → ISSUED_DOCUMENT), allowed only when the payment has exactly one live allocation and that receivable has no document.
-  - `fromEntryRefusal` (`issuing/ledger-plan.ts:102`) gains these shapes. Anything still refused comes back as `issuable:false` with a reason.
+- **Linked-only issuing (review C1, revised in the build 2026-11-22):** issuing must never post a second Owed, and never rewrite an entry's money.
+  - Taking an entry over (MUT-648's path) stays for what it fits: an untouched ADJUSTMENT Owed, and an unallocated CAPTURE Received.
+  - Everything else is issued **linked only**: the document is numbered and linked to the entry (`receivableId` or `paymentId`), and nothing is posted or changed.
+    - A 305 for an INSTALLMENT or RETAINER_CHARGE Owed, or a partly credited Owed. Taking those over would break the agreement's link (originId) or the credit.
+    - A RECEIPT or 320 for an **allocated** payment, including one split across several Owed entries. A 320 taking over a 3,400 Owed for a 1,000 partial payment would rewrite the Owed's money, so it is linked, not taken over.
+    - A RECEIPT links its tax invoice (`originalId`) when the payment's single Owed has one.
+  - `documentsDue` says which (`linkOnly`). `lockFromEntryTx` (`prisma.ts:5246`) and its memory twin accept these shapes and refuse an entry that already has a document. Splits that mix an invoiced Owed with an uninvoiced one, and INTEGRATION payments, stay `issuable:false`.
   - Payments keep the CAPTURE rule (income recorded in the app). An INTEGRATION payment (from an API key or a connected app) is listed with `issuable:false` and reason `RECORDED_ELSEWHERE`, so it can still be attached or marked.
 
 ## 7. API (OpenAPI regenerated; `API_VERSION` → `1.127.0-mut660`; ADR-270)
