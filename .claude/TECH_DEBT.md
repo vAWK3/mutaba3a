@@ -2858,6 +2858,26 @@ empty option and list the profiles only), with a drawer test for each.
 
 ---
 
+### TD-319: Linking Malafat to an account with two-step sign-in on is refused
+**Status**: Open (2026-11-22, MUT-710 D6, review 8)
+- **What:** `/v1/auth/malafat/link` and `/consent` write the link before any session exists, so with two-step on they answer `TWO_FACTOR_LINK_UNAVAILABLE`.
+- **Fix:** link after the second step (a challenge between link and consent), then lift the refusal.
+
+### TD-320: TWO_FACTOR_SEAL_KEY can't be rotated without re-enrolment
+**Status**: Open (2026-11-22, MUT-710 D4)
+- **What:** one key seals every TOTP secret and keys every recovery-code digest; there is no key id or second key.
+- **Fix:** a versioned key list (seal with the newest, open with any), and a re-seal job.
+
+### TD-321: A setup link's second step is consumed before the redeem, not inside its transaction
+**Status**: Open (2026-11-22, MUT-710 D11)
+- **What:** the challenge is claimed by a conditional update just before `accountSetup.redeem`; if the redeem then loses a race (another tab, a newer link) the person starts the second step again. Never weaker, only a retry.
+- **Fix:** pass the challenge id into both stores' redeem and consume it in the same transaction.
+
+### TD-322: Tax Authority token refreshes are logged, not audited
+**Status**: Open (2026-11-22, MUT-710 D13)
+- **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.
+- **Fix:** after that branch merges, append the audit rows in `accessTokenFor`.
+
 ## Resolved Debt
 
 ### TD-314: The monthly summary's catch-up days re-read everyone already mailed

@@ -28,6 +28,26 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-275, API 1.130.0-mut710)
+
+### Added
+- Two-step sign-in, authenticator app (RFC 6238 TOTP, QR drawn on the server) or an emailed code, the person's choice, with 10 one-time recovery codes. Every first step (password, passkey, emailed sign-in code, Malafat `/exchange`; cookie and device) answers 403 `TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }` when it is on; `POST /v1/sessions/two-factor` and `/v1/device-sessions/two-factor` finish it; `POST /v1/two-factor/email-code` re-sends.
+- Every person setup link (reset, setup, operator links, after `--lock` too) asks for the second step: `POST /v1/account-setup/two-factor`, `/check` reports `twoFactor`, the redeem takes `challengeToken` + `code | recoveryCode`.
+- `/v1/me/two-factor` (GET, `challenge`, `enrolment`, `enrolment/confirm`, `recovery-codes`, DELETE); Me `user.twoFactor`; mails `two-factor-code` and `two-factor-changed` (ar/en).
+- The issuing gate: `PUT /v1/issuer`, `POST /v1/issued-documents`, `POST /v1/issuing/tax-authority/connect`, `POST /v1/issuing/allocation-decisions` answer 403 `TWO_FACTOR_SETUP_REQUIRED { enrolled }` unless it is on and this session passed it. Disconnecting stays open.
+- Operator reset: `DELETE /admin/v1/users/{id}/two-factor`, `npm run users -- two-factor-reset --email …`.
+- `auth_event` log lines (sign-in success/failure/lockout, every two-step event, password change/reset, Tax Authority connect/disconnect/token refresh) and the Terraform bucket kept 365 days (`auth_log.tf`).
+- Error codes `TWO_FACTOR_REQUIRED`, `TWO_FACTOR_CODE_WRONG`, `TWO_FACTOR_CHALLENGE_EXPIRED`, `TWO_FACTOR_TOO_MANY_TRIES`, `TWO_FACTOR_SETUP_REQUIRED`, `TWO_FACTOR_USE_PASSWORD`, `TWO_FACTOR_LINK_UNAVAILABLE`, `TWO_FACTOR_REQUIRED_FOR_ISSUING`.
+
+### Security
+- Review 4: the setup-link gate covers every person link whatever its purpose (an operator SETUP link after `--lock` no longer skips it).
+- Review 2: parallel requests can't race the second step. Each try is reserved on the person under their `two_factor` row lock before the code is read (`reserveTry`, replacing `recordFailure`), so no more than 5 guesses pass before the lock; the challenge's tries are one `UPDATE … RETURNING`; the TOTP step, a recovery code and the challenge are each claimed by one conditional update.
+- With two-step on the first step no longer clears the email key's throttle; finish rechecks status, closure and `passwordChangedAt`.
+
+### Technical
+- Migration `20261124120000_mut710_two_factor`; `TWO_FACTOR_SEAL_KEY` (required on production and staging); `issueSession` is no longer exported (`beginOrIssue`, `finishTwoFactor`).
+- Tests: `routes-two-factor-sign-in`, `routes-two-factor-enrolment`, `routes-two-factor-gate`, the two-step store contract on memory and Postgres. Issuing tests use `issuingHarness` (people with two-step on).
+
 ## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.125.0-mut647)
 
 ### Added
