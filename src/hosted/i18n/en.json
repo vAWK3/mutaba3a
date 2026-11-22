@@ -254,6 +254,7 @@
       "language": "Language"
     },
     "destinations": {
+      "home": "Home",
       "owed": "Owed",
       "paid": "Paid",
       "spent": "Spent",
@@ -3023,6 +3024,62 @@
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
         "column": "Document"
+      }
+    },
+    "home": {
+      "add": {
+        "title": "Add",
+        "dropTitle": "Drop receipts here",
+        "dropHint": "PDF, JPEG or PNG, up to 10 MB",
+        "receipt": "Add receipt",
+        "photo": "Take a photo",
+        "income": "Add income"
+      },
+      "waiting": {
+        "title": "Waiting for you"
+      },
+      "seeAll": "See all",
+      "toReview": {
+        "title": "To review",
+        "seeAll": "See all receipts to review",
+        "count": {
+          "one": "{count} receipt to review",
+          "other": "{count} receipts to review"
+        }
+      },
+      "overdue": {
+        "title": "Clients overdue",
+        "seeAll": "See all clients overdue",
+        "count": {
+          "one": "{count} client overdue",
+          "other": "{count} clients overdue"
+        },
+        "daysLate": {
+          "one": "{count} day late",
+          "other": "{count} days late"
+        },
+        "late": "Late"
+      },
+      "clear": {
+        "title": "Nothing needs you right now.",
+        "body": "New receipts and late payments will show up here."
+      },
+      "view": {
+        "label": "View",
+        "todo": "Receipts & to-dos",
+        "inOut": "In & out"
+      },
+      "inOut": {
+        "in": "Money in",
+        "out": "Money out",
+        "received": "Received in {month}",
+        "spent": "Spent in {month}",
+        "owedNow": "Owed now",
+        "overdueNow": "Overdue now",
+        "uncategorized": "Uncategorized",
+        "toOwed": "Open Owed",
+        "toSpent": "Open Spent",
+        "toReports": "Compare months in Reports"
       }
     }
   }
