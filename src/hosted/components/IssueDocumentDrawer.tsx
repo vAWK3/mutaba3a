@@ -353,6 +353,8 @@ function addDays(isoDate: string, days: number): string {
 /** The server's refusals the person can act on, in words; anything else is the general failure. */
 function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, string>) => string): string {
   const reason = apiErrorReason(error);
+  // MUT-647: the entry already has an invoice issued elsewhere; MTB3A issues none for it while it is attached.
+  if (reason === 'EXTERNAL_INVOICE_ATTACHED') return t('hosted.issue.refusals.EXTERNAL_INVOICE_ATTACHED', { number: String((error.details as { number?: unknown }).number ?? '') });
   const known = ['DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL', 'QUANTITY_INVALID', 'DISCOUNT_INVALID', 'TOTAL_NOT_POSITIVE', 'EXEMPT_DEALER_TAX_INVOICE'];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');

@@ -14,6 +14,11 @@ paths:
   - src/hosted/pages/views/IssuedDocuments.tsx
   - src/hosted/pages/views/issuedTabs.ts
   - src/hosted/pages/views/docTypeIcons.tsx
+  - src/hosted/components/AttachExternalInvoiceDrawer.tsx
+  - src/hosted/components/ExternalInvoiceColumn.tsx
+  - src/hosted/data/externalInvoiceQueries.ts
+  - src/hosted/components/art/invoicing-*
+  - src/hosted/pages/views/art/**
 features:
   - id: setup
     title: Set up issuing from the three introduction cards to a ready letterhead, each step saved on its own
@@ -81,3 +86,24 @@ features:
       - The drawer says issuing opens once Business details and Numbering are complete, with a link to the setup
       - The drawer opens with Client 1 already chosen
       - There is no Issued tab
+  - id: attach-external
+    title: Attach an invoice issued elsewhere to an Owed or a Received; read, confirmed, never numbered by MTB3A (MUT-647)
+    tier: secondary
+    tickets: [MUT-647]
+    paths:
+      - src/hosted/components/HostedTable.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Open Owed on Nour Studio (issuing on) and choose Attach on Client 1's entry
+      - Choose the invoice's PDF, correct the number to 3382 and the total to 1,450
+      - Attach, then open it from the entry's "Issued elsewhere" badge and open its file
+      - On Paid, drop a PDF on the Received row and attach it
+      - Remove that one; open Owed in Arabic
+    expect:
+      - The Document column offers Attach on an entry the person recorded, and nothing on an Owed MTB3A issued the document for
+      - The reader fills the number (3381), date (2026-10-12) and total (1,500.00); every field can be corrected; the drawer says MTB3A neither numbers it nor puts it in the uniform file
+      - A total that differs from the entry's is said, and Attach still works
+      - The entry shows "Issued elsewhere"; it opens with "Invoice 3382" and its date, its file opens, and it says MTB3A issues no document for the entry while it is attached
+      - A file dropped on a Received row is read and attached the same way (entryKind RECEIVED)
+      - After Remove the row offers Attach again; in Arabic the badge reads صادرة من جهة أخرى, right to left, with no sideways scroll
