@@ -1,3 +1,5 @@
+import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
+import { TokenBox } from '../israel/tax-authority/token-box.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
@@ -38,6 +40,8 @@ const ALLOWED_GETS = [
   // MUT-646: the setup and the logo.
   'GET /v1/issuer/logo',
   'GET /v1/issuing/setup',
+  // MUT-571: whether the profile is connected to the Tax Authority.
+  'GET /v1/issuing/tax-authority',
   'GET /v1/issuing/styles',
   'GET /v1/issuing/gaps',
   'GET /v1/issuing/settings',
@@ -106,7 +110,7 @@ const call = (op: Operation, query = '') =>
 
 beforeAll(async () => {
   storage = new MemoryAttachmentStorage();
-  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true });
+  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');

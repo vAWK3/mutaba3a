@@ -4476,6 +4476,20 @@ export interface IssuerLogoRecord {
   createdAt: Date;
 }
 
+/** MUT-571: a profile's connection to the Tax Authority. The tokens are sealed (AES-256-GCM); the store never opens them. */
+export interface TaxAuthorityConnectionRecord {
+  organizationId: string;
+  environment: string;
+  accessTokenSealed: string;
+  accessExpiresAt: Date;
+  refreshTokenSealed: string | null;
+  /** The consent ends here (90 days after it was given); a reconnect is needed after. */
+  refreshExpiresAt: Date | null;
+  connectedByUserId: string;
+  connectedAt: Date;
+  version: number;
+}
+
 export interface IssuedDocumentCounterRecord {
   organizationId: string;
   docType: IssuedDocType;
@@ -4569,6 +4583,12 @@ export interface IssueDocumentInput {
   fromEntry: { kind: 'receivable' | 'payment'; id: string } | null;
   /** MUT-572 fills it; null until then. */
   allocationNumber: string | null;
+  /**
+   * MUT-572 (ADR-264): asks the Tax Authority for this document's allocation number once its own number is known and
+   * every check has passed, inside the issue (the counter stays locked meanwhile). Anything but `allocated` refuses the
+   * issue as `allocation_failed`: nothing is written and the number is not taken. Absent when no number is needed.
+   */
+  allocate?: (number: number) => Promise<AllocationOutcome>;
   /** The ledger rows' title before the number, e.g. "חשבונית מס"; the store appends the number. */
   titlePrefix: string;
   coreVersion: string;
@@ -4578,8 +4598,21 @@ export interface IssueDocumentInput {
   requestId: string | null;
 }
 
+/** MUT-572: what asking for an allocation number came to. `allocated` carries the 9 digits printed on the document. */
+export type AllocationOutcome =
+  | { kind: 'allocated'; number: string }
+  /** The Tax Authority held the number: the person picks one of the four choices (InvoiceDecision). */
+  | { kind: 'held'; message: string | null }
+  /** The request was refused for its content (fix and send again). */
+  | { kind: 'refused'; errors: { code: number | null; message: string | null; param: string | null }[] }
+  /** No answer in time, or the service failed: nothing was issued; the same request may be sent again. */
+  | { kind: 'unavailable' }
+  /** The profile's connection is missing or expired. */
+  | { kind: 'not_connected' };
+
 export type IssueResult =
   | { kind: 'issued'; document: IssuedDocumentRecord; created: boolean }
+  | { kind: 'allocation_failed'; outcome: Exclude<AllocationOutcome, { kind: 'allocated' }> }
   /** D6: the date is before the last issued document of this type. */
   | { kind: 'date_before_last'; lastDate: IsoDate }
   | { kind: 'customer_not_found' }
@@ -4619,6 +4652,16 @@ export interface IssuingRepository {
   /** MUT-646: no current logo; the rows stay for the documents that print them. */
   clearLogo(organizationId: string, at: Date): Promise<void>;
   getLogo(organizationId: string, logoId: string): Promise<IssuerLogoRecord | null>;
+  /** MUT-571: the profile's Tax Authority connection, or null. */
+  getTaxConnection(organizationId: string): Promise<TaxAuthorityConnectionRecord | null>;
+  /** Replaces the connection (a new consent). */
+  putTaxConnection(record: Omit<TaxAuthorityConnectionRecord, 'version'>): Promise<TaxAuthorityConnectionRecord>;
+  deleteTaxConnection(organizationId: string): Promise<boolean>;
+  /**
+   * Runs `fn` with the connection locked (a single-use refresh token is never sent twice): `fn` sees the latest row and
+   * returns the tokens to store, or null to leave it. Concurrent callers wait their turn and see the stored result.
+   */
+  withTaxConnectionLock<T>(organizationId: string, fn: (current: TaxAuthorityConnectionRecord | null) => Promise<{ update: Omit<TaxAuthorityConnectionRecord, 'version'> | null; result: T }>): Promise<T>;
   counters(organizationId: string): Promise<IssuedDocumentCounterRecord[]>;
   /** D3: sets a type's first number; `has_documents` once one of that type exists. */
   setStartingNumber(organizationId: string, docType: IssuedDocType, start: number): Promise<{ kind: 'set'; counter: IssuedDocumentCounterRecord } | { kind: 'has_documents' }>;

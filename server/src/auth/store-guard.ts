@@ -377,6 +377,11 @@ export const STORE_ACCESS: StoreAccess = {
     addLogo: { write: 'issuing' },
     clearLogo: { write: 'issuing' },
     getLogo: { read: 'issuing' },
+    // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
+    getTaxConnection: { read: 'issuing' },
+    putTaxConnection: { write: 'issuing' },
+    deleteTaxConnection: { write: 'issuing' },
+    withTaxConnectionLock: { write: 'issuing' },
     counters: { read: 'issuing' },
     setStartingNumber: { write: 'issuing' },
     issue: { write: 'issuing' },

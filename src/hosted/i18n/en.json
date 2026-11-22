@@ -2908,7 +2908,13 @@
       },
       "taxAuthority": {
         "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
-        "status": "When needed"
+        "status": "When needed",
+        "connectBody": "Connect this profile to the Tax Authority so invoices that require an allocation number receive one. You sign in at the Tax Authority's own site; MTB3A never sees your password.",
+        "connect": "Connect to the Tax Authority",
+        "connected": "Connected to the Tax Authority until {until}.",
+        "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
+        "disconnect": "Disconnect",
+        "returnedFailed": "The connection was not completed. Please try again."
       },
       "ready": {
         "title": "Your letterhead is ready",

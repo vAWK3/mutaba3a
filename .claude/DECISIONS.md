@@ -6788,6 +6788,37 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** a soft gate (a banner only) — S1-a chose the hard one; storing the logo as an attachment (its bucket object could be deleted or replaced under an issued document).
 
+## ADR-264: Allocation Numbers Are Asked For Inside the Issue, After the Counter Lock (MUT-571, MUT-572)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-571-572-tax-authority.md`). Sandbox only until MUT-567/638.
+
+**Context:**
+- A tax invoice (305) or invoice-receipt (320) to a business, at or over the threshold, must carry the Tax Authority's allocation number. The number is obtained before the document exists.
+- Our numbering is gap-free and issuing is one transaction (ADR-260).
+- The Approval request names the document's own number (`invoice_reference_number`), so that number must be known first.
+
+**Decision:**
+1. **Inside the issue.** The issue transaction takes the counter's row lock, runs every check, then calls the injected `allocate(number)` hook before writing anything. Anything but a number throws the transaction away: no gap, no trace. The lock is held for the call's round trip (timeout 10 s, transaction 40 s), so issuing is serialised per profile and document type while it waits; acceptable for one business's invoices. The memory store does the same in order.
+2. **Idempotent by key.** Our `invoice_id` is a hash of (profile, Idempotency-Key). A timeout (502 TAX_AUTHORITY_UNAVAILABLE, not cached by the idempotency layer) and a retry with the same key send the same id, and the Tax Authority answers it once. A replayed key returns the stored document without calling again.
+3. **Held numbers.**
+   - 409 ALLOCATION_HELD offers CANCEL, CONTINUE and FURTHER_OBJECTION. CANCEL and FURTHER_OBJECTION are reported through `POST /v1/issuing/allocation-decisions`. CONTINUE is the issue again with a new key and `withoutAllocation.heldKey`, which reports CONTINUE and issues without a number.
+   - Reverse charge waits for VAT-0 compose rules.
+   - The held error codes aren't published, so they are learned from the sandbox's held test dealer.
+4. **Connection.**
+   - OAuth 2.0 authorization code against the `longtimetoken` endpoints. The callback trusts only an HMAC state (profile, person, 10 minutes).
+   - Tokens are sealed (AES-256-GCM) at rest, never logged, never answered.
+   - The single-use refresh token is spent under a row lock (`SELECT … FOR UPDATE`, or the memory store's queue), so two callers refresh once.
+   - The consent lasts 90 days from `consented_on`; then the status reads `expired` and the owner connects again.
+5. **The threshold** is the one shared table, `israel/allocation-number.ts` (ADR-246: ₪25,000 from 2024-05-05, ₪20,000 2025-01-01, ₪10,000 2026-01-01, ₪5,000 2026-06-01; before VAT, by the invoice date). The Tax Authority's general-information service (MinimumAmount) isn't subscribed. The specs Basel supplied state no figures; the table's source is MUT-557's ticket and the 2026 rules recorded in ADR-246.
+6. **Off by default.** No `TAX_AUTHORITY_ENV` means no routes (404 `TAX_AUTHORITY_OFF`) and issuing as before. Production needs every value set explicitly and its own token key.
+
+**Consequences:**
+- An issue over the threshold depends on the Tax Authority answering: when it doesn't, nothing is issued and the person tries again.
+- The software registration number defaults to the spec's test value until MUT-567.
+
+**Alternatives rejected:**
+- Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
+- Asking before the transaction with a predicted number: a concurrent issue could take it.
 ## ADR-266: Issuing in the Portal Lives Under Documents, in a Drawer (MUT-570)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-570-portal-issue.md`; wireframes round 2, direction B).

@@ -106,6 +106,7 @@ export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
 export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
 export type IssuedDocType = Schemas['IssuedDocType'];
 export type IssuingStyles = Schemas['IssuingStyles'];
+export type TaxAuthorityStatus = Schemas['TaxAuthorityStatus'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
@@ -785,6 +786,11 @@ export const api = {
   saveIssuerLogo: (profileId: string, file: Blob) => request<void>('PUT', '/v1/issuer/logo', { profileId, file }),
   removeIssuerLogo: (profileId: string) => request<void>('DELETE', '/v1/issuer/logo', { profileId }),
   /** MUT-570: issued documents. Every call is 404 where issuing is off for the profile. */
+  /** MUT-571: the profile's Tax Authority connection; 404 where this server has none configured. */
+  taxAuthorityStatus: (profileId: string, signal?: AbortSignal) => request<TaxAuthorityStatus>('GET', '/v1/issuing/tax-authority', { profileId, signal }),
+  /** The Tax Authority's sign-in address for this profile (state signed, 10 minutes). */
+  taxAuthorityConnect: (profileId: string) => request<Schemas['TaxAuthorityConnect']>('POST', '/v1/issuing/tax-authority/connect', { profileId }),
+  taxAuthorityDisconnect: (profileId: string) => request<void>('DELETE', '/v1/issuing/tax-authority', { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
   issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; cursor?: string | null } = {}, signal?: AbortSignal) =>
     request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),

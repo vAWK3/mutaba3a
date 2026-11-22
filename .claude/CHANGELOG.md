@@ -28,6 +28,15 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Connect to the Tax Authority; allocation numbers on issued invoices (MUT-571, MUT-572, ADR-264, API 1.120.0-mut571)
+
+### Added
+- `GET/DELETE /v1/issuing/tax-authority`, `POST /v1/issuing/tax-authority/connect`, the public `GET /v1/issuing/tax-authority/callback` (OAuth 2.0 code flow, signed state), `POST /v1/issuing/allocation-decisions`.
+- Issuing a 305/320 to a customer with a VAT number at or over the threshold asks the Tax Authority's Approval service for the allocation number inside the issue. Refusals: 409 `TAX_AUTHORITY_NOT_CONNECTED`, 409 `ALLOCATION_HELD`, 422 `ALLOCATION_REFUSED`, 502 `TAX_AUTHORITY_UNAVAILABLE`. `withoutAllocation.heldKey` continues a held invoice without a number.
+- The setup's Tax Authority step is done while connected.
+
+### Technical
+- Table `tax_authority_connections` (migration `20261122170000_mut571_tax_authority_connection`); tokens sealed with AES-256-GCM (`israel/tax-authority/token-box.ts`); config `TAX_AUTHORITY_*` (off unless `TAX_AUTHORITY_ENV`).
 ## [Unreleased] - 2026-11-22 — Issue documents in the portal (MUT-570, ADR-266, API 1.119.0-mut570)
 
 ### Added
