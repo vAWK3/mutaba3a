@@ -6819,6 +6819,38 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Alternatives rejected:**
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
+
+## ADR-265: Issued-Document PDFs Leave Signed (PAdES B-T), With a Pluggable Key; Production Refuses Until Its Certificate Is In Place (MUT-641)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-641-signed-pdf.md`). The production certificate is Basel's open decision (accountant's answer to MUT-567 Q3 first), queued in `~/Work/tools/heavy-gate/DECISIONS.md`.
+
+**Context:** Instruction 18B: a tax document sent electronically is the original only with an electronic signature proving who issued it and that it is unchanged. MUT-640 (ADR-261) prints the PDF; nothing signed it. The ticket assumes the software house (Barmajiyat) signs on behalf of every issuer.
+
+**Decision:**
+1. **Every issued-document PDF that leaves is signed**: `GET` (view copy) and `POST` (produced copy, original or copy) `/v1/issued-documents/{id}/pdf`. The draft preview (`POST …/preview/pdf`) is never signed.
+2. **The signature:** PAdES baseline B-T in pure Node (`server/src/issuing/pdf/sign/`): an invisible signature field, `/SubFilter /ETSI.CAdES.detached`, CMS with content-type, message-digest and signing-certificate-v2 signed attributes over SHA-256, and an RFC 3161 time-stamp token over the signature value. The panel's `/Reason` names the business in the document's language ("signed by MTB3A on behalf of …").
+3. **The key is pluggable** (`ISSUING_SIGNER`): `dev` = a throwaway authority (root, signer, TSA) made in the process on first use, never written anywhere, refused in production; `kms` = a Cloud KMS key (asymmetricSign over the digest; the service account holds only `roles/cloudkms.signer`), its certificate chain from `ISSUING_SIGNING_CERT_CHAIN` (refused if it contains a private key) and the CA's TSA (`ISSUING_TSA_URL`); `off` = none. Unset = `dev` outside production, `off` in production. A key whose signature doesn't verify against its certificate is refused before use.
+4. **Never unsigned:** no signer → 503 `SIGNING_NOT_CONFIGURED`, checked before a copy is recorded; a key or TSA failure → 503 `SIGNING_UNAVAILABLE` (logged), the issue stands, and a retry with the same Idempotency-Key gets the same copy signed.
+5. **The original is signed once and kept** (`issued_document_originals`, INSERT-only by the MUT-568 trigger, no foreign keys, purge-exempt, MUT-644's retention): every later request for copy 0 gets the same bytes. Copies are signed per request.
+6. **Interim v1 (Basel, 2026-11-22): sign in production before a certifying authority does.** The production KMS key certifies itself: `npm run signing:interim-cert` reads the key's public key and has KMS sign a self-issued document-signing certificate in Barmajiyat's name ("… document signing (self-issued)"); that PEM is `ISSUING_SIGNING_CERT_CHAIN`. Readers verify the signature and that nothing changed, but show the signer as not trusted. When the authority's deal closes, it certifies **the same key** (a CSR from it: `npm run signing:interim-cert -- --csr`, signed inside KMS) and only the chain changes. The time-stamp comes from a public RFC 3161 service until the authority's: Sectigo over https (DigiCert, Sectigo and FreeTSA verified against our client on 2026-11-22; production refuses a plain-http one, since over http anyone on the path could answer with a token signed by a certificate of their own). Whether this interim signature counts as the legal original under Instruction 18B is the accountant's call (MUT-567 Q3); until then it proves who issued the file and that it is unchanged.
+
+**Consequences:** production PDFs answer 503 until the certificate is bought and configured (issuing is still behind the operator's `invoicing` feature). Each view copy costs one KMS signature and one TSA call in production. Long-term validation (B-LT: revocation data in a DSS dictionary) waits for the real CA (TD-316). The recipient's consent to digital documents is not stored yet (TD-317; its shape waits for the accountant's answer, the field and UI for MUT-570/573). Dependencies: `pkijs` 3.4.3, `asn1js` 3.1.0, `pdf-lib` now a runtime dependency.
+
+**Pre-landing review (2026-11-22; 7 specialists, Red Team, adversarial pass):**
+- The original goes out on exactly one produced copy: it is kept with that copy's index (`issued_document_originals.copyIndex`). A failed signing doesn't spend it: until an original has been kept, the next produced copy (any key, any person) is the original. Every other copy, a racing twin that lost the keep and the failed request's own later retry included, is a copy.
+- The signing certificate must be valid at the signing time, or the signer refuses (SIGNING_NOT_CONFIGURED, `details.reason` CERTIFICATE_NOT_VALID).
+- A kms chain must parse, start with the signer's own certificate and chain issuer by issuer, or the server doesn't boot. Each start logs the signer's subject, fingerprint and end date, and warns within 30 days of it.
+- The time-stamp token is verified before it is embedded: its signature, a timeStamping certificate, a SHA-256 imprint of this signature, our nonce, and its time within 10 minutes of ours. The reply is capped at 256 KB.
+- KMS and the time-stamp authority each get one retry after 400 ms; KMS's own refusals (400/403/404) are setup errors (KEY_UNAVAILABLE), not retried. The time-stamp reply is read as it streams and dropped past 256 KB.
+- Setup errors are SIGNING_NOT_CONFIGURED with a reason (KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE); transient ones are SIGNING_UNAVAILABLE.
+- View copies are cached per instance for 10 minutes (32 documents), so a reload isn't another KMS signature and time-stamp.
+- Terraform: `prevent_destroy` on the key ring and key (signing is switched off by removing the certificate chain; the key-on tests only plan, since Terraform 1.9's test teardown can't destroy a protected key); the chain-needs-key rule is a precondition on the Cloud Run service (Terraform 1.5 compatible); `issuing_tsa_url` must be https.
+- The verifier matches the signer by issuer and serial, and flags non-zero bytes in the signature slot's padding.
+
+**Supported KMS algorithms:** `RSA_SIGN_PKCS1_{2048,3072,4096}_SHA256` and `EC_SIGN_P256_SHA256` (what the CMS declares). Production's key is Terraform's (`signing.tf`): RSA 3072, HSM, the API's service account holding only `roles/cloudkms.signer` on it; signing reaches Cloud Run only once `issuing_signing_cert_chain` is set.
+
+**Alternatives rejected:** `@signpdf` (adbe.pkcs7.detached by default, no RFC 3161 client, no signing-certificate-v2); a key file or PKCS#12 in Secret Manager (the key could be read and copied; KMS keeps it unexportable); signing at issue time instead of at delivery (each copy carries its own mark, so each is a different file); falling back to an unsigned file during an outage (the ticket forbids it).
+
 ## ADR-266: Issuing in the Portal Lives Under Documents, in a Drawer (MUT-570)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-570-portal-issue.md`; wireframes round 2, direction B).
@@ -6836,6 +6868,21 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. Style choices come from `GET /v1/issuing/styles` (Basel: new styles appear without a portal release).
 
 **Consequences:** the issue drawer is reusable by MUT-648 (offer after saving income) and MUT-647. Paid status per row is read on the document page only (no request per row).
+
+
+## ADR-267: An Invoice Issued Elsewhere Is Kept Beside Its Entry, Never Numbered Here (MUT-647)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-647-external-invoice.md`; wireframes round 3, A+B).
+
+**Decision:**
+1. An invoice another system issued is attached to the Owed or Received it belongs to: one live one per entry (`external_invoices`, a partial unique index on the live row). It is never numbered by MTB3A, never counted in its numbering, and never goes in the uniform file.
+2. The file is the entry's INVOICE attachment, written by the issuing store in the same transaction as the link (sessions can't write the attachments domain: attachments are Malafat's). The server writes the bytes itself (the bucket has no CORS for a browser PUT). Removing it soft-deletes both.
+3. `POST /v1/issuing/external-invoices/read` reads the number, date and total with the receipts reader (ADR-199) plus a number reader for Hebrew, Arabic and English invoices. Nothing is stored; nothing read is an error, the person types it. No upload-day window: an old invoice is fine.
+4. The person confirms or corrects every field. An amount that differs from the entry's is said, never blocking.
+5. While an entry has one, issuing a MTB3A document from that entry is refused (409 `EXTERNAL_INVOICE_ATTACHED`, with the number). An Owed MTB3A issued takes none (409 `ISSUED_HERE`).
+6. Same gate as issuing: the owner's `invoicing` feature; owner writes, accountants read and open.
+
+**Consequences:** a separate table, not new attachment columns, so the signed-out portal's local format needs no migration (signed out, nothing is attached). The phone half (share a file to an entry) follows MUT-573.
 
 ## ADR-268: After Saving Income, the Toast Offers Its Document, Linked to the Entry (MUT-648)
 

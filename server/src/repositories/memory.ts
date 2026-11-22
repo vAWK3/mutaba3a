@@ -22,6 +22,8 @@ import type {
   IssuerDetailsRecord,
   IssuingRepository,
   IssuerLogoRecord,
+  ExternalInvoiceRecord,
+  IssuedOriginalPdfRecord,
   IssuingSetupRecord,
   TaxAuthorityConnectionRecord,
   AccountClosureRecord,
@@ -386,6 +388,9 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-646 */
   private readonly issuingSetupMap = new Map<string, IssuingSetupRecord>();
   private readonly issuerLogoMap = new Map<string, IssuerLogoRecord>();
+  /** MUT-647 */
+  private readonly externalInvoiceMap = new Map<string, ExternalInvoiceRecord>();
+  private readonly issuedOriginals = new Map<string, IssuedOriginalPdfRecord>();
   /** MUT-571 */
   private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
   private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
@@ -1039,6 +1044,43 @@ export class MemoryLedgerStore implements LedgerStore {
       copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: again ? null : (copy.requestKey ?? null) });
       this.issuedCopies.set(documentId, copies);
       return { copyIndex: copies.length - 1 };
+    },
+    attachExternal: async (input, file) => {
+      const live = [...this.externalInvoiceMap.values()].find((x) => x.organizationId === input.organizationId && x.entryKind === input.entryKind && x.entryId === input.entryId && !x.removedAt);
+      if (live) return { kind: 'exists', record: { ...live } };
+      this.files.set(input.attachmentId, { id: input.attachmentId, organizationId: input.organizationId, kind: 'INVOICE', ...file, projectId: null, invoiceNumber: input.number, invoiceDate: input.documentDate, uploadedByKeyId: null, status: 'READY', createdAt: input.createdAt, completedAt: input.createdAt, deletedAt: null });
+      const record: ExternalInvoiceRecord = { ...input, id: randomUUID(), removedAt: null };
+      this.externalInvoiceMap.set(record.id, record);
+      return { kind: 'attached', record: { ...record } };
+    },
+    liveExternal: async (organizationId, entryKind, entryIds) =>
+      [...this.externalInvoiceMap.values()].filter((x) => x.organizationId === organizationId && x.entryKind === entryKind && entryIds.includes(x.entryId) && !x.removedAt).map((x) => ({ ...x })),
+    getExternal: async (organizationId, id) => {
+      const x = this.externalInvoiceMap.get(id);
+      return x && x.organizationId === organizationId ? { ...x } : null;
+    },
+    removeExternal: async (organizationId, id, at) => {
+      const x = this.externalInvoiceMap.get(id);
+      if (!x || x.organizationId !== organizationId || x.removedAt) return null;
+      x.removedAt = at;
+      const file = this.files.get(x.attachmentId);
+      if (file && !file.deletedAt) file.deletedAt = at;
+      return { ...x };
+    },
+    getOriginalPdf: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? { ...r, bytes: new Uint8Array(r.bytes) } : null;
+    },
+    originalCopyIndex: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? r.copyIndex : null;
+    },
+    keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return null;
+      const kept = this.issuedOriginals.get(documentId) ?? { documentId, organizationId, copyIndex: pdf.copyIndex, bytes: new Uint8Array(pdf.bytes), sha256: pdf.sha256, createdAt: at };
+      this.issuedOriginals.set(documentId, kept);
+      return { ...kept, bytes: new Uint8Array(kept.bytes) };
     },
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);

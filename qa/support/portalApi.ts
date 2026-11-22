@@ -526,6 +526,8 @@ export interface FakeApiSeed {
   periodDownloads?: boolean;
   /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
   invoicing?: boolean | 'ready';
+  /** MUT-647: what reading an invoice issued elsewhere answers (default: a read invoice 3381 of 1,500.00). */
+  externalReading?: { read: boolean; number: string | null; documentDate: string | null; amount: string | null };
   /** MUT-648: the business's "offer to issue after saving" (on unless false). */
   offerAfterSave?: boolean;
 }
@@ -541,6 +543,8 @@ interface StubIssuing {
   /** MUT-570: what this profile issued, newest first, and each Owed it posted (outstanding, in minor units). */
   docs: Record<string, Json>[];
   owed: Map<string, { gross: number; outstanding: number; customerId: string | null }>;
+  /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received; a removed one leaves the list. */
+  external: (Record<string, Json> & { id: string; entryKind: string; entryId: string })[];
 }
 const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
 const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
@@ -802,6 +806,7 @@ export class FakeApi {
   readonly issuing: Map<string, StubIssuing> | null;
   /** MUT-570: the setup done (details and numbering), so issuing is open. */
   private readonly invoicingReady: boolean;
+  private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
   private readonly offerAfterSave: boolean;
 
   constructor(seed: FakeApiSeed) {
@@ -838,6 +843,7 @@ export class FakeApi {
     this.periodDownloads = seed.periodDownloads ?? false;
     this.issuing = seed.invoicing ? new Map() : null;
     this.invoicingReady = seed.invoicing === 'ready';
+    this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
@@ -1036,7 +1042,7 @@ export class FakeApi {
       this.customers.push(created);
       return json(created, 201);
     }
-    if (resource === 'issuer' || resource === 'issuing' || resource === 'issued-documents') return this.issuingAnswer(e, resource, id, sub);
+    if (resource === 'issuer' || resource === 'issuing' || resource === 'issued-documents') return this.issuingAnswer(e, resource, id, sub, subId);
     // MUT-570: the Owed an issued tax invoice posted, as GET /v1/receivables/{id} reads it.
     if (resource === 'receivables' && method === 'GET' && id && this.issuedOwed(id)) return json(this.issuedOwed(id));
     if (resource === 'business-lookup' && method === 'GET') {
@@ -1193,14 +1199,59 @@ export class FakeApi {
 
   /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */
   /** MUT-333: 30 days from now, as the server counts it. */
+  /**
+   * MUT-647: invoices issued elsewhere, the way the server answers them: read (nothing kept), attach (one per entry;
+   * 409 EXTERNAL_INVOICE_EXISTS, 409 ISSUED_HERE for an Owed MTB3A issued), list by entry, open the file, remove.
+   */
+  private externalAnswer(e: Logged, state: StubIssuing, sub: string | undefined, subId: string | undefined) {
+    const { method, query: q } = e;
+    if (sub === 'read' && method === 'POST') return json(this.externalReading);
+    if (!sub && method === 'POST') {
+      const entryKind = q.get('entryKind') ?? '';
+      const entryId = q.get('entryId') ?? '';
+      const owed = entryKind === 'OWED' ? this.receivables.find((r) => r.id === entryId) : undefined;
+      const received = entryKind === 'RECEIVED' ? this.payments.find((p) => p.id === entryId) : undefined;
+      if (!owed && !received) return notFound();
+      if (owed?.origin === 'ISSUED_DOCUMENT') return conflict('ISSUED_HERE');
+      const live = state.external.find((x) => x.entryKind === entryKind && x.entryId === entryId);
+      if (live) return json({ error: { code: 'CONFLICT', message: 'exists', details: { reason: 'EXTERNAL_INVOICE_EXISTS', externalInvoiceId: live.id } } }, 409);
+      const made = {
+        id: uid(0xe7, state.external.length + 1),
+        entryKind,
+        entryId,
+        attachmentId: uid(0xe8, state.external.length + 1),
+        number: q.get('number') ?? '',
+        documentDate: q.get('documentDate') ?? '',
+        filename: q.get('filename') ?? 'invoice',
+        mimeType: e.headers['content-type'] ?? 'application/pdf',
+        sizeBytes: e.raw?.length ?? 0,
+        createdAt: STAMP,
+      };
+      state.external.push(made);
+      return json(made, 201);
+    }
+    if (!sub && method === 'GET') {
+      const ids = new Set((q.get('entryIds') ?? '').split(',').filter(Boolean));
+      return json({ items: state.external.filter((x) => x.entryKind === q.get('entryKind') && ids.has(x.entryId)) });
+    }
+    const found = state.external.find((x) => x.id === sub);
+    if (!found) return notFound();
+    if (subId === 'file' && method === 'GET') return json({ url: `${STORAGE}/external/${found.id}?disposition=inline`, expiresAt: '2099-01-01T00:00:00Z', filename: found.filename, mimeType: found.mimeType });
+    if (!subId && method === 'DELETE') {
+      state.external = state.external.filter((x) => x !== found);
+      return { status: 204, body: '' };
+    }
+    return notFound();
+  }
+
   /** MUT-646: the invoicing setup's routes, the way the server answers them (the gate's own rules: details and numbering). */
-  private issuingAnswer(e: Logged, resource: string, id: string | undefined, sub: string | undefined) {
+  private issuingAnswer(e: Logged, resource: string, id: string | undefined, sub: string | undefined, subId?: string) {
     const profileId = e.headers['x-mutaba3a-profile'];
     const profile = this.profiles.find((p) => p.stub.id === profileId);
     if (!this.issuing || !profile || profile.stub.type === 'PERSONAL') return notFound();
     let state = this.issuing.get(profileId!);
     if (!state) {
-      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {}, docs: [], owed: new Map() };
+      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {}, docs: [], owed: new Map(), external: [] };
       if (this.invoicingReady) {
         state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
         Object.assign(state, { introSeen: true, numbering: true, defaults: true });
@@ -1224,6 +1275,7 @@ export class FakeApi {
     const { method } = e;
     if (resource === 'issued-documents') return this.issuedAnswer(e, state, id, sub, missingOf());
     if (resource === 'issuing') {
+      if (id === 'external-invoices') return this.externalAnswer(e, state, sub, subId);
       if (id === 'setup' && !sub && method === 'GET') return setup();
       if (id === 'setup' && sub === 'intro-seen' && method === 'POST') {
         state.introSeen = true;
