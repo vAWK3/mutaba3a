@@ -14,6 +14,8 @@ import { todayInZone } from '../format/dates';
 import { useWritableFor } from '../session/me';
 import { ClientPicker } from './ClientPicker';
 import { Drawer } from './Drawer';
+import { Skeleton } from './QueryView';
+import { useToast } from './Toast';
 
 /**
  * MUT-570 (direction B, P1/P2/P4): issue a tax invoice, invoice-receipt, receipt or credit note from a drawer over the
@@ -32,9 +34,11 @@ export interface IssueStart {
   lines?: Line[];
   /** A receipt paying an invoice: the remaining amount. */
   amount?: string;
+  /** The original's "prices include VAT" (a credit note or a similar document keeps it). */
+  pricesIncludeVat?: boolean;
 }
 
-interface Line {
+export interface Line {
   description: string;
   kind: 'GOODS' | 'SERVICE';
   quantity: string;
@@ -48,13 +52,31 @@ interface Line {
 const EMPTY_LINE: Line = { description: '', kind: 'SERVICE', quantity: '1', unitPrice: '', discount: '' };
 const DECIMAL = /^\d{1,13}(\.\d{1,2})?$/;
 const QUANTITY = /^\d{1,9}(\.\d{1,3})?$/;
+const positiveQuantity = (q: string) => QUANTITY.test(q.trim()) && /[1-9]/.test(q);
+const DESCRIPTION_MAX = 300;
 const money = (v: string) => (DECIMAL.test(v.trim()) ? (v.includes('.') ? v.trim().padEnd(v.trim().indexOf('.') + 3, '0') : `${v.trim()}.00`) : null);
 
 /** A document type's own word for the button and the heading. */
 const TYPES: IssuedDocType[] = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'];
 
-export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: { profile: HostedProfile; start?: IssueStart; onClose: () => void; onIssued: (doc: IssuedDocument) => void }) {
+export function IssueDocumentDrawer(props: { profile: HostedProfile; start?: IssueStart; onClose: () => void; onIssued: (doc: IssuedDocument) => void }) {
+  const { t } = useLanguage();
+  const setup = useIssuingSetup(props.profile.id);
+  const issuer = useIssuer(props.profile.id);
+  // Review fix: the form starts from the issuer (dealer type, VAT pricing, language), so it waits for it.
+  if (!setup.data || issuer.data === undefined) {
+    return (
+      <Drawer title={t('hosted.issue.title')} onClose={props.onClose} closeLabel={t('common.close')}>
+        <Skeleton />
+      </Drawer>
+    );
+  }
+  return <IssueForm {...props} />;
+}
+
+function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: HostedProfile; start?: IssueStart; onClose: () => void; onIssued: (doc: IssuedDocument) => void }) {
   const { t, language } = useLanguage();
+  const toast = useToast();
   const formId = useId();
   const writable = useWritableFor(profile);
   const setup = useIssuingSetup(profile.id);
@@ -68,7 +90,7 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
   const [docType, setDocType] = useState<IssuedDocType>(start.docType ?? (exempt ? 'RECEIPT' : 'TAX_INVOICE'));
   const [lines, setLines] = useState<Line[]>(start.lines ?? [{ ...EMPTY_LINE, unitPrice: start.amount ?? '' }]);
   const [openLine, setOpenLine] = useState<number | null>(null);
-  const [vatIncluded, setVatIncluded] = useState<boolean | null>(null);
+  const [vatIncluded, setVatIncluded] = useState<boolean | null>(start.pricesIncludeVat ?? null);
   const [documentDate, setDocumentDate] = useState(today);
   const [dueDate, setDueDate] = useState('');
   const [method, setMethod] = useState<'BANK' | 'CASH'>('BANK');
@@ -79,6 +101,7 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
   const pricesIncludeVat = vatIncluded ?? issuer.data?.pricesIncludeVat ?? false;
   const language_ = (issuer.data?.defaultLanguage ?? 'he') as IssueDocumentRequest['language'];
   const takesPayment = docType === 'TAX_INVOICE_RECEIPT' || docType === 'RECEIPT';
+  // An exempt dealer issues receipts only (the issuer is loaded before this form renders, so the first type is right).
   const needsCustomer = docType !== 'RECEIPT';
 
   // The due date follows the profile's payment terms once the issuer is read.
@@ -89,7 +112,8 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
     if (terms != null) setDueDate(addDays(today, terms));
   }
 
-  const linesValid = lines.length > 0 && lines.every((l) => l.description.trim() && QUANTITY.test(l.quantity.trim()) && money(l.unitPrice) !== null && (!l.discount.trim() || money(l.discount) !== null));
+  const discountInvalid = (l: Line) => !!l.discount.trim() && money(l.discount) === null;
+  const linesValid = lines.length > 0 && lines.every((l) => l.description.trim() && positiveQuantity(l.quantity) && money(l.unitPrice) !== null && !discountInvalid(l));
   const body: IssueDocumentRequest | null =
     linesValid && (!needsCustomer || customerId)
       ? {
@@ -128,6 +152,12 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
   const [drafting, setDrafting] = useState(false);
 
   const setLine = (index: number, patch: Partial<Line>) => setLines(lines.map((l, i) => (i === index ? { ...l, ...patch } : l)));
+  // Review fix: a refusal of an earlier attempt goes once the draft changes.
+  const [issuedFor, setIssuedFor] = useState(serialized);
+  if (issue.error && issuedFor !== serialized) {
+    setIssuedFor(serialized);
+    issue.reset();
+  }
   const refusal = issue.error ?? preview.error;
   const refusalText = refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
@@ -135,6 +165,7 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
     event.preventDefault();
     setTried(true);
     if (!body) return;
+    setIssuedFor(serialized);
     issue.mutate(
       { body, key: attempt.keyFor(body) },
       {
@@ -151,6 +182,8 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
     setDrafting(true);
     try {
       openPdf(await api.draftPdf(profile.id, body), 'draft.pdf');
+    } catch {
+      toast(t('hosted.issue.pdfFailed'));
     } finally {
       setDrafting(false);
     }
@@ -158,7 +191,7 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
 
   const typeLabel = (type: IssuedDocType) => t(`hosted.issue.types.${type}`);
   const allowedTypes = exempt ? (['RECEIPT'] as IssuedDocType[]) : TYPES.filter((type) => type !== 'CREDIT_NOTE' || start.originalId);
-  const blocked = setup.data && !setup.data.canIssue;
+  const blocked = setup.data ? !setup.data.canIssue : false;
 
   return (
     <Drawer
@@ -218,9 +251,9 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
             </div>
             {lines.map((line, i) => (
               <div key={i} className="hp-issue-line" data-testid={`issue-line-${i}`}>
-                <Input label={t('hosted.issue.description')} id={`${formId}-desc-${i}`} value={line.description} dir="auto" maxLength={500} onChange={(e) => setLine(i, { description: e.target.value })} error={tried && !line.description.trim() ? t('hosted.issue.descriptionRequired') : undefined} />
+                <Input label={t('hosted.issue.description')} id={`${formId}-desc-${i}`} value={line.description} dir="auto" maxLength={DESCRIPTION_MAX} onChange={(e) => setLine(i, { description: e.target.value })} error={tried && !line.description.trim() ? t('hosted.issue.descriptionRequired') : undefined} />
                 <div className="hp-issue-line-numbers">
-                  <Input label={t('hosted.issue.quantity')} id={`${formId}-qty-${i}`} value={line.quantity} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { quantity: e.target.value })} error={tried && !QUANTITY.test(line.quantity.trim()) ? t('hosted.issue.numberInvalid') : undefined} />
+                  <Input label={t('hosted.issue.quantity')} id={`${formId}-qty-${i}`} value={line.quantity} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { quantity: e.target.value })} error={tried && !positiveQuantity(line.quantity) ? t('hosted.issue.numberInvalid') : undefined} />
                   <Input label={t('hosted.issue.price')} id={`${formId}-price-${i}`} value={line.unitPrice} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { unitPrice: e.target.value })} error={tried && money(line.unitPrice) === null ? t('hosted.issue.numberInvalid') : undefined} />
                   <span className="hp-issue-line-net" aria-live="polite">
                     {preview.data?.lines[i] ? formatDecimal(preview.data.lines[i].net, 'ILS', language) : ''}
@@ -236,13 +269,13 @@ export function IssueDocumentDrawer({ profile, start = {}, onClose, onIssued }: 
                     </Button>
                   )}
                 </div>
-                {openLine === i && (
+                {(openLine === i || discountInvalid(line)) && (
                   <div className="hp-issue-line-options">
                     <Select label={t('hosted.issue.kind')} id={`${formId}-kind-${i}`} value={line.kind} onChange={(e) => setLine(i, { kind: e.target.value as Line['kind'] })}>
                       <option value="SERVICE">{t('hosted.issue.kinds.SERVICE')}</option>
                       <option value="GOODS">{t('hosted.issue.kinds.GOODS')}</option>
                     </Select>
-                    <Input label={t('hosted.issue.lineDiscount')} id={`${formId}-disc-${i}`} value={line.discount} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { discount: e.target.value })} />
+                    <Input label={t('hosted.issue.lineDiscount')} id={`${formId}-disc-${i}`} value={line.discount} dir="ltr" inputMode="decimal" onChange={(e) => setLine(i, { discount: e.target.value })} error={discountInvalid(line) ? t('hosted.issue.numberInvalid') : undefined} />
                     <label className="hp-issue-switch">
                       <input type="checkbox" checked={line.pricesIncludeVat ?? pricesIncludeVat} onChange={(e) => setLine(i, { pricesIncludeVat: e.target.checked })} />
                       <span>{t('hosted.issue.linePriceIncludesVat')}</span>
@@ -320,7 +353,7 @@ function addDays(isoDate: string, days: number): string {
 /** The server's refusals the person can act on, in words; anything else is the general failure. */
 function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, string>) => string): string {
   const reason = apiErrorReason(error);
-  const known = ['DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL'];
+  const known = ['DATE_BEFORE_LAST_DOCUMENT', 'ORIGINAL_PAID', 'EXCEEDS_OUTSTANDING', 'ISSUING_SETUP_INCOMPLETE', 'DATE_BEFORE_ORIGINAL', 'QUANTITY_INVALID', 'DISCOUNT_INVALID', 'TOTAL_NOT_POSITIVE', 'EXEMPT_DEALER_TAX_INVOICE'];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');
 }

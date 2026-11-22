@@ -190,10 +190,11 @@ test('issue a tax invoice: client, lines, live totals, then the document with it
     await expect(page.getByTestId('issued-outstanding')).toContainText('12,774.00');
   });
 
-  await step('AC3 A credit note from the tax invoice, prefilled with its lines, credits what is still owed', async () => {
+  await step('AC3 A credit note from the part-paid tax invoice starts at what is still owed, VAT included', async () => {
     await page.getByTestId('issued-credit').click();
-    await expect(drawer.getByLabel('Description').first()).toHaveValue('Flutter development, sprint 3');
-    await drawer.getByRole('button', { name: 'Remove' }).first().click();
+    await expect(drawer.getByLabel('Description')).toHaveValue('Credit for Tax invoice 1');
+    await expect(drawer.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('12774.00');
+    await expect(drawer.getByRole('checkbox', { name: 'Prices include VAT' })).toBeChecked();
     await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
     await page.getByTestId('issue-submit').click();
     await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');

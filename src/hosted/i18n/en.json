@@ -2988,7 +2988,11 @@
         "ORIGINAL_PAID": "A credit note credits only what is still owed on its tax invoice.",
         "EXCEEDS_OUTSTANDING": "The receipt is more than the tax invoice still owes.",
         "ISSUING_SETUP_INCOMPLETE": "Finish the invoicing setup before issuing.",
-        "DATE_BEFORE_ORIGINAL": "A credit note can't be dated before its tax invoice."
+        "DATE_BEFORE_ORIGINAL": "A credit note can't be dated before its tax invoice.",
+        "QUANTITY_INVALID": "Enter a quantity greater than zero.",
+        "DISCOUNT_INVALID": "A discount can't be more than the line's amount.",
+        "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
+        "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only."
       },
       "backToList": "Issued documents",
       "issuedTitle": "{document} was issued",
@@ -3001,7 +3005,10 @@
       "creditNote": "Issue a credit note",
       "similar": "Issue a similar document",
       "receiptLine": "Payment for {document}",
-      "finalNote": "This document stays as it was issued. A credit note corrects it."
+      "finalNote": "This document stays as it was issued. A credit note corrects it.",
+      "pdfFailed": "The PDF could not be prepared. Please try again.",
+      "notFound": "This document could not be found.",
+      "creditLine": "Credit for {document}"
     }
   }
 }

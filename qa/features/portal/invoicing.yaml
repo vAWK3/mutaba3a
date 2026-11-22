@@ -59,13 +59,13 @@ features:
       - Choose Client 1, describe two lines (40 × 450, 1 × 1,300)
       - Issue the tax invoice
       - On its page, Record a payment and issue a receipt for 10,000
-      - Back on the tax invoice, Issue a credit note from its lines for 1,000
+      - Back on the tax invoice, Issue a credit note and lower it to 1,000
       - Open the list, then in Arabic
     expect:
       - The totals come from the server's preview as the lines are typed (19,300.00 before VAT, 22,774.00 with it), and the drawer says an issued document is corrected only by a credit note
       - The tax invoice takes number 1 (POST with an Idempotency-Key); its page shows the issued moment and 22,774.00 still owed
       - The receipt pays the tax invoice (appliesToDocumentId, payment) and what is still owed drops to 12,774.00
-      - The credit note is prefilled with the invoice's lines and names its tax invoice (originalId)
+      - After the part payment, the credit note starts as one line for what is still owed (12,774.00, prices include VAT) and names its tax invoice (originalId)
       - The list shows the three documents; in Arabic it reads right to left
   - id: issue-gate
     title: Issuing waits for the setup; a client page issues for that client; no issuing, no Issued tab (MUT-570)

@@ -6,6 +6,7 @@ import { useLanguage } from '../../../lib/i18n/core';
 import { ApiError, api, type HostedProfile, type IssuedDocument } from '../../api/client';
 import { IssueDocumentDrawer, type IssueStart } from '../../components/IssueDocumentDrawer';
 import { Skeleton } from '../../components/QueryView';
+import { useToast } from '../../components/Toast';
 import { SectionTabs } from '../../components/SectionTabs';
 import { openPdf, useIssuedDocument, useIssuedDocuments } from '../../data/issuedQueries';
 import { useIssuingSetup } from '../../data/issuingQueries';
@@ -118,17 +119,35 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
   const [drawer, setDrawer] = useState<IssueStart | null>(null);
   const [busy, setBusy] = useState(false);
   const attempt = useAttemptKey();
+  const toast = useToast();
+  if (doc.error) return <p className="hp-muted" role="alert">{t('hosted.issue.notFound')}</p>;
   if (!doc.data) return <Skeleton />;
   const d = doc.data;
   const outstanding = owed.data?.outstanding ?? null;
   const owing = outstanding !== null && outstanding !== '0.00';
-  const lines = d.lines.map((l) => ({ description: l.description, kind: (l.kind === 'GOODS' ? 'GOODS' : 'SERVICE') as 'GOODS' | 'SERVICE', quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount === '0.00' ? '' : l.discount }));
+  // Each line keeps its own VAT basis: whether its price included VAT, and whether it was exempt (review fix).
+  const lines = d.lines.map((l) => ({
+    description: l.description,
+    kind: (l.kind === 'GOODS' ? 'GOODS' : 'SERVICE') as 'GOODS' | 'SERVICE',
+    quantity: l.quantity,
+    unitPrice: l.unitPrice,
+    discount: l.discount === '0.00' ? '' : l.discount,
+    pricesIncludeVat: l.pricesIncludeVat,
+    ...(l.vatRateBasisPoints === 0 ? { vatExempt: true } : {}),
+  }));
+  // A credit note credits only what is still owed: after a part payment, one line for that amount, VAT included.
+  const partlyPaid = owing && outstanding !== d.gross;
+  const creditLines = partlyPaid
+    ? [{ description: t('hosted.issue.creditLine', { document: docTitle(t, d) }), kind: 'SERVICE' as const, quantity: '1', unitPrice: outstanding!, discount: '', pricesIncludeVat: true, ...(d.lines.every((l) => l.vatRateBasisPoints === 0) ? { vatExempt: true } : {}) }]
+    : lines;
   const pdf = async (produce: boolean) => {
     setBusy(true);
     try {
       const filename = `${docTitle(t, d)}.pdf`;
       openPdf(produce ? await api.producePdf(profile.id, d.id, attempt.keyFor({ document: d.id })) : await api.viewPdf(profile.id, d.id), filename);
       if (produce) attempt.succeeded();
+    } catch {
+      toast(t('hosted.issue.pdfFailed'));
     } finally {
       setBusy(false);
     }
@@ -191,12 +210,12 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
           </Button>
         )}
         {writable && d.docType === 'TAX_INVOICE' && owing && (
-          <Button variant="secondary" data-testid="issued-credit" onClick={() => setDrawer({ docType: 'CREDIT_NOTE', customerId: d.customerId ?? undefined, originalId: d.id, lines })}>
+          <Button variant="secondary" data-testid="issued-credit" onClick={() => setDrawer({ docType: 'CREDIT_NOTE', customerId: d.customerId ?? undefined, originalId: d.id, lines: creditLines, pricesIncludeVat: partlyPaid ? true : d.pricesIncludeVat })}>
             {t('hosted.issue.creditNote')}
           </Button>
         )}
         {writable && d.docType !== 'CREDIT_NOTE' && (
-          <Button variant="ghost" onClick={() => setDrawer({ docType: d.docType, customerId: d.customerId ?? undefined, lines })}>
+          <Button variant="ghost" onClick={() => setDrawer({ docType: d.docType, customerId: d.customerId ?? undefined, lines, pricesIncludeVat: d.pricesIncludeVat })}>
             {t('hosted.issue.similar')}
           </Button>
         )}
