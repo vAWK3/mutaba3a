@@ -31,7 +31,7 @@ export interface IssueStart {
   docType?: IssuedDocType;
   /** A credit note: the tax invoice it credits (its lines come too). */
   originalId?: string;
-  /** A receipt: the open tax invoice it pays. */
+  /** A receipt: the open tax invoice it pays; a receipt or invoice-receipt: the payment request it settles (MUT-662). */
   appliesToDocumentId?: string;
   lines?: Line[];
   /** A receipt paying an invoice: the remaining amount. */
@@ -61,7 +61,7 @@ const DESCRIPTION_MAX = 300;
 const money = (v: string) => (DECIMAL.test(v.trim()) ? (v.includes('.') ? v.trim().padEnd(v.trim().indexOf('.') + 3, '0') : `${v.trim()}.00`) : null);
 
 /** A document type's own word for the button and the heading. */
-const TYPES: IssuedDocType[] = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'];
+const TYPES: IssuedDocType[] = ['TAX_INVOICE', 'PAYMENT_REQUEST', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'];
 
 export function IssueDocumentDrawer(props: { profile: HostedProfile; start?: IssueStart; onClose: () => void; onIssued: (doc: IssuedDocument) => void }) {
   const { t } = useLanguage();
@@ -107,8 +107,12 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const pricesIncludeVat = vatIncluded ?? issuer.data?.pricesIncludeVat ?? false;
   const language_ = (issuer.data?.defaultLanguage ?? 'he') as IssueDocumentRequest['language'];
   const takesPayment = docType === 'TAX_INVOICE_RECEIPT' || docType === 'RECEIPT';
+  // MUT-662: a payment request falls due like a tax invoice.
+  const hasDueDate = docType === 'TAX_INVOICE' || docType === 'PAYMENT_REQUEST';
   // An exempt dealer issues receipts only (the issuer is loaded before this form renders, so the first type is right).
-  const needsCustomer = docType !== 'RECEIPT';
+  // MUT-660 (N1): money received with no client takes its invoice-receipt with no client (linked to the entry).
+  const noClientEntry = start.fromEntry?.kind === 'received' && !start.customerId;
+  const needsCustomer = docType !== 'RECEIPT' && !noClientEntry;
 
   // The due date follows the profile's payment terms once the issuer is read.
   const terms = issuer.data?.paymentTermsDays;
@@ -128,9 +132,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
           currency: 'ILS',
           language: language_,
           ...(customerId ? { customerId } : {}),
-          ...(docType === 'TAX_INVOICE' && dueDate ? { dueDate } : {}),
+          ...(hasDueDate && dueDate ? { dueDate } : {}),
           ...(start.originalId && docType === 'CREDIT_NOTE' ? { originalId: start.originalId } : {}),
-          ...(start.appliesToDocumentId && docType === 'RECEIPT' ? { appliesToDocumentId: start.appliesToDocumentId } : {}),
+          ...(start.appliesToDocumentId && takesPayment ? { appliesToDocumentId: start.appliesToDocumentId } : {}),
           // A Received this document takes over already says how the money came in.
           ...(takesPayment && start.fromEntry?.kind !== 'received' ? { payment: { method, reference: reference.trim() || null, receivedOn } } : {}),
           ...(start.fromEntry ? { fromEntry: start.fromEntry } : {}),
@@ -169,7 +173,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const refusal = issue.error ?? preview.error;
   const refusalText = refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
-  // MUT-711 (ADR-272): the preview says the invoice needs an allocation number MTB3A can't request. Issue waits for a
+  // MUT-711 (ADR-273): the preview says the invoice needs an allocation number MTB3A can't request. Issue waits for a
   // well-formed number, sent with the invoice number it was requested for (a preview, never a reservation).
   const allocation = preview.data?.allocation ?? null;
   const manual = allocation?.mode === 'MANUAL' ? allocation : null;
@@ -215,8 +219,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
 
   const typeLabel = (type: IssuedDocType) => t(`hosted.issue.types.${type}`);
   // Linked to an entry (I1-a): an Owed takes a tax invoice, a Received an invoice-receipt or a receipt (review fix).
-  const entryTypes: IssuedDocType[] | null = start.fromEntry ? (start.fromEntry.kind === 'owed' ? ['TAX_INVOICE'] : ['TAX_INVOICE_RECEIPT', 'RECEIPT']) : null;
-  const allowedTypes = exempt ? (['RECEIPT'] as IssuedDocType[]) : (entryTypes ?? TYPES.filter((type) => type !== 'CREDIT_NOTE' || start.originalId));
+  // MUT-662: an Owed may also take a payment request (an exempt dealer's only document for one).
+  const entryTypes: IssuedDocType[] | null = start.fromEntry ? (start.fromEntry.kind === 'owed' ? (exempt ? ['PAYMENT_REQUEST'] : ['TAX_INVOICE', 'PAYMENT_REQUEST']) : exempt ? ['RECEIPT'] : ['TAX_INVOICE_RECEIPT', 'RECEIPT']) : null;
+  const allowedTypes = entryTypes ?? (exempt ? (['RECEIPT', 'PAYMENT_REQUEST'] as IssuedDocType[]) : TYPES.filter((type) => type !== 'CREDIT_NOTE' || start.originalId));
   // The entry fixes the client and the amount: those stay as they are (the server refuses a mismatch).
   const linked = !!start.fromEntry;
   const blocked = setup.data ? !setup.data.canIssue : false;
@@ -275,6 +280,11 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
               {t('hosted.issue.type')}
             </span>
             <SegmentedControl labelledBy={`${formId}-type`} value={docType} options={allowedTypes.map((type) => ({ value: type, label: typeLabel(type) }))} onChange={setDocType} />
+            {docType === 'PAYMENT_REQUEST' && (
+              <p className="hp-muted" data-testid="issue-payment-request-note">
+                {t('hosted.issue.paymentRequestNote')}
+              </p>
+            )}
           </div>
 
           <section className="hp-issue-lines" aria-labelledby={`${formId}-lines`}>
@@ -367,7 +377,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
 
           <div className="hp-issue-dates">
             <Input label={t('hosted.issue.date')} id={`${formId}-date`} type="date" value={documentDate} max={today} onChange={(e) => setDocumentDate(e.target.value)} />
-            {docType === 'TAX_INVOICE' && <Input label={t('hosted.issue.dueDate')} id={`${formId}-due`} type="date" value={dueDate} min={documentDate} onChange={(e) => setDueDate(e.target.value)} />}
+            {hasDueDate && <Input label={t('hosted.issue.dueDate')} id={`${formId}-due`} type="date" value={dueDate} min={documentDate} onChange={(e) => setDueDate(e.target.value)} />}
           </div>
 
           {takesPayment && start.fromEntry?.kind !== 'received' && (

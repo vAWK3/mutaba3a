@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, payment, receivable } from '../../support/portalApi';
+import { FakeApi, payment, receivable, type DueSeed } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -211,6 +211,83 @@ test('issue a tax invoice: client, lines, live totals, then the document with it
   });
 });
 
+test('a payment request: issued as PR-0001, settled by two invoice-receipts, and another cancelled (MUT-662)', { tag: '@portal.invoicing.payment-request' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+
+  await step('Choose Issue a document, Client 1 and the Payment request type: it says it is not a tax document', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    await page.getByTestId('issue-open').click();
+    await drawer.getByLabel('Client').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await drawer.getByRole('radio', { name: 'Payment request' }).click();
+    await expect(drawer.getByTestId('issue-payment-request-note')).toContainText('Not a tax document');
+    await drawer.getByLabel('Description').fill('Website, phase 2');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+    await expect(drawer.getByTestId('issue-totals')).toContainText('1,180.00');
+  });
+
+  await step('AC1 Issue it: PR-0001, Unpaid, with a due date and no allocation number', async () => {
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Payment request PR-0001');
+    await expect(page.getByTestId('issued-status')).toHaveText('Unpaid');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'PAYMENT_REQUEST', customerId: expect.any(String) });
+  });
+
+  await step('AC2 Record a payment of 400: an invoice-receipt that refers to the request; it reads Partly paid', async () => {
+    await page.getByTestId('payment-request-pay').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('400');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice-receipt 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'TAX_INVOICE_RECEIPT', appliesToDocumentId: expect.any(String), payment: { method: 'BANK' } });
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Payment request PR-0001/ }).click();
+    await expect(page.getByTestId('issued-status')).toHaveText('Partly paid');
+    await expect(page.getByTestId('payment-request-block')).toContainText('Tax invoice-receipt 1');
+  });
+
+  await step('AC3 While an invoice-receipt refers to it, it cannot be cancelled', async () => {
+    await page.getByTestId('payment-request-cancel').click();
+    await expect(page.getByTestId('payment-request-cancel-blocked')).toContainText('credit note first');
+  });
+
+  await step('AC4 The second payment covers the rest: Paid in full', async () => {
+    await page.getByTestId('payment-request-pay').click();
+    await page.getByTestId('issue-submit').click();
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Payment request PR-0001/ }).click();
+    await expect(page.getByTestId('issued-status')).toHaveText('Paid in full');
+    await expect(page.getByTestId('payment-request-pay')).toHaveCount(0);
+  });
+
+  await step('AC5 Another request, cancelled with a reason: Cancelled, CX-0001, and the list says so', async () => {
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByTestId('issue-open').click();
+    await drawer.getByLabel('Client').fill('Client 1');
+    await page.getByRole('option', { name: /Client 1/ }).click();
+    await drawer.getByRole('radio', { name: 'Payment request' }).click();
+    await drawer.getByLabel('Description').fill('Sent twice');
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('500');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Payment request PR-0002');
+    await page.getByTestId('payment-request-cancel').click();
+    await page.getByLabel('Reason (optional)').fill('sent twice');
+    await page.getByTestId('payment-request-cancel-confirm').click();
+    await expect(page.getByTestId('issued-status')).toHaveText('Cancelled');
+    await expect(page.getByTestId('payment-request-cancelled')).toContainText('CX-0001');
+    expect(api.last('POST', /\/cancel$/)?.body).toMatchObject({ reason: 'sent twice' });
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await expect(page.locator('.hp-issued-table tbody tr').first()).toContainText('Cancelled');
+  });
+
+  await step('In Arabic the request reads right to left with its PR number', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByRole('link', { name: /طلب دفع PR-0001/ })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
 test('issuing waits for the setup; a client page issues for that client', { tag: '@portal.invoicing.issue-gate' }, async ({ page, step }) => {
   await step('AC1 (MUT-646) With the setup not done, the drawer says what is missing and links to it', async () => {
     const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: true });
@@ -357,6 +434,23 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
     expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'TAX_INVOICE', fromEntry: { kind: 'owed', id: expect.any(String) }, pricesIncludeVat: true, lines: [{ unitPrice: '1180.00', pricesIncludeVat: true }] });
   });
 
+  await step('Follow-up: leave Owed for Paid inside the toast window; its Issue still opens the drawer there', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill('2360');
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(toast).toContainText('Saved');
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
+    await toast.getByRole('button', { name: 'Issue a tax invoice' }).click();
+    await expect(issue).toBeVisible();
+    await expect(issue.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('2360.00');
+    await issue.getByRole('button', { name: 'Close' }).first().click();
+    await expect(issue).toHaveCount(0);
+  });
+
   await step('E4 An Owed recorded earlier offers its tax invoice from its row', async () => {
     await api.open(page, `/p/${OFFICE_A}/receivables`);
     await expect(page.locator('[data-testid^="issue-from-"]').first()).toBeVisible();
@@ -385,6 +479,120 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
     await expect(toast).toContainText('Saved');
     await expect(toast.getByRole('button')).toHaveCount(0);
     expect(plain.last('GET', /^\/v1\/issuing\/setup$/)).toBeFalsy();
+  });
+});
+
+// ---- MUT-660: documents due (To issue), Issue all, not for invoice, a client's documents preference ----
+
+const daysAgo = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString().slice(0, 10);
+const C2 = customer(1).id;
+const dueSeed = (): DueSeed[] => [
+  { kind: 'TAX_INVOICE', entry: { kind: 'owed', id: 'e0000000-0000-4000-8000-000000000001', number: 'CHG-2026-0001' }, customerId: C1, amount: '3400.00', date: daysAgo(20) },
+  { kind: 'TAX_INVOICE_RECEIPT', entry: { kind: 'received', id: 'e0000000-0000-4000-8000-000000000002', number: 'PAY-2026-0002' }, customerId: C1, amount: '700.00', date: daysAgo(3) },
+  { kind: 'PAYMENT_REQUEST', entry: { kind: 'owed', id: 'e0000000-0000-4000-8000-000000000003', number: 'CHG-2026-0003' }, customerId: C2, amount: '5000.00', date: daysAgo(30), issuable: false, reason: 'PAYMENT_REQUEST_PENDING', hasTaxDocument: true },
+];
+const dueWorld = (documentsDue: DueSeed[] = dueSeed()) => new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 2, invoicing: 'ready', documentsDue });
+const toIssuePath = `/p/${OFFICE_A}/documents/to-issue`;
+
+test('Home’s To issue opens the documents due by client; Issue all issues one client’s documents', { tag: '@portal.invoicing.to-issue-issue-all' }, async ({ page, step }) => {
+  const api = dueWorld();
+
+  await step('Open Nour Studio’s home', async () => {
+    await api.open(page, `/p/${OFFICE_A}`);
+    const group = page.getByRole('region', { name: 'To issue' });
+    await expect(group).toContainText('3 documents to issue');
+  });
+
+  await step('Choose See all in the To issue group', async () => {
+    await page.getByRole('link', { name: 'See all documents to issue' }).click();
+    await expect(page).toHaveURL(new RegExp(`${toIssuePath}$`));
+    await expect(page.getByTestId(/^due-group-/).first()).toContainText('Client 1');
+    const other = page.getByTestId(`due-group-${C2}`);
+    await expect(other).toContainText("Payment requests can't be issued here yet");
+    await expect(other.getByRole('button', { name: 'Attach' })).toBeVisible();
+  });
+
+  await step('In Client 1’s group choose Issue all, then confirm', async () => {
+    await page.getByTestId(`due-issue-all-${C1}`).click();
+    await expect(page.getByText('Issue 2 documents for Client 1? Issuing is final.')).toBeVisible();
+    await page.getByRole('button', { name: 'Issue 2' }).click();
+    await expect(page.getByText('2 documents issued for Client 1.')).toBeVisible();
+    const post = api.last('POST', /^\/v1\/documents-due\/issue$/);
+    expect(post?.body).toMatchObject({ customerId: C1, items: [{ kind: 'owed' }, { kind: 'received' }] });
+    await expect(page.getByTestId(`due-group-${C1}`)).toHaveCount(0);
+  });
+});
+
+test('Older than 6 months selects old items; mark them not for invoice in one action, then bring them back', { tag: '@portal.invoicing.to-issue-bulk-not-for-invoice' }, async ({ page, step }) => {
+  const api = dueWorld([
+    { kind: 'TAX_INVOICE_RECEIPT', entry: { kind: 'received', id: 'e0000000-0000-4000-8000-0000000000a1', number: 'PAY-2025-0040' }, customerId: null, amount: '180.00', date: daysAgo(400) },
+    { kind: 'TAX_INVOICE_RECEIPT', entry: { kind: 'received', id: 'e0000000-0000-4000-8000-0000000000a2', number: 'PAY-2026-0011' }, customerId: null, amount: '300.00', date: daysAgo(220) },
+    { kind: 'TAX_INVOICE_RECEIPT', entry: { kind: 'received', id: 'e0000000-0000-4000-8000-0000000000a3', number: 'PAY-2026-0090' }, customerId: C1, amount: '450.00', date: daysAgo(10) },
+  ]);
+
+  await step('Open Documents › To issue', async () => {
+    await api.open(page, toIssuePath);
+    await expect(page.getByTestId(/^due-row-/)).toHaveCount(3);
+  });
+
+  await step('Choose Older than 6 months, then Select all shown', async () => {
+    await expect(page.getByTestId('due-older').locator('option')).toHaveText(['Any date', '1 month', '3 months', '6 months', '12 months']);
+    await page.getByTestId('due-older').selectOption('6');
+    await expect(page.getByTestId(/^due-row-/)).toHaveCount(2);
+    await page.getByTestId('due-select-all').click();
+    await expect(page.getByTestId('due-bulk')).toContainText('2 selected');
+  });
+
+  await step('Choose Not for invoice and confirm', async () => {
+    await page.getByTestId('due-bulk-action').click();
+    await expect(page.getByText('Mark 2 entries not for invoice?')).toBeVisible();
+    await page.getByRole('button', { name: 'Mark 2' }).click();
+    await expect(page.getByText('2 marked not for invoice')).toBeVisible();
+    await expect(page.getByTestId('due-empty')).toBeVisible();
+    expect(api.last('POST', /^\/v1\/documents-due\/not-for-invoice$/)?.body).toMatchObject({ value: true });
+  });
+
+  await step('Open Not for invoice, select all shown, choose Back to invoice and confirm', async () => {
+    await page.getByTestId('due-view-not-for-invoice').click();
+    await expect(page.getByTestId(/^due-row-/)).toHaveCount(2);
+    await page.getByTestId('due-select-all').click();
+    await page.getByTestId('due-bulk-action').click();
+    await page.getByRole('button', { name: 'Bring back 2' }).click();
+    await expect(page.getByText('2 back to invoice')).toBeVisible();
+    expect(api.last('POST', /^\/v1\/documents-due\/not-for-invoice$/)?.body).toMatchObject({ value: false });
+  });
+});
+
+test('An entry with a tax document can’t be marked not for invoice: a credit note comes first', { tag: '@portal.invoicing.not-for-invoice-refused' }, async ({ page, step }) => {
+  const api = dueWorld();
+
+  await step('Open Documents › To issue', async () => {
+    await api.open(page, toIssuePath);
+  });
+
+  await step('Choose Not for invoice on an item whose entry has a tax invoice', async () => {
+    await page.getByTestId('due-nfi-e0000000-0000-4000-8000-000000000003').click();
+    await expect(page.getByText(/Issue a credit note first/)).toBeVisible();
+    await expect(page.getByTestId('due-row-e0000000-0000-4000-8000-000000000003')).toBeVisible();
+  });
+});
+
+test('Set a client’s documents preference on the client page', { tag: '@portal.invoicing.client-documents-preference' }, async ({ page, step }) => {
+  const api = dueWorld([]);
+
+  await step('Open Client 1’s page on Nour Studio', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    const field = page.getByTestId('client-documents-preference');
+    await expect(field.getByLabel('Documents')).toHaveValue('DEFAULT');
+    await expect(field).toContainText('a tax invoice-receipt for each payment, partial ones included.');
+  });
+
+  await step('Set Documents to Tax invoice first', async () => {
+    await page.getByTestId('client-documents-preference').getByLabel('Documents').selectOption('TAX_INVOICE_FIRST');
+    await expect(page.getByTestId('client-documents-preference')).toContainText('a tax invoice when an amount is owed, then a receipt for each payment.');
+    const patch = api.last('PATCH', new RegExp(`^/v1/customers/${C1}$`));
+    expect(patch?.body).toEqual({ documentsPreference: 'TAX_INVOICE_FIRST' });
+    expect(patch?.headers['if-match']).toBeTruthy();
   });
 });
 

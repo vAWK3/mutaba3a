@@ -10,7 +10,7 @@ import { SectionTabs } from '../../components/SectionTabs';
 import { useToast } from '../../components/Toast';
 import { downloadNavigator } from '../../data/download';
 import { DOCUMENT_KINDS, isNarrowed, type DocumentFilters } from '../../data/filters';
-import { useIssuingSetup } from '../../data/issuingQueries';
+import { useInvoicingWorthAsking, useIssuingSetup } from '../../data/issuingQueries';
 import { useAttachments, useCustomerDirectory } from '../../data/queries';
 import { formatInstant, formatSize } from '../../format/dates';
 import { useProfile } from '../../session/me';
@@ -175,6 +175,6 @@ export function DocumentsPage(props: Omit<DocumentsListProps, 'fixedCustomerId'>
 function IssuingTabs() {
   const { t } = useLanguage();
   const profile = useProfile();
-  const setup = useIssuingSetup(profile.id, profile.type !== 'PERSONAL');
+  const setup = useIssuingSetup(profile.id, useInvoicingWorthAsking(profile));
   return setup.data ? <SectionTabs {...documentTabs(profile.id, t)} /> : null;
 }

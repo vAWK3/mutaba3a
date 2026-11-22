@@ -14,7 +14,7 @@ function allocationDate(isoDate: string): string {
 }
 
 /**
- * MUT-711 (ADR-272, wireframe A "Number first, then issue"): the invoice needs an allocation number and MTB3A can't
+ * MUT-711 (ADR-273, wireframe A "Number first, then issue"): the invoice needs an allocation number and MTB3A can't
  * request it. The panel lists what the Tax Authority's page asks for, each with Copy (and Copy all), links to that page
  * and takes the 9-digit number. The invoice number is the next one, shown as a preview: nothing is reserved, and the
  * server refuses the issue if another document takes it first. Digits read left to right in either language (ADR-101).

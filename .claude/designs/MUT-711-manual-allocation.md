@@ -1,4 +1,4 @@
-# MUT-711: Plan B, an allocation number requested by hand (ADR-272)
+# MUT-711: Plan B, an allocation number requested by hand (ADR-273)
 
 **Choice:** wireframe A, "Number first, then issue" (Basel, 2026-11-22). Epic MUT-566.
 

@@ -3,7 +3,7 @@ import { ApiError } from '../../errors.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../compose.js';
 import { copyLabel } from '../copies.js';
 import { standardVatRateOn } from '../vat-rate.js';
-import { DOC_TYPE_CODES, ISSUED_DOC_TYPES } from '../types.js';
+import { DOC_TYPE_CODES, ISSUED_DOC_TYPES, TAX_DOCUMENTS, VAT_BEARING } from '../types.js';
 
 /** MUT-568: the issuing core's pure rules — line math, VAT, discounts and who may issue what. */
 
@@ -32,7 +32,7 @@ const reason = (fn: () => unknown): unknown => {
 
 describe('document type codes', () => {
   it('match the uniform file and the allocation API', () => {
-    expect(DOC_TYPE_CODES).toEqual({ TAX_INVOICE: 305, TAX_INVOICE_RECEIPT: 320, CREDIT_NOTE: 330, RECEIPT: 400 });
+    expect(DOC_TYPE_CODES).toEqual({ TAX_INVOICE: 305, TAX_INVOICE_RECEIPT: 320, CREDIT_NOTE: 330, RECEIPT: 400, PAYMENT_REQUEST: 300 });
     expect([...ISSUED_DOC_TYPES].sort()).toEqual(Object.keys(DOC_TYPE_CODES).sort());
   });
 });
@@ -206,5 +206,26 @@ describe('composeDocument: review fixes', () => {
 describe('copyLabel', () => {
   it('reads ORIGINAL on the first copy only', () => {
     expect([0, 1, 2, 3].map(copyLabel)).toEqual(['ORIGINAL', 'COPY', 'COPY', 'COPY']);
+  });
+});
+
+describe('MUT-662: payment request', () => {
+  it('a licensed dealer\'s request carries VAT like a tax invoice, so the invoice-receipts that follow match it', () => {
+    const doc = composeDocument(base({ docType: 'PAYMENT_REQUEST', dealerType: 'LICENSED' }));
+    expect(doc.vatRateBasisPoints).toBe(1800);
+    expect(doc.grossMinor).toBe(shekels(18000 * 1.18));
+  });
+
+  it('an exempt dealer may issue one, at rate 0; a tax invoice is still refused', () => {
+    const doc = composeDocument(base({ docType: 'PAYMENT_REQUEST', dealerType: 'EXEMPT' }));
+    expect(doc.vatRateBasisPoints).toBe(0);
+    expect(doc.vatMinor).toBe(0n);
+    expect(doc.grossMinor).toBe(shekels(18000));
+    expect(reason(() => composeDocument(base({ dealerType: 'EXEMPT' })))).toBe('EXEMPT_DEALER_TAX_INVOICE');
+  });
+
+  it('is not a tax document: VAT and tax totals leave it out', () => {
+    expect(TAX_DOCUMENTS.has('PAYMENT_REQUEST')).toBe(false);
+    expect(VAT_BEARING.has('PAYMENT_REQUEST')).toBe(true);
   });
 });

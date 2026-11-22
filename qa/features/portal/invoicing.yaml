@@ -72,6 +72,26 @@ features:
       - The receipt pays the tax invoice (appliesToDocumentId, payment) and what is still owed drops to 12,774.00
       - After the part payment, the credit note starts as one line for what is still owed (12,774.00, prices include VAT) and names its tax invoice (originalId)
       - The list shows the three documents; in Arabic it reads right to left
+  - id: payment-request
+    title: A payment request — issued as PR-0001, settled by invoice-receipts, cancelled by record (MUT-662)
+    tier: secondary
+    tickets: [MUT-662]
+    steps:
+      - Open Documents › Issued, choose Issue a document, Client 1 and the Payment request type, one line of 1,000
+      - Issue it
+      - Record a payment of 400 from its page
+      - Try to cancel it
+      - Record the rest
+      - Issue another payment request of 500 and cancel it with a reason
+      - Open the list in Arabic
+    expect:
+      - The type says it is not a tax document (no allocation number, not counted in VAT) and the totals show 1,180.00
+      - It takes PR-0001 and reads Unpaid
+      - The payment is an invoice-receipt that refers to the request (appliesToDocumentId) and the request reads Partly paid, listing it
+      - Cancel is not offered while an invoice-receipt refers to it; the panel says to credit the invoice-receipt first
+      - The request reads Paid in full and offers no further payment
+      - The second request reads Cancelled with CX-0001, and the list shows Cancelled
+      - In Arabic the list reads right to left with "طلب دفع PR-0001"
   - id: issue-gate
     title: Issuing waits for the setup; a client page issues for that client; no issuing, no Issued tab (MUT-570)
     tier: secondary
@@ -115,20 +135,84 @@ features:
       - src/hosted/components/IncomeCaptureDrawer.tsx
       - src/hosted/components/issueOffers.ts
       - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/IssueOffer.tsx
       - src/hosted/components/Toast.tsx
       - src/hosted/pages/views/ReceivablesList.tsx
     steps:
       - On Owed, record 1,180 from Client 1
       - Choose Issue a tax invoice on the save toast, then Issue
+      - Record another Owed, open Paid before the toast fades, and choose Issue a tax invoice there
       - Reopen Owed
       - With "offer to issue after saving" off, record another Owed
       - On a profile without invoicing, record an Owed
     expect:
       - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
       - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - Leaving Owed inside the toast's six seconds keeps its button working: on Paid it opens the drawer for the Owed just saved
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup
+  - id: to-issue-issue-all
+    title: Home's To issue count opens the documents due by client; Issue all issues one client's documents
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/pages/home/ToIssueGroup.tsx
+      - src/hosted/pages/home/HomeTodo.tsx
+      - src/hosted/data/documentsDueQueries.ts
+      - src/hosted/router.tsx
+    steps:
+      - Open Nour Studio's home
+      - Choose See all in the To issue group
+      - In Client 1's group choose Issue all, then confirm
+    expect:
+      - Home shows "To issue" with 3 documents and links to Documents › To issue
+      - The list groups the items by client (No client last); a payment request says it can't be issued here yet and offers Attach and Not for invoice
+      - Issue all confirms in place with the count and the client, sends one POST /v1/documents-due/issue for the client's items, and says 2 documents were issued; the group leaves the list
+  - id: to-issue-bulk-not-for-invoice
+    title: Select old items with "Older than 6 months", mark them not for invoice in one action, and bring them back
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/data/documentsDueQueries.ts
+    steps:
+      - Open Documents › To issue
+      - Choose Older than 6 months, then Select all shown
+      - Choose Not for invoice and confirm
+      - Open Not for invoice, select all shown, choose Back to invoice and confirm
+    expect:
+      - Older than offers 1, 3, 6 and 12 months; 6 months lists only the two items older than six months
+      - One confirmation names the count ("Mark 2 entries not for invoice?"); the items leave To issue and the toast offers Undo
+      - Not for invoice lists them, and Back to invoice returns both in one action
+  - id: not-for-invoice-refused
+    title: An entry with a tax document can't be marked not for invoice; the app says a credit note comes first
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/NotForInvoiceAction.tsx
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+    steps:
+      - Open Documents › To issue
+      - Choose Not for invoice on an item whose entry has a tax invoice
+    expect:
+      - The server refuses (409 HAS_TAX_DOCUMENT) and the page says to issue a credit note first; the item stays in To issue
+  - id: client-documents-preference
+    title: Set a client's documents preference on the client page
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/DocumentsPreferenceField.tsx
+      - src/hosted/components/ClientBusinessDetails.tsx
+      - src/hosted/data/customerQueries.ts
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+    steps:
+      - Open Client 1's page on Nour Studio
+      - Set Documents to Tax invoice first
+    expect:
+      - The field starts on "Profile default (On payment)" and says an invoice-receipt is due for each payment
+      - Choosing Tax invoice first saves PATCH /v1/customers with If-Match and says a tax invoice is due when an amount is owed, then a receipt for each payment
   - id: manual-allocation
     title: When MTB3A can't request the allocation number, enter one requested by hand before issuing; the number is a preview, never held (MUT-711)
     tier: secondary

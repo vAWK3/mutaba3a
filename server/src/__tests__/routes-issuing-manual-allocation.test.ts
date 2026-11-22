@@ -5,7 +5,7 @@ import { TokenBox } from '../israel/tax-authority/token-box.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type AccountantHarness } from './helpers/accountants.js';
 
 /**
- * MUT-711 (ADR-272): Plan B. When MTB3A can't request the allocation number (the Tax Authority is off on this server,
+ * MUT-711 (ADR-273): Plan B. When MTB3A can't request the allocation number (the Tax Authority is off on this server,
  * or the profile isn't connected), the business requests it by hand and enters it before issuing. The invoice number
  * it was requested for is only a preview: the numbering never has a gap, and a number requested for another invoice
  * number is never printed.

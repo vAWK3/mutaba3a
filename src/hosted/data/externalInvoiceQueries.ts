@@ -25,7 +25,11 @@ export function useAttachExternalInvoice(profileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ query, file }: { query: Parameters<typeof api.attachExternalInvoice>[1]; file: Blob }) => api.attachExternalInvoice(profileId, query, file),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: scope(profileId) }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: scope(profileId) });
+      // MUT-660: an attached invoice settles what the entry was due.
+      void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'documents-due') });
+    },
   });
 }
 
@@ -33,7 +37,11 @@ export function useRemoveExternalInvoice(profileId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.removeExternalInvoice(profileId, id),
-    onSettled: () => void queryClient.invalidateQueries({ queryKey: scope(profileId) }),
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: scope(profileId) });
+      // MUT-660: an attached invoice settles what the entry was due.
+      void queryClient.invalidateQueries({ queryKey: profileKey(profileId, 'documents-due') });
+    },
   });
 }
 

@@ -101,7 +101,7 @@ const envSchema = z.object({
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
   /**
-   * MUT-711 (ADR-272): where a business requests an allocation number by hand when MTB3A can't (shown on the review
+   * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).
    */

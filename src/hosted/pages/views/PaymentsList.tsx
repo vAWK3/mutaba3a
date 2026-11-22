@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { NotForInvoiceAction } from '../../components/NotForInvoiceAction';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -40,6 +41,11 @@ interface PaymentRow {
   allocations: Allocation[];
   /** MUT-224: the user's own posted capture on a profile they own: its date can be changed. */
   redatable: boolean;
+  /** MUT-660: marked not for invoice; the version a mark sends; a document of MTB3A's is on it. */
+  notForInvoice: boolean;
+  version: number;
+  posted: boolean;
+  issuedHere: boolean;
 }
 
 // MUT-647: a reversed payment takes no invoice issued elsewhere.
@@ -60,6 +66,10 @@ function shape(items: Payment[], customers: Map<string, Customer>, language: 'en
     captureSource: p.captureSource,
     allocations: p.allocations,
     redatable: redatable(p),
+    notForInvoice: p.notForInvoice,
+    version: p.version,
+    posted: p.status === 'POSTED',
+    issuedHere: p.origin === 'issued_document',
   }));
 }
 
@@ -90,7 +100,10 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
         : undefined,
     [list.data, customers.data, language, t, profile, userId, writable],
   );
-  const external = useExternalInvoiceColumn('RECEIVED', rows, amountOf, takesExternal);
+  // MUT-660: a posted Received with no document of MTB3A's can be marked not for invoice, beside Attach.
+  const canMark = incomeAffordancesFor(profile, writable).kinds.length > 0;
+  const markAction = useCallback((r: PaymentRow) => (canMark && r.posted && !r.issuedHere ? <NotForInvoiceAction kind="received" id={r.id} version={r.version} marked={r.notForInvoice} client={r.client} /> : null), [canMark]);
+  const external = useExternalInvoiceColumn('RECEIVED', rows, amountOf, takesExternal, markAction);
 
   const toggle = useCallback(
     (id: string) =>

@@ -4690,3 +4690,20 @@ Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated f
 | Store contract | `store-contract-issuing.ts` | a copy's request key returns the same copy |
 
 No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
+
+## MUT-660 — documents due, not for invoice, the books split (2026-11-22, ADR-270)
+
+| Layer | File | Covers |
+|---|---|---|
+| Domain | `server/src/issuing/__tests__/documents-due.test.ts` | every preference × Owed/Received; AC2 3,400 → 1,000 → second receipt; partial payments; no client (N1); exempt; non-₪; mixed splits; receipt number; attached invoices; marks; deleted/credited/reversed; order; older than (month ends) |
+| Domain | `server/src/issuing/__tests__/ledger-plan.test.ts` | `fromEntryMode` take vs link vs refuse; `entryAmount` |
+| Domain | `server/src/income/__tests__/invoice-class.test.ts` | split order, mixed shares, the reconciliation property (AC9), `invoiceStatusOf` |
+| Store contract | `store-contract-issuing.ts` (memory + Prisma) | linked 305 for a credited Owed; linked 320 for a partial payment; linked 400 keeping its invoice; no-client 320; `dueInputs` with documentsDue; `setNotForInvoice` all-or-nothing, idempotent, versions, HAS_TAX_DOCUMENT, credit note lifts it; `incomeContext` |
+| Routes | `server/src/__tests__/routes-documents-due.test.ts` | gate (404), AC1 preference, AC2, AC3, N1, Issue all refusals and replay, AC6/AC8 bulk + count, AC5 + If-Match + idempotent single mark, older than, accountant read-only; Reports split and non-invoicing unchanged (AC10); export `invoice_status` |
+| Mail | `server/src/billing/__tests__/monthly-summary.test.ts` | two split lines on invoicing profiles; no key elsewhere |
+| Local | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` | snapshot 21 → 22 |
+| Portal | `src/hosted/pages/__tests__/DocumentsDue.test.tsx` | grouping, reasons, Issue all, bulk + Undo, credit-note refusal, older than (D21), hidden at 404; Home group and its absence; the row mark (If-Match, refusal, marked state); the client field (If-Match, hidden at 404); the Reports card |
+| Release-QA | `qa/specs/portal/invoicing.spec.ts`, `reports.spec.ts` | `@portal.invoicing.to-issue-issue-all`, `…to-issue-bulk-not-for-invoice`, `…not-for-invoice-refused`, `…client-documents-preference`, `@portal.reports.invoice-split` |
+
+The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning session's.
+

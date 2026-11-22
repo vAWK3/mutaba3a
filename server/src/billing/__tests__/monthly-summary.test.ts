@@ -8,6 +8,7 @@ const figures = (over: Partial<ProfileFigures> = {}): ProfileFigures => ({
   activity: { dataSince: null, buckets: [], currencies: [], history: [], daysToPaid: { overall: null, byCustomer: [], samples: [] } } as unknown as ProfileFigures['activity'],
   owed: { currencies: [], overdueCount: 0 },
   entriesInRange: true,
+  invoiceSplit: null,
   ...over,
 });
 const flows = (rows: Array<[string, string]>) => rows.map(([currency, received]) => ({ currency, received, spent: '0.00', byCategory: [], byCustomer: [] })) as unknown as ProfileFigures['activity']['currencies'];
@@ -104,5 +105,16 @@ describe('MUT-535: the choice (D6, D7)', () => {
     expect(choiceForSwitch(true, [covered])).toBe('ON_ALL');
     expect(choiceForSwitch(true, [])).toBeNull();
     expect(choiceForSwitch(false, [own])).toBe('OFF');
+  });
+});
+
+describe('profileBlockOf: the invoice split (MUT-660)', () => {
+  const activity = { dataSince: null, buckets: [], currencies: [{ currency: 'ILS', received: '1250.00', spent: '0.00', byCategory: [], byCustomer: [] }], history: [], daysToPaid: { overall: null, byCustomer: [], samples: [] } } as unknown as ProfileFigures['activity'];
+  it('adds the two lines on an invoicing profile, zero rows left out', () => {
+    const block = profileBlockOf({ id: 'p', name: 'Studio' }, figures({ activity, invoiceSplit: [{ currency: 'ILS', invoiceMinor: 100_000n, notForInvoiceMinor: 25_000n, allMinor: 125_000n }, { currency: 'USD', invoiceMinor: 0n, notForInvoiceMinor: 0n, allMinor: 0n }] }));
+    expect(block?.invoiceSplit).toEqual({ invoiceIncome: [{ currency: 'ILS', amount: '1000.00' }], notForInvoice: [{ currency: 'ILS', amount: '250.00' }] });
+  });
+  it('a profile without invoicing has no split key at all (the mail is unchanged)', () => {
+    expect(profileBlockOf({ id: 'p', name: 'Studio' }, figures({ activity }))).not.toHaveProperty('invoiceSplit');
   });
 });

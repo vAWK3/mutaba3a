@@ -1,4 +1,5 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import { invoiceSplitOf, serializeInvoiceSplit } from '../income/invoice-split.js';
 import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { crossRates, type CachedFxRates, type FxRate } from '../fx-rates.js';
 import { verdictProfilesOf } from '../personal-profile.js';
@@ -252,7 +253,9 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
       const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
-      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary }, 200);
+      // MUT-660: invoicing profiles only; every other profile's answer is unchanged.
+      const split = await invoiceSplitOf(store, organization, payments, { from, to });
+      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary, ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
 

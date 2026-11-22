@@ -9,8 +9,8 @@ import type { IssueStart } from './IssueDocumentDrawer';
 export function issueOffers(saved: IncomeResponse, defaultLine: string, exempt: boolean): IssueStart[] {
   const lines = [{ description: saved.title?.trim() || defaultLine, kind: 'SERVICE' as const, quantity: '1', unitPrice: saved.amount, discount: '', pricesIncludeVat: true }];
   const base = { customerId: saved.customerId ?? undefined, lines, pricesIncludeVat: true, fromEntry: { kind: saved.kind === 'owed' ? ('owed' as const) : ('received' as const), id: saved.id } };
-  // An exempt dealer issues receipts only: nothing for an Owed (it can't take a receipt), a receipt for a Received.
-  if (exempt) return saved.kind === 'owed' ? [] : [{ ...base, docType: 'RECEIPT' }];
+  // An exempt dealer issues receipts and (MUT-662) payment requests: a payment request for an Owed with a client.
+  if (exempt) return saved.kind === 'owed' ? (saved.customerId ? [{ ...base, docType: 'PAYMENT_REQUEST' }] : []) : [{ ...base, docType: 'RECEIPT' }];
   if (saved.kind === 'owed') return saved.customerId ? [{ ...base, docType: 'TAX_INVOICE' }] : [];
   return saved.customerId ? [{ ...base, docType: 'TAX_INVOICE_RECEIPT' }, { ...base, docType: 'RECEIPT' }] : [{ ...base, docType: 'RECEIPT' }];
 }

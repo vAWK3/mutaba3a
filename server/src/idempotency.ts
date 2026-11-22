@@ -207,3 +207,14 @@ export function claimKeyFor(auth: AuthContext, key: string): string {
 export function sessionClaimKey(userId: string, key: string): string {
   return `s:${createHash('sha256').update(`${userId}\n${key}`).digest('hex')}`;
 }
+
+/**
+ * MUT-709: what a payment-recording route stores as `Payment.clientRequestKey`. A 5xx releases the claim, so a retry
+ * of a request whose payment did commit runs the handler again; the route finds that payment by this key and answers
+ * with it instead of recording a second one. Derived from the claim key, so one principal never matches another's.
+ */
+export function paymentRequestKey(c: Context<AppEnv>): string | null {
+  const key = c.req.header(IDEMPOTENCY_HEADER);
+  if (!key) return null;
+  return createHash('sha256').update(`${claimKeyFor(c.get('auth'), key)}\npayment`).digest('hex');
+}

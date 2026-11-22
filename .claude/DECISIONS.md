@@ -6823,6 +6823,10 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
 
+**Amendment (2026-11-22, invoicing follow-ups, API 1.130.0-followups):**
+- **Where the callback lands.** PORTAL_ORIGIN alone doesn't say a portal page exists there (a local API sets it to itself and serves no portal), so the callback used to redirect to an API 404. Now the state also signs the portal the person pressed Connect on: the connect request's Origin, kept only when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server (the Vite dev portal on another port). The callback returns there; with none, to this server's own portal when it serves one (PORTAL_DIST_DIR); with neither (a phone's start, a forged or late state), to its own short page in Arabic and English. A declined consent (`error=access_denied`) lands as `taxAuthority=refused` with its own words.
+- **The re-consent reminder (AC3).** A daily job (`POST /jobs/v1/issuing/tax-authority-reminders`, Terraform `tax_authority_reminders_enabled`, off by default) mails the profile's owner ten days before the consent ends and once when it has ended (for 7 days), each once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`), with no new column: the windows stay inside the log's 30 days. The setup page's Tax Authority step says the same from `until` and offers Connect again.
+
 ## ADR-265: Issued-Document PDFs Leave Signed (PAdES B-T), With a Pluggable Key; Production Refuses Until Its Certificate Is In Place (MUT-641)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-641-signed-pdf.md`). The production certificate is Basel's open decision (accountant's answer to MUT-567 Q3 first), queued in `~/Work/tools/heavy-gate/DECISIONS.md`.
@@ -6915,7 +6919,37 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** the one-time notices (Trial, Passkey, Second way in, Malafat created, Firm on) moved from Owed to home (`LandingNotices`). The To invoice group waits for MUT-648 and a not-for-invoice flag (`TODO(blocked-by …)` in `HomeTodo`); MUT-604's period cards will sit under the Waiting lane. AASA claims neither path.
 
 
-## ADR-272: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
+## ADR-270: Documents Due Are Derived per Client; "Not for Invoice" Is a Mark; Issue Linked Where Taking Over Would Rewrite Money (MUT-660)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/mut-660-documents-due.md`, wireframes `mut-660-wireframes.html`, approved by Basel; decisions D1–D4 in Jira 13423, N1–N3 in the brief; canvas D21 and D24 from the MUT-660..665 planning session).
+
+**Decision:**
+1. **A client's documents preference** (`Customer.documentsPreference`: TAX_INVOICE_FIRST, PAYMENT_REQUEST_FIRST, ON_PAYMENT, NO_DOCUMENT; null follows `IssuerDetails.defaultDocumentsPreference`, ON_PAYMENT by default). Money received with no client counts as ON_PAYMENT and is due an invoice-receipt (N1).
+2. **What is due is derived on every read, never stored** (`server/src/issuing/documents-due.ts`). One function feeds the list, Home's count, Issue all and MUT-661's offer. TAX_INVOICE_FIRST: an Owed is due a 305, and a payment on an Owed with no 305 yet is not due (no double invoicing); after the 305 each payment is due a 400 on it. PAYMENT_REQUEST_FIRST and ON_PAYMENT: each payment, partial ones included, is due a 320 for its own amount. An exempt dealer: payments are due a 400 only. Issued documents (`receivableId` / `paymentId`), attached invoices (MUT-647) and a receipt number (MUT-481, a receipt only) settle what is due. All open income counts, with no cutoff (D1).
+3. **Home's count counts every listed item** (N2), including what MTB3A can't issue yet (payment requests until MUT-662, non-₪, split payments mixing invoiced and uninvoiced Owed, API-recorded payments): those rows say why and offer Attach and Not for invoice.
+4. **"Not for invoice" is a mark** on an Owed or a Received (`notForInvoice`, versioned, If-Match on one entry, all or nothing in bulk). No reason. Refused (409 HAS_TAX_DOCUMENT) while a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't block. No hidden mode: marked income stays in All income, the accountant's view and exports.
+5. **Take over or link** (`fromEntryMode`, both stores). A document takes its entry over (I1-a, MUT-648) only for an untouched ADJUSTMENT Owed or an unallocated captured Received. Otherwise it is issued **linked only**: numbered and linked to the entry, nothing posted or changed: an agreement's charge or a credited Owed (taking over would cut the agreement or the credit), an allocated Received (a 320 taking over a 3,400 Owed for a 1,000 payment would rewrite it), and no-client money taking a 320 (no Owed can be posted without a client). This revises the plan's review item C1 during the build.
+6. **The books split** (`server/src/income/invoice-class.ts`): every received payment's money is Invoice income or Not for invoice, so All income = Invoice income + Not for invoice per currency. A document on the money wins; then the payment's mark; then each allocated share follows its Owed (marked, or a NO_DOCUMENT client); the rest follows the payment's client. Cash basis. Only where invoicing is on (`issuing/invoicing-on.ts`); every other profile's answers are unchanged (no key at all). It feeds Reports (`invoiceSplit`), the monthly summary (two lines), the share-link summary and the Excel Income sheet's `invoice_status` column (English codes: due, issued, not_for_invoice, no_document; canvas D24).
+7. **Issue all** is one client per call, at most 25 items, each through the single issue (`issueOne`) with its own derived idempotency key, dated today, one line for its amount with VAT included. Each item answers issued, held (MUT-572: issue it on its own to choose) or refused.
+
+**Consequences:** migration 20261122230000 (additive) and API 1.127.0-mut660. The portal gains Documents › To issue (a third tab), Home's To issue group (replacing MUT-657's TODO), the row mark, the client field, the profile default and the Reports card. This device keeps the fields (snapshot 22) but has no invoicing, so nothing changes there. The phone half runs in its own session (N3). MUT-666 is narrowed to splits of mixed status.
+
+## ADR-271: A Payment Request Is a Non-Tax Document Tied to an Owed, Settled by Referring Documents and Cancelled by Record (MUT-662)
+
+**Date:** 2026-11-23 · **Status:** Accepted (Basel approved the canvas, D16/D18)
+
+**Context.** Businesses whose clients get a payment request first must not report VAT before the money arrives. The approval spec lists חשבון עסקה as code 300.
+
+**Decision.**
+- PAYMENT_REQUEST is an issued document with its own series. It shows VAT (exempt dealers: none) so the invoice-receipts that follow match it, but it is not in `TAX_DOCUMENTS`: never allocated, never in VAT or tax totals.
+- It is always tied to an Owed: linked to an existing one (never taking it over), or posting an ordinary ADJUSTMENT Owed when issued with no entry. Cancelling never changes the Owed.
+- Each payment gets its own 320 (400 for exempt dealers) referring to it by `originalId`; status is derived (UNPAID, PARTLY_PAID, PAID, CANCELLED), nothing stored.
+- It is cancelled by an insert-only cancellation record (CX series), refused while a live 320/400 refers to it (D18). A credit note never targets it.
+- Shown as PR-0007 / CX-0002 in every language; the stored number and the uniform file use the plain int.
+
+**Consequences.** One live request per Owed (a cancelled one doesn't count). Old phone builds skip the unknown type. The uniform-file mapping (record 300) is wired by whichever of MUT-569 / MUT-662 merges second.
+
+## ADR-273: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
 
 **Status:** Accepted (2026-11-22; wireframe A "Number first, then issue", chosen by Basel; canvas https://claude.ai/artifact/Ev11vFMKsFAuXVXVp2nx4e).
 
@@ -6929,4 +6963,4 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 5. **The link is configuration.** `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https), default the Tax Authority's site (`DEFAULT_MANUAL_ALLOCATION_URL`) until the exact page is confirmed.
 6. **Clients.** The portal drawer and the phone's issue sheet show the panel for MANUAL: the four details with Copy and Copy all, the link, a 9-digit input and "change the amount". Issue stays disabled until the number is well formed. On ALLOCATION_NUMBER_MOVED the entered number is cleared and the preview read again.
 
-**Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.127.0-mut711.
+**Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.133.0-mut711.

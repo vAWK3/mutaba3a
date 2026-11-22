@@ -37,6 +37,7 @@ export const TEMPLATE_IDS = [
   'accountant-invite',
   'sign-in-code',
   'monthly-summary',
+  'tax-authority-reconnect',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -77,6 +78,8 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'comeback-offer',
   // MUT-535: only the monthly run sends it, once a month per person.
   'monthly-summary',
+  // MUT-571 AC3: only the daily run sends it, twice per consent at most (ten days before its end, then on it).
+  'tax-authority-reconnect',
 ]);
 
 export interface TemplateVars {
@@ -148,6 +151,11 @@ export interface TemplateVars {
    * currency and the Switch link, or null; `offLink` the opt-out page, `{portal}/mail-off#{token}`.
    */
   'monthly-summary': { month: { year: number; month: number }; asOf: CalendarDay; profiles: MailSummaryProfile[]; yearly: { savings: number; currency: string; link: string } | null; offLink: string };
+  /**
+   * MUT-571 AC3: a profile's Tax Authority consent (90 days) ends `soon` (within `daysLeft`, 1-10, rounded up) or has
+   * `ended`. `link` opens the profile's invoicing setup, whose Tax Authority step connects again. No date (ADR-159 §5).
+   */
+  'tax-authority-reconnect': { stage: 'soon' | 'ended'; daysLeft: number; profileName: string; link: string };
 }
 
 /** MUT-535: an amount in one currency, as the API writes it (a canonical decimal); the template formats it. */
@@ -162,6 +170,8 @@ export interface MailSummaryProfile {
   /** The profile's overview, `{portal}/p/{id}`. */
   link: string;
   cameIn: MailMoney[];
+  /** MUT-660: invoicing profiles only: what came in, split into Invoice income and Not for invoice. */
+  invoiceSplit?: { invoiceIncome: MailMoney[]; notForInvoice: MailMoney[] };
   owed: MailMoney[];
   overdue: MailMoney[];
   overdueCount: number;
