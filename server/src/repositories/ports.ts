@@ -4585,6 +4585,6 @@ export interface IssuingRepository {
   getById(organizationId: string, id: string): Promise<IssuedDocumentRecord | null>;
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
-  recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string }, at: Date): Promise<{ copyIndex: number } | null>;
+  recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
   gaps(organizationId: string): Promise<IssuedNumberGap[]>;
 }

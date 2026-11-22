@@ -90,6 +90,10 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issued-documents',
   'GET /v1/issued-documents/{documentId}',
   'POST /v1/issued-documents/{documentId}/copies',
+  // MUT-640: the PDF.
+  'GET /v1/issued-documents/{documentId}/pdf',
+  'POST /v1/issued-documents/{documentId}/pdf',
+  'POST /v1/issued-documents/preview/pdf',
 ];
 
 /**

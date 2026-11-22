@@ -390,52 +390,7 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     return c.body(new Uint8Array(bytes), 200, { 'content-type': 'application/pdf', 'content-disposition': `inline; filename="${filename}"`, 'cache-control': 'no-store' });
   }
 
-  app.openapi(
-    createRoute({
-      method: 'get',
-      path: '/v1/issued-documents/{documentId}/pdf',
-      tags: ['Issuing'],
-      summary: 'View a document as a PDF (a copy, not counted)',
-      description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).',
-      security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:read')] as const,
-      request: { params: IssuedDocumentIdParamSchema },
-      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, false);
-      const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
-      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-      const bytes = await renderIssuedDocumentPdf(doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc), logo: null });
-      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
-    },
-  );
-
-  app.openapi(
-    createRoute({
-      method: 'post',
-      path: '/v1/issued-documents/{documentId}/pdf',
-      tags: ['Issuing'],
-      summary: 'Produce a copy of a document as a PDF (download, email, share)',
-      description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.',
-      security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write'), idempotent(store, 'issued_document.pdf')] as const,
-      request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
-      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, true);
-      const { user } = sessionAuth(c);
-      const { documentId } = c.req.valid('param');
-      const doc = await store.issuing.getById(organization.id, documentId);
-      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-      const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel }, c.get('now')());
-      if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
-      const bytes = await renderIssuedDocumentPdf(doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc), logo: null });
-      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
-    },
-  );
-
+  // Registered before /{documentId}/pdf, so "preview" is never read as a document id.
   app.openapi(
     createRoute({
       method: 'post',
@@ -491,6 +446,53 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       };
       const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? null, logo: null });
       return pdf(c, bytes, 'draft.pdf');
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/issued-documents/{documentId}/pdf',
+      tags: ['Issuing'],
+      summary: 'View a document as a PDF (a copy, not counted)',
+      description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).',
+      security: PERSON_OR_MALAFAT,
+      middleware: [requireScope('issuing:read')] as const,
+      request: { params: IssuedDocumentIdParamSchema },
+      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, false);
+      const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
+      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
+      const bytes = await renderIssuedDocumentPdf(doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/issued-documents/{documentId}/pdf',
+      tags: ['Issuing'],
+      summary: 'Produce a copy of a document as a PDF (download, email, share)',
+      description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.',
+      security: PERSON_OR_MALAFAT,
+      // Not the idempotency middleware (it replays JSON): the copy keeps its request key, so a retry gets the same copy and mark.
+      middleware: [requireScope('issuing:write')] as const,
+      request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
+      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      const { user } = sessionAuth(c);
+      const { documentId } = c.req.valid('param');
+      const doc = await store.issuing.getById(organization.id, documentId);
+      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
+      const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel, requestKey: c.req.valid('header')['idempotency-key'] }, c.get('now')());
+      if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
+      const bytes = await renderIssuedDocumentPdf(doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
     },
   );
 

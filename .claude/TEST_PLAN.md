@@ -4666,3 +4666,13 @@ Not run: `test:db` (no store change: the report only reads through existing repo
 | Matrix / guards | `accountant-route-matrix.test.ts` (5 issuing GETs seeded), `accountant-store-guard.test.ts`, `store-guard.test.ts`, `api-key.test.ts`, `writability-drift.test.ts`, `prisma-account-purge-catalog.test.ts`, `rollback-check.test.ts` | the new domain, scopes, the owner-flag read, purge exemptions, rollback hazard |
 
 No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
+
+## MUT-640 — issued-document PDF (2026-11-22, ADR-261)
+
+| Layer | File | Covers |
+|---|---|---|
+| Render gate | `server/src/issuing/pdf/__tests__/gate.test.ts` | AC1/AC5 3 styles × he/ar/en: zero `.notdef`, every word extractable (NFKC), RTL first word rightmost; AC3 black and blue ink only; AC4 logo / no logo; draft mark; unknown style → Professional; PDFs in `server/.pdf-e2e/` (AC2, human look) |
+| Routes | `server/src/__tests__/routes-issuing-pdf.test.ts` | produced copies: original then copy, a retried key keeps its copy; view copy counts nothing; preview draft writes nothing; accountant views, can't produce |
+| Store contract | `store-contract-issuing.ts` | a copy's request key returns the same copy |
+
+No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).

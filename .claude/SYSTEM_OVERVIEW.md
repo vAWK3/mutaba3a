@@ -397,6 +397,8 @@ Signed in, Your data › Download my records writes the chosen profiles to the s
 - MUT-568 (ADR-260): issued invoices, receipts and credit notes are a separate INSERT-only record (database triggers
   refuse UPDATE, DELETE and TRUNCATE), numbered gap-free per type, kept 7 years after an account closes, and corrected
   only by a credit note. Behind the `invoicing` feature on business profiles; server only until MUT-570.
+- MUT-640 (ADR-261): issued documents print server-side as PDFs (Hebrew, Arabic, English; Professional, Modern or Minimal; black
+  or blue ink), with Malafat's tri-script engine; the first produced copy is the original, later ones copies.
 
 ---
 

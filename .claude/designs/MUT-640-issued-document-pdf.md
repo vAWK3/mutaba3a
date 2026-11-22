@@ -60,3 +60,10 @@ Email sending (MUT-570/573), logo upload (MUT-646), customer VAT number/address 
 - The business's own document, in its language and style, from the first issued invoice: the thing customers pay for.
 - Unblocks the portal and phone issue flows (MUT-570, MUT-573) and sending.
 - Cost: pure Node rendering, no Chromium, no new infrastructure.
+
+## Build log (2026-11-22)
+
+- **D-PDF5:** business details at the start side, logo at the end (RTL text in pdfmake-rtl keeps to its start edge).
+- **D-PDF6:** Arabic is Thmanyah in every style (serif display for Professional): Noto Naskh, Noto Sans Arabic and IBM Plex Sans Arabic failed the extraction gate.
+- **D-PDF7:** the produced-copy POST stores its Idempotency-Key on the copy (`requestKey`) instead of the idempotency middleware (which replays JSON only); `/preview/pdf` is registered before `/{documentId}/pdf`.
+- API 1.116.0-mut640; ADR-261.

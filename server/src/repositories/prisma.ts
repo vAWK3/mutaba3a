@@ -859,8 +859,13 @@ export class PrismaLedgerStore implements LedgerStore {
         // A row lock, not an UPDATE: the immutability trigger never fires, and concurrent copies queue here.
         const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "issued_documents" WHERE "id" = ${documentId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
         if (locked.length === 0) return null;
+        // MUT-640: the same request key gets the same copy back (under the lock, so a racing retry waits for it).
+        if (copy.requestKey) {
+          const again = await tx.issuedDocumentCopy.findFirst({ where: { documentId, requestKey: copy.requestKey }, select: { copyIndex: true } });
+          if (again) return again;
+        }
         const copyIndex = await tx.issuedDocumentCopy.count({ where: { documentId } });
-        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel } });
+        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel, requestKey: copy.requestKey ?? null } });
         return { copyIndex };
       }),
     gaps: async (organizationId) => {

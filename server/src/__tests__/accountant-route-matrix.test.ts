@@ -33,6 +33,7 @@ const ALLOWED_GETS = [
   // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
   'GET /v1/issued-documents',
   'GET /v1/issued-documents/{documentId}',
+  'GET /v1/issued-documents/{documentId}/pdf',
   'GET /v1/issuer',
   'GET /v1/issuing/gaps',
   'GET /v1/issuing/settings',

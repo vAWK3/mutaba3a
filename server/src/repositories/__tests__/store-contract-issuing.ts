@@ -175,6 +175,10 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const indexes = await Promise.all([0, 1, 2, 3].map((i) => store.issuing.recordCopy(w.a.id, doc.id, copy, at(10 + i))));
       expect(indexes.map((r) => r!.copyIndex).sort()).toEqual([0, 1, 2, 3]);
       expect(await store.issuing.recordCopy(w.b.id, doc.id, copy, at(20))).toBeNull();
+      // MUT-640: the same request key gets the same copy back, and takes no new index.
+      const keyed = await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, at(21));
+      expect(await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, at(22))).toEqual(keyed);
+      expect(keyed).toEqual({ copyIndex: 4 });
     });
 
     it('lists newest first, paginated, filtered by type and customer, inside one profile only', async () => {

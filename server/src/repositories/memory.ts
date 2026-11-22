@@ -380,7 +380,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
   private readonly issuedCounterMap = new Map<string, IssuedDocumentCounterRecord>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
-  private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date }[]>();
+  private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -957,7 +957,9 @@ export class MemoryLedgerStore implements LedgerStore {
       const d = this.issuedDocMap.get(documentId);
       if (!d || d.organizationId !== organizationId) return null;
       const copies = this.issuedCopies.get(documentId) ?? [];
-      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at });
+      const again = copy.requestKey ? copies.find((c) => c.requestKey === copy.requestKey) : undefined;
+      if (again) return { copyIndex: again.copyIndex };
+      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: copy.requestKey ?? null });
       this.issuedCopies.set(documentId, copies);
       return { copyIndex: copies.length - 1 };
     },
