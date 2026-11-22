@@ -83,9 +83,14 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
     setFilledPatch(patch);
   }
   // The letterhead is the page's state: told after this render, never during it (review fix).
+  // Once per fill, whatever the caller passes as onPreview (a new function each render must not re-fire it).
+  const previewRef = useRef(onPreview);
   useEffect(() => {
-    if (filledPatch) onPreview(filledPatch);
-  }, [filledPatch, onPreview]);
+    previewRef.current = onPreview;
+  });
+  useEffect(() => {
+    if (filledPatch) previewRef.current(filledPatch);
+  }, [filledPatch]);
 
   const set = (key: keyof typeof form) => (event: ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const value = event.target.value;
