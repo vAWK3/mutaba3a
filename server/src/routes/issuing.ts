@@ -13,7 +13,7 @@ import { ISSUED_DOC_TYPES } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { IssueDocumentInput, IssuerDetailsRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   IssueDocumentRequestSchema,
   IssuedCopyRequestSchema,
@@ -73,8 +73,19 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
   }
 
   /** The request's shape rules per type, then the pure compose (both the preview and the issue run this). */
-  function composeFrom(body: IssueRequest, issuer: IssuerDetailsRecord, today: string) {
+  /** A credit note's tax invoice: it credits at that invoice's rate and can't be dated before it (review fix 1). */
+  async function creditedInvoice(organizationId: string, body: IssueRequest): Promise<IssuedDocumentRecord | null> {
+    if (body.docType !== 'CREDIT_NOTE' || !body.originalId) return null;
+    const original = await store.issuing.getById(organizationId, body.originalId);
+    if (!original || original.docType !== 'TAX_INVOICE') throw new ApiError('NOT_FOUND', 'No such tax invoice', { field: 'originalId' });
+    return original;
+  }
+
+  function composeFrom(body: IssueRequest, issuer: IssuerDetailsRecord, today: string, original: IssuedDocumentRecord | null) {
     const documentDate = pastMoneyDate(body.documentDate, today, 'documentDate');
+    if (original && documentDate < original.documentDate) {
+      throw new ApiError('VALIDATION_FAILED', `A credit note can't be dated before its tax invoice (${original.documentDate})`, { field: 'documentDate', reason: 'DATE_BEFORE_ORIGINAL', originalDate: original.documentDate });
+    }
     const needs = (ok: boolean, field: string, message: string) => {
       if (!ok) throw new ApiError('VALIDATION_FAILED', message, { field, reason: 'FIELD_NOT_ALLOWED_FOR_TYPE' });
     };
@@ -93,6 +104,7 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       dealerType: issuer.dealerType,
       documentDiscountMinor: body.discount ? parseAmount(body.discount, 'ILS', 'discount') : 0n,
       pricesIncludeVat: body.pricesIncludeVat ?? issuer.pricesIncludeVat,
+      ...(original ? { vatRateBasisPoints: original.vatRateBasisPoints } : {}),
       lines: body.lines.map((l) => ({
         description: l.description,
         kind: l.kind,
@@ -215,7 +227,8 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const organization = await issuingProfile(c, false);
       const issuer = await mustIssuer(organization.id);
-      const { composed } = composeFrom(c.req.valid('json'), issuer, todayFor(organization, c.get('now')()));
+      const body = c.req.valid('json');
+      const { composed } = composeFrom(body, issuer, todayFor(organization, c.get('now')()), await creditedInvoice(organization.id, body));
       return c.json(serializeComposedTotals({ ...composed, currency: 'ILS' }), 200);
     },
   );
@@ -239,7 +252,7 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const issuer = await mustIssuer(organization.id);
-      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now));
+      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
       if (body.customerId && !customer) throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
       // I1-a: a document for a captured Received prints how that money came in.

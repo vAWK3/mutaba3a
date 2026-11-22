@@ -188,6 +188,21 @@ describe('composeDocument: prices that include VAT (V1-a)', () => {
   });
 });
 
+describe('composeDocument: review fixes', () => {
+  const line = (unit: number, over: Partial<ComposeInput['lines'][number]> = {}) => ({ description: 'x', kind: 'SERVICE' as const, quantityMilli: 1_000n, unitPriceMinor: shekels(unit), discountMinor: 0n, ...over });
+
+  it('a credit note uses its tax invoice\'s rate, not the rate of its own date', () => {
+    const doc = composeDocument(base({ docType: 'CREDIT_NOTE', documentDate: '2025-01-05', vatRateBasisPoints: 1700, lines: [line(1_000)] }));
+    expect(doc).toMatchObject({ vatRateBasisPoints: 1700, vatMinor: shekels(170) });
+  });
+
+  it('refuses a document discount above the subtotal in the document\'s own terms, never capping it silently', () => {
+    expect(reason(() => composeDocument(base({ documentDiscountMinor: shekels(201), lines: [line(118, { pricesIncludeVat: true }), line(100)] })))).toBe('DISCOUNT_INVALID');
+    const ok = composeDocument(base({ documentDiscountMinor: shekels(190), lines: [line(118, { pricesIncludeVat: true }), line(100)] }));
+    expect(ok.discountMinor).toBe(shekels(190));
+  });
+});
+
 describe('copyLabel', () => {
   it('reads ORIGINAL on the first copy only', () => {
     expect([0, 1, 2, 3].map(copyLabel)).toEqual(['ORIGINAL', 'COPY', 'COPY', 'COPY']);

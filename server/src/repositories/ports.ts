@@ -4470,6 +4470,7 @@ export interface IssuedDocumentRecord {
   style: string;
   ink: string;
   notes: string | null;
+  /** A credit note's tax invoice, or the tax invoice a receipt pays. */
   originalId: string | null;
   paymentDetails: IssuedPaymentDetails | null;
   allocationNumber: string | null;

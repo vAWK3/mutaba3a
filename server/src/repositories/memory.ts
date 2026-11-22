@@ -380,7 +380,7 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
   private readonly issuedCounterMap = new Map<string, IssuedDocumentCounterRecord>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
-  private readonly issuedCopyCount = new Map<string, number>();
+  private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -947,12 +947,13 @@ export class MemoryLedgerStore implements LedgerStore {
       const last = items[items.length - 1];
       return { items: items.map(cloneIssued), nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
     },
-    recordCopy: async (organizationId, documentId) => {
+    recordCopy: async (organizationId, documentId, copy, at) => {
       const d = this.issuedDocMap.get(documentId);
       if (!d || d.organizationId !== organizationId) return null;
-      const copyIndex = this.issuedCopyCount.get(documentId) ?? 0;
-      this.issuedCopyCount.set(documentId, copyIndex + 1);
-      return { copyIndex };
+      const copies = this.issuedCopies.get(documentId) ?? [];
+      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at });
+      this.issuedCopies.set(documentId, copies);
+      return { copyIndex: copies.length - 1 };
     },
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
@@ -1005,8 +1006,8 @@ export class MemoryLedgerStore implements LedgerStore {
     let creditId: string | null = null;
     if (plan.receivable && fromReceivable) {
       // I1-a: the recorded Owed becomes the document's, with the document's VAT split.
-      const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title } = plan.receivable;
-      Object.assign(fromReceivable, { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, origin: 'ISSUED_DOCUMENT', originId: id, version: fromReceivable.version + 1 });
+      const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate } = plan.receivable;
+      Object.assign(fromReceivable, { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate, origin: 'ISSUED_DOCUMENT', originId: id, version: fromReceivable.version + 1 });
       receivableId = fromReceivable.id;
     } else if (plan.receivable) {
       const { title, ...rest } = plan.receivable;
@@ -1016,7 +1017,7 @@ export class MemoryLedgerStore implements LedgerStore {
       // I1-a: the captured Received becomes the document's and pays its Owed (320) or the invoice it names (400).
       const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
       Object.assign(fromPayment, { origin: 'ISSUED_DOCUMENT', version: fromPayment.version + 1, updatedAt: at });
-      if (target) this.applyAllocations(fromPayment, [{ receivableId: target, amountMinor: fromPayment.amountMinor }], at);
+      if (target) this.applyAllocations(fromPayment, [{ receivableId: target, amountMinor: fromPayment.amountMinor }], at, true);
       paymentId = fromPayment.id;
     } else if (plan.payment) {
       const { allocate, ...p } = plan.payment;
@@ -1036,6 +1037,7 @@ export class MemoryLedgerStore implements LedgerStore {
           allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
         },
         at,
+        true,
       ).payment.id;
     }
     if (plan.credit && originalReceivable) {
@@ -1068,7 +1070,7 @@ export class MemoryLedgerStore implements LedgerStore {
       style: input.style,
       ink: input.ink,
       notes: input.notes,
-      originalId: input.originalId,
+      originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : null,
       allocationNumber: input.allocationNumber,
       receivableId,
@@ -2754,7 +2756,8 @@ export class MemoryLedgerStore implements LedgerStore {
         .map((r) => ({ ...r })),
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
       const r = this.recs.get(receivableId);
-      if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
+      // MUT-568 (review fix 2): a document's Owed is corrected only by a credit note.
+      if (!r || r.organizationId !== organizationId || r.deletedAt || r.origin === 'ISSUED_DOCUMENT') return null;
       if (r.status !== 'OPEN' || input.amountMinor > outstanding(r)) throw new InsufficientCapacity(receivableId);
       const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, reasonCode: input.reasonCode ?? null, createdAt: at };
       this.credits.set(credit.id, credit);
@@ -2838,7 +2841,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.recs.get(id);
       if (!r || r.organizationId !== organizationId) return null;
       // Mirrors the Prisma WHERE clause: money on the row refuses the void, and the undeleted record says so.
-      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
+      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n && r.origin !== 'ISSUED_DOCUMENT') r.deletedAt = at;
       return { ...r };
     },
     redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate, dueDate) => {
@@ -2994,7 +2997,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   /** Numbers, stores and allocates a payment whose checks have passed. */
-  private insertPayment(input: CreatePaymentInput, at: Date): { payment: PaymentRecord; allocations: AllocationRecord[] } {
+  private insertPayment(input: CreatePaymentInput, at: Date, allowDocumentOwned = false): { payment: PaymentRecord; allocations: AllocationRecord[] } {
     const year = Number(input.receivedOn.slice(0, 4));
     const counterKey = `${input.organizationId}:${year}`;
     const seq = (this.counters.get(counterKey) ?? 0) + 1;
@@ -3002,7 +3005,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const { allocations: requested, ...rest } = input;
     const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
-    const allocations = this.applyAllocations(payment, requested, at);
+    const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);
     return { payment: { ...payment }, allocations };
   }
 
@@ -3025,7 +3028,9 @@ export class MemoryLedgerStore implements LedgerStore {
     Object.assign(payment, { allocatedMinor: 0n, status: 'REVERSED', reversedAt: at, reversalReason: reason, reversalReasonCode: reasonCode, version: payment.version + 1, updatedAt: at });
   }
 
-  private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): AllocationRecord[] {
+  private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date, allowDocumentOwned = false): AllocationRecord[] {
+    // MUT-568 (review fix 2): only issuing pays a document's Owed.
+    if (!allowDocumentOwned && requested.some((a) => this.recs.get(a.receivableId)?.origin === 'ISSUED_DOCUMENT')) throw new ForeignKeyViolation('payment_allocations.receivableId');
     const created: AllocationRecord[] = [];
     for (const a of requested) {
       const r = this.recs.get(a.receivableId)!;

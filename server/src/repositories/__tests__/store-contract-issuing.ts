@@ -218,7 +218,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       );
       const doc = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
       expect(doc.receivableId).toBe(owed.id);
-      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ origin: 'ISSUED_DOCUMENT', originId: doc.id, netMinor: shekels(1_000), vatMinor: shekels(180), grossMinor: shekels(1_180), title: 'חשבונית מס 1', dueDate: '2026-12-01', postingDate: '2026-11-20' });
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ origin: 'ISSUED_DOCUMENT', originId: doc.id, netMinor: shekels(1_000), vatMinor: shekels(180), grossMinor: shekels(1_180), title: 'חשבונית מס 1', dueDate: '2026-12-22', postingDate: '2026-11-22' });
       const all = await store.receivables.statementSources(w.a.id, w.customer.id, 'ILS');
       expect(all.receivables).toHaveLength(1);
       // Taken over once: a second document can't take it again.
@@ -260,6 +260,44 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect(doc).toMatchObject({ pricesIncludeVat: true, grossMinor: shekels(1_230), vatMinor: shekels(180) });
       expect(doc.lines.map((l) => [l.pricesIncludeVat, l.vatRateBasisPoints])).toEqual([[true, 1800], [false, 0]]);
       expect(await store.issuing.getById(w.a.id, doc.id)).toEqual(doc);
+    });
+
+    it('a receipt keeps the invoice it pays; a taken-over Owed takes the document dates (review fixes 3, 5)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const invoice = await w.issued(store, w.issue());
+      const receipt = await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 100, appliesToDocumentId: invoice.id }), 2);
+      expect(receipt.originalId).toBe(invoice.id);
+      const owed = await store.receivables.createAdjustment(
+        { organizationId: w.a.id, customerId: w.customer.id, projectId: null, currency: 'ILS', netMinor: shekels(1_180), vatMinor: 0n, grossMinor: shekels(1_180), vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-10-30', postingDate: '2026-10-28', postedAt: at(0), createdByUserId: w.user.id, requestId: null },
+        at(0),
+      );
+      await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id }, dueDate: '2026-12-22' }), 3);
+      expect(await store.receivables.getById(w.a.id, owed.id)).toMatchObject({ postingDate: '2026-11-22', dueDate: '2026-12-22' });
+    });
+
+    it('the ledger refuses to credit, delete or pay a document-owned Owed outside issuing (review fix 2)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const invoice = await w.issued(store, w.issue());
+      const credit = { amountMinor: shekels(10), netMinor: shekels(10), vatMinor: 0n, reason: 'x', reasonCode: 'OTHER', effectiveDate: '2026-11-22' as const, requestId: null };
+      expect(await store.receivables.credit(w.a.id, invoice.receivableId!, credit, at(2))).toBeNull();
+      expect((await store.receivables.softDeleteAdjustment(w.a.id, invoice.receivableId!, at(3)))?.deletedAt ?? null).toBeNull();
+      await expect(
+        store.payments.create(
+          { organizationId: w.a.id, customerId: w.customer.id, projectId: null, currency: 'ILS', amountMinor: shekels(10), receivedOn: '2026-11-22', method: 'BANK', reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: [{ receivableId: invoice.receivableId!, amountMinor: shekels(10) }] },
+          at(4),
+        ),
+      ).rejects.toThrow();
+      expect(await store.receivables.getById(w.a.id, invoice.receivableId!)).toMatchObject({ paidMinor: 0n, creditedMinor: 0n, deletedAt: null });
+    });
+
+    it('an all-exempt document posts an EXEMPT Owed (review fix 4)', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const composed = composeDocument({ docType: 'TAX_INVOICE', currency: 'ILS', documentDate: '2026-11-22', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(50), discountMinor: 0n, vatExempt: true }] });
+      const doc = await w.issued(store, { ...w.issue(), composed });
+      expect(await store.receivables.getById(w.a.id, doc.receivableId!)).toMatchObject({ vatTreatment: 'EXEMPT', vatMinor: 0n, grossMinor: shekels(50) });
     });
 
     it('a document read back is a copy: changing it changes nothing stored', async () => {

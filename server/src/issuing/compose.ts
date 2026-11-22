@@ -35,6 +35,8 @@ export interface ComposeInput {
   /** In the document's terms (`pricesIncludeVat`). */
   documentDiscountMinor: bigint;
   pricesIncludeVat: boolean;
+  /** A credit note credits at its tax invoice's rate (review fix 1), not the rate on its own date. */
+  vatRateBasisPoints?: number;
   lines: ComposeLineInput[];
 }
 
@@ -77,7 +79,7 @@ export function parseQuantity(text: string): bigint {
 export function composeDocument(input: ComposeInput): ComposedDocument {
   assertWhoMayIssue(input);
   assertLines(input.lines);
-  const rate = VAT_BEARING.has(input.docType) ? standardVatRateOn(input.documentDate) : 0;
+  const rate = VAT_BEARING.has(input.docType) ? (input.vatRateBasisPoints ?? standardVatRateOn(input.documentDate)) : 0;
   const documentInclusive = input.pricesIncludeVat && rate > 0;
   const lines = input.lines.map((line) => {
     const vatExempt = rate > 0 && line.vatExempt === true;
@@ -87,15 +89,18 @@ export function composeDocument(input: ComposeInput): ComposedDocument {
   const toNet = (gross: bigint) => roundHalfUpDiv(gross * BP, BP + BigInt(rate));
   const toGross = (net: bigint) => roundHalfUpDiv(net * (BP + BigInt(rate)), BP);
   const subtotalMinor = lines.reduce((sum, l) => sum + (l.inclusive ? toNet(l.amount) : l.amount), 0n);
-  const typedTotal = lines.reduce((sum, l) => sum + l.amount, 0n);
-  if (input.documentDiscountMinor < 0n || input.documentDiscountMinor > typedTotal) {
-    throw validationError('DISCOUNT_INVALID', 'the document discount must be between zero and the subtotal', { field: 'discount' });
-  }
-  const shares = spread(input.documentDiscountMinor, lines.map((l) => l.amount));
+  // The discount is in the document's terms: weigh and check it against the lines in those terms, then convert each
+  // line's share back to the line's own terms. Too much is refused, never capped (review fix 6).
+  const sameTerms = (l: { vatExempt: boolean; inclusive: boolean }) => l.vatExempt || l.inclusive === documentInclusive;
+  const inDocumentTerms = lines.map((l) => (sameTerms(l) ? l.amount : documentInclusive ? toGross(l.amount) : toNet(l.amount)));
+  const discountRefused = () => validationError('DISCOUNT_INVALID', 'the document discount must be between zero and the subtotal', { field: 'discount' });
+  if (input.documentDiscountMinor < 0n || input.documentDiscountMinor > inDocumentTerms.reduce((sum, a) => sum + a, 0n)) throw discountRefused();
+  const shares = spread(input.documentDiscountMinor, inDocumentTerms);
   const after = lines.map((l, i) => {
     const share = shares[i]!;
-    const own = l.vatExempt || l.inclusive === documentInclusive ? share : documentInclusive ? toNet(share) : toGross(share);
-    return l.amount - (own > l.amount ? l.amount : own);
+    const own = sameTerms(l) ? share : documentInclusive ? toNet(share) : toGross(share);
+    if (own > l.amount) throw discountRefused();
+    return l.amount - own;
   });
   const nets = lines.map((l, i) => (l.inclusive ? toNet(after[i]!) : after[i]!));
   const exclusiveIdx = lines.flatMap((l, i) => (!l.inclusive && !l.vatExempt && rate > 0 ? [i] : []));

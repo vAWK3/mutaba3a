@@ -206,6 +206,14 @@ describe('issuing routes (MUT-568)', () => {
     expect(wrongType.error.details.reason).toBe('FIELD_NOT_ALLOWED_FOR_TYPE');
   });
 
+  it('a credit note can\'t be dated before its tax invoice (review fix 1)', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const invoice = await read(await issue(h, w.on, invoiceBody(w.customerId, { documentDate: '2026-11-05' })));
+    const note = { docType: 'CREDIT_NOTE', documentDate: '2026-11-04', currency: 'ILS', language: 'he', customerId: w.customerId, originalId: invoice.id, lines: [{ description: 'Early', kind: 'SERVICE', quantity: '1', unitPrice: '10.00' }] };
+    expect((await read(await issue(h, w.on, note))).error.details.reason).toBe('DATE_BEFORE_ORIGINAL');
+  });
+
   it('audits the issue as session-only activity', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);

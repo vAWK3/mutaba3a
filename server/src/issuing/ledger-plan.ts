@@ -56,7 +56,9 @@ export function ledgerPlan(input: IssueDocumentInput, number: number): LedgerPla
     netMinor: composed.netMinor,
     vatMinor: composed.vatMinor,
     grossMinor: composed.grossMinor,
-    vatTreatment: composed.vatRateBasisPoints > 0 ? 'STANDARD_RATED' : 'OUT_OF_SCOPE',
+    // Review fix 4: an all-exempt document is EXEMPT, not standard-rated at 0. A mixed one stays STANDARD_RATED with its
+    // real VAT; its exempt part is in the receivable's net (the document's lines keep the split for the uniform file).
+    vatTreatment: composed.vatRateBasisPoints === 0 ? 'OUT_OF_SCOPE' : composed.lines.every((l) => l.vatExempt) ? 'EXEMPT' : 'STANDARD_RATED',
     vatRateBasisPoints: composed.vatRateBasisPoints,
     title,
     dueDate: input.dueDate ?? input.documentDate,

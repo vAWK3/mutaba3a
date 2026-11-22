@@ -803,6 +803,8 @@ export class PrismaLedgerStore implements LedgerStore {
     counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
     setStartingNumber: (organizationId, docType, start) =>
       this.prisma.$transaction(async (tx) => {
+        // Review fix 9: lock the counter first, so a first document can't commit between the check and the write.
+        await tx.$queryRaw`SELECT 1 FROM "issued_document_counters" WHERE "organizationId" = ${organizationId}::uuid AND "docType" = ${docType}::"IssuedDocType" FOR UPDATE`;
         if (await tx.issuedDocument.findFirst({ where: { organizationId, docType }, select: { id: true } })) return { kind: 'has_documents' as const };
         const counter = await tx.issuedDocumentCounter.upsert({
           where: { organizationId_docType: { organizationId, docType } },
@@ -815,7 +817,7 @@ export class PrismaLedgerStore implements LedgerStore {
       const replay = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
       if (replay) return { kind: 'issued', document: replay, created: false };
       try {
-        return await this.prisma.$transaction((tx) => issueTx(tx, input, at));
+        return await this.prisma.$transaction((tx) => issueTx(tx, input, at), CORRECT_TX_OPTIONS);
       } catch (err) {
         if (err instanceof IssueRefused) return err.result;
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
@@ -2372,7 +2374,8 @@ export class PrismaLedgerStore implements LedgerStore {
       return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n);
     },
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
-      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null }, select: { id: true } });
+      // MUT-568 (review fix 2): a document's Owed is corrected only by a credit note, never credited here.
+      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null, origin: { not: 'ISSUED_DOCUMENT' } }, select: { id: true } });
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         const r = await lockReceivable(tx, receivableId);
@@ -2443,7 +2446,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // landing in between would otherwise hide a row a POSTED payment is allocated to. Same shape as
     // payments.reverse re-asserting `status: 'POSTED'`. A refusal shows up as a row that comes back undeleted.
     softDeleteAdjustment: async (organizationId, id, at) => {
-      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
+      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n, origin: { not: 'ISSUED_DOCUMENT' } }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
     // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
@@ -4511,10 +4514,10 @@ async function nextPaymentNumberTx(tx: Tx, organizationId: string, receivedOn: s
 }
 
 /** Inserts a numbered payment and its allocations (capacity checked under row locks). */
-async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date, allowDocumentOwned = false): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
   const { allocations: requested, ...rest } = input;
   const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
-  const allocations = await applyAllocations(tx, payment, requested, at);
+  const allocations = await applyAllocations(tx, payment, requested, at, allowDocumentOwned);
   const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
   return { payment: fresh, allocations };
 }
@@ -4574,10 +4577,15 @@ async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput
 }
 
 /** Allocation rows + receivable sums + payment allocated total, all inside the caller's transaction; capacity checked under row locks. */
-async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): Promise<AllocationRecord[]> {
+async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date, allowDocumentOwned = false): Promise<AllocationRecord[]> {
   const created: AllocationRecord[] = [];
   let total = 0n;
   await lockReceivablesInIdOrder(tx, requested.map((a) => a.receivableId));
+  // MUT-568 (review fix 2): only issuing pays a document's Owed (a 320, or a 400 naming its invoice); any other payment can't.
+  if (!allowDocumentOwned && requested.length > 0) {
+    const owned = await tx.receivable.count({ where: { id: { in: requested.map((a) => a.receivableId) }, origin: 'ISSUED_DOCUMENT' } });
+    if (owned > 0) throw new ForeignKeyViolation('payment_allocations.receivableId');
+  }
   for (const a of requested) {
     created.push(await allocateRowTx(tx, { organizationId: payment.organizationId, paymentId: payment.id, ...a }, at));
     total += a.amountMinor;
@@ -5108,6 +5116,11 @@ async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput): Promise<{ kin
 async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
   const { organizationId } = input;
   const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
+  // Review fix 7: the year counters before any receivable lock, the order every other posting writer takes (MUT-443).
+  const postsOwed = (input.docType === 'TAX_INVOICE' || input.docType === 'TAX_INVOICE_RECEIPT') && input.fromEntry?.kind !== 'receivable';
+  const postsReceived = (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
+  const owedNumber = postsOwed ? await nextReceivableNumberTx(tx, organizationId, input.documentDate) : null;
+  const receivedNumber = postsReceived && input.payment ? await nextPaymentNumberTx(tx, organizationId, input.payment.receivedOn) : null;
   const last = await tx.issuedDocument.findFirst({ where: { organizationId, docType: input.docType }, orderBy: { documentDate: 'desc' }, select: { documentDate: true } });
   if (last && last.documentDate > input.documentDate) throw new IssueRefused({ kind: 'date_before_last', lastDate: last.documentDate });
   if (input.customerId && !(await tx.customer.findFirst({ where: { id: input.customerId, organizationId }, select: { id: true } }))) {
@@ -5133,15 +5146,16 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   let creditId: string | null = null;
   if (plan.receivable && from?.kind === 'receivable') {
     // I1-a: the recorded Owed becomes the document's: its money is now the document's VAT split, read-only from here.
-    const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title } = plan.receivable;
-    await tx.receivable.update({ where: { id: from.id }, data: { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, origin: 'ISSUED_DOCUMENT', originId: documentId, version: { increment: 1 } } });
+    // Review fix 3: it also takes the document's dates, so its VAT falls in the invoice's month.
+    const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate } = plan.receivable;
+    await tx.receivable.update({ where: { id: from.id }, data: { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate, origin: 'ISSUED_DOCUMENT', originId: documentId, version: { increment: 1 } } });
     receivableId = from.id;
   } else if (plan.receivable) {
     const receivable = await tx.receivable.create({
       data: {
         ...plan.receivable,
         organizationId,
-        number: await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate),
+        number: owedNumber ?? (await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate)),
         projectId: null,
         agreementId: null,
         origin: 'ISSUED_DOCUMENT',
@@ -5157,7 +5171,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     // I1-a: the captured Received becomes the document's, and pays its Owed (320) or the invoice it names (400).
     const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? originalReceivableId : null;
     const payment = await tx.payment.update({ where: { id: from.id }, data: { origin: 'ISSUED_DOCUMENT', version: { increment: 1 }, updatedAt: at } });
-    if (target) await applyAllocations(tx, payment, [{ receivableId: target, amountMinor: payment.amountMinor }], at);
+    if (target) await applyAllocations(tx, payment, [{ receivableId: target, amountMinor: payment.amountMinor }], at, true);
     paymentId = from.id;
   } else if (plan.payment) {
     const { allocate, ...p } = plan.payment;
@@ -5177,8 +5191,9 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
         captureSource: null,
         allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
       },
-      await nextPaymentNumberTx(tx, organizationId, p.receivedOn),
+      receivedNumber ?? (await nextPaymentNumberTx(tx, organizationId, p.receivedOn)),
       at,
+      true,
     );
     paymentId = payment.id;
   }
@@ -5211,7 +5226,8 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       style: input.style,
       ink: input.ink,
       notes: input.notes,
-      originalId: input.originalId,
+      // Review fix 5: a receipt keeps the invoice it pays.
+      originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
       allocationNumber: input.allocationNumber,
       receivableId,
