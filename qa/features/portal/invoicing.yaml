@@ -72,6 +72,26 @@ features:
       - The receipt pays the tax invoice (appliesToDocumentId, payment) and what is still owed drops to 12,774.00
       - After the part payment, the credit note starts as one line for what is still owed (12,774.00, prices include VAT) and names its tax invoice (originalId)
       - The list shows the three documents; in Arabic it reads right to left
+  - id: payment-request
+    title: A payment request — issued as PR-0001, settled by invoice-receipts, cancelled by record (MUT-662)
+    tier: secondary
+    tickets: [MUT-662]
+    steps:
+      - Open Documents › Issued, choose Issue a document, Client 1 and the Payment request type, one line of 1,000
+      - Issue it
+      - Record a payment of 400 from its page
+      - Try to cancel it
+      - Record the rest
+      - Issue another payment request of 500 and cancel it with a reason
+      - Open the list in Arabic
+    expect:
+      - The type says it is not a tax document (no allocation number, not counted in VAT) and the totals show 1,180.00
+      - It takes PR-0001 and reads Unpaid
+      - The payment is an invoice-receipt that refers to the request (appliesToDocumentId) and the request reads Partly paid, listing it
+      - Cancel is not offered while an invoice-receipt refers to it; the panel says to credit the invoice-receipt first
+      - The request reads Paid in full and offers no further payment
+      - The second request reads Cancelled with CX-0001, and the list shows Cancelled
+      - In Arabic the list reads right to left with "طلب دفع PR-0001"
   - id: issue-gate
     title: Issuing waits for the setup; a client page issues for that client; no issuing, no Issued tab (MUT-570)
     tier: secondary
@@ -115,17 +135,20 @@ features:
       - src/hosted/components/IncomeCaptureDrawer.tsx
       - src/hosted/components/issueOffers.ts
       - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/IssueOffer.tsx
       - src/hosted/components/Toast.tsx
       - src/hosted/pages/views/ReceivablesList.tsx
     steps:
       - On Owed, record 1,180 from Client 1
       - Choose Issue a tax invoice on the save toast, then Issue
+      - Record another Owed, open Paid before the toast fades, and choose Issue a tax invoice there
       - Reopen Owed
       - With "offer to issue after saving" off, record another Owed
       - On a profile without invoicing, record an Owed
     expect:
       - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
       - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - Leaving Owed inside the toast's six seconds keeps its button working: on Paid it opens the drawer for the Owed just saved
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup

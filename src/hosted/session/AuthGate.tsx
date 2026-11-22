@@ -17,6 +17,7 @@ import { useIsLocalMode, useMode } from './mode';
 import { WelcomePage } from '../pages/auth/WelcomePage';
 import { ProfileBanner } from '../components/ProfileBanner';
 import { LapseBanner, LockedScreen } from '../components/LapseGate';
+import { IssueOfferProvider } from '../components/IssueOffer';
 import { billingGateOf } from '../data/trialPrompt';
 import { pickShellOverlay } from '../data/filters';
 import { useSignOut } from './useSignOut';
@@ -192,10 +193,11 @@ export function ProfileLayout({ profileId }: { profileId: string }) {
           {locked ? (
             <LockedScreen profile={profile} />
           ) : (
-            <>
+            // MUT-648: the save toast's Issue offer outlives the page that saved (IssueOfferProvider).
+            <IssueOfferProvider profile={profile}>
               <LapseBanner profile={profile} />
               <Outlet />
-            </>
+            </IssueOfferProvider>
           )}
         </Fragment>
       </HostedShell>

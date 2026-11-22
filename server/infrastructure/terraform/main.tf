@@ -59,6 +59,8 @@ locals {
   comeback_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.comeback_mail_enabled
   # MUT-535: the monthly summary needs mail and the operator's go-ahead; without Stripe it mails without the yearly line.
   monthly_summary_mail_enabled = var.mailer == "resend" && var.monthly_summary_mail_enabled
+  # MUT-571 AC3: the Tax Authority re-consent reminders need mail and the operator's go-ahead (the connection is configured).
+  tax_authority_reminders_enabled = var.mailer == "resend" && var.tax_authority_reminders_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -93,7 +95,7 @@ locals {
     var.accountant_plan_enabled ? { ACCOUNTANT_PLAN = "true" } : {},
   )
 
-  # MUT-569 (ADR-271): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
+  # MUT-569 (ADR-272): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
   # its placeholders (zeros, "MTB3A"). The software house is the registering owner: Narabnd Studio Ltd (MUT-700).
   uniform_file_env = merge(
     var.uniform_file_registration_number == null ? {} : { UNIFORM_FILE_REGISTRATION_NUMBER = var.uniform_file_registration_number },
@@ -1198,6 +1200,38 @@ resource "google_cloud_scheduler_job" "monthly_summary_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/monthly-summary-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-571 AC3: the Tax Authority re-consent reminders, daily at 09:00 Jerusalem. The owner of each connected profile is
+# mailed once ten days before the 90-day consent ends and once when it has ended; each stage once per consent (the send
+# log), so a retry or a second run sends nothing new. Only with mail on and once tax_authority_reminders_enabled says the
+# Tax Authority connection is configured here and the operator read a dry run.
+resource "google_cloud_scheduler_job" "tax_authority_reminders" {
+  count = local.tax_authority_reminders_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-tax-authority-reminders${local.suffix}"
+  region           = var.region
+  description      = "Tax Authority re-consent reminders, daily (MUT-571)."
+  schedule         = "0 9 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/issuing/tax-authority-reminders"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

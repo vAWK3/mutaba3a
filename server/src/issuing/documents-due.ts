@@ -12,7 +12,10 @@ export type DocumentsPreference = (typeof DOCUMENTS_PREFERENCES)[number];
 export const DEFAULT_DOCUMENTS_PREFERENCE: DocumentsPreference = 'ON_PAYMENT';
 
 export type DueKind = 'TAX_INVOICE' | 'PAYMENT_REQUEST' | 'RECEIPT' | 'TAX_INVOICE_RECEIPT';
-/** Why a due item can't be issued in MTB3A; it can still be attached (MUT-647) or marked not for invoice. */
+/**
+ * Why a due item can't be issued in MTB3A; it can still be attached (MUT-647) or marked not for invoice.
+ * PAYMENT_REQUEST_PENDING is no longer produced (MUT-662 issues payment requests); old clients keep reading it.
+ */
 export type DueReason = 'PAYMENT_REQUEST_PENDING' | 'CURRENCY_NOT_ILS' | 'MIXED_ALLOCATION' | 'RECORDED_ELSEWHERE';
 
 export interface DueReceivableInput {
@@ -31,6 +34,8 @@ export interface DueReceivableInput {
   documented: boolean;
   /** The linked tax invoice (305) a receipt can apply to. */
   taxInvoiceId: string | null;
+  /** MUT-662: the live (uncancelled) payment request linked to it; its payments are due a document that refers to it. */
+  paymentRequestId: string | null;
   /** A live invoice issued elsewhere is attached to it (MUT-647, OWED). */
   externalInvoice: boolean;
 }
@@ -73,7 +78,7 @@ export interface DueItem {
   date: IsoDate;
   issuable: boolean;
   reason?: DueReason;
-  /** The tax invoice a receipt pays. */
+  /** The tax invoice a receipt pays, or the payment request a 320 or 400 settles (MUT-662). */
   appliesToDocumentId?: string;
   /** Issue it linked to the entry with no posting: the entry's money stays as recorded. */
   linkOnly: boolean;
@@ -91,7 +96,7 @@ export function documentsDue(input: DocumentsDueInput): DueItem[] {
   const exempt = input.dealerType === 'EXEMPT';
   const items = [
     ...(exempt ? [] : input.receivables.flatMap((r) => receivableDue(input, r))),
-    ...input.payments.flatMap((p) => (exempt ? exemptPaymentDue(input, p) : paymentDue(input, p, byId))),
+    ...input.payments.flatMap((p) => (exempt ? exemptPaymentDue(input, p, byId) : paymentDue(input, p, byId))),
   ];
   return items.sort(byClientThenDate);
 }
@@ -113,13 +118,14 @@ function monthsBefore(today: IsoDate, months: number): IsoDate {
 }
 
 function receivableDue(input: DocumentsDueInput, r: DueReceivableInput): DueItem[] {
-  if (r.deleted || r.notForInvoice || r.origin === 'ISSUED_DOCUMENT' || r.documented || r.externalInvoice) return [];
+  // MUT-662: an Owed with a live payment request has had its document; its payments are due theirs.
+  if (r.deleted || r.notForInvoice || r.origin === 'ISSUED_DOCUMENT' || r.documented || r.paymentRequestId || r.externalInvoice) return [];
   const amountMinor = r.grossMinor - r.creditedMinor;
   if (amountMinor <= 0n) return [];
   const preference = preferenceOf(input, r.customerId);
   if (preference !== 'TAX_INVOICE_FIRST' && preference !== 'PAYMENT_REQUEST_FIRST') return [];
   const kind: DueKind = preference === 'TAX_INVOICE_FIRST' ? 'TAX_INVOICE' : 'PAYMENT_REQUEST';
-  const reason = kind === 'PAYMENT_REQUEST' ? 'PAYMENT_REQUEST_PENDING' : currencyReason(r.currency);
+  const reason = currencyReason(r.currency);
   return [{
     kind,
     entry: { kind: 'receivable', id: r.id, number: r.number },
@@ -128,8 +134,8 @@ function receivableDue(input: DocumentsDueInput, r: DueReceivableInput): DueItem
     currency: r.currency,
     date: r.postingDate,
     // An ADJUSTMENT Owed is taken over by its tax invoice (MUT-648's path); an agreement's charge, or a credited one,
-    // keeps its money and gets the document linked to it.
-    linkOnly: r.origin !== 'ADJUSTMENT' || r.creditedMinor > 0n,
+    // keeps its money and gets the document linked to it. A payment request is always linked (MUT-662).
+    linkOnly: kind === 'PAYMENT_REQUEST' || r.origin !== 'ADJUSTMENT' || r.creditedMinor > 0n,
     ...outcome(reason),
   }];
 }
@@ -138,14 +144,27 @@ function counted(p: DuePaymentInput): boolean {
   return p.status === 'POSTED' && p.origin !== 'ISSUED_DOCUMENT' && !p.notForInvoice && !p.documented && !p.externalInvoice;
 }
 
-function exemptPaymentDue(input: DocumentsDueInput, p: DuePaymentInput): DueItem[] {
+function exemptPaymentDue(input: DocumentsDueInput, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
   if (!counted(p) || p.receiptNumber || preferenceOf(input, p.customerId) === 'NO_DOCUMENT') return [];
-  return [paymentItem(p, 'RECEIPT', p.amountMinor, p.allocations.length > 0, paymentReason(p))];
+  const requested = requestOf(p, byId);
+  return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, p.allocations.length > 0, paymentReason(p)), ...(requested ? { appliesToDocumentId: requested } : {}) }];
+}
+
+/** MUT-662: the live payment request a payment settles, when all of it went to that request's Owed. */
+function requestOf(p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): string | null {
+  if (p.allocations.length !== 1) return null;
+  const r = byId.get(p.allocations[0]!.receivableId);
+  return r && !r.documented && !r.externalInvoice ? r.paymentRequestId : null;
 }
 
 function paymentDue(input: DocumentsDueInput, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
   if (!counted(p)) return [];
   if (p.allocations.length === 0) return unallocatedDue(input, p);
+  // MUT-662: a payment on a payment request's Owed gets an invoice-receipt that refers to the request, linked only.
+  const requested = requestOf(p, byId);
+  if (requested && !excludedShare(input, { receivable: byId.get(p.allocations[0]!.receivableId), amountMinor: p.amountMinor })) {
+    return [{ ...paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, true, paymentReason(p)), appliesToDocumentId: requested }];
+  }
   const shares: Share[] = p.allocations.map((a) => ({ receivable: byId.get(a.receivableId), amountMinor: a.amountMinor }));
   const live = shares.filter((s) => !excludedShare(input, s));
   if (live.length === 0) return [];

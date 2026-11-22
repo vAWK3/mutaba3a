@@ -2,7 +2,7 @@
 
 **State:** built, reviewed and verified. Main, with MUT-660 (185517a6) and MUT-657's guard fix, is merged into this branch and the conflicts are resolved. **Not merged into main.** Basel said "merge now, add to release" in the MUT-569 session. mini-crm-00 holds the merge until after the 11-23 release, on Basel's yes. Jira MUT-569 is still **In Progress**; In Review comes after the merge.
 
-**Numbers after the merge:** MUT-569 is **ADR-271**, **TD-323** and **API 1.128.0-mut569**. MUT-660 took ADR-270, TD-320 and 1.127.0. The renumbering covered code comments, Terraform, docs and the knowledge files. OpenAPI and `schema.d.ts` were regenerated.
+**Numbers after the merge:** MUT-569 is **ADR-272**, **TD-323** and **API 1.134.0-mut569**. MUT-660 took ADR-270, TD-320 and 1.127.0; MUT-709 took 1.128.0, MUT-662 ADR-271 and 1.129.0, the invoicing follow-ups 1.130.0, MUT-664a 1.131.0 (merged from main f5763e73), and MUT-711 takes 1.133.0 and ADR-273 (merging into main before this branch). The renumbering covered code comments, Terraform, docs and the knowledge files. OpenAPI and `schema.d.ts` were regenerated.
 
 ## Checks
 

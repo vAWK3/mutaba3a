@@ -152,6 +152,8 @@ describe('STORE_ACCESS', () => {
       'features.revoke',
       // MUT-593: the operator's per-firm Malafat switch.
       'integrations.setDelegation',
+      // MUT-571 AC3: the re-consent reminder job reads every profile's connection end, on the unguarded store.
+      'issuing.taxConnectionsEndingBetween',
       // MUT-595: Sign in with Malafat runs on public routes, unguarded.
       'malafatSignIns.claimCallback',
       'malafatSignIns.claimCompletion',

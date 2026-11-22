@@ -3,8 +3,8 @@ import { Select } from '../../components/ui/Input';
 import { useLanguage } from '../../lib/i18n/core';
 import { ApiError, type Customer, type DocumentsPreference } from '../api/client';
 import { useUpdateCustomer } from '../data/customerQueries';
-import { useIssuingSetup } from '../data/issuingQueries';
-import { useIsLocalMode } from '../session/mode';
+import { useInvoicingWorthAsking, useIssuingSetup } from '../data/issuingQueries';
+import { useOptionalProfile } from '../session/me';
 
 /** "Profile default" first: no value of the client's own (null). */
 const CHOICES: ReadonlyArray<DocumentsPreference | 'DEFAULT'> = ['DEFAULT', 'TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
@@ -17,10 +17,10 @@ const CHOICES: ReadonlyArray<DocumentsPreference | 'DEFAULT'> = ['DEFAULT', 'TAX
 export function DocumentsPreferenceField({ profileId, client, writable, profileDefault }: { profileId: string; client: Customer; writable: boolean; profileDefault: DocumentsPreference }) {
   const { t } = useLanguage();
   const id = useId();
-  const local = useIsLocalMode();
-  const setup = useIssuingSetup(profileId, !local);
+  const ask = useInvoicingWorthAsking(useOptionalProfile());
+  const setup = useIssuingSetup(profileId, ask);
   const update = useUpdateCustomer(profileId, client.id);
-  if (local || !setup.data) return null;
+  if (!ask || !setup.data) return null;
   const current = client.documentsPreference ?? null;
   const effective = current ?? profileDefault;
   const changedElsewhere = update.error instanceof ApiError && update.error.status === 409;

@@ -10,7 +10,7 @@ import { profileKey } from '../../session/me';
 import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
 import { useIssuingStyles } from '../../data/issuedQueries';
 import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuerLogo } from '../../data/issuingQueries';
-import { DEFAULT_INK, INKS, wholeNumber, type PaperModel } from './setupSteps';
+import { DEFAULT_INK, INKS, endsSoon, wholeNumber, type PaperModel } from './setupSteps';
 
 /** MUT-660: the documents preference choices, in the order the client page offers them. */
 const DOCUMENTS_PREFERENCES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
@@ -30,7 +30,8 @@ const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
 /** MUT-570 (Basel): the styles come from the server, so a new one appears without a portal release; until it answers, these. */
 const KNOWN_STYLES = ['PROFESSIONAL', 'MODERN', 'MINIMAL'];
 const LANGUAGES = ['he', 'ar', 'en'] as const;
-const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE'] as const;
+// MUT-662: a payment request has its own series, so it is asked like the others.
+const DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const;
 export const LOGO_MAX_BYTES = 256 * 1024;
 
 function SaveError({ error }: { error: unknown }) {
@@ -407,7 +408,8 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
 /**
  * Step 5 (MUT-571): connect the profile to the Tax Authority, for allocation numbers. Connect opens the Tax Authority's
  * own sign-in (the business owner signs in there; MTB3A never sees the password) and comes back here. A server without
- * the connection configured answers 404: the step then says it will be available.
+ * the connection configured answers 404: the step then says it will be available. Ten days before the consent ends the
+ * step says so and offers Connect again (the reminder mail links here); after, it reads as ended.
  */
 export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const t = useT();
@@ -435,20 +437,26 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
     }
   };
   const state = status.data?.state;
+  const until = status.data?.until?.slice(0, 10) ?? '';
+  const ending = state === 'connected' && endsSoon(status.data?.until);
   return (
     <div className="hp-setup-form" data-testid="tax-authority-step">
       {status.error ? (
         <p>{t('hosted.invoicing.taxAuthority.body')}</p>
+      ) : ending ? (
+        <p role="status" data-testid="tax-authority-ending">
+          {t('hosted.invoicing.taxAuthority.endingSoon', { until })}
+        </p>
       ) : state === 'connected' ? (
         <p role="status" data-testid="tax-authority-connected">
-          {t('hosted.invoicing.taxAuthority.connected', { until: status.data!.until?.slice(0, 10) ?? '' })}
+          {t('hosted.invoicing.taxAuthority.connected', { until })}
         </p>
       ) : (
         <p>{t(state === 'expired' ? 'hosted.invoicing.taxAuthority.expired' : 'hosted.invoicing.taxAuthority.connectBody')}</p>
       )}
-      {returned === 'failed' && state !== 'connected' && (
-        <p className="input-error-message" role="alert">
-          {t('hosted.invoicing.taxAuthority.returnedFailed')}
+      {(returned === 'failed' || returned === 'refused') && state !== 'connected' && (
+        <p className="input-error-message" role="alert" data-testid="tax-authority-returned">
+          {t(returned === 'refused' ? 'hosted.invoicing.taxAuthority.returnedRefused' : 'hosted.invoicing.taxAuthority.returnedFailed')}
         </p>
       )}
       {failed && (
@@ -457,9 +465,9 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
         </p>
       )}
       <div className="hp-setup-actions">
-        {status.data && state !== 'connected' && (
+        {status.data && (state !== 'connected' || ending) && (
           <Button type="button" onClick={() => void connect()} disabled={busy} data-testid="tax-authority-connect">
-            {t('hosted.invoicing.taxAuthority.connect')}
+            {t(ending ? 'hosted.invoicing.taxAuthority.reconnect' : 'hosted.invoicing.taxAuthority.connect')}
           </Button>
         )}
         {state === 'connected' && (

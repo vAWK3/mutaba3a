@@ -4,14 +4,22 @@ import { todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
 import { buildStatement, decodeStatementCursor } from '../statements/build.js';
 import { serializeStatement } from '../statements/serialize.js';
+import { statementTags, type StatementLineTags } from '../statements/tags.js';
+import { customerBalances } from '../statements/balances.js';
+import { ledgerEntries } from '../statements/lines.js';
+import { formatMoney, type Currency } from '../money.js';
+import type { StatementLine } from '../statements/build.js';
+import { documentsDue } from '../issuing/documents-due.js';
+import { invoicingOn } from '../issuing/invoicing-on.js';
 import { ApiError } from '../errors.js';
 import { normalizeTaxId } from '../israel/tax-id.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
-import type { CustomerRecord, LedgerStore, UpdateCustomerPatch } from '../repositories/ports.js';
+import type { CustomerRecord, IssuedDocumentRecord, LedgerStore, Organization, UpdateCustomerPatch } from '../repositories/ports.js';
 import {
   CreateCustomerRequestSchema,
+  CustomerBalancesSchema,
   CustomerIdParamSchema,
   CustomerPageSchema,
   CustomerSchema,
@@ -245,6 +253,30 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
+  // ---- MUT-664: every client's balance (MUT-663's Clients list) ----
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/customer-balances',
+      tags: ['Customers'],
+      summary: 'Every client\'s balance per currency',
+      description: 'MUT-664: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals). Negative: the client is in credit. Clients with no movement are absent; money with no client is not here. Dated installments whose date has arrived are posted first, as on the statement.',
+      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      middleware: [requireScope('payments:read')] as const,
+      responses: { 200: { description: 'The balances', content: { 'application/json': { schema: CustomerBalancesSchema } } }, ...errorResponses },
+    }),
+    async (c) => {
+      const { organization } = c.get('auth');
+      const now = c.get('now')();
+      const asOf = todayFor(organization, now);
+      const posting = lazyPostingOf(c, store);
+      await postDueItems(posting.store, organization, asOf, now, posting.actor);
+      const rows = await store.receivables.periodSources(organization.id, null);
+      const balances = customerBalances(ledgerEntries(rows, { asOf, timezone: organization.timezone }));
+      return c.json({ asOf, balances: balances.map((b) => ({ customerId: b.customerId, currency: b.currency as Currency, balance: formatMoney({ minor: b.balanceMinor, currency: b.currency as Currency }) })) }, 200);
+    },
+  );
+
   // ---- MUT-478: the customer statement (ledger card) ----
   app.openapi(
     createRoute({
@@ -275,12 +307,34 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       await postDueItems(posting.store, organization, asOf, now, posting.actor);
       const sources = await store.receivables.statementSources(organization.id, customer.id, q.currency);
       const view = { asOf, timezone: organization.timezone, from: q.from ?? null, to: q.to ?? null, projectId: q.projectId ?? null };
-      const page = buildStatement(sources, view, { limit: q.limit, cursor });
-      return c.json(serializeStatement({ customerId: customer.id, currency: q.currency, view, page }), 200);
+      const page = buildStatement(sources, view, { limit: q.limit, cursor, order: q.order });
+      const tags = await tagsFor(store, organization, customer.id, q.currency, page.lines);
+      return c.json(serializeStatement({ customerId: customer.id, currency: q.currency, view, page, tags }), 200);
     },
   );
 
   return app;
+}
+
+/** MUT-664: the documents on each line of a page and the one it is due; none when invoicing is off for the profile. */
+async function tagsFor(store: LedgerStore, organization: Organization, customerId: string, currency: string, lines: readonly StatementLine[]): Promise<Map<string, StatementLineTags> | undefined> {
+  if (lines.length === 0 || !(await invoicingOn(store, organization))) return undefined;
+  const issued: IssuedDocumentRecord[] = [];
+  let cursor: { createdAt: Date; id: string } | null = null;
+  do {
+    const page = await store.issuing.list(organization.id, { customerId, currency }, { limit: 200, cursor });
+    issued.push(...page.items);
+    cursor = page.nextCursor;
+  } while (cursor);
+  const owedIds = lines.filter((l) => l.kind === 'CHARGE').map((l) => l.receivableId!);
+  const paymentIds = lines.filter((l) => l.kind === 'PAYMENT').map((l) => l.paymentId!);
+  const [owed, received, inputs] = await Promise.all([
+    owedIds.length ? store.issuing.liveExternal(organization.id, 'OWED', owedIds) : [],
+    paymentIds.length ? store.issuing.liveExternal(organization.id, 'RECEIVED', paymentIds) : [],
+    store.issuing.dueInputs(organization.id),
+  ]);
+  const due = documentsDue(inputs).filter((i) => i.customerId === customerId);
+  return statementTags(lines, { issued, external: [...owed, ...received], due });
 }
 
 async function mustGet(store: LedgerStore, organizationId: string, id: string): Promise<CustomerRecord> {

@@ -1,5 +1,6 @@
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import { setupLinkOrigin } from '../auth/account-setup.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { TaxAuthorityError, type DecisionChoice } from '../israel/tax-authority/client.js';
@@ -13,7 +14,9 @@ import { conflictResponse, errorResponses, notFoundResponse, validationResponse 
  * MUT-571 (ADR-264): connecting a profile to the Tax Authority. The owner asks for the authorize URL (a signed,
  * ten-minute `state` names the profile and the person), signs in at the Tax Authority, and its browser comes back to
  * the unauthenticated callback, which checks the state, swaps the code for tokens and stores them sealed. Then it sends
- * the browser to the portal's invoicing setup (or answers a short page when no portal origin is configured).
+ * the browser back to the portal's invoicing setup: the portal the person pressed Connect on (signed into the state),
+ * else this server's own portal when it serves one; with neither (an API-only server, a forged or late state) it
+ * answers a short page of its own, never an address with no page behind it.
  * MUT-572: the owner reports a held allocation's choice (cancel, or a hearing; "continue" is the issue itself).
  */
 const json = <T>(description: string, schema: T) => ({ description, content: { 'application/json': { schema } } });
@@ -24,6 +27,8 @@ export interface TaxAuthorityRouteDeps {
   issuingProfile: (c: Context<AppEnv>, write: boolean) => Promise<Organization>;
   audit: (c: Context<AppEnv>, action: string, entityType: string, entityId: string, metadata?: JsonObject) => Promise<unknown>;
   portalOrigin: string | null;
+  /** This server serves the portal itself (PORTAL_DIST_DIR): its pages exist at PORTAL_ORIGIN, or its own origin. */
+  servesPortal: boolean;
   vatNumberOf: (organizationId: string) => Promise<number | null>;
 }
 
@@ -70,7 +75,7 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       const ta = configured();
       const organization = await deps.issuingProfile(c, true);
       const { user } = sessionAuth(c);
-      return c.json({ authorizeUrl: ta.client.authorizeUrl(newState(ta.stateSecret, organization.id, user.id, c.get('now')())) }, 200);
+      return c.json({ authorizeUrl: ta.client.authorizeUrl(newState(ta.stateSecret, organization.id, user.id, c.get('now')(), returnOriginOf(c, deps.portalOrigin))) }, 200);
     },
   );
 
@@ -80,7 +85,8 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       path: '/v1/issuing/tax-authority/callback',
       tags: ['Issuing'],
       summary: 'Where the Tax Authority sends the browser back after sign-in',
-      description: 'MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the portal\'s invoicing setup with `taxAuthority=connected` or `failed`.',
+      description:
+        'MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server\'s own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened.',
       security: [],
       request: { query: z.object({ code: z.string().max(4096).optional(), state: z.string().max(2048).optional(), error: z.string().max(200).optional() }) },
       responses: { 302: { description: 'Back to the portal' }, 200: { description: 'Done (no portal configured)', content: { 'text/html': { schema: z.string() } } } },
@@ -90,7 +96,8 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       const now = c.get('now')();
       const { code, state, error } = c.req.valid('query');
       const claim = state ? readState(ta.stateSecret, state, now) : null;
-      let outcome: 'connected' | 'failed' = 'failed';
+      // The Tax Authority sends `error` (access_denied) when the owner declines; nothing is exchanged then.
+      let outcome: 'connected' | 'refused' | 'failed' = claim && error ? 'refused' : 'failed';
       if (claim && code && !error) {
         try {
           const tokens = await ta.client.exchangeCode(code);
@@ -104,8 +111,9 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
           }
         }
       }
-      if (deps.portalOrigin && claim) return c.redirect(`${deps.portalOrigin}/p/${claim.profileId}/you/invoicing?taxAuthority=${outcome}`, 302);
-      return c.html(`<!doctype html><meta charset="utf-8"><title>MTB3A</title><p>${outcome === 'connected' ? 'Connected to the Tax Authority. You can close this window.' : 'The connection to the Tax Authority did not complete. Close this window and try again.'}</p>`, 200);
+      const portal = claim?.returnOrigin ?? (deps.servesPortal ? setupLinkOrigin(deps.portalOrigin ?? undefined, c.req.url) : null);
+      if (portal && claim) return c.redirect(`${portal.replace(/\/+$/, '')}/p/${claim.profileId}/you/invoicing?taxAuthority=${outcome}`, 302);
+      return c.html(callbackPage(outcome), 200);
     },
   );
 
@@ -165,4 +173,40 @@ export async function reportDecision(ta: TaxAuthorityDeps, deps: Pick<TaxAuthori
     throw new ApiError('TAX_AUTHORITY_UNAVAILABLE', 'The Tax Authority did not answer; try again shortly');
   }
   if (!answer.ok) throw new ApiError('VALIDATION_FAILED', 'The Tax Authority did not accept the choice', { reason: 'ALLOCATION_DECISION_REFUSED', message: answer.message });
+}
+
+const LOOPBACK_ORIGIN = /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/;
+
+/**
+ * The portal the person pressed Connect on, to return to after the Tax Authority: the request's Origin, but only one
+ * that is this server's portal (PORTAL_ORIGIN, or the API's own origin when it has none) or, on a local server, a
+ * loopback dev portal (the Vite one on another port). Anything else (a phone's request with no Origin, a foreign site)
+ * signs no origin into the state, so the callback falls back to this server's own portal or its own page.
+ */
+function returnOriginOf(c: Context<AppEnv>, portalOrigin: string | null): string | null {
+  const origin = c.req.header('origin');
+  if (!origin || origin === 'null') return null;
+  let parsed: URL;
+  try {
+    parsed = new URL(origin);
+  } catch {
+    return null;
+  }
+  if (parsed.origin !== origin) return null;
+  if (portalOrigin && origin === new URL(portalOrigin).origin) return origin;
+  if (origin === setupLinkOrigin(portalOrigin ?? undefined, c.req.url)) return origin;
+  const localServer = portalOrigin ? LOOPBACK_ORIGIN.test(new URL(portalOrigin).origin) : LOOPBACK_ORIGIN.test(new URL(c.req.url).origin);
+  return localServer && LOOPBACK_ORIGIN.test(origin) ? origin : null;
+}
+
+const PAGE_WORDS = {
+  connected: { en: 'Connected to the Tax Authority. You can close this window and go back to MTB3A.', ar: 'تم الربط بسلطة الضرائب. يمكنك إغلاق هذه النافذة والعودة إلى متابعة.' },
+  refused: { en: 'The connection was not approved on the Tax Authority’s site. Close this window and choose Connect to the Tax Authority again when you are ready.', ar: 'لم تتم الموافقة على الربط في موقع سلطة الضرائب. أغلق هذه النافذة واختر «الربط بسلطة الضرائب» مجددًا حين تكون مستعدًا.' },
+  failed: { en: 'The connection to the Tax Authority did not complete. Close this window and try again.', ar: 'لم يكتمل الربط بسلطة الضرائب. أغلق هذه النافذة وحاول مجددًا.' },
+} as const;
+
+/** The callback's own page, when there is no portal to return to: what happened, in Arabic first, then English. */
+function callbackPage(outcome: keyof typeof PAGE_WORDS): string {
+  const words = PAGE_WORDS[outcome];
+  return `<!doctype html><html lang="ar" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>MTB3A</title><body style="font-family:system-ui,sans-serif;max-width:32rem;margin:3rem auto;padding:0 1rem;line-height:1.6"><p>${words.ar}</p><p lang="en" dir="ltr">${words.en}</p></body></html>`;
 }

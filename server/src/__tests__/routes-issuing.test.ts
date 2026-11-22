@@ -203,6 +203,54 @@ describe('issuing routes (MUT-568)', () => {
     expect((await read(await issue(h, w.on, note))).error.details.reason).toBe('DATE_BEFORE_ORIGINAL');
   });
 
+  it('MUT-662: a payment request: PR-0001, no allocation asked, status from the invoice-receipts that settle it', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const res = await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST', dueDate: '2026-12-05' }));
+    expect(res.status, await res.clone().text()).toBe(201);
+    const pr = await read(res);
+    expect(pr).toMatchObject({ docType: 'PAYMENT_REQUEST', number: 1, displayNumber: 'PR-0001', gross: '29146.00', allocationNumber: null, paymentRequest: { status: 'UNPAID', covered: '0.00', linked: [], cancellation: null } });
+    expect(await h.store.receivables.getById(w.profileId, pr.receivableId)).toMatchObject({ origin: 'ADJUSTMENT', grossMinor: 2_914_600n, dueDate: '2026-12-05' });
+    const pay = (amount: string) => issue(h, w.on, { docType: 'TAX_INVOICE_RECEIPT', documentDate: '2026-11-06', currency: 'ILS', language: 'he', customerId: w.customerId, appliesToDocumentId: pr.id, payment: { method: 'BANK', receivedOn: '2026-11-06' }, lines: [{ description: 'Part', kind: 'SERVICE', quantity: '1', unitPrice: amount, pricesIncludeVat: true }] });
+    const part = await pay('10000.00');
+    expect(part.status, await part.clone().text()).toBe(201);
+    expect(await read(part)).toMatchObject({ docType: 'TAX_INVOICE_RECEIPT', receivableId: null, originalId: pr.id });
+    const after = await read(await h.app.request(`/v1/issued-documents/${pr.id}`, { headers: w.on }));
+    expect(after.paymentRequest).toMatchObject({ status: 'PARTLY_PAID', covered: '10000.00', linked: [{ docType: 'TAX_INVOICE_RECEIPT', gross: '10000.00' }] });
+    const list = await read(await h.app.request('/v1/issued-documents?docType=PAYMENT_REQUEST', { headers: w.on }));
+    expect(list.items.map((d: { paymentRequest: { status: string } }) => d.paymentRequest.status)).toEqual(['PARTLY_PAID']);
+  });
+
+  it('MUT-662 (D18): cancel is refused while an invoice-receipt refers to it; the owner cancels otherwise, once; an accountant never', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const pr = await read(await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST' })));
+    const cancel = (id: string, headers: Record<string, string>, key = idem()) => h.app.request(`/v1/issued-documents/${id}/cancel`, json({ reason: 'sent twice' }, { ...headers, ...key }));
+    const acc = await shared(h, w.owner, w.profileId);
+    expect((await cancel(pr.id, acc.on(w.profileId))).status).toBe(403);
+    const key = idem();
+    const done = await cancel(pr.id, w.on, key);
+    expect(done.status, await done.clone().text()).toBe(200);
+    expect((await read(done)).paymentRequest).toMatchObject({ status: 'CANCELLED', cancellation: { number: 1, displayNumber: 'CX-0001', reason: 'sent twice' } });
+    expect((await cancel(pr.id, w.on, key)).status).toBe(200);
+    expect((await read(await cancel(pr.id, w.on))).error.details.reason).toBe('ALREADY_CANCELLED');
+    const invoice = await read(await issue(h, w.on, invoiceBody(w.customerId)));
+    expect((await read(await cancel(invoice.id, w.on))).error.details.reason).toBe('NOT_A_PAYMENT_REQUEST');
+    const paid = await read(await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST' })));
+    await issue(h, w.on, { docType: 'TAX_INVOICE_RECEIPT', documentDate: '2026-11-06', currency: 'ILS', language: 'he', customerId: w.customerId, appliesToDocumentId: paid.id, payment: { method: 'BANK', receivedOn: '2026-11-06' }, lines: [{ description: 'Part', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] });
+    expect((await read(await cancel(paid.id, w.on))).error.details.reason).toBe('PAYMENT_REQUEST_HAS_DOCUMENTS');
+  });
+
+  it('MUT-662: an exempt dealer may issue a payment request, at no VAT', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const current = await read(await h.app.request('/v1/issuer', { headers: w.on }));
+    expect((await h.app.request('/v1/issuer', json({ ...ISSUER, dealerType: 'EXEMPT' }, { ...w.on, 'if-match': String(current.version) }, 'PUT'))).status).toBe(200);
+    const res = await issue(h, w.on, invoiceBody(w.customerId, { docType: 'PAYMENT_REQUEST' }));
+    expect(res.status, await res.clone().text()).toBe(201);
+    expect(await read(res)).toMatchObject({ vat: '0.00', vatRateBasisPoints: 0, gross: '24700.00' });
+  });
+
   it('audits the issue as session-only activity', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);
@@ -211,3 +259,17 @@ describe('issuing routes (MUT-568)', () => {
   });
 });
 
+
+describe('MUT-664: the Documents tab list', () => {
+  it('a tax invoice carries what is settled on it, and the list filters by currency and period', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const doc = await read(await issue(h, w.on, invoiceBody(w.customerId)));
+    expect(doc.docType).toBe('TAX_INVOICE');
+    const page = await read(await h.app.request(`/v1/issued-documents?customerId=${w.customerId}`, { headers: w.on }));
+    expect(page.items[0]).toMatchObject({ id: doc.id, settlement: 'OPEN', settled: '0.00' });
+    expect((await read(await h.app.request(`/v1/issued-documents?customerId=${w.customerId}&currency=USD`, { headers: w.on }))).items).toEqual([]);
+    expect((await read(await h.app.request(`/v1/issued-documents?from=2026-11-06`, { headers: w.on }))).items).toEqual([]);
+    expect((await read(await h.app.request(`/v1/issued-documents?from=2026-11-01&to=2026-11-05`, { headers: w.on }))).items).toHaveLength(1);
+  });
+});

@@ -20,6 +20,8 @@ import type {
   IssueResult,
   IssuedDocumentCounterRecord,
   IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
   IssuerLogoRecord,
@@ -230,6 +232,7 @@ import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
 import { DOC_TYPE_CODES } from '../issuing/types.js';
@@ -401,6 +404,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
   private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  /** MUT-662: payment request cancellations by documentId, and each profile's next CX number. */
+  private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
+  private readonly cancellationCounters = new Map<string, number>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
@@ -994,6 +1000,11 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...next };
     },
     deleteTaxConnection: async (organizationId) => this.taxConnectionMap.delete(organizationId),
+    taxConnectionsEndingBetween: async (from, to) =>
+      [...this.taxConnectionMap.values()]
+        .filter((r) => r.refreshExpiresAt !== null && r.refreshExpiresAt >= from && r.refreshExpiresAt < to)
+        .sort((a, b) => a.refreshExpiresAt!.getTime() - b.refreshExpiresAt!.getTime())
+        .map((r) => ({ ...r })),
     withTaxConnectionLock: async (organizationId, fn) => {
       // One caller at a time per profile, as the Prisma store's row lock.
       const before = this.taxConnectionLocks.get(organizationId) ?? Promise.resolve();
@@ -1032,9 +1043,16 @@ export class MemoryLedgerStore implements LedgerStore {
       const d = this.issuedDocMap.get(id);
       return d && d.organizationId === organizationId ? cloneIssued(d) : null;
     },
+    moneyDocumentOn: async (organizationId, paymentId) => {
+      const d = [...this.issuedDocMap.values()]
+        .filter((x) => x.organizationId === organizationId && x.paymentId === paymentId && (x.docType === 'RECEIPT' || x.docType === 'TAX_INVOICE_RECEIPT'))
+        .sort((a, b) => a.issuedAt.getTime() - b.issuedAt.getTime())[0];
+      return d ? { id: d.id, docType: d.docType, number: d.number } : null;
+    },
     list: async (organizationId, filter, page) => {
       const rows = [...this.issuedDocMap.values()]
         .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
+        .filter((d) => (!filter.currency || d.currency === filter.currency) && (!filter.from || d.documentDate >= filter.from) && (!filter.to || d.documentDate <= filter.to))
         .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime() || (a.id < b.id ? 1 : -1))
         .filter((d) => !page.cursor || d.issuedAt < page.cursor.createdAt || (d.issuedAt.getTime() === page.cursor.createdAt.getTime() && d.id < page.cursor.id));
       const items = rows.slice(0, page.limit);
@@ -1157,15 +1175,50 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((d) => d.organizationId === organizationId && d.documentDate >= from && d.documentDate <= to)
         .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number)
         .map(cloneIssued),
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at): Promise<CancelPaymentRequestResult> => {
+      const replay = [...this.issuedCancellations.values()].find((c) => c.organizationId === organizationId && c.requestKey === cancel.requestKey);
+      if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: { ...replay }, created: false } : { kind: 'not_found' };
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return { kind: 'not_found' };
+      if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+      const existing = this.issuedCancellations.get(documentId);
+      if (existing) return { kind: 'already_cancelled', cancellation: { ...existing } };
+      if (blocksCancel(this.referringDocuments(organizationId, documentId))) return { kind: 'has_documents' };
+      const number = this.cancellationCounters.get(organizationId) ?? 1;
+      this.cancellationCounters.set(organizationId, number + 1);
+      const cancellation: IssuedDocumentCancellationRecord = { id: randomUUID(), organizationId, documentId, number, cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey };
+      this.issuedCancellations.set(documentId, cancellation);
+      return { kind: 'cancelled', cancellation: { ...cancellation }, created: true };
+    },
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      for (const id of documentIds) {
+        const d = this.issuedDocMap.get(id);
+        if (!d || d.organizationId !== organizationId || d.docType !== 'PAYMENT_REQUEST') continue;
+        const c = this.issuedCancellations.get(id);
+        out.set(id, paymentRequestFacts(d.grossMinor, this.referringDocuments(organizationId, id), c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
+    },
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
       return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
     },
   };
 
+  /** MUT-662: the 320s and 400s that refer to a payment request, each with its credit notes. */
+  private referringDocuments(organizationId: string, requestId: string): ReferringDocument[] {
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    return docs
+      .filter((d) => d.originalId === requestId && referringToRequest(d.docType))
+      .sort((a, b) => a.number - b.number)
+      .map((d) => ({ id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n) }));
+  }
+
   /** MUT-660: the documents linked to an entry, credit notes aside. */
   private linkedDocuments(organizationId: string, kind: 'receivable' | 'payment', id: string): IssuedDocumentRecord[] {
-    return [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId && d.docType !== 'CREDIT_NOTE' && (kind === 'receivable' ? d.receivableId === id : d.paymentId === id));
+    // MUT-662: a cancelled payment request no longer counts (its Owed goes back to To issue).
+    return [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId && d.docType !== 'CREDIT_NOTE' && !(d.docType === 'PAYMENT_REQUEST' && this.issuedCancellations.has(d.id)) && (kind === 'receivable' ? d.receivableId === id : d.paymentId === id));
   }
 
   /** MUT-660: a document is linked to the payment, or to the payment it corrected. */
@@ -1212,6 +1265,7 @@ export class MemoryLedgerStore implements LedgerStore {
       deleted: !!r.deletedAt,
       documented: docs.length > 0,
       taxInvoiceId: docs.find((d) => d.docType === 'TAX_INVOICE')?.id ?? null,
+      paymentRequestId: this.linkedDocuments(r.organizationId, 'receivable', r.id).find((d) => d.docType === 'PAYMENT_REQUEST')?.id ?? null,
       externalInvoice: this.hasLiveExternal(r.organizationId, 'OWED', r.id),
     };
   }
@@ -1275,7 +1329,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
     let originalReceivable: ReceivableRecord | null = null;
     if (originalId) {
-      const original = docs.find((d) => d.id === originalId && d.docType === 'TAX_INVOICE');
+      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
+      const original = docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || (input.docType !== 'CREDIT_NOTE' && d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
       const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
       if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
       // MUT-660: a linked receipt names the invoice its payment already paid; nothing is allocated, so no outstanding check.
@@ -1307,7 +1362,8 @@ export class MemoryLedgerStore implements LedgerStore {
       receivableId = fromReceivable.id;
     } else if (plan.receivable) {
       const { title, ...rest } = plan.receivable;
-      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, origin: 'ISSUED_DOCUMENT', originId: id, postedAt: at, createdByUserId: input.createdByUserId }).id;
+      // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, originId: rest.origin === 'ISSUED_DOCUMENT' ? id : null, postedAt: at, createdByUserId: input.createdByUserId }).id;
     }
     if (plan.payment && fromPayment) {
       // I1-a: the captured Received becomes the document's and pays its Owed (320) or the invoice it names (400).
@@ -3238,6 +3294,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const created = this.insertPayment(input, new Date(at.getTime() + 1));
       return { reversed: { ...payment }, ...created };
     },
+    findByClientRequestKey: async (organizationId, clientRequestKey) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.clientRequestKey === clientRequestKey)),
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
       const { payment } = await this.payments.create({ ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
@@ -3309,6 +3366,8 @@ export class MemoryLedgerStore implements LedgerStore {
     const seq = (this.counters.get(counterKey) ?? 0) + 1;
     this.counters.set(counterKey, seq);
     const { allocations: requested, ...rest } = input;
+    // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
+    if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
     const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
     const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);

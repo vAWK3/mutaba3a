@@ -1850,3 +1850,15 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-split-currency dt .hp-muted { font-size: var(--text-label); }
 .hp-split-currency dd { margin: 0; font-family: var(--font-mono); }
 .hp-split-sum { font-weight: var(--weight-semibold); }
+
+/* MUT-664: the client's ledger card (layout A) */
+.hp-ledger { display: grid; gap: var(--space-3); }
+.hp-ledger-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.hp-ledger-period { display: inline-flex; gap: var(--space-2); align-items: center; font-size: var(--text-label); color: var(--muted); }
+.hp-ledger-closing { margin: 0; font-size: var(--text-body); }
+.hp-ledger-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.hp-ledger-month th, .hp-ledger-month td { background: var(--surface-subtle, var(--bg)); font-weight: var(--weight-medium); color: var(--muted); }
+.hp-ledger-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.hp-chip-due { background: var(--warning-subtle, #f6ebcf); color: var(--on-warning-subtle, #7a5200); }
+.hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
+@media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }

@@ -6823,6 +6823,10 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
 
+**Amendment (2026-11-22, invoicing follow-ups, API 1.130.0-followups):**
+- **Where the callback lands.** PORTAL_ORIGIN alone doesn't say a portal page exists there (a local API sets it to itself and serves no portal), so the callback used to redirect to an API 404. Now the state also signs the portal the person pressed Connect on: the connect request's Origin, kept only when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server (the Vite dev portal on another port). The callback returns there; with none, to this server's own portal when it serves one (PORTAL_DIST_DIR); with neither (a phone's start, a forged or late state), to its own short page in Arabic and English. A declined consent (`error=access_denied`) lands as `taxAuthority=refused` with its own words.
+- **The re-consent reminder (AC3).** A daily job (`POST /jobs/v1/issuing/tax-authority-reminders`, Terraform `tax_authority_reminders_enabled`, off by default) mails the profile's owner ten days before the consent ends and once when it has ended (for 7 days), each once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`), with no new column: the windows stay inside the log's 30 days. The setup page's Tax Authority step says the same from `until` and offers Connect again.
+
 ## ADR-265: Issued-Document PDFs Leave Signed (PAdES B-T), With a Pluggable Key; Production Refuses Until Its Certificate Is In Place (MUT-641)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-641-signed-pdf.md`). The production certificate is Basel's open decision (accountant's answer to MUT-567 Q3 first), queued in `~/Work/tools/heavy-gate/DECISIONS.md`.
@@ -6930,7 +6934,22 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** migration 20261122230000 (additive) and API 1.127.0-mut660. The portal gains Documents › To issue (a third tab), Home's To issue group (replacing MUT-657's TODO), the row mark, the client field, the profile default and the Reports card. This device keeps the fields (snapshot 22) but has no invoicing, so nothing changes there. The phone half runs in its own session (N3). MUT-666 is narrowed to splits of mixed status.
 
-## ADR-271: The Uniform File Is the Issued Documents Only, Written in ISO-8859-8 With Arabic in Hebrew Letters (MUT-569)
+## ADR-271: A Payment Request Is a Non-Tax Document Tied to an Owed, Settled by Referring Documents and Cancelled by Record (MUT-662)
+
+**Date:** 2026-11-23 · **Status:** Accepted (Basel approved the canvas, D16/D18)
+
+**Context.** Businesses whose clients get a payment request first must not report VAT before the money arrives. The approval spec lists חשבון עסקה as code 300.
+
+**Decision.**
+- PAYMENT_REQUEST is an issued document with its own series. It shows VAT (exempt dealers: none) so the invoice-receipts that follow match it, but it is not in `TAX_DOCUMENTS`: never allocated, never in VAT or tax totals.
+- It is always tied to an Owed: linked to an existing one (never taking it over), or posting an ordinary ADJUSTMENT Owed when issued with no entry. Cancelling never changes the Owed.
+- Each payment gets its own 320 (400 for exempt dealers) referring to it by `originalId`; status is derived (UNPAID, PARTLY_PAID, PAID, CANCELLED), nothing stored.
+- It is cancelled by an insert-only cancellation record (CX series), refused while a live 320/400 refers to it (D18). A credit note never targets it.
+- Shown as PR-0007 / CX-0002 in every language; the stored number and the uniform file use the plain int.
+
+**Consequences.** One live request per Owed (a cancelled one doesn't count). Old phone builds skip the unknown type. The uniform-file mapping (record 300) is wired by whichever of MUT-569 / MUT-662 merges second.
+
+## ADR-272: The Uniform File Is the Issued Documents Only, Written in ISO-8859-8 With Arabic in Hebrew Letters (MUT-569)
 
 **Status:** Accepted (2026-11-22; Basel approved the plan D1–D7 and the wireframe).
 

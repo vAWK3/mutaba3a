@@ -751,6 +751,61 @@ const monthlySummary: Copy<'monthly-summary'> = {
   },
 };
 
+/**
+ * MUT-571 AC3: the Tax Authority asks the business owner to approve the connection again every 90 days. Ten days
+ * before it ends, then once it has ended. Formal Arabic (MSA). The day count only: no date (ADR-159 §5).
+ */
+const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
+  en: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `Your MTB3A connection to the Tax Authority ends within ${enDays(daysLeft)}`,
+          preheader: 'Connect again so invoices keep receiving allocation numbers.',
+          headline: 'Approve the Tax Authority connection again',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority ends within ${enDays(daysLeft)}.`],
+            ['The Tax Authority asks the business owner to approve it again every 90 days. It takes a minute: sign in on the Tax Authority’s site and approve.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Once it ends, invoices that need an allocation number wait until you connect again.']],
+        }
+      : {
+          subject: 'Your MTB3A connection to the Tax Authority has ended',
+          preheader: 'Connect again so invoices receive allocation numbers again.',
+          headline: 'The Tax Authority connection has ended',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority has ended.`],
+            ['Invoices that need an allocation number wait until you connect again. Sign in on the Tax Authority’s site and approve; it takes a minute.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Reply to this email if you need help.']],
+        },
+  ar: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `ينتهي ربط متابعة بسلطة الضرائب خلال ${arDays(daysLeft)}`,
+          preheader: 'أعد الربط لتواصل الفواتير الحصول على أرقام التخصيص.',
+          headline: 'جدّد الموافقة على الربط بسلطة الضرائب',
+          intro: [
+            [`ينتهي ربط ملف «${profileName}» بسلطة الضرائب خلال ${arDays(daysLeft)}.`],
+            ['تطلب سلطة الضرائب من صاحب العمل تجديد موافقته كل 90 يومًا. لا يستغرق ذلك سوى دقيقة: سجّل الدخول في موقع سلطة الضرائب ووافق.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['بعد انتهائه، تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط.']],
+        }
+      : {
+          subject: 'انتهى ربط متابعة بسلطة الضرائب',
+          preheader: 'أعد الربط لتحصل الفواتير على أرقام التخصيص من جديد.',
+          headline: 'انتهى الربط بسلطة الضرائب',
+          intro: [
+            [`انتهى ربط ملف «${profileName}» بسلطة الضرائب.`],
+            ['تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط. سجّل الدخول في موقع سلطة الضرائب ووافق، ولا يستغرق ذلك سوى دقيقة.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+        },
+};
+
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'finish-signup': finishSignup,
   'account-exists': accountExists,
@@ -773,4 +828,5 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'accountant-invite': accountantInvite,
   'sign-in-code': signInCode,
   'monthly-summary': monthlySummary,
+  'tax-authority-reconnect': taxAuthorityReconnect,
 };

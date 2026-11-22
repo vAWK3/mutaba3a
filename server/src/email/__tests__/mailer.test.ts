@@ -61,6 +61,7 @@ const vars = {
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: false, updateLink: 'https://portal.example.test/?billing=true' },
   'comeback-offer': { stage: 'day-30', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
+  'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },

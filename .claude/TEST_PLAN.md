@@ -4667,7 +4667,7 @@ Not run: `test:db` (no store change: the report only reads through existing repo
 
 No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
 
-## MUT-569 — the uniform file (מבנה אחיד 1.31) (2026-11-22, ADR-271)
+## MUT-569 — the uniform file (מבנה אחיד 1.31) (2026-11-22, ADR-272)
 
 | Layer | File | Covers |
 |---|---|---|

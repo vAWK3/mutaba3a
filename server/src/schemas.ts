@@ -2350,6 +2350,9 @@ export const CONFLICT_REASONS = [
   'ACCOUNTANT_LIMIT',
   'ALREADY_HAS_ACCESS',
   'ACCOUNT_EXISTS',
+  // MUT-709: reversing, correcting or undoing a payment an issued receipt or invoice-receipt stands on. details carry
+  // documentId, docType and number; the way out is a credit note.
+  'HAS_DOCUMENT',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -3101,7 +3104,18 @@ export const CustomerStatementQuerySchema = z.object({
   to: IsoDateSchema.optional().openapi({ description: 'Lines after this date are left out. Omitted: every line, including ones dated after asOf.' }),
   limit: z.coerce.number().int().min(1).max(500).default(200).openapi({ description: 'Lines per page, 1–500.' }),
   cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  order: z.enum(['asc', 'desc']).default('asc').openapi({ description: 'MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way.' }),
 });
+
+/** MUT-664: a document standing on a statement line (issued here, or attached from elsewhere: MUT-647, MUT-481). */
+export const StatementDocumentTagSchema = z
+  .object({
+    id: uuid.nullable().openapi({ description: 'The issued document; null for one issued elsewhere' }),
+    source: z.enum(['ISSUED', 'EXTERNAL']),
+    docType: z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST']),
+    number: z.string(),
+  })
+  .openapi('StatementDocumentTag');
 
 const StatementLineBase = {
   /** The source row's id (receivable, credit, payment, or allocation on a project statement); a reversal adds ":reversal". */
@@ -3114,6 +3128,10 @@ const StatementLineBase = {
   debit: AmountSchema,
   credit: AmountSchema,
   runningBalance: AmountSchema,
+  /** MUT-664: the documents on the line; always [] when invoicing is off for the profile. */
+  documents: z.array(StatementDocumentTagSchema),
+  /** MUT-664: the document the line is still due (MUT-660's rule); null when none, or invoicing is off. */
+  due: z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).nullable(),
 };
 
 export const StatementChargeOriginSchema = z
@@ -3167,6 +3185,14 @@ export const StatementLineSchema = z
   ])
   .openapi('StatementLine');
 
+/** MUT-664 (for MUT-663's Clients list): every client's balance per currency; negative = in credit (D15). */
+export const CustomerBalancesSchema = z
+  .object({
+    asOf: IsoDateSchema,
+    balances: z.array(z.object({ customerId: uuid, currency: CurrencySchema, balance: AmountSchema })),
+  })
+  .openapi('CustomerBalances');
+
 export const CustomerStatementSchema = z
   .object({
     customerId: uuid,
@@ -3182,7 +3208,7 @@ export const CustomerStatementSchema = z
     totals: z.object({ debit: AmountSchema, credit: AmountSchema }),
     /** openingBalance + debits − credits for the period. With no project and no period: the customer summary's outstanding − unallocated. */
     closingBalance: AmountSchema,
-    /** Oldest first; runningBalance carries across pages. */
+    /** In `order` (oldest first by default); runningBalance carries across pages. */
     lines: z.array(StatementLineSchema),
     nextCursor: z.string().nullable(),
   })
@@ -5013,7 +5039,9 @@ export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type
 
 // ---- MUT-568 (ADR-260): the issuing core ---------------------------------------------------------------------------
 
-export const IssuedDocTypeSchema = z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']).openapi('IssuedDocType', { description: '305, 320, 330 and 400 in the Tax Authority\'s codes' });
+export const IssuedDocTypeSchema = z
+  .enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST'])
+  .openapi('IssuedDocType', { description: '305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority\'s codes. Clients skip types they don\'t know.' });
 export const DealerTypeSchema = z.enum(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']).openapi('DealerType', { description: 'עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה' });
 export const DocumentLanguageSchema = z.enum(['ar', 'he', 'en']).openapi('DocumentLanguage');
 
@@ -5055,6 +5083,34 @@ export const IssuerDetailsSchema = z
   .openapi('IssuerDetails');
 
 /** MUT-571: a profile's connection to the Tax Authority. */
+/** MUT-571 AC3: one run of the Tax Authority re-consent reminders (counts only for the job). */
+export const TaxAuthorityReminderSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'Connections whose consent ends within 10 days or ended within 7' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage of this consent was already mailed' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: a read or the mailer failed, mail off, capped or refused' }),
+    skipped: z.number().int().openapi({ description: 'Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed' }),
+  })
+  .openapi('TaxAuthorityReminderSummary');
+
+export const TaxAuthorityReminderRunSchema = z
+  .object({
+    summary: TaxAuthorityReminderSummarySchema,
+    rows: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        stage: z.enum(['soon', 'ended']).nullable(),
+        action: z.enum(['send', 'skip']),
+        skip: z.enum(['other-environment', 'no-refresh', 'profile-gone', 'owner-gone', 'owner-inactive', 'suppressed']).nullable(),
+        outcome: z.string().nullable(),
+      }),
+    ),
+  })
+  .openapi('TaxAuthorityReminderRun');
+
 export const TaxAuthorityStatusSchema = z
   .object({
     state: z.enum(['none', 'connected', 'expired']),
@@ -5183,7 +5239,7 @@ export const IssueDocumentRequestSchema = z
     customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
     dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
     originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
-    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice it pays' }),
+    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
     discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
     pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: whether the prices typed include VAT; default from the business details' }),
@@ -5201,6 +5257,19 @@ export const IssueDocumentRequestSchema = z
   .openapi('IssueDocumentRequest');
 
 const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
+
+/** MUT-662: a payment request's status, derived from what refers to it. */
+export const PaymentRequestFactsSchema = z
+  .object({
+    status: z.enum(['UNPAID', 'PARTLY_PAID', 'PAID', 'CANCELLED']),
+    covered: AmountSchema.openapi({ description: 'What the referring invoice-receipts and receipts cover, after their credit notes' }),
+    linked: z.array(z.object({ id: uuid, docType: IssuedDocTypeSchema, number: z.number().int(), gross: AmountSchema })),
+    cancellation: z.object({ number: z.number().int(), displayNumber: z.string(), cancelledAt: z.string().datetime(), reason: z.string().nullable() }).nullable(),
+  })
+  .openapi('PaymentRequestFacts');
+
+/** MUT-662 (D18): cancelling a payment request. */
+export const CancelPaymentRequestSchema = z.object({ reason: z.string().trim().max(300).nullable().optional() }).openapi('CancelPaymentRequest');
 
 export const IssuedDocumentPreviewSchema = z
   .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
@@ -5226,12 +5295,23 @@ export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
   coreVersion: z.string(),
+  /** MUT-662 */
+  displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
+  paymentRequest: PaymentRequestFactsSchema.nullable().openapi({ description: 'MUT-662: a payment request\'s derived status; null for other types' }),
 }).openapi('IssuedDocument');
 
-export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
+/** MUT-664 (D22): a list item carries how much of it is settled (the client page's Documents tab). */
+export const IssuedDocumentListItemSchema = IssuedDocumentSchema.extend({
+  settled: AmountSchema.nullable().openapi({ description: 'Paid + credited on its Owed, at most its gross; null on a credit note' }),
+  settlement: z.enum(['OPEN', 'PARTLY_PAID', 'PAID', 'CANCELLED']).nullable().openapi({ description: 'CANCELLED: credit notes cover its gross. Null on a credit note' }),
+}).openapi('IssuedDocumentListItem');
+export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentListItemSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
 export const ListIssuedDocumentsQuerySchema = z.object({
   docType: IssuedDocTypeSchema.optional(),
   customerId: uuid.optional(),
+  currency: CurrencySchema.optional().openapi({ description: 'MUT-664' }),
+  from: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or after' }),
+  to: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or before' }),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });

@@ -35,6 +35,8 @@ export interface PdfLabels {
   total: string;
   totalCredit: string;
   received: string;
+  /** MUT-662: a payment request's grand total. */
+  totalRequested: string;
   paymentHeading: string;
   method: Record<'CASH' | 'BANK', string>;
   reference: string;
@@ -77,6 +79,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     total: 'סה״כ לתשלום',
     totalCredit: 'סה״כ זיכוי',
     received: 'סה״כ שהתקבל',
+    totalRequested: 'סה״כ לתשלום',
     paymentHeading: 'פרטי התשלום',
     method: { CASH: 'מזומן', BANK: 'העברה בנקאית' },
     reference: 'אסמכתא',
@@ -116,6 +119,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     total: 'المبلغ المستحق',
     totalCredit: 'مجموع الإشعار الدائن',
     received: 'المبلغ المستلم',
+    totalRequested: 'المبلغ المطلوب',
     paymentHeading: 'تفاصيل الدفع',
     method: { CASH: 'نقدًا', BANK: 'تحويل بنكي' },
     reference: 'المرجع',
@@ -155,6 +159,7 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     total: 'Total due',
     totalCredit: 'Total credited',
     received: 'Total received',
+    totalRequested: 'Total requested',
     paymentHeading: 'Payment',
     method: { CASH: 'Cash', BANK: 'Bank transfer' },
     reference: 'Reference',

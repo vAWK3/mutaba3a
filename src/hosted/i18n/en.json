@@ -394,10 +394,9 @@
         "body": "It may have been archived or belong to another profile."
       },
       "tabs": {
-        "summary": "Summary",
-        "receivables": "Receivables",
-        "payments": "Payments",
-        "documents": "Documents"
+        "ledger": "Ledger card",
+        "documents": "Documents",
+        "details": "Details"
       },
       "lastPayment": "Last payment: {date}",
       "noPayments": "No payments yet",
@@ -451,6 +450,21 @@
           "PAYMENT_REQUEST_FIRST": "a payment request when an amount is owed, then a tax invoice-receipt for each payment.",
           "ON_PAYMENT": "a tax invoice-receipt for each payment, partial ones included.",
           "NO_DOCUMENT": "nothing. Their income stays in All income, the accountant's view and exports, and counts as not for invoice."
+        }
+      },
+      "documentsTab": {
+        "toIssue": "Documents to issue · {count}",
+        "type": "Document type",
+        "allTypes": "All types",
+        "currency": "Currency",
+        "allCurrencies": "All currencies",
+        "status": "Status",
+        "settledOf": "{settled} of {gross} settled",
+        "settlement": {
+          "OPEN": "Open",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid",
+          "CANCELLED": "Cancelled by credit note"
         }
       }
     },
@@ -1995,6 +2009,7 @@
         "exceedsNow": "That’s more than what’s left now ({outstanding})",
         "nothingLeft": "Nothing is left on this entry any more.",
         "alreadyReversed": "This payment was already reversed. Showing the latest.",
+        "hasDocument": "A receipt was issued for this payment, so it can’t be reversed. Issue a credit note first.",
         "changed": "This changed while you were saving. Showing the latest."
       },
       "owedTitle": "Amount owed",
@@ -2954,7 +2969,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "taxAuthority": {
         "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
@@ -2964,7 +2980,10 @@
         "connected": "Connected to the Tax Authority until {until}.",
         "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
         "disconnect": "Disconnect",
-        "returnedFailed": "The connection was not completed. Please try again."
+        "returnedFailed": "The connection was not completed. Please try again.",
+        "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
+        "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
+        "reconnect": "Connect again"
       },
       "ready": {
         "title": "Your letterhead is ready",
@@ -2996,7 +3015,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "client": "Client",
       "clientPlaceholder": "Search by name or number",
@@ -3073,6 +3093,28 @@
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
         "column": "Document"
+      },
+      "colStatus": "Status",
+      "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
+      "paymentRequest": {
+        "issued": "Issued",
+        "status": {
+          "UNPAID": "Unpaid",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid in full",
+          "CANCELLED": "Cancelled"
+        },
+        "covered": "{covered} of {gross}",
+        "notTax": "A payment request is not a tax document. The invoice-receipts that follow it are.",
+        "linkedTitle": "Documents for its payments",
+        "cancelledLine": "Cancelled {number} on {date}",
+        "cancel": "Cancel payment request…",
+        "cancelTitle": "Cancel {document}?",
+        "cancelBody": "The request is kept and marked cancelled with a number of its own. What the client owes doesn’t change. This can’t be undone.",
+        "reason": "Reason (optional)",
+        "cancelConfirm": "Cancel payment request",
+        "cancelled": "{number} cancelled ({cancellation})",
+        "cancelBlocked": "An invoice-receipt refers to this request. Cancel the invoice-receipt with a credit note first."
       }
     },
     "home": {
@@ -3270,6 +3312,45 @@
       "rowBack": "Back to invoice",
       "markRow": "Mark the entry for {client} not for invoice",
       "backRow": "Bring the entry for {client} back to invoice"
+    },
+    "ledger": {
+      "title": "Ledger card",
+      "period": "Period",
+      "periods": {
+        "all": "All movements",
+        "month": "This month",
+        "quarter": "Last 3 months",
+        "year": "This year"
+      },
+      "viewOnly": "View only",
+      "closing": "Balance",
+      "opening": "Opening balance",
+      "inCredit": "Client in credit · {amount}",
+      "showEarlier": "Show earlier",
+      "cols": {
+        "date": "Date",
+        "movement": "Movement",
+        "document": "Document",
+        "debit": "Debit",
+        "credit": "Credit",
+        "balance": "Balance"
+      },
+      "kinds": {
+        "CHARGE": "Owed",
+        "CREDIT": "Credit",
+        "PAYMENT": "Payment",
+        "PAYMENT_REVERSAL": "Payment reversed"
+      },
+      "due": {
+        "TAX_INVOICE": "Tax invoice due",
+        "PAYMENT_REQUEST": "Payment request due",
+        "RECEIPT": "Receipt due",
+        "TAX_INVOICE_RECEIPT": "Invoice-receipt due"
+      },
+      "empty": {
+        "title": "No movements yet",
+        "body": "Owed amounts, payments and credits for this client will show here with a running balance."
+      }
     }
   }
 }

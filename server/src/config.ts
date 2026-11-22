@@ -99,7 +99,7 @@ const envSchema = z.object({
   TAX_AUTHORITY_SOFTWARE_NUMBER: z.coerce.number().int().positive().optional(),
   TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
   /**
-   * MUT-569 (ADR-271): the uniform file's software fields (A000 1006, 1009, 1010). The registration certificate number
+   * MUT-569 (ADR-272): the uniform file's software fields (A000 1006, 1009, 1010). The registration certificate number
    * is zeros until MUT-567 issues it; the software house is the registering owner, Narabnd Studio Ltd (MUT-700), set in
    * Terraform (software_house_*). The defaults are placeholders, never a real company.
    */

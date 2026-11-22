@@ -119,12 +119,14 @@ describe('documents due routes (MUT-660)', () => {
     const paid = await income(h, w, 'received', '300.00', w.nour.id);
     const key = idem();
     const result = await read(await issueAll(h, w, quds.id, [{ kind: 'owed', id: request.id }, { kind: 'received', id: paid.id }, { kind: 'owed', id: '00000000-0000-4000-8000-000000000000' }], key));
-    expect(result.results.map((r: { status: string; reason: string }) => [r.status, r.reason])).toEqual([['refused', 'PAYMENT_REQUEST_PENDING'], ['refused', 'OTHER_CLIENT'], ['refused', 'NOT_DUE']]);
+    // MUT-662: a payment request is issued now (linked to its Owed), no longer PAYMENT_REQUEST_PENDING.
+    expect(result.results.map((r: { status: string; reason: string }) => [r.status, r.reason])).toEqual([['issued', null], ['refused', 'OTHER_CLIENT'], ['refused', 'NOT_DUE']]);
+    expect(result.results[0].document).toMatchObject({ docType: 'PAYMENT_REQUEST', displayNumber: 'PR-0001', receivableId: request.id });
     const ok = idem();
     const first = await read(await issueAll(h, w, w.nour.id, [{ kind: 'received', id: paid.id }], ok));
     const replay = await read(await issueAll(h, w, w.nour.id, [{ kind: 'received', id: paid.id }], ok));
     expect(replay.results[0].document.id).toBe(first.results[0].document.id);
-    expect((await read(await h.app.request('/v1/issued-documents', { headers: w.on }))).items).toHaveLength(1);
+    expect((await read(await h.app.request('/v1/issued-documents', { headers: w.on }))).items).toHaveLength(2);
   });
 
   it('AC6/AC8: bulk not for invoice and back, in one action, idempotent; the count follows', async () => {

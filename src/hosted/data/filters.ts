@@ -261,17 +261,25 @@ export interface DocumentFilters {
 }
 export const parseDocuments = (raw: Raw): DocumentFilters => compact({ customerId: id(raw.customerId), kind: oneOf(raw.kind, DOCUMENT_KINDS) });
 
-export const CLIENT_TABS = ['summary', 'receivables', 'payments', 'documents'] as const;
+/** MUT-664: Ledger card (the default) | Documents | Details, as on the approved board. */
+export const CLIENT_TABS = ['ledger', 'documents', 'details'] as const;
 export type ClientTab = (typeof CLIENT_TABS)[number];
+/** Links from before MUT-664 keep working: the receivables and payments tabs folded into the ledger card, summary is Details. */
+const LEGACY_CLIENT_TABS: Record<string, ClientTab> = { summary: 'details', receivables: 'ledger', payments: 'ledger' };
+const clientTab = (raw: unknown): ClientTab | undefined => oneOf(raw, CLIENT_TABS) ?? (typeof raw === 'string' ? LEGACY_CLIENT_TABS[raw] : undefined);
+/** The ledger card's period: everything, this month, the last three months, this year. */
+export const LEDGER_PERIODS = ['all', 'month', 'quarter', 'year'] as const;
+export type LedgerPeriod = (typeof LEDGER_PERIODS)[number];
 
 /** Client detail: the tab, plus the filters of whichever list it shows (the client itself is fixed). */
-export type ClientDetailSearch = { tab?: ClientTab } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
+export type ClientDetailSearch = { tab?: ClientTab; period?: LedgerPeriod } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
     paymentStatus?: PaymentStatusFilter;
     kind?: DocumentFilters['kind'];
   } & IncomeDrawerSearch;
 export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
   compact({
-    tab: oneOf(raw.tab, CLIENT_TABS),
+    tab: clientTab(raw.tab),
+    period: oneOf(raw.period, LEDGER_PERIODS),
     projectId: id(raw.projectId),
     currency: oneOf(raw.currency, CURRENCIES),
     status: oneOf(raw.status, RECEIVABLE_STATUSES),

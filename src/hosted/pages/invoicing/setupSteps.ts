@@ -33,3 +33,13 @@ export function wholeNumber(raw: string): number | null {
   // eslint-disable-next-line no-restricted-syntax
   return /^\d{1,9}$/.test(digits) ? Number.parseInt(digits, 10) : null;
 }
+
+/** MUT-571 AC3: the consent lasts 90 days; from this many days before its end the step asks to connect again (the mail's day). */
+export const RECONNECT_NOTICE_DAYS = 10;
+
+/** The connection ends within RECONNECT_NOTICE_DAYS of `now` (and hasn't yet: an ended one reads `expired`). */
+export function endsSoon(until: string | null | undefined, now: Date = new Date()): boolean {
+  if (!until) return false;
+  const left = new Date(until).getTime() - now.getTime();
+  return left > 0 && left <= RECONNECT_NOTICE_DAYS * 86_400_000;
+}

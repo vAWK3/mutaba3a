@@ -174,7 +174,7 @@ describe('a client’s documents preference (MUT-660, AC1, wireframe screen 4)',
   const client = { ...CUSTOMERS[0]!, taxId: null, address: null, documentsPreference: null, version: 2 };
 
   it('shows the profile default and what is due; a change saves with If-Match and says what is due now', async () => {
-    const { api, user } = portal(`/p/${ORG_A}/clients/${C1}`, {
+    const { api, user } = portal(`/p/${ORG_A}/clients/${C1}?tab=details`, {
       [`GET /v1/customers/${C1}`]: () => ok(client),
       'GET /v1/issuer': () => ok({ legalName: 'Studio', vatId: '123456789', dealerType: 'LICENSED', defaultDocumentsPreference: 'ON_PAYMENT', version: 1 }),
       [`PATCH /v1/customers/${C1}`]: (req) => ok({ ...client, ...(req.body as object), version: 3 }),

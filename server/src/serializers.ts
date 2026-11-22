@@ -11,6 +11,8 @@ import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import { allocationNumberRequired } from './israel/allocation-number.js';
+import { documentNumberLabel } from './issuing/labels.js';
+import type { PaymentRequestFacts } from './issuing/payment-request.js';
 import type { CreditReasonCode } from './payments/credit.js';
 import type {
   IssuedDocumentLineRecord,
@@ -846,7 +848,8 @@ export function serializeComposedTotals(d: { currency: string; subtotalMinor: bi
   };
 }
 
-export function serializeIssuedDocument(d: IssuedDocumentRecord) {
+/** MUT-662: a payment request's facts ride along when the caller read them (`paymentRequestFacts`). */
+export function serializeIssuedDocument(d: IssuedDocumentRecord, facts: PaymentRequestFacts | null = null) {
   return {
     ...serializeComposedTotals(d),
     id: d.id,
@@ -868,6 +871,18 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord) {
     receivableId: d.receivableId,
     paymentId: d.paymentId,
     coreVersion: d.coreVersion,
+    displayNumber: documentNumberLabel(d.docType, d.number),
+    paymentRequest:
+      d.docType === 'PAYMENT_REQUEST' && facts
+        ? {
+            status: facts.status,
+            covered: amt(facts.coveredMinor, d.currency),
+            linked: facts.linked.map((l) => ({ id: l.id, docType: l.docType, number: l.number, gross: amt(l.grossMinor, d.currency) })),
+            cancellation: facts.cancellation
+              ? { number: facts.cancellation.number, displayNumber: documentNumberLabel('CANCELLATION', facts.cancellation.number), cancelledAt: facts.cancellation.cancelledAt.toISOString(), reason: facts.cancellation.reason }
+              : null,
+          }
+        : null,
   };
 }
 

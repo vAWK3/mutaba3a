@@ -11,6 +11,7 @@ import type { ShareLinkPeriod } from '../share-links/period.js';
 import type { ComposedDocument } from '../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../issuing/types.js';
 import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
+import type { PaymentRequestFacts } from '../issuing/payment-request.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -1383,6 +1384,8 @@ export interface PaymentRecord {
   version: number;
   createdAt: Date;
   updatedAt: Date;
+  /** MUT-709: the recording request's key (`paymentRequestKey`); absent or null when it had none. */
+  clientRequestKey?: string | null;
 }
 
 export interface AllocationRecord {
@@ -1423,6 +1426,8 @@ export interface CreatePaymentInput {
   origin: PaymentOrigin;
   captureSource: string | null;
   allocations: AllocationInput[];
+  /** MUT-709: `paymentRequestKey` of the request that records it; unique per organization. */
+  clientRequestKey?: string | null;
 }
 
 /**
@@ -1443,6 +1448,8 @@ export interface CaptureReceivedInput {
   requestId: string | null;
   createdByUserId: string;
   captureSource: string | null;
+  /** MUT-709: as on CreatePaymentInput. */
+  clientRequestKey?: string | null;
 }
 
 /** The reversal reason `payments.undoCapture` records (and the route audits). */
@@ -1542,6 +1549,8 @@ export interface PaymentRepository {
    * InsufficientCapacity / LockConflict as `create` does. Null when no such payment.
    */
   correct(organizationId: string, paymentId: string, input: CorrectPaymentInput, at: Date): Promise<{ reversed: PaymentRecord; payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
+  /** MUT-709: the payment an earlier attempt of the same request recorded (any status), if any. */
+  findByClientRequestKey(organizationId: string, clientRequestKey: string): Promise<PaymentRecord | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
   /**
@@ -4626,7 +4635,7 @@ export interface IssueDocumentInput {
   originalId: string | null;
   /** 320 and 400: how the money came in. */
   payment: IssuedPaymentDetails | null;
-  /** 400: the open tax invoice this receipt pays, if any. */
+  /** 400: the open tax invoice or payment request this receipt pays; 320: the payment request it settles (MUT-662). */
   appliesToDocumentId: string | null;
   /**
    * I1-a: the recorded entry this document is for. The document takes it over (no new Owed or Received): a 305 an Owed
@@ -4668,7 +4677,7 @@ export type IssueResult =
   /** D6: the date is before the last issued document of this type. */
   | { kind: 'date_before_last'; lastDate: IsoDate }
   | { kind: 'customer_not_found' }
-  /** 330's original or 400's appliesTo: missing, another profile's, or not an open tax invoice. */
+  /** 330's original or 320/400's appliesTo: missing, another profile's, not an open tax invoice or a live payment request. */
   | { kind: 'original_not_found' }
   /** R-D2: a credit note credits only what is still owed on its tax invoice (MUT-643 for paid ones). */
   | { kind: 'original_paid'; outstandingMinor: bigint }
@@ -4678,9 +4687,35 @@ export type IssueResult =
   | { kind: 'entry_not_found' }
   | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' };
 
+/** MUT-662: a payment request's cancellation record (CX series). */
+export interface IssuedDocumentCancellationRecord {
+  id: string;
+  organizationId: string;
+  documentId: string;
+  number: number;
+  cancelledAt: Date;
+  reason: string | null;
+  createdByUserId: string;
+  requestKey: string;
+}
+
+export type CancelPaymentRequestResult =
+  | { kind: 'cancelled'; cancellation: IssuedDocumentCancellationRecord; created: boolean }
+  | { kind: 'not_found' }
+  | { kind: 'not_a_payment_request' }
+  | { kind: 'already_cancelled'; cancellation: IssuedDocumentCancellationRecord }
+  /** D18: a live invoice-receipt or receipt refers to it. */
+  | { kind: 'has_documents' };
+
 export interface IssuedDocumentFilter {
   docType?: IssuedDocType;
   customerId?: string;
+  /** MUT-664: the client page's Documents tab filters. */
+  currency?: string;
+  /** documentDate on or after. */
+  from?: IsoDate;
+  /** documentDate on or before. */
+  to?: IsoDate;
 }
 
 export interface IssuedNumberGap {
@@ -4709,6 +4744,8 @@ export interface IssuingRepository {
   /** Replaces the connection (a new consent). */
   putTaxConnection(record: Omit<TaxAuthorityConnectionRecord, 'version'>): Promise<TaxAuthorityConnectionRecord>;
   deleteTaxConnection(organizationId: string): Promise<boolean>;
+  /** MUT-571 AC3: every connection (any profile) whose consent ends in [from, to), soonest first: the re-consent reminder's job. */
+  taxConnectionsEndingBetween(from: Date, to: Date): Promise<TaxAuthorityConnectionRecord[]>;
   /**
    * Runs `fn` with the connection locked (a single-use refresh token is never sent twice): `fn` sees the latest row and
    * returns the tokens to store, or null to leave it. Concurrent callers wait their turn and see the stored result.
@@ -4720,6 +4757,11 @@ export interface IssuingRepository {
   /** One transaction: the next gap-free number, the document and its lines, and its ledger rows. */
   issue(input: IssueDocumentInput, at: Date): Promise<IssueResult>;
   getById(organizationId: string, id: string): Promise<IssuedDocumentRecord | null>;
+  /**
+   * MUT-709: the first receipt or invoice-receipt issued for this payment (`IssuedDocument.paymentId`), or null. Only
+   * what a refusal names, so any principal that may reverse a payment can ask, with or without issuing access.
+   */
+  moneyDocumentOn(organizationId: string, paymentId: string): Promise<{ id: string; docType: IssuedDocType; number: number } | null>;
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
   /** MUT-569: every document dated `from`…`to` (both inclusive), with its lines, by type code then number (the uniform file). */
   inRange(organizationId: string, from: IsoDate, to: IsoDate): Promise<IssuedDocumentRecord[]>;
@@ -4757,6 +4799,13 @@ export interface IssuingRepository {
    * (a live 305, or a 320; a receipt doesn't block), is another version than expected, or isn't there.
    */
   setNotForInvoice(organizationId: string, items: readonly NotForInvoiceItem[], value: boolean, at: Date): Promise<NotForInvoiceResult>;
+  /**
+   * MUT-662 (D18): cancels a payment request with a record of its own, in one transaction that locks the request's Owed
+   * (the order a 320 applying it takes). The same key returns the same record; the Owed is never changed.
+   */
+  cancelPaymentRequest(organizationId: string, documentId: string, cancel: { reason: string | null; requestKey: string; userId: string }, at: Date): Promise<CancelPaymentRequestResult>;
+  /** MUT-662: each payment request's derived status, in one read per table (never per row). Other ids are left out. */
+  paymentRequestFacts(organizationId: string, documentIds: readonly string[]): Promise<Map<string, PaymentRequestFacts>>;
 }
 
 export interface NotForInvoiceItem {

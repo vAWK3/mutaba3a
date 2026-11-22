@@ -1,6 +1,6 @@
 # MUT-569: export the uniform file (מבנה אחיד 1.31) for the Tax Authority simulator
 
-Status: **Approved 2026-11-22 (D1–D7, wireframe; the phone gets nothing); built the same day (ADR-271, API 1.128.0-mut569).** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
+Status: **Approved 2026-11-22 (D1–D7, wireframe; the phone gets nothing); built the same day (ADR-272, API 1.134.0-mut569).** Epic MUT-566. Blocks MUT-567 (the software registration). Blocked by MUT-568, which is merged to local main and In Review, so the issuing core is in the code. The full eng review runs at the start of `/eng-build`, as it did for MUT-568.
 
 Tracker: Jira · barmajiyat · MUT via `atlassian-barmajiyat` · Backlog is the default · a finished ticket goes to In Review, and only Basel moves it to Done.
 
@@ -103,7 +103,7 @@ An auditor can still read a name like "מחמד עבד אללה". The document i
 | `repositories/ports.ts` · `prisma.ts` · `memory.ts` | `IssuingRepository.inRange(organizationId, from, to)`: documents with their lines by `documentDate`, ordered by type then number. It uses the existing `(organizationId, docType, number)` unique index plus an org/date filter, as one query with lines included. No migration. |
 | `server/src/routes/issuing.ts` | `GET /v1/issuing/uniform-file?from=YYYY-MM-DD&to=YYYY-MM-DD` → `application/zip` (Content-Disposition `OPENFRMT-<vat>-<from>_<to>.zip`). Access is `issuingProfile(c, false)`, as for `/gaps` (the owner, or an accountant under a grant; Malafat, personal profiles and the flag off get 404). Scope `issuing:read`. It writes audit `issuing.uniform_file_exported` {from, to, counts}. A range that's invalid, reversed or after today is refused with 422 `VALIDATION_FAILED`/`PERIOD_RANGE`. |
 | `server/src/config.ts` | `UNIFORM_FILE_SOFTWARE_REGISTRATION` (8 digits, default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME` (default `Barmajiyat`). Production refuses the zero default only once `UNIFORM_FILE_REQUIRE_REGISTRATION=true` (set after MUT-567). |
-| `app.ts`, OpenAPI | `API_VERSION` → `1.126.0-mut569` (+ the pinned tests); `openapi:generate`; `src/hosted/api/schema.d.ts` regenerated |
+| `app.ts`, OpenAPI | `API_VERSION` → `1.134.0-mut569` (+ the pinned tests); `openapi:generate`; `src/hosted/api/schema.d.ts` regenerated |
 | Portal: `src/hosted/pages/invoicing/UniformFileExport.tsx` | You › Invoicing gains a "Uniform file (מבנה אחיד)" card: from/to `DateField`s (default: last tax year), Export button, a download through the same authed-blob helper the PDF download uses, a toast. Its own file, mounted with one line in `InvoicingSetupPage` (MUT-660 is building in parallel nearby). i18n ar/en. Follows DESIGN.md (card, secondary button). |
 | `server/src/issuing/uniform-file/__tests__/fixture.test.ts` | the simulator fixture (below) |
 
