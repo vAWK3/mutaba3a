@@ -62,10 +62,12 @@ test('The monthly summary - last month per currency, the same Owed as the overvi
     expect(m.text).toContain('Overdue: ₪3,200 (1 entry)');
     return m;
   });
-  await step('Open the mail’s Open link: the overview shows the same ₪3,200 owed', async () => {
-    const link = mail.text.match(/https?:\/\/\S+\/p\/[0-9a-f-]{36}/)?.[0];
+  await step('Open the mail’s Open link: home on In & out (MUT-657 E-5); Owed shows the same ₪3,200 owed', async () => {
+    const link = mail.text.match(/https?:\/\/\S+\/p\/[0-9a-f-]{36}\?view=in-out/)?.[0];
     expect(link).toBeTruthy();
     await page.goto(link!);
+    await expect(page).toHaveURL(/\?view=in-out$/);
+    await page.goto(link!.replace('?view=in-out', '/owed'));
     const owed = page.locator('.hp-stat').filter({ hasText: 'Owed' }).first();
     await expect(owed).toContainText('3,200', { timeout: 30_000 });
   });

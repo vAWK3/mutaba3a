@@ -304,7 +304,7 @@ test('The Home trial banner in Arabic on a 375 px phone: Not now, hide, the last
     await banner.getByRole('button', { name: 'إخفاء لمدة 3 أيام' }).click();
     await expect(banner).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'المستحق' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await expect(banner).toHaveCount(0);
     await expect(page.getByRole('dialog')).toHaveCount(0);
   });
@@ -324,7 +324,7 @@ test('The Home trial banner in Arabic on a 375 px phone: Not now, hide, the last
       .poll(async () => (await (await page.request.get('/v1/me')).json()).profiles.find((p: { id: string }) => p.id === person.personalId).billing.source, { timeout: 60_000, intervals: [2_000] })
       .toBe('STRIPE');
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'المستحق' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await expect(banner).toHaveCount(0);
   });
 });

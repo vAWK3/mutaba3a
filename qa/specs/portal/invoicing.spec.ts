@@ -299,7 +299,8 @@ test('issuing waits for the setup; a client page issues for that client', { tag:
 
   await step('E2 A client page offers Issue a document for this client, the client already chosen', async () => {
     const api = ready();
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    // MUT-664: what was issued to the client is on its Documents tab
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=documents`);
     await page.getByTestId('issue-open').click();
     await expect(page.getByRole('dialog', { name: 'Issue a document' }).getByLabel('Client')).toHaveValue('Client 1');
   });
@@ -653,7 +654,8 @@ test('Set a client’s documents preference on the client page', { tag: '@portal
   const api = dueWorld([]);
 
   await step('Open Client 1’s page on Nour Studio', async () => {
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    // MUT-664: the preference is on the client's Details tab
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=details`);
     const field = page.getByTestId('client-documents-preference');
     await expect(field.getByLabel('Documents')).toHaveValue('DEFAULT');
     await expect(field).toContainText('a tax invoice-receipt for each payment, partial ones included.');
