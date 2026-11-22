@@ -5216,7 +5216,8 @@ function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRec
     issuer: row.issuer as JsonObject,
     customer: row.customer as JsonObject,
     paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
-    allocationSource: row.allocationSource as IssuedDocumentRecord['allocationSource'],
+    // MUT-711: a number issued before the column has no source; the API was the only one then.
+    allocationSource: (row.allocationSource ?? (row.allocationNumber ? 'API' : null)) as IssuedDocumentRecord['allocationSource'],
     lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
   };
 }

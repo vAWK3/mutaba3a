@@ -33,7 +33,7 @@
 ### Added
 - The issue preview answers `allocation` (null, or `{ mode: AUTOMATIC|MANUAL, nextNumber, documentDate, net, customerTaxId, requestUrl }`) so the review step knows a number is needed and whether MTB3A can request it.
 - `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`: a number requested by hand, saved with source MANUAL. Refusals: 409 ALLOCATION_NUMBER_REQUIRED, 409 ALLOCATION_NUMBER_MOVED (the previewed number was taken; nothing is reserved), 422 ALLOCATION_NUMBER_INVALID, 422 ALLOCATION_NOT_NEEDED.
-- `IssuedDocument.allocationSource` (API | MANUAL | null); migration `20261122230000_mut711_manual_allocation` adds the column with a CHECK and backfills API.
+- `IssuedDocument.allocationSource` (API | MANUAL | null); migration `20261122230000_mut711_manual_allocation` adds the column with a CHECK; earlier rows are not touched (immutable) and read as API.
 - `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https; default the Tax Authority's site until the page is confirmed).
 - Portal: `ManualAllocationPanel` in the issue drawer (details with Copy and Copy all, the link, the 9-digit input, "change the amount"); Issue disabled until the number is well formed. QA feature `portal.invoicing.manual-allocation`.
 
