@@ -1874,6 +1874,6 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-ledger-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .hp-ledger-month th, .hp-ledger-month td { background: var(--surface-subtle, var(--bg)); font-weight: var(--weight-medium); color: var(--muted); }
 .hp-ledger-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
-.hp-chip-due { background: var(--warning-subtle, #f6ebcf); color: var(--on-warning-subtle, #7a5200); }
+.hp-chip-due { background: var(--warning-subtle); color: var(--warning); } /* the butter chip pair (.hp-billing-chip-butter): --on-warning-subtle does not exist */
 .hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
 @media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }
