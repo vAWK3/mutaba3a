@@ -129,6 +129,7 @@ export function approvalRequest(input: {
   issuedOn: string;
   composed: ComposedDocument;
   accountingSoftwareNumber: number;
+  userName: string;
 }): ApprovalRequest {
   const c = input.composed;
   const items: ApprovalItem[] = c.lines.map((l) => ({
@@ -152,6 +153,7 @@ export function approvalRequest(input: {
     invoiceDate: input.documentDate,
     invoiceIssuanceDate: input.issuedOn,
     accountingSoftwareNumber: input.accountingSoftwareNumber,
+    userName: input.userName,
     amountBeforeDiscount: shekels(c.subtotalMinor),
     discount: shekels(c.discountMinor),
     paymentAmount: shekels(c.netMinor),

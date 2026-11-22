@@ -33,6 +33,8 @@ export interface ApprovalItem {
 }
 
 export interface ApprovalRequest {
+  /** Who issues it (the service requires user_id or user_name). */
+  userName: string;
   /** Our unique id for this request; the same id asked again returns the same answer. */
   invoiceId: string;
   /** 305 tax invoice, 320 tax invoice-receipt. */
@@ -215,6 +217,8 @@ export function approvalBody(r: ApprovalRequest) {
     invoice_date: r.invoiceDate,
     invoice_issuance_date: r.invoiceIssuanceDate,
     accounting_software_number: r.accountingSoftwareNumber,
+    // Error 446 (sandbox, 2026-11-22): one of user_id or user_name is required.
+    user_name: r.userName.slice(0, 25),
     amount_before_discount: r.amountBeforeDiscount,
     discount: r.discount,
     payment_amount: r.paymentAmount,

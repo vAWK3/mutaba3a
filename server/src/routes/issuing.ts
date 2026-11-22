@@ -635,7 +635,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           const docType = body.docType as 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT';
           const invoiceId = allocationInvoiceId(organization.id, input.requestKey);
           input.allocate = allocator(ta, organization.id, now, (number) =>
-            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber }),
+            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber, userName: user.displayName?.trim() || user.email }),
           );
         }
       }
