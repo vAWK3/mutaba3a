@@ -11,7 +11,7 @@ record the date where the item says.
   1. **Create the key.** Add `issuing_signing_key = true` to `production.tfvars`, then `make release server`. Terraform enables the Cloud KMS API and creates key ring `mutaba3a-issuing` with the HSM key `issued-documents` (RSA_SIGN_PKCS1_3072_SHA256, about $2.50 a month). It gives the API's service account `roles/cloudkms.signer` on that key only. Nothing signs yet: no `ISSUING_` variable reaches Cloud Run. Check: `gcloud kms keys versions list --project mtb3a-production --location europe-west1 --keyring mutaba3a-issuing --key issued-documents` lists version 1 as ENABLED. Leave the line in `production.tfvars` from now on: a release whose file lacks it fails, because Terraform refuses to destroy the key (`prevent_destroy`).
   2. **Make the interim certificate.** Run this once on your Mac, signed in as a project owner:
      - `gcloud auth application-default login` and `gcloud auth application-default set-quota-project mtb3a-production`.
-     - Then, from `server/`: `npm run signing:interim-cert -- --key projects/mtb3a-production/locations/europe-west1/keyRings/mutaba3a-issuing/cryptoKeys/issued-documents/cryptoKeyVersions/1 --organization "Barmajiyat Ltd." --years 2 --out interim.pem`.
+     - Then, from `server/`: `npm run signing:interim-cert -- --key projects/mtb3a-production/locations/europe-west1/keyRings/mutaba3a-issuing/cryptoKeys/issued-documents/cryptoKeyVersions/1 --organization "Narabnd Studio Ltd" --years 2 --out interim.pem`.
      - The same key path is also `terraform -chdir=infrastructure/terraform output -raw issuing_signing_key_version`.
      - KMS signs the certificate inside the HSM; no key is read or written. The script prints the certificate's SHA-256 fingerprint and end date. `interim.pem` is public: keep it with the release notes.
      - If it says permission denied, give yourself `roles/cloudkms.signerVerifier` and `roles/cloudkms.publicKeyViewer` on that key.
@@ -21,7 +21,7 @@ record the date where the item says.
      - Or run `pdfsig <file>`: "Signature is Valid", "Total document signed".
   **To switch signing off:** delete the `issuing_signing_cert_chain` line and release (the PDF routes answer 503). Never remove `issuing_signing_key`: the key's certificate would become useless. **Renewal:** the API logs the certificate's end date at every start and warns 30 days before it. Make a new certificate (step 2) before then, or new originals can't be signed (503, `details.reason` CERTIFICATE_NOT_VALID).
   **When the authority's deal closes:** ask them which subject fields they want (CN, O, serialNumber).
-  - Then `npm run signing:interim-cert -- --csr --key <the same key path> --organization "Barmajiyat Ltd." --company-number <ח.פ.> --out request.csr`. KMS signs the request; `openssl req -in request.csr -verify -noout` checks it.
+  - Then `npm run signing:interim-cert -- --csr --key <the same key path> --organization "Narabnd Studio Ltd" --company-number 517108775 --out request.csr`. KMS signs the request; `openssl req -in request.csr -verify -noout` checks it.
   - Send `request.csr` to them. Put the certificate they return, then their chain, in `issuing_signing_cert_chain`, and their time-stamp URL (https) in `issuing_tsa_url`. Release.
   Delete this item when production signs, and record the date on MUT-641.
 
