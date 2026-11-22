@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ApiError, api, type IssueDocumentRequest, type IssuedDocType, type IssuedDocument } from '../api/client';
 import { profileKey } from '../session/me';
 import { setupKey, useIssuer, useIssuingSetup } from './issuingQueries';
-import { useMe } from '../session/me';
+import { useMeOrNull } from '../session/me';
 import type { HostedProfile } from '../api/client';
 
 /**
@@ -80,8 +80,8 @@ export function openPdf(blob: Blob, filename: string) {
  * business's "Offer to issue after saving" on.
  */
 export function useIssueAfterSave(profile: HostedProfile): boolean {
-  const me = useMe();
-  const eligible = me.user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS';
+  const me = useMeOrNull();
+  const eligible = !!me?.user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS';
   const setup = useIssuingSetup(profile.id, eligible);
   const issuer = useIssuer(profile.id, eligible && !!setup.data?.canIssue);
   return eligible && !!setup.data?.canIssue && issuer.data?.offerAfterSave === true;
