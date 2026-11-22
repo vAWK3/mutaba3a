@@ -1113,7 +1113,8 @@ export class MemoryLedgerStore implements LedgerStore {
         const record = item.kind === 'receivable' ? this.recs.get(item.id) : this.pays.get(item.id);
         const live = record && record.organizationId === organizationId && (item.kind === 'receivable' ? !(record as ReceivableRecord).deletedAt : (record as PaymentRecord).status === 'POSTED');
         if (!record || !live) return { kind: 'not_found', item };
-        if (item.expectedVersion !== undefined && record.version !== item.expectedVersion) return { kind: 'stale', item, version: record.version };
+        // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+        if (item.expectedVersion !== undefined && record.version !== item.expectedVersion && record.notForInvoice !== value) return { kind: 'stale', item, version: record.version };
         if (value && this.hasTaxDocument(organizationId, item.kind, item.id)) return { kind: 'has_tax_document', item };
         found.push(record);
       }

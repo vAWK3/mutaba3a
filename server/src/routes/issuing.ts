@@ -12,6 +12,7 @@ import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/co
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
+import { registerDocumentsDueRoutes } from './documents-due.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
@@ -190,6 +191,94 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
 
+  /** One issue, from a request (POST /v1/issued-documents, and each item of MUT-660's Issue all). Throws the route's errors. */
+  async function issueOne(c: Context<AppEnv>, organization: Organization, body: IssueRequest, requestKey: string): Promise<{ document: IssuedDocumentRecord; created: boolean }> {
+      const { user } = sessionAuth(c);
+      const now = c.get('now')();
+      // MUT-646 (S1-a): nothing is issued until the business details and the numbering answer are in.
+      const [current, setup] = await Promise.all([store.issuing.getIssuer(organization.id), store.issuing.getSetup(organization.id)]);
+      const missing = setupMissing(current, setup);
+      if (missing.length > 0) throw new ApiError('CONFLICT', 'Finish the invoicing setup before issuing', { reason: 'ISSUING_SETUP_INCOMPLETE', missing });
+      // MUT-647 (AC3): an entry whose invoice was issued elsewhere gets no second document from MTB3A.
+      if (body.fromEntry) {
+        const [attached] = await store.issuing.liveExternal(organization.id, body.fromEntry.kind === 'owed' ? 'OWED' : 'RECEIVED', [body.fromEntry.id]);
+        if (attached) throw new ApiError('CONFLICT', `This entry already has invoice ${attached.number}, issued elsewhere; remove it to issue one here`, { reason: 'EXTERNAL_INVOICE_ATTACHED', number: attached.number });
+      }
+      const issuer = current!;
+      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
+      const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
+      if (body.customerId && !customer) throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
+      // I1-a: a document for a captured Received prints how that money came in.
+      const fromPayment = body.fromEntry?.kind === 'received' ? await store.payments.getById(organization.id, body.fromEntry.id) : null;
+      if (body.fromEntry?.kind === 'received' && !fromPayment) throw new ApiError('NOT_FOUND', 'No such entry', { field: 'fromEntry' });
+      const payment = fromPayment
+        ? { method: fromPayment.method, reference: fromPayment.reference, receivedOn: fromPayment.receivedOn }
+        : body.payment
+          ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: pastMoneyDate(body.payment.receivedOn, todayFor(organization, now), 'payment.receivedOn') }
+          : null;
+      const input: IssueDocumentInput = {
+        organizationId: organization.id,
+        docType: body.docType,
+        documentDate,
+        currency: body.currency,
+        composed,
+        issuer: issuerSnapshot(issuer, setup?.logoId ?? null),
+        customerId: customer?.id ?? null,
+        customer: customerSnapshot(customer),
+        language: body.language,
+        style: issuer.documentStyle,
+        ink: issuer.ink,
+        notes: body.notes ?? null,
+        dueDate: body.docType === 'TAX_INVOICE' ? (body.dueDate ?? null) : null,
+        originalId: body.originalId ?? null,
+        payment,
+        appliesToDocumentId: body.appliesToDocumentId ?? null,
+        fromEntry: body.fromEntry ? { kind: body.fromEntry.kind === 'owed' ? 'receivable' : 'payment', id: body.fromEntry.id } : null,
+        allocationNumber: null,
+        titlePrefix: DOC_TYPE_TITLES[body.language][body.docType],
+        coreVersion: ISSUING_CORE_VERSION,
+        createdByUserId: user.id,
+        requestKey,
+        requestId: c.get('requestId'),
+      };
+      // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
+      if (tax.deps && needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null })) {
+        const ta = tax.deps;
+        if (body.withoutAllocation) {
+          // Held earlier: the person chose to issue without a number; the Tax Authority hears CONTINUE first.
+          await reportDecision(ta, { vatNumberOf: async () => Number(issuer.vatId) }, organization.id, body.withoutAllocation.heldKey, 'CONTINUE', now);
+        } else {
+          const docType = body.docType as 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT';
+          const invoiceId = allocationInvoiceId(organization.id, input.requestKey);
+          input.allocate = allocator(ta, organization.id, now, (number) =>
+            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber, userName: user.displayName?.trim() || user.email }),
+          );
+        }
+      }
+      const result = await store.issuing.issue(input, now);
+      switch (result.kind) {
+        case 'date_before_last':
+          throw new ApiError('VALIDATION_FAILED', `Documents of this type are already dated ${result.lastDate}; a new one can't be earlier`, { field: 'documentDate', reason: 'DATE_BEFORE_LAST_DOCUMENT', lastDate: result.lastDate });
+        case 'customer_not_found':
+          throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
+        case 'original_not_found':
+          throw new ApiError('NOT_FOUND', 'No such tax invoice for this customer', { field: body.originalId ? 'originalId' : 'appliesToDocumentId' });
+        case 'original_paid':
+          throw new ApiError('VALIDATION_FAILED', 'A credit note credits only what is still owed on its tax invoice', { field: 'lines', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString() });
+        case 'exceeds_outstanding':
+          throw new ApiError('VALIDATION_FAILED', 'The receipt is more than the tax invoice still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
+        case 'entry_not_found':
+          throw new ApiError('NOT_FOUND', 'No such entry to issue for, or it already has a document', { field: 'fromEntry' });
+        case 'allocation_failed':
+          throw allocationError(result.outcome);
+        case 'entry_mismatch':
+          throw new ApiError('VALIDATION_FAILED', `The document's ${result.field} must match the entry's`, { field: 'fromEntry', reason: 'ENTRY_MISMATCH', mismatch: result.field });
+        case 'issued':
+          if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number });
+          return result;
+      }
+  }
+
   function audit(c: Context<AppEnv>, action: string, entityType: string, entityId: string, metadata?: JsonObject) {
     const { organization, user } = sessionAuth(c);
     return store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action, entityType, entityId, ...(metadata ? { metadata } : {}), requestId: c.get('requestId') });
@@ -248,7 +337,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       if (!ok) throw new ApiError('VALIDATION_FAILED', message, { field, reason: 'FIELD_NOT_ALLOWED_FOR_TYPE' });
     };
     const takesPayment = body.docType === 'TAX_INVOICE_RECEIPT' || body.docType === 'RECEIPT';
-    needs(body.docType === 'RECEIPT' || !!body.customerId, 'customerId', 'this document needs a customer');
+    // MUT-660 (N1): money received with no client takes an invoice-receipt linked to it (it posts no Owed).
+    needs(body.docType === 'RECEIPT' || !!body.customerId || (body.docType === 'TAX_INVOICE_RECEIPT' && body.fromEntry?.kind === 'received'), 'customerId', 'this document needs a customer');
     needs((body.docType === 'CREDIT_NOTE') === !!body.originalId, 'originalId', 'a credit note, and only a credit note, names the tax invoice it credits');
     needs(body.docType === 'RECEIPT' || !body.appliesToDocumentId, 'appliesToDocumentId', 'only a receipt pays an earlier tax invoice');
     needs(takesPayment === (!!body.payment || body.fromEntry?.kind === 'received'), 'payment', 'an invoice-receipt or a receipt, and only those, says how the money came in');
@@ -613,91 +703,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     }),
     async (c) => {
       const organization = await issuingProfile(c, true);
-      const { user } = sessionAuth(c);
-      const body = c.req.valid('json');
-      const now = c.get('now')();
-      // MUT-646 (S1-a): nothing is issued until the business details and the numbering answer are in.
-      const [current, setup] = await Promise.all([store.issuing.getIssuer(organization.id), store.issuing.getSetup(organization.id)]);
-      const missing = setupMissing(current, setup);
-      if (missing.length > 0) throw new ApiError('CONFLICT', 'Finish the invoicing setup before issuing', { reason: 'ISSUING_SETUP_INCOMPLETE', missing });
-      // MUT-647 (AC3): an entry whose invoice was issued elsewhere gets no second document from MTB3A.
-      if (body.fromEntry) {
-        const [attached] = await store.issuing.liveExternal(organization.id, body.fromEntry.kind === 'owed' ? 'OWED' : 'RECEIVED', [body.fromEntry.id]);
-        if (attached) throw new ApiError('CONFLICT', `This entry already has invoice ${attached.number}, issued elsewhere; remove it to issue one here`, { reason: 'EXTERNAL_INVOICE_ATTACHED', number: attached.number });
-      }
-      const issuer = current!;
-      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
-      const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
-      if (body.customerId && !customer) throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
-      // I1-a: a document for a captured Received prints how that money came in.
-      const fromPayment = body.fromEntry?.kind === 'received' ? await store.payments.getById(organization.id, body.fromEntry.id) : null;
-      if (body.fromEntry?.kind === 'received' && !fromPayment) throw new ApiError('NOT_FOUND', 'No such entry', { field: 'fromEntry' });
-      const payment = fromPayment
-        ? { method: fromPayment.method, reference: fromPayment.reference, receivedOn: fromPayment.receivedOn }
-        : body.payment
-          ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: pastMoneyDate(body.payment.receivedOn, todayFor(organization, now), 'payment.receivedOn') }
-          : null;
-      const input: IssueDocumentInput = {
-        organizationId: organization.id,
-        docType: body.docType,
-        documentDate,
-        currency: body.currency,
-        composed,
-        issuer: issuerSnapshot(issuer, setup?.logoId ?? null),
-        customerId: customer?.id ?? null,
-        customer: customerSnapshot(customer),
-        language: body.language,
-        style: issuer.documentStyle,
-        ink: issuer.ink,
-        notes: body.notes ?? null,
-        dueDate: body.docType === 'TAX_INVOICE' ? (body.dueDate ?? null) : null,
-        originalId: body.originalId ?? null,
-        payment,
-        appliesToDocumentId: body.appliesToDocumentId ?? null,
-        fromEntry: body.fromEntry ? { kind: body.fromEntry.kind === 'owed' ? 'receivable' : 'payment', id: body.fromEntry.id } : null,
-        allocationNumber: null,
-        titlePrefix: DOC_TYPE_TITLES[body.language][body.docType],
-        coreVersion: ISSUING_CORE_VERSION,
-        createdByUserId: user.id,
-        requestKey: c.req.valid('header')['idempotency-key'],
-        requestId: c.get('requestId'),
-      };
-      // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
-      if (tax.deps && needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null })) {
-        const ta = tax.deps;
-        if (body.withoutAllocation) {
-          // Held earlier: the person chose to issue without a number; the Tax Authority hears CONTINUE first.
-          await reportDecision(ta, { vatNumberOf: async () => Number(issuer.vatId) }, organization.id, body.withoutAllocation.heldKey, 'CONTINUE', now);
-        } else {
-          const docType = body.docType as 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT';
-          const invoiceId = allocationInvoiceId(organization.id, input.requestKey);
-          input.allocate = allocator(ta, organization.id, now, (number) =>
-            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber, userName: user.displayName?.trim() || user.email }),
-          );
-        }
-      }
-      const result = await store.issuing.issue(input, now);
-      switch (result.kind) {
-        case 'date_before_last':
-          throw new ApiError('VALIDATION_FAILED', `Documents of this type are already dated ${result.lastDate}; a new one can't be earlier`, { field: 'documentDate', reason: 'DATE_BEFORE_LAST_DOCUMENT', lastDate: result.lastDate });
-        case 'customer_not_found':
-          throw new ApiError('NOT_FOUND', 'No such customer', { field: 'customerId' });
-        case 'original_not_found':
-          throw new ApiError('NOT_FOUND', 'No such tax invoice for this customer', { field: body.originalId ? 'originalId' : 'appliesToDocumentId' });
-        case 'original_paid':
-          throw new ApiError('VALIDATION_FAILED', 'A credit note credits only what is still owed on its tax invoice', { field: 'lines', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString() });
-        case 'exceeds_outstanding':
-          throw new ApiError('VALIDATION_FAILED', 'The receipt is more than the tax invoice still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
-        case 'entry_not_found':
-          throw new ApiError('NOT_FOUND', 'No such entry to issue for, or it already has a document', { field: 'fromEntry' });
-        case 'allocation_failed':
-          throw allocationError(result.outcome);
-        case 'entry_mismatch':
-          throw new ApiError('VALIDATION_FAILED', `The document's ${result.field} must match the entry's`, { field: 'fromEntry', reason: 'ENTRY_MISMATCH', mismatch: result.field });
-        case 'issued':
-          if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number });
-          return c.json(serializeIssuedDocument(result.document), 201);
-      }
+      const { document } = await issueOne(c, organization, c.req.valid('json'), c.req.valid('header')['idempotency-key']);
+      return c.json(serializeIssuedDocument(document), 201);
     },
   );
 
@@ -956,6 +963,9 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       return c.json({ types: await store.issuing.gaps(organization.id) }, 200);
     },
   );
+
+  // MUT-660: documents due, Issue all and not for invoice, behind the same gate and through the same single issue.
+  registerDocumentsDueRoutes(app, { store, issuingProfile, issueOne, audit });
 
   return app;
 }

@@ -10,3 +10,10 @@ export const DOC_TYPE_TITLES: Readonly<Record<DocumentLanguage, Readonly<Record<
   ar: { TAX_INVOICE: 'فاتورة ضريبية', TAX_INVOICE_RECEIPT: 'فاتورة ضريبية وإيصال', RECEIPT: 'إيصال', CREDIT_NOTE: 'إشعار دائن' },
   en: { TAX_INVOICE: 'Tax invoice', TAX_INVOICE_RECEIPT: 'Tax invoice-receipt', RECEIPT: 'Receipt', CREDIT_NOTE: 'Credit note' },
 };
+
+/** MUT-660: the one line Issue all prints when the entry has no title of its own. */
+export const DEFAULT_LINE_DESCRIPTION: Readonly<Record<DocumentLanguage, string>> = {
+  he: 'שירותים מקצועיים',
+  ar: 'خدمات مهنية',
+  en: 'Professional services',
+};

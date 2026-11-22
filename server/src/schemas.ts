@@ -5231,3 +5231,57 @@ export const IssuedCopyRequestSchema = z.object({ channel: z.enum(['DOWNLOAD', '
 export const IssuingGapsSchema = z
   .object({ types: z.array(z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), last: z.number().int(), missing: z.array(z.number().int()) })) })
   .openapi('IssuingGaps');
+
+// ---- MUT-660 (ADR-270): documents due, Issue all, not for invoice ----
+const DueEntryKindSchema = z.enum(['owed', 'received']);
+const DueEntryRefSchema = z.object({ kind: DueEntryKindSchema, id: uuid }).openapi('DueEntryRef');
+export const DueKindSchema = z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).openapi('DueKind');
+export const DueReasonSchema = z
+  .enum(['PAYMENT_REQUEST_PENDING', 'CURRENCY_NOT_ILS', 'MIXED_ALLOCATION', 'RECORDED_ELSEWHERE'])
+  .openapi('DueReason', { description: 'Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice' });
+export const DueItemSchema = z
+  .object({
+    kind: DueKindSchema.nullable().openapi({ description: 'The document due; null in the not-for-invoice view' }),
+    entry: DueEntryRefSchema.extend({ number: z.string() }),
+    customerId: uuid.nullable(),
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    date: IsoDateSchema.openapi({ description: 'The Owed’s posting date or the Received’s date' }),
+    issuable: z.boolean(),
+    reason: DueReasonSchema.nullable(),
+    appliesToDocumentId: uuid.nullable().openapi({ description: 'A receipt: the tax invoice it pays' }),
+  })
+  .openapi('DueItem');
+export const DocumentsDueQuerySchema = z.object({
+  view: z.enum(['to-issue', 'not-for-invoice']).default('to-issue'),
+  olderThanMonths: z.coerce.number().int().min(0).max(120).default(0).openapi({ description: 'Only items dated before today minus N months (0 = all)' }),
+});
+export const DocumentsDueSchema = z
+  .object({
+    view: z.enum(['to-issue', 'not-for-invoice']),
+    groups: z.array(z.object({ customerId: uuid.nullable(), items: z.array(DueItemSchema) })),
+    counts: z.object({ total: z.number().int(), byKind: z.record(z.string(), z.number().int()) }),
+  })
+  .openapi('DocumentsDue');
+export const DocumentsDueCountSchema = z.object({ total: z.number().int() }).openapi('DocumentsDueCount');
+export const IssueDueRequestSchema = z
+  .object({ customerId: uuid.nullable(), items: z.array(DueEntryRefSchema).min(1).max(25) })
+  .strict()
+  .openapi('IssueDueRequest');
+export const IssueDueResultSchema = z
+  .object({
+    results: z.array(
+      z.object({
+        entry: DueEntryRefSchema,
+        status: z.enum(['issued', 'held', 'refused']),
+        reason: z.string().nullable().openapi({ description: 'Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason)' }),
+        document: IssuedDocumentSchema.nullable(),
+      }),
+    ),
+    issued: z.number().int(),
+  })
+  .openapi('IssueDueResult');
+export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefSchema).min(1).max(500), value: z.boolean() }).strict().openapi('NotForInvoiceRequest');
+export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
+export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');
+export const NotForInvoiceEntrySchema = z.object({ kind: DueEntryKindSchema, id: uuid, notForInvoice: z.boolean(), version: z.number().int() }).openapi('NotForInvoiceEntry');

@@ -1033,7 +1033,8 @@ export class PrismaLedgerStore implements LedgerStore {
           const rows = await tx.$queryRaw<Array<{ version: number; notForInvoice: boolean }>>`SELECT "version", "notForInvoice" FROM ${table} WHERE "id" = ${item.id}::uuid AND "organizationId" = ${organizationId}::uuid AND ${live} FOR UPDATE`;
           const row = rows[0];
           if (!row) return { kind: 'not_found', item };
-          if (item.expectedVersion !== undefined && row.version !== item.expectedVersion) return { kind: 'stale', item, version: row.version };
+          // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+          if (item.expectedVersion !== undefined && row.version !== item.expectedVersion && row.notForInvoice !== value) return { kind: 'stale', item, version: row.version };
           if (value && (await hasTaxDocumentTx(tx, organizationId, item))) return { kind: 'has_tax_document', item };
           found.push({ item, notForInvoice: row.notForInvoice });
         }
