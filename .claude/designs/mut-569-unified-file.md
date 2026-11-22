@@ -107,6 +107,14 @@ An auditor can still read a name like "מחמד עבד אללה". The document i
 | Portal: `src/hosted/pages/invoicing/UniformFileExport.tsx` | You › Invoicing gains a "Uniform file (מבנה אחיד)" card: from/to `DateField`s (default: last tax year), Export button, a download through the same authed-blob helper the PDF download uses, a toast. Its own file, mounted with one line in `InvoicingSetupPage` (MUT-660 is building in parallel nearby). i18n ar/en. Follows DESIGN.md (card, secondary button). |
 | `server/src/issuing/uniform-file/__tests__/fixture.test.ts` | the simulator fixture (below) |
 
+**Wireframe:** [mut-569-uniform-file-wireframe.html](mut-569-uniform-file-wireframe.html), in Arabic RTL with an English toggle, showing the desktop card and the phone.
+
+- The card sits under the current invoicing setup. The range chips are Last year (the default), This year and Other dates; the From/To fields open only for Other dates.
+- After the download, a line gives the document and record counts. The route sends them in the `X-Uniform-File-Documents` and `X-Uniform-File-Records` headers, exposed through CORS.
+- A failure shows an error toast with Try again. "To before From" is refused in place.
+- An accountant sees the same card.
+- The phone gets nothing by default (D6). The wireframe also shows the alternative: one line pointing to the portal.
+
 Reuse:
 
 - `roundHalfUpDiv` from `vat.ts` (VAT-inclusive unit price → net).

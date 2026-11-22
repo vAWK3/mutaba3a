@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Uniform file export</title>
+<style>
+  :root {
+    --bg:#FCF6ED; --surface:#FFFCF7; --field:#F4F2FB; --text:#392F4B; --muted:#564E68; --line:#E6E2ED;
+    --accent:#795DBA; --accent-solid:#5E439E; --on-accent:#FCF6ED; --lav:#E0D7FF; --lav-ink:#4D387E;
+    --mint:#BAEBD4; --mint-ink:#00513E; --rose:#FFCED5; --rose-ink:#742B35; --butter:#F6E8B3; --butter-ink:#67450A;
+    --stage:#EFE8DC;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg:#221B2D; --surface:#2E273C; --field:#3B334C; --text:#F4EEE4; --muted:#BAB3C8; --line:#4B435A;
+      --accent:#BCA9F7; --accent-solid:#C8B7FF; --on-accent:#221B2D; --lav:#453A64; --lav-ink:#DBCEFF;
+      --mint:#134E39; --mint-ink:#A5E9CA; --rose:#62313A; --rose-ink:#FFC2CB; --butter:#4E3F12; --butter-ink:#F6E8B3;
+      --stage:#17121F;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--stage); color:var(--text); font: 16px/1.5 "Thmanyah Sans", system-ui, -apple-system, "Segoe UI", sans-serif; }
+  .num { font-family: "IBM Plex Mono", ui-monospace, monospace; font-variant-numeric: tabular-nums; }
+  .controls { position: sticky; top:0; z-index:5; background:var(--surface); border-block-end:1px solid var(--line); padding:12px 16px; display:flex; flex-wrap:wrap; gap:16px 24px; align-items:center; }
+  .controls h2 { font-size:13px; margin:0; color:var(--muted); font-weight:500; }
+  .seg { display:inline-flex; border:1px solid var(--line); border-radius:999px; overflow:hidden; }
+  .seg button { border:0; background:transparent; color:var(--text); padding:6px 12px; font:inherit; font-size:13px; cursor:pointer; min-height:32px; }
+  .seg button[aria-pressed="true"] { background:var(--lav); color:var(--lav-ink); }
+  .group { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+  .stage { display:flex; gap:32px; padding:24px 16px 48px; justify-content:center; align-items:flex-start; flex-wrap:wrap; }
+  .frame-label { font-size:13px; color:var(--muted); margin:0 0 8px; }
+  .desktop { width: min(980px, 100%); background:var(--bg); border:1px solid var(--line); border-radius:18px; overflow:hidden; }
+  .browser-bar { height:32px; background:var(--field); border-block-end:1px solid var(--line); display:flex; align-items:center; padding-inline:12px; gap:6px; }
+  .browser-bar i { width:10px; height:10px; border-radius:50%; background:var(--line); display:block; }
+  .browser-bar span { margin-inline-start:12px; font-size:12px; color:var(--muted); direction:ltr; }
+  .chrome { display:flex; justify-content:center; padding:16px; }
+  .pill { background:var(--surface); border:1px solid var(--line); border-radius:999px; padding:6px 18px; font-size:13px; color:var(--muted); display:flex; gap:20px; }
+  .page { max-width:720px; margin:0 auto; padding:8px 24px 48px; }
+  .back { color:var(--accent-solid); font-size:13px; text-decoration:none; }
+  h1 { font-family: "Thmanyah Serif Display", Georgia, serif; font-size:32px; margin:8px 0 4px; }
+  .note { color:var(--muted); font-size:13px; margin:0 0 20px; }
+  .placeholder { border:1.5px dashed var(--line); border-radius:24px; padding:28px; text-align:center; color:var(--muted); font-size:13px; margin-block-end:24px; }
+  .card { background:var(--surface); border:1px solid var(--line); border-radius:24px; padding:24px; position:relative; }
+  .card.new { outline:2px solid var(--accent); outline-offset:4px; }
+  .new-tag { position:absolute; inset-block-start:-12px; inset-inline-end:20px; background:var(--accent-solid); color:var(--on-accent); font-size:11px; font-weight:500; padding:2px 10px; border-radius:999px; }
+  .card h3 { font-size:20px; font-weight:500; margin:0 0 4px; }
+  .card .lead { color:var(--muted); font-size:13px; margin:0 0 16px; }
+  .chips { display:flex; gap:8px; flex-wrap:wrap; margin-block-end:12px; }
+  .chip { border:1px solid var(--line); background:transparent; color:var(--text); border-radius:999px; padding:8px 14px; font:inherit; font-size:13px; cursor:pointer; min-height:44px; }
+  .chip[aria-pressed="true"] { background:var(--lav); color:var(--lav-ink); border-color:transparent; }
+  .fields { display:grid; grid-template-columns: 1fr 1fr; gap:12px; margin-block-end:16px; }
+  @media (max-width: 480px) { .fields { grid-template-columns: 1fr; } }
+  label.f { display:flex; flex-direction:column; gap:4px; font-size:13px; color:var(--muted); }
+  .input { background:var(--field); border:1px solid transparent; border-radius:12px; padding:10px 12px; min-height:44px; color:var(--text); font:inherit; font-size:16px; }
+  .input[aria-invalid="true"] { border-color:var(--rose-ink); }
+  .ferr { color:var(--rose-ink); font-size:13px; }
+  .actions { display:flex; gap:12px; align-items:center; flex-wrap:wrap; }
+  .btn { border:0; border-radius:12px; padding:10px 18px; min-height:44px; font:inherit; font-weight:600; cursor:pointer; }
+  .btn.primary { background:var(--accent-solid); color:var(--on-accent); }
+  .btn.secondary { background:transparent; color:var(--accent-solid); border:1px solid var(--line); }
+  .btn[disabled] { opacity:.6; cursor:default; }
+  .spin { display:inline-block; width:14px; height:14px; border:2px solid currentColor; border-inline-end-color:transparent; border-radius:50%; animation:s 0.8s linear infinite; vertical-align:-2px; margin-inline-end:6px; }
+  @keyframes s { to { transform:rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spin { animation:none; } }
+  .status { margin-block-start:16px; border-radius:14px; padding:12px 14px; font-size:16px; display:flex; gap:10px; align-items:flex-start; }
+  .status.ok { background:var(--mint); color:var(--mint-ink); }
+  .status.info { background:var(--lav); color:var(--lav-ink); }
+  .status small { display:block; font-size:13px; opacity:.9; }
+  details { margin-block-start:16px; font-size:13px; color:var(--muted); }
+  details summary { cursor:pointer; color:var(--accent-solid); min-height:32px; }
+  details ul { margin:8px 0 0; padding-inline-start:20px; }
+  code, .ltr { direction:ltr; unicode-bidi:isolate; }
+  .toast { position:absolute; inset-block-end:16px; inset-inline-start:50%; transform:translateX(-50%); background:var(--rose); color:var(--rose-ink); border-radius:14px; padding:12px 16px; font-size:16px; box-shadow:0 6px 24px rgba(0,0,0,.12); display:flex; gap:12px; align-items:center; white-space:nowrap; }
+  [dir="rtl"] .toast { transform:translateX(50%); inset-inline-start:auto; inset-inline-end:50%; }
+  .toast button { background:transparent; border:0; color:inherit; font:inherit; font-weight:600; text-decoration:underline; cursor:pointer; }
+  .desktop-body { position:relative; }
+  .phone { width:375px; height:760px; background:var(--bg); border:10px solid #1d1726; border-radius:44px; overflow:hidden; display:flex; flex-direction:column; }
+  .phone .bar { height:44px; display:flex; justify-content:space-between; align-items:center; padding:0 20px; font-size:13px; }
+  .phone .top { display:flex; align-items:center; gap:8px; padding:4px 16px 12px; }
+  .phone .top b { font-family:"Thmanyah Serif Display", Georgia, serif; font-size:22px; }
+  .phone .list { margin:0 16px; background:var(--surface); border:1px solid var(--line); border-radius:18px; }
+  .phone .row { padding:14px 16px; min-height:56px; display:flex; justify-content:space-between; align-items:center; border-block-end:1px solid var(--line); font-size:16px; }
+  .phone .row:last-child { border-block-end:0; }
+  .phone .row small { display:block; color:var(--muted); font-size:13px; }
+  .phone .row.hint { outline:2px solid var(--accent); outline-offset:-2px; border-radius:0 0 18px 18px; }
+  .phone .muted { color:var(--muted); font-size:13px; padding:12px 20px; }
+  .annot { max-width:980px; margin:0 auto; padding:0 16px 40px; font-size:13px; color:var(--muted); }
+  .annot ol { padding-inline-start:20px; }
+</style>
+</head>
+<body>
+<div class="controls" id="controls">
+  <div class="group"><h2 data-t="cLang"></h2>
+    <div class="seg" data-ctl="lang"><button data-v="ar">العربية</button><button data-v="en">English</button></div></div>
+  <div class="group"><h2 data-t="cState"></h2>
+    <div class="seg" data-ctl="state">
+      <button data-v="ready" data-t="sReady"></button><button data-v="busy" data-t="sBusy"></button><button data-v="done" data-t="sDone"></button><button data-v="empty" data-t="sEmpty"></button><button data-v="invalid" data-t="sInvalid"></button><button data-v="failed" data-t="sFailed"></button>
+    </div></div>
+  <div class="group"><h2 data-t="cViewer"></h2>
+    <div class="seg" data-ctl="viewer"><button data-v="owner" data-t="vOwner"></button><button data-v="accountant" data-t="vAccountant"></button></div></div>
+  <div class="group"><h2 data-t="cPhone"></h2>
+    <div class="seg" data-ctl="phone"><button data-v="none" data-t="pNone"></button><button data-v="hint" data-t="pHint"></button></div></div>
+</div>
+
+<div class="stage">
+  <div>
+    <p class="frame-label" data-t="fDesktop"></p>
+    <div class="desktop">
+      <div class="browser-bar"><i></i><i></i><i></i><span>app.mtb3a.com/p/…/you/invoicing</span></div>
+      <div class="desktop-body">
+        <div class="chrome"><div class="pill"><span data-t="navHome"></span><span data-t="navMoney"></span><span data-t="navClients"></span><span data-t="navDocs"></span></div></div>
+        <div class="page">
+          <a class="back" href="#" data-t="back"></a>
+          <h1 data-t="title"></h1>
+          <p class="note" data-t="pageNote"></p>
+          <div class="placeholder" data-t="letterhead"></div>
+          <section class="card new" aria-labelledby="uf-h">
+            <span class="new-tag" data-t="newTag"></span>
+            <h3 id="uf-h" data-t="cardTitle"></h3>
+            <p class="lead" data-t="cardLead"></p>
+            <div class="chips" role="group">
+              <button class="chip" data-preset="lastYear" data-t="lastYear"></button>
+              <button class="chip" data-preset="thisYear" data-t="thisYear"></button>
+              <button class="chip" data-preset="custom" data-t="otherDates"></button>
+            </div>
+            <div class="fields">
+              <label class="f"><span data-t="from"></span><input class="input" id="from" type="date"></label>
+              <label class="f"><span data-t="to"></span><input class="input" id="to" type="date"><span class="ferr" id="toErr" hidden></span></label>
+            </div>
+            <div class="actions">
+              <button class="btn primary" id="go"></button>
+            </div>
+            <div id="status"></div>
+            <details>
+              <summary data-t="insideTitle"></summary>
+              <ul>
+                <li><code>INI.TXT</code> · <span data-t="insideIni"></span></li>
+                <li><code>BKMVDATA.zip</code> · <span data-t="insideBkmv"></span></li>
+                <li><code>report.html</code> · <span data-t="insideReport"></span></li>
+              </ul>
+            </details>
+          </section>
+        </div>
+        <div id="toast"></div>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <p class="frame-label" data-t="fPhone"></p>
+    <div class="phone">
+      <div class="bar"><span class="num">9:41</span><span>●●●</span></div>
+      <div class="top"><span>‹</span><b data-t="phoneTitle"></b></div>
+      <div class="list" id="phoneList"></div>
+      <p class="muted" id="phoneNote"></p>
+    </div>
+  </div>
+</div>
+
+<div class="annot">
+  <p><b data-t="notesTitle"></b></p>
+  <ol id="notes"></ol>
+</div>
+
+<script>
+const T = {
+  ar: {
+    cLang:'اللغة', cState:'الحالة', cViewer:'من يفتحها', cPhone:'الهاتف',
+    sReady:'جاهز', sBusy:'جارٍ التحضير', sDone:'تمّ التنزيل', sEmpty:'لا مستندات', sInvalid:'تواريخ خاطئة', sFailed:'فشل',
+    vOwner:'صاحب الملف', vAccountant:'محاسب', pNone:'لا شيء (مقترح)', pHint:'سطر يدلّ على البوابة',
+    fDesktop:'البوابة على الويب · أنت › الفواتير', fPhone:'تطبيق الهاتف · إعدادات الفواتير',
+    navHome:'الرئيسية', navMoney:'المال', navClients:'الزبائن', navDocs:'المستندات',
+    back:'‹ الملفات', title:'الفواتير · برمجيات', pageNote:'كيف تبدو مستنداتك وكيف تُرقَّم.',
+    letterhead:'رأس الورقة وخطوات الإعداد (كما هي اليوم، بلا تغيير)', newTag:'جديد',
+    cardTitle:'الملف الموحّد (מבנה אחיד)',
+    cardLead:'لسلطة الضرائب ولمدقّق حساباتك: كل المستندات التي أصدرتها بين تاريخين، بصيغة 1.31.',
+    leadAccountant:'لسلطة الضرائب وللتدقيق: كل المستندات التي أصدرها هذا الملف بين تاريخين، بصيغة 1.31.',
+    lastYear:'السنة الماضية', thisYear:'هذه السنة', otherDates:'تواريخ أخرى', from:'من', to:'إلى',
+    go:'تنزيل الملف', busy:'جارٍ التحضير…',
+    doneMain:(f,d,r)=>`نزل <span class="ltr">${f}</span>`, doneSub:(d,r)=>`${d} مستندًا · ${r} سجلًّا`,
+    emptyMain:'لا مستندات في هذه التواريخ.', emptySub:'الملف صالح ويحمل سجلَّي البداية والنهاية فقط.',
+    errOrder:'"إلى" قبل "من".',
+    failed:'تعذّر تحضير الملف.', retry:'حاول مجددًا',
+    insideTitle:'ماذا في الملف؟', insideIni:'ملخّص الملف وعدد السجلات', insideBkmv:'المستندات وسطورها والدفعات', insideReport:'ملخّص للطباعة: عدد المستندات ومجموعها لكل نوع',
+    phoneTitle:'الفواتير', pRow1:'تفاصيل العمل', pRow2:'الترقيم', pRow3:'سلطة الضرائب',
+    pHintRow:'الملف الموحّد', pHintSub:'من البوابة على الويب: app.mtb3a.com',
+    pNoteNone:'لا مدخل في الهاتف: تنزيل ملف لسلطة الضرائب عمل مكتبي (D6).', pNoteHint:'سطر واحد يدلّ على البوابة؛ لا تنزيل في الهاتف.',
+    notesTitle:'ملاحظات',
+    notes:[
+      'البطاقة الجديدة تحت إعداد الفواتير الحالي، في ملفها الخاص (UniformFileExport) لأن MUT-660 يعمل قرب هذه الصفحة.',
+      'الافتراضي: السنة الماضية كاملة (السنة الضريبية). "تواريخ أخرى" تفتح الحقلين؛ "إلى" لا يتجاوز اليوم.',
+      'بعد التنزيل يظهر سطر بعدد المستندات والسجلات (من ترويسة في الردّ). الفشل رسالة خطأ عابرة كما في تنزيل PDF.',
+      'المحاسب الذي مُنح الوصول يرى البطاقة نفسها وينزّل الملف؛ لا شيء آخر يتغيّر له.',
+      'التواريخ بأسماء الأشهر الشامية وأرقام غربية؛ اسم الملف دائمًا من اليسار لليمين.'
+    ]
+  },
+  en: {
+    cLang:'Language', cState:'State', cViewer:'Viewer', cPhone:'Phone',
+    sReady:'Ready', sBusy:'Preparing', sDone:'Downloaded', sEmpty:'No documents', sInvalid:'Bad dates', sFailed:'Failed',
+    vOwner:'Owner', vAccountant:'Accountant', pNone:'Nothing (rec.)', pHint:'A line pointing to the portal',
+    fDesktop:'Web portal · You › Invoicing', fPhone:'Phone app · Invoicing settings',
+    navHome:'Home', navMoney:'Money', navClients:'Clients', navDocs:'Documents',
+    back:'‹ Profiles', title:'Invoicing · Barmajiyat', pageNote:'How your documents look and how they are numbered.',
+    letterhead:'The letterhead and setup steps (as today, unchanged)', newTag:'New',
+    cardTitle:'Uniform file (מבנה אחיד)',
+    cardLead:'For the Tax Authority and your auditor: every document you issued between two dates, in format 1.31.',
+    leadAccountant:'For the Tax Authority and an audit: every document this profile issued between two dates, in format 1.31.',
+    lastYear:'Last year', thisYear:'This year', otherDates:'Other dates', from:'From', to:'To',
+    go:'Download the file', busy:'Preparing…',
+    doneMain:(f)=>`Downloaded <span class="ltr">${f}</span>`, doneSub:(d,r)=>`${d} documents · ${r} records`,
+    emptyMain:'No documents in these dates.', emptySub:'The file is still valid: it holds only the opening and closing records.',
+    errOrder:'“To” comes before “From”.',
+    failed:'Couldn’t prepare the file.', retry:'Try again',
+    insideTitle:'What’s in the file?', insideIni:'the file’s summary and record counts', insideBkmv:'the documents, their lines and payments', insideReport:'a summary to print: count and total per document type',
+    phoneTitle:'Invoicing', pRow1:'Business details', pRow2:'Numbering', pRow3:'Tax Authority',
+    pHintRow:'Uniform file', pHintSub:'From the web portal: app.mtb3a.com',
+    pNoteNone:'No entry on the phone: downloading a file for the Tax Authority is a desk task (D6).', pNoteHint:'One line pointing to the portal; no download on the phone.',
+    notesTitle:'Notes',
+    notes:[
+      'The new card sits under today’s invoicing setup, in its own file (UniformFileExport), because MUT-660 is working near this page.',
+      'Default: all of last year (the tax year). “Other dates” opens the two fields; “To” can’t go past today.',
+      'After the download a line gives the document and record counts (from a response header). A failure is an error toast, as with a PDF download.',
+      'An accountant with access sees the same card and downloads the file; nothing else changes for them.',
+      'Dates use the Levantine month names and Western digits; the file name always reads left to right.'
+    ]
+  }
+};
+const S = { lang:'ar', state:'ready', viewer:'owner', phone:'none', preset:'lastYear' };
+const today = new Date('2026-11-22');
+const y = today.getFullYear();
+const presets = { lastYear:[`${y-1}-01-01`,`${y-1}-12-31`], thisYear:[`${y}-01-01`,'2026-11-22'] };
+const $ = (s) => document.querySelector(s);
+
+function render() {
+  const t = T[S.lang];
+  document.documentElement.lang = S.lang; document.documentElement.dir = S.lang === 'ar' ? 'rtl' : 'ltr';
+  document.querySelectorAll('[data-t]').forEach(el => { const v = t[el.dataset.t]; if (typeof v === 'string') el.textContent = v; });
+  document.querySelectorAll('.seg').forEach(seg => seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(S[seg.dataset.ctl] === b.dataset.v))));
+  $('.card .lead').textContent = S.viewer === 'accountant' ? t.leadAccountant : t.cardLead;
+  document.querySelectorAll('.chip').forEach(c => c.setAttribute('aria-pressed', String(c.dataset.preset === S.preset)));
+  const custom = S.preset === 'custom';
+  const [f, to] = S.state === 'invalid' ? ['2025-06-01','2025-03-31'] : (presets[S.preset] || [$('#from').value || `${y-1}-01-01`, $('#to').value || `${y-1}-12-31`]);
+  $('#from').value = f; $('#to').value = to; $('#from').disabled = !custom && S.state !== 'invalid'; $('#to').disabled = !custom && S.state !== 'invalid';
+  $('#to').max = '2026-11-22';
+  const invalid = S.state === 'invalid';
+  $('#to').setAttribute('aria-invalid', String(invalid)); $('#toErr').hidden = !invalid; $('#toErr').textContent = t.errOrder;
+  const go = $('#go'); const busy = S.state === 'busy';
+  go.disabled = busy || invalid; go.innerHTML = busy ? `<span class="spin" aria-hidden="true"></span>${t.busy}` : t.go;
+  const file = `OPENFRMT-515151515-${f}_${to}.zip`;
+  $('#status').innerHTML = S.state === 'done'
+    ? `<div class="status ok" role="status"><span aria-hidden="true">✓</span><div>${t.doneMain(file)}<small class="num">${t.doneSub('312','1,204')}</small></div></div>`
+    : S.state === 'empty'
+    ? `<div class="status info" role="status"><span aria-hidden="true">i</span><div>${t.emptyMain}<small>${t.emptySub}</small></div></div>` : '';
+  $('#toast').innerHTML = S.state === 'failed' ? `<div class="toast" role="alert">${t.failed}<button type="button" id="retry">${t.retry}</button></div>` : '';
+  const r = $('#retry'); if (r) r.onclick = () => { S.state = 'busy'; render(); };
+  $('#phoneList').innerHTML = [t.pRow1, t.pRow2, t.pRow3].map(x => `<div class="row">${x}<span>›</span></div>`).join('')
+    + (S.phone === 'hint' ? `<div class="row hint"><div>${t.pHintRow}<small class="ltr">${t.pHintSub}</small></div><span>↗</span></div>` : '');
+  $('#phoneNote').textContent = S.phone === 'hint' ? t.pNoteHint : t.pNoteNone;
+  $('#notes').innerHTML = t.notes.map(n => `<li>${n}</li>`).join('');
+}
+document.querySelectorAll('.seg').forEach(seg => seg.addEventListener('click', e => { const b = e.target.closest('button'); if (!b) return; S[seg.dataset.ctl] = b.dataset.v; render(); }));
+document.querySelectorAll('.chip').forEach(c => c.addEventListener('click', () => { S.preset = c.dataset.preset; if (S.state === 'invalid') S.state = 'ready'; render(); }));
+$('#go').addEventListener('click', () => { S.state = 'busy'; render(); setTimeout(() => { S.state = 'done'; render(); }, 1200); });
+render();
+</script>
+</body>
+</html>
