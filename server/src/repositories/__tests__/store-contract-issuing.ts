@@ -227,6 +227,20 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       expect((await store.issuing.list(w.b.id, {}, { limit: 10, cursor: null })).items).toEqual([]);
     });
 
+    it('MUT-569: reads the documents dated in a range, both ends inclusive, by type code then number, with their lines', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const first = await w.issued(store, w.issue({ documentDate: '2026-11-01' }), 1);
+      const second = await w.issued(store, w.issue({ documentDate: '2026-11-10' }), 2);
+      const receipt = await w.issued(store, w.issue({ docType: 'RECEIPT', customerId: null, documentDate: '2026-11-05' }), 3);
+      const third = await w.issued(store, w.issue({ documentDate: '2026-11-20' }), 4);
+      const found = await store.issuing.inRange(w.a.id, '2026-11-05', '2026-11-20');
+      expect(found.map((d) => d.id)).toEqual([second.id, third.id, receipt.id]);
+      expect(found[0]!.lines).toEqual(second.lines);
+      expect((await store.issuing.inRange(w.a.id, '2026-11-01', '2026-11-01')).map((d) => d.id)).toEqual([first.id]);
+      expect(await store.issuing.inRange(w.b.id, '2026-01-01', '2026-12-31')).toEqual([]);
+    });
+
     it('keeps issuer details with If-Match versions', async () => {
       const store = await makeStore();
       const w = await world(store);

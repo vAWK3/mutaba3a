@@ -198,7 +198,7 @@ import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
-import type { IssuedDocType } from '../issuing/types.js';
+import { DOC_TYPE_CODES, type IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -209,6 +209,8 @@ const TAX_CONNECTION_SELECT = { organizationId: true, environment: true, accessT
 const toExternal = (row: { entryKind: string } & Omit<ExternalInvoiceRecord, 'entryKind'>): ExternalInvoiceRecord => ({ ...row, entryKind: row.entryKind === 'RECEIVED' ? 'RECEIVED' : 'OWED' });
 
 /** MUT-646 */
+/** MUT-569: documents per lines query (Postgres takes at most 32,767 bind parameters). */
+const ISSUED_LINES_CHUNK = 5_000;
 const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
 const toLogo = (row: { id: string; organizationId: string; contentType: string; bytes: Uint8Array; sha256: string; createdAt: Date }): IssuerLogoRecord => ({
   ...row,
@@ -973,6 +975,22 @@ export class PrismaLedgerStore implements LedgerStore {
       // INSERT-only: the first original kept wins; a racing twin's insert conflicts and gets the winner's back.
       await this.prisma.issuedDocumentOriginal.createMany({ data: [{ documentId, organizationId, copyIndex: pdf.copyIndex, bytes: Buffer.from(pdf.bytes), sha256: pdf.sha256, createdAt: at }], skipDuplicates: true });
       return this.issuing.getOriginalPdf(organizationId, documentId);
+    },
+    inRange: async (organizationId, from, to) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: { organizationId, documentDate: { gte: from, lte: to } },
+        orderBy: [{ docType: 'asc' }, { number: 'asc' }],
+      });
+      // Lines in chunks: a whole history can pass Postgres's bind-parameter limit in one IN list.
+      const byDocument = new Map<string, IssuedLineRow[]>();
+      for (let i = 0; i < rows.length; i += ISSUED_LINES_CHUNK) {
+        const ids = rows.slice(i, i + ISSUED_LINES_CHUNK).map((r) => r.id);
+        const lines = await this.prisma.issuedDocumentLine.findMany({ where: { organizationId, documentId: { in: ids } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+        for (const line of lines) byDocument.set(line.documentId, [...(byDocument.get(line.documentId) ?? []), line]);
+      }
+      return rows
+        .map((row) => issuedRecord(row, byDocument.get(row.id) ?? []))
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number);
     },
     gaps: async (organizationId) => {
       const [counters, numbers] = await Promise.all([

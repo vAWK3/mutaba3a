@@ -387,6 +387,7 @@ export const STORE_ACCESS: StoreAccess = {
     issue: { write: 'issuing' },
     getById: { read: 'issuing' },
     list: { read: 'issuing' },
+    inRange: { read: 'issuing' },
     recordCopy: { write: 'issuing' },
     // MUT-641: the signed original, kept once.
     getOriginalPdf: { read: 'issuing' },

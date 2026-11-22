@@ -8,7 +8,7 @@ import { buildUniformFile, type UniformFileDocument, type UniformFileInput } fro
 const shekels = (n: number): bigint => BigInt(Math.round(n * 100));
 let seq = 0;
 
-function doc(docType: IssuedDocType, number: number, over: Partial<UniformFileDocument> & { lines?: ComposeLineInput[]; pricesIncludeVat?: boolean; discount?: bigint } = {}): UniformFileDocument {
+function doc(docType: IssuedDocType, number: number, over: Partial<Omit<UniformFileDocument, 'lines'>> & { lines?: ComposeLineInput[]; pricesIncludeVat?: boolean; discount?: bigint } = {}): UniformFileDocument {
   const composed = composeDocument({
     docType,
     currency: 'ILS',

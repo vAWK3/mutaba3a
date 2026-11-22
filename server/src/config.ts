@@ -98,6 +98,13 @@ const envSchema = z.object({
   /** The software's registration number (MUT-567); the sandbox accepts the spec's test value 987654321. */
   TAX_AUTHORITY_SOFTWARE_NUMBER: z.coerce.number().int().positive().optional(),
   TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
+  /**
+   * MUT-569 (ADR-269): the uniform file's software fields (A000 1006, 1009, 1010). The registration certificate number
+   * is zeros until MUT-567 issues it; the software house is Barmajiyat's Israeli company.
+   */
+  UNIFORM_FILE_REGISTRATION_NUMBER: z.string().regex(/^\d{8}$/, 'must be the 8-digit registration certificate number').default('00000000'),
+  SOFTWARE_HOUSE_VAT_ID: z.string().regex(/^\d{9}$/, 'must be a 9-digit company number').default('000000000'),
+  SOFTWARE_HOUSE_NAME: z.string().min(1).max(20).default('Barmajiyat'),
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */

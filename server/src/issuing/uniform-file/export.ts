@@ -53,6 +53,11 @@ export interface UniformFileSoftware {
   houseName: string;
 }
 
+/** What config supplies (the rest is the product's own name and the issuing core's version). */
+export type UniformFileHouse = Pick<UniformFileSoftware, 'registrationNumber' | 'houseVatId' | 'houseName'>;
+/** Until MUT-567: no registration number yet, and the house's company number unset (config fills both). */
+export const UNIFORM_FILE_HOUSE_PLACEHOLDER: UniformFileHouse = { registrationNumber: '00000000', houseVatId: '000000000', houseName: 'Barmajiyat' };
+
 export interface UniformFileInput {
   issuer: { vatId: string; legalName: string; address: string | null; city: string | null; dealerType: DealerType };
   /** The documents dated in the range, with their lines. */

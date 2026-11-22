@@ -230,6 +230,7 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
+import { DOC_TYPE_CODES } from '../issuing/types.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -1082,6 +1083,11 @@ export class MemoryLedgerStore implements LedgerStore {
       this.issuedOriginals.set(documentId, kept);
       return { ...kept, bytes: new Uint8Array(kept.bytes) };
     },
+    inRange: async (organizationId, from, to) =>
+      [...this.issuedDocMap.values()]
+        .filter((d) => d.organizationId === organizationId && d.documentDate >= from && d.documentDate <= to)
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number)
+        .map(cloneIssued),
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
       return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
