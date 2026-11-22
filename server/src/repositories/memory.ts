@@ -254,8 +254,11 @@ import { numberGaps } from '../issuing/gaps.js';
  * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  * 19 (MUT-596): `people` gained `passwordChosen`.
+ * 20 (MUT-535): `people` gained `monthlySummaryMail`.
+ * 21 (MUT-642): `custs` gained `taxId` and `address`.
+ * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 21;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 22;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
