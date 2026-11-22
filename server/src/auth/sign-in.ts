@@ -7,6 +7,7 @@ import type { AppEnv } from './middleware.js';
 import { generateDeviceSessionToken, generateSessionToken, sessionDigest, SIGN_IN_POLICY, type SessionKind, type SignInThrottle } from './sessions.js';
 import { SIGN_IN_CODE_POLICY, signInCodeDigest } from './sign-in-code.js';
 import { generateOneTimePassword, normalizeEmail, type PasswordHasher } from './users.js';
+import { authEmailKey } from '../observability/auth-log.js';
 import { verifyAssertion, type WebauthnConfig } from './webauthn.js';
 import { challengeExpired, twoFactorRequired, type PresentedSecondStep, type SecondStepUsed, type TwoFactorFlow } from './two-factor-flow.js';
 import type { AuthenticationResponseJSON } from '@simplewebauthn/server';
@@ -249,6 +250,10 @@ export interface SignInAudit {
 export async function recordSignInFailure(c: Context<AppEnv>, deps: SignInDeps, key: string, user: UserRecord | null, audit: SignInAudit): Promise<void> {
   const now = c.get('now')();
   const lockUntil = deps.throttle.recordFailure(key, now);
+  // MUT-710 (D12): every failure goes to the authentication log; an address with no account only as its keyed digest.
+  const logged = { method: audit.method, sessionKind: audit.sessionKind, emailKey: authEmailKey(deps.pepper, key) };
+  deps.twoFactor.log(c, 'sign_in.failed', user?.id ?? null, logged);
+  if (lockUntil) deps.twoFactor.log(c, 'sign_in.locked_out', user?.id ?? null, logged);
   if (!user) return;
   await deps.store.users.recordFailedSignIn(user.id, now, lockUntil);
   if (lockUntil) await auditToMembers(c, deps.store, user, 'user.locked_out', audit);
@@ -331,6 +336,7 @@ async function issueSession(c: Context<AppEnv>, deps: SignInDeps, user: UserReco
   }
   const signedIn = (await store.users.recordSignIn(user.id, now)) ?? user;
   await auditToMembers(c, store, signedIn, 'user.signed_in', audit);
+  deps.twoFactor.log(c, 'sign_in.succeeded', user.id, { method: audit.method, sessionKind: audit.sessionKind, ...(audit.twoFactor ? { outcome: `two_factor:${audit.twoFactor}` } : {}) });
   return { user: signedIn, token, session };
 }
 

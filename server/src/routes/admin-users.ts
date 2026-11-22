@@ -8,6 +8,9 @@ import { termsAccepted, type CurrentTerms } from '../legal.js';
 import { MAX_PROFILE_OWNERS } from '../co-owners.js';
 import { personalProfileFor, profileOwnerOf } from '../personal-profile.js';
 import type { Logger } from '../logger.js';
+import type { Mailer } from '../email/ports.js';
+import { authLog } from '../observability/auth-log.js';
+import { setupLinkOrigin } from '../auth/account-setup.js';
 import type { ErrorReporter } from '../observability/reporter.js';
 import { TOKEN_ACTOR, type ActionContext } from '../operator/actor.js';
 import { accountActions, accountAudit, mintSetupLink, setupLinkAuditMetadata, type AccountAuditAction } from '../operator/actions/accounts.js';
@@ -58,6 +61,8 @@ export interface AdminUserOptions {
   reporter?: ErrorReporter;
   /** MUT-441 (R5): told after a feature is granted (receipt_reading queues the person's unread receipts). */
   onGranted?: FeatureActionOptions['onGranted'];
+  /** MUT-710 (D9): mails the "two-step sign-in was reset" notice. Absent = no notice. */
+  mailer?: Mailer;
 }
 
 const adminErrors = {
@@ -543,6 +548,45 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
     }),
     async (c) => {
       return c.json(await accounts.revokeSessions(c.req.valid('param').userId, ctxOf(c)), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'delete',
+      path: '/admin/v1/users/{userId}/two-factor',
+      tags: ['Admin'],
+      summary: 'Reset a person\'s two-step sign-in after checking who they are (MUT-710 D9)',
+      description:
+        'For a person who lost their authenticator and recovery codes. Turns two-step sign-in off, signs them out everywhere, audits it on each of their profiles (ADMIN) and mails them a notice. A suspected takeover is `rotate --lock` plus this (the attacker may have enrolled their own factor).',
+      security: [{ adminToken: [] }],
+      request: { params: UserIdParam },
+      responses: {
+        200: { description: 'Reset', content: { 'application/json': { schema: z.object({ reset: z.literal(true), revoked: z.number().int().min(0) }).openapi('TwoFactorResetResponse') } } },
+        404: notFound,
+        409: { description: 'CONFLICT reason TWO_FACTOR_OFF', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...adminErrors,
+      },
+    }),
+    async (c) => {
+      const { userId } = c.req.valid('param');
+      const user = await store.users.getById(userId);
+      if (!user) throw new ApiError('NOT_FOUND', 'Unknown user');
+      const state = await store.twoFactor.get(userId);
+      const rows: AuditEventInput[] = (await store.memberships.listByUser(userId)).map((m) => ({
+        organizationId: m.organizationId, actorType: 'ADMIN', actorId: null, action: 'user.two_factor_reset_by_operator', entityType: 'user', entityId: userId, requestId: c.get('requestId'), metadata: { method: state?.method ?? null },
+      }));
+      if (!state || !(await store.twoFactor.disable(userId, c.get('now')(), rows))) throw new ApiError('CONFLICT', 'Two-step sign-in is off for this person', { reason: 'TWO_FACTOR_OFF' });
+      const { revoked } = await accounts.revokeSessions(userId, ctxOf(c));
+      authLog(logger, { kind: 'two_factor.reset_by_operator', userId, method: state.method, requestId: c.get('requestId') });
+      if (options.mailer) {
+        try {
+          await options.mailer.send({ to: user.email, template: 'two-factor-changed', locale: user.locale, vars: { change: 'reset', method: state.method, signInLink: `${setupLinkOrigin(sessions.portalOrigin, c.req.url).replace(/\/+$/, '')}/` }, idempotencyKey: `two-factor-reset:${userId}:${c.get('requestId')}` });
+        } catch (err) {
+          logger.error({ err, userId }, 'two-step reset notice failed');
+        }
+      }
+      return c.json({ reset: true as const, revoked }, 200);
     },
   );
 

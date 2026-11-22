@@ -206,6 +206,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     const at = c.get('now')();
     const redeemed = await store.accountSetup.redeem({ tokenDigest, passwordHash, at, audit, terms: acceptance, termsAudit });
     if (!redeemed) throw unusable(await stateAfterLosing(body.token, at));
+    twoFactor.log(c, 'password.reset', person.id, { outcome: link.purpose });
     // The database lockout is cleared by the redeem; the in-process sign-in throttle is cleared here, so the sign-in that follows works.
     throttle.clear(normalizeEmail(redeemed.email));
     // MUT-359 (A5): after the commit, and never able to change this answer. "Set" when the person had no password.

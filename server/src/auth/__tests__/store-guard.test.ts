@@ -216,6 +216,8 @@ describe('STORE_ACCESS', () => {
       'signupReviews.findByUser',
       'signupReviews.list',
       'signupReviews.markNotified',
+      // MUT-710: expired two-step challenges, pruned by the server's timer.
+      'twoFactor.pruneChallenges',
       'users.create',
       // MUT-527: the operator console's account list.
       'users.listForOperator',

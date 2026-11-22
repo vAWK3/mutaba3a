@@ -106,7 +106,7 @@ export async function buildMe(
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount] = await Promise.all([
+  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount, twoFactor] = await Promise.all([
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
@@ -116,6 +116,8 @@ export async function buildMe(
     accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
     // MUT-596: only when it decides ownSignIn (a password the person never chose).
     user.passwordChosen ? 0 : store.passkeys.listByUser(user.id).then((keys) => keys.length),
+    // MUT-710 (D8): three small reads by the person's id.
+    twoFactorStateOf(store, user.id),
   ]);
   return {
     user: {
@@ -137,6 +139,7 @@ export async function buildMe(
       features,
       // MUT-459: only an operator's /v1/me names it; the console's link and pages hang off this.
       ...(user.operatorAt ? { operator: true as const } : {}),
+      twoFactor,
     },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles },
@@ -161,4 +164,10 @@ function delegatedMe(me: Awaited<ReturnType<typeof buildMe>>, via: DelegatedVia)
 async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
   const latest = await store.users.latestTermsAcceptance(userId);
   return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
+}
+
+/** MUT-710 (ADR-275 D8): Me's and GET /v1/me/two-factor's view of the person's two-step sign-in. */
+export async function twoFactorStateOf(store: LedgerStore, userId: string): Promise<{ enabled: boolean; method: 'totp' | 'email' | null; recoveryCodesLeft: number; requiredForIssuing: boolean }> {
+  const [state, recoveryCodesLeft, requiredForIssuing] = await Promise.all([store.twoFactor.get(userId), store.twoFactor.recoveryCodesLeft(userId), store.twoFactor.ownsIssuingProfile(userId)]);
+  return { enabled: state !== null, method: state?.method ?? null, recoveryCodesLeft: state ? recoveryCodesLeft : 0, requiredForIssuing };
 }

@@ -4,6 +4,7 @@ import type { IssuedDocType } from '../../issuing/types.js';
 import type { AllocationOutcome, LedgerStore, TaxAuthorityConnectionRecord } from '../../repositories/ports.js';
 import { aboveAllocationThreshold, ALLOCATION_NUMBER_DIGITS } from '../allocation-number.js';
 import type { ApprovalItem, ApprovalRequest, TaxAuthorityClient, TaxAuthorityTokens } from './client.js';
+import { authLog, type AuthLogSink } from '../../observability/auth-log.js';
 import type { TokenBox } from './token-box.js';
 
 /**
@@ -27,6 +28,13 @@ export interface TaxAuthorityDeps {
   stateSecret: string;
   /** The registration number of the software (the sandbox's test one until MUT-567). */
   accountingSoftwareNumber: number;
+  /** MUT-710 (ADR-275 D12): token issue, refresh and disconnects go to the 12-month authentication log. Absent = nowhere. */
+  authLog?: AuthLogSink;
+}
+
+/** MUT-710 (D12): one auth_event line for a Tax Authority event (never a token). */
+export function logTaxAuthority(deps: Pick<TaxAuthorityDeps, 'authLog'>, kind: 'tax_authority.connected' | 'tax_authority.connect_failed' | 'tax_authority.disconnected' | 'tax_authority.token_refreshed' | 'tax_authority.token_refresh_failed', entry: { userId: string | null; organizationId: string; outcome?: string; requestId?: string | null }): void {
+  if (deps.authLog) authLog(deps.authLog, { kind, ...entry });
 }
 
 export function signState(secret: string, payload: { profileId: string; userId: string; expiresAt: number }): string {
@@ -97,8 +105,10 @@ export async function accessTokenFor(deps: TaxAuthorityDeps, organizationId: str
     try {
       const tokens = await deps.client.refresh(refreshToken);
       const update = connectionFrom(deps, tokens, current, now);
+      logTaxAuthority(deps, 'tax_authority.token_refreshed', { userId: null, organizationId });
       return { update, result: tokens.accessToken };
-    } catch {
+    } catch (err) {
+      logTaxAuthority(deps, 'tax_authority.token_refresh_failed', { userId: null, organizationId, outcome: err instanceof Error ? err.name : 'error' });
       return { update: null, result: null };
     }
   });

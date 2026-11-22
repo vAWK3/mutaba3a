@@ -4,7 +4,7 @@ import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
 import { TaxAuthorityError, type DecisionChoice } from '../israel/tax-authority/client.js';
-import { accessTokenFor, allocationInvoiceId, connectionFrom, newState, readState, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
+import { accessTokenFor, allocationInvoiceId, connectionFrom, logTaxAuthority, newState, readState, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
 import type { JsonObject, Organization } from '../repositories/ports.js';
 import { AllocationDecisionRequestSchema, TaxAuthorityConnectSchema, TaxAuthorityStatusSchema } from '../schemas.js';
 import { PERSON_OR_MALAFAT } from './security.js';
@@ -97,10 +97,12 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
           const tokens = await ta.client.exchangeCode(code);
           await ta.store.issuing.putTaxConnection(connectionFrom(ta, tokens, { organizationId: claim.profileId, connectedByUserId: claim.userId, connectedAt: now, refreshExpiresAt: null }, now));
           await ta.store.audit.append({ organizationId: claim.profileId, actorType: 'USER', actorId: claim.userId, action: 'tax_authority.connected', entityType: 'issuer_details', entityId: claim.profileId, requestId: c.get('requestId') });
+          logTaxAuthority(ta, 'tax_authority.connected', { userId: claim.userId, organizationId: claim.profileId, requestId: c.get('requestId') });
           outcome = 'connected';
         } catch (err) {
           // The reason is kept (never the code or a token); the browser just hears it failed.
           if (claim) {
+            logTaxAuthority(ta, 'tax_authority.connect_failed', { userId: claim.userId, organizationId: claim.profileId, outcome: String(err instanceof TaxAuthorityError ? err.status : 'error'), requestId: c.get('requestId') });
             await ta.store.audit.append({ organizationId: claim.profileId, actorType: 'USER', actorId: claim.userId, action: 'tax_authority.connect_failed', entityType: 'issuer_details', entityId: claim.profileId, metadata: { status: err instanceof TaxAuthorityError ? err.status : null }, requestId: c.get('requestId') });
           }
         }
@@ -122,9 +124,12 @@ export function registerTaxAuthorityRoutes(app: OpenAPIHono<AppEnv>, deps: TaxAu
       responses: { 204: { description: 'Disconnected' }, ...notFoundResponse, ...errorResponses },
     }),
     async (c) => {
-      configured();
+      const ta = configured();
       const organization = await deps.issuingProfile(c, true);
-      if (await deps.store.issuing.deleteTaxConnection(organization.id)) await deps.audit(c, 'tax_authority.disconnected', 'issuer_details', organization.id);
+      if (await deps.store.issuing.deleteTaxConnection(organization.id)) {
+        await deps.audit(c, 'tax_authority.disconnected', 'issuer_details', organization.id);
+        logTaxAuthority(ta, 'tax_authority.disconnected', { userId: c.get('identity')?.user.id ?? null, organizationId: organization.id, requestId: c.get('requestId') });
+      }
       return c.body(null, 204);
     },
   );

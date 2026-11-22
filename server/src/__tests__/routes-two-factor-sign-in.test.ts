@@ -34,7 +34,8 @@ function harness() {
   const clock = { now: START };
   const now = () => clock.now;
   const store = new MemoryLedgerStore();
-  const logger = pino({ level: 'silent' });
+  const lines: Loose[] = [];
+  const logger = pino({ level: 'info' }, { write: (line: string) => void lines.push(JSON.parse(line)) });
   const outbox = new MemoryMailTransport(now);
   const mailer = createMailer({ transport: outbox, store, logger, now, fromAddress: 'no-reply@mail.example.test', replyTo: 'help@example.test', limits: { daily: 500, securityReserve: 50, perRecipient: 50 } });
   const app = createApp({
@@ -54,7 +55,7 @@ function harness() {
   const advance = (seconds: number) => {
     clock.now = new Date(clock.now.getTime() + seconds * 1000);
   };
-  return { app, store, outbox, advance, now };
+  return { app, store, outbox, advance, now, authEvents: () => lines.filter((l) => l.event === 'auth_event') };
 }
 type Harness = ReturnType<typeof harness>;
 
@@ -367,5 +368,24 @@ describe('every person setup link asks for the second step (MUT-710 D11, review 
     const started = await read(await h.app.request('/v1/account-setup/two-factor', json({ token }, SAME_ORIGIN)));
     expect(started.method).toBe('email');
     expect((await redeem(h, token, { challengeToken: started.challengeToken, code: lastCode(h, p.email) })).status).toBe(200);
+  });
+});
+
+describe('the authentication log (MUT-710 AC6, AC7, D12)', () => {
+  it('writes sign-in failures, the challenge, the second step and the success, with no code, token or address', async () => {
+    const h = harness();
+    const p = await provision(h);
+    await passwordPortal(h, p, 'wrong-password-123');
+    await h.app.request('/v1/sessions', json({ email: 'nobody@studio.example', password: 'whatever-123456' }, SAME_ORIGIN));
+    const { challengeToken } = await challengeOf(await passwordPortal(h, p));
+    const code = totpNow(h, p);
+    await finishPortal(h, { challengeToken, code });
+    const events = h.authEvents();
+    expect(events.map((e) => e.kind)).toEqual(expect.arrayContaining(['sign_in.failed', 'two_factor.challenged', 'two_factor.verified', 'sign_in.succeeded']));
+    const unknown = events.find((e) => e.kind === 'sign_in.failed' && e.userId === null);
+    expect(unknown.emailKey).toMatch(/^[0-9a-f]{16}$/);
+    const text = JSON.stringify(events);
+    for (const secret of [code, challengeToken, 'nobody@studio.example', p.email, SETUP_TEST_PASSWORD]) expect(text).not.toContain(secret);
+    expect(events.find((e) => e.kind === 'sign_in.succeeded')).toMatchObject({ userId: p.id, method: 'password', sessionKind: 'cookie', outcome: 'two_factor:totp' });
   });
 });

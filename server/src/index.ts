@@ -174,6 +174,8 @@ const taxAuthority = config.TAX_AUTHORITY_ENV
         timeoutMs: config.TAX_AUTHORITY_TIMEOUT_MS,
       }),
       box: new TokenBox(config.TAX_AUTHORITY_TOKEN_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
+      // MUT-710 (D12): token issue, refresh and disconnects into the 12-month authentication log.
+      authLog: logger,
       stateSecret: sessionDigest(config.SESSION_TOKEN_PEPPER, 'mut-571-tax-authority-state-v1'),
       // The spec's test registration number until MUT-567 gives the real one.
       accountingSoftwareNumber: config.TAX_AUTHORITY_SOFTWARE_NUMBER ?? 987654321,

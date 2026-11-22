@@ -1288,6 +1288,17 @@ export const AccountantClientWithStatsSchema = AccountantClientSchema.extend({
 
 export const AccountantClientListSchema = z.object({ items: z.array(AccountantClientWithStatsSchema) }).openapi('AccountantClientList');
 
+/** MUT-710 (D8): the person's two-step sign-in, in Me and GET /v1/me/two-factor. */
+export const TwoFactorStateSchema = z
+  .object({
+    enabled: z.boolean(),
+    method: z.enum(['totp', 'email']).nullable(),
+    recoveryCodesLeft: z.number().int(),
+    /** True while the person owns a profile that issues documents or is connected to the Tax Authority: it can't be turned off. */
+    requiredForIssuing: z.boolean(),
+  })
+  .openapi('TwoFactorState');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -1320,6 +1331,8 @@ export const MeSchema = z
        * so no one else's /v1/me hints at it. Additive since 1.79.0-mut459.
        */
       operator: z.literal(true).optional(),
+      /** MUT-710 (ADR-275 D8): two-step sign-in. Additive since 1.130.0-mut710. */
+      twoFactor: TwoFactorStateSchema,
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -1720,6 +1733,42 @@ export const TwoFactorFinishRequestSchema = z
 /** MUT-710 (D5): POST /v1/two-factor/email-code. */
 export const TwoFactorEmailCodeRequestSchema = z.object({ challengeToken: TwoFactorChallengeTokenSchema }).openapi('TwoFactorEmailCodeRequest');
 export const TwoFactorEmailCodeResponseSchema = z.object({ expiresAt: z.string().datetime() }).openapi('TwoFactorEmailCodeResponse');
+
+/** MUT-710 (D8): the current second step, for changing a person's two-step sign-in while it is on. */
+const ManageProof = {
+  currentPassword: z.string().max(1024).optional().openapi({ description: 'Required when the person has a password of their own (Me ownPassword)' }),
+  challengeToken: TwoFactorChallengeTokenSchema.optional().openapi({ description: 'From POST /v1/me/two-factor/challenge; required while two-step sign-in is on' }),
+  code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+  recoveryCode: z.string().min(8).max(20).optional(),
+};
+export const TwoFactorManageRequestSchema = z.object(ManageProof).openapi('TwoFactorManageRequest');
+
+export const TwoFactorEnrolmentRequestSchema = z.object({ method: z.enum(['totp', 'email']), ...ManageProof }).openapi('TwoFactorEnrolmentRequest');
+
+export const TwoFactorEnrolmentSchema = z
+  .object({
+    enrolmentToken: z.string(),
+    method: z.enum(['totp', 'email']),
+    expiresAt: z.string().datetime(),
+    /** totp: the base32 secret to type, the otpauth:// address, and its QR code (SVG, drawn on the server). */
+    secret: z.string().optional(),
+    otpauthUri: z.string().optional(),
+    qrSvg: z.string().optional(),
+    /** email, or totp for a person without their own password: a code was mailed here, to send as `code` / `emailCode`. */
+    emailHint: z.string().optional(),
+    emailCodeRequired: z.boolean(),
+  })
+  .openapi('TwoFactorEnrolment');
+
+export const TwoFactorConfirmRequestSchema = z
+  .object({
+    enrolmentToken: TwoFactorChallengeTokenSchema,
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/),
+    emailCode: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+  })
+  .openapi('TwoFactorConfirmRequest');
+
+export const TwoFactorRecoveryCodesSchema = z.object({ recoveryCodes: z.array(z.string()) }).openapi('TwoFactorRecoveryCodes');
 
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');

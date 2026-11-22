@@ -60,11 +60,15 @@ export interface PresentedSecondStep {
   challengeToken: string;
   code?: string | undefined;
   recoveryCode?: string | undefined;
+  /** D8: an app enrolment by a person without their own password also proves the mailbox with an emailed code. */
+  emailCode?: string | undefined;
 }
 
 export interface VerifiedSecondStep {
   challenge: TwoFactorChallengeRecord;
   used: SecondStepUsed;
+  /** An enrolment's TOTP step, stored as lastUsedStep when it turns on. */
+  step?: number;
   /** After a recovery code: how many are left. */
   recoveryCodesLeft?: number;
 }
@@ -117,11 +121,31 @@ export class TwoFactorFlow {
     };
   }
 
+  /**
+   * D8: an enrolment challenge. The email method mails its test code; the app method carries the new secret sealed and,
+   * when `mailProof` (no password of the person's own to prove), mails a code as well.
+   */
+  async enrolment(c: Context<AppEnv>, store: LedgerStore, user: UserRecord, method: TwoFactorRecord['method'], pendingSecret: string | null, mailProof: boolean): Promise<{ token: string; challenge: TwoFactorChallengeRecord }> {
+    const now = c.get('now')();
+    const token = generateChallengeToken();
+    const challenge = await store.twoFactor.createChallenge({
+      userId: user.id,
+      tokenDigest: challengeTokenDigest(this.options.pepper, token),
+      purpose: 'enrol',
+      method,
+      ...(pendingSecret ? { pendingSecretSealed: this.options.keys.sealSecret(pendingSecret) } : {}),
+      at: now,
+      expiresAt: new Date(now.getTime() + TWO_FACTOR_POLICY.challengeMinutes * 60_000),
+    });
+    if (method === 'email' || mailProof) await this.mailCode(c, store, user, challenge);
+    return { token, challenge };
+  }
+
   /** D5: POST /v1/two-factor/email-code. A fresh code for a live email challenge, within the resend limits. */
   async resend(c: Context<AppEnv>, store: LedgerStore, challengeToken: string): Promise<{ expiresAt: string }> {
     const now = c.get('now')();
     const challenge = await store.twoFactor.findChallenge(challengeTokenDigest(this.options.pepper, challengeToken), now);
-    if (!challenge || challenge.method !== 'email') throw challengeExpired();
+    if (!challenge || (challenge.method !== 'email' && !(challenge.purpose === 'enrol' && challenge.codeDigest))) throw challengeExpired();
     const user = await store.users.getById(challenge.userId);
     if (!user) throw challengeExpired();
     await this.mailCode(c, store, user, challenge);
@@ -146,8 +170,10 @@ export class TwoFactorFlow {
 
     const reserved = await store.twoFactor.reserveTry(userId, now, LOCK_POLICY);
     if (!reserved.allowed) {
-      if (!reserved.lockedUntil) throw challengeExpired(); // turned off meanwhile
-      throw this.locked(c, reserved.lockedUntil, now);
+      if (reserved.lockedUntil) throw this.locked(c, reserved.lockedUntil, now);
+      // Off: only a first enrolment has nothing to count on the person (its challenge still caps the tries);
+      // any other challenge means it was turned off meanwhile.
+      if (challenge.purpose !== 'enrol') throw challengeExpired();
     }
     const spent = await store.twoFactor.spendAttempt(challenge.id, now, TWO_FACTOR_POLICY.maxAttempts);
     if (!spent.spent) throw new ApiError('TWO_FACTOR_TOO_MANY_TRIES', 'Too many wrong codes; start signing in again');
@@ -183,7 +209,10 @@ export class TwoFactorFlow {
     const totp = verifyTotp(secret, code, now, challenge.purpose === 'enrol' ? null : state?.lastUsedStep ?? null);
     if (!totp.ok) return null;
     // An enrolment's step is stored when it turns on (enable's lastUsedStep); a sign-in's is claimed now, once.
-    if (challenge.purpose === 'enrol') return { used: 'totp' };
+    if (challenge.purpose === 'enrol') {
+      if (challenge.codeDigest && !this.emailCodeMatches(challenge, (presented.emailCode ?? '').replace(/\s/g, ''))) return null;
+      return { used: 'totp', step: totp.step };
+    }
     return (await store.twoFactor.recordStep(challenge.userId, totp.step, now)) ? { used: 'totp' } : null;
   }
 
@@ -255,7 +284,7 @@ export class TwoFactorFlow {
   }
 
   /** D12: one auth_event line, with the request's address and agent. */
-  log(c: Context<AppEnv>, kind: AuthEventKind, userId: string | null, fields: { method?: string; sessionKind?: SessionKind; outcome?: string } = {}): void {
+  log(c: Context<AppEnv>, kind: AuthEventKind, userId: string | null, fields: { method?: string; sessionKind?: SessionKind; outcome?: string; emailKey?: string } = {}): void {
     authLog(this.options.logger, {
       kind,
       userId,

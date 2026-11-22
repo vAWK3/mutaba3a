@@ -417,6 +417,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       }
       // MUT-359 (A5): after the commit, and never able to change this answer.
       await sendPasswordNotice(mailer, logger, user, { first: false, signInLink: signInLinkOf(settings, c.req.url), requestId: c.get('requestId') });
+      options.twoFactor.log(c, 'password.changed', user.id, { sessionKind: session.kind });
       if (!rotated) return c.body(null, 204);
       if (session.kind === 'device') return c.json({ token: rotated }, 200);
       // D4: the cookie lives as long as the session can, never past the deadline sign-in set.

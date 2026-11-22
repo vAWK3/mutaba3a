@@ -68,7 +68,7 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
 import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
-import { twoFactorRoutes } from './routes/two-factor.js';
+import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, twoFactorRoutes } from './routes/two-factor.js';
 import { TwoFactorFlow } from './auth/two-factor-flow.js';
 import { TwoFactorKeys } from './auth/two-factor.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
@@ -315,7 +315,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -397,7 +397,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.125.0-mut647';
+export const API_VERSION = '1.130.0-mut710';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -569,7 +569,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       twoFactor,
     }),
   );
-  app.route('/', twoFactorRoutes({ store, settings: sessions, ipLimiter: signInIpLimiter, twoFactor }));
+  app.route('/', twoFactorRoutes({ store, settings: sessions, ipLimiter: signInIpLimiter, twoFactor, passwordHasher, throttle: signInThrottle, mailer, logger: deps.logger }));
   // MUT-115: a person's passkeys, and the public sign-in challenge (the sign-in IP limiter, under its own key).
   app.route(
     '/',
@@ -731,7 +731,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer, ...(onGranted ? { onGranted } : {}) }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
