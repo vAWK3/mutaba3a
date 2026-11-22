@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { approvalBody, HttpTaxAuthorityClient, TaxAuthorityError, type ApprovalRequest } from '../client.js';
+import { approvalBody, HELD_ERROR_CODES, HttpTaxAuthorityClient, TaxAuthorityError, type ApprovalRequest } from '../client.js';
 
 /** MUT-571/572: the wire shapes the guide, the NodeJsExample and the specs give, against a stubbed fetch. */
 function client(answer: (url: string, init: RequestInit) => Response) {
@@ -77,5 +77,11 @@ describe('HttpTaxAuthorityClient', () => {
 describe('the Approval body (sandbox error 446)', () => {
   it("names who issues it, cut to the service's 25 characters", () => {
     expect(approvalBody(REQUEST).user_name).toBe('Basel Sader, Barmajiyat S');
+  });
+});
+
+describe('a held number (sandbox dealer 777777723)', () => {
+  it('reads error 460 as held, not refused', () => {
+    expect(HELD_ERROR_CODES.has(460)).toBe(true);
   });
 });
