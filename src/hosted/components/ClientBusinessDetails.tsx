@@ -5,7 +5,8 @@ import { useLanguage } from '../../lib/i18n/core';
 import { ApiError, apiErrorReason, type BusinessLookup, type Customer } from '../api/client';
 import { completeNumber, useBusinessLookup, useUpdateCustomer } from '../data/customerQueries';
 import { useIsLocalMode } from '../session/mode';
-import { useIssuer } from '../data/issuingQueries';
+import { useInvoicingWorthAsking, useIssuer } from '../data/issuingQueries';
+import { useOptionalProfile } from '../session/me';
 import { DocumentsPreferenceField } from './DocumentsPreferenceField';
 
 /**
@@ -19,8 +20,7 @@ import { DocumentsPreferenceField } from './DocumentsPreferenceField';
 export function ClientBusinessDetails({ profileId, client, writable }: { profileId: string; client: Customer; writable: boolean }) {
   const { t } = useLanguage();
   const [editing, setEditing] = useState(false);
-  const local = useIsLocalMode();
-  const issuer = useIssuer(profileId, !local);
+  const issuer = useIssuer(profileId, useInvoicingWorthAsking(useOptionalProfile()));
 
   return (
     <section className="hp-card hp-business" aria-label={t('hosted.client.business.title')}>
