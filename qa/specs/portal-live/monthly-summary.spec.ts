@@ -66,7 +66,8 @@ test('The monthly summary - last month per currency, the same Owed as the overvi
     const link = mail.text.match(/https?:\/\/\S+\/p\/[0-9a-f-]{36}\?view=in-out/)?.[0];
     expect(link).toBeTruthy();
     await page.goto(link!);
-    await expect(page).toHaveURL(/\?view=in-out$/);
+    // The trial's welcome step adds its own keys after view=in-out
+    await expect(page).toHaveURL(/\?view=in-out(&|$)/);
     await page.goto(link!.replace('?view=in-out', '/owed'));
     const owed = page.locator('.hp-stat').filter({ hasText: 'Owed' }).first();
     await expect(owed).toContainText('3,200', { timeout: 30_000 });
