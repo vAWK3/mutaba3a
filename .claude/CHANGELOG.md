@@ -28,7 +28,7 @@
 
 ---
 
-## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.128.0-mut662)
+## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.129.0-mut662)
 
 ### Added
 - Issued document type PAYMENT_REQUEST (חשבון עסקה, code 300): own series, shows VAT so the invoice-receipts that follow match, never allocated and never in VAT or tax totals. From an Owed it is linked (posts nothing); with no entry it posts an ordinary ADJUSTMENT Owed.
