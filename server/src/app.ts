@@ -93,6 +93,7 @@ import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
+import { renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
 import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, UsedTickets, type DownloadLimits } from './period-pack/index.js';
@@ -599,6 +600,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     billing: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
+    // MUT-640: hosted only; the signed-out portal's local app passes none.
+    issuedPdf: renderIssuedDocumentPdf,
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.

@@ -8,7 +8,6 @@ import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { copyLabel } from '../issuing/copies.js';
-import { renderIssuedDocumentPdf } from '../issuing/pdf/render.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
 import { ISSUED_DOC_TYPES } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
@@ -50,7 +49,14 @@ type IssueRequest = z.infer<typeof IssueDocumentRequestSchema>;
  * profile gets the switched-off 404. Writes need the profile's owner (creator or co-owner); an accountant reads under
  * their grant. Issued documents are never changed or removed: a credit note corrects a tax invoice.
  */
-export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
+/**
+ * MUT-640: the PDF renderer, handed in by the hosted server (issuing/pdf/render.ts). The portal's signed-out mode runs
+ * these routes in the browser, where Node's fonts and files don't exist: it passes none, and the PDF routes aren't
+ * registered there (it has no issuing either). Typed here so the browser bundle never imports the renderer.
+ */
+export type IssuedPdfRenderer = (doc: IssuedDocumentRecord, options: { mark: 'ORIGINAL' | 'COPY' | 'DRAFT'; originalNumber: number | null; logo: null }) => Promise<Uint8Array>;
+
+export function issuingRoutes(store: LedgerStore, renderIssuedDocumentPdf: IssuedPdfRenderer | null = null): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   /** The selected profile, if issuing is on for it. The feature is the owner's, so co-owners and accountants see the same. */
@@ -353,126 +359,130 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
-  // ---- MUT-640: the PDF. Copies are produced only through POST …/pdf, so the original is always printed (review fix 7).
+  function registerPdfRoutes(renderIssuedDocumentPdf: IssuedPdfRenderer) {
+    // ---- MUT-640: the PDF. Copies are produced only through POST …/pdf, so the original is always printed (review fix 7).
 
-  const pdfResponse = { description: 'The PDF', content: { 'application/pdf': { schema: z.string().openapi({ format: 'binary' }) } } };
+    const pdfResponse = { description: 'The PDF', content: { 'application/pdf': { schema: z.string().openapi({ format: 'binary' }) } } };
 
-  /** The number of the tax invoice a credit note credits or a receipt pays (printed on it). */
-  async function originalNumberOf(organizationId: string, doc: IssuedDocumentRecord): Promise<number | null> {
-    if (!doc.originalId) return null;
-    return (await store.issuing.getById(organizationId, doc.originalId))?.number ?? null;
+    /** The number of the tax invoice a credit note credits or a receipt pays (printed on it). */
+    async function originalNumberOf(organizationId: string, doc: IssuedDocumentRecord): Promise<number | null> {
+      if (!doc.originalId) return null;
+      return (await store.issuing.getById(organizationId, doc.originalId))?.number ?? null;
+    }
+
+    function pdf(c: Context<AppEnv>, bytes: Uint8Array, filename: string) {
+      return c.body(new Uint8Array(bytes), 200, { 'content-type': 'application/pdf', 'content-disposition': `inline; filename="${filename}"`, 'cache-control': 'no-store' });
+    }
+
+    // Registered before /{documentId}/pdf, so "preview" is never read as a document id.
+    app.openapi(
+      createRoute({
+        method: 'post',
+        path: '/v1/issued-documents/preview/pdf',
+        tags: ['Issuing'],
+        summary: 'The PDF a document would be, marked as a draft',
+        description: 'D7: stateless, like the preview. Watermarked "draft" in the document\'s language; shows the number the next document of its type would take.',
+        security: PERSON_OR_MALAFAT,
+        middleware: [requireScope('issuing:read')] as const,
+        request: { body: jsonBody(IssueDocumentRequestSchema) },
+        responses: { 200: pdfResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
+      }),
+      async (c) => {
+        const organization = await issuingProfile(c, false);
+        const issuer = await mustIssuer(organization.id);
+        const body = c.req.valid('json');
+        const original = await creditedInvoice(organization.id, body);
+        const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, c.get('now')()), original);
+        const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
+        const next = (await store.issuing.counters(organization.id)).find((k) => k.docType === body.docType)?.next ?? 1;
+        const draft: IssuedDocumentRecord = {
+          id: '00000000-0000-0000-0000-000000000000',
+          organizationId: organization.id,
+          docType: body.docType,
+          number: next,
+          documentDate,
+          issuedAt: c.get('now')(),
+          currency: body.currency,
+          subtotalMinor: composed.subtotalMinor,
+          discountMinor: composed.discountMinor,
+          netMinor: composed.netMinor,
+          vatRateBasisPoints: composed.vatRateBasisPoints,
+          vatMinor: composed.vatMinor,
+          grossMinor: composed.grossMinor,
+          pricesIncludeVat: composed.pricesIncludeVat,
+          issuer: issuerSnapshot(issuer),
+          customerId: customer?.id ?? null,
+          customer: customer ? { name: customer.name } : {},
+          language: body.language,
+          style: issuer.documentStyle,
+          ink: issuer.ink,
+          notes: body.notes ?? null,
+          originalId: body.originalId ?? body.appliesToDocumentId ?? null,
+          paymentDetails: body.payment ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: body.payment.receivedOn } : null,
+          allocationNumber: null,
+          receivableId: null,
+          paymentId: null,
+          creditId: null,
+          coreVersion: ISSUING_CORE_VERSION,
+          createdByUserId: sessionAuth(c).user.id,
+          requestKey: '',
+          lines: composed.lines.map((l) => ({ index: l.index, description: l.description.trim(), kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
+        };
+        const paid = body.appliesToDocumentId ? await store.issuing.getById(organization.id, body.appliesToDocumentId) : null;
+        const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? paid?.number ?? null, logo: null });
+        return pdf(c, bytes, 'draft.pdf');
+      },
+    );
+
+    app.openapi(
+      createRoute({
+        method: 'get',
+        path: '/v1/issued-documents/{documentId}/pdf',
+        tags: ['Issuing'],
+        summary: 'View a document as a PDF (a copy, not counted)',
+        description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).',
+        security: PERSON_OR_MALAFAT,
+        middleware: [requireScope('issuing:read')] as const,
+        request: { params: IssuedDocumentIdParamSchema },
+        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+      }),
+      async (c) => {
+        const organization = await issuingProfile(c, false);
+        const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
+        if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
+        const bytes = await renderIssuedDocumentPdf(doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+        return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
+      },
+    );
+
+    app.openapi(
+      createRoute({
+        method: 'post',
+        path: '/v1/issued-documents/{documentId}/pdf',
+        tags: ['Issuing'],
+        summary: 'Produce a copy of a document as a PDF (download, email, share)',
+        description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.',
+        security: PERSON_OR_MALAFAT,
+        // Not the idempotency middleware (it replays JSON): the copy keeps its request key, so a retry gets the same copy and mark.
+        middleware: [requireScope('issuing:write')] as const,
+        request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
+        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+      }),
+      async (c) => {
+        const organization = await issuingProfile(c, true);
+        const { user } = sessionAuth(c);
+        const { documentId } = c.req.valid('param');
+        const doc = await store.issuing.getById(organization.id, documentId);
+        if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
+        const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel, requestKey: c.req.valid('header')['idempotency-key'] }, c.get('now')());
+        if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
+        const bytes = await renderIssuedDocumentPdf(doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc), logo: null });
+        return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
+      },
+    );
   }
 
-  function pdf(c: Context<AppEnv>, bytes: Buffer, filename: string) {
-    return c.body(new Uint8Array(bytes), 200, { 'content-type': 'application/pdf', 'content-disposition': `inline; filename="${filename}"`, 'cache-control': 'no-store' });
-  }
-
-  // Registered before /{documentId}/pdf, so "preview" is never read as a document id.
-  app.openapi(
-    createRoute({
-      method: 'post',
-      path: '/v1/issued-documents/preview/pdf',
-      tags: ['Issuing'],
-      summary: 'The PDF a document would be, marked as a draft',
-      description: 'D7: stateless, like the preview. Watermarked "draft" in the document\'s language; shows the number the next document of its type would take.',
-      security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:read')] as const,
-      request: { body: jsonBody(IssueDocumentRequestSchema) },
-      responses: { 200: pdfResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, false);
-      const issuer = await mustIssuer(organization.id);
-      const body = c.req.valid('json');
-      const original = await creditedInvoice(organization.id, body);
-      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, c.get('now')()), original);
-      const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
-      const next = (await store.issuing.counters(organization.id)).find((k) => k.docType === body.docType)?.next ?? 1;
-      const draft: IssuedDocumentRecord = {
-        id: '00000000-0000-0000-0000-000000000000',
-        organizationId: organization.id,
-        docType: body.docType,
-        number: next,
-        documentDate,
-        issuedAt: c.get('now')(),
-        currency: body.currency,
-        subtotalMinor: composed.subtotalMinor,
-        discountMinor: composed.discountMinor,
-        netMinor: composed.netMinor,
-        vatRateBasisPoints: composed.vatRateBasisPoints,
-        vatMinor: composed.vatMinor,
-        grossMinor: composed.grossMinor,
-        pricesIncludeVat: composed.pricesIncludeVat,
-        issuer: issuerSnapshot(issuer),
-        customerId: customer?.id ?? null,
-        customer: customer ? { name: customer.name } : {},
-        language: body.language,
-        style: issuer.documentStyle,
-        ink: issuer.ink,
-        notes: body.notes ?? null,
-        originalId: body.originalId ?? body.appliesToDocumentId ?? null,
-        paymentDetails: body.payment ? { method: body.payment.method, reference: body.payment.reference ?? null, receivedOn: body.payment.receivedOn } : null,
-        allocationNumber: null,
-        receivableId: null,
-        paymentId: null,
-        creditId: null,
-        coreVersion: ISSUING_CORE_VERSION,
-        createdByUserId: sessionAuth(c).user.id,
-        requestKey: '',
-        lines: composed.lines.map((l) => ({ index: l.index, description: l.description.trim(), kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
-      };
-      const paid = body.appliesToDocumentId ? await store.issuing.getById(organization.id, body.appliesToDocumentId) : null;
-      const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? paid?.number ?? null, logo: null });
-      return pdf(c, bytes, 'draft.pdf');
-    },
-  );
-
-  app.openapi(
-    createRoute({
-      method: 'get',
-      path: '/v1/issued-documents/{documentId}/pdf',
-      tags: ['Issuing'],
-      summary: 'View a document as a PDF (a copy, not counted)',
-      description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).',
-      security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:read')] as const,
-      request: { params: IssuedDocumentIdParamSchema },
-      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, false);
-      const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
-      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-      const bytes = await renderIssuedDocumentPdf(doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc), logo: null });
-      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
-    },
-  );
-
-  app.openapi(
-    createRoute({
-      method: 'post',
-      path: '/v1/issued-documents/{documentId}/pdf',
-      tags: ['Issuing'],
-      summary: 'Produce a copy of a document as a PDF (download, email, share)',
-      description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.',
-      security: PERSON_OR_MALAFAT,
-      // Not the idempotency middleware (it replays JSON): the copy keeps its request key, so a retry gets the same copy and mark.
-      middleware: [requireScope('issuing:write')] as const,
-      request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
-      responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, true);
-      const { user } = sessionAuth(c);
-      const { documentId } = c.req.valid('param');
-      const doc = await store.issuing.getById(organization.id, documentId);
-      if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-      const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel, requestKey: c.req.valid('header')['idempotency-key'] }, c.get('now')());
-      if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
-      const bytes = await renderIssuedDocumentPdf(doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc), logo: null });
-      return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
-    },
-  );
+  if (renderIssuedDocumentPdf) registerPdfRoutes(renderIssuedDocumentPdf);
 
   app.openapi(
     createRoute({
