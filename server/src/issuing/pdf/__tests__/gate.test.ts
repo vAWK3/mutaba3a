@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { IssuedDocumentRecord } from '../../../repositories/ports.js';
+import { composeDocument } from '../../compose.js';
 import { INKS } from '../model.js';
 import { renderIssuedDocumentPdf } from '../render.js';
 import { DOCUMENT_STYLES } from '../styles.js';
@@ -135,5 +136,33 @@ describe('logo and draft (AC4)', () => {
   it('a preview carries the draft mark', async () => {
     const pdf = await inspectPdf(await renderIssuedDocumentPdf(fixture('he', 'MINIMAL', 'BLACK'), { mark: 'DRAFT', originalNumber: null, logo: null }));
     expect(norm(pdf.pages.map(pageText).join(''))).toContain(norm('טיוטה'));
+  });
+});
+
+describe('totals in the document\'s terms (review fixes 3, 4)', () => {
+  it('an all-inclusive document with an exempt line shows the typed discount and the taxable and exempt amounts apart', async () => {
+    const composed = composeDocument({
+      docType: 'TAX_INVOICE',
+      currency: 'ILS',
+      documentDate: '2026-11-22',
+      dealerType: 'COMPANY',
+      pricesIncludeVat: true,
+      documentDiscountMinor: 11_800n,
+      lines: [
+        { description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 118_000n, discountMinor: 0n },
+        { description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 5_000n, discountMinor: 0n, vatExempt: true },
+      ],
+    });
+    const doc = {
+      ...fixture('he', 'PROFESSIONAL', 'BLACK'),
+      ...composed,
+      lines: composed.lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
+    };
+    const text = norm(pageText((await inspectPdf(await renderIssuedDocumentPdf(doc, { mark: 'ORIGINAL', originalNumber: null, logo: null }))).pages[0]!));
+    expect(text).toContain(norm('1,230.00'));
+    expect(text).toContain(norm('−118.00'));
+    expect(text).toContain(norm('חייב'));
+    expect(text).toContain(norm('פטור'));
+    expect(text).toContain(norm(`${(Number(composed.grossMinor) / 100).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',')}`));
   });
 });

@@ -193,6 +193,7 @@ import type {
 import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
+import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
 import type { IssuedDocType } from '../issuing/types.js';
@@ -860,12 +861,16 @@ export class PrismaLedgerStore implements LedgerStore {
         const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "issued_documents" WHERE "id" = ${documentId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
         if (locked.length === 0) return null;
         // MUT-640: the same request key gets the same copy back (under the lock, so a racing retry waits for it).
-        if (copy.requestKey) {
-          const again = await tx.issuedDocumentCopy.findFirst({ where: { documentId, requestKey: copy.requestKey }, select: { copyIndex: true } });
-          if (again) return again;
+        // Review fix 6: only the same person's retry within a day; a reused key otherwise produces a new copy, never a
+        // second original.
+        let requestKey = copy.requestKey ?? null;
+        if (requestKey) {
+          const again = await tx.issuedDocumentCopy.findFirst({ where: { documentId, requestKey }, select: { copyIndex: true, producedByUserId: true, producedAt: true } });
+          if (again && again.producedByUserId === copy.producedByUserId && at.getTime() - again.producedAt.getTime() <= COPY_REPLAY_MS) return { copyIndex: again.copyIndex };
+          if (again) requestKey = null;
         }
         const copyIndex = await tx.issuedDocumentCopy.count({ where: { documentId } });
-        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel, requestKey: copy.requestKey ?? null } });
+        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel, requestKey } });
         return { copyIndex };
       }),
     gaps: async (organizationId) => {

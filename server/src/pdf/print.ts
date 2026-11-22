@@ -22,7 +22,26 @@ type PrinterClass = new (fonts: ReturnType<typeof fontDictionary>) => Printer;
 const PdfPrinter: PrinterClass = ((PrinterModule as { default?: PrinterClass }).default ?? PrinterModule) as PrinterClass;
 let printer: Printer | null = null;
 
+/**
+ * Review fix 12: layout is synchronous CPU work; at most two documents render at once, the rest wait their turn, so a
+ * burst of large documents can't stall every other request.
+ */
+const MAX_CONCURRENT_RENDERS = 2;
+let rendering = 0;
+const waiting: Array<() => void> = [];
+
 export async function printPdf(definition: DocDefinition): Promise<Buffer> {
+  if (rendering >= MAX_CONCURRENT_RENDERS) await new Promise<void>((resolve) => waiting.push(resolve));
+  rendering += 1;
+  try {
+    return await render(definition);
+  } finally {
+    rendering -= 1;
+    waiting.shift()?.();
+  }
+}
+
+async function render(definition: DocDefinition): Promise<Buffer> {
   printer ??= new PdfPrinter(fontDictionary());
   const doc = await printer.createPdfKitDocument(definition);
   return new Promise<Buffer>((resolve, reject) => {

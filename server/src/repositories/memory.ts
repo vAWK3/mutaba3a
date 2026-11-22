@@ -222,6 +222,7 @@ import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
+import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
 import { numberGaps } from '../issuing/gaps.js';
 
@@ -958,8 +959,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!d || d.organizationId !== organizationId) return null;
       const copies = this.issuedCopies.get(documentId) ?? [];
       const again = copy.requestKey ? copies.find((c) => c.requestKey === copy.requestKey) : undefined;
-      if (again) return { copyIndex: again.copyIndex };
-      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: copy.requestKey ?? null });
+      if (again && again.producedByUserId === copy.producedByUserId && at.getTime() - again.producedAt.getTime() <= COPY_REPLAY_MS) return { copyIndex: again.copyIndex };
+      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: again ? null : (copy.requestKey ?? null) });
       this.issuedCopies.set(documentId, copies);
       return { copyIndex: copies.length - 1 };
     },

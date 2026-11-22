@@ -6744,3 +6744,5 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** the image carries 3.1 MB of fonts (`server/assets/fonts/pdf`, OFL licences beside them). The logo prints once MUT-646 uploads it (`IssuerDetails.logoAttachmentId`); the customer's VAT number and address once MUT-642 snapshots them.
 
 **Alternatives rejected:** headless Chromium (≈200 MB image, cold starts); Noto Naskh for Arabic (scrambled extraction, Malafat MAL-1008); the idempotency middleware for the PDF POST (it replays JSON only).
+
+**Pre-landing review (2026-11-22):** copies are produced only through `POST …/pdf` (the JSON `POST …/copies` is removed, so no copy is ever counted without being printed); a request key replays for the same person within 24 h only; an all-inclusive document's subtotal and discount print as typed; exempt and taxable amounts print apart; at most two renders run at once; `postinstall` is `patch-package --error-on-fail && prisma generate`.

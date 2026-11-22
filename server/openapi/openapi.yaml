@@ -9894,19 +9894,6 @@ components:
       required:
         - items
         - nextCursor
-    IssuedCopy:
-      type: object
-      properties:
-        copyIndex:
-          type: integer
-        label:
-          type: string
-          enum:
-            - ORIGINAL
-            - COPY
-      required:
-        - copyIndex
-        - label
     IssuedCopyRequest:
       type: object
       properties:
@@ -24107,75 +24094,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/IssuedDocument"
-        "401":
-          description: Missing, malformed, unknown, revoked, expired or wrong-environment key
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "403":
-          description: Key lacks the required scope
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "404":
-          description: No such entity in this organization
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "422":
-          description: Validation or idempotency-key failure
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-        "429":
-          description: Rate limited
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ErrorEnvelope"
-  /v1/issued-documents/{documentId}/copies:
-    post:
-      tags:
-        - Issuing
-      summary: Record a copy produced (download, email, share)
-      description: The first copy of a document is its original ("מקור"); every later one is a copy ("העתק"). The PDF (MUT-640) prints the label this returns. A retry with the same Idempotency-Key gets the same answer.
-      security:
-        - session: []
-        - deviceSession: []
-        - delegated: []
-      parameters:
-        - schema:
-            type: string
-            format: uuid
-          required: true
-          name: documentId
-          in: path
-        - schema:
-            type: string
-            minLength: 8
-            maxLength: 128
-            description: Client-generated key, unique per operation attempt (plan §14.2).
-          required: true
-          description: Client-generated key, unique per operation attempt (plan §14.2).
-          name: idempotency-key
-          in: header
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/IssuedCopyRequest"
-      responses:
-        "201":
-          description: Recorded
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/IssuedCopy"
         "401":
           description: Missing, malformed, unknown, revoked, expired or wrong-environment key
           content:

@@ -26,7 +26,7 @@ function parties(k: Kit, opts: { boxed: boolean; nameSize: number }): Node {
   const meta = { stack: vm.meta.map((m) => k.pair(m.label, m.value, { margin: [0, 1, 0, 1] })) };
   const box = (n: Node) => (opts.boxed ? { table: { widths: ['*'], body: [[{ ...n, ...cell(8) }]] }, layout: { hLineColor: () => vm.ink, vLineColor: () => vm.ink, hLineWidth: () => 1, vLineWidth: () => 1 } } : n);
   const cols = [box(customer), box(meta)];
-  return { columns: vm.rtl ? cols : cols, columnGap: 16, margin: [0, 8, 0, 8] };
+  return { columns: vm.rtl ? [...cols].reverse() : cols, columnGap: 16, margin: [0, 8, 0, 8] };
 }
 
 /**
@@ -126,7 +126,7 @@ const MODERN: StyleDefinition = {
       [
         top,
         k.text(vm.title, { bold: true, fontSize: 28, margin: [0, 14, 0, 0] }),
-        k.num(`${vm.labels.no} ${vm.number}`, { fontSize: 18, alignment: k.start }),
+        { columns: vm.rtl ? [{ width: '*', text: '' }, { ...k.num(vm.number, { fontSize: 18 }), width: 'auto' }, { ...k.text(vm.labels.no, { fontSize: 18 }), width: 'auto' }] : [{ ...k.text(vm.labels.no, { fontSize: 18 }), width: 'auto' }, { ...k.num(vm.number, { fontSize: 18, alignment: 'left' }), width: 'auto' }, { width: '*', text: '' }], columnGap: 6 },
         ...(vm.legalTitle ? [k.text(vm.legalTitle, { fontSize: 10 })] : []),
         k.rule(2, [0, 10, 0, 6]),
         { ...strip, columns: vm.rtl ? [...strip.columns].reverse() : strip.columns },

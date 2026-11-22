@@ -103,10 +103,21 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
   if (doc.allocationNumber) meta.push({ label: l.allocation, value: doc.allocationNumber });
   if (options.originalNumber !== null) meta.push({ label: doc.docType === 'CREDIT_NOTE' ? l.creditFor : l.receiptFor, value: String(options.originalNumber) });
   const totals: LabelValue[] = [];
+  const typed = doc.lines.map((line) => roundHalfUpDiv(line.quantityMilli * line.unitPriceMinor, 1000n) - line.discountMinor);
   if (doc.discountMinor > 0n) {
-    totals.push({ label: l.subtotal, value: money(doc.subtotalMinor) }, { label: l.discount, value: money(-doc.discountMinor) });
+    // Review fix 3: an all-inclusive document shows its subtotal and discount as typed (VAT included), matching its
+    // lines; otherwise both are before VAT, like the net below them.
+    const allInclusive = doc.pricesIncludeVat && doc.lines.every((line) => line.pricesIncludeVat || line.vatRateBasisPoints === 0);
+    const subtotal = allInclusive ? typed.reduce((sum, t) => sum + t, 0n) : doc.subtotalMinor;
+    const discount = allInclusive ? subtotal - doc.grossMinor : doc.discountMinor;
+    totals.push({ label: l.subtotal, value: money(subtotal) }, { label: l.discount, value: money(-discount) });
   }
-  if (doc.vatRateBasisPoints > 0) totals.push({ label: l.net, value: money(doc.netMinor) }, { label: l.vat(percent(doc.vatRateBasisPoints)), value: money(doc.vatMinor) });
+  if (doc.vatRateBasisPoints > 0) {
+    // Review fix 4: with VAT-exempt lines, the exempt and the taxable amounts are shown apart.
+    const exemptNet = doc.lines.filter((line) => line.vatRateBasisPoints === 0).reduce((sum, line) => sum + line.netMinor, 0n);
+    if (exemptNet > 0n) totals.push({ label: l.taxable, value: money(doc.netMinor - exemptNet) }, { label: l.exempt, value: money(exemptNet) });
+    totals.push({ label: l.net, value: money(doc.netMinor) }, { label: l.vat(percent(doc.vatRateBasisPoints)), value: money(doc.vatMinor) });
+  }
   const grandLabel = doc.docType === 'CREDIT_NOTE' ? l.totalCredit : doc.docType === 'RECEIPT' ? l.received : l.total;
   const payment: LabelValue[] = doc.paymentDetails
     ? [
@@ -128,7 +139,7 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
     logo: options.logo,
     issuer: {
       name: str(issuer['legalName']) ?? '',
-      idLine: str(issuer['vatId']) ? `${dealer ? l.issuerId[dealer] : l.issuerId.COMPANY} ${str(issuer['vatId'])}` : null,
+      idLine: str(issuer['vatId']) ? `${dealer ? l.issuerId[dealer] : l.customerId} ${str(issuer['vatId'])}` : null,
       address: [str(issuer['address']), str(issuer['city'])].filter(Boolean).join(', ') || null,
       contact: [str(issuer['phone']), str(issuer['email']), str(issuer['website'])].filter((v): v is string => v !== null),
     },
@@ -140,7 +151,7 @@ export function buildViewModel(doc: IssuedDocumentRecord, ink: string, options: 
       quantity: formatQuantity(line.quantityMilli),
       unitPrice: formatAmount(line.unitPriceMinor),
       // The line as typed: quantity × price less its own discount, in its own terms (VAT included or not).
-      amount: formatAmount(roundHalfUpDiv(line.quantityMilli * line.unitPriceMinor, 1000n) - line.discountMinor),
+      amount: formatAmount(typed[line.index - 1] ?? 0n),
       exempt: line.vatRateBasisPoints === 0 && doc.vatRateBasisPoints > 0,
     })),
     totals,

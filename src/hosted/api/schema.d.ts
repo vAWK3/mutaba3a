@@ -14037,99 +14037,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/v1/issued-documents/{documentId}/copies": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Record a copy produced (download, email, share)
-         * @description The first copy of a document is its original ("מקור"); every later one is a copy ("העתק"). The PDF (MUT-640) prints the label this returns. A retry with the same Idempotency-Key gets the same answer.
-         */
-        post: {
-            parameters: {
-                query?: never;
-                header: {
-                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
-                    "idempotency-key": string;
-                };
-                path: {
-                    documentId: string;
-                };
-                cookie?: never;
-            };
-            requestBody: {
-                content: {
-                    "application/json": components["schemas"]["IssuedCopyRequest"];
-                };
-            };
-            responses: {
-                /** @description Recorded */
-                201: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["IssuedCopy"];
-                    };
-                };
-                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
-                401: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Key lacks the required scope */
-                403: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description No such entity in this organization */
-                404: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Validation or idempotency-key failure */
-                422: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-                /** @description Rate limited */
-                429: {
-                    headers: {
-                        [name: string]: unknown;
-                    };
-                    content: {
-                        "application/json": components["schemas"]["ErrorEnvelope"];
-                    };
-                };
-            };
-        };
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/v1/issued-documents/preview/pdf": {
         parameters: {
             query?: never;
@@ -28048,11 +27955,6 @@ export interface components {
         IssuedDocumentPage: {
             items: components["schemas"]["IssuedDocument"][];
             nextCursor: string | null;
-        };
-        IssuedCopy: {
-            copyIndex: number;
-            /** @enum {string} */
-            label: "ORIGINAL" | "COPY";
         };
         IssuedCopyRequest: {
             /** @enum {string} */

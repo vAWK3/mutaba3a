@@ -28,9 +28,13 @@ describe('issued-document PDF routes (MUT-640)', () => {
     const first = await produce(key);
     expect(first.status).toBe(200);
     expect(first.headers.get('content-type')).toBe('application/pdf');
-    expect(await text(first)).toContain('מקור');
+    const firstText = await text(first);
+    expect(firstText).toContain('מקור');
+    expect(firstText).not.toContain('העתק');
     expect(await text(await produce(key))).toContain('מקור');
-    expect(await text(await produce())).toContain('העתק');
+    const later = await text(await produce());
+    expect(later).toContain('העתק');
+    expect(later).not.toContain('מקור');
   });
 
   it('GET is a view copy: prints העתק and counts nothing', async () => {
@@ -39,7 +43,9 @@ describe('issued-document PDF routes (MUT-640)', () => {
     const doc = await read(await h.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() })));
     const view = await h.app.request(`/v1/issued-documents/${doc.id}/pdf`, { headers: w.on });
     expect(view.status).toBe(200);
-    expect(await text(view)).toContain('העתק');
+    const viewed = await text(view);
+    expect(viewed).toContain('העתק');
+    expect(viewed).not.toContain('מקור');
     // The first produced copy is still the original.
     expect(await text(await h.app.request(`/v1/issued-documents/${doc.id}/pdf`, json({ channel: 'EMAIL' }, { ...w.on, ...idem() })))).toContain('מקור');
   });

@@ -27,6 +27,8 @@ export interface PdfLabels {
   vatExemptLine: string;
   subtotal: string;
   discount: string;
+  taxable: string;
+  exempt: string;
   net: string;
   vat: (percent: string) => string;
   vatIncluded: string;
@@ -65,6 +67,8 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     vatExemptLine: 'פטור ממע״מ',
     subtotal: 'סה״כ לפני הנחה',
     discount: 'הנחה',
+    taxable: 'חייב במע״מ',
+    exempt: 'פטור ממע״מ',
     net: 'סה״כ לפני מע״מ',
     vat: (p) => `מע״מ ${p}%`,
     vatIncluded: 'המחירים כוללים מע״מ',
@@ -101,6 +105,8 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     vatExemptLine: 'معفى من ضريبة القيمة المضافة',
     subtotal: 'المجموع قبل الخصم',
     discount: 'الخصم',
+    taxable: 'الخاضع للضريبة',
+    exempt: 'المعفى من الضريبة',
     net: 'المجموع قبل الضريبة',
     vat: (p) => `ضريبة القيمة المضافة ${p}%`,
     vatIncluded: 'الأسعار تشمل ضريبة القيمة المضافة',
@@ -137,6 +143,8 @@ export const PDF_LABELS: Readonly<Record<DocumentLanguage, PdfLabels>> = {
     vatExemptLine: 'VAT exempt',
     subtotal: 'Subtotal',
     discount: 'Discount',
+    taxable: 'Taxable',
+    exempt: 'VAT exempt',
     net: 'Total before VAT',
     vat: (p) => `VAT ${p}%`,
     vatIncluded: 'Prices include VAT',

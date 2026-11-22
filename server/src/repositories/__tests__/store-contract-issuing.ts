@@ -179,6 +179,10 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const keyed = await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, at(21));
       expect(await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, at(22))).toEqual(keyed);
       expect(keyed).toEqual({ copyIndex: 4 });
+      // Review fix 6: another person, or a day later, reusing the key gets a new copy, never the earlier one back.
+      expect(await store.issuing.recordCopy(w.a.id, doc.id, { producedByUserId: '00000000-0000-4000-8000-0000000000ff', channel: 'EMAIL', requestKey: 'download-1' }, at(23))).toEqual({ copyIndex: 5 });
+      const dayLater = new Date(at(21).getTime() + 25 * 60 * 60 * 1000);
+      expect(await store.issuing.recordCopy(w.a.id, doc.id, { ...copy, requestKey: 'download-1' }, dayLater)).toEqual({ copyIndex: 6 });
     });
 
     it('lists newest first, paginated, filtered by type and customer, inside one profile only', async () => {

@@ -18,7 +18,6 @@ import type { IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsRecord, Jso
 import {
   IssueDocumentRequestSchema,
   IssuedCopyRequestSchema,
-  IssuedCopySchema,
   IssuedDocTypeParamSchema,
   IssuedDocumentIdParamSchema,
   IssuedDocumentPageSchema,
@@ -354,29 +353,7 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     },
   );
 
-  app.openapi(
-    createRoute({
-      method: 'post',
-      path: '/v1/issued-documents/{documentId}/copies',
-      tags: ['Issuing'],
-      summary: 'Record a copy produced (download, email, share)',
-      description: 'The first copy of a document is its original ("מקור"); every later one is a copy ("העתק"). The PDF (MUT-640) prints the label this returns. A retry with the same Idempotency-Key gets the same answer.',
-      security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write'), idempotent(store, 'issued_document.copy')] as const,
-      request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
-      responses: { 201: json('Recorded', IssuedCopySchema), ...notFoundResponse, ...validationResponse, ...errorResponses },
-    }),
-    async (c) => {
-      const organization = await issuingProfile(c, true);
-      const { user } = sessionAuth(c);
-      const { documentId } = c.req.valid('param');
-      const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel }, c.get('now')());
-      if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
-      return c.json({ copyIndex: copy.copyIndex, label: copyLabel(copy.copyIndex) }, 201);
-    },
-  );
-
-  // ---- MUT-640: the PDF ------------------------------------------------------------------------------------------
+  // ---- MUT-640: the PDF. Copies are produced only through POST …/pdf, so the original is always printed (review fix 7).
 
   const pdfResponse = { description: 'The PDF', content: { 'application/pdf': { schema: z.string().openapi({ format: 'binary' }) } } };
 
@@ -444,7 +421,8 @@ export function issuingRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
         requestKey: '',
         lines: composed.lines.map((l) => ({ index: l.index, description: l.description.trim(), kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
       };
-      const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? null, logo: null });
+      const paid = body.appliesToDocumentId ? await store.issuing.getById(organization.id, body.appliesToDocumentId) : null;
+      const bytes = await renderIssuedDocumentPdf(draft, { mark: 'DRAFT', originalNumber: original?.number ?? paid?.number ?? null, logo: null });
       return pdf(c, bytes, 'draft.pdf');
     },
   );
