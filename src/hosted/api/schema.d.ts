@@ -14772,7 +14772,7 @@ export interface paths {
         };
         /**
          * View a document as a PDF (a copy, not counted)
-         * @description D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).
+         * @description D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original). MUT-641: digitally signed.
          */
         get: {
             parameters: {
@@ -14839,12 +14839,21 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE). */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
             };
         };
         put?: never;
         /**
          * Produce a copy of a document as a PDF (download, email, share)
-         * @description Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.
+         * @description Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes. Until the original has been signed and kept (a signing outage), every produced copy is the original.
          */
         post: {
             parameters: {
@@ -14911,6 +14920,15 @@ export interface paths {
                 };
                 /** @description Rate limited */
                 429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE). */
+                503: {
                     headers: {
                         [name: string]: unknown;
                     };

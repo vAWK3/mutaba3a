@@ -29,6 +29,7 @@ if (!url) {
         VALUES (${id}::uuid, ${org.id}::uuid, 'RECEIPT', 1, '2026-11-22', 'ILS', 100, 0, 100, 0, 0, 100, false, '{}', '{}', 'he', 'PROFESSIONAL', 'BLACK', '1.0.0', ${org.id}::uuid, ${unique()})`;
       await raw.$executeRaw`INSERT INTO "issued_document_lines" VALUES (${id}::uuid, 1, ${org.id}::uuid, 'x', 'GOODS', 1000, 100, 0, 100, false, 0, 0)`;
       await raw.$executeRaw`INSERT INTO "issued_document_copies" ("documentId","copyIndex","organizationId","producedByUserId","channel") VALUES (${id}::uuid, 0, ${org.id}::uuid, ${org.id}::uuid, 'DOWNLOAD')`;
+      await raw.$executeRaw`INSERT INTO "issued_document_originals" ("documentId","organizationId","copyIndex","bytes","sha256") VALUES (${id}::uuid, ${org.id}::uuid, 0, '\x25504446'::bytea, ${'a'.repeat(64)})`;
       return { org, id };
     }
 
@@ -38,12 +39,15 @@ if (!url) {
       ['UPDATE issued_document_lines', (id: string) => raw.$executeRaw`UPDATE "issued_document_lines" SET "description" = 'y' WHERE "documentId" = ${id}::uuid`],
       ['DELETE issued_document_lines', (id: string) => raw.$executeRaw`DELETE FROM "issued_document_lines" WHERE "documentId" = ${id}::uuid`],
       ['DELETE issued_document_copies', (id: string) => raw.$executeRaw`DELETE FROM "issued_document_copies" WHERE "documentId" = ${id}::uuid`],
+      // MUT-641: the signed original is as permanent as the document.
+      ['UPDATE issued_document_originals', (id: string) => raw.$executeRaw`UPDATE "issued_document_originals" SET "sha256" = 'x' WHERE "documentId" = ${id}::uuid`],
+      ['DELETE issued_document_originals', (id: string) => raw.$executeRaw`DELETE FROM "issued_document_originals" WHERE "documentId" = ${id}::uuid`],
     ] as const)('refuses %s', async (_label, run) => {
       const { id } = await oneDocument();
       await expect(run(id)).rejects.toThrow(/immutable/);
     });
 
-    it.each(['issued_documents', 'issued_document_lines', 'issued_document_copies', 'issued_document_counters'])('refuses TRUNCATE %s', async (table) => {
+    it.each(['issued_documents', 'issued_document_lines', 'issued_document_copies', 'issued_document_counters', 'issued_document_originals'])('refuses TRUNCATE %s', async (table) => {
       await expect(raw.$executeRawUnsafe(`TRUNCATE "${table}"`)).rejects.toThrow(/immutable|append-only/);
     });
 

@@ -6,6 +6,8 @@ import type { IssuedDocumentRecord } from '../../../repositories/ports.js';
 import { composeDocument } from '../../compose.js';
 import { INKS } from '../model.js';
 import { renderIssuedDocumentPdf } from '../render.js';
+import { devDocumentSigner, signatureDetailsOf } from '../sign/index.js';
+import { checkSignedPdf } from '../sign/verify.js';
 import { DOCUMENT_STYLES } from '../styles.js';
 import { inspectPdf, pageText } from './pdf-inspection.js';
 
@@ -79,11 +81,24 @@ function fixture(lang: Lang, style: string, ink: 'BLACK' | 'BLUE'): IssuedDocume
 
 const norm = (s: string) => s.normalize('NFKC').replace(/\s+/g, '');
 
+const signer = devDocumentSigner();
+
 describe.each(DOCUMENT_STYLES)('%s style', (style) => {
-  it.each(['he', 'ar', 'en'] as const)('%s: no missing glyphs, every word extractable, RTL order, ink only (AC1, AC3)', async (lang) => {
-    const bytes = await renderIssuedDocumentPdf(fixture(lang, style, 'BLACK'), { mark: 'ORIGINAL', originalNumber: null, logo: null });
+  // MUT-641: the gate runs on the signed file too, the one that actually leaves the system.
+  it.each([
+    ['he', false],
+    ['ar', false],
+    ['en', false],
+    ['he', true],
+    ['ar', true],
+    ['en', true],
+  ] as const)('%s (signed: %s): no missing glyphs, every word extractable, RTL order, ink only (AC1, AC3)', async (lang, signed) => {
+    const doc = fixture(lang, style, 'BLACK');
+    const rendered = await renderIssuedDocumentPdf(doc, { mark: 'ORIGINAL', originalNumber: null, logo: null });
+    const bytes = signed ? await signer.sign(rendered, signatureDetailsOf(doc, new Date())) : rendered;
+    if (signed) expect(checkSignedPdf(bytes).problems).toEqual([]);
     mkdirSync(OUT, { recursive: true });
-    writeFileSync(path.join(OUT, `${style.toLowerCase()}-${lang}.pdf`), bytes);
+    writeFileSync(path.join(OUT, `${style.toLowerCase()}-${lang}${signed ? '-signed' : ''}.pdf`), bytes);
     const pdf = await inspectPdf(bytes);
     expect(pdf.notdefGlyphs).toEqual([]);
     const text = norm(pdf.pages.map(pageText).join(''));

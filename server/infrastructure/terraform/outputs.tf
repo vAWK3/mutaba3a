@@ -90,3 +90,8 @@ output "receipt_read_queue" {
   description = "MUT-441: the receipt-reads Cloud Tasks queue (the API's READ_QUEUE); null until server_ocr_enabled."
   value       = local.read_queue_id
 }
+
+output "issuing_signing_key_version" {
+  description = "MUT-641: the KMS key version that signs issued-document PDFs; pass it to `npm run signing:interim-cert -- --key …` (null until issuing_signing_key)."
+  value       = local.issuing_signing_key_version
+}

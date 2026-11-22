@@ -399,6 +399,9 @@ Signed in, Your data › Download my records writes the chosen profiles to the s
   only by a credit note. Behind the `invoicing` feature on business profiles; server only until MUT-570.
 - MUT-640 (ADR-261): issued documents print server-side as PDFs (Hebrew, Arabic, English; Professional, Modern or Minimal; black
   or blue ink), with Malafat's tri-script engine; the first produced copy is the original, later ones copies.
+- MUT-641 (ADR-265): every issued-document PDF that leaves is signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp);
+  the original is signed once and kept (`issued_document_originals`). Dev/QA sign with a throwaway authority; production
+  signs with a Cloud KMS key and a certifying authority's certificate (`ISSUING_SIGNER=kms`), and answers 503 until then.
 
 ---
 
