@@ -159,6 +159,8 @@ function allocationError(outcome: Exclude<AllocationOutcome, { kind: 'allocated'
 export interface IssuingTaxAuthority {
   deps: TaxAuthorityDeps | null;
   portalOrigin: string | null;
+  /** This server serves the portal (PORTAL_DIST_DIR), so the callback may return to its own pages. */
+  servesPortal?: boolean;
 }
 
 /** MUT-647: where an invoice issued elsewhere is kept, and the reader that fills its fields. */
@@ -1017,7 +1019,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   if (issuedPdf) registerPdfRoutes(issuedPdf.render);
   registerExternalInvoiceRoutes(app, { store, storage: external.storage, ocr: external.ocr, urlTtlSeconds: external.urlTtlSeconds, issuingProfile, audit });
 
-  registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, vatNumberOf: async (id) => {
+  registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, servesPortal: tax.servesPortal ?? false, vatNumberOf: async (id) => {
     const issuer = await store.issuing.getIssuer(id);
     return issuer ? Number(issuer.vatId) : null;
   } });

@@ -28,6 +28,21 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
+
+### Added
+- **Re-consent reminder (MUT-571 AC3).** `POST /jobs/v1/issuing/tax-authority-reminders` (job token, daily) and `POST /admin/v1/issuing/tax-authority-reminders` (operator, `dryRun`): the owner of each connected profile is mailed ten days before the 90-day consent ends and once when it has ended (for 7 days), in their language. Each stage once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`); retries and later runs answer `duplicate`. New mail template `tax-authority-reconnect` (en + formal ar), exempt from the per-recipient cap like the other job mails. Store: `issuing.taxConnectionsEndingBetween` (operator-only in the guard).
+- Terraform: `tax_authority_reminders_enabled` (default false) creates the `tax_authority_reminders` Scheduler job (09:00 Jerusalem); `tests/tax_authority_reminders.tftest.hcl`. Operator steps in `docs/operations/before-release.md`.
+- Portal: the setup's Tax Authority step says when the connection ends within 10 days and offers Connect again (`endsSoon`, `RECONNECT_NOTICE_DAYS`); a declined consent (`?taxAuthority=refused`) has its own words.
+
+### Fixed
+- **Where the browser lands after the Tax Authority (MUT-571).** The callback redirected to `PORTAL_ORIGIN/p/<id>/you/invoicing` even where no portal is served there (a local API with PORTAL_ORIGIN set to itself: "No route for GET …"). The connect state now signs the portal the person pressed Connect on (its Origin, when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server); the callback returns there, else to this server's own portal when it serves one (PORTAL_DIST_DIR), else answers its own page in Arabic and English. `error=access_denied` → `taxAuthority=refused`.
+- **The after-save Issue offer (MUT-648).** Leaving Owed (or Payments, or a client) inside the save toast's six seconds unmounted IncomeDrawerHost and its issue state, so the toast's Issue button did nothing. The issue drawer now belongs to the profile's layout (`IssueOfferProvider` / `useOfferIssue`, keyed by profile).
+
+### Technical
+- Files: `server/src/routes/tax-authority.ts`, `server/src/israel/tax-authority/{service,reconnect-reminder}.ts`, `server/src/routes/tax-authority-reminders.ts`, `server/src/email/{ports.ts,templates/copy.ts,templates/look.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/infrastructure/terraform/{main,variables}.tf`, `src/hosted/components/IssueOffer.tsx`, `src/hosted/components/IncomeDrawerHost.tsx`, `src/hosted/session/AuthGate.tsx`, `src/hosted/pages/invoicing/{InvoicingSteps.tsx,setupSteps.ts}`, i18n en + ar. Tests: `routes-tax-authority.test.ts` (landing cases), `routes-tax-authority-reminders.test.ts`, `service.test.ts`, `IssueOffer.test.tsx`, `InvoicingSteps.test.tsx`, the mail template samples.
+
+---
 ## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.129.0-mut662)
 
 ### Added

@@ -15,6 +15,7 @@ import { ReceiptDropZone } from './ReceiptDropZone';
 import { ToReviewGroup } from './ToReviewGroup';
 import { ToIssueGroup } from './ToIssueGroup';
 import { useDocumentsDueCount } from '../../data/documentsDueQueries';
+import { useInvoicingWorthAsking } from '../../data/issuingQueries';
 
 /**
  * Home's Receipts & to-dos (MUT-657, "Two lanes"): an Add lane beside a Waiting lane, Add first in reading order and
@@ -69,11 +70,10 @@ function WaitingLane({ profile, availability, toReview }: { profile: HostedProfi
   const id = useId();
   const summary = useOrganizationSummary(profile.id);
   const names = useCustomerDirectory(profile.id);
-  const isLocal = useIsLocalMode();
   const reviewing = availability === 'on' ? toReview : 0;
   const overdue = summary.data ? overdueClientCount(summary.data) : 0;
   // MUT-660: null where invoicing is off (and on this device), so the group never shows there.
-  const toIssueCount = useDocumentsDueCount(profile.id, !isLocal);
+  const toIssueCount = useDocumentsDueCount(profile.id, useInvoicingWorthAsking(profile));
   const toIssue = toIssueCount.data ?? 0;
 
   let body;

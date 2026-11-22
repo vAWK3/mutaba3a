@@ -434,6 +434,23 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
     expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'TAX_INVOICE', fromEntry: { kind: 'owed', id: expect.any(String) }, pricesIncludeVat: true, lines: [{ unitPrice: '1180.00', pricesIncludeVat: true }] });
   });
 
+  await step('Follow-up: leave Owed for Paid inside the toast window; its Issue still opens the drawer there', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill('2360');
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(toast).toContainText('Saved');
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Paid' }).click();
+    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
+    await toast.getByRole('button', { name: 'Issue a tax invoice' }).click();
+    await expect(issue).toBeVisible();
+    await expect(issue.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('2360.00');
+    await issue.getByRole('button', { name: 'Close' }).first().click();
+    await expect(issue).toHaveCount(0);
+  });
+
   await step('E4 An Owed recorded earlier offers its tax invoice from its row', async () => {
     await api.open(page, `/p/${OFFICE_A}/receivables`);
     await expect(page.locator('[data-testid^="issue-from-"]').first()).toBeVisible();

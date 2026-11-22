@@ -40,6 +40,7 @@ import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import { trialMailRoutes } from './routes/trial-mail.js';
 import { cardFailedMailRoutes } from './routes/card-failed-mail.js';
+import { taxAuthorityReminderRoutes } from './routes/tax-authority-reminders.js';
 import { comebackMailRoutes } from './routes/comeback-mail.js';
 import { MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, monthlySummaryMailRoutes } from './routes/monthly-summary-mail.js';
 import { renewalMailRoutes } from './routes/renewal-mail.js';
@@ -387,7 +388,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.130.0-mut664';
+export const API_VERSION = '1.131.0-mut664';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -617,6 +618,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
     portalOrigin: sessions.portalOrigin ?? null,
+    servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.
     ocr: deps.receiptReading?.ocr ?? null,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
@@ -796,6 +798,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       ...(deps.monthlySummaryDailySends ? { sendBudget: deps.monthlySummaryDailySends } : {}),
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+    }),
+  );
+  // MUT-571 AC3: the daily Tax Authority re-consent reminders (job + operator), on the unguarded store like the trial mails.
+  app.route(
+    '/',
+    taxAuthorityReminderRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      environment: deps.taxAuthority?.client.environment ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );

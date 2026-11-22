@@ -135,17 +135,20 @@ features:
       - src/hosted/components/IncomeCaptureDrawer.tsx
       - src/hosted/components/issueOffers.ts
       - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/IssueOffer.tsx
       - src/hosted/components/Toast.tsx
       - src/hosted/pages/views/ReceivablesList.tsx
     steps:
       - On Owed, record 1,180 from Client 1
       - Choose Issue a tax invoice on the save toast, then Issue
+      - Record another Owed, open Paid before the toast fades, and choose Issue a tax invoice there
       - Reopen Owed
       - With "offer to issue after saving" off, record another Owed
       - On a profile without invoicing, record an Owed
     expect:
       - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
       - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - Leaving Owed inside the toast's six seconds keeps its button working: on Paid it opens the drawer for the Owed just saved
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup

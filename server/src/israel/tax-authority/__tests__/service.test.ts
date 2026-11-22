@@ -25,13 +25,22 @@ describe('connect state', () => {
   it('names the profile and the person for ten minutes; a changed or late one is refused', () => {
     const now = at('2026-11-22T10:00:00Z');
     const state = newState('state-secret', 'p1', 'u1', now);
-    expect(readState('state-secret', state, now)).toEqual({ profileId: 'p1', userId: 'u1' });
+    expect(readState('state-secret', state, now)).toEqual({ profileId: 'p1', userId: 'u1', returnOrigin: null });
     expect(readState('state-secret', state, at('2026-11-22T10:11:00Z'))).toBeNull();
     expect(readState('other-secret', state, now)).toBeNull();
     const [body, mac] = state.split('.');
     const forged = Buffer.from(JSON.stringify({ profileId: 'p2', userId: 'u1', expiresAt: now.getTime() + 60_000 })).toString('base64url');
     expect(readState('state-secret', `${forged}.${mac}`, now)).toBeNull();
     expect(readState('state-secret', `${body}`, now)).toBeNull();
+  });
+
+  it('carries the portal the person started from, signed with the rest', () => {
+    const now = at('2026-11-22T10:00:00Z');
+    const state = newState('state-secret', 'p1', 'u1', now, 'http://127.0.0.1:5175');
+    expect(readState('state-secret', state, now)).toEqual({ profileId: 'p1', userId: 'u1', returnOrigin: 'http://127.0.0.1:5175' });
+    const [, mac] = state.split('.');
+    const swapped = Buffer.from(JSON.stringify({ profileId: 'p1', userId: 'u1', expiresAt: now.getTime() + 60_000, returnOrigin: 'https://evil.example' })).toString('base64url');
+    expect(readState('state-secret', `${swapped}.${mac}`, now)).toBeNull();
   });
 });
 

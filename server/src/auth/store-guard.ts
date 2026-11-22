@@ -389,6 +389,8 @@ export const STORE_ACCESS: StoreAccess = {
     putTaxConnection: { write: 'issuing' },
     deleteTaxConnection: { write: 'issuing' },
     withTaxConnectionLock: { write: 'issuing' },
+    // MUT-571 AC3: across profiles, for the reminder job only (the unguarded store).
+    taxConnectionsEndingBetween: 'operator',
     counters: { read: 'issuing' },
     setStartingNumber: { write: 'issuing' },
     issue: { write: 'issuing' },
