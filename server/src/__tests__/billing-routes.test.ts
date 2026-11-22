@@ -113,6 +113,8 @@ describe('GET /v1/billing (MUT-362)', () => {
       comeback: null,
       // MUT-565: accountant access is off in this harness.
       accountantPlan: null,
+      // MUT-702: nothing covers a person provisioned after the backfill.
+      currentPlan: null,
     });
   });
 
@@ -197,6 +199,71 @@ describe('GET /v1/billing (MUT-362)', () => {
     expect(res.status).toBe(200);
     expect(await read(res)).toMatchObject({ configured: true, catalog: { ILS: null, USD: null } });
     expect(h.logs.some((l) => l.includes('"level":40') && l.includes('billing catalog'))).toBe(true);
+  });
+});
+
+// MUT-702 Part A (ADR-270): the person's plan, read from their own profiles' entitlements, whatever covers them.
+describe('GET /v1/billing currentPlan (MUT-702)', () => {
+  const grantTier = (h: Harness, userId: string, tier: 'SOLO' | 'BUSINESS' | 'FIRM' | 'FREELANCER', organizationId: string | null = null) =>
+    h.store.billing.createGrant({ id: randomUUID(), userId: organizationId ? null : userId, organizationId, tier, reason: 'plan test', expiresAt: null, grantedBy: 'admin', at: NOW, audit: [] });
+
+  it('is null when nothing covers the person', async () => {
+    const h = harness();
+    const u = await person(h);
+    expect((await read(await u.get())).currentPlan).toBeNull();
+  });
+
+  it('is business during a running trial, and null once the trial has ended', async () => {
+    const h = harness();
+    const u = await person(h);
+    await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 3 * DAY));
+    expect((await read(await u.get())).currentPlan).toBe('business');
+    await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 20 * DAY));
+    expect((await read(await u.get())).currentPlan).toBeNull();
+  });
+
+  it.each([
+    ['SOLO', 'solo'],
+    ['BUSINESS', 'business'],
+    ['FIRM', 'firm'],
+  ] as const)('an operator %s grant is %s', async (tier, plan) => {
+    const h = harness();
+    const u = await person(h);
+    await grantTier(h, u.userId, tier);
+    expect((await read(await u.get())).currentPlan).toBe(plan);
+  });
+
+  it('a legacy Freelancer subscription is freelancer', async () => {
+    const h = harness();
+    const u = await person(h);
+    await linkSubscription(h, u.userId);
+    const body = await read(await u.get());
+    expect(body.currentPlan).toBe('freelancer');
+    expect(body.subscription).toMatchObject({ tier: 'FREELANCER' });
+  });
+
+  it('a lapsed subscription alone is null (read-only)', async () => {
+    const h = harness();
+    const u = await person(h);
+    await linkSubscription(h, u.userId, 'canceled');
+    expect((await read(await u.get())).currentPlan).toBeNull();
+  });
+
+  it('takes the best tier across the person’s own profiles: a Business grant on one profile beats Solo on all', async () => {
+    const h = harness();
+    const u = await person(h);
+    await grantTier(h, u.userId, 'SOLO');
+    await grantTier(h, u.userId, 'BUSINESS', u.personalId);
+    expect((await read(await u.get())).currentPlan).toBe('business');
+  });
+
+  it('a profile covered only by Malafat names no plan', async () => {
+    const h = harness();
+    const u = await person(h);
+    await h.store.integrations.connect({ organizationId: u.personalId, provider: 'MALAFAT', externalTenantId: `t-${++seq}`, displayName: 'Firm', connectedByApiKeyId: null, at: NOW } as Loose);
+    await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 3 * DAY));
+    // Malafat wins over the running trial (rule 1), and carries no tier.
+    expect((await read(await u.get())).currentPlan).toBeNull();
   });
 });
 
