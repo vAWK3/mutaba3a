@@ -962,6 +962,18 @@ export class PrismaLedgerStore implements LedgerStore {
         return toExternal(removed);
       });
     },
+    getOriginalPdf: async (organizationId, documentId) => {
+      const row = await this.prisma.issuedDocumentOriginal.findFirst({ where: { documentId, organizationId } });
+      return row ? { ...row, bytes: new Uint8Array(row.bytes) } : null;
+    },
+    originalCopyIndex: async (organizationId, documentId) =>
+      (await this.prisma.issuedDocumentOriginal.findFirst({ where: { documentId, organizationId }, select: { copyIndex: true } }))?.copyIndex ?? null,
+    keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
+      if (!(await this.prisma.issuedDocument.findFirst({ where: { id: documentId, organizationId }, select: { id: true } }))) return null;
+      // INSERT-only: the first original kept wins; a racing twin's insert conflicts and gets the winner's back.
+      await this.prisma.issuedDocumentOriginal.createMany({ data: [{ documentId, organizationId, copyIndex: pdf.copyIndex, bytes: Buffer.from(pdf.bytes), sha256: pdf.sha256, createdAt: at }], skipDuplicates: true });
+      return this.issuing.getOriginalPdf(organizationId, documentId);
+    },
     gaps: async (organizationId) => {
       const [counters, numbers] = await Promise.all([
         this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),

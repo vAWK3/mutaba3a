@@ -9,7 +9,6 @@ import { hasFeature } from '../features.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
-import { copyLabel } from '../issuing/copies.js';
 import { DOC_TYPE_TITLES } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
@@ -122,6 +121,14 @@ type IssueRequest = z.infer<typeof IssueDocumentRequestSchema>;
 export type IssuedPdfRenderer = (doc: IssuedDocumentRecord, options: { mark: 'ORIGINAL' | 'COPY' | 'DRAFT'; originalNumber: number | null; logo: Uint8Array | null }) => Promise<Uint8Array>;
 export interface IssuedPdf {
   render: IssuedPdfRenderer;
+  /**
+   * MUT-641 (ADR-265): signs a document's PDF before it leaves (every copy and the original; never the draft preview).
+   * Null when this server has no signer: the routes then answer 503 SIGNING_NOT_CONFIGURED rather than send a file
+   * that isn't the legal original. A rejection is a signing outage: 503 SIGNING_UNAVAILABLE, nothing sent.
+   */
+  sign: ((doc: IssuedDocumentRecord, pdf: Uint8Array, signedAt: Date) => Promise<Uint8Array>) | null;
+  /** MUT-641: told when a signing failed (the key, the time-stamp authority), so an outage is seen. */
+  signingFailed?(details: { organizationId: string; documentId: string; error: unknown }): void;
   /** MUT-646: whether the PDF engine can draw this logo (checked once, at upload). */
   logoPrints(bytes: Uint8Array): Promise<boolean>;
   /** MUT-646: told when a document printed without its logo because the logo could not be drawn. */
@@ -722,6 +729,13 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     // ---- MUT-640: the PDF. Copies are produced only through POST …/pdf, so the original is always printed (review fix 7).
 
     const pdfResponse = { description: 'The PDF', content: { 'application/pdf': { schema: z.string().openapi({ format: 'binary' }) } } };
+    const signingResponse = {
+      503: {
+        description:
+          'MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE).',
+        content: { 'application/json': { schema: ErrorEnvelopeSchema } },
+      },
+    } as const;
 
     /** The number of the tax invoice a credit note credits or a receipt pays (printed on it). */
     async function originalNumberOf(organizationId: string, doc: IssuedDocumentRecord): Promise<number | null> {
@@ -731,6 +745,65 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
 
     function pdf(c: Context<AppEnv>, bytes: Uint8Array, filename: string) {
       return c.body(new Uint8Array(bytes), 200, { 'content-type': 'application/pdf', 'content-disposition': `inline; filename="${filename}"`, 'cache-control': 'no-store' });
+    }
+
+    /** MUT-641: refused before anything is recorded when this server can't sign at all. */
+    function signer(): NonNullable<IssuedPdf['sign']> {
+      if (!issuedPdf?.sign) throw new ApiError('SIGNING_NOT_CONFIGURED', 'Signed documents are not available on this server yet');
+      return issuedPdf.sign;
+    }
+
+    /**
+     * MUT-641 (AC5): a signed file or an error, never the unsigned one. A setup problem (an expired certificate, a key
+     * that isn't the certificate's) is SIGNING_NOT_CONFIGURED with its reason, since trying again won't help; anything
+     * else (KMS or the time-stamp authority down, after one retry inside the signer) is SIGNING_UNAVAILABLE.
+     */
+    async function signed(c: Context<AppEnv>, doc: IssuedDocumentRecord, bytes: Uint8Array, retry: string): Promise<Uint8Array> {
+      const sign = signer();
+      try {
+        return await sign(doc, bytes, c.get('now')());
+      } catch (error) {
+        issuedPdf?.signingFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
+        // Duck-typed: the signer's error class is Node-only and this file also runs in the browser (it has no PDFs there).
+        const setup = error instanceof Error && error.name === 'SigningSetupError' ? (error as Error & { reason?: string }).reason : undefined;
+        if (setup) throw new ApiError('SIGNING_NOT_CONFIGURED', 'Signed documents are not available on this server until its signing certificate is fixed; nothing was sent', { reason: setup });
+        throw new ApiError('SIGNING_UNAVAILABLE', `The document could not be signed, so nothing was sent. ${retry}`);
+      }
+    }
+
+    /**
+     * MUT-641 (review): a view copy is the same file until it is signed again, so a reload or a second device within a
+     * few minutes gets the one already signed instead of another KMS signature and time-stamp. Per instance, small.
+     */
+    const VIEW_COPY_TTL_MS = 10 * 60 * 1000;
+    const VIEW_COPY_MAX = 32;
+    const viewCopies = new Map<string, { bytes: Uint8Array; until: number }>();
+    async function signedViewCopy(c: Context<AppEnv>, doc: IssuedDocumentRecord, render: () => Promise<Uint8Array>): Promise<Uint8Array> {
+      const now = c.get('now')().getTime();
+      const cached = viewCopies.get(doc.id);
+      if (cached && cached.until > now) return cached.bytes;
+      const bytes = await signed(c, doc, await render(), 'Try again shortly.');
+      viewCopies.delete(doc.id);
+      viewCopies.set(doc.id, { bytes, until: now + VIEW_COPY_TTL_MS });
+      if (viewCopies.size > VIEW_COPY_MAX) viewCopies.delete(viewCopies.keys().next().value!);
+      return bytes;
+    }
+
+    /**
+     * MUT-641: the original goes out on exactly one produced copy, signed once and kept with that copy's index; a
+     * retry of that copy gets the same bytes. Until an original has been signed and kept (a signing outage), the next
+     * produced copy (any key, any person) is the original. Every other copy, including a racing twin that lost the
+     * keep, is a copy ("העתק"), signed afresh.
+     */
+    async function producedPdf(c: Context<AppEnv>, doc: IssuedDocumentRecord, copyIndex: number): Promise<Uint8Array> {
+      const render = (mark: 'ORIGINAL' | 'COPY') => async () => renderPdf(renderIssuedDocumentPdf, doc, { mark, originalNumber: await originalNumberOf(doc.organizationId, doc) });
+      const asCopy = async () => signed(c, doc, await render('COPY')(), 'Try again shortly with the same Idempotency-Key to get the same copy.');
+      const keeper = await store.issuing.originalCopyIndex(doc.organizationId, doc.id);
+      if (keeper !== null) return keeper === copyIndex ? (await store.issuing.getOriginalPdf(doc.organizationId, doc.id))!.bytes : asCopy();
+      const bytes = await signed(c, doc, await render('ORIGINAL')(), 'Try again shortly: the next produced copy is still the original.');
+      const kept = await store.issuing.keepOriginalPdf(doc.organizationId, doc.id, { bytes, sha256: createHash('sha256').update(bytes).digest('hex'), copyIndex }, c.get('now')());
+      if (!kept) throw new ApiError('NOT_FOUND', 'No such document');
+      return kept.copyIndex === copyIndex ? kept.bytes : asCopy();
     }
 
     // Registered before /{documentId}/pdf, so "preview" is never read as a document id.
@@ -799,17 +872,18 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         path: '/v1/issued-documents/{documentId}/pdf',
         tags: ['Issuing'],
         summary: 'View a document as a PDF (a copy, not counted)',
-        description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original).',
+        description: 'D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original). MUT-641: digitally signed.',
         security: PERSON_OR_MALAFAT,
         middleware: [requireScope('issuing:read')] as const,
         request: { params: IssuedDocumentIdParamSchema },
-        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...signingResponse, ...errorResponses },
       }),
       async (c) => {
         const organization = await issuingProfile(c, false);
         const doc = await store.issuing.getById(organization.id, c.req.valid('param').documentId);
         if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
-        const bytes = await renderPdf(renderIssuedDocumentPdf, doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc) });
+        signer();
+        const bytes = await signedViewCopy(c, doc, async () => renderPdf(renderIssuedDocumentPdf, doc, { mark: 'COPY', originalNumber: await originalNumberOf(organization.id, doc) }));
         return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
       },
     );
@@ -820,12 +894,13 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         path: '/v1/issued-documents/{documentId}/pdf',
         tags: ['Issuing'],
         summary: 'Produce a copy of a document as a PDF (download, email, share)',
-        description: 'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy.',
+        description:
+          'Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes. Until the original has been signed and kept (a signing outage), every produced copy is the original.',
         security: PERSON_OR_MALAFAT,
         // Not the idempotency middleware (it replays JSON): the copy keeps its request key, so a retry gets the same copy and mark.
         middleware: [requireScope('issuing:write')] as const,
         request: { headers: IdempotencyHeaderSchema, params: IssuedDocumentIdParamSchema, body: jsonBody(IssuedCopyRequestSchema) },
-        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...errorResponses },
+        responses: { 200: pdfResponse, ...notFoundResponse, ...validationResponse, ...signingResponse, ...errorResponses },
       }),
       async (c) => {
         const organization = await issuingProfile(c, true);
@@ -833,9 +908,11 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         const { documentId } = c.req.valid('param');
         const doc = await store.issuing.getById(organization.id, documentId);
         if (!doc) throw new ApiError('NOT_FOUND', 'No such document');
+        // A server that can't sign records no copy.
+        signer();
         const copy = await store.issuing.recordCopy(organization.id, documentId, { producedByUserId: user.id, channel: c.req.valid('json').channel, requestKey: c.req.valid('header')['idempotency-key'] }, c.get('now')());
         if (!copy) throw new ApiError('NOT_FOUND', 'No such document');
-        const bytes = await renderPdf(renderIssuedDocumentPdf, doc, { mark: copyLabel(copy.copyIndex), originalNumber: await originalNumberOf(organization.id, doc) });
+        const bytes = await producedPdf(c, doc, copy.copyIndex);
         return pdf(c, bytes, `${doc.docType.toLowerCase()}-${doc.number}.pdf`);
       },
     );

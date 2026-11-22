@@ -2321,3 +2321,18 @@ model ExternalInvoice {
   @@map("external_invoices")
 }
 
+/// MUT-641 (ADR-265): an issued document's signed original ("מקור"), kept once and handed out as is. INSERT-only, like
+/// the documents (trigger); no foreign keys; kept 7 years after the account closes (MUT-644).
+model IssuedDocumentOriginal {
+  documentId     String   @id @db.Uuid
+  organizationId String   @db.Uuid
+  /// The produced copy (issued_document_copies.copyIndex) that received the original; every other copy is a copy.
+  copyIndex      Int
+  bytes          Bytes
+  /// SHA-256 of bytes, hex.
+  sha256         String   @db.VarChar(64)
+  createdAt      DateTime @default(now())
+
+  @@index([organizationId])
+  @@map("issued_document_originals")
+}

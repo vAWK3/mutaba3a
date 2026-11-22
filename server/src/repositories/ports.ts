@@ -4478,6 +4478,18 @@ export interface IssuerLogoRecord {
   createdAt: Date;
 }
 
+/** MUT-641 (ADR-265): an issued document's signed original ("מקור"), kept once and handed out as is. */
+export interface IssuedOriginalPdfRecord {
+  documentId: string;
+  organizationId: string;
+  /** The produced copy that received it (review): the original goes out on exactly one copy. */
+  copyIndex: number;
+  bytes: Uint8Array;
+  /** The SHA-256 of `bytes` (hex). */
+  sha256: string;
+  createdAt: Date;
+}
+
 /** MUT-571: a profile's connection to the Tax Authority. The tokens are sealed (AES-256-GCM); the store never opens them. */
 export interface TaxAuthorityConnectionRecord {
   organizationId: string;
@@ -4700,6 +4712,16 @@ export interface IssuingRepository {
   list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
   /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
   recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
+  /** MUT-641: the signed original, or null until it was first produced. */
+  getOriginalPdf(organizationId: string, documentId: string): Promise<IssuedOriginalPdfRecord | null>;
+  /** MUT-641 (review): which produced copy received the original, without its bytes; null until one did. */
+  originalCopyIndex(organizationId: string, documentId: string): Promise<number | null>;
+  /**
+   * MUT-641: keeps the signed original for the copy that produced it. The first one kept wins and is what every caller
+   * gets back (a racing twin gets the winner's, with the winner's copyIndex); it is never replaced. Null for an unknown
+   * document.
+   */
+  keepOriginalPdf(organizationId: string, documentId: string, pdf: Pick<IssuedOriginalPdfRecord, 'bytes' | 'sha256' | 'copyIndex'>, at: Date): Promise<IssuedOriginalPdfRecord | null>;
   gaps(organizationId: string): Promise<IssuedNumberGap[]>;
   /** MUT-647: attaches an invoice issued elsewhere; `exists` when the entry already has a live one. */
   attachExternal(input: Omit<ExternalInvoiceRecord, 'id' | 'removedAt'>, file: ExternalInvoiceFileInput): Promise<{ kind: 'attached'; record: ExternalInvoiceRecord } | { kind: 'exists'; record: ExternalInvoiceRecord }>;

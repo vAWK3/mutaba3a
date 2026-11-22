@@ -94,6 +94,7 @@ import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
+import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
 import type { RegistryLookup } from './israel/registry.js';
 import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
@@ -200,6 +201,11 @@ export interface AppDependencies {
   monthlySummaryDailySends?: number;
   /** MUT-533 (D3): BILLING_RETRY_WINDOW_DAYS, the Smart Retries window the failed-card reminder is timed in. Default 14. */
   retryWindowDays?: number;
+  /**
+   * MUT-641 (ADR-265): signs every issued-document PDF that leaves (documentSignerFrom(config)). Absent or null = no
+   * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
+   */
+  documentSigner?: DocumentSigner | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -616,6 +622,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // MUT-640: hosted only; the signed-out portal's local app passes none.
     issuedPdf: {
       render: renderIssuedDocumentPdf,
+      sign: deps.documentSigner ? (doc, pdf, signedAt) => deps.documentSigner!.sign(pdf, signatureDetailsOf(doc, signedAt)) : null,
+      signingFailed: ({ organizationId, documentId, error }) => deps.logger.error({ organizationId, documentId, err: error, signer: deps.documentSigner?.kind }, 'issued document could not be signed; nothing was sent'),
       logoPrints,
       logoFailed: ({ organizationId, documentId, error }) => deps.logger.warn({ organizationId, documentId, err: error }, 'issued document printed without its logo'),
     },
