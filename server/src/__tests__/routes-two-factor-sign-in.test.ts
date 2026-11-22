@@ -15,7 +15,7 @@ import type { TwoFactorMethod } from '../repositories/ports.js';
 import { SETUP_TEST_PASSWORD, setupTokenOf } from './helpers/provision.js';
 
 /**
- * MUT-710 (ADR-275 D1–D3, D6, D11, D14): the second step at every sign-in entry point (password, emailed code, cookie
+ * MUT-710 (ADR-274 D1–D3, D6, D11, D14): the second step at every sign-in entry point (password, emailed code, cookie
  * and device), its single use and counting under parallel requests, and every person setup link, SETUP included.
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any

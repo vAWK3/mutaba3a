@@ -1,4 +1,4 @@
-# MUT-710 (ADR-275 D12): the authentication log the SHAAM security appendix (§19) asks for, kept 12 months and encrypted
+# MUT-710 (ADR-274 D12): the authentication log the SHAAM security appendix (§19) asks for, kept 12 months and encrypted
 # at rest. The API writes one structured `auth_event` line per sign-in, two-step, password and Tax Authority event
 # (server/src/observability/auth-log.ts); this sink copies those lines from the API's own stdout into a bucket kept
 # 365 days. Cloud Logging encrypts buckets at rest with Google-managed AES-256 keys, as Cloud SQL does.

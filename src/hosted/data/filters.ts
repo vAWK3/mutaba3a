@@ -261,17 +261,25 @@ export interface DocumentFilters {
 }
 export const parseDocuments = (raw: Raw): DocumentFilters => compact({ customerId: id(raw.customerId), kind: oneOf(raw.kind, DOCUMENT_KINDS) });
 
-export const CLIENT_TABS = ['summary', 'receivables', 'payments', 'documents'] as const;
+/** MUT-664: Ledger card (the default) | Documents | Details, as on the approved board. */
+export const CLIENT_TABS = ['ledger', 'documents', 'details'] as const;
 export type ClientTab = (typeof CLIENT_TABS)[number];
+/** Links from before MUT-664 keep working: the receivables and payments tabs folded into the ledger card, summary is Details. */
+const LEGACY_CLIENT_TABS: Record<string, ClientTab> = { summary: 'details', receivables: 'ledger', payments: 'ledger' };
+const clientTab = (raw: unknown): ClientTab | undefined => oneOf(raw, CLIENT_TABS) ?? (typeof raw === 'string' ? LEGACY_CLIENT_TABS[raw] : undefined);
+/** The ledger card's period: everything, this month, the last three months, this year. */
+export const LEDGER_PERIODS = ['all', 'month', 'quarter', 'year'] as const;
+export type LedgerPeriod = (typeof LEDGER_PERIODS)[number];
 
 /** Client detail: the tab, plus the filters of whichever list it shows (the client itself is fixed). */
-export type ClientDetailSearch = { tab?: ClientTab } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
+export type ClientDetailSearch = { tab?: ClientTab; period?: LedgerPeriod } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
     paymentStatus?: PaymentStatusFilter;
     kind?: DocumentFilters['kind'];
   } & IncomeDrawerSearch;
 export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
   compact({
-    tab: oneOf(raw.tab, CLIENT_TABS),
+    tab: clientTab(raw.tab),
+    period: oneOf(raw.period, LEDGER_PERIODS),
     projectId: id(raw.projectId),
     currency: oneOf(raw.currency, CURRENCIES),
     status: oneOf(raw.status, RECEIVABLE_STATUSES),
@@ -377,4 +385,23 @@ export function pickShellOverlay(search: Raw): Partial<ProfileDrawerSearch> {
   const picked: Raw = {};
   for (const key of SHELL_OVERLAY_KEYS) if (search[key] !== undefined) picked[key] = search[key];
   return picked as Partial<ProfileDrawerSearch>;
+}
+
+/**
+ * Home (MUT-657): its view (`?view=in-out`; Receipts & to-dos has no key, so coming back opens it) and the income
+ * drawer its Add income opens. Nothing else: a bare `?currency=` belongs to Owed (`legacyOwedSearch`).
+ */
+export interface HomeSearch extends IncomeDrawerSearch {
+  view?: 'in-out';
+}
+export const parseHome = (raw: Raw): HomeSearch => compact({ view: raw.view === 'in-out' ? ('in-out' as const) : undefined, ...parseIncomeDrawer(raw) });
+
+/**
+ * MUT-657 (E-1): Owed's overview moved from the bare `/p/:id` to `/owed`, and `?currency=` was its only key, so a bare
+ * address that carries one is an old Owed link. Its search for `/owed`: the currency and every shell key (a Stripe
+ * return's `?checkout=`, `?billing=`, …); null when the address is home's.
+ */
+export function legacyOwedSearch(raw: Raw): (OverviewFilters & Partial<ProfileDrawerSearch>) | null {
+  const currency = oneOf(raw.currency, CURRENCIES);
+  return currency ? { ...pickShellOverlay(raw), currency } : null;
 }

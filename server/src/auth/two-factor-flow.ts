@@ -21,7 +21,7 @@ import {
 } from './two-factor.js';
 
 /**
- * MUT-710 (ADR-275 D2, D3, D5): the second step itself, shared by sign-in (sign-in.ts), setup links
+ * MUT-710 (ADR-274 D2, D3, D5): the second step itself, shared by sign-in (sign-in.ts), setup links
  * (routes/account-setup.ts) and the person's own management routes. Holds the keys, the pepper and the mailer; the
  * store comes with each call, so a guarded route keeps its guard.
  *
@@ -339,13 +339,15 @@ export async function auditPerson(c: Context<AppEnv>, store: LedgerStore, user: 
 }
 
 /**
- * MUT-710 (ADR-275 D10, AC4): issuing and the Tax Authority need two-step sign-in on and this session to have passed
+ * MUT-710 (ADR-274 D10, AC4): issuing and the Tax Authority need two-step sign-in on and this session to have passed
  * it. Placed after requireScope and **before** idempotent(...) (review 3: the idempotency layer stores and replays a
  * 4xx, so a refusal inside the handler would replay forever under the same key). `issuing:write` is session-only, so
  * no API key or agent reaches it; anything else without a person session is refused the same way.
  */
 export function requireTwoFactor(store: Pick<LedgerStore, 'twoFactor'>): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
+    // TWO_FACTOR_ISSUING_GATE_ENABLED off (the default until the screens ship): issuing is open as before MUT-710.
+    if (c.get('twoFactorIssuingGate') !== true) return next();
     const session = c.get('identity')?.session ?? null;
     const state = session ? await store.twoFactor.get(c.get('identity').user.id) : null;
     if (!session || !state || !session.twoFactorAt) {

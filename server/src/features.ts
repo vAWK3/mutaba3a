@@ -5,13 +5,14 @@ import type { LedgerStore } from './repositories/ports.js';
  * column is plain text, so a new flag is a change here and needs no migration. Every flag is off until granted.
  *
  * `agent_access`: the person may connect their own AI agent over MCP (epic MUT-432).
- * `receipt_reading`: the server reads the receipts this person uploads (MUT-441, D3), while SERVER_OCR is on.
+ * `receipt_reading` was MUT-441's per-person grant for server reading; MUT-659 (Basel, 2026-11-22) reads everyone's
+ * receipts while SERVER_OCR is on, so it is no longer a feature (its old grant rows were revoked by migration).
  * `accountant_access`: as an owner, the person may invite an accountant and make share links (MUT-577), while
  *   ACCOUNTANT_ACCESS / SHARE_LINKS are on. Listing and revoking need no feature; accountants and link visitors neither.
  * `invoicing`: the person's business profiles issue invoices, receipts and credit notes (MUT-568, D1). Checked on the
  *   profile's owner, so co-owners and accountants under a grant see what the owner's flag allows.
  */
-export const FEATURES = ['agent_access', 'receipt_reading', 'accountant_access', 'invoicing'] as const;
+export const FEATURES = ['agent_access', 'accountant_access', 'invoicing'] as const;
 export type Feature = (typeof FEATURES)[number];
 
 export function isFeature(name: string): name is Feature {

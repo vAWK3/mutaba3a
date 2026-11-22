@@ -42,7 +42,7 @@ export const TWO_STEP_KEYS = new TwoFactorKeys('accountant-harness-two-step-key-
  * person signedIn() makes has two-step sign-in on, and each sign-in finishes with one of their recovery codes.
  */
 export function issuingHarness(overrides: Partial<AppDependencies> = {}) {
-  return { ...accountantHarness(overrides), twoStep: true as const };
+  return { ...accountantHarness({ twoFactorIssuingGate: true, ...overrides }), twoStep: true as const };
 }
 
 export function accountantHarness(overrides: Partial<AppDependencies> = {}) {

@@ -106,7 +106,7 @@ async function harness(setup: { dailyCap?: number } = {}) {
 }
 
 describe('MUT-535: the monthly summary run', () => {
-  it('mails a payer last month per currency, with the overview link and an opt-out link that names them (AC1)', async () => {
+  it('mails a payer last month per currency, with the In & out link and an opt-out link that names them (AC1)', async () => {
     const h = await harness();
     const p = await h.person();
     const client = await p.customer();
@@ -124,7 +124,8 @@ describe('MUT-535: the monthly summary run', () => {
     expect(mail!.text).toContain('Came in during November: ₪12,400 · $900');
     expect(mail!.text).toContain('Still owed: ₪3,200');
     expect(mail!.text).toContain('Overdue: ₪3,200 (1 entry)');
-    expect(mail!.text).toContain(`${PORTAL}/p/${p.personal}`);
+    // MUT-657: the profile's home, opened on In & out (this month's money), not Owed
+    expect(mail!.text).toContain(`${PORTAL}/p/${p.personal}?view=in-out`);
     const token = /mail-off#([A-Za-z0-9_.-]+)/.exec(mail!.text)?.[1] ?? '';
     expect(verifyMailOffToken(PEPPER, token)).toBe(p.userId);
     // One paid invoice: no yearly line yet (AC4).

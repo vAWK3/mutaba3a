@@ -116,7 +116,7 @@ features:
     tier: secondary
     paths:
       - src/hosted/components/TrialBanner.tsx
-      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/components/LandingNotices.tsx
       - src/hosted/data/trialPrompt.ts
     steps:
       - Sign in during the free trial on a server that can take a card, and open Owed

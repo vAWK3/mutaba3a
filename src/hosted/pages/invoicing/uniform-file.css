@@ -1,0 +1,78 @@
+/* MUT-569: You › Invoicing's uniform-file card (DESIGN.md: a card on --surface, one filled button, a status on mint). */
+.hp-uniform-file {
+  margin-block-start: var(--space-8);
+  padding: var(--space-6);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-card);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.hp-uniform-file h2 {
+  font-size: var(--text-headline);
+  font-weight: var(--weight-medium);
+  margin: 0;
+}
+
+.hp-uniform-file-lead {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.hp-uniform-file-dates {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  inline-size: 100%;
+}
+
+/* 480px: the portal's stacking breakpoint (DESIGN.md, RTL and 375 px). */
+@media (max-width: 480px) {
+  .hp-uniform-file-dates {
+    grid-template-columns: 1fr;
+  }
+}
+
+.hp-uniform-file-status {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  inline-size: 100%;
+}
+
+.hp-uniform-file-status.is-done {
+  background: var(--success-subtle);
+  color: var(--success);
+}
+
+.hp-uniform-file-status.is-empty {
+  background: var(--accent-2-subtle);
+  color: var(--info);
+}
+
+.hp-uniform-file-status small {
+  display: block;
+  font-size: var(--text-label);
+}
+
+.hp-uniform-file-inside {
+  color: var(--muted);
+  font-size: var(--text-label);
+}
+
+.hp-uniform-file-inside summary {
+  color: var(--accent-text);
+  cursor: pointer;
+  min-block-size: 44px;
+  display: flex;
+  align-items: center;
+}
+
+.hp-uniform-file-inside ul {
+  margin: var(--space-2) 0 0;
+  padding-inline-start: var(--space-5);
+}

@@ -4,7 +4,7 @@ import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.
 import { ADMIN, accountantHarness, businessOf, idem, issuingHarness, json, person, read, signedIn, type AccountantHarness } from './helpers/accountants.js';
 
 /**
- * MUT-710 (ADR-275 D10, AC4): issuing and the Tax Authority need two-step sign-in on and a session that passed it;
+ * MUT-710 (ADR-274 D10, AC4): issuing and the Tax Authority need two-step sign-in on and a session that passed it;
  * the refusal comes before the idempotency layer, so it is never replayed; disconnecting always works.
  */
 const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
@@ -26,7 +26,7 @@ async function owner(h: AccountantHarness) {
 
 describe('the issuing gate (MUT-710 D10)', () => {
   it('without two-step sign-in, all four routes point to setup (enrolled: false)', async () => {
-    const h = accountantHarness({ taxAuthority: TAX });
+    const h = accountantHarness({ taxAuthority: TAX, twoFactorIssuingGate: true });
     const { on } = await owner(h);
     expect(await refusal(await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT')))).toEqual({ enrolled: false });
     expect(await refusal(await h.app.request('/v1/issued-documents', json({}, { ...on, ...idem() })))).toEqual({ enrolled: false });
@@ -55,6 +55,20 @@ describe('the issuing gate (MUT-710 D10)', () => {
     const again = await signedIn(h, p.email, p.password, p.userId, p.personalId);
     const res = await h.app.request('/v1/issued-documents', json({}, { ...again.on(profileId), ...key }));
     expect((await read(res)).error?.code).not.toBe('TWO_FACTOR_SETUP_REQUIRED');
+  });
+
+  it('with TWO_FACTOR_ISSUING_GATE_ENABLED off (the default), issuing needs no two-step sign-in', async () => {
+    const h = accountantHarness({ taxAuthority: TAX });
+    const { p, on } = await owner(h);
+    expect(await h.store.twoFactor.get(p.userId)).toBeNull();
+    expect((await h.app.request('/v1/issuer', json(ISSUER, on, 'PUT'))).status).toBe(200);
+    for (const res of [
+      await h.app.request('/v1/issued-documents', json({}, { ...on, ...idem() })),
+      await h.app.request('/v1/issuing/tax-authority/connect', json({}, on)),
+      await h.app.request('/v1/issuing/allocation-decisions', json({ heldKey: 'k', choice: 'CANCEL' }, on)),
+    ]) {
+      expect((await res.text()).includes('TWO_FACTOR_SETUP_REQUIRED')).toBe(false);
+    }
   });
 
   it('disconnecting from the Tax Authority always works', async () => {

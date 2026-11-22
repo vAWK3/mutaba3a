@@ -1,4 +1,4 @@
-# MUT-710 (ADR-275 D4): the key that seals two-step sign-in secrets (TOTP) and digests recovery codes. Generated here,
+# MUT-710 (ADR-274 D4): the key that seals two-step sign-in secrets (TOTP) and digests recovery codes. Generated here,
 # never a tfvars value, always mounted. Replacing it would make every authenticator-app secret unreadable and void
 # every recovery code (everyone with two-step sign-in locked out of it), so it can't be destroyed by a plan.
 

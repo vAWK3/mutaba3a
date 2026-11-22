@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { CreateTwoFactorChallengeInput, LedgerStore, UserRecord } from '../ports.js';
 
 /**
- * MUT-710 storage contract (ADR-275): two-step sign-in, its recovery codes and challenges. Run against the memory store
+ * MUT-710 storage contract (ADR-274): two-step sign-in, its recovery codes and challenges. Run against the memory store
  * and Postgres (`test:db`), so both agree that every counter is conditional: a TOTP step is used once, a recovery code
  * once, a challenge once, and tries and resends stop at their caps (review 2).
  */
@@ -28,6 +28,7 @@ export function describeLedgerStoreTwoFactorContract(name: string, makeStore: ()
     bankDetails: null,
     footerNote: null,
     offerAfterSave: true,
+    defaultDocumentsPreference: 'ON_PAYMENT' as const,
   };
 
   async function person(store: LedgerStore): Promise<UserRecord> {

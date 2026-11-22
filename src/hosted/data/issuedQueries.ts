@@ -15,9 +15,9 @@ const noRetryOn404 = (count: number, error: unknown) => !notFound(error) && coun
 
 export const issuedKey = (profileId: string, ...rest: string[]) => profileKey(profileId, 'issued', ...rest);
 
-export function useIssuedDocuments(profileId: string, filter: { customerId?: string; docType?: IssuedDocType } = {}, enabled = true) {
+export function useIssuedDocuments(profileId: string, filter: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string } = {}, enabled = true) {
   return useQuery({
-    queryKey: issuedKey(profileId, 'list', filter.customerId ?? '', filter.docType ?? ''),
+    queryKey: issuedKey(profileId, 'list', filter.customerId ?? '', filter.docType ?? '', filter.currency ?? '', filter.from ?? '', filter.to ?? ''),
     queryFn: ({ signal }) => api.issuedDocuments(profileId, filter, signal),
     retry: noRetryOn404,
     enabled,
@@ -57,8 +57,20 @@ export function useIssueDocument(profileId: string) {
     mutationFn: ({ body, key }: { body: IssueDocumentRequest; key: string }): Promise<IssuedDocument> => api.issueDocument(profileId, body, key),
     onSuccess: (doc) => {
       queryClient.setQueryData(issuedKey(profileId, 'doc', doc.id), doc);
-      for (const scope of ['issued', 'receivables', 'receivable', 'payments', 'payment', 'summary', 'directory', 'customer']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
+      for (const scope of ['issued', 'documents-due', 'receivables', 'receivable', 'payments', 'payment', 'summary', 'directory', 'customer']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
       void queryClient.invalidateQueries({ queryKey: setupKey(profileId) });
+    },
+  });
+}
+
+/** MUT-662: cancel a payment request. Its Owed goes back to documents due, so those and the summaries refetch. */
+export function useCancelPaymentRequest(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ documentId, reason, key }: { documentId: string; reason: string | null; key: string }): Promise<IssuedDocument> => api.cancelPaymentRequest(profileId, documentId, reason, key),
+    onSuccess: (doc) => {
+      queryClient.setQueryData(issuedKey(profileId, 'doc', doc.id), doc);
+      for (const scope of ['issued', 'receivables', 'receivable', 'documents-due', 'summary']) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, scope) });
     },
   });
 }

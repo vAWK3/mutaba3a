@@ -240,18 +240,18 @@ describe('the account page (design 5A, 4A)', () => {
   });
 
   it('the operator’s own feature switch works, through the step-up (the E10 amendment)', async () => {
-    const own = account({ id: OPERATOR_ID, operator: true, availableFeatures: ['agent_access', 'receipt_reading'] });
+    const own = account({ id: OPERATOR_ID, operator: true, availableFeatures: ['agent_access', 'accountant_access'] });
     const { user, api } = portal({
       view: own,
       path: `/operator/accounts/${OPERATOR_ID}`,
       stepUpUntil: STALE,
-      extra: { [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`]: () => ok({ feature: 'receipt_reading', grantedAt: NOW.toISOString(), granted: true }) },
+      extra: { [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`]: () => ok({ feature: 'accountant_access', grantedAt: NOW.toISOString(), granted: true }) },
     });
-    const flag = (await features()).getByRole('switch', { name: /Receipt reading/ });
-    expect(flag).toHaveTextContent('Reads new receipts on our servers and fills in the date, total and vendor.');
+    const flag = (await features()).getByRole('switch', { name: /Accountant access/ });
+    expect(flag).toHaveTextContent('As an owner, they can invite an accountant to read a profile and make share links.');
     expect(flag).not.toHaveAttribute('aria-disabled');
     await user.click(flag);
-    await waitFor(() => expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`)).toBe(1));
+    await waitFor(() => expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`)).toBe(1));
     expect(browser.startAuthentication).toHaveBeenCalledTimes(1);
     expect(api.count('POST /v1/operator/step-up')).toBe(1);
   });

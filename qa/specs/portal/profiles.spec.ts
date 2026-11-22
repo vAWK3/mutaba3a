@@ -170,7 +170,7 @@ test('New profile: name and type are asked for, the zone can be changed, and the
   await step('The new profile opens, and the server got exactly what was chosen', async () => {
     await expect(page.getByTestId('toast-live')).toHaveText(/Home is ready/);
     await expect(page.getByRole('link', { name: 'You · Home' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     const post = api.last('POST', /^\/v1\/profiles$/);
     expect(post?.body).toEqual({ name: 'Home', type: 'PERSONAL', defaultCurrency: 'JOD', timezone: 'Asia/Amman' });
     expect(post?.headers['idempotency-key']).toMatch(/^[0-9a-f-]{36}$/);

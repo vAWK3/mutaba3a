@@ -35,6 +35,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // B: text that reads left to right in any language
   'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
   'src/hosted/shell/YouIsland.tsx': { auto: 1 },
+  'src/hosted/pages/home/HomeInOut.tsx': { auto: 1 }, // MUT-657: a category's name (D)
+  'src/hosted/pages/home/OverdueGroup.tsx': { auto: 1 }, // MUT-657: a client's name (D)
   // MUT-562: the Client books desk, the accept-invite page and a share link's page (names, emails, months, PINs)
   'src/hosted/components/EntriesTable.tsx': { auto: 2 }, // an entry's title and category (D)
   'src/hosted/components/PinBoxes.tsx': { ltr: 1 }, // a PIN's digits run left to right in both languages (B)
@@ -55,10 +57,12 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/invoicing/InvoicingSteps.tsx': { ltr: 5, auto: 5 },
   // MUT-646: the letterhead reads in the document's language, not the portal's: English left to right, Hebrew and Arabic right to left
   'src/hosted/pages/invoicing/Letterhead.tsx': { ltr: 1, rtl: 1 },
+  // MUT-569: the file names (OPENFRMT…zip, INI.TXT, BKMVDATA.zip, report.html) read left to right.
+  'src/hosted/pages/invoicing/UniformFileExport.tsx': { ltr: 4 },
   // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
   'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 4, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
-  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 2 },
+  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
@@ -68,6 +72,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
   'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
+  'src/hosted/pages/views/DocumentsDuePage.tsx': { auto: 1 }, // MUT-660: the client's name heading a group
+  'src/hosted/pages/home/ToIssueGroup.tsx': { auto: 1 }, // MUT-660: a client's name
   'src/hosted/pages/views/PaymentsList.tsx': { ltr: 1 }, // payment number
   'src/hosted/pages/auth/SignInPage.tsx': { ltr: 2 }, // email, password
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)

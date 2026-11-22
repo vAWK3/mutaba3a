@@ -296,9 +296,8 @@ test('Add income from a client’s page starts as Owed with that client filled i
     expect(api.last('POST', /^\/v1\/income$/)?.body).toMatchObject({ kind: 'owed', amount: '300.00', customerId: C2 });
   });
 
-  await step('It is on the client’s Receivables tab', async () => {
-    await page.getByRole('tab', { name: 'Receivables' }).click();
-    await expect(page.getByRole('table', { name: 'Receivables' })).toContainText('300.00');
+  await step('It is on the client’s ledger card', async () => {
+    await expect(page.getByTestId('ledger-card')).toContainText('300.00');
   });
 });
 
@@ -733,6 +732,40 @@ test('A payment on the wrong job is reversed with a reason; the entry is owed ag
     await expect(shown.getByRole('button', { name: 'Reverse payment' })).toHaveCount(0);
     await api.open(page, `/p/${OFFICE_A}/receivables`);
     await expect(page.getByRole('button', { name: /^Record payment for Client 1/ })).toBeVisible();
+  });
+});
+
+test('A payment a receipt was issued for can\'t be reversed; the portal says to issue a credit note first and nothing changes (MUT-709)', { tag: '@portal.income.reverse-receipted' }, async ({ page, step }) => {
+  const owed = owedEntry();
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [owed] });
+  const paymentDrawer = page.getByRole('dialog', { name: 'Change the received date' });
+  const reverseDrawer = page.getByRole('dialog', { name: /^Reverse payment/ });
+
+  await step('Record payment in full on the Owed entry; a receipt stands on it on the server', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const settle = page.getByRole('dialog', { name: /Record payment/ });
+    await settle.getByRole('button', { name: 'Record payment' }).click();
+    await expect(settle).toHaveCount(0);
+    // MUT-709: the server refuses to reverse a payment an issued receipt or invoice-receipt stands on.
+    api.once('POST', /^\/v1\/payments\/[^/]+\/reverse$/, apiError(409, 'CONFLICT', { reason: 'HAS_DOCUMENT' }));
+  });
+
+  await step('Open that payment from Payments, choose Reverse payment, give a reason and confirm', async () => {
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    await page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ }).locator('button.row-link').click();
+    await paymentDrawer.getByRole('button', { name: 'Reverse payment' }).click();
+    await expect(reverseDrawer).toBeVisible();
+    await reverseDrawer.getByLabel('Reason').fill('Applied to the wrong job');
+    await reverseDrawer.getByRole('button', { name: 'Reverse payment' }).click();
+  });
+
+  await step('The toast says to issue a credit note first; the payment is not reversed', async () => {
+    await expect(page.getByTestId('toast-live')).toContainText('Issue a credit note first');
+    await api.open(page, `/p/${OFFICE_A}/payments`);
+    const row = page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ });
+    await expect(row).toBeVisible();
+    await expect(row).not.toContainText('Reversed');
   });
 });
 

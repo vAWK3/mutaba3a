@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { base32Decode, base32Encode, generateTotpSecret, otpauthUri, TOTP_POLICY, totpAt, verifyTotp } from '../totp.js';
 
-/** MUT-710 (ADR-275 D4): RFC 6238 TOTP, HMAC-SHA1, 6 digits, 30 s, ±1 step, no reuse of a step. */
+/** MUT-710 (ADR-274 D4): RFC 6238 TOTP, HMAC-SHA1, 6 digits, 30 s, ±1 step, no reuse of a step. */
 describe('TOTP (MUT-710)', () => {
   // RFC 6238 appendix B: the SHA-1 seed is the ASCII "12345678901234567890"; the RFC prints 8 digits, we use the last 6.
   const rfcSecret = base32Encode(Buffer.from('12345678901234567890', 'ascii'));

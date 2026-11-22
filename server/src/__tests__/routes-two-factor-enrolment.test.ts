@@ -3,7 +3,7 @@ import { stepOf, totpAt } from '../auth/totp.js';
 import { ADMIN, accountantHarness, businessOf, json, person, read, signedIn, type AccountantHarness, type Person } from './helpers/accountants.js';
 
 /**
- * MUT-710 (ADR-275 D8, D9, AC1): turning two-step sign-in on (app or email), the proof it needs, the recovery codes,
+ * MUT-710 (ADR-274 D8, D9, AC1): turning two-step sign-in on (app or email), the proof it needs, the recovery codes,
  * switching, new codes and turning it off, with the notice mailed each time.
  */
 const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
@@ -97,7 +97,7 @@ describe('while it is on (MUT-710 D8, D9)', () => {
   });
 
   it('turning it off needs the second step, and is refused while the person issues documents', async () => {
-    const h = accountantHarness();
+    const h = accountantHarness({ twoFactorIssuingGate: true });
     const p = await person(h);
     const { codes } = await turnOnApp(h, p);
     expect((await h.app.request(`/admin/v1/users/${p.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
@@ -113,6 +113,21 @@ describe('while it is on (MUT-710 D8, D9)', () => {
     const res = await h.app.request('/v1/me/two-factor', { ...json({ currentPassword: q.password, challengeToken: await manageChallenge(h, q), recoveryCode: mine.codes[0] }, q.auth), method: 'DELETE' });
     expect(res.status).toBe(204);
     expect((await read(await h.app.request('/v1/me/two-factor', { headers: q.auth }))).enabled).toBe(false);
+  });
+});
+
+describe('with the issuing gate off (TWO_FACTOR_ISSUING_GATE_ENABLED, the default)', () => {
+  it('issuing requires nothing, so a person who issues can still turn it off', async () => {
+    const h = accountantHarness();
+    const p = await person(h);
+    const { codes } = await turnOnApp(h, p);
+    expect((await h.app.request(`/admin/v1/users/${p.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
+    const profileId = await businessOf(h, p);
+    expect((await h.app.request('/v1/issuer', json(ISSUER, p.on(profileId), 'PUT'))).status).toBe(200);
+    expect((await read(await h.app.request('/v1/me/two-factor', { headers: p.auth }))).requiredForIssuing).toBe(false);
+    expect((await read(await h.app.request('/v1/me', { headers: p.auth }))).user.twoFactor.requiredForIssuing).toBe(false);
+    const res = await h.app.request('/v1/me/two-factor', { ...json({ currentPassword: p.password, challengeToken: await manageChallenge(h, p), recoveryCode: codes[0] }, p.auth), method: 'DELETE' });
+    expect(res.status).toBe(204);
   });
 });
 

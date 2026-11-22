@@ -51,7 +51,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
     }),
     async (c) => {
       const { user, via } = c.get('identity');
-      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
       return c.json(via ? delegatedMe(me, via) : me, 200);
     },
   );
@@ -78,6 +78,7 @@ export async function buildMe(
   maxOwnedProfiles = MAX_OWNED_PROFILES,
   accountantAccess = false,
   accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
+  twoFactorIssuingGate = false,
 ) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
@@ -117,7 +118,7 @@ export async function buildMe(
     // MUT-596: only when it decides ownSignIn (a password the person never chose).
     user.passwordChosen ? 0 : store.passkeys.listByUser(user.id).then((keys) => keys.length),
     // MUT-710 (D8): three small reads by the person's id.
-    twoFactorStateOf(store, user.id),
+    twoFactorStateOf(store, user.id, twoFactorIssuingGate),
   ]);
   return {
     user: {
@@ -166,8 +167,9 @@ async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTer
   return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
 }
 
-/** MUT-710 (ADR-275 D8): Me's and GET /v1/me/two-factor's view of the person's two-step sign-in. */
-export async function twoFactorStateOf(store: LedgerStore, userId: string): Promise<{ enabled: boolean; method: 'totp' | 'email' | null; recoveryCodesLeft: number; requiredForIssuing: boolean }> {
-  const [state, recoveryCodesLeft, requiredForIssuing] = await Promise.all([store.twoFactor.get(userId), store.twoFactor.recoveryCodesLeft(userId), store.twoFactor.ownsIssuingProfile(userId)]);
+/** MUT-710 (ADR-274 D8): Me's and GET /v1/me/two-factor's view of the person's two-step sign-in. */
+export async function twoFactorStateOf(store: LedgerStore, userId: string, issuingGate: boolean): Promise<{ enabled: boolean; method: 'totp' | 'email' | null; recoveryCodesLeft: number; requiredForIssuing: boolean }> {
+  // With the issuing gate off (TWO_FACTOR_ISSUING_GATE_ENABLED), nothing requires it, so it can always be turned off.
+  const [state, recoveryCodesLeft, requiredForIssuing] = await Promise.all([store.twoFactor.get(userId), store.twoFactor.recoveryCodesLeft(userId), issuingGate ? store.twoFactor.ownsIssuingProfile(userId) : false]);
   return { enabled: state !== null, method: state?.method ?? null, recoveryCodesLeft: state ? recoveryCodesLeft : 0, requiredForIssuing };
 }

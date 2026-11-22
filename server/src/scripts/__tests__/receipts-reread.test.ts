@@ -1,12 +1,12 @@
 import pino from 'pino';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../../attachments/storage.js';
 import { receipt } from '../../receipts/extract/__tests__/fixtures.js';
 import type { OcrClient, OcrResult } from '../../receipts/ocr-client.js';
 import { createReceiptReader, READ_GIVE_UP_MS, SERVER_READER_GENERATION, serverReaderVersion } from '../../receipts/reading/reader.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
-import { buyerContactReport, rereadReceipts, withoutServerFields } from '../receipts-reread.js';
+import { buyerContactReport, queueReadBacklog, rereadReceipts, withoutServerFields } from '../receipts-reread.js';
 
 /**
  * MUT-514 (D11 reversed, 2026-11-03): the re-read command. A receipt an older server reader filled is reset so the
@@ -27,10 +27,9 @@ class OneOcr implements OcrClient {
   }
 }
 
-async function world(granted = true, lines: OcrResult['lines'] = PAZ) {
+async function world(lines: OcrResult['lines'] = PAZ) {
   const store = new MemoryLedgerStore();
   const ORG = (await store.organizations.create({ name: 'Firm', slug: `reread-${Math.random().toString(36).slice(2, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' })).id;
-  vi.spyOn(store.features, 'activeFor').mockResolvedValue(granted ? ['receipt_reading'] : []);
   const storage = new MemoryAttachmentStorage();
   const clock = { now: FIRST_READ };
   const reader = createReceiptReader({ store, storage, ocr: new OneOcr(lines), dispatcher: { enqueue: async () => {} }, logger: pino({ level: 'silent' }), now: () => clock.now });
@@ -87,9 +86,6 @@ describe('receipts:reread (MUT-514)', () => {
     expect(r.planned).toEqual([]);
     for (const x of [current, phone]) expect((await w.store.expenseReceipts.getById(w.ORG, x.id))?.suggested).toEqual(x.suggested);
 
-    const ungranted = await world(false);
-    const kept = await ungranted.oldRead();
-    expect(await rereadReceipts(ungranted.store, { readerBelow: 2, apply: true, now: LATER })).toEqual({ planned: [], noGrant: [kept.id], reset: [] });
   });
 
   it('with a file type, only receipts of that type are picked (MUT-590 D3: PDFs only)', async () => {
@@ -120,7 +116,7 @@ describe('receipts:reread (MUT-514)', () => {
 
   it('a re-read that adds nothing is not picked again, and a generation above the current reader is refused (qa-reconcile review)', async () => {
     // The fixed reader finds nothing on this receipt it can be sure of.
-    const w = await world(true, receipt(['חנות']));
+    const w = await world(receipt(['חנות']));
     const before = await w.oldRead({ readerVersion: 'server-ocr-rapid-tess-1', vatMinor: f('14947'), date: f('2026-10-21', 'qr') });
     w.clock.now = LATER;
     await rereadReceipts(w.store, { readerBelow: 2, apply: true, now: LATER });
@@ -134,10 +130,8 @@ describe('receipts:reread (MUT-514)', () => {
 describe('receipts:reread --buyer-contacts (MUT-630)', () => {
   const BILL = receipt(['חברת הסלולר', 'לכבוד: דנה', 'Dana@Example.com', 'טל 052-9876543', 'סה"כ ₪59.90']);
 
-  async function seeded(holders = true) {
-    const w = await world(true, BILL);
-    vi.spyOn(w.store.features, 'holders').mockResolvedValue(holders ? [{ userId: USER, email: 'pilot@example.com', grantedAt: FIRST_READ }] : []);
-    vi.spyOn(w.store.memberships, 'listByUser').mockResolvedValue([{ organizationId: w.ORG } as Awaited<ReturnType<typeof w.store.memberships.listByUser>>[number]]);
+  async function seeded() {
+    const w = await world(BILL);
     // The bill's read teaches the profile the buyer's email and phone.
     const bill = await w.oldRead({ readerVersion: serverReaderVersion('rapid-tess') });
     await w.store.expenseReceipts.resetForReread(bill.id, bill.version, null, FIRST_READ);
@@ -162,10 +156,25 @@ describe('receipts:reread --buyer-contacts (MUT-630)', () => {
     expect(JSON.stringify(items.map(({ kind, fields }) => ({ kind, fields })))).not.toMatch(/dana|052/i);
   });
 
-  it('looks only at profiles a receipt_reading holder belongs to', async () => {
-    const w = await seeded(false);
-    await w.store.vendors.resolve({ organizationId: w.ORG, name: 'חברת הסלולר', phone: '052-9876543' }, FIRST_READ);
-    expect(await buyerContactReport(w.store)).toEqual([]);
+  it('MUT-659: looks at every profile, with no grant holders at all', async () => {
+    const w = await seeded();
+    expect(await w.store.features.holders('receipt_reading')).toEqual([]);
+    const own = await w.store.vendors.resolve({ organizationId: w.ORG, name: 'חברת הסלולר', phone: '052-9876543' }, FIRST_READ);
+    expect(await buyerContactReport(w.store)).toEqual([{ kind: 'vendor', id: own!.id, organizationId: w.ORG, fields: ['phone'] }]);
+  });
+});
+
+/** MUT-659: reading is for everyone, so the receipts nobody asked to read get asked for once after the deploy. */
+describe('receipts:reread --backlog (MUT-659)', () => {
+  it('asks once for every never-read To-review receipt with an uploader, and a second run finds nothing', async () => {
+    const w = await world();
+    const never = await w.store.expenseReceipts.create({ organizationId: w.ORG, expenseId: null, filename: 'n.jpg', mimeType: 'image/jpeg', sizeBytes: 4, receivedOn: '2026-10-30', uploadedByUserId: USER, requestId: null }, FIRST_READ);
+    await w.store.expenseReceipts.complete(w.ORG, never.id, FIRST_READ);
+    const alreadyRead = await w.oldRead();
+    expect(await queueReadBacklog(w.store, LATER)).toEqual([never.id]);
+    expect((await w.store.expenseReceipts.getById(w.ORG, never.id))?.readStatus).toBe('PENDING');
+    expect((await w.store.expenseReceipts.getById(w.ORG, alreadyRead.id))?.readStatus).toBe('DONE');
+    expect(await queueReadBacklog(w.store, LATER)).toEqual([]);
   });
 });
 

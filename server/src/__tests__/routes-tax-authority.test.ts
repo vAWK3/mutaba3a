@@ -10,8 +10,8 @@ import { ADMIN, ORIGIN, issuingHarness, businessOf, idem, json, person, read, sh
 const box = new TokenBox('route-test-secret-with-at-least-32-characters');
 const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '777777715', dealerType: 'COMPANY', city: 'Nazareth' };
 
-function harness(client = new FakeTaxAuthority()) {
-  const h = issuingHarness({ taxAuthority: { client, box, stateSecret: 'state-secret-for-tests', accountingSoftwareNumber: 987654321 } });
+function harness(client = new FakeTaxAuthority(), over: Parameters<typeof issuingHarness>[0] = {}) {
+  const h = issuingHarness({ taxAuthority: { client, box, stateSecret: 'state-secret-for-tests', accountingSoftwareNumber: 987654321 }, ...over });
   return { h, client };
 }
 
@@ -27,10 +27,15 @@ async function profile(h: AccountantHarness) {
   return { owner, profileId, on, business: business.id as string, privatePerson: privatePerson.id as string };
 }
 
-async function connect(h: AccountantHarness, on: Record<string, string>) {
-  const started = await read(await h.app.request('/v1/issuing/tax-authority/connect', { method: 'POST', headers: on }));
-  const state = new URL(started.authorizeUrl).searchParams.get('state')!;
-  return h.app.request(`/v1/issuing/tax-authority/callback?code=good-code&state=${encodeURIComponent(state)}`);
+/** Connect from the portal (its Origin, by default this server's PORTAL_ORIGIN), then come back with `back`. */
+async function startConnect(h: AccountantHarness, on: Record<string, string>, origin: string | null = ORIGIN) {
+  const started = await read(await h.app.request('/v1/issuing/tax-authority/connect', { method: 'POST', headers: { ...on, ...(origin ? { origin } : {}) } }));
+  return new URL(started.authorizeUrl).searchParams.get('state')!;
+}
+
+async function connect(h: AccountantHarness, on: Record<string, string>, origin: string | null = ORIGIN, back = 'code=good-code') {
+  const state = await startConnect(h, on, origin);
+  return h.app.request(`/v1/issuing/tax-authority/callback?${back}&state=${encodeURIComponent(state)}`);
 }
 
 const invoice = (customerId: string, price: string, over: Record<string, unknown> = {}) => ({
@@ -78,14 +83,63 @@ describe('Tax Authority connection (MUT-571)', () => {
     const forged = await h.app.request(`/v1/issuing/tax-authority/callback?code=good-code&state=not.valid`);
     expect(forged.status).toBe(200);
     expect(await forged.text()).toContain('did not complete');
-    const started = await read(await h.app.request('/v1/issuing/tax-authority/connect', { method: 'POST', headers: w.on }));
-    const state = new URL(started.authorizeUrl).searchParams.get('state')!;
+    const state = await startConnect(h, w.on);
     const refused = await h.app.request(`/v1/issuing/tax-authority/callback?code=bad-code&state=${encodeURIComponent(state)}`);
     expect(refused.headers.get('location')).toContain('taxAuthority=failed');
     h.setNow(new Date(h.now().getTime() + 11 * 60_000));
     const late = await h.app.request(`/v1/issuing/tax-authority/callback?code=good-code&state=${encodeURIComponent(state)}`);
     expect(await late.text()).toContain('did not complete');
     expect(await h.store.issuing.getTaxConnection(w.profileId)).toBeNull();
+  });
+
+  describe('where the browser lands after the Tax Authority (follow-up: never an address with no page)', () => {
+    const landing = (profileId: string, origin: string, outcome: string) => `${origin}/p/${profileId}/you/invoicing?taxAuthority=${outcome}`;
+
+    it('the dev portal on another local port: back to it, not to the API origin (which serves no portal here)', async () => {
+      const { h } = harness();
+      const w = await profile(h);
+      const back = await connect(h, w.on, 'http://127.0.0.1:5175');
+      expect(back.status).toBe(302);
+      expect(back.headers.get('location')).toBe(landing(w.profileId, 'http://127.0.0.1:5175', 'connected'));
+    });
+
+    it('an API-only server and a start with no portal Origin (a phone): its own page says connected, in Arabic and English', async () => {
+      const { h } = harness();
+      const w = await profile(h);
+      const back = await connect(h, w.on, null);
+      expect(back.status).toBe(200);
+      const page = await back.text();
+      expect(page).toContain('dir="rtl"');
+      expect(page).toContain('تم الربط بسلطة الضرائب');
+      expect(page).toContain('Connected to the Tax Authority');
+      expect(await read(await h.app.request('/v1/issuing/tax-authority', { headers: w.on }))).toMatchObject({ state: 'connected' });
+    });
+
+    it('a server that serves the portal: back to PORTAL_ORIGIN even with no Origin on the start', async () => {
+      const { h } = harness(new FakeTaxAuthority(), { portal: { distDir: '/nonexistent-portal-dist' } });
+      const w = await profile(h);
+      const back = await connect(h, w.on, null);
+      expect(back.headers.get('location')).toBe(landing(w.profileId, ORIGIN, 'connected'));
+    });
+
+    it('a foreign Origin is never signed into the state', async () => {
+      const { h } = harness();
+      const w = await profile(h);
+      const back = await connect(h, w.on, 'https://evil.example');
+      expect(back.status).toBe(200);
+      expect(back.headers.get('location')).toBeNull();
+    });
+
+    it('consent refused on the Tax Authority site: back to the setup with taxAuthority=refused, nothing exchanged or stored', async () => {
+      const { h, client } = harness();
+      const w = await profile(h);
+      const back = await connect(h, w.on, ORIGIN, 'error=access_denied');
+      expect(back.headers.get('location')).toBe(landing(w.profileId, ORIGIN, 'refused'));
+      expect(client.issuedTokens).toHaveLength(0);
+      expect(await h.store.issuing.getTaxConnection(w.profileId)).toBeNull();
+      const own = await connect(h, w.on, null, 'error=access_denied');
+      expect(await own.text()).toContain('was not approved');
+    });
   });
 
   it('only the owner connects or disconnects; an accountant reads the status', async () => {

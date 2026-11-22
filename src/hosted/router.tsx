@@ -1,6 +1,6 @@
 /* eslint-disable react-refresh/only-export-components */
 import { useCallback, useRef, type ReactNode, type RefObject } from 'react';
-import { Navigate, Outlet, createRootRoute, createRoute, createRouter, useNavigate, type RouterHistory } from '@tanstack/react-router';
+import { Navigate, Outlet, createRootRoute, createRoute, createRouter, redirect, useNavigate, type RouterHistory } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { SignInPage, type ArrivalReason } from './pages/auth/SignInPage';
 import { SetupPage } from './pages/auth/SetupPage';
@@ -18,8 +18,9 @@ import { useLocalStop } from './session/localStop';
 import { ReloadToContinue } from './pages/auth/BootScreens';
 import { CrashCard } from './components/QueryView';
 import { reportBoundaryError } from './observability/errorReporting';
-import { omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseOverview, parsePaymentsPage, parseReceiptReview, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
+import { legacyOwedSearch, omitShellOverlay, parseClientDetail, parseGlance, parseClients, parseConversionsPage, parseDocuments, parseExpensesPage, parseGroupDetail, parseGroupsPage, parseHome, parseOverview, parsePaymentsPage, parseReceiptReview, parseReceiptsPage, parseReceivablesPage, parseReports, pickShellOverlay } from './data/filters';
 import { OverviewPage } from './pages/views/OverviewPage';
+import { HomePage } from './pages/views/HomePage';
 import { ReportsPage } from './pages/views/ReportsPage';
 import { GlancePage } from './pages/views/GlancePage';
 import { glanceShellProfile } from './data/verdict';
@@ -37,6 +38,7 @@ import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { InvoicingSetupPage } from './pages/invoicing/InvoicingSetupPage';
 import { IssuedDocumentPage, IssuedDocumentsPage } from './pages/views/IssuedDocuments';
+import { DocumentsDuePage } from './pages/views/DocumentsDuePage';
 import { SharingPage } from './pages/sharing/SharingPage';
 import { parseSharingSearch } from './pages/sharing/sharingRules';
 import { ConsentPage } from './pages/connect/ConsentPage';
@@ -159,7 +161,8 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
 
   const authedRoute = createRoute({ getParentRoute: () => rootRoute, id: 'authed', component: AuthGate });
 
-  const homeRoute = createRoute({ getParentRoute: () => authedRoute, path: '/', component: HomeRedirect });
+  /** `/`: on to the person's profile (its home) or the welcome. Not the profile's home page, which is `homeRoute`. */
+  const rootRedirectRoute = createRoute({ getParentRoute: () => authedRoute, path: '/', component: HomeRedirect });
 
   /** Web fallback for the iOS/Android universal link when the app isn't installed (MUT-111). */
   const captureRoute = createRoute({ getParentRoute: () => authedRoute, path: '/capture', component: CaptureRedirect });
@@ -183,10 +186,29 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     },
   });
 
-  const overviewRoute = createRoute({
+  /**
+   * MUT-657: the profile's home, at the bare path every inbound link already uses (E-1). A bare `?currency=` was the old
+   * overview's key, so that address goes on to Owed, keeping the shell's keys, without a history entry of its own.
+   */
+  const homeRoute = createRoute({
     getParentRoute: () => profileRoute,
     ...PAGE_CRASH,
     path: '/',
+    validateSearch: parseHome,
+    beforeLoad: ({ location, params }) => {
+      const owed = legacyOwedSearch(location.search as Raw);
+      if (owed) throw redirect({ to: '/p/$profileId/owed', params, search: owed as never, replace: true });
+    },
+    component: function Home() {
+      return <HomePage search={omitShellOverlay(homeRoute.useSearch())} setSearch={useReplaceSearch()} />;
+    },
+  });
+
+  /** Owed's overview (MUT-424), at `/owed` since MUT-657 gave home the bare path. */
+  const overviewRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/owed',
     validateSearch: parseOverview,
     component: function Overview() {
       return <OverviewPage filters={omitShellOverlay(overviewRoute.useSearch())} setFilters={useReplaceSearch()} />;
@@ -274,6 +296,17 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     component: function IssuedDocument() {
       const { documentId } = issuedDocumentRoute.useParams();
       return <IssuedDocumentPage key={documentId} profile={useProfile()} documentId={documentId} justIssued={issuedDocumentRoute.useSearch().issued === true} />;
+    },
+  });
+
+  /** MUT-660: documents due, a tab of Documents where issuing is on for the profile. */
+  const toIssueRoute = createRoute({
+    getParentRoute: () => profileRoute,
+    ...PAGE_CRASH,
+    path: '/documents/to-issue',
+    validateSearch: (raw: Raw) => pickShellOverlay(raw),
+    component: function ToIssue() {
+      return <DocumentsDuePage profile={useProfile()} />;
     },
   });
 
@@ -556,7 +589,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     shareLinkRoute,
     mailOffRoute,
     authedRoute.addChildren([
-      homeRoute,
+      rootRedirectRoute,
       captureRoute,
       connectApproveRoute,
       glanceRoute,
@@ -570,6 +603,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       operatorYouRoute,
       ...youRoutes.map((route) => route.noProfile),
       profileRoute.addChildren([
+        homeRoute,
         overviewRoute,
         reportsRoute,
         clientsRoute,
@@ -579,6 +613,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
         documentsRoute,
         issuedRoute,
         issuedDocumentRoute,
+        toIssueRoute,
         expensesRoute,
         groupsRoute,
         groupRoute,

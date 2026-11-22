@@ -40,6 +40,7 @@ import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import { trialMailRoutes } from './routes/trial-mail.js';
 import { cardFailedMailRoutes } from './routes/card-failed-mail.js';
+import { taxAuthorityReminderRoutes } from './routes/tax-authority-reminders.js';
 import { comebackMailRoutes } from './routes/comeback-mail.js';
 import { MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, monthlySummaryMailRoutes } from './routes/monthly-summary-mail.js';
 import { renewalMailRoutes } from './routes/renewal-mail.js';
@@ -98,6 +99,7 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
+import type { UniformFileHouse } from './issuing/uniform-file/export.js';
 import type { RegistryLookup } from './israel/registry.js';
 import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
@@ -139,7 +141,7 @@ export interface AppDependencies {
   /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
   sessions?: SessionSettings;
   /**
-   * MUT-710 (ADR-275 D4): seals TOTP secrets and keys recovery codes. Production builds it from TWO_FACTOR_SEAL_KEY;
+   * MUT-710 (ADR-274 D4): seals TOTP secrets and keys recovery codes. Production builds it from TWO_FACTOR_SEAL_KEY;
    * absent = derived from the session pepper (tests, local).
    */
   twoFactorKeys?: TwoFactorKeys;
@@ -163,6 +165,8 @@ export interface AppDependencies {
   registry?: RegistryLookup | null;
   /** MUT-571/572: the Tax Authority's Open API client and token box; absent = no connection on this server (the routes answer 404). */
   taxAuthority?: Omit<TaxAuthorityDeps, 'store'> | null;
+  /** MUT-711: where an allocation number is requested by hand; absent = DEFAULT_MANUAL_ALLOCATION_URL. */
+  manualAllocationUrl?: string | null;
   businessLookupLimiter?: RateLimiter;
   /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
   publicFxIpLimiter?: RateLimiter;
@@ -203,6 +207,11 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (TWO_FACTOR_SETUP_REQUIRED). Production passes
+   * TWO_FACTOR_ISSUING_GATE_ENABLED (off by default). Absent = off; issuingHarness and the gate's own suites turn it on.
+   */
+  twoFactorIssuingGate?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -216,6 +225,8 @@ export interface AppDependencies {
    * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
    */
   documentSigner?: DocumentSigner | null;
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, Barmajiyat). */
+  uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -397,7 +408,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.130.0-mut710';
+export const API_VERSION = '1.135.0-mut710';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -411,7 +422,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -531,7 +542,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
   app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
   app.route('/', healthRoutes(store, deps.version, reporter.enabled));
-  // MUT-710 (ADR-275): the second step, shared by every sign-in route and setup links.
+  // MUT-710 (ADR-274): the second step, shared by every sign-in route and setup links.
   const twoFactor = new TwoFactorFlow({
     keys: deps.twoFactorKeys ?? new TwoFactorKeys(`pepper:${sessions.pepper}`),
     pepper: sessions.pepper,
@@ -638,9 +649,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     logger: deps.logger,
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
+    manualAllocationUrl: deps.manualAllocationUrl ?? null,
     portalOrigin: sessions.portalOrigin ?? null,
+    servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.
     ocr: deps.receiptReading?.ocr ?? null,
+    uniformFileSoftware: deps.uniformFileSoftware ?? null,
     // MUT-640: hosted only; the signed-out portal's local app passes none.
     issuedPdf: {
       render: renderIssuedDocumentPdf,
@@ -704,12 +718,6 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       : null;
   if (receiptReader && deps.receiptReading?.dispatcher instanceof InlineDispatcher) deps.receiptReading.dispatcher.bind((id) => receiptReader.readOne(id));
   app.route('/', receiptReadingRoutes({ reader: receiptReader, verifier: deps.receiptReadVerifier ?? null }));
-  // R5: granting receipt_reading queues the person's To-review receipts that were never read.
-  const onGranted = receiptReader
-    ? async (userId: string, feature: string) => {
-        if (feature === 'receipt_reading') await receiptReader.backlog(userId);
-      }
-    : undefined;
   // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
   const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
   // MUT-642: the registry lookup calls data.gov.il, so it's hosted only, outside PORTAL_ROUTES.
@@ -731,12 +739,12 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
   app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe
@@ -824,6 +832,18 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       ...(deps.monthlySummaryDailySends ? { sendBudget: deps.monthlySummaryDailySends } : {}),
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+    }),
+  );
+  // MUT-571 AC3: the daily Tax Authority re-consent reminders (job + operator), on the unguarded store like the trial mails.
+  app.route(
+    '/',
+    taxAuthorityReminderRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      environment: deps.taxAuthority?.client.environment ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
     }),
   );

@@ -10,7 +10,7 @@ import {
   TwoFactorKeys,
 } from '../two-factor.js';
 
-/** MUT-710 (ADR-275): the pure rules of two-step sign-in. */
+/** MUT-710 (ADR-274): the pure rules of two-step sign-in. */
 describe('two-step sign-in rules (MUT-710)', () => {
   it('ten-minute challenges, five tries, ten recovery codes, a 15-minute lock after 5 wrong second steps', () => {
     expect(TWO_FACTOR_POLICY).toMatchObject({

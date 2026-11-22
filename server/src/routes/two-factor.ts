@@ -28,7 +28,7 @@ import { signInLinkOf } from './account-setup.js';
 import { twoFactorStateOf } from './me.js';
 
 /**
- * MUT-710 (ADR-275): two-step sign-in routes that aren't a sign-in themselves. POST /v1/two-factor/email-code is public
+ * MUT-710 (ADR-274): two-step sign-in routes that aren't a sign-in themselves. POST /v1/two-factor/email-code is public
  * (a challenge token is the only credential) and serves the portal and the phone alike.
  */
 export interface TwoFactorRouteOptions {
@@ -95,7 +95,7 @@ export function twoFactorRoutes(options: TwoFactorRouteOptions): OpenAPIHono<App
       security: PERSON,
       responses: { 200: { description: 'The state', content: { 'application/json': { schema: TwoFactorStateSchema } } }, 401: errorResponse('No valid session'), 403: errorResponse('PRINCIPAL_NOT_ACCEPTED') },
     }),
-    async (c) => c.json(await twoFactorStateOf(store, personSession(c).user.id), 200),
+    async (c) => c.json(await twoFactorStateOf(store, personSession(c).user.id, c.get('twoFactorIssuingGate') === true), 200),
   );
 
   app.openapi(
@@ -257,7 +257,7 @@ export function twoFactorRoutes(options: TwoFactorRouteOptions): OpenAPIHono<App
       const { user } = personSession(c);
       const state = await store.twoFactor.get(user.id);
       if (!state) throw new ApiError('CONFLICT', 'Two-step sign-in is off', { reason: 'TWO_FACTOR_OFF' });
-      if (await store.twoFactor.ownsIssuingProfile(user.id)) throw new ApiError('TWO_FACTOR_REQUIRED_FOR_ISSUING', 'Two-step sign-in stays on while you issue documents');
+      if (c.get('twoFactorIssuingGate') === true && (await store.twoFactor.ownsIssuingProfile(user.id))) throw new ApiError('TWO_FACTOR_REQUIRED_FOR_ISSUING', 'Two-step sign-in stays on while you issue documents');
       await prove(c, user, c.req.valid('json'), true);
       await store.twoFactor.disable(user.id, c.get('now')(), await auditRows(c, user, 'user.two_factor_disabled', { method: state.method }));
       twoFactor.log(c, 'two_factor.disabled', user.id, { method: state.method });

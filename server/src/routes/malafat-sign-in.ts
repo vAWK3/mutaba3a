@@ -72,7 +72,7 @@ export interface MalafatSignInRouteOptions {
   ipLimiter: RateLimiter;
   terms: CurrentTerms;
   webauthn: WebauthnConfig | null;
-  /** MUT-710 (ADR-275 D6): an already-linked person's Malafat sign-in passes the second step like any first step. */
+  /** MUT-710 (ADR-274 D6): an already-linked person's Malafat sign-in passes the second step like any first step. */
   twoFactor: TwoFactorFlow;
   config: MalafatSignInConfig | null;
 }
@@ -152,7 +152,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
     const sessionKind = kind === 'app' ? 'device' : 'cookie';
     const { user: person, token } = await beginOrIssue(c, signInDeps, user, { sessionKind, method: 'malafat' }, sessionLifetime(sessionKind, settings));
     if (kind === 'web') setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
+    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
     return { state: 'signed_in' as const, me, ...(kind === 'app' ? { token } : {}) };
   }
 

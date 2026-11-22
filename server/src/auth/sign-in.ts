@@ -49,7 +49,7 @@ export interface SignInDeps {
   passwordHasher: PasswordHasher;
   throttle: SignInThrottle;
   pepper: string;
-  /** MUT-710 (ADR-275 D1): the second step every sign-in passes through when the person has it on. */
+  /** MUT-710 (ADR-274 D1): the second step every sign-in passes through when the person has it on. */
   twoFactor: TwoFactorFlow;
 }
 
@@ -260,7 +260,7 @@ export async function recordSignInFailure(c: Context<AppEnv>, deps: SignInDeps, 
 }
 
 /**
- * MUT-710 (ADR-275 D1, D14): the one way a verified first step becomes a session. Without two-step sign-in the session
+ * MUT-710 (ADR-274 D1, D14): the one way a verified first step becomes a session. Without two-step sign-in the session
  * is issued as before (and the email key's throttle cleared). With it on, a challenge is created instead and the
  * caller gets 403 TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }; finishTwoFactor issues the
  * session. D6: with the email method an emailed sign-in code is one factor twice, so it is refused (said only to the

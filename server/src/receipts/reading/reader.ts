@@ -1,5 +1,4 @@
 import type { AttachmentStorage } from '../../attachments/storage.js';
-import { hasFeature } from '../../features.js';
 import type { Logger } from '../../logger.js';
 import type { ExpenseReceiptRecord, FinishReadOutcome, LedgerStore, ReadIdentifiers, ReadSkipReason, ReceiptReadRequest, ReceiptSuggestion } from '../../repositories/ports.js';
 import { learnedBuyerIds } from '../extract/buyer.js';
@@ -31,7 +30,7 @@ export type ReadJobStatus = 'done' | 'skipped' | 'failed' | 'busy' | 'none' | 'r
  * MUT-590: why a read ended SKIPPED, for the log: deleted or filed (onto an expense) before it could write, or its
  * suggestion already complete. Receipt 27e28e05 was filed 10 s into its read; the log said only `skipped`.
  */
-export type ReadSkipCode = ReadSkipReason | 'complete' | 'ungranted';
+export type ReadSkipCode = ReadSkipReason | 'complete' | 'uploader_gone';
 
 interface Finished {
   status: ReadJobStatus;
@@ -53,7 +52,7 @@ export interface ReceiptReadTrigger {
 export interface ReceiptReader extends ReceiptReadTrigger {
   readOne(receiptId: string): Promise<ReadJobStatus>;
   sweep(): Promise<SweepSummary>;
-  backlog(userId: string): Promise<number>;
+  backlog(userId?: string): Promise<number>;
 }
 
 export interface ReceiptReaderOptions {
@@ -104,14 +103,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   const { store, storage, ocr, dispatcher, logger, now } = options;
   const receipts = store.expenseReceipts;
 
-  async function holdsGrant(receipt: ExpenseReceiptRecord): Promise<boolean> {
-    return receipt.uploadedByUserId !== null && (await hasFeature(store, receipt.uploadedByUserId, 'receipt_reading'));
-  }
-
-  /** D3 and F5: a receipt reads only for an uploader who holds the grant; one whose uploader is gone never reads. */
+  /** F5: a receipt whose uploader is gone never reads. MUT-659: every other uploader's does (no per-person grant). */
   async function decide(receipt: ExpenseReceiptRecord): Promise<ReceiptReadRequest | null> {
     if (receipt.uploadedByUserId === null) return 'SKIPPED';
-    if (!(await holdsGrant(receipt))) return null;
     return isCompleteSuggestion(receipt.suggested) ? 'SKIPPED' : 'PENDING';
   }
 
@@ -150,7 +144,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return scrubbed('store_failed', () => receipts.finishRead(receiptId, version, outcome));
   }
 
-  /** `code` is the skip reason the caller already knows (complete, ungranted); the store's own wins (deleted, filed). */
+  /** `code` is the skip reason the caller already knows (complete, uploader_gone); the store's own wins (deleted, filed). */
   async function finish(receiptId: string, version: number, outcome: FinishReadOutcome, code?: ReadSkipCode): Promise<Finished> {
     const result = await finishRead(receiptId, version, outcome);
     if (result.kind === 'saved') return outcome.status === 'DONE' ? { status: 'done' } : outcome.status === 'FAILED' ? { status: 'failed' } : { status: 'skipped', ...(code ? { code } : {}) };
@@ -234,8 +228,8 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     if (receipt.deletedAt || receipt.filingStatus === 'FILED') return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }));
     // This claim was one more than the limit allows (a Cloud Tasks retry after three tries), or it waited too long.
     if (exhausted(receipt, at, attempts - 1)) return done({ ...(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: 'exhausted' })), code: 'exhausted' });
-    // The grant was taken away, or the uploader left, since the receipt was queued.
-    if (!(await holdsGrant(receipt))) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }, 'ungranted'));
+    // The uploader left since the receipt was queued (F5). MUT-659: there is no grant to lose.
+    if (receipt.uploadedByUserId === null) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }, 'uploader_gone'));
     if (isCompleteSuggestion(receipt.suggested)) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }, 'complete'));
     try {
       const { read, identifiers, stats } = await readFile(receipt);
@@ -270,9 +264,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return summary;
   }
 
-  /** R5: at grant time, the person's To-review receipts that were never read are asked for once. Idempotent. */
-  async function backlog(userId: string): Promise<number> {
-    const ids = await receipts.markBacklogPending({ userId }, now());
+  /** R5, MUT-659: To-review receipts that were never read (one person's, or everyone's) are asked for once. Idempotent. */
+  async function backlog(userId?: string): Promise<number> {
+    const ids = await receipts.markBacklogPending(userId ? { userId } : {}, now());
     for (const id of ids) await enqueue(id, 0);
     logger.info({ userId, queued: ids.length }, 'receipt read backlog');
     return ids.length;

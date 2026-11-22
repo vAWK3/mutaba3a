@@ -3,10 +3,14 @@
  * phone's universal links, the mail and Stripe landings and bookmarks all point at them), so a destination is a map
  * from a path's first segment under `/p/:id`, not a URL prefix: `/receivables` lights Owed without being nested
  * under it. Pure, so every rule is a unit test; MUT-426's floating pill uses it.
+ *
+ * MUT-657 (E-1/E-2): home takes the bare path and is the pill's first item; Owed's overview moved to `/owed` (a bare
+ * `?currency=` still redirects there, so no old link breaks).
  */
 
 export const DESTINATIONS = [
-  { key: 'owed', path: '' },
+  { key: 'home', path: '' },
+  { key: 'owed', path: '/owed' },
   { key: 'paid', path: '/payments' },
   { key: 'spent', path: '/expenses' },
   { key: 'clients', path: '/clients' },
@@ -14,9 +18,10 @@ export const DESTINATIONS = [
 
 export type Destination = (typeof DESTINATIONS)[number]['key'];
 
-/** The first segment after `/p/:id` (the overview is the bare path) → the destination it sits in or under. */
+/** The first segment after `/p/:id` (home is the bare path) → the destination it sits in or under. */
 const DESTINATION_OF_SEGMENT: Record<string, Destination> = {
-  '': 'owed',
+  '': 'home',
+  owed: 'owed',
   receivables: 'owed',
   payments: 'paid',
   conversions: 'paid',

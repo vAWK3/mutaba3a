@@ -98,14 +98,35 @@ const envSchema = z.object({
   /** The software's registration number (MUT-567); the sandbox accepts the spec's test value 987654321. */
   TAX_AUTHORITY_SOFTWARE_NUMBER: z.coerce.number().int().positive().optional(),
   TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
+  /**
+   * MUT-569 (ADR-272): the uniform file's software fields (A000 1006, 1009, 1010). The registration certificate number
+   * is zeros until MUT-567 issues it; the software house is the registering owner, Narabnd Studio Ltd (MUT-700), set in
+   * Terraform (software_house_*). The defaults are placeholders, never a real company.
+   */
+  UNIFORM_FILE_REGISTRATION_NUMBER: z.string().regex(/^\d{8}$/, 'must be the 8-digit registration certificate number').default('00000000'),
+  SOFTWARE_HOUSE_VAT_ID: z.string().regex(/^\d{9}$/, 'must be a 9-digit company number').default('000000000'),
+  SOFTWARE_HOUSE_NAME: z.string().min(1).max(20).default('MTB3A'),
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
   /**
-   * MUT-710 (ADR-275 D4): seals two-step sign-in's authenticator secrets (AES-256-GCM) and keys its recovery-code digests.
+   * MUT-710 (ADR-274 D4): seals two-step sign-in's authenticator secrets (AES-256-GCM) and keys its recovery-code digests.
    * Required on production and staging with no fallback (Terraform generates it, two_factor.tf); elsewhere derived
    * from the session pepper when unset.
    */
   TWO_FACTOR_SEAL_KEY: secret('TWO_FACTOR_SEAL_KEY').optional(),
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (403 TWO_FACTOR_SETUP_REQUIRED on PUT /v1/issuer, issuing, the Tax
+   * Authority connect and allocation decisions) only when exactly "true". Off by default until the portal and phone
+   * screens that turn two-step sign-in on have shipped, so nobody already issuing is locked out. The second step at
+   * sign-in, for people who turned it on, does not depend on it.
+   */
+  TWO_FACTOR_ISSUING_GATE_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
+   * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
+   * confirmed (open item on MUT-711).
+   */
+  TAX_AUTHORITY_MANUAL_ALLOCATION_URL: z.string().url().refine((u) => u.startsWith('https://'), 'must be https').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
@@ -179,14 +200,13 @@ const envSchema = z.object({
    */
   PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
-   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). Off,
-   * the server behaves as before MUT-255, so main can deploy before any screen shows the library (decision P4: on
-   * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
+   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). MUT-659:
+   * on by default for everyone (dev, QA and every deploy); only "false" turns it off, the way back to before MUT-255.
    */
-  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   /**
-   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, a receipt reads only for an
-   * uploader granted `receipt_reading`. Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
+   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, every uploader's receipts are
+   * read (MUT-659 dropped the per-person grant). Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
    * server_ocr_enabled). Only "true" turns it on, as above.
    */
   SERVER_OCR: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),

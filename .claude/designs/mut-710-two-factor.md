@@ -7,8 +7,8 @@ relied on as a second factor.
 Scope built here: items 1 (two-step sign-in) and 2 (authentication logs, 12 months, encrypted at rest). Items 3–8 are
 planned in a MUT-710 comment, not built.
 
-ADR: **ADR-275** (number reserved above the in-flight ADR-269…271 of MUT-657/660/662/701/709; renumber at merge if
-needed). API: **1.130.0-mut710** (renumbered at merge). Migration: `20261124120000_mut710_two_factor` (sorts after
+ADR: **ADR-274** (number reserved above the in-flight ADR-269…271 of MUT-657/660/662/701/709; renumber at merge if
+needed). API: **1.135.0-mut710** (renumbered at merge). Migration: `20261124120000_mut710_two_factor` (sorts after
 MUT-660 `20261122230000`, MUT-662 `20261123000100`, MUT-709 `20261123000000`, MUT-702 `20261123100000`).
 
 ## 1. Problem and acceptance criteria
@@ -35,7 +35,7 @@ trace), no defined retention, Cloud Logging default 30 days.
   a Terraform test asserts the bucket, its retention and the sink filter.
 - AC8 The phone and portal screens follow the wireframes Basel approved on 2026-11-22 (`mut-710-wireframes.html`).
 
-## 2. Decisions (→ ADR-275)
+## 2. Decisions (→ ADR-274)
 
 D1 **Where the second step sits.** After the first credential verifies and before `issueSession`. One function,
 `beginOrIssue(c, deps, user, audit, lifetime)` in `auth/sign-in.ts`, replaces the direct `issueSession` call in the
@@ -117,7 +117,7 @@ forever under the same key). On: `POST /v1/issuing/tax-authority/connect`, `POST
 sent to the Tax Authority, so the prompt meets the person at the start of setup). `DELETE /v1/issuing/tax-authority`
 stays open on purpose: cutting the connection must always work. Passes when `identity.session.twoFactorAt` is set and
 the person's two-step sign-in is on. `issuing:write` is session-only (`SESSION_ONLY_SCOPES`), so no agent or API key
-path exists; a delegated Malafat token never reaches issuing (`issuingProfile` 404s it). Refusal:
+path exists; a delegated Malafat token never reaches issuing (`issuingProfile` 404s it). Shipped dark: enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false), turned on once the screens are live and the people who issue have turned it on. Refusal:
 `403 TWO_FACTOR_SETUP_REQUIRED { enrolled: boolean }` ("enrolled" = on but this session predates it: sign in again).
 
 D11 **Password and setup links.** Every person link (recovery RESET, SETUP, operator links, `--lock` included) asks for

@@ -59,7 +59,7 @@ export interface AdminUserOptions {
   terms: CurrentTerms;
   /** MUT-434 (D14): forced agent disconnects are noted here. Absent = nowhere. */
   reporter?: ErrorReporter;
-  /** MUT-441 (R5): told after a feature is granted (receipt_reading queues the person's unread receipts). */
+  /** MUT-441 (R5): told after a feature is granted. No feature uses it since MUT-659 retired receipt_reading. */
   onGranted?: FeatureActionOptions['onGranted'];
   /** MUT-710 (D9): mails the "two-step sign-in was reset" notice. Absent = no notice. */
   mailer?: Mailer;

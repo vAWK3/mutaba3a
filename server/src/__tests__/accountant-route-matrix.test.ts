@@ -32,6 +32,9 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/streak',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-660: documents due, read under the grant when the owner holds `invoicing`.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
   // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
   'GET /v1/issued-documents',
   'GET /v1/issued-documents/{documentId}',
@@ -47,6 +50,8 @@ const ALLOWED_GETS = [
   'GET /v1/issuing/tax-authority',
   'GET /v1/issuing/styles',
   'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
   'GET /v1/issuing/settings',
   'GET /v1/payments',
   // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
@@ -77,6 +82,7 @@ const QUERIES: Record<string, string> = {
   'GET /v1/summaries/period': '?from=2026-11-01&to=2026-11-30&currency=ILS',
   'GET /v1/customers/{customerId}/statement': '?currency=ILS',
   'GET /v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10',
+  'GET /v1/issuing/uniform-file': '?from=2026-11-01&to=2026-11-05',
 };
 const PLACEHOLDER = '00000000-0000-4000-8000-0000000000aa';
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;

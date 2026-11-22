@@ -1,4 +1,4 @@
-# MUT-710 (ADR-275): authentication events kept 12 months, encrypted at rest (SHAAM security appendix §19), and the key
+# MUT-710 (ADR-274): authentication events kept 12 months, encrypted at rest (SHAAM security appendix §19), and the key
 # that seals two-step sign-in secrets. Providers are mocked:
 #   terraform init -backend=false && terraform test -filter=tests/auth_log.tftest.hcl
 

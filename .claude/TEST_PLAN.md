@@ -4667,6 +4667,21 @@ Not run: `test:db` (no store change: the report only reads through existing repo
 
 No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
 
+## MUT-569 — the uniform file (מבנה אחיד 1.31) (2026-11-22, ADR-272)
+
+| Layer | File | Covers |
+|---|---|---|
+| Formats | `server/src/issuing/uniform-file/__tests__/format.test.ts` | record widths add up to the spec (466/19/95/444/339/222/110) and the spec's start positions; alpha/numeric padding; signed amounts and quantities; ISO-8859-8 text: Hebrew kept, points and bidi marks dropped, punctuation to ASCII, Arabic in Hebrew letters with final forms, Arabic-Indic digits; `encodeLine` refuses anything else |
+| Writer | `…/__tests__/export.test.ts` | AC2 INI summary = BKMVDATA counts, A000 1002 = Z900 1155, running record numbers, one primary id in three places; AC3 no documents → A100 + Z900; CRLF and widths; the A000 header fields; Israel time across DST; a 305 with a document discount adds up (lines → 1219, 1219 + 1220 = 1221, + 1222 = 1223, each line qty × 1265 + 1266 = 1267); 330 names its 305; 400 is C100 + D120 (walk-in key 0); 320 has D110 + D120 (bank 4); customer key, VAT number and an Arabic name |
+| Package | `…/__tests__/package.test.ts` | the zip's OPENFRMT folder, inner BKMVDATA.zip and report; the report in ar/en, escaped, empty case |
+| Routes | `server/src/__tests__/routes-uniform-file.test.ts` | every type in range with headers and audit; out of range and another profile left out; AC3 empty; reversed, future and malformed ranges 422; accountant 200; personal and feature-off 404 |
+| Store | `store-contract-issuing.ts` | `inRange` inclusive bounds, order, lines, per profile (memory locally; Prisma in CI, TD-323) |
+| Fixture | `server/src/__tests__/uniform-file-fixture.test.ts` | AC1 ≥ 2,000 records (2,345), < 4 MB, every type, Hebrew and Arabic; writes the simulator files with `UNIFORM_FILE_FIXTURE_OUT` |
+| Portal | `src/hosted/pages/invoicing/__tests__/UniformFileExport.test.tsx` | last year by default, download call and counts, empty, reversed dates refused, failure toast and retry, reader copy |
+| Release QA | `qa/specs/portal/invoicing.spec.ts` | `@portal.invoicing.uniform-file`, `@portal.invoicing.uniform-file-empty` |
+
+The simulator pass itself (AC1) is Basel's step: `docs/operations/tax-authority/uniform-file/README.md`.
+
 ## MUT-641 — signed issued-document PDFs (2026-11-22, ADR-265)
 
 | Layer | File | Covers |
@@ -4691,7 +4706,7 @@ Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated f
 
 No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
 
-## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-275)
+## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-274)
 
 | Layer | File | Covers |
 |---|---|---|
@@ -4703,3 +4718,20 @@ No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
 | Terraform | `infrastructure/terraform/tests/auth_log.tftest.hcl` | 365-day bucket, location, pinned sink filter |
 
 Release-qa flows (brief §5) wait for the portal and phone screens.
+
+## MUT-660 — documents due, not for invoice, the books split (2026-11-22, ADR-270)
+
+| Layer | File | Covers |
+|---|---|---|
+| Domain | `server/src/issuing/__tests__/documents-due.test.ts` | every preference × Owed/Received; AC2 3,400 → 1,000 → second receipt; partial payments; no client (N1); exempt; non-₪; mixed splits; receipt number; attached invoices; marks; deleted/credited/reversed; order; older than (month ends) |
+| Domain | `server/src/issuing/__tests__/ledger-plan.test.ts` | `fromEntryMode` take vs link vs refuse; `entryAmount` |
+| Domain | `server/src/income/__tests__/invoice-class.test.ts` | split order, mixed shares, the reconciliation property (AC9), `invoiceStatusOf` |
+| Store contract | `store-contract-issuing.ts` (memory + Prisma) | linked 305 for a credited Owed; linked 320 for a partial payment; linked 400 keeping its invoice; no-client 320; `dueInputs` with documentsDue; `setNotForInvoice` all-or-nothing, idempotent, versions, HAS_TAX_DOCUMENT, credit note lifts it; `incomeContext` |
+| Routes | `server/src/__tests__/routes-documents-due.test.ts` | gate (404), AC1 preference, AC2, AC3, N1, Issue all refusals and replay, AC6/AC8 bulk + count, AC5 + If-Match + idempotent single mark, older than, accountant read-only; Reports split and non-invoicing unchanged (AC10); export `invoice_status` |
+| Mail | `server/src/billing/__tests__/monthly-summary.test.ts` | two split lines on invoicing profiles; no key elsewhere |
+| Local | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` | snapshot 21 → 22 |
+| Portal | `src/hosted/pages/__tests__/DocumentsDue.test.tsx` | grouping, reasons, Issue all, bulk + Undo, credit-note refusal, older than (D21), hidden at 404; Home group and its absence; the row mark (If-Match, refusal, marked state); the client field (If-Match, hidden at 404); the Reports card |
+| Release-QA | `qa/specs/portal/invoicing.spec.ts`, `reports.spec.ts` | `@portal.invoicing.to-issue-issue-all`, `…to-issue-bulk-not-for-invoice`, `…not-for-invoice-refused`, `…client-documents-preference`, `@portal.reports.invoice-split` |
+
+The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning session's.
+

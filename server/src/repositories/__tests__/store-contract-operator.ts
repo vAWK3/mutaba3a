@@ -181,14 +181,14 @@ export function describeLedgerStoreOperatorContract(name: string, makeStore: () 
       const late = (await store.users.create(marked(marker, 'late', 'Late', 4))).user;
       await store.users.recordSignIn(early.id, at(10));
       await store.users.recordSignIn(late.id, at(20));
-      await store.features.grant({ userId: late.id, feature: 'receipt_reading', grantedBy: 'admin', at: at(5), audit: [] });
+      await store.features.grant({ userId: late.id, feature: 'invoicing', grantedBy: 'admin', at: at(5), audit: [] });
       await store.features.grant({ userId: late.id, feature: 'agent_access', grantedBy: 'admin', at: at(5), audit: [] });
       await store.features.grant({ userId: early.id, feature: 'agent_access', grantedBy: 'admin', at: at(5), audit: [] });
       await store.features.revoke({ userId: early.id, feature: 'agent_access', at: at(6), audit: [] });
 
       const page = await store.users.listForOperator({ q: marker, limit: 10, cursor: null });
       expect(page.items.map((i) => i.user.id)).toEqual([late.id, early.id, neverNewer.id, never.id]);
-      expect(page.items.map((i) => i.features)).toEqual([['agent_access', 'receipt_reading'], [], [], []]);
+      expect(page.items.map((i) => i.features)).toEqual([['agent_access', 'invoicing'], [], [], []]);
       expect(page.items[0]!.user).toMatchObject({ email: `late-${marker}@studio.ps`, lastSignInAt: at(20), operatorAt: null });
       expect(page.nextCursor).toBeNull();
     });

@@ -1,4 +1,4 @@
--- MUT-710 (ADR-275): two-step sign-in. Additive only: three new tables, two enums, one nullable column on sessions.
+-- MUT-710 (ADR-274): two-step sign-in. Additive only: three new tables, two enums, one nullable column on sessions.
 
 -- CreateEnum
 CREATE TYPE "TwoFactorMethod" AS ENUM ('totp', 'email');

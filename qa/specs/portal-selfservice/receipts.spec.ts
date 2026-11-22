@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { person } from '../../support/agent';
-import { chooseLanguage, grantCoverage, grantFeature, liveState } from '../../support/selfService';
+import { chooseLanguage, grantCoverage, liveState } from '../../support/selfService';
 
 /**
  * MUT-441 (AC8): our own server reads an uploaded receipt, against the live dev API (support/selfservice-live.mjs) and
@@ -24,9 +24,8 @@ test.beforeEach(async ({ page }) => {
 test('I upload a receipt photo and the server reads it; the review page fills in the amount and date', { tag: '@portal-selfservice.receipts.server-reading' }, async ({ page, step }) => {
   expect(liveState().ocr, 'the env runs the receipt-ocr sidecar (Tesseract on PATH: brew install tesseract)').toBe(true);
   const me = await person(page, { agentAccess: false });
-  // The live API gates writes on billing (ADR-181); the operator grants the pilot's receipt reading (D3).
+  // The live API gates writes on billing (ADR-181). MUT-659: reading needs no grant, so none is given.
   await grantCoverage(me.id);
-  await grantFeature(me.id, 'receipt_reading');
   const grid = page.getByRole('list', { name: 'Receipts' });
   const card = grid.getByRole('link', { name: `Open ${FILE_NAME}` });
 
@@ -65,7 +64,6 @@ test('A receipt photographed on its side is turned and read; the review page fil
   expect(liveState().ocr, 'the env runs the receipt-ocr sidecar (Tesseract on PATH: brew install tesseract)').toBe(true);
   const me = await person(page, { agentAccess: false });
   await grantCoverage(me.id);
-  await grantFeature(me.id, 'receipt_reading');
   const card = page.getByRole('list', { name: 'Receipts' }).getByRole('link', { name: `Open ${SIDEWAYS_NAME}` });
 
   await step('Open Expenses › Receipts', async () => {
@@ -98,7 +96,6 @@ test("I upload an invoice PDF a vendor's software made and the server reads it; 
   expect(liveState().ocr, 'the env runs the receipt-ocr sidecar (Tesseract on PATH: brew install tesseract)').toBe(true);
   const me = await person(page, { agentAccess: false });
   await grantCoverage(me.id);
-  await grantFeature(me.id, 'receipt_reading');
   const card = page.getByRole('list', { name: 'Receipts' }).getByRole('link', { name: `Open ${VENDOR_PDF_NAME}` });
 
   await step('Open Expenses › Receipts', async () => {

@@ -63,7 +63,7 @@ export const ERROR_CODES = {
    */
   PASSKEY_NOT_ACCEPTED: 403,
   /**
-   * MUT-710 (ADR-275 D1): the first step verified and the person has two-step sign-in on; no session exists yet.
+   * MUT-710 (ADR-274 D1): the first step verified and the person has two-step sign-in on; no session exists yet.
    * `details`: { challengeToken, method totp|email, expiresAt, emailHint? }. Also a setup link's redeem without the
    * second step (D11). 403, not 401, so an old client shows the message instead of "signed out".
    */

@@ -10,7 +10,7 @@ import { openYou } from '../../support/you';
 import { expectOnlyKnownAxeViolations } from '../../support/axe';
 
 /**
- * The signed-in portal's shell (hosted-portal.md §7.1): Owed (the overview), the
+ * The signed-in portal's shell (hosted-portal.md §7.1): home first in the pill (MUT-657), Owed (the overview, at /owed), the
  * four destinations and what sits one level in (MUT-424), the profile switcher and client detail, and the floating
  * chrome (MUT-426: the pill, the You island, the Reports corner icon, page motion). Every /v1 call is answered by
  * the in-memory API in qa/support/portalApi.ts.
@@ -32,8 +32,8 @@ const AR = AR_HOSTED.shell;
 const C1 = customer(0).id;
 const C2 = customer(1).id;
 const C3 = customer(2).id;
-/** MUT-424: the four destinations, each page titled with its tab's word. */
-const DESTINATIONS = ['Owed', 'Paid', 'Spent', 'Clients'] as const;
+/** MUT-424: the four destinations, each page titled with its tab's word; MUT-657: home first. */
+const DESTINATIONS = ['Home', 'Owed', 'Paid', 'Spent', 'Clients'] as const;
 
 function seeded() {
   return new FakeApi({
@@ -57,12 +57,19 @@ function seeded() {
   });
 }
 
-test('signed in, the portal opens on Owed for the first profile, and each of the four destinations is one click away', { tag: '@portal.shell.navigate' }, async ({ page, step }) => {
+test('signed in, the portal opens on home for the first profile, and Owed and the other destinations are one click away', { tag: '@portal.shell.navigate' }, async ({ page, step }) => {
   const api = seeded();
 
-  await step('Open the portal signed in', async () => {
+  await step('Open the portal signed in: home, lit first in the pill', async () => {
     await api.open(page, '/');
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
+    await expect(page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Home', exact: true })).toHaveAttribute('aria-current', 'page');
+  });
+
+  await step('Open Owed from the pill: its overview is at /owed', async () => {
+    await page.getByRole('navigation', { name: 'Sections' }).getByRole('link', { name: 'Owed', exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/owed$`));
     await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 
@@ -91,7 +98,7 @@ test('signed in, the portal opens on Owed for the first profile, and each of the
     await expect(page.getByRole('table', { name: 'Owed' }).getByRole('row')).toHaveCount(2);
   });
 
-  await step('Visit each of the four destinations from the pill', async () => {
+  await step('Visit home and each of the four destinations from the pill', async () => {
     const nav = page.getByRole('navigation', { name: 'Sections' });
     await expect(nav.getByRole('link')).toHaveText([...DESTINATIONS]);
     for (const destination of DESTINATIONS) {
@@ -132,8 +139,8 @@ test('from Owed, Paid and Clients, Receivables, Conversions and Documents are on
   const nav = page.getByRole('navigation', { name: 'Sections' });
   const main = page.getByRole('main');
 
-  await step('Open the portal signed in', async () => {
-    await api.open(page, `/p/${OFFICE_A}`);
+  await step('Open Owed signed in', async () => {
+    await api.open(page, `/p/${OFFICE_A}/owed`);
     await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
   });
 
@@ -162,7 +169,7 @@ test('from Owed, Paid and Clients, Receivables, Conversions and Documents are on
   });
 });
 
-test('switching profile from You › Profiles keeps the section, and a profile that is not yours says so', { tag: '@portal.shell.switch-profile' }, async ({ page, step }) => {
+test('switching profile from You › Profiles lands on that profile’s home, and a profile that is not yours says so', { tag: '@portal.shell.switch-profile' }, async ({ page, step }) => {
   const api = seeded();
 
   await step('Open Payments on Nour Studio', async () => {
@@ -180,12 +187,12 @@ test('switching profile from You › Profiles keeps the section, and a profile t
     await expect(main).toContainText('Your local profiles stay in the MTB3A app on your device.');
   });
 
-  await step('Switch to Nour Accounting: back on Payments, now for that profile', async () => {
+  await step('Switch to Nour Accounting: on its home (MUT-657), its figures read for that profile', async () => {
     await main.getByRole('button', { name: /Nour Accounting/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/payments$`));
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}$`));
     await expect(page.getByRole('link', { name: 'You · Nour Accounting' })).toBeVisible();
-    await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
-    await expect.poll(() => api.last('GET', /^\/v1\/payments$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_B);
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
+    await expect.poll(() => api.last('GET', /^\/v1\/summaries\/organization$/)?.headers['x-mutaba3a-profile']).toBe(OFFICE_B);
   });
 
   await step('Open a profile id that is not on the account', async () => {
@@ -196,11 +203,11 @@ test('switching profile from You › Profiles keeps the section, and a profile t
   await step('Go to the first profile from there', async () => {
     await page.getByRole('button', { name: 'Go to Nour Studio' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
   });
 });
 
-test('a client opens to its summary and matters, then its own receivables, payments and documents', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
+test('a client opens to its ledger card, then its documents and its details with the matters', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
   const logo = project(1, C1, 'Logo redesign');
   const site = project(2, C1, 'Website');
   const api = new FakeApi({
@@ -235,32 +242,19 @@ test('a client opens to its summary and matters, then its own receivables, payme
     await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
   });
 
-  await step('The summary shows the last payment, the ILS figures and each matter', async () => {
-    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
-    const strip = page.getByRole('group', { name: 'ILS' });
-    await expect(strip).toContainText('Outstanding');
-    await expect(strip).toContainText('1,200.00');
-    await expect(strip).toContainText('Overdue');
-    const matters = page.getByRole('table', { name: 'Matters' });
-    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
-    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
-  });
-
-  await step('Receivables tab: only this client’s, with no client column', async () => {
-    await page.getByRole('tab', { name: 'Receivables' }).click();
-    await expect(page).toHaveURL(/tab=receivables/);
-    const table = page.getByRole('table', { name: 'Receivables' });
-    await expect(table.getByRole('row')).toHaveCount(2);
-    await expect(table).toContainText('Logo redesign');
-    await expect(table.getByRole('columnheader', { name: 'Client' })).toHaveCount(0);
-    expect(api.last('GET', /^\/v1\/receivables$/)?.query.get('customerId')).toBe(C1);
-  });
-
-  await step('Payments tab: this client’s payments', async () => {
-    await page.getByRole('tab', { name: 'Payments' }).click();
-    const table = page.getByRole('table', { name: 'Payments' });
-    await expect(table).toContainText('PAY-0101');
-    await expect(table).not.toContainText('PAY-0202');
+  await step('The ledger card shows this client’s movements, newest first, with the running balance', async () => {
+    const card = page.getByTestId('ledger-card');
+    await expect(card).toBeVisible();
+    // 1,200 owed against 1,800 paid in the fake: the client is in credit, shown without a minus sign (D15).
+    await expect(page.getByTestId('ledger-closing')).toContainText('Client in credit · ');
+    await expect(page.getByTestId('ledger-closing')).toContainText('600.00');
+    const lines = card.getByTestId('ledger-line');
+    await expect(lines).toHaveCount(2);
+    await expect(lines.first()).toContainText('PAY-0101');
+    await expect(card).not.toContainText('PAY-0202');
+    const asked = api.last('GET', new RegExp(`^/v1/customers/${C1}/statement$`));
+    expect(asked?.query.get('order')).toBe('desc');
+    expect(asked?.query.get('currency')).toBe('ILS');
   });
 
   await step('Documents tab: this client’s documents', async () => {
@@ -268,6 +262,18 @@ test('a client opens to its summary and matters, then its own receivables, payme
     const table = page.getByRole('table', { name: 'Documents' });
     await expect(table).toContainText('invoice-logo.pdf');
     await expect(table).not.toContainText('other.pdf');
+  });
+
+  await step('Details tab: the last payment, the ILS figures and each matter', async () => {
+    await page.getByRole('tab', { name: 'Details' }).click();
+    await expect(page).toHaveURL(/tab=details/);
+    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
+    const strip = page.getByRole('group', { name: 'ILS' });
+    await expect(strip).toContainText('Outstanding');
+    await expect(strip).toContainText('1,200.00');
+    const matters = page.getByRole('table', { name: 'Matters' });
+    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
+    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
   });
 
   await step('Back to All clients', async () => {
@@ -353,13 +359,13 @@ test('an account with no profile yet is offered New profile and Sign out', { tag
   });
 });
 
-test('once firm features are on, the Overview shows one note that Dismiss keeps gone, in English and Arabic', { tag: '@portal.shell.firm-enabled-banner' }, async ({ page, step }) => {
+test('once firm features are on, home shows one note that Dismiss keeps gone, in English and Arabic', { tag: '@portal.shell.firm-enabled-banner' }, async ({ page, step }) => {
   const TEXT = "Firm features are on for Khatib Law. New tools show up here as they're released.";
   const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Khatib Law'), firm: true }, { ...office(OFFICE_B, 'Sader Office'), firm: true }] });
 
-  await step('Sign in to the firm profile: the Overview shows the note', async () => {
+  await step('Sign in to the firm profile: home shows the note', async () => {
     await api.open(page, `/p/${OFFICE_A}`);
-    await expect(page.getByRole('heading', { name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(page.getByRole('note').filter({ hasText: TEXT })).toBeVisible();
   });
 
@@ -370,7 +376,7 @@ test('once firm features are on, the Overview shows one note that Dismiss keeps 
 
   await step('Reload the portal: it stays gone', async () => {
     await page.reload();
-    await expect(page.getByRole('heading', { name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(page.getByText(TEXT)).toHaveCount(0);
   });
 
@@ -653,7 +659,7 @@ test('pages slide by depth, mirrored in Arabic, the You page grows from the isla
 
   await step('Open Owed: the browser takes view-transition types, as the router checks them', async () => {
     await page.setViewportSize(DESKTOP);
-    await api.open(page, `/p/${OFFICE_A}`);
+    await api.open(page, `/p/${OFFICE_A}/owed`);
     await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
     expect(await page.evaluate(() => [CSS.supports('selector(:active-view-transition-type(a))'), CSS.supports('selector(:active-view-transition-type(a)')])).toEqual([true, true]);
   });
@@ -690,7 +696,7 @@ test('pages slide by depth, mirrored in Arabic, the You page grows from the isla
   });
 
   await step('In Arabic, forward comes in from the left and back from the right', async () => {
-    await api.open(page, `/p/${OFFICE_A}`, 'ar');
+    await api.open(page, `/p/${OFFICE_A}/owed`, 'ar');
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await page.locator(`a[href="/p/${OFFICE_A}/receivables"]`).first().click();
     expect(await lastTransition(page)).toEqual({ types: ['forward'], incoming: ['hp-vt-in-from-left'] });
@@ -700,7 +706,7 @@ test('pages slide by depth, mirrored in Arabic, the You page grows from the isla
 
   await step('With reduced motion, the same move only cross-fades', async () => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
-    await api.open(page, `/p/${OFFICE_A}`);
+    await api.open(page, `/p/${OFFICE_A}/owed`);
     await page.locator(`a[href="/p/${OFFICE_A}/receivables"]`).first().click();
     expect(await lastTransition(page)).toEqual({ types: ['forward'], incoming: ['hp-vt-fade-in'] });
   });

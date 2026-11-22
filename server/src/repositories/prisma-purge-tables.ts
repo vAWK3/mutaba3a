@@ -63,6 +63,8 @@ export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   issued_documents: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
+  issued_document_cancellations: 'kept 7 years after closing: a payment request\'s cancellation, INSERT-only (MUT-662, MUT-644)',
+  issued_cancellation_counters: 'kept 7 years after closing: numbering of the retained cancellations (MUT-662, MUT-644)',
   issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
   issued_document_originals: 'kept 7 years after closing: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
 };

@@ -163,7 +163,7 @@ const isWrite = (a: MethodAccess | undefined) => typeof a === 'object' && 'write
 const writes = (calls: Call[]) => calls.filter((c) => isWrite(accessOf(c))).map((c) => `${c.repo}.${c.method}`);
 
 /** Reads that refuse a request without these query parameters (MUT-478: a statement is in one currency). */
-const REQUIRED_QUERY: Record<string, string> = { '/v1/customers/:customerId/statement': '?currency=ILS', '/v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10' };
+const REQUIRED_QUERY: Record<string, string> = { '/v1/customers/:customerId/statement': '?currency=ILS', '/v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10', '/v1/issuing/uniform-file': '?from=2026-10-01&to=2026-10-31' };
 
 function send(h: Harness, op: Operation, headers: Record<string, string>, ids: Record<string, string> = {}) {
   const path = op.path.replace(/:([A-Za-z]+)/g, (_m, name: string) => ids[name] ?? PLACEHOLDER) + (REQUIRED_QUERY[op.path] ?? '');
@@ -183,7 +183,7 @@ describe('every route sits inside the matrix', () => {
     // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) the PDF view (MUT-640), the business lookup (MUT-642),
     // the invoicing setup and its logo (MUT-646), the styles list (MUT-570), the Tax Authority connection's status (MUT-571),
     // and the invoices issued elsewhere and their files (MUT-647).
-    expect(SESSION_READS.length).toBe(55);
+    expect(SESSION_READS.length).toBe(58);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -241,7 +241,7 @@ describe('a session on a key-only operation (hosted-portal.md §5 layer 2)', () 
   /** MUT-339: the streak is personal-profile only, so on this firm it is 409 NOT_PERSONAL (its 200: streak-routes.test.ts). */
   // MUT-568: issuing is switched off (404) on a profile whose owner lacks `invoicing`, as on this operator firm (its 200: routes-issuing.test.ts).
   // MUT-642: the business lookup needs ?number=, so sent bare it is a 422 before anything else.
-  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : /^\/v1\/(issuer|issuing|issued-documents)/.test(op.path) ? 404 : op.path === '/v1/business-lookup' ? 422 : 200);
+  const okOn = (op: { path: string }) => (op.path === '/v1/expenses/streak' ? 409 : /^\/v1\/(issuer|issuing|issued-documents|documents-due)/.test(op.path) ? 404 : op.path === '/v1/business-lookup' ? 422 : 200);
 
   it.each(SESSION_READS.filter((op) => !op.path.includes(':')).map((op) => [op.key, op] as const))('%s answers 200 to a session (a read row)', async (_key, op) => {
     expect((await send(h, op, as(a.org.id))).status).toBe(okOn(op));

@@ -220,7 +220,7 @@ const app = createApp({
   store,
   logger,
   rateLimiter,
-  // MUT-710 (ADR-275 D4): its own key on production and staging (config refuses to start without it); elsewhere
+  // MUT-710 (ADR-274 D4): its own key on production and staging (config refuses to start without it); elsewhere
   // derived from the session pepper, as the Tax Authority's box is.
   twoFactorKeys: new TwoFactorKeys(config.TWO_FACTOR_SEAL_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
   // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; while null, the PDF routes answer 503
@@ -248,6 +248,7 @@ const app = createApp({
   periodPackLimits: { maxRows: config.PERIOD_PACK_MAX_ROWS, maxReceiptBytes: config.PERIOD_PACK_MAX_RECEIPT_BYTES },
   periodPackConcurrency: config.PERIOD_PACK_CONCURRENCY,
   billingGate: config.BILLING_GATE,
+  twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
@@ -303,6 +304,8 @@ const app = createApp({
   fxRates,
   registry,
   taxAuthority,
+  uniformFileSoftware: { registrationNumber: config.UNIFORM_FILE_REGISTRATION_NUMBER, houseVatId: config.SOFTWARE_HOUSE_VAT_ID, houseName: config.SOFTWARE_HOUSE_NAME },
+  manualAllocationUrl: config.TAX_AUTHORITY_MANUAL_ALLOCATION_URL ?? null,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },
@@ -315,7 +318,7 @@ if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_
 else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
-if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; receipts are read for uploaders granted receipt_reading');
+if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; every uploader\'s receipts are read');
 if (!receiptReadVerifier) logger.info('READ_OIDC_AUDIENCE/API_ORIGIN or READ_INVOKER_SA/SWEEP_INVOKER_SA are not set; POST /jobs/v1/receipts/read answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
 if (!documentSigner) logger.info('ISSUING_SIGNER is off; issued-document PDFs answer 503 SIGNING_NOT_CONFIGURED (the draft preview still prints)');
@@ -370,7 +373,7 @@ const mailPruneTimer = setInterval(() => {
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
   // MUT-618 (D3): sign-in codes live 10 minutes; rows go a day after they expire.
   void store.signInCodes.prune(new Date(Date.now() - SIGN_IN_CODE_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'sign-in code prune failed'));
-  // MUT-710 (ADR-275 §3): two-step challenges live 10 minutes; rows go a day after they expire.
+  // MUT-710 (ADR-274 §3): two-step challenges live 10 minutes; rows go a day after they expire.
   void store.twoFactor.pruneChallenges(new Date(Date.now() - TWO_FACTOR_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'two-step challenge prune failed'));
   // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));

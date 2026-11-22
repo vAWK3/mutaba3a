@@ -3,7 +3,7 @@ import { TokenBox } from '../israel/tax-authority/token-box.js';
 import { sessionDigest } from './sessions.js';
 
 /**
- * MUT-710 (ADR-275): the pure rules of two-step sign-in. The flow lives in sign-in.ts (the challenge at sign-in) and
+ * MUT-710 (ADR-274): the pure rules of two-step sign-in. The flow lives in sign-in.ts (the challenge at sign-in) and
  * routes/two-factor.ts (turning it on and off); TOTP itself is totp.ts.
  */
 export const TWO_FACTOR_POLICY = {

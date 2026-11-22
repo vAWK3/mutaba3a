@@ -2500,3 +2500,25 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `sharingRules.ts` (slice B): `isolate`, `periodRange`, `monthsLabel`, `rangeLine`, `foldDigits`, `pinOf`, `linkRow`, `liveLinks`, `linkErrorOf`, `periodEvent`. `sharingQueries.ts`: `useShareLinks` (404 → `{ off: true }`), `useCreateShareLink`, `useRevokeShareLink`, `refetchAfterRefusal`; revokes share `useOptimisticItem` (per-item undo, one read after the last).
 - `DownloadPeriodRow` — `src/hosted/pages/sharing/DownloadPeriodRow.tsx`: `profile`. The owner's Download a period (MUT-314). `data/periodDownload.ts`: `postDownload(ticket)` (hidden form POST to the stream), `periodDownloadsOn`, `usePeriodDownloadsOn`; rules `monthOptions`, `monthSpan`, `monthName`, `downloadErrorOf`. MUT-562's desk download can reuse `postDownload`.
 
+### Portal home — MUT-657 (ADR-269)
+- `HomePage` — `src/hosted/pages/views/HomePage.tsx`: the bare `/p/$profileId`; `search` (`HomeSearch`: `view?: 'in-out'` plus the income drawer keys), `setSearch`. Header with `HomeViewSwitch`, `LandingNotices`, then `HomeTodo` or `HomeInOut`; mounts `IncomeDrawerHost` for Add income.
+- `HomeViewSwitch` — `src/hosted/pages/home/HomeViewSwitch.tsx`: `view: 'todo' | 'in-out'`, `onChange`. A `role="group"` of `aria-pressed` buttons; full width at 760 px.
+- `HomeTodo` — `src/hosted/pages/home/HomeTodo.tsx`: `profile`, `onAddIncome`. The Add lane and the Waiting lane (`.hp-home-lanes`), the calm line, the library-off copy (`ReceiptsUnavailable`, plus Sign in signed out).
+- `HomeGroup` — `src/hosted/pages/home/HomeGroup.tsx`: `title`, `count`, `countLabel` (screen-reader sentence), `seeAll` (`to`, `label`, `name`), `children`. One `<section>` named by its `h2`. Reuse it for the To invoice group (MUT-648) and MUT-604's cards.
+- `ToReviewGroup` / `OverdueGroup` — `src/hosted/pages/home/`: the strip of To review cards (`useReceipts(…, 'to_review', 8)`, `ReceiptCard showAmount={false}`) and up to three overdue clients (no amounts).
+- `ReceiptDropZone` — `src/hosted/pages/home/ReceiptDropZone.tsx`: `profileId`. Drop zone (hidden at 760 px), Add receipt, Take a photo (`capture="environment"`, shown under `(pointer: coarse)`).
+- `HomeInOut` — `src/hosted/pages/home/HomeInOut.tsx`: `profile`. This month's money in and out per currency (component-state currency), from the org summary and `useReportActivity`.
+- `LandingNotices` — `src/hosted/components/LandingNotices.tsx`: `heading` ref. Trial, Passkey, Second way in, Malafat created, Firm on, in that order.
+- `useReceiptFiles` — `src/hosted/data/useReceiptFiles.ts`: `(profileId, { onLanded? })` → `{ onFiles, uploading, pending }`. The library upload with the gallery's rules, toasts and "added to To review"; the gallery and home share it.
+- `overdueClientCount` / `overdueClients` — `src/hosted/data/homeTodo.ts`: pure, from an `OrganizationSummary`.
+- `ReceiptCard` gained `showAmount` (default true). `useReceipts(profileId, status, limit = 24)` keys by limit. `parseHome` / `legacyOwedSearch` in `data/filters.ts`. `sectionPath` in `shell/youRoutes.ts`.
+
+### Documents due — MUT-660 (ADR-270)
+- `DocumentsDuePage` — `src/hosted/pages/views/DocumentsDuePage.tsx`: `profile`. Documents › To issue: segmented To issue / Not for invoice, Older than (`OLDER_THAN_MONTHS` 0/1/3/6/12), groups by client (No client last) with Issue all (in-place confirm), rows with Issue (the issue drawer, filled in) or Attach + Not for invoice with the reason, the bulk bar (in-place confirm with the count, Undo).
+- `ToIssueGroup` — `src/hosted/pages/home/ToIssueGroup.tsx`: `profileId`, `count`, `names`. Home's Waiting-lane group: the count and up to three clients (`TO_ISSUE_CLIENTS_SHOWN`).
+- `NotForInvoiceAction` — `src/hosted/components/NotForInvoiceAction.tsx`: `kind`, `id`, `version`, `marked`, `client`. A row's Not for invoice / Back to invoice (If-Match), with a neutral badge when marked; Undo; the credit-note message on 409.
+- `DocumentsPreferenceField` — `src/hosted/components/DocumentsPreferenceField.tsx`: `profileId`, `client`, `writable`, `profileDefault`. A self-saving select (If-Match) with what is due; invoicing profiles only.
+- `InvoiceSplitCard` — `src/hosted/pages/views/InvoiceSplitCard.tsx`: `rows` (InvoiceSplitRow[]). Reports' Invoice income / Not for invoice / All income per currency.
+- `documentsDueQueries` — `src/hosted/data/documentsDueQueries.ts`: `useDocumentsDue`, `useDocumentsDueCount` (null on 404), `useIssueDue` (chunks of 25), `useMarkNotForInvoice`, `useSetEntryNotForInvoice`, `refreshAfterDue`, `markRefusal`.
+- Server: `documentsDue`/`olderThan`/`preferenceOf` (`issuing/documents-due.ts`), `splitPayment`/`splitIncome`/`invoiceStatusOf` (`income/invoice-class.ts`), `invoiceSplitOf`/`serializeInvoiceSplit` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`), `issuingProfileOf` (`routes/issuing.ts`), `registerDocumentsDueRoutes` (`routes/documents-due.ts`).
+

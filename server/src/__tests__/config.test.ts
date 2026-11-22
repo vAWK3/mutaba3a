@@ -156,8 +156,8 @@ describe('loadConfig — receipts library switch (MUT-389)', () => {
     expect(loadConfig({ ...base, BILLING_GATE: 'false' }).BILLING_GATE).toBe(false);
   });
 
-  it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
-    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
+  it('is on by default (MUT-659); only "false" turns it off (z.coerce.boolean would read "false" as on)', () => {
+    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(true);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'true' }).RECEIPTS_LIBRARY).toBe(true);
   });
@@ -191,10 +191,17 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
   });
 
   it('TWO_FACTOR_SEAL_KEY (MUT-710 D4): required on production and staging, optional elsewhere', () => {
-    const { TWO_FACTOR_SEAL_KEY: _key, ...without } = base;
+    const without = { ...base, TWO_FACTOR_SEAL_KEY: undefined };
     for (const env of ['production', 'staging']) expect(() => loadConfig({ ...without, NODE_ENV: env }), env).toThrow('TWO_FACTOR_SEAL_KEY');
     expect(loadConfig({ ...without, NODE_ENV: 'development' }).TWO_FACTOR_SEAL_KEY).toBeUndefined();
     expect(loadConfig({ ...base, NODE_ENV: 'production' }).TWO_FACTOR_SEAL_KEY).toBe('t'.repeat(32));
+  });
+
+  it('TWO_FACTOR_ISSUING_GATE_ENABLED (MUT-710 D10): off unless exactly "true", production included', () => {
+    expect(loadConfig(base).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
+    expect(loadConfig({ ...base, TWO_FACTOR_ISSUING_GATE_ENABLED: 'true' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(true);
+    expect(loadConfig({ ...base, TWO_FACTOR_ISSUING_GATE_ENABLED: 'false' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
   });
 
   it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {

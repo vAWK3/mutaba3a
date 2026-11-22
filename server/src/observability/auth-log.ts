@@ -1,7 +1,7 @@
 import { createHmac } from 'node:crypto';
 
 /**
- * MUT-710 (ADR-275 D12): the authentication log the SHAAM security appendix (§19) asks for. Every event is one
+ * MUT-710 (ADR-274 D12): the authentication log the SHAAM security appendix (§19) asks for. Every event is one
  * structured stdout line with `event: 'auth_event'`; the Terraform sink (infrastructure/terraform/auth_log.tf) copies
  * exactly those lines into a Cloud Logging bucket kept 365 days. The audit table stays the per-profile record; this is
  * the complete one: it also covers people with no profile and addresses with no account.

@@ -50,7 +50,7 @@ export interface AccountSetupRouteOptions {
   logger: Logger;
   /** MUT-367: told after a SIGNUP redeem opens an account that waits for review. */
   reviewDigest: ReviewDigest;
-  /** MUT-710 (ADR-275 D11): every person link asks for the second step when the person has it on. */
+  /** MUT-710 (ADR-274 D11): every person link asks for the second step when the person has it on. */
   twoFactor: TwoFactorFlow;
 }
 
@@ -219,7 +219,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
   }
 
   /**
-   * MUT-710 (ADR-275 D11, review 4): every person link (setup, reset, an operator's, --lock included) asks for the
+   * MUT-710 (ADR-274 D11, review 4): every person link (setup, reset, an operator's, --lock included) asks for the
    * second step when the person has it on, whatever its purpose: after an operator --lock nulls the password the next
    * link is SETUP, and it must not skip the step. The challenge is bound to this link and person, and is consumed here
    * (single use, by the store's conditional update) before the slow hash; a redeem that then loses its race leaves it

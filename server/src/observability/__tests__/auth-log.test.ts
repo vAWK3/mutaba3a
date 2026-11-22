@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { authEmailKey, authLog, AUTH_EVENT_KINDS, type AuthLogSink } from '../auth-log.js';
 
-/** MUT-710 (ADR-275 D12): one structured line per authentication event, routed to the 12-month bucket by its `event`. */
+/** MUT-710 (ADR-274 D12): one structured line per authentication event, routed to the 12-month bucket by its `event`. */
 describe('authentication log (MUT-710)', () => {
   function capture(): { sink: AuthLogSink; lines: Array<{ fields: Record<string, unknown>; message: string }> } {
     const lines: Array<{ fields: Record<string, unknown>; message: string }> = [];

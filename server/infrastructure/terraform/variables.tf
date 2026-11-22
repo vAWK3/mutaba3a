@@ -108,9 +108,9 @@ variable "sentry_enabled" {
 }
 
 variable "receipts_library_enabled" {
-  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. false (default) = the API behaves as before MUT-255. Turn it on when MUT-260 (portal) or MUT-258 (phone) ships, and don't turn it back off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
+  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. MUT-659: true by default, for everyone. Don't turn it off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "accountant_access_enabled" {
@@ -157,6 +157,12 @@ variable "comeback_mail_enabled" {
 
 variable "monthly_summary_mail_enabled" {
   description = "MUT-535 (ADR-259): creates the monthly summary mail job (days 1-7 of each month, 14:00 Jerusalem). Off (default) until the operator has read `npm run billing:monthly-summary-mail -- --dry-run` after the release, the privacy policy that names the mail is live, and the paying + trialling count fits the mail budget (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "tax_authority_reminders_enabled" {
+  description = "MUT-571 AC3: creates the daily Tax Authority re-consent reminder job (09:00 Jerusalem): the owner of each connected profile is mailed 10 days before the 90-day consent ends and when it has ended. Off (default) until the Tax Authority connection (TAX_AUTHORITY_ENV) is configured on this service and the operator has read a dry run (docs/operations/before-release.md)."
   type        = bool
   default     = false
 }
@@ -531,3 +537,40 @@ variable "auth_log_bucket_locked" {
   type        = bool
   default     = false
 }
+
+variable "two_factor_issuing_gate_enabled" {
+  description = "MUT-710 (ADR-274 D10): sets TWO_FACTOR_ISSUING_GATE_ENABLED=true, so PUT /v1/issuer, issuing, the Tax Authority connect and allocation decisions need two-step sign-in on and a session that passed it (403 TWO_FACTOR_SETUP_REQUIRED). false (default) = issuing as before MUT-710. Turn on only after the portal and phone screens that turn two-step sign-in on are live, and after everyone already issuing has turned it on (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "uniform_file_registration_number" {
+  description = "MUT-569 (ADR-272): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.uniform_file_registration_number == null || can(regex("^[0-9]{8}$", var.uniform_file_registration_number))
+    error_message = "uniform_file_registration_number is 8 digits."
+  }
+}
+
+variable "software_house_vat_id" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_VAT_ID, the registering software house's 9-digit company number in the uniform file (A000 1009). The owner is Narabnd Studio Ltd, 517108775 (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_vat_id == null || can(regex("^[0-9]{9}$", var.software_house_vat_id))
+    error_message = "software_house_vat_id is a 9-digit company number."
+  }
+}
+
+variable "software_house_name" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_NAME, the software house's registered name in the uniform file (A000 1010, at most 20 characters), e.g. נאראבנד סטודיו בע\"מ (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_name == null || (length(var.software_house_name) >= 1 && length(var.software_house_name) <= 20)
+    error_message = "software_house_name is 1 to 20 characters."
+  }
+}
+

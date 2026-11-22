@@ -1,7 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 
 /**
- * MUT-710 (ADR-275 D4): time-based one-time codes, RFC 6238 over RFC 4226, as authenticator apps (Authy, Google
+ * MUT-710 (ADR-274 D4): time-based one-time codes, RFC 6238 over RFC 4226, as authenticator apps (Authy, Google
  * Authenticator, 1Password) compute them: HMAC-SHA1, 6 digits, 30-second steps. Pure: no clock, no store.
  */
 export const TOTP_POLICY = {

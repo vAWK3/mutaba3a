@@ -42,9 +42,10 @@ function portal(path: string, routes: Record<string, Handler> = {}, profiles = [
 
 const rowsOf = (table: HTMLElement) => within(table).getAllByRole('row').slice(1);
 
+/** Owed's overview, at /owed since MUT-657 gave home the bare path. */
 describe('Overview', () => {
   it('shows the strip for the default currency and sorts overdue, outstanding, quiet, then name', async () => {
-    portal(`/p/${ORG_A}`, { 'GET /v1/summaries/organization': () => ok(organizationSummary()) });
+    portal(`/p/${ORG_A}/owed`, { 'GET /v1/summaries/organization': () => ok(organizationSummary()) });
     const strip = await screen.findByRole('group', { name: 'ILS' });
     expect(strip).toHaveTextContent('Owed₪12,000.00');
     expect(strip).toHaveTextContent('Overdue₪2,000.00');
@@ -55,35 +56,35 @@ describe('Overview', () => {
   });
 
   it('shows the currency switch only when more than one currency has a non-zero figure', async () => {
-    portal(`/p/${ORG_A}`, { 'GET /v1/summaries/organization': () => ok(organizationSummary(false)) });
+    portal(`/p/${ORG_A}/owed`, { 'GET /v1/summaries/organization': () => ok(organizationSummary(false)) });
     await screen.findByRole('group', { name: 'ILS' });
     expect(screen.queryByRole('tablist')).toBeNull();
   });
 
   it('switches currency through the URL, replacing history', async () => {
-    const { user, router } = portal(`/p/${ORG_A}`, { 'GET /v1/summaries/organization': () => ok(organizationSummary(true)) });
+    const { user, router } = portal(`/p/${ORG_A}/owed`, { 'GET /v1/summaries/organization': () => ok(organizationSummary(true)) });
     await screen.findByRole('group', { name: 'ILS' });
     const before = router.history.length;
     await user.click(within(screen.getByRole('tablist')).getByRole('tab', { name: 'USD' }));
     expect(await screen.findByRole('group', { name: 'USD' })).toHaveTextContent('Owed$500.00');
-    expect(locationOf(router)).toBe(`/p/${ORG_A}?currency=USD`);
+    expect(locationOf(router)).toBe(`/p/${ORG_A}/owed?currency=USD`);
     expect(router.history.length).toBe(before);
   });
 
   it('has loading, empty and error states with no figure', async () => {
-    portal(`/p/${ORG_A}`, { 'GET /v1/summaries/organization': never });
+    portal(`/p/${ORG_A}/owed`, { 'GET /v1/summaries/organization': never });
     expect(await screen.findByLabelText('Loading')).toHaveAttribute('aria-busy', 'true');
     expect(document.body.textContent).not.toContain('₪');
   });
 
   it('says so when the profile has no money yet', async () => {
-    portal(`/p/${ORG_A}`, { 'GET /v1/summaries/organization': () => ok({ asOf: '2026-10-11', currencies: [] }) });
+    portal(`/p/${ORG_A}/owed`, { 'GET /v1/summaries/organization': () => ok({ asOf: '2026-10-11', currencies: [] }) });
     expect(await screen.findByText('No money recorded on this profile yet')).toBeInTheDocument();
   });
 
   it('never shows a stale figure after a failed refetch', async () => {
     let healthy = true;
-    const { queryClient } = portal(`/p/${ORG_A}`, {
+    const { queryClient } = portal(`/p/${ORG_A}/owed`, {
       'GET /v1/summaries/organization': () => (healthy ? ok(organizationSummary()) : fail(503, 'INTERNAL')),
     });
     await screen.findByText('₪12,000.00');
@@ -150,8 +151,8 @@ describe('Client detail', () => {
     };
   }
 
-  it('shows the per-currency summary and the matters', async () => {
-    portal(`/p/${ORG_A}/clients/${C1}`, {
+  it('shows the per-currency summary and the matters on Details', async () => {
+    portal(`/p/${ORG_A}/clients/${C1}?tab=details`, {
       'GET /v1/customers/c1111111-1111-4111-8111-111111111111': () => ok(CUSTOMERS[0]),
       'GET /v1/summaries/customers/c1111111-1111-4111-8111-111111111111': () => ok(summary()),
       'GET /v1/projects': () => ok(page([{ ...PROJECTS[0], id: '00000000-0000-4000-8000-000000000001' }])),
@@ -163,15 +164,16 @@ describe('Client detail', () => {
     expect(within(matters).getByText('₪20,000.00')).toBeInTheDocument();
   });
 
-  it('shows the receivables tab filtered to this client, with the read-only notice', async () => {
+  it('opens on the ledger card for this client (MUT-664); Details carries the read-only notice', async () => {
     const { user, api } = portal(`/p/${ORG_A}/clients/${C1}`, {
       'GET /v1/customers/c1111111-1111-4111-8111-111111111111': () => ok(CUSTOMERS[0]),
       'GET /v1/summaries/customers/c1111111-1111-4111-8111-111111111111': () => ok(summary()),
-      'GET /v1/receivables': () => ok(page([RECEIVABLES[0]])),
+      [`GET /v1/customers/${C1}/statement`]: () => ok({ customerId: C1, currency: 'ILS', projectId: null, from: null, to: null, asOf: '2026-10-11', openingBalance: '0.00', totals: { debit: '9000.00', credit: '0.00' }, closingBalance: '9000.00', lines: [{ id: 'r1', kind: 'CHARGE', date: '2026-10-01', number: null, projectId: null, debit: '9000.00', credit: '0.00', runningBalance: '9000.00', documents: [], due: null, receivableId: 'r1', outstanding: '9000.00' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(page([{ ...PROJECTS[0], id: '00000000-0000-4000-8000-000000000001' }])),
     });
-    await user.click(await screen.findByRole('tab', { name: 'Receivables' }));
-    await screen.findByRole('table', { name: 'Receivables' });
-    expect(api.calls.some((c) => c.url.pathname === '/v1/receivables' && c.url.searchParams.get('customerId') === C1)).toBe(true);
+    expect(await screen.findAllByTestId('ledger-line')).toHaveLength(1);
+    expect(api.calls.some((c) => c.url.pathname === `/v1/customers/${C1}/statement` && c.url.searchParams.get('order') === 'desc')).toBe(true);
+    await user.click(screen.getByRole('tab', { name: 'Details' }));
     expect(screen.getByRole('note')).toHaveTextContent('Malafat records income and payments for this profile.');
   });
 
@@ -317,21 +319,24 @@ describe('Profile switcher (You › Profiles)', () => {
     expect(screen.getByRole('main')).toHaveTextContent('Your local profiles stay in the MTB3A app on your device.');
   });
 
-  it('keeps the section, sends the new profile header, and never shows the old figures', async () => {
+  it('lands on the new profile home (MUT-657), sends its header, and never shows the old figures', async () => {
     const { user, router, api } = portal(
       `/p/${ORG_A}/receivables`,
-      { 'GET /v1/receivables': ({ headers }) => (headers.get('x-mutaba3a-profile') === ORG_A ? ok(page(RECEIVABLES)) : never()) },
+      {
+        'GET /v1/receivables': () => ok(page(RECEIVABLES)),
+        'GET /v1/summaries/organization': ({ headers }) => (headers.get('x-mutaba3a-profile') === ORG_A ? ok(organizationSummary()) : never()),
+      },
       both,
     );
     const before = await screen.findByRole('table', { name: 'Receivables' });
     expect(within(before).getByText('Lease dispute')).toBeInTheDocument();
     await user.click(screen.getByRole('link', { name: /^You/ }));
     await user.click(await screen.findByRole('button', { name: /Nour — personal/ }));
-    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}/receivables`));
-    expect(await screen.findByLabelText('Loading')).toBeInTheDocument();
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_B}`));
+    expect(await screen.findByRole('heading', { level: 1, name: 'Home' })).toBeInTheDocument();
     expect(screen.queryByRole('table', { name: 'Receivables' })).toBeNull();
     expect(document.body.textContent).not.toContain('1,170.00');
-    expect(api.calls.some((c) => c.url.pathname === '/v1/receivables' && c.headers.get('x-mutaba3a-profile') === ORG_B)).toBe(true);
+    await waitFor(() => expect(api.calls.some((c) => c.url.pathname === '/v1/summaries/organization' && c.headers.get('x-mutaba3a-profile') === ORG_B)).toBe(true));
   });
 });
 
@@ -485,10 +490,11 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '+ Add income' }));
   });
 
-  it('prefills the client on Client detail and records a payment from its Receivables tab', SLOW_UNDER_COVERAGE, async () => {
+  it('prefills the client on Client detail and records a payment from its ledger card', SLOW_UNDER_COVERAGE, async () => {
     const { user, router } = portal(`/p/${ORG_A}/clients/${C1}`, {
       [`GET /v1/customers/${C1}`]: () => ok(CUSTOMERS[0]),
-      [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [] }),
+      [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [{ currency: 'ILS' }] }),
+      [`GET /v1/customers/${C1}/statement`]: () => ok({ customerId: C1, currency: 'ILS', projectId: null, from: null, to: null, asOf: '2026-10-11', openingBalance: '0.00', totals: { debit: '1170.00', credit: '0.00' }, closingBalance: '1170.00', lines: [{ id: R1, kind: 'CHARGE', date: '2026-10-01', number: 'CHG-1', projectId: null, debit: '1170.00', credit: '0.00', runningBalance: '1170.00', documents: [], due: null, receivableId: R1, outstanding: '1170.00' }], nextCursor: null }),
       'GET /v1/receivables': () => ok(page([OPEN_OWED[0]])),
       [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
     }, [PERSONAL]);
@@ -498,9 +504,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-    await user.click(screen.getByRole('tab', { name: 'Receivables' }));
-    const table = await screen.findByRole('table', { name: 'Receivables' });
-    await user.click(within(table).getByRole('button', { name: /Record payment/ }));
+    await user.click(await screen.findByRole('button', { name: 'Owed CHG-1' }));
     await waitFor(() => expect(locationOf(router)).toContain(`settle=${R1}`));
     expect(await screen.findByLabelText('Amount (ILS)')).toHaveValue('1170.00');
   });

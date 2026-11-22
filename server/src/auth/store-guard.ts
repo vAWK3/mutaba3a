@@ -162,7 +162,7 @@ export const STORE_ACCESS: StoreAccess = {
   externalIdentities: { syncMembers: { write: 'integration' }, findBySubject: 'operator', claim: 'operator', listByUser: 'sessionOnly', listByOrganization: 'sessionOnly', link: 'operator' },
   // MUT-618: emailed sign-in codes, on public routes, unguarded, like sign-in.
   signInCodes: { issue: 'operator', attempt: 'operator', prune: 'operator' },
-  // MUT-710 (ADR-275): the second step runs on the public sign-in routes (no guard) and on the person's own /v1/me
+  // MUT-710 (ADR-274): the second step runs on the public sign-in routes (no guard) and on the person's own /v1/me
   // routes. Turning it on or off and new recovery codes are identity writes; the challenge bookkeeping is the person's
   // own; pruning is the server's timer.
   twoFactor: {
@@ -265,6 +265,7 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-443: a reversal and its replacement in one write; the same domain as each half.
     correct: { write: 'payments' },
     findReplacedBy: 'read',
+    findByClientRequestKey: 'read',
     // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
     capture: { write: 'capture' },
     undoCapture: { write: 'capture' },
@@ -398,16 +399,27 @@ export const STORE_ACCESS: StoreAccess = {
     addLogo: { write: 'issuing' },
     clearLogo: { write: 'issuing' },
     getLogo: { read: 'issuing' },
+    // MUT-660: documents due (reads), the books split (reads) and the not-for-invoice mark (an issuing write).
+    dueInputs: { read: 'issuing' },
+    incomeContext: { read: 'issuing' },
+    setNotForInvoice: { write: 'issuing' },
+    cancelPaymentRequest: { write: 'issuing' },
+    paymentRequestFacts: { read: 'issuing' },
     // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
     getTaxConnection: { read: 'issuing' },
     putTaxConnection: { write: 'issuing' },
     deleteTaxConnection: { write: 'issuing' },
     withTaxConnectionLock: { write: 'issuing' },
+    // MUT-571 AC3: across profiles, for the reminder job only (the unguarded store).
+    taxConnectionsEndingBetween: 'operator',
     counters: { read: 'issuing' },
     setStartingNumber: { write: 'issuing' },
     issue: { write: 'issuing' },
     getById: { read: 'issuing' },
+    // MUT-709: whether a receipt stands on a payment; asked by every route that may reverse one, whoever calls it.
+    moneyDocumentOn: 'read',
     list: { read: 'issuing' },
+    inRange: { read: 'issuing' },
     recordCopy: { write: 'issuing' },
     // MUT-641: the signed original, kept once.
     getOriginalPdf: { read: 'issuing' },
@@ -675,15 +687,18 @@ export function accountantStoreGuard(): StoreGuard {
  * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
  */
 export function shareLinkStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(PROFILE_FEED_READS, shareLinkReadOnly);
+  return readOnlyStoreGuard(SHARE_LINK_EXTRA_READS, shareLinkReadOnly);
 }
+
+/** MUT-660 (ADR-270): a link's summary and download split income when the owner holds `invoicing`, so they read the owner's flags. A read of flags only. */
+export const SHARE_LINK_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
 
 /**
  * MUT-314 (ADR-248): the guard a period download's stream runs under, whoever asked, so nothing it reaches can write.
  * A share link's stream keeps the link's own guard; an owner's or an accountant's reads like an accountant's, plus the
  * entries feed (sessionOnly: it reads across a person's profiles; the download reads it for its one profile).
  */
-export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list']);
+export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'features.activeFor']);
 
 export function periodDownloadStoreGuard(kind: 'member' | 'accountant' | 'link'): StoreGuard {
   if (kind === 'link') return shareLinkStoreGuard();

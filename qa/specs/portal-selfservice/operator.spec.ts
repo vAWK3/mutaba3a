@@ -578,10 +578,10 @@ test('Searching "basel" finds every account with it in the email or name, in Ara
   });
 });
 
-test('Switch receipt reading on your own account with the passkey; the blocked actions are explained once', { tag: '@portal-selfservice.operator.own-feature' }, async ({ page, step }) => {
+test('Switch accountant access on your own account with the passkey; the blocked actions are explained once', { tag: '@portal-selfservice.operator.own-feature' }, async ({ page, step }) => {
   await chooseLanguage(page, 'en');
   const me = await operator(page);
-  const flag = () => page.getByRole('region', { name: 'Features' }).getByRole('switch', { name: /Receipt reading/ });
+  const flag = () => page.getByRole('region', { name: 'Features' }).getByRole('switch', { name: /Accountant access/ });
   await step('Open your own account from the list: one note, no Access rows, no Grant row', async () => {
     await openAccount(page, me.email);
     await expect(page.getByText('This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.')).toBeVisible();
@@ -589,12 +589,12 @@ test('Switch receipt reading on your own account with the passkey; the blocked a
     await expect(page.getByRole('region', { name: 'Access' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Billing' }).getByRole('button', { name: /Grant coverage/ })).toHaveCount(0);
   });
-  await step('Turn Receipt reading on, confirming with the passkey: it reads on, and the CLI lists you', async () => {
-    await expect(flag()).toContainText('Reads new receipts on our servers and fills in the date, total and vendor.');
+  await step('Turn Accountant access on, confirming with the passkey: it reads on, and the CLI lists you', async () => {
+    await expect(flag()).toContainText('As an owner, they can invite an accountant to read a profile and make share links.');
     await expect(flag()).toHaveAttribute('aria-checked', 'false');
     await flag().click();
     await expect(flag()).toHaveAttribute('aria-checked', 'true');
-    expect(await featureHolders('receipt_reading')).toContain(me.id);
+    expect(await featureHolders('accountant_access')).toContain(me.id);
   });
   await step('The server still refuses to disable your own account (409 OWN_ACCOUNT)', async () => {
     const res = await page.request.post(`/v1/operator/accounts/${me.id}/disable`, { headers: { origin: liveState().origin } });
@@ -603,24 +603,24 @@ test('Switch receipt reading on your own account with the passkey; the blocked a
   });
 });
 
-test('Receipt reading shows its name and explanation in Arabic, and its own turn-off confirmation', { tag: '@portal-selfservice.operator.feature-name-arabic' }, async ({ page, step }) => {
+test('Accountant access shows its name and explanation in Arabic, and its own turn-off confirmation', { tag: '@portal-selfservice.operator.feature-name-arabic' }, async ({ page, step }) => {
   await chooseLanguage(page, 'ar');
   await operator(page, 'ar');
   const person = await targetWithId('reading');
-  const flag = () => page.getByRole('region', { name: 'الميزات' }).getByRole('switch', { name: /قراءة الإيصالات/ });
-  await step('Open their account: قراءة الإيصالات is named and explained, never by its key', async () => {
+  const flag = () => page.getByRole('region', { name: 'الميزات' }).getByRole('switch', { name: /وصول المحاسب/ });
+  await step('Open their account: وصول المحاسب is named and explained, never by its key', async () => {
     await openAccount(page, person.email, 'ar');
-    await expect(flag()).toContainText('تُقرأ الإيصالات الجديدة على خوادمنا ويُملأ التاريخ والمجموع والمورّد.');
-    await expect(page.getByText('receipt_reading')).toHaveCount(0);
+    await expect(flag()).toContainText('بصفته مالكًا، يمكنه دعوة محاسب لقراءة ملف ومشاركة روابط.');
+    await expect(page.getByText('accountant_access')).toHaveCount(0);
   });
   await step('Turn it on with the passkey, then off: it asks first, in its own words', async () => {
     await flag().click();
     await expect(flag()).toHaveAttribute('aria-checked', 'true');
     await flag().click();
-    await expect.poll(() => confirmText(page)).toContain(`سيفقد ${person.email} قراءة الإيصالات؛ والإيصالات التي يضيفها من الآن لن تُقرأ.`);
+    await expect.poll(() => confirmText(page)).toContain(`لن يستطيع ${person.email} دعوة محاسبين أو إنشاء روابط جديدة؛ وما شاركه من قبل يبقى يعمل حتى يلغيه.`);
     await page.getByRole('button', { name: 'إيقاف', exact: true }).click();
     await expect(flag()).toHaveAttribute('aria-checked', 'false');
-    expect(await featureHolders('receipt_reading')).not.toContain(person.id);
+    expect(await featureHolders('accountant_access')).not.toContain(person.id);
   });
 });
 
@@ -628,7 +628,7 @@ test('Your settings shows you’re an operator, your passkeys, the step-up, and 
   await page.setViewportSize({ width: 375, height: 812 });
   await chooseLanguage(page, 'en');
   await operator(page);
-  const flag = () => page.getByRole('region', { name: 'Your features' }).getByRole('switch', { name: /Receipt reading/ });
+  const flag = () => page.getByRole('region', { name: 'Your features' }).getByRole('switch', { name: /Accountant access/ });
   await step('Open Your settings: operator since, 1 passkey, not confirmed', async () => {
     await page.goto('/operator/signups');
     await page.getByRole('link', { name: 'Your settings' }).click();
@@ -640,7 +640,7 @@ test('Your settings shows you’re an operator, your passkeys, the step-up, and 
     await expect(confirmation).toContainText('Changes will ask for your passkey.');
     await expectNoHorizontalOverflow(page, 'Your settings at 375 px');
   });
-  await step('Turn Receipt reading on for yourself with the passkey: on, and confirmed until a time', async () => {
+  await step('Turn Accountant access on for yourself with the passkey: on, and confirmed until a time', async () => {
     await flag().click();
     await expect(flag()).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('region', { name: 'Confirmation' })).toContainText(/Confirmed with your passkey until \d{1,2}:\d{2}/);

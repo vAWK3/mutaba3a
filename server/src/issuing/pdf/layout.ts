@@ -83,6 +83,11 @@ export function logoNode(k: Kit, fit: [number, number]): Node | null {
   return { image: `data:image/${png ? 'png' : 'jpeg'};base64,${k.vm.logo.toString('base64')}`, fit };
 }
 
+/** MUT-662: the framed "not a tax invoice" line (in the ink colour, never wrapped away). */
+function noticeBox(k: Kit): Node {
+  return { margin: [0, 6, 0, 8], table: { widths: ['*'], body: [[k.text(k.vm.notice ?? '', { bold: true, fontSize: 10, alignment: 'center', margin: [6, 4, 6, 4] })]] }, layout: { hLineColor: () => k.vm.ink, vLineColor: () => k.vm.ink } };
+}
+
 /** The document-level parts every style shares: page, fonts, direction, the draft watermark. */
 export function documentFrame(k: Kit, content: Node[], margins: [number, number, number, number], footerSize?: number): Node {
   return {
@@ -92,6 +97,7 @@ export function documentFrame(k: Kit, content: Node[], margins: [number, number,
     ...(k.vm.isDraft ? { watermark: { text: k.vm.mark, color: k.vm.ink, opacity: 0.08, bold: true, font: k.chain[0] } } : {}),
     info: { title: `${k.vm.title} ${k.vm.number}`, creator: 'MTB3A', producer: 'MTB3A' },
     footer: footer(k, footerSize),
-    content,
+    // MUT-662 (D16): a payment request's framed notice sits right under the header, in every style.
+    content: k.vm.notice ? [...content.slice(0, 1), noticeBox(k), ...content.slice(1)] : content,
   };
 }

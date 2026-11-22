@@ -11,16 +11,16 @@ import { atProfileCap, canCreateProfile } from '../../data/profileRules';
 import { useMe } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { useProfileDrawers } from '../../shell/ProfileDrawers';
-import { switchTarget, type SectionSegment } from '../../shell/youRoutes';
+import { switchTarget } from '../../shell/youRoutes';
 
 /**
  * You › Profiles (MUT-425; was the profile switcher, hosted-portal.md §7.2): each profile with its kind, the Hosted
  * chip and the shared cue; New profile and Manage profiles (MUT-183); the note that local profiles stay on the device.
- * Picking a profile, the open one included, goes to the section the person came from (`from`), never the record: a
- * client id from one firm means nothing in another. At the cap, New profile stays focusable and says why it does
+ * Picking a profile, the open one included, goes to its home (MUT-657 E-3), never the record: a client id from one
+ * firm means nothing in another. At the cap, New profile stays focusable and says why it does
  * nothing (`aria-disabled`, plan §2.2).
  */
-export function YouProfiles({ active, from }: { active: HostedProfile | null; from: SectionSegment | undefined }) {
+export function YouProfiles({ active }: { active: HostedProfile | null }) {
   const t = useT();
   const tp = useTp();
   const me = useMe();
@@ -59,7 +59,7 @@ export function YouProfiles({ active, from }: { active: HostedProfile | null; fr
                 </span>
               }
               sub={<ProfileKindLine profile={profile} viewerId={me.user.id} />}
-              onClick={() => void navigate({ to: switchTarget(profile.id, from) })}
+              onClick={() => void navigate({ to: switchTarget(profile.id) })}
             />
           );
         })}
