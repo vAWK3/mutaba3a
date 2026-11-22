@@ -116,14 +116,13 @@ const json = (body: unknown, headers: Record<string, string> = {}, method = 'POS
 const idem = () => ({ 'idempotency-key': `key-${++seq}-${Math.random().toString(36).slice(2, 8)}` });
 const keyOf = (url: string) => new URL(url).pathname.replace(/^\/+/, '').replace(/^upload\//, '');
 const FILE = { filename: 'receipt.jpg', mimeType: 'image/jpeg', sizeBytes: 2048 };
-const grant = (h: Harness, userId: string) => h.app.request(`/admin/v1/users/${userId}/features/receipt_reading`, { method: 'PUT', headers: admin });
+const grantRetired = (h: Harness, userId: string) => h.app.request(`/admin/v1/users/${userId}/features/receipt_reading`, { method: 'PUT', headers: admin });
 
-async function setup(opts: Options & { granted?: boolean } = {}) {
+async function setup(opts: Options = {}) {
   const h = harness(opts);
   const org = await read(await h.app.request('/admin/v1/organizations', json({ name: `Firm ${++seq}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, admin)));
   const email = `reader${++seq}@firm.ps`;
   const created = await provisionUser(h.app, { email, displayName: 'Nour Haddad', organizationId: org.id, locale: 'en' });
-  if (opts.granted !== false) expect((await grant(h, created.user.id)).status).toBe(200);
   const res = await h.app.request('/v1/sessions', json({ email, password: created.password }, SAME_ORIGIN));
   const token = new RegExp(`${COOKIE}=([^;]*)`).exec(res.headers.get('set-cookie') ?? '')?.[1] ?? '';
   const as = { cookie: `${COOKIE}=${token}`, 'x-mutaba3a-profile': org.id, ...SAME_ORIGIN };
@@ -146,7 +145,7 @@ const job = (h: Harness, body: unknown, headers: Record<string, string> = asQueu
 const idle = (h: Harness) => (h.dispatcher instanceof InlineDispatcher ? h.dispatcher.idle() : Promise.resolve());
 
 describe('complete asks the server to read (D3, F5, R10 #5)', () => {
-  it('flag on, granted uploader, no suggestion: PENDING in the complete, then read in this process (inline)', async () => {
+  it('flag on, any uploader (MUT-659: no grant), no suggestion: PENDING in the complete, then read in this process (inline)', async () => {
     const { h, orgId, as } = await setup();
     const done = await upload(h, as, { ...FILE, capture: 'scanned' });
     expect(done.reading).toBe('pending');
@@ -167,11 +166,12 @@ describe('complete asks the server to read (D3, F5, R10 #5)', () => {
     expect((await stored(h, orgId, done.id)).readStatus ?? 'NONE').toBe('NONE');
   });
 
-  it('no grant: NONE, nothing queued (the grant backlog picks it up later)', async () => {
-    const { h, orgId, as } = await setup({ granted: false, dispatcher: 'recording' });
+  it('MUT-659: an uploader with no feature grant at all is read: PENDING and asked once', async () => {
+    const { h, orgId, userId, as } = await setup({ dispatcher: 'recording' });
+    expect(await h.store.features.activeFor(userId)).toEqual([]);
     const done = await upload(h, as);
-    expect((await stored(h, orgId, done.id)).readStatus ?? 'NONE').toBe('NONE');
-    expect((h.dispatcher as RecordingDispatcher).asked).toEqual([]);
+    expect((await stored(h, orgId, done.id)).readStatus).toBe('PENDING');
+    expect((h.dispatcher as RecordingDispatcher).asked).toEqual([`${done.id}-0`]);
   });
 
   it('F5: an uploader who is gone is SKIPPED, never read', async () => {
@@ -478,27 +478,13 @@ describe('AC5 / R10 #3: no receipt text reaches a log line or Sentry', () => {
   });
 });
 
-describe('R5: granting receipt_reading queues the person\'s unread To-review receipts once', () => {
-  it('marks them PENDING and asks for each; granting again changes nothing', async () => {
-    const { h, orgId, userId, as } = await setup({ granted: false, dispatcher: 'recording' });
-    const waiting = await upload(h, as);
-    const second = await upload(h, as);
-    const filed = await upload(h, as);
-    await h.app.request(`/v1/receipts/${filed.id}/approve`, json({ occurredOn: '2026-10-28', amount: '1.00', currency: 'ILS', vendor: 'X' }, { ...as, ...idem() }));
-    const dispatcher = h.dispatcher as RecordingDispatcher;
-    expect((await grant(h, userId)).status).toBe(200);
-    expect([...dispatcher.asked].sort()).toEqual([`${waiting.id}-0`, `${second.id}-0`].sort());
-    for (const id of [waiting.id, second.id]) expect((await stored(h, orgId, id)).readStatus).toBe('PENDING');
-    expect((await stored(h, orgId, filed.id)).readStatus ?? 'NONE').toBe('NONE');
-    expect((await grant(h, userId)).status).toBe(200);
-    expect(dispatcher.asked).toHaveLength(2);
-  });
-
-  it('with the flag off, a grant queues nothing', async () => {
-    const { h, orgId, userId, as } = await setup({ granted: false, reading: false });
-    const waiting = await upload(h, as);
-    expect((await grant(h, userId)).status).toBe(200);
-    expect((await stored(h, orgId, waiting.id)).readStatus ?? 'NONE').toBe('NONE');
+describe('MUT-659: receipt_reading is no longer a feature', () => {
+  it('granting it is refused and changes nothing about reading', async () => {
+    const { h, orgId, userId, as } = await setup({ dispatcher: 'recording' });
+    expect((await grantRetired(h, userId)).status).toBe(422);
+    expect(await h.store.features.activeFor(userId)).toEqual([]);
+    const done = await upload(h, as);
+    expect((await stored(h, orgId, done.id)).readStatus).toBe('PENDING');
   });
 });
 

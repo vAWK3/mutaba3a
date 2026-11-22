@@ -2184,11 +2184,6 @@
           "sub": "They can connect their own Claude to log receipts and statements",
           "confirmOff": "{email} loses Claude access, and any Claude they connected is disconnected now."
         },
-        "receipt_reading": {
-          "label": "Receipt reading",
-          "sub": "Reads new receipts on our servers and fills in the date, total and vendor.",
-          "confirmOff": "{email} loses receipt reading; receipts they add from now on aren't read."
-        },
         "accountant_access": {
           "label": "Accountant access",
           "sub": "As an owner, they can invite an accountant to read a profile and make share links.",

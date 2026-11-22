@@ -3693,7 +3693,7 @@ export class MemoryLedgerStore implements LedgerStore {
     markBacklogPending: async (scope, now) => {
       const moved: string[] = [];
       for (const r of this.expReceipts.values()) {
-        if (r.uploadedByUserId !== scope.userId || (scope.organizationId && r.organizationId !== scope.organizationId)) continue;
+        if (r.uploadedByUserId === null || (scope.userId && r.uploadedByUserId !== scope.userId) || (scope.organizationId && r.organizationId !== scope.organizationId)) continue;
         if (r.status !== 'READY' || r.filingStatus !== 'TO_REVIEW' || r.deletedAt || (r.readStatus ?? 'NONE') !== 'NONE' || isCompleteSuggestion(r.suggested)) continue;
         Object.assign(r, { readStatus: 'PENDING', readRequestedAt: now, readLeaseUntil: null });
         moved.push(r.id);

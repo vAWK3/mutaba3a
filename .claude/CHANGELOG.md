@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
+
+### Changed
+- Server receipt reading is for every uploader while `SERVER_OCR` is on: no per-person grant (`reader.ts` `decide` and the claim-time check; a receipt whose uploader left is still skipped, code `uploader_gone`).
+- `RECEIPTS_LIBRARY` defaults to on (only `"false"` turns it off); Terraform `receipts_library_enabled` defaults to true.
+- `receipts:reread`: no grant filter (`noGrant` → `noUploader`); `--buyer-contacts` looks at every profile; new `--backlog --apply` asks once for every never-read To-review receipt (`markBacklogPending({})`).
+
+### Removed
+- `receipt_reading` from `FEATURES`, the operator console's words for it, and the grant-time backlog hook. Migration `20261122220000_mut659_receipt_reading_for_everyone` revokes its open grants.
+
+### Technical
+- Operator tests and the `portal-selfservice` operator specs use `accountant_access` as their named-feature example; the receipts specs no longer grant reading.
+
+---
 ## [Unreleased] - 2026-11-22 — Portal home: receipts and what is waiting first, In & out behind a switch (MUT-657, ADR-269)
 
 ### Added

@@ -7,7 +7,7 @@ import { PORTAL_LANGUAGE_KEY } from '../../../i18n/HostedLanguageProvider';
 /**
  * MUT-527: the operator console's account list (search as you type, Load more, its empty, loading and error states),
  * Your settings (the operator mark, passkeys with the deep link, the step-up, your own features), the no-passkey note
- * on every page, and feature names (receipt_reading named in both languages; an unknown flag humanised).
+ * on every page, and feature names (accountant_access named in both languages; an unknown flag humanised).
  */
 const browser = vi.hoisted(() => ({ startAuthentication: vi.fn() }));
 vi.mock('@simplewebauthn/browser', async (importOriginal) => {
@@ -44,7 +44,7 @@ const mine = (overrides: Partial<OperatorAccount> = {}): OperatorAccount => ({
   features: [],
   activeSessionCount: 1,
   agentGrantCount: 0,
-  availableFeatures: ['agent_access', 'receipt_reading', 'bank_feeds'],
+  availableFeatures: ['agent_access', 'accountant_access', 'bank_feeds'],
   profiles: [],
   ...overrides,
 });
@@ -61,7 +61,7 @@ const row = (n: number, overrides: Partial<OperatorAccountListItem> = {}): Opera
 });
 
 const PEOPLE = [
-  row(1, { email: 'basel@studio.example', displayName: 'Basel Sader', operator: true, lastSignInAt: '2026-10-27T11:00:00.000Z', features: ['receipt_reading'] }),
+  row(1, { email: 'basel@studio.example', displayName: 'Basel Sader', operator: true, lastSignInAt: '2026-10-27T11:00:00.000Z', features: ['accountant_access'] }),
   row(2, { email: 'rana@studio.example', displayName: 'Rana Basel', status: 'DISABLED' }),
   row(3, { email: 'sara@studio.example', displayName: 'Sara Khalil', status: 'PENDING_REVIEW' }),
 ];
@@ -85,13 +85,13 @@ function portal({ who = operator(), own = mine(), people = PEOPLE, stepUpUntil =
     'GET /v1/operator/accounts': listHandler(people, stepUpUntil),
     [`GET /v1/operator/accounts/${OPERATOR_ID}`]: () => ok({ account: current, stepUpUntil }),
     [`GET /v1/operator/accounts/${OPERATOR_ID}/billing-grants`]: () => ok({ grants: [], stepUpUntil }),
-    [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`]: () => {
-      current = { ...current, features: [...current.features, 'receipt_reading'] };
-      return ok({ feature: 'receipt_reading', grantedAt: NOW.toISOString(), granted: true });
+    [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`]: () => {
+      current = { ...current, features: [...current.features, 'accountant_access'] };
+      return ok({ feature: 'accountant_access', grantedAt: NOW.toISOString(), granted: true });
     },
-    [`DELETE /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`]: () => {
-      current = { ...current, features: current.features.filter((f) => f !== 'receipt_reading') };
-      return ok({ feature: 'receipt_reading', revoked: true });
+    [`DELETE /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`]: () => {
+      current = { ...current, features: current.features.filter((f) => f !== 'accountant_access') };
+      return ok({ feature: 'accountant_access', revoked: true });
     },
     'POST /v1/operator/step-up/options': () => ok(CHALLENGE),
     'POST /v1/operator/step-up': () => ok({ stepUpUntil: FRESH }),
@@ -124,7 +124,7 @@ describe('the account list (AC1)', () => {
     const basel = rows.getByRole('link', { name: /basel@studio\.example/ });
     expect(within(basel).getByText('Operator', { selector: '.badge' })).toHaveClass('badge-accent');
     expect(basel).toHaveTextContent('Basel Sader · Last signed in 1 hour ago');
-    expect(basel).toHaveTextContent('On: Receipt reading');
+    expect(basel).toHaveTextContent('On: Accountant access');
     const rana = rows.getByRole('link', { name: /rana@studio\.example/ });
     expect(within(rana).getByText('Disabled')).toBeInTheDocument();
     expect(rana).toHaveTextContent('Never signed in');
@@ -180,7 +180,7 @@ describe('the account list (AC1)', () => {
     const rows = await list('الحسابات');
     expect(document.documentElement).toHaveAttribute('dir', 'rtl');
     expect(screen.getByLabelText('ابحث في الحسابات')).toHaveAttribute('dir', 'auto');
-    expect(rows.getByRole('link', { name: /basel@studio\.example/ })).toHaveTextContent('مفعّل: قراءة الإيصالات');
+    expect(rows.getByRole('link', { name: /basel@studio\.example/ })).toHaveTextContent('مفعّل: وصول المحاسب');
     expect(screen.getByRole('button', { name: 'عرض المزيد' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'إعداداتك' })).toBeInTheDocument();
   });
@@ -210,21 +210,21 @@ describe('Your settings (the You tab)', () => {
   it('your own features switch here, after the passkey step-up; then the session reads as confirmed', async () => {
     const { user, api } = portal({ path: '/operator/you', stepUpUntil: STALE });
     const yours = within(await screen.findByRole('region', { name: 'Your features' }));
-    const flag = yours.getByRole('switch', { name: /Receipt reading/ });
+    const flag = yours.getByRole('switch', { name: /Accountant access/ });
     expect(flag).toHaveAttribute('aria-checked', 'false');
     await user.click(flag);
-    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Your features' })).getByRole('switch', { name: /Receipt reading/ })).toHaveAttribute('aria-checked', 'true'));
+    await waitFor(() => expect(within(screen.getByRole('region', { name: 'Your features' })).getByRole('switch', { name: /Accountant access/ })).toHaveAttribute('aria-checked', 'true'));
     expect(browser.startAuthentication).toHaveBeenCalledTimes(1);
-    expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`)).toBe(1);
+    expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`)).toBe(1);
     expect(within(screen.getByRole('region', { name: 'Confirmation' })).getByText(/^Confirmed with your passkey until /)).toBeInTheDocument();
   });
 
   it('turning your own feature off confirms first, in its own words', async () => {
-    const { user, api } = portal({ path: '/operator/you', own: mine({ features: ['receipt_reading'] }) });
-    await user.click(within(await screen.findByRole('region', { name: 'Your features' })).getByRole('switch', { name: /Receipt reading/ }));
-    expect(screen.getByText((_, el) => el?.tagName === 'P' && plain(el.textContent) === "basel@studio.example loses receipt reading; receipts they add from now on aren't read.")).toBeInTheDocument();
+    const { user, api } = portal({ path: '/operator/you', own: mine({ features: ['accountant_access'] }) });
+    await user.click(within(await screen.findByRole('region', { name: 'Your features' })).getByRole('switch', { name: /Accountant access/ }));
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && plain(el.textContent) === "basel@studio.example can't invite accountants or make new links; the ones they already shared keep working until they revoke them.")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Turn off' }));
-    await waitFor(() => expect(api.count(`DELETE /v1/operator/accounts/${OPERATOR_ID}/features/receipt_reading`)).toBe(1));
+    await waitFor(() => expect(api.count(`DELETE /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`)).toBe(1));
   });
 
   it('a flag the portal has no words for shows a humanised name, never its key', async () => {
@@ -238,7 +238,7 @@ describe('Your settings (the You tab)', () => {
     localStorage.clear();
     portal({ who: operator('ar'), path: '/operator/you' });
     const yours = within(await screen.findByRole('region', { name: 'ميزاتك' }));
-    expect(yours.getByRole('switch', { name: /قراءة الإيصالات/ })).toHaveTextContent('تُقرأ الإيصالات الجديدة على خوادمنا ويُملأ التاريخ والمجموع والمورّد.');
+    expect(yours.getByRole('switch', { name: /وصول المحاسب/ })).toHaveTextContent('بصفته مالكًا، يمكنه دعوة محاسب لقراءة ملف ومشاركة روابط.');
     expect(screen.getByText(/^مشغّل منذ .*2026/)).toBeInTheDocument();
   });
 });

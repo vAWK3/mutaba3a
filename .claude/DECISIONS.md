@@ -5823,6 +5823,9 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Extraction inside the Python service (D2 B). Not taken: rules split from the rest of the stack; raw text crosses to the API in memory only and is never stored or logged.
 - An LLM or a third-party OCR API. Rejected, as in ADR-199.
 
+
+**Amendment (MUT-659, Basel 2026-11-22): reading is for everyone.** Override log: replaces the per-user half of decision 6 (D3) and MUT-514's R11 gate ("score the next ~15 production reads before granting anyone else"), which Basel waived knowingly. While `SERVER_OCR` is on, every uploader's receipts are read; `receipt_reading` leaves `FEATURES` and its open grants are revoked by migration `20261122220000_mut659_receipt_reading_for_everyone` (rows kept for history). The kill switch stays the deploy flag. Never-read To-review receipts are asked for once after the deploy with `npm run receipts:reread -- --backlog --apply`. `RECEIPTS_LIBRARY` and Terraform `receipts_library_enabled` default to on. Open reading bugs (MUT-586, MUT-632, MUT-637) are fixed as they come; a read only fills a To-review suggestion the person checks before filing.
+
 ## ADR-221: A New Expense's Receipts Upload in Its Edit Drawer After Save (MUT-491)
 
 **Status:** Accepted (2026-10-28, MUT-491; epic MUT-252). Plan and eng review: `.claude/designs/mut-491-receipt-on-create.md`. ADR-220 is reserved by MUT-441.

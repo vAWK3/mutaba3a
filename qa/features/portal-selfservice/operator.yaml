@@ -113,7 +113,7 @@ features:
       - Both people are listed and the third is not; the addresses read left to right
       - The page reads right to left with no sideways scroll, the four tabs included
   - id: own-feature
-    title: Switch receipt reading on your own account with the passkey; the blocked actions are explained once
+    title: Switch accountant access on your own account with the passkey; the blocked actions are explained once
     tickets: [MUT-527]
     paths:
       - src/hosted/pages/operator/OperatorAccountPage.tsx
@@ -123,25 +123,25 @@ features:
       - src/hosted/operator/OperatorStepUp.tsx
     steps:
       - Sign in with the password (no step-up yet) and open your own account from the list
-      - Turn Receipt reading on, confirming with the passkey
+      - Turn Accountant access on, confirming with the passkey
       - Try to disable your own account through the API
     expect:
       - One note at the top says sign-in and security actions are in You › Account and features switch here; there are no Access rows and no Grant row
-      - Receipt reading is named and explained ("Reads new receipts on our servers…"), and turns on after the passkey; the CLI lists you as a holder
+      - Accountant access is named and explained ("As an owner, they can invite an accountant…"), and turns on after the passkey; the CLI lists you as a holder
       - The server still refuses to disable your own account (409 OWN_ACCOUNT)
   - id: feature-name-arabic
-    title: Receipt reading shows its name and explanation in Arabic, and its own turn-off confirmation
+    title: Accountant access shows its name and explanation in Arabic, and its own turn-off confirmation
     tickets: [MUT-527]
     paths:
       - src/hosted/operator/featureNames.ts
       - src/hosted/i18n/ar.json
       - src/hosted/i18n/en.json
     steps:
-      - In Arabic, open a person's account; in الميزات find قراءة الإيصالات and turn it on
+      - In Arabic, open a person's account; in الميزات find وصول المحاسب and turn it on
       - Turn it off
     expect:
-      - The switch is named قراءة الإيصالات with its explanation, never receipt_reading
-      - Turning it off asks first, saying the person loses receipt reading and new receipts aren't read
+      - The switch is named وصول المحاسب with its explanation, never accountant_access
+      - Turning it off asks first, in its own words (the person can't invite accountants or make new links)
   - id: you-panel
     title: Your settings shows you're an operator, your passkeys, the step-up, and your own features
     tickets: [MUT-527]
@@ -152,7 +152,7 @@ features:
       - server/src/operator/actions/accounts.ts
     steps:
       - Sign in with the password on a 375 px phone and open Your settings in the console
-      - Turn Receipt reading on for yourself, confirming with the passkey
+      - Turn Accountant access on for yourself, confirming with the passkey
       - Press Manage passkeys
     expect:
       - It says Operator since <date>, 1 passkey, and Not confirmed (changes will ask for your passkey), with no sideways scroll

@@ -3211,7 +3211,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     markBacklogPending: async (scope, now) => {
       const candidates = await this.prisma.expenseReceipt.findMany({
-        where: { uploadedByUserId: scope.userId, ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
+        where: { ...(scope.userId ? { uploadedByUserId: scope.userId } : { uploadedByUserId: { not: null } }), ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
         select: { id: true, suggested: true },
       });
       const ids = candidates.filter((r) => !isCompleteSuggestion(r.suggested as unknown as ReceiptSuggestion | null)).map((r) => r.id);

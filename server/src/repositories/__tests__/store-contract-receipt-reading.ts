@@ -216,6 +216,9 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       expect(await store.expenseReceipts.getById(w.a.id, waiting.id)).toMatchObject({ readStatus: 'PENDING', readRequestedAt: at(50) });
       for (const id of [unfinished.id, notMine.id, complete.id]) expect((await store.expenseReceipts.getById(w.a.id, id))?.readStatus ?? 'NONE').toBe('NONE');
       expect((await store.expenseReceipts.getById(w.a.id, already.id))?.readRequestedAt).toEqual(at(1));
+      // MUT-659: with no userId, everyone's never-asked receipts (here: the other person's) move too.
+      expect(await store.expenseReceipts.markBacklogPending({}, at(80))).toEqual([notMine.id]);
+      expect(await store.expenseReceipts.markBacklogPending({}, at(90))).toEqual([]);
     });
 
     it('MUT-557 (A2): a never-read receipt with every field that reads as a big ILS invoice without an allocation number is picked once', async () => {

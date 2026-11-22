@@ -154,8 +154,8 @@ describe('loadConfig — receipts library switch (MUT-389)', () => {
     expect(loadConfig({ ...base, BILLING_GATE: 'false' }).BILLING_GATE).toBe(false);
   });
 
-  it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
-    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
+  it('is on by default (MUT-659); only "false" turns it off (z.coerce.boolean would read "false" as on)', () => {
+    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(true);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'true' }).RECEIPTS_LIBRARY).toBe(true);
   });

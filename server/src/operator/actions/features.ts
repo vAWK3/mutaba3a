@@ -15,8 +15,8 @@ import { accountActions, accountAudit, type AccountActionOptions } from './accou
  */
 export type FeatureActionOptions = Pick<AccountActionOptions, 'store' | 'logger' | 'sessions' | 'reporter'> & {
   /**
-   * MUT-441 (R5): told after every grant, a repeat included, so granting `receipt_reading` again after SERVER_OCR is
-   * turned on still queues that person's unread receipts. Best effort: a failure is logged and reported, and the grant
+   * MUT-441 (R5): told after every grant, a repeat included (built for `receipt_reading`, which MUT-659 retired; kept
+   * for the next feature that needs a follow-up on grant). Best effort: a failure is logged and reported, and the grant
    * stands (granting again retries it).
    */
   onGranted?: ((userId: string, feature: Feature) => Promise<void>) | undefined;
