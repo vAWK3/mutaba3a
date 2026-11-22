@@ -1,6 +1,6 @@
 # MUT-660: documents due per client, To issue, "not for invoice", invoice income in the books
 
-Status: **plan, waiting for Basel's approval** (2026-11-22). Jira MUT-660, epic MUT-566. Blocks MUT-661. Relates to MUT-662, MUT-657, MUT-648, MUT-647, MUT-568, MUT-663.
+Status: **plan; N1 to N3 decided, waiting for Basel's changes and approval** (2026-11-22). Jira MUT-660, epic MUT-566. Blocks MUT-661. Relates to MUT-662, MUT-657, MUT-648, MUT-647, MUT-568, MUT-663.
 Design: round 2, alternative B (https://claude.ai/artifact/PpXdTXqS8RQucM8pGiQ5Wi#page-r2).
 Source: `~/.gstack/projects/vAWK3-mutaba3a/mut-660-plan.md`, written and engineering-reviewed on 2026-11-22. This brief takes that plan with the review's corrections folded in. It re-checks every code reference against main at 61375c4b (MUT-657 and MUT-659 merged), and keeps to this repo.
 
@@ -28,20 +28,12 @@ Decisions already made by Basel (Jira comment 13423):
 - **D3:** on the phone, a "To issue · N" strip in Recent.
 - **D4:** the phone doesn't set the preference; that waits for MUT-663.
 
-## 2. Open decisions for Basel (new in this brief)
+## 2. Decisions from this brief (Basel, 2026-11-22)
 
-- **N1. Money received with no client: invoice-receipt or receipt?**
-  - The ticket says it counts as On payment, so it is due an **invoice-receipt**.
-  - MUT-648's offer after saving (`issueOffers.ts`) gives a no-client Received only a **receipt**.
-  - Recommendation: follow the ticket. A licensed dealer owes a tax document for the sale, and the server already issues a 320 with no customer. The MUT-648 offer stays as it is; MUT-661 aligns offers with what's due.
-- **N2. What Home's count counts.**
-  - AC6 says the count equals the documents due.
-  - Two kinds of items can't be issued in MTB3A today: payment requests (until MUT-662) and non-₪ items (issuing is ILS only, `compose.ts:134`). The person can still settle both: attach an invoice issued elsewhere (MUT-647) or mark it not for invoice.
-  - Recommendation: **count every listed item**, so the count, the list and AC6 agree. Rows that can't be issued show why, and offer Attach and Not for invoice instead of Issue.
-  - Alternative (the earlier review's choice): count only what's issuable, and show the rest in the list without counting it.
-- **N3. Where the phone half runs.** The Flutter work happens in `mutaba3a-flutter` against this API (§12).
-  - Recommendation: open a separate session for it once this merges to local main, and keep the iOS QA flow there.
-  - This ticket moves to In Review when the mini-crm half merges, with a note that the phone half is outstanding.
+- **N1. Money received with no client is due an invoice-receipt**, as the ticket says (it counts as On payment). MUT-648's offer after saving stays receipt-only until MUT-661 aligns offers with what's due.
+- **N2. Home's count counts every listed item**, so the count, the list and AC6 agree. Payment requests (until MUT-662) and non-₪ items are counted. Their rows say why they can't be issued here, and offer Attach and Not for invoice.
+  - Basel also asked why those items can't be issued at all. A separate PM intake covers issuing every document type (payment request, foreign currency and the rest); this plan doesn't wait for it.
+- **N3. The phone half runs in its own session** in `mutaba3a-flutter` once this merges to local main, and the iOS QA flow goes with it. MUT-660 moves to In Review when the mini-crm half merges, with a note that the phone half is still open.
 
 ## 3. Data (Prisma migration `20261122230000_mut660_documents_due`, after MUT-659's)
 
