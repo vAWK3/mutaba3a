@@ -12,6 +12,8 @@ import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/co
 import { DOC_TYPE_TITLES, documentNumberLabel } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
+import { settlementOf } from '../issuing/settlement.js';
+import { formatMoney, type Currency } from '../money.js';
 import { registerDocumentsDueRoutes } from './documents-due.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
@@ -193,6 +195,18 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   const app = new OpenAPIHono<AppEnv>();
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
+
+  /** Every credit note of the client (or the profile), for MUT-664's settlement of a page of tax invoices. */
+  async function creditNotesOf(organizationId: string, customerId: string | undefined): Promise<IssuedDocumentRecord[]> {
+    const notes: IssuedDocumentRecord[] = [];
+    let cursor: { createdAt: Date; id: string } | null = null;
+    do {
+      const page = await store.issuing.list(organizationId, { docType: 'CREDIT_NOTE', ...(customerId ? { customerId } : {}) }, { limit: 200, cursor });
+      notes.push(...page.items);
+      cursor = page.nextCursor;
+    } while (cursor);
+    return notes;
+  }
 
   /** One issue, from a request (POST /v1/issued-documents, and each item of MUT-660's Issue all). Throws the route's errors. */
   async function issueOne(c: Context<AppEnv>, organization: Organization, body: IssueRequest, requestKey: string): Promise<{ document: IssuedDocumentRecord; created: boolean }> {
@@ -766,10 +780,24 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     async (c) => {
       const organization = await issuingProfile(c, false);
       const q = c.req.valid('query');
-      const page = await store.issuing.list(organization.id, { ...(q.docType ? { docType: q.docType } : {}), ...(q.customerId ? { customerId: q.customerId } : {}) }, { limit: q.limit, cursor: q.cursor ? decodeCursor(q.cursor) : null });
+      const filter = { ...(q.docType ? { docType: q.docType } : {}), ...(q.customerId ? { customerId: q.customerId } : {}), ...(q.currency ? { currency: q.currency } : {}), ...(q.from ? { from: q.from } : {}), ...(q.to ? { to: q.to } : {}) };
+      const page = await store.issuing.list(organization.id, filter, { limit: q.limit, cursor: q.cursor ? decodeCursor(q.cursor) : null });
+      // MUT-664 (D22): settled amounts in two batched reads (the Owed rows, the credit notes), never one per document.
       // MUT-662: payment requests' status, two reads per page (never per row).
-      const facts = await store.issuing.paymentRequestFacts(organization.id, page.items.filter((d) => d.docType === 'PAYMENT_REQUEST').map((d) => d.id));
-      return c.json({ items: page.items.map((d) => serializeIssuedDocument(d, facts.get(d.id) ?? null)), nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
+      const invoices = page.items.filter((d) => d.docType === 'TAX_INVOICE');
+      const owedIds = invoices.flatMap((d) => (d.receivableId ? [d.receivableId] : []));
+      const [owed, creditNotes, facts] = await Promise.all([
+        owedIds.length ? store.receivables.getByIds(organization.id, owedIds) : [],
+        invoices.length ? creditNotesOf(organization.id, q.customerId) : [],
+        store.issuing.paymentRequestFacts(organization.id, page.items.filter((d) => d.docType === 'PAYMENT_REQUEST').map((d) => d.id)),
+      ]);
+      const owedById = new Map(owed.map((r) => [r.id, r]));
+      const items = page.items.map((d) => {
+        const request = facts.get(d.id) ?? null;
+        const s = settlementOf(d, d.receivableId ? (owedById.get(d.receivableId) ?? null) : null, creditNotes, request);
+        return { ...serializeIssuedDocument(d, request), settled: s.settledMinor === null ? null : formatMoney({ minor: s.settledMinor, currency: d.currency as Currency }), settlement: s.settlement };
+      });
+      return c.json({ items, nextCursor: page.nextCursor ? encodeCursor(page.nextCursor) : null }, 200);
     },
   );
 

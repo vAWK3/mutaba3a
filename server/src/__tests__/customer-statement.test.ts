@@ -210,3 +210,39 @@ describe('GET /v1/customers/{id}/statement (MUT-478)', () => {
     expect(major === 1 && (minor ?? 0) >= 83).toBe(true);
   });
 });
+
+describe('MUT-664: newest first, document tags, client balances', () => {
+  it('order=desc is the asc lines reversed with the same running balances and closing', async () => {
+    const h = harness();
+    const { f } = await ledger(h);
+    const asc = (await statement(h, f)).body;
+    const desc = await statement(h, f, 'currency=ILS&order=desc');
+    expect(desc.status).toBe(200);
+    expect(desc.body.lines.map((l: Loose) => [l.id, l.runningBalance])).toEqual([...asc.lines].reverse().map((l: Loose) => [l.id, l.runningBalance]));
+    expect(desc.body.closingBalance).toBe(asc.closingBalance);
+    expect(desc.body.lines[0].runningBalance).toBe(asc.closingBalance);
+  });
+
+  it('a profile without invoicing gets no document tags and nothing due on any line', async () => {
+    const h = harness();
+    const { f } = await ledger(h);
+    const { body } = await statement(h, f);
+    expect(body.lines.every((l: Loose) => Array.isArray(l.documents) && l.documents.length === 0 && l.due === null)).toBe(true);
+  });
+
+  it('GET /v1/customer-balances: each client per currency equals their statement closing balance', async () => {
+    const h = harness();
+    const { f } = await ledger(h);
+    const closing = (await statement(h, f)).body.closingBalance;
+    const res = await h.app.request('/v1/customer-balances', { headers: f.auth });
+    expect(res.status).toBe(200);
+    const body = await read(res);
+    expect(body.balances).toEqual([{ customerId: f.customer.id, currency: 'ILS', balance: closing }]);
+  });
+
+  it('422 for an unknown order', async () => {
+    const h = harness();
+    const { f } = await ledger(h);
+    expect((await statement(h, f, 'currency=ILS&order=sideways')).status).toBe(422);
+  });
+});

@@ -394,10 +394,9 @@
         "body": "It may have been archived or belong to another profile."
       },
       "tabs": {
-        "summary": "Summary",
-        "receivables": "Receivables",
-        "payments": "Payments",
-        "documents": "Documents"
+        "ledger": "Ledger card",
+        "documents": "Documents",
+        "details": "Details"
       },
       "lastPayment": "Last payment: {date}",
       "noPayments": "No payments yet",
@@ -451,6 +450,21 @@
           "PAYMENT_REQUEST_FIRST": "a payment request when an amount is owed, then a tax invoice-receipt for each payment.",
           "ON_PAYMENT": "a tax invoice-receipt for each payment, partial ones included.",
           "NO_DOCUMENT": "nothing. Their income stays in All income, the accountant's view and exports, and counts as not for invoice."
+        }
+      },
+      "documentsTab": {
+        "toIssue": "Documents to issue · {count}",
+        "type": "Document type",
+        "allTypes": "All types",
+        "currency": "Currency",
+        "allCurrencies": "All currencies",
+        "status": "Status",
+        "settledOf": "{settled} of {gross} settled",
+        "settlement": {
+          "OPEN": "Open",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid",
+          "CANCELLED": "Cancelled by credit note"
         }
       }
     },
@@ -3296,6 +3310,45 @@
       "rowBack": "Back to invoice",
       "markRow": "Mark the entry for {client} not for invoice",
       "backRow": "Bring the entry for {client} back to invoice"
+    },
+    "ledger": {
+      "title": "Ledger card",
+      "period": "Period",
+      "periods": {
+        "all": "All movements",
+        "month": "This month",
+        "quarter": "Last 3 months",
+        "year": "This year"
+      },
+      "viewOnly": "View only",
+      "closing": "Balance",
+      "opening": "Opening balance",
+      "inCredit": "Client in credit · {amount}",
+      "showEarlier": "Show earlier",
+      "cols": {
+        "date": "Date",
+        "movement": "Movement",
+        "document": "Document",
+        "debit": "Debit",
+        "credit": "Credit",
+        "balance": "Balance"
+      },
+      "kinds": {
+        "CHARGE": "Owed",
+        "CREDIT": "Credit",
+        "PAYMENT": "Payment",
+        "PAYMENT_REVERSAL": "Payment reversed"
+      },
+      "due": {
+        "TAX_INVOICE": "Tax invoice due",
+        "PAYMENT_REQUEST": "Payment request due",
+        "RECEIPT": "Receipt due",
+        "TAX_INVOICE_RECEIPT": "Invoice-receipt due"
+      },
+      "empty": {
+        "title": "No movements yet",
+        "body": "Owed amounts, payments and credits for this client will show here with a running balance."
+      }
     }
   }
 }

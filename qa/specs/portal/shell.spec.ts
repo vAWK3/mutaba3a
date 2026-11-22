@@ -207,7 +207,7 @@ test('switching profile from You › Profiles lands on that profile’s home, an
   });
 });
 
-test('a client opens to its summary and matters, then its own receivables, payments and documents', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
+test('a client opens to its ledger card, then its documents and its details with the matters', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
   const logo = project(1, C1, 'Logo redesign');
   const site = project(2, C1, 'Website');
   const api = new FakeApi({
@@ -242,32 +242,19 @@ test('a client opens to its summary and matters, then its own receivables, payme
     await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
   });
 
-  await step('The summary shows the last payment, the ILS figures and each matter', async () => {
-    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
-    const strip = page.getByRole('group', { name: 'ILS' });
-    await expect(strip).toContainText('Outstanding');
-    await expect(strip).toContainText('1,200.00');
-    await expect(strip).toContainText('Overdue');
-    const matters = page.getByRole('table', { name: 'Matters' });
-    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
-    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
-  });
-
-  await step('Receivables tab: only this client’s, with no client column', async () => {
-    await page.getByRole('tab', { name: 'Receivables' }).click();
-    await expect(page).toHaveURL(/tab=receivables/);
-    const table = page.getByRole('table', { name: 'Receivables' });
-    await expect(table.getByRole('row')).toHaveCount(2);
-    await expect(table).toContainText('Logo redesign');
-    await expect(table.getByRole('columnheader', { name: 'Client' })).toHaveCount(0);
-    expect(api.last('GET', /^\/v1\/receivables$/)?.query.get('customerId')).toBe(C1);
-  });
-
-  await step('Payments tab: this client’s payments', async () => {
-    await page.getByRole('tab', { name: 'Payments' }).click();
-    const table = page.getByRole('table', { name: 'Payments' });
-    await expect(table).toContainText('PAY-0101');
-    await expect(table).not.toContainText('PAY-0202');
+  await step('The ledger card shows this client’s movements, newest first, with the running balance', async () => {
+    const card = page.getByTestId('ledger-card');
+    await expect(card).toBeVisible();
+    // 1,200 owed against 1,800 paid in the fake: the client is in credit, shown without a minus sign (D15).
+    await expect(page.getByTestId('ledger-closing')).toContainText('Client in credit · ');
+    await expect(page.getByTestId('ledger-closing')).toContainText('600.00');
+    const lines = card.getByTestId('ledger-line');
+    await expect(lines).toHaveCount(2);
+    await expect(lines.first()).toContainText('PAY-0101');
+    await expect(card).not.toContainText('PAY-0202');
+    const asked = api.last('GET', new RegExp(`^/v1/customers/${C1}/statement$`));
+    expect(asked?.query.get('order')).toBe('desc');
+    expect(asked?.query.get('currency')).toBe('ILS');
   });
 
   await step('Documents tab: this client’s documents', async () => {
@@ -275,6 +262,18 @@ test('a client opens to its summary and matters, then its own receivables, payme
     const table = page.getByRole('table', { name: 'Documents' });
     await expect(table).toContainText('invoice-logo.pdf');
     await expect(table).not.toContainText('other.pdf');
+  });
+
+  await step('Details tab: the last payment, the ILS figures and each matter', async () => {
+    await page.getByRole('tab', { name: 'Details' }).click();
+    await expect(page).toHaveURL(/tab=details/);
+    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
+    const strip = page.getByRole('group', { name: 'ILS' });
+    await expect(strip).toContainText('Outstanding');
+    await expect(strip).toContainText('1,200.00');
+    const matters = page.getByRole('table', { name: 'Matters' });
+    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
+    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
   });
 
   await step('Back to All clients', async () => {

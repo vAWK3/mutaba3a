@@ -18,7 +18,7 @@ describe('income drawer URL state (MUT-133)', () => {
   it('parses drawer state beside each page\'s filters', () => {
     expect(parseReceivablesPage({ status: 'SETTLED', settle: R })).toEqual({ status: 'SETTLED', settle: R });
     expect(parsePaymentsPage({ status: 'POSTED', newIncome: 'received' })).toEqual({ status: 'POSTED', newIncome: 'received' });
-    expect(parseClientDetail({ tab: 'receivables', settle: R })).toEqual({ tab: 'receivables', settle: R });
+    expect(parseClientDetail({ tab: 'receivables', settle: R })).toEqual({ tab: 'ledger', settle: R });
   });
 
   it('accepts only a uuid for the re-date drawers ?income= and ?payment= (MUT-224)', () => {
@@ -27,7 +27,7 @@ describe('income drawer URL state (MUT-133)', () => {
     expect(parseIncomeDrawer({ income: 'nope', payment: '1' })).toEqual({});
     expect(parseReceivablesPage({ status: 'ALL', income: R })).toEqual({ status: 'ALL', income: R });
     expect(parsePaymentsPage({ status: 'POSTED', payment: R })).toEqual({ status: 'POSTED', payment: R });
-    expect(parseClientDetail({ tab: 'payments', payment: R })).toEqual({ tab: 'payments', payment: R });
+    expect(parseClientDetail({ tab: 'payments', payment: R })).toEqual({ tab: 'ledger', payment: R });
   });
 
   it('splits the re-date drawers out with the others (MUT-224)', () => {
@@ -167,5 +167,15 @@ describe('home search (MUT-657)', () => {
     expect(legacyOwedSearch({ currency: 'USD', billing: 'true', checkout: 'success', view: 'in-out' })).toEqual({ currency: 'USD', billing: 'true', checkout: 'success' });
     expect(legacyOwedSearch({ currency: 'XYZ' })).toBeNull();
     expect(legacyOwedSearch({ billing: true })).toBeNull();
+  });
+});
+
+describe('MUT-664: client tabs', () => {
+  it('Ledger card | Documents | Details; links from before keep working', () => {
+    expect(parseClientDetail({ tab: 'ledger' }).tab).toBe('ledger');
+    expect(parseClientDetail({ tab: 'details', period: 'quarter' })).toEqual({ tab: 'details', period: 'quarter' });
+    expect(parseClientDetail({ tab: 'summary' }).tab).toBe('details');
+    expect(parseClientDetail({ tab: 'documents' }).tab).toBe('documents');
+    expect(parseClientDetail({ tab: 'nope', period: 'decade' })).toEqual({});
   });
 });

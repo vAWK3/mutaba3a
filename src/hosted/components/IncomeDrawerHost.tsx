@@ -81,7 +81,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   // MUT-648: the save toast's "Issue …" opens the issue drawer for the entry just saved. The profile's layout owns that
   // drawer (IssueOfferProvider), so the button still works after this page is left inside the toast's six seconds.
   const onOfferIssue = useOfferIssue() ?? undefined;
-  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
+  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: {} } as never));
   if (drawer.settle && canSettle) {
     const receivableId = drawer.settle;
     return (

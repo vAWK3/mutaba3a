@@ -102,6 +102,11 @@ export type IssuingNumberingRequest = Schemas['IssuingNumberingRequest'];
 export type IssuingSettings = Schemas['IssuingSettings'];
 export type IssuedDocument = Schemas['IssuedDocument'];
 export type IssuedDocumentPage = Schemas['IssuedDocumentPage'];
+export type IssuedDocumentListItem = Schemas['IssuedDocumentListItem'];
+/** MUT-664: the ledger card (כרטסת). */
+export type CustomerStatement = Schemas['CustomerStatement'];
+export type StatementLine = Schemas['StatementLine'];
+export type StatementDocumentTag = Schemas['StatementDocumentTag'];
 export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
 export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
 export type IssuedDocType = Schemas['IssuedDocType'];
@@ -815,7 +820,10 @@ export const api = {
   externalInvoiceFile: (profileId: string, id: string) => request<Schemas['ExternalInvoiceFile']>('GET', `/v1/issuing/external-invoices/${encodeURIComponent(id)}/file`, { profileId }),
   removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
-  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; cursor?: string | null } = {}, signal?: AbortSignal) =>
+  /** MUT-664: one page of a client's ledger card in one currency (newest first for the portal). */
+  customerStatement: (profileId: string, customerId: string, query: Query<'/v1/customers/{customerId}/statement'>, signal?: AbortSignal) =>
+    request<CustomerStatement>('GET', `/v1/customers/${encodeURIComponent(customerId)}/statement`, { profileId, query, signal }),
+  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string; cursor?: string | null } = {}, signal?: AbortSignal) =>
     request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),
   issuedDocument: (profileId: string, documentId: string, signal?: AbortSignal) =>
     request<IssuedDocument>('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}`, { profileId, signal }),

@@ -3104,7 +3104,18 @@ export const CustomerStatementQuerySchema = z.object({
   to: IsoDateSchema.optional().openapi({ description: 'Lines after this date are left out. Omitted: every line, including ones dated after asOf.' }),
   limit: z.coerce.number().int().min(1).max(500).default(200).openapi({ description: 'Lines per page, 1–500.' }),
   cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  order: z.enum(['asc', 'desc']).default('asc').openapi({ description: 'MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way.' }),
 });
+
+/** MUT-664: a document standing on a statement line (issued here, or attached from elsewhere: MUT-647, MUT-481). */
+export const StatementDocumentTagSchema = z
+  .object({
+    id: uuid.nullable().openapi({ description: 'The issued document; null for one issued elsewhere' }),
+    source: z.enum(['ISSUED', 'EXTERNAL']),
+    docType: z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST']),
+    number: z.string(),
+  })
+  .openapi('StatementDocumentTag');
 
 const StatementLineBase = {
   /** The source row's id (receivable, credit, payment, or allocation on a project statement); a reversal adds ":reversal". */
@@ -3117,6 +3128,10 @@ const StatementLineBase = {
   debit: AmountSchema,
   credit: AmountSchema,
   runningBalance: AmountSchema,
+  /** MUT-664: the documents on the line; always [] when invoicing is off for the profile. */
+  documents: z.array(StatementDocumentTagSchema),
+  /** MUT-664: the document the line is still due (MUT-660's rule); null when none, or invoicing is off. */
+  due: z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).nullable(),
 };
 
 export const StatementChargeOriginSchema = z
@@ -3170,6 +3185,14 @@ export const StatementLineSchema = z
   ])
   .openapi('StatementLine');
 
+/** MUT-664 (for MUT-663's Clients list): every client's balance per currency; negative = in credit (D15). */
+export const CustomerBalancesSchema = z
+  .object({
+    asOf: IsoDateSchema,
+    balances: z.array(z.object({ customerId: uuid, currency: CurrencySchema, balance: AmountSchema })),
+  })
+  .openapi('CustomerBalances');
+
 export const CustomerStatementSchema = z
   .object({
     customerId: uuid,
@@ -3185,7 +3208,7 @@ export const CustomerStatementSchema = z
     totals: z.object({ debit: AmountSchema, credit: AmountSchema }),
     /** openingBalance + debits − credits for the period. With no project and no period: the customer summary's outstanding − unallocated. */
     closingBalance: AmountSchema,
-    /** Oldest first; runningBalance carries across pages. */
+    /** In `order` (oldest first by default); runningBalance carries across pages. */
     lines: z.array(StatementLineSchema),
     nextCursor: z.string().nullable(),
   })
@@ -5302,10 +5325,18 @@ export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   paymentRequest: PaymentRequestFactsSchema.nullable().openapi({ description: 'MUT-662: a payment request\'s derived status; null for other types' }),
 }).openapi('IssuedDocument');
 
-export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
+/** MUT-664 (D22): a list item carries how much of it is settled (the client page's Documents tab). */
+export const IssuedDocumentListItemSchema = IssuedDocumentSchema.extend({
+  settled: AmountSchema.nullable().openapi({ description: 'Paid + credited on its Owed, at most its gross; null on a credit note' }),
+  settlement: z.enum(['OPEN', 'PARTLY_PAID', 'PAID', 'CANCELLED']).nullable().openapi({ description: 'CANCELLED: credit notes cover its gross. Null on a credit note' }),
+}).openapi('IssuedDocumentListItem');
+export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentListItemSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
 export const ListIssuedDocumentsQuerySchema = z.object({
   docType: IssuedDocTypeSchema.optional(),
   customerId: uuid.optional(),
+  currency: CurrencySchema.optional().openapi({ description: 'MUT-664' }),
+  from: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or after' }),
+  to: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or before' }),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });
