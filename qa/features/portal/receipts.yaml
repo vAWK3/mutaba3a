@@ -9,6 +9,7 @@ paths:
   - src/hosted/components/ReceiptPreview.tsx
   - src/hosted/data/receiptQueries.ts
   - src/hosted/data/receiptFileRules.ts
+  - src/hosted/data/useReceiptFiles.ts
   - src/hosted/lib/receiptSuggestion.ts
   - src/hosted/components/expenseForm/useHostedExpenseForm.ts
   - src/hosted/components/expenseForm/HostedExpenseFields.tsx

@@ -82,7 +82,7 @@ test('Sign in with a passkey, after signing out', { tag: '@portal-selfservice.pa
   });
   await step('Signed in, on Home, with no password typed', async () => {
     await expect(page).toHaveURL(HOME);
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
   });
   await step('Passkeys shows it was used today', async () => {
     await openYou(page, 'account');
@@ -226,7 +226,7 @@ test('The email field offers the passkey (autofill)', { tag: '@portal-selfservic
     await authenticator.setPresence(true);
     await page.reload();
     await expect(page).toHaveURL(HOME, { timeout: 15_000 });
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
   });
 });
 
@@ -289,7 +289,7 @@ test('After signup, a Not now on the setup step means Home does not ask again ri
     await trial.getByRole('button', { name: 'Continue', exact: true }).click();
     await expect(page.getByRole('dialog')).toHaveCount(0);
     await expect(page).toHaveURL(HOME);
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(page.getByText(SUGGESTION)).toHaveCount(0);
   });
   await step('30 days later, Home suggests a passkey (the second of three offers)', async () => {
@@ -306,7 +306,7 @@ test('Not now hides the suggestion for 30 days; after the third Not now it never
     await suggestion(page).getByRole('button', { name: 'Not now' }).click();
     await expect(suggestion(page)).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(suggestion(page)).toHaveCount(0);
   });
   for (const offer of ['second', 'third']) {
@@ -321,7 +321,7 @@ test('Not now hides the suggestion for 30 days; after the third Not now it never
   await step('30 days after the third Not now: no card, ever', async () => {
     lapsePasskeyPromptHide(email);
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(suggestion(page)).toHaveCount(0);
   });
 });
@@ -341,7 +341,7 @@ test('Add a passkey from the suggestion, then sign in with it', { tag: '@portal-
   await step('Sign in with a passkey: Home, and no card', async () => {
     await signInWithPasskey(page, authenticator);
     await expect(page).toHaveURL(HOME);
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(suggestion(page)).toHaveCount(0);
   });
 });
@@ -358,10 +358,10 @@ test('Someone who already has a passkey is never shown the suggestion', { tag: '
   await step('Home: no card, then or after a reload', async () => {
     await page.goto('/');
     await expect(page).toHaveURL(HOME);
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(suggestion(page)).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(suggestion(page)).toHaveCount(0);
   });
 });

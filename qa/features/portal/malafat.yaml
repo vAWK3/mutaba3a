@@ -7,7 +7,7 @@ paths:
   - src/hosted/data/malafatSuggestions.ts
   - src/hosted/session/malafatMoments.ts
   - src/hosted/pages/views/ClientsPage.tsx
-  - src/hosted/pages/views/OverviewPage.tsx
+  - src/hosted/components/LandingNotices.tsx
   - src/hosted/components/ProfileCreateDrawer.tsx
   - src/components/malafat/**
   - src/lib/malafatSuggestions.ts
