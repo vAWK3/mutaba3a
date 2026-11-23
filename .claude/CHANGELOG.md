@@ -30,6 +30,8 @@
 
 ## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
 
+- Arabic plan names (Basel, 2026-11-23): مستقل / تجاري / مؤسسة, legacy Freelancer الخطة السابقة (`src/hosted/i18n/ar.json`).
+
 ### Added
 - `server/src/billing/plans.ts`: the one source for the plans (solo, business, firm; legacy freelancer): `TIER_OF`, `RANK` (Solo = Freelancer < Business < Firm), `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` (enforced by MUT-704) and `currentPlanOf`. No provider, price or lookup key.
 - Prisma `BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, ADD VALUE only).

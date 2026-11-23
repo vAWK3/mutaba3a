@@ -2316,10 +2316,10 @@
         "drawerFor": "للملفات التي أنشأها",
         "tierLabel": "الخطة",
         "tier": {
-          "SOLO": "سولو",
-          "BUSINESS": "أعمال",
-          "FIRM": "مكتب",
-          "FREELANCER": "مستقل (قديم)"
+          "SOLO": "مستقل",
+          "BUSINESS": "تجاري",
+          "FIRM": "مؤسسة",
+          "FREELANCER": "الخطة السابقة"
         },
         "tierNote": {
           "SOLO": "عمل واحد يديره شخص واحد",

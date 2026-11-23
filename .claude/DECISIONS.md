@@ -7033,5 +7033,5 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:**
 - Per-plan prices, Checkout for a chosen plan, changing plan, the catalog script, the mirror's `solo`/`business` product tags, and offers and retention per plan are held for MUT-700 (the seller). A Stripe product tagged `solo` or `business` today is still UNKNOWN_TIER in the mirror (on purpose).
 - Clients that read `billing.tier` see BUSINESS for a trial. The portal never reads it; Flutter's `BillingTier.tryParse` gives null for an unknown tier and `ProfileBilling` never reads `tier`.
-- Arabic plan names (سولو، أعمال، مكتب، مستقل (قديم)) await Basel's confirmation.
+- Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
 - Merging the migration restarts the shared dev API: warn the orchestrator before the merge.

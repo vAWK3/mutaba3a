@@ -200,7 +200,7 @@ Otherwise it decides the timing:
 - **Operator.** `routes/admin-billing.ts:95,248`, `routes/operator.ts:421` and `scripts/users.ts:84` accept SOLO and BUSINESS.
 - **Operator console.** `src/hosted/pages/operator/OperatorBillingSection.tsx:28` gains the two tiers, plus `hosted.operator.billing.tier.*` keys in ar and en.
 - **Mail copy.** `email/templates/copy.ts:507,525` takes the plan name from the subscription's tier.
-- **Plan names.** Arabic proposal سولو / أعمال / مكتب, to confirm. English: Solo / Business / Firm; Freelancer stays for legacy.
+- **Plan names.** Arabic (Basel, 2026-11-23): مستقل / تجاري / مؤسسة; legacy Freelancer الخطة السابقة. English: Solo / Business / Firm; Freelancer stays for legacy.
 - **Versioning.** Regenerate OpenAPI and portal types. Bump the API minor version: `1.1xx.0-mut702`.
 
 ### I. The catalog script (MUT-708 part 1): `server/src/scripts/stripe-plans.ts` (`npm --prefix server run billing:plans`)
@@ -318,7 +318,7 @@ Commands, through the heavy queue, one at a time:
 
 ## 6. Open items for Basel (none block building; defaults in brackets)
 - USD prices [$12 / $27 / $75].
-- Arabic plan names [سولو / أعمال / مكتب].
+- Arabic plan names: decided 2026-11-23, مستقل / تجاري / مؤسسة.
 - A founder moving up loses the founder price [yes, shown in the preview].
 
 ## 7. Acceptance criteria → proof
