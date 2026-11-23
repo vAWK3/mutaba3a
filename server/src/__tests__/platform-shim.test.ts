@@ -1,4 +1,4 @@
-import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { bufferShim, BufferShim } from '../../../src/hosted/local/platform/buffer-shim.js';
 import * as shimCrypto from '../../../src/hosted/local/platform/crypto.js';
@@ -49,6 +49,30 @@ function bytesToString(bytes: Uint8Array): string {
 }
 
 describe('platform shims: byte-identical to node:crypto / Buffer', () => {
+  it('MUT-710: hkdfSync(sha256) matches real node:crypto, empty salt and the two-step key\'s own shape included', () => {
+    const rand = mulberry32(SEED);
+    for (let i = 0; i < 50; i++) {
+      const ikm = randomByteArray(rand, 1 + (i % 64));
+      const salt = i % 3 === 0 ? new Uint8Array(0) : randomByteArray(rand, i % 40);
+      const info = `mutaba3a/two-factor-recovery/v${i}`;
+      const keylen = 1 + ((i * 7) % 80);
+      expect(Buffer.from(shimCrypto.hkdfSync('sha256', ikm, salt, info, keylen)).toString('hex')).toBe(Buffer.from(hkdfSync('sha256', ikm, salt, info, keylen)).toString('hex'));
+    }
+  });
+
+  it('MUT-710: randomInt stays in [min, max) and refuses a bad range; any hash but sha256 throws', () => {
+    for (let i = 0; i < 2000; i++) {
+      const n = shimCrypto.randomInt(0, 1_000_000);
+      expect(Number.isInteger(n) && n >= 0 && n < 1_000_000).toBe(true);
+      const m = shimCrypto.randomInt(5, 7);
+      expect(m === 5 || m === 6).toBe(true);
+    }
+    expect(shimCrypto.randomInt(1)).toBe(0);
+    expect(() => shimCrypto.randomInt(3, 3)).toThrow(RangeError);
+    expect(() => shimCrypto.createHmac('sha1' as 'sha256', 'k')).toThrow(/only sha256/);
+    expect(() => shimCrypto.createCipheriv('aes-256-gcm')).toThrow(/not available in local mode/);
+  });
+
   it(`SHA-256 matches real node:crypto across ${ITERATIONS} randomized inputs`, () => {
     const rand = mulberry32(SEED);
     for (let i = 0; i < ITERATIONS; i++) {

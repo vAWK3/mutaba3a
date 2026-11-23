@@ -119,6 +119,9 @@ import type {
   MalafatSignInRepository,
   SignInCodeRecord,
   SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorRecord,
+  TwoFactorRepository,
   ExternalIdentityRepository,
   MemberSyncResult,
   OAuthClientRecord,
@@ -345,6 +348,9 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
   private readonly seats = new Map<string, ExternalIdentityRecord>();
   /** MUT-618: emailed sign-in codes, with their digest and use. */
+  private readonly twoFactorRows = new Map<string, TwoFactorRecord>();
+  private readonly twoFactorCodeRows = new Map<string, { id: string; userId: string; codeDigest: string; createdAt: Date; usedAt: Date | null }>();
+  private readonly twoFactorChallengeRows = new Map<string, TwoFactorChallengeRecord>();
   private readonly signInCodeRows = new Map<string, SignInCodeRecord & { codeDigest: string; usedAt: Date | null; cancelledAt: Date | null }>();
   /** MUT-595: Sign in with Malafat round trips, with their digests (state, result, ticket). Outside the snapshot. */
   private readonly malafatFlows = new Map<string, MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }>();
@@ -779,6 +785,7 @@ export class MemoryLedgerStore implements LedgerStore {
         passkeyId: input.passkeyId ?? null,
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         stepUpAt: input.passkeyId ? input.at : null,
+        twoFactorAt: input.twoFactorAt ?? null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -1647,6 +1654,146 @@ export class MemoryLedgerStore implements LedgerStore {
       return count;
     },
   };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => cloneTwoFactor(this.twoFactorRows.get(userId)),
+    enable: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor.userId');
+      const existing = this.twoFactorRows.get(input.userId);
+      this.twoFactorRows.set(input.userId, {
+        userId: input.userId,
+        method: input.method,
+        totpSecretSealed: input.totpSecretSealed,
+        lastUsedStep: input.lastUsedStep,
+        failures: 0,
+        failuresSince: null,
+        lockedUntil: null,
+        enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+        updatedAt: input.at,
+      });
+      this.replaceTwoFactorCodes(input.userId, input.recoveryDigests, input.at);
+      const revokedSessions = this.revokeSessionsOf(input.userId, 'two_factor_enabled', input.at, input.keepSessionId ?? undefined);
+      const kept = input.keepSessionId ? this.sessionsById.get(input.keepSessionId) : undefined;
+      if (kept && !kept.revokedAt) kept.twoFactorAt = input.at;
+      this.pushEvents(input.audit, input.at);
+      return { revokedSessions };
+    },
+    disable: async (userId, at, audit) => {
+      if (!this.twoFactorRows.delete(userId)) return false;
+      for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+      for (const [id, row] of this.twoFactorChallengeRows) if (row.userId === userId) this.twoFactorChallengeRows.delete(id);
+      for (const session of this.sessionsById.values()) if (session.userId === userId) session.twoFactorAt = null;
+      this.pushEvents(audit, at);
+      return true;
+    },
+    recordStep: async (userId, step, at) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row || (row.lastUsedStep !== null && row.lastUsedStep >= step)) return false;
+      Object.assign(row, { lastUsedStep: step, updatedAt: at });
+      return true;
+    },
+    reserveTry: async (userId, at, policy) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row) return { allowed: false, lockedUntil: null };
+      if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+      const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+      row.failures = fresh ? 1 : row.failures + 1;
+      row.failuresSince = fresh ? at : row.failuresSince;
+      if (row.failures < policy.lockAfter) return { allowed: true, lockedUntil: null };
+      const lockedUntil = new Date(at.getTime() + policy.lockMs);
+      Object.assign(row, { lockedUntil, failures: 0, failuresSince: null });
+      return { allowed: true, lockedUntil };
+    },
+    clearFailures: async (userId) => {
+      const row = this.twoFactorRows.get(userId);
+      if (row) Object.assign(row, { failures: 0, failuresSince: null, lockedUntil: null });
+    },
+    replaceRecoveryCodes: async (userId, digests, at, audit) => {
+      this.replaceTwoFactorCodes(userId, digests, at);
+      this.pushEvents(audit, at);
+    },
+    useRecoveryCode: async (userId, digest, at) => {
+      const row = [...this.twoFactorCodeRows.values()].find((r) => r.userId === userId && r.codeDigest === digest && r.usedAt === null);
+      if (row) row.usedAt = at;
+      return { used: row !== undefined, left: this.twoFactorCodesLeft(userId) };
+    },
+    recoveryCodesLeft: async (userId) => this.twoFactorCodesLeft(userId),
+    createChallenge: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor_challenges.userId');
+      for (const row of this.twoFactorChallengeRows.values()) if (row.tokenDigest === input.tokenDigest) throw new UniqueViolation('two_factor_challenges.tokenDigest');
+      const row: TwoFactorChallengeRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        purpose: input.purpose,
+        method: input.method,
+        sessionKind: input.sessionKind ?? null,
+        firstStep: input.firstStep ? { ...input.firstStep } : null,
+        passwordChangedAt: input.passwordChangedAt ?? null,
+        linkId: input.linkId ?? null,
+        pendingSecretSealed: input.pendingSecretSealed ?? null,
+        codeDigest: null,
+        codeSentAt: null,
+        codesSent: 0,
+        attempts: 0,
+        createdAt: input.at,
+        expiresAt: input.expiresAt,
+        consumedAt: null,
+      };
+      this.twoFactorChallengeRows.set(row.id, row);
+      return cloneChallenge(row)!;
+    },
+    findChallenge: async (tokenDigest, at) =>
+      cloneChallenge([...this.twoFactorChallengeRows.values()].find((r) => r.tokenDigest === tokenDigest && r.consumedAt === null && r.expiresAt.getTime() > at.getTime())),
+    spendAttempt: async (id, at, maxAttempts) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.attempts >= maxAttempts) return { spent: false, triesLeft: 0 };
+      row.attempts += 1;
+      return { spent: true, triesLeft: maxAttempts - row.attempts };
+    },
+    consumeChallenge: async (id, at) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime()) return false;
+      row.consumedAt = at;
+      return true;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.codesSent >= limits.maxCodes) return false;
+      if (row.codeSentAt && at.getTime() - row.codeSentAt.getTime() < limits.minGapMs) return false;
+      Object.assign(row, { codeDigest, codeSentAt: at, codesSent: row.codesSent + 1 });
+      return true;
+    },
+    pruneChallenges: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.twoFactorChallengeRows) {
+        if (row.expiresAt.getTime() < before.getTime()) {
+          this.twoFactorChallengeRows.delete(id);
+          count += 1;
+        }
+      }
+      return count;
+    },
+    ownsIssuingProfile: async (userId) => {
+      for (const org of this.orgs.values()) {
+        if (!this.issuerMap.has(org.id) && !this.taxConnectionMap.has(org.id)) continue;
+        if (ownsProfile(org, userId, this.members.get(membershipKey(userId, org.id))?.role ?? null)) return true;
+      }
+      return false;
+    },
+  };
+
+  private replaceTwoFactorCodes(userId: string, digests: readonly string[], at: Date): void {
+    for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+    for (const codeDigest of digests) {
+      const id = randomUUID();
+      this.twoFactorCodeRows.set(id, { id, userId, codeDigest, createdAt: at, usedAt: null });
+    }
+  }
+
+  private twoFactorCodesLeft(userId: string): number {
+    return [...this.twoFactorCodeRows.values()].filter((r) => r.userId === userId && r.usedAt === null).length;
+  }
 
   readonly passkeys: PasskeyRepository = {
     listByUser: async (userId) =>
@@ -3369,7 +3516,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const { allocations: requested, ...rest } = input;
     // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
     if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
-    const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
+    const payment: PaymentRecord = { id: randomUUID(), ...rest, clientRequestKey: rest.clientRequestKey ?? null, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
     const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);
     return { payment: { ...payment }, allocations };
@@ -4922,6 +5069,14 @@ export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendor
 function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
   target.clear();
   for (const [key, value] of source) target.set(key, value);
+}
+
+function cloneTwoFactor(row: TwoFactorRecord | undefined): TwoFactorRecord | null {
+  return row ? { ...row } : null;
+}
+
+function cloneChallenge(row: TwoFactorChallengeRecord | undefined): TwoFactorChallengeRecord | null {
+  return row ? { ...row, firstStep: row.firstStep ? { ...row.firstStep } : null } : null;
 }
 
 function membershipKey(userId: string, organizationId: string): string {

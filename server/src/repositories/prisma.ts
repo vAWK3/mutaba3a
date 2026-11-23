@@ -147,6 +147,10 @@ import type {
   MalafatSignInRepository,
   SignInCodeRecord,
   SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorFirstStep,
+  TwoFactorRecord,
+  TwoFactorRepository,
   ExternalIdentityRepository,
   MalafatRole,
   MembershipRole,
@@ -514,7 +518,7 @@ export class PrismaLedgerStore implements LedgerStore {
           // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
           const kept = await tx.session.findFirst({
             where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
-            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true },
+            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true, twoFactorAt: true },
           });
           if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
           const user = await tx.user.update({
@@ -543,6 +547,8 @@ export class PrismaLedgerStore implements LedgerStore {
                 passkeyId: kept.passkeyId,
                 // MUT-459 (review): a password change proves the password only; the rotated session has no step-up.
                 stepUpAt: null,
+                // MUT-710 (review 6): changing the password isn't losing a factor; the second step carries over.
+                twoFactorAt: kept.twoFactorAt,
               },
             });
           } else {
@@ -610,6 +616,7 @@ export class PrismaLedgerStore implements LedgerStore {
         ...(input.passkeyId === undefined ? {} : { passkeyId: input.passkeyId }),
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         ...(input.passkeyId ? { stepUpAt: input.at } : {}),
+        ...(input.twoFactorAt ? { twoFactorAt: input.twoFactorAt } : {}),
       };
       const { verifiedPasswordHash } = input;
       if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
@@ -1506,6 +1513,149 @@ export class PrismaLedgerStore implements LedgerStore {
       return { kind: 'exhausted' };
     },
     prune: async (before) => (await this.prisma.signInCode.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+  };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => mapNullable(await this.prisma.twoFactor.findUnique({ where: { userId } }), toTwoFactor),
+    enable: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Review 2: under the person's row lock, so two confirmations can't leave two sets of recovery codes.
+          const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('two_factor.userId');
+          const existing = await tx.twoFactor.findUnique({ where: { userId: input.userId } });
+          const row = {
+            method: input.method,
+            totpSecretSealed: input.totpSecretSealed,
+            lastUsedStep: input.lastUsedStep === null ? null : BigInt(input.lastUsedStep),
+            failures: 0,
+            failuresSince: null,
+            lockedUntil: null,
+            enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+            updatedAt: input.at,
+          };
+          await tx.twoFactor.upsert({ where: { userId: input.userId }, create: { userId: input.userId, ...row }, update: row });
+          await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: input.userId } });
+          await tx.twoFactorRecoveryCode.createMany({ data: input.recoveryDigests.map((codeDigest) => ({ userId: input.userId, codeDigest, createdAt: input.at })) });
+          const { count } = await tx.session.updateMany({
+            where: { userId: input.userId, revokedAt: null, ...(input.keepSessionId ? { id: { not: input.keepSessionId } } : {}) },
+            data: { revokedAt: input.at, revokedReason: 'two_factor_enabled' },
+          });
+          if (input.keepSessionId) await tx.session.updateMany({ where: { id: input.keepSessionId, revokedAt: null }, data: { twoFactorAt: input.at } });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { revokedSessions: count };
+        }),
+      ),
+    disable: (userId, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.twoFactor.deleteMany({ where: { userId } });
+        if (count === 0) return false;
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorChallenge.deleteMany({ where: { userId } });
+        await tx.session.updateMany({ where: { userId, twoFactorAt: { not: null } }, data: { twoFactorAt: null } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
+    recordStep: async (userId, step, at) => {
+      const { count } = await this.prisma.twoFactor.updateMany({
+        where: { userId, OR: [{ lastUsedStep: null }, { lastUsedStep: { lt: BigInt(step) } }] },
+        data: { lastUsedStep: BigInt(step), updatedAt: at },
+      });
+      return count === 1;
+    },
+    reserveTry: (userId, at, policy) =>
+      this.prisma.$transaction(async (tx) => {
+        // Review 2: the person's two_factor row lock serializes parallel tries, so no more than `lockAfter` pass.
+        const [row] = await tx.$queryRaw<Array<{ failures: number; failuresSince: Date | null; lockedUntil: Date | null }>>`SELECT failures, "failuresSince", "lockedUntil" FROM two_factor WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        if (!row) return { allowed: false, lockedUntil: null };
+        if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+        const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+        const failures = fresh ? 1 : row.failures + 1;
+        if (failures < policy.lockAfter) {
+          await tx.twoFactor.update({ where: { userId }, data: { failures, failuresSince: fresh ? at : row.failuresSince } });
+          return { allowed: true, lockedUntil: null };
+        }
+        const lockedUntil = new Date(at.getTime() + policy.lockMs);
+        await tx.twoFactor.update({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil } });
+        return { allowed: true, lockedUntil };
+      }),
+    clearFailures: async (userId) => {
+      await this.prisma.twoFactor.updateMany({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil: null } });
+    },
+    replaceRecoveryCodes: (userId, digests, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorRecoveryCode.createMany({ data: digests.map((codeDigest) => ({ userId, codeDigest, createdAt: at })) });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+      }),
+    useRecoveryCode: async (userId, digest, at) => {
+      const { count } = await this.prisma.twoFactorRecoveryCode.updateMany({ where: { userId, codeDigest: digest, usedAt: null }, data: { usedAt: at } });
+      const left = await this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } });
+      return { used: count === 1, left };
+    },
+    recoveryCodesLeft: (userId) => this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } }),
+    createChallenge: async (input) =>
+      toTwoFactorChallenge(
+        await translate(() =>
+          this.prisma.twoFactorChallenge.create({
+            data: {
+              userId: input.userId,
+              tokenDigest: input.tokenDigest,
+              purpose: input.purpose,
+              method: input.method,
+              sessionKind: input.sessionKind ?? null,
+              firstStep: input.firstStep ? { ...input.firstStep } : Prisma.JsonNull,
+              passwordChangedAt: input.passwordChangedAt ?? null,
+              linkId: input.linkId ?? null,
+              pendingSecretSealed: input.pendingSecretSealed ?? null,
+              createdAt: input.at,
+              expiresAt: input.expiresAt,
+            },
+          }),
+        ),
+      ),
+    findChallenge: async (tokenDigest, at) =>
+      mapNullable(await this.prisma.twoFactorChallenge.findFirst({ where: { tokenDigest, consumedAt: null, expiresAt: { gt: at } } }), toTwoFactorChallenge),
+    spendAttempt: async (id, at, maxAttempts) => {
+      // One conditional UPDATE … RETURNING: the count and the tries left come from the same statement.
+      const [row] = await this.prisma.$queryRaw<Array<{ attempts: number }>>`
+        UPDATE two_factor_challenges SET attempts = attempts + 1
+        WHERE id = ${id}::uuid AND "consumedAt" IS NULL AND "expiresAt" > ${at} AND attempts < ${maxAttempts}
+        RETURNING attempts`;
+      return row ? { spent: true, triesLeft: Math.max(0, maxAttempts - Number(row.attempts)) } : { spent: false, triesLeft: 0 };
+    },
+    consumeChallenge: async (id, at) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({ where: { id, consumedAt: null, expiresAt: { gt: at } }, data: { consumedAt: at } });
+      return count === 1;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({
+        where: {
+          id,
+          consumedAt: null,
+          expiresAt: { gt: at },
+          codesSent: { lt: limits.maxCodes },
+          OR: [{ codeSentAt: null }, { codeSentAt: { lte: new Date(at.getTime() - limits.minGapMs) } }],
+        },
+        data: { codeDigest, codeSentAt: at, codesSent: { increment: 1 } },
+      });
+      return count === 1;
+    },
+    pruneChallenges: async (before) => (await this.prisma.twoFactorChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    ownsIssuingProfile: async (userId) => {
+      // A person owns a handful of profiles at most: read their ids, then whether any issues.
+      const owned = await this.prisma.organization.findMany({
+        where: { OR: [ownedBy(userId), coOwnedBy(userId), { memberSyncAt: { not: null }, memberships: { some: { userId, role: 'OWNER' } } }] },
+        select: { id: true },
+      });
+      const ids = owned.map((o) => o.id);
+      if (ids.length === 0) return false;
+      const [issuers, connections] = await Promise.all([
+        this.prisma.issuerDetails.count({ where: { organizationId: { in: ids } } }),
+        this.prisma.taxAuthorityConnection.count({ where: { organizationId: { in: ids } } }),
+      ]);
+      return issuers + connections > 0;
+    },
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -5324,6 +5474,43 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     userAgent: row.userAgent,
     passkeyId: row.passkeyId,
     stepUpAt: row.stepUpAt,
+    twoFactorAt: row.twoFactorAt,
+  };
+}
+
+function toTwoFactor(row: Prisma.TwoFactorGetPayload<object>): TwoFactorRecord {
+  return {
+    userId: row.userId,
+    method: row.method,
+    totpSecretSealed: row.totpSecretSealed,
+    lastUsedStep: row.lastUsedStep === null ? null : Number(row.lastUsedStep),
+    failures: row.failures,
+    failuresSince: row.failuresSince,
+    lockedUntil: row.lockedUntil,
+    enabledAt: row.enabledAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toTwoFactorChallenge(row: Prisma.TwoFactorChallengeGetPayload<object>): TwoFactorChallengeRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    purpose: row.purpose,
+    method: row.method,
+    sessionKind: row.sessionKind,
+    firstStep: (row.firstStep as TwoFactorFirstStep | null) ?? null,
+    passwordChangedAt: row.passwordChangedAt,
+    linkId: row.linkId,
+    pendingSecretSealed: row.pendingSecretSealed,
+    codeDigest: row.codeDigest,
+    codeSentAt: row.codeSentAt,
+    codesSent: row.codesSent,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    consumedAt: row.consumedAt,
   };
 }
 

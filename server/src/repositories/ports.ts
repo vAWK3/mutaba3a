@@ -464,6 +464,122 @@ export interface SignInCodeRepository {
   prune(before: Date): Promise<number>;
 }
 
+// --- MUT-710 (ADR-274): two-step sign-in ---------------------------------------------------------------------------
+
+export type TwoFactorMethod = 'totp' | 'email';
+export type TwoFactorPurpose = 'sign_in' | 'enrol' | 'reset' | 'manage';
+
+export interface TwoFactorRecord {
+  userId: string;
+  method: TwoFactorMethod;
+  totpSecretSealed: string | null;
+  lastUsedStep: number | null;
+  failures: number;
+  failuresSince: Date | null;
+  lockedUntil: Date | null;
+  enabledAt: Date;
+  updatedAt: Date;
+}
+
+/** The first step a sign-in challenge carries to its session and audit (sign-in.ts SignInAudit). */
+export interface TwoFactorFirstStep {
+  method: 'password' | 'passkey' | 'malafat' | 'email-code';
+  passkeyId?: string;
+}
+
+export interface TwoFactorChallengeRecord {
+  id: string;
+  userId: string;
+  tokenDigest: string;
+  purpose: TwoFactorPurpose;
+  method: TwoFactorMethod;
+  sessionKind: SessionKind | null;
+  firstStep: TwoFactorFirstStep | null;
+  passwordChangedAt: Date | null;
+  linkId: string | null;
+  pendingSecretSealed: string | null;
+  codeDigest: string | null;
+  codeSentAt: Date | null;
+  codesSent: number;
+  attempts: number;
+  createdAt: Date;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export interface CreateTwoFactorChallengeInput {
+  userId: string;
+  tokenDigest: string;
+  purpose: TwoFactorPurpose;
+  method: TwoFactorMethod;
+  sessionKind?: SessionKind;
+  firstStep?: TwoFactorFirstStep;
+  passwordChangedAt?: Date;
+  linkId?: string;
+  pendingSecretSealed?: string;
+  at: Date;
+  expiresAt: Date;
+}
+
+export interface EnableTwoFactorInput {
+  userId: string;
+  method: TwoFactorMethod;
+  totpSecretSealed: string | null;
+  /** The step the confirming code used, so it can't be used again. */
+  lastUsedStep: number | null;
+  recoveryDigests: string[];
+  at: Date;
+  /** The session that turned it on: stamped twoFactorAt and kept; every other live session of the person is revoked. */
+  keepSessionId: string | null;
+  audit: AuditEventInput[];
+}
+
+/**
+ * MUT-710: every counter moves by a conditional update (review 2), so parallel requests can't win extra guesses or
+ * reuse a code. Challenges are looked up by their token's digest and are live only while unconsumed and unexpired.
+ */
+export interface TwoFactorRepository {
+  get(userId: string): Promise<TwoFactorRecord | null>;
+  /**
+   * Turns it on (or switches method), replacing any earlier row and recovery codes, under the person's row lock.
+   * Returns how many other sessions were signed out.
+   */
+  enable(input: EnableTwoFactorInput): Promise<{ revokedSessions: number }>;
+  /** Turns it off: deletes the row, the recovery codes and live challenges. False when it was already off. */
+  disable(userId: string, at: Date, audit: AuditEventInput[]): Promise<boolean>;
+  /** D4: records a TOTP step only if it is after the last one used; false = already used (replay or a lost race). */
+  recordStep(userId: string, step: number, at: Date): Promise<boolean>;
+  /**
+   * D3 (review 2): reserves one second-step try before the code is checked, under the person's row lock, so parallel
+   * tries can't slip past the lock. Counts within the window; the try that reaches `lockAfter` sets lockedUntil and
+   * restarts the count (`lockedUntil` returned: this try set it). While locked, or with two-step sign-in off, nothing
+   * is counted and `allowed` is false (`lockedUntil` = the lock's end, or null when off). A right code then calls
+   * clearFailures, which also lifts a lock its own reservation set.
+   */
+  reserveTry(userId: string, at: Date, policy: { lockAfter: number; windowMs: number; lockMs: number }): Promise<{ allowed: boolean; lockedUntil: Date | null }>;
+  clearFailures(userId: string): Promise<void>;
+  replaceRecoveryCodes(userId: string, digests: string[], at: Date, audit: AuditEventInput[]): Promise<void>;
+  /** Uses one unused code; false when no unused code has this digest. Returns the codes left on success. */
+  useRecoveryCode(userId: string, digest: string, at: Date): Promise<{ used: boolean; left: number }>;
+  recoveryCodesLeft(userId: string): Promise<number>;
+  createChallenge(input: CreateTwoFactorChallengeInput): Promise<TwoFactorChallengeRecord>;
+  /** The live challenge with this token digest, else null. */
+  findChallenge(tokenDigest: string, at: Date): Promise<TwoFactorChallengeRecord | null>;
+  /** Spends one try while attempts < max and the challenge is live; false when none is left. Returns tries left. */
+  spendAttempt(id: string, at: Date, maxAttempts: number): Promise<{ spent: boolean; triesLeft: number }>;
+  /** Single use: true for exactly one caller. */
+  consumeChallenge(id: string, at: Date): Promise<boolean>;
+  /** D5: stores a newly mailed code's digest if the last one went out at least `minGapMs` ago and fewer than `maxCodes` were sent. */
+  recordCodeSent(id: string, codeDigest: string, at: Date, limits: { minGapMs: number; maxCodes: number }): Promise<boolean>;
+  /** Deletes challenges that expired before `before`. */
+  pruneChallenges(before: Date): Promise<number>;
+  /**
+   * D8/D10: true when the person owns a profile (creator, co-owner or a Malafat firm's partner, as `ownsProfile`) that
+   * has issuer details or a Tax Authority connection; then two-step sign-in can't be turned off.
+   */
+  ownsIssuingProfile(userId: string): Promise<boolean>;
+}
+
 export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';
 
 export interface MalafatSignInRecord {
@@ -1971,6 +2087,8 @@ export interface SessionRecord {
   passkeyId: string | null;
   /** MUT-459 (ADR-212): the last operator passkey step-up on this session; never moves credentialsVerifiedAt. */
   stepUpAt: Date | null;
+  /** MUT-710 (ADR-274): when this session passed the second step or turned it on; issuing needs it. */
+  twoFactorAt: Date | null;
 }
 
 export interface CreateSessionInput {
@@ -1989,6 +2107,8 @@ export interface CreateSessionInput {
   verifiedPasswordHash?: string;
   /** MUT-115: set on a passkey sign-in, so removing the passkey can revoke this session. */
   passkeyId?: string;
+  /** MUT-710: set when the sign-in passed the second step. */
+  twoFactorAt?: Date;
 }
 
 export interface SessionRepository {
@@ -2809,6 +2929,8 @@ export interface LedgerStore {
   passkeys: PasskeyRepository;
   /** MUT-618: emailed sign-in codes; sign-in reads and writes them unguarded (operator-only below the routes). */
   signInCodes: SignInCodeRepository;
+  /** MUT-710 (ADR-274): two-step sign-in. */
+  twoFactor: TwoFactorRepository;
   /** MUT-433: per-user feature flags; `/v1/me` reads the person's own (sessionOnly), only the operator writes them. */
   features: FeaturesRepository;
   /** MUT-434: the OAuth authorization server's clients, requests, grants, codes and tokens. */

@@ -761,7 +761,7 @@ test('A payment a receipt was issued for can\'t be reversed; the portal says to 
   });
 
   await step('The toast says to issue a credit note first; the payment is not reversed', async () => {
-    await expect(page.getByTestId('toast-live')).toContainText('Issue a credit note first');
+    await expect(page.getByRole('alert')).toContainText('Issue a credit note first');
     await api.open(page, `/p/${OFFICE_A}/payments`);
     const row = page.getByRole('table', { name: 'Payments' }).getByRole('row', { name: /Client 1/ });
     await expect(row).toBeVisible();

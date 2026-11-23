@@ -182,8 +182,8 @@ describe('every route sits inside the matrix', () => {
     // the customer statement (MUT-478), the period totals (MUT-483), one profile's feed (MUT-575) and the period
     // download's mint (MUT-314), an expense's move preview (MUT-589), and the 5 issuing reads (MUT-568) the PDF view (MUT-640), the business lookup (MUT-642),
     // the invoicing setup and its logo (MUT-646), the styles list (MUT-570), the Tax Authority connection's status (MUT-571),
-    // and the invoices issued elsewhere and their files (MUT-647).
-    expect(SESSION_READS.length).toBe(58);
+    // the invoices issued elsewhere and their files (MUT-647), and every client's balance (MUT-664).
+    expect(SESSION_READS.length).toBe(59);
   });
 
   it.each(SCOPED.map((op) => [op.key, op] as const))('%s: each scope is a matrix row, granted by every principal it declares', (_key, op) => {
@@ -333,6 +333,8 @@ describe('the escape hatch', () => {
       'routes/agreements.ts',
       'routes/agreements.ts',
       'routes/customers.ts',
+      // MUT-664: GET /v1/customer-balances.
+      'routes/customers.ts',
       'routes/receivables.ts',
       'routes/records-export.ts',
       'routes/retainers.ts',
@@ -363,6 +365,7 @@ describe('lazy posting during a session read is a system act (ADR-037 decision 8
     ['GET /v1/summaries/period', () => '/v1/summaries/period', { installment: 1, charge: 1 }],
     ['GET /v1/summaries/customers/{customerId}', (f) => `/v1/summaries/customers/${f.customer.id}`, { installment: 1, charge: 1 }],
     ['GET /v1/customers/{customerId}/statement', (f) => `/v1/customers/${f.customer.id}/statement?currency=ILS`, { installment: 1, charge: 1 }],
+    ['GET /v1/customer-balances', () => '/v1/customer-balances', { installment: 1, charge: 1 }],
     ['GET /v1/summaries/projects/{projectId}', (f) => `/v1/summaries/projects/${f.project.id}`, { installment: 1, charge: 1 }],
     ['GET /v1/receivables', () => '/v1/receivables', { installment: 1, charge: 1 }],
     ['GET /v1/agreements', () => '/v1/agreements', { installment: 1, charge: 1 }],

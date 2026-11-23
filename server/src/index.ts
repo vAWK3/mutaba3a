@@ -1,3 +1,4 @@
+import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
 import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
 import { TokenBox } from './israel/tax-authority/token-box.js';
 import { RegistryLookup } from './israel/registry.js';
@@ -173,6 +174,8 @@ const taxAuthority = config.TAX_AUTHORITY_ENV
         timeoutMs: config.TAX_AUTHORITY_TIMEOUT_MS,
       }),
       box: new TokenBox(config.TAX_AUTHORITY_TOKEN_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
+      // MUT-710 (D12): token issue, refresh and disconnects into the 12-month authentication log.
+      authLog: logger,
       stateSecret: sessionDigest(config.SESSION_TOKEN_PEPPER, 'mut-571-tax-authority-state-v1'),
       // The spec's test registration number until MUT-567 gives the real one.
       accountingSoftwareNumber: config.TAX_AUTHORITY_SOFTWARE_NUMBER ?? 987654321,
@@ -217,6 +220,9 @@ const app = createApp({
   store,
   logger,
   rateLimiter,
+  // MUT-710 (ADR-274 D4): its own key on production and staging (config refuses to start without it); elsewhere
+  // derived from the session pepper, as the Tax Authority's box is.
+  twoFactorKeys: new TwoFactorKeys(config.TWO_FACTOR_SEAL_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
   // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; while null, the PDF routes answer 503
   // SIGNING_NOT_CONFIGURED. A kms signer whose chain is wrong stops the boot here (documentSignerFrom).
   documentSigner,
@@ -242,6 +248,7 @@ const app = createApp({
   periodPackLimits: { maxRows: config.PERIOD_PACK_MAX_ROWS, maxReceiptBytes: config.PERIOD_PACK_MAX_RECEIPT_BYTES },
   periodPackConcurrency: config.PERIOD_PACK_CONCURRENCY,
   billingGate: config.BILLING_GATE,
+  twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
@@ -366,6 +373,8 @@ const mailPruneTimer = setInterval(() => {
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
   // MUT-618 (D3): sign-in codes live 10 minutes; rows go a day after they expire.
   void store.signInCodes.prune(new Date(Date.now() - SIGN_IN_CODE_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'sign-in code prune failed'));
+  // MUT-710 (ADR-274 §3): two-step challenges live 10 minutes; rows go a day after they expire.
+  void store.twoFactor.pruneChallenges(new Date(Date.now() - TWO_FACTOR_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'two-step challenge prune failed'));
   // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);

@@ -295,7 +295,8 @@ test('a client’s VAT or company number fills its name and address from the reg
   const card = page.getByRole('region', { name: 'Business details' });
 
   await step('Open Client 1 and choose Add business details', async () => {
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    // MUT-664: business details are on the client's Details tab
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=details`);
     await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
     await card.getByRole('button', { name: 'Add business details' }).click();
   });
@@ -329,7 +330,7 @@ test('a client’s VAT or company number fills its name and address from the reg
   });
 
   await step('In Arabic the card reads بيانات المنشأة, right to left, the number left to right', async () => {
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`, 'ar');
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=details`, 'ar');
     const ar = page.getByRole('region', { name: 'بيانات المنشأة' });
     await expect(ar).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -609,7 +610,7 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await expect(island).not.toHaveAttribute('aria-current', 'page');
   });
 
-  await step('From a profile’s Reports (through the Glance), switching profile lands on the other profile’s Reports', async () => {
+  await step('From a profile’s Reports (through the Glance), switching profile lands on the other profile’s home (MUT-657 E-3)', async () => {
     await page.locator('.hp-reports').click();
     await expect(page).toHaveURL(/\/reports\?back=/);
     await page.getByRole('list', { name: 'Your profiles' }).getByRole('link', { name: /^Nour Studio,/ }).click();
@@ -617,7 +618,7 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await expect(page.locator('.hp-reports')).toHaveAttribute('aria-current', 'page');
     await openYou(page, 'profiles');
     await page.getByRole('main').getByRole('button', { name: /Nour Accounting/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/reports$`));
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}$`));
   });
 });
 
@@ -740,7 +741,7 @@ test('with reduced transparency the pill and the island are solid, with no blur'
   });
 });
 
-test('the keyboard meets Reports, the four tabs, then the island, each with a visible focus ring', { tag: '@portal.shell.keyboard' }, async ({ page, step }) => {
+test('the keyboard meets Reports, Home and the four tabs, then the island, each with a visible focus ring', { tag: '@portal.shell.keyboard' }, async ({ page, step }) => {
   const api = seeded();
   const focused = () =>
     page.evaluate(() => {
@@ -754,14 +755,14 @@ test('the keyboard meets Reports, the four tabs, then the island, each with a vi
     await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     const seen = [];
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       await page.keyboard.press('Tab');
       const now = await focused();
       expect(now.ring, `${now.name} shows a focus ring`).not.toBe('none');
       seen.push(now);
     }
-    expect(seen.map((item) => item.name)).toEqual(['Reports', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Nour Studio']);
-    expect(seen.map((item) => item.current)).toEqual([null, null, 'page', null, null, null]);
+    expect(seen.map((item) => item.name)).toEqual(['Reports', 'Home', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Nour Studio']);
+    expect(seen.map((item) => item.current)).toEqual([null, null, null, 'page', null, null, null]);
   });
 
   await step('Enter on the island opens You, where the island is aria-current', async () => {

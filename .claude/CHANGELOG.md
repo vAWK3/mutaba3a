@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-274, API 1.135.0-mut710)
+
+### Added
+- Two-step sign-in, authenticator app (RFC 6238 TOTP, QR drawn on the server) or an emailed code, the person's choice, with 10 one-time recovery codes. Every first step (password, passkey, emailed sign-in code, Malafat `/exchange`; cookie and device) answers 403 `TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }` when it is on; `POST /v1/sessions/two-factor` and `/v1/device-sessions/two-factor` finish it; `POST /v1/two-factor/email-code` re-sends.
+- Every person setup link (reset, setup, operator links, after `--lock` too) asks for the second step: `POST /v1/account-setup/two-factor`, `/check` reports `twoFactor`, the redeem takes `challengeToken` + `code | recoveryCode`.
+- `/v1/me/two-factor` (GET, `challenge`, `enrolment`, `enrolment/confirm`, `recovery-codes`, DELETE); Me `user.twoFactor`; mails `two-factor-code` and `two-factor-changed` (ar/en).
+- The issuing gate: `PUT /v1/issuer`, `POST /v1/issued-documents`, `POST /v1/issuing/tax-authority/connect`, `POST /v1/issuing/allocation-decisions` answer 403 `TWO_FACTOR_SETUP_REQUIRED { enrolled }` unless it is on and this session passed it. Disconnecting stays open. Enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false; `tests/two_factor_issuing_gate.tftest.hcl`): the gate ships dark.
+- Operator reset: `DELETE /admin/v1/users/{id}/two-factor`, `npm run users -- two-factor-reset --email …`.
+- `auth_event` log lines (sign-in success/failure/lockout, every two-step event, password change/reset, Tax Authority connect/disconnect/token refresh) and the Terraform bucket kept 365 days (`auth_log.tf`).
+- Error codes `TWO_FACTOR_REQUIRED`, `TWO_FACTOR_CODE_WRONG`, `TWO_FACTOR_CHALLENGE_EXPIRED`, `TWO_FACTOR_TOO_MANY_TRIES`, `TWO_FACTOR_SETUP_REQUIRED`, `TWO_FACTOR_USE_PASSWORD`, `TWO_FACTOR_LINK_UNAVAILABLE`, `TWO_FACTOR_REQUIRED_FOR_ISSUING`.
+
+### Security
+- Review 4: the setup-link gate covers every person link whatever its purpose (an operator SETUP link after `--lock` no longer skips it).
+- Review 2: parallel requests can't race the second step. Each try is reserved on the person under their `two_factor` row lock before the code is read (`reserveTry`, replacing `recordFailure`), so no more than 5 guesses pass before the lock; the challenge's tries are one `UPDATE … RETURNING`; the TOTP step, a recovery code and the challenge are each claimed by one conditional update.
+- With two-step on the first step no longer clears the email key's throttle; finish rechecks status, closure and `passwordChangedAt`.
+
+### Technical
+- Migration `20261124120000_mut710_two_factor`; `TWO_FACTOR_SEAL_KEY` (required on production and staging); `issueSession` is no longer exported (`beginOrIssue`, `finishTwoFactor`).
+- Tests: `routes-two-factor-sign-in`, `routes-two-factor-enrolment`, `routes-two-factor-gate`, the two-step store contract on memory and Postgres. Issuing tests use `issuingHarness` (people with two-step on). `no-self-registration` lists the four second-step routes as public (their credential is the challenge token); `config.test` and `two_factor_issuing_gate.tftest.hcl` cover the gate switch on and off.
+
+---
+
 ## [Unreleased] - 2026-11-22 — Manual allocation number before issuing (MUT-711, ADR-273, API 1.133.0-mut711)
 
 ### Added
@@ -72,6 +94,22 @@
 - Merged after MUT-662: a payment request is written as record type 300 (C100 and its D110 lines), and the documents report lists it; ADR-271's "wired by whichever merges second" is this.
 
 ---
+## [Unreleased] - 2026-11-22 — Client ledger: Ledger card | Documents | Details (MUT-664a, API 1.131.0-mut664)
+
+### Added
+- `GET /v1/customer-balances`: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals; negative = the client is in credit). Clients with no movement are absent; money with no client is not listed. Dated installments that have come due are posted first, as on the statement.
+- The client statement takes `order=desc` (newest first, for the ledger card); each line carries its document tags and due date (`server/src/statements/tags.ts`).
+- Issued-document list items carry `settled` and `settlement` (OPEN / PARTLY_PAID / PAID / CANCELLED; null on a credit note): receipts and invoice-receipts are paid when issued; a tax invoice is paid + credited on its Owed, at most its gross, CANCELLED when credit notes cover it (`server/src/issuing/settlement.ts`).
+- Portal client page (`/p/$profileId/clients/$customerId`): three tabs, Ledger card | Documents | Details. The ledger card (`components/ledger/LedgerCard.tsx`) is newest first with tags, due and "Client in credit"; the Documents tab has type and status filters and shows settled amounts. A legacy `?tab=payments` lands on the ledger.
+
+### Changed
+- A payment request settles by what is issued against it: the 320s/400s that apply it (MUT-662's status, UNPAID shown as OPEN), not PAID on issue.
+
+### Technical
+- Files: `server/src/routes/{customers,issuing}.ts`, `server/src/statements/{balances,build,serialize,tags}.ts`, `server/src/issuing/settlement.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/schemas.ts`, `src/hosted/components/ledger/LedgerCard.tsx`, `src/hosted/data/{statementQueries,filters,issuedQueries}.ts`, `src/hosted/format/ledger.ts`, i18n en + ar. Tests: `customer-statement.test.ts`, `routes-issuing.test.ts`, `settlement.test.ts`, `statements/__tests__/{balances,build,tags}.test.ts`, `LedgerCard.test.tsx`. QA: `portal.shell.client-detail` reads the ledger card, then Documents and Details.
+
+---
+
 ## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
 
 ### Added
@@ -102,7 +140,7 @@
 - An exempt dealer may issue payment requests (EXEMPT_DEALER_TAX_INVOICE still refuses tax invoices).
 
 ### Technical
-- Migrations 20261123000000_mut662_doc_type (enum value alone) and 20261123000100_mut662_cancellations. A 320 applying a request locks the request's Owed before reading its cancellation; cancelling takes the same lock (R4).
+- Migrations 20261123000200_mut662_doc_type (enum value alone) and 20261123000300_mut662_cancellations. A 320 applying a request locks the request's Owed before reading its cancellation; cancelling takes the same lock (R4).
 ## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.128.0-mut709)
 
 ### Fixed

@@ -380,9 +380,10 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
   transition: background-color var(--duration-toggle) var(--ease-spring), color var(--duration-toggle) var(--ease-spring);
 }
 .hp-island-named { padding-inline-start: var(--space-3); }
-/* A tablet's desktop layout: the island gives way to the centred pill (about 360px wide in Arabic), cutting the name sooner */
+/* A tablet's desktop layout: the island gives way to the centred pill (about 440px wide in Arabic since MUT-657 put
+   Home in it), cutting the name sooner: half the pill, the edge gap and a little air */
 @media (min-width: 761px) and (max-width: 959px) {
-  .hp-island { max-width: min(240px, calc(50vw - 216px)); }
+  .hp-island { max-width: min(240px, calc(50vw - 252px)); }
 }
 .hp-island-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
 /* D2: the profile's ring token comes inline (YouIsland ringColorOf); no profile, a neutral ring */
@@ -1874,6 +1875,6 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-ledger-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
 .hp-ledger-month th, .hp-ledger-month td { background: var(--surface-subtle, var(--bg)); font-weight: var(--weight-medium); color: var(--muted); }
 .hp-ledger-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
-.hp-chip-due { background: var(--warning-subtle, #f6ebcf); color: var(--on-warning-subtle, #7a5200); }
+.hp-chip-due { background: var(--warning-subtle); color: var(--warning); } /* the butter chip pair (.hp-billing-chip-butter): --on-warning-subtle does not exist */
 .hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
 @media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }

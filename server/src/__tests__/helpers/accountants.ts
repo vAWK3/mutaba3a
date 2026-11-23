@@ -8,6 +8,7 @@ import { CURRENT_TERMS } from '../../legal.js';
 import { SlidingWindowRateLimiter } from '../../rate-limit.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { provisionUser } from './provision.js';
+import { generateRecoveryCodes, TwoFactorKeys } from '../../auth/two-factor.js';
 
 /**
  * MUT-559 (ADR-245): one app with accountant access on, a memory mailer and a movable clock, and the people a grant
@@ -33,6 +34,17 @@ export const json = (body: unknown, headers: Record<string, string> = {}, method
 });
 export const idem = () => ({ 'idempotency-key': randomUUID() });
 
+/** MUT-710: the harnesses' two-step keys, so a test can turn it on for a person on the store. */
+export const TWO_STEP_KEYS = new TwoFactorKeys('accountant-harness-two-step-key-32-chars');
+
+/**
+ * MUT-710 (D10): issuing and the Tax Authority need a session that passed the second step. In this harness every
+ * person signedIn() makes has two-step sign-in on, and each sign-in finishes with one of their recovery codes.
+ */
+export function issuingHarness(overrides: Partial<AppDependencies> = {}) {
+  return { ...accountantHarness({ twoFactorIssuingGate: true, ...overrides }), twoStep: true as const };
+}
+
 export function accountantHarness(overrides: Partial<AppDependencies> = {}) {
   let now = T0;
   // A harness handed another's store (a second app over the same data) reports that store as its own.
@@ -54,6 +66,7 @@ export function accountantHarness(overrides: Partial<AppDependencies> = {}) {
     accountantAccess: true,
     // MUT-641: the development authority signs, as on the dev server and in QA.
     documentSigner: devDocumentSigner(),
+    twoFactorKeys: TWO_STEP_KEYS,
     ...overrides,
   });
   return { app, store, transport, now: () => now, setNow: (at: Date) => void (now = at) };
@@ -80,8 +93,23 @@ export async function person(h: AccountantHarness, options: { email?: string; di
   return signedIn(h, email, created.password as string, created.user.id as string, created.personalProfile.id as string);
 }
 
+const recoveryCodesOf = new Map<string, string[]>();
+
+/** MUT-710: two-step sign-in on (once per person), with plenty of recovery codes for repeated sign-ins at a fixed clock. */
+async function twoStepOn(h: AccountantHarness, userId: string): Promise<void> {
+  if (await h.store.twoFactor.get(userId)) return;
+  const codes = Array.from({ length: 10 }, () => generateRecoveryCodes()).flat();
+  recoveryCodesOf.set(userId, codes);
+  await h.store.twoFactor.enable({ userId, method: 'totp', totpSecretSealed: TWO_STEP_KEYS.sealSecret('JBSWY3DPEHPK3PXP'), lastUsedStep: null, recoveryDigests: codes.map((c) => TWO_STEP_KEYS.recoveryDigest(userId, c)), at: h.now(), keepSessionId: null, audit: [] });
+}
+
 export async function signedIn(h: AccountantHarness, email: string, password: string, userId: string, personalId: string): Promise<Person> {
-  const res = await h.app.request('/v1/device-sessions', json({ email, password }));
+  if ((h as { twoStep?: boolean }).twoStep) await twoStepOn(h, userId);
+  let res = await h.app.request('/v1/device-sessions', json({ email, password }));
+  if (res.status === 403 && recoveryCodesOf.has(userId)) {
+    const { challengeToken } = (await read(res)).error.details as { challengeToken: string };
+    res = await h.app.request('/v1/device-sessions/two-factor', json({ challengeToken, recoveryCode: recoveryCodesOf.get(userId)!.shift() }));
+  }
   if (res.status !== 201) throw new Error(`sign-in failed: ${res.status} ${await res.text()}`);
   const auth = { authorization: `Bearer ${(await read(res)).token as string}` };
   return { email, password, userId, personalId, auth, on: (profileId) => ({ ...auth, 'x-mutaba3a-profile': profileId }) };

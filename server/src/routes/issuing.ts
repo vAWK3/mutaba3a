@@ -4,6 +4,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { createHash, randomBytes } from 'node:crypto';
 import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
+import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
 import { hasFeature } from '../features.js';
 import { idempotent } from '../idempotency.js';
@@ -475,7 +476,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       summary: 'Set the business details printed on documents',
       description: 'Without If-Match the details are created (409 VERSION_MISMATCH if they exist); with it they are replaced. Issued documents keep the details they were issued with.',
       security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write')] as const,
+      // MUT-710 (D10): sets the details sent to the Tax Authority, so the second step meets the person at setup's start.
+      middleware: [requireScope('issuing:write'), requireTwoFactor(store)] as const,
       request: { body: jsonBody(IssuerDetailsRequestSchema) },
       responses: { 200: json('Saved', IssuerDetailsSchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),
@@ -783,7 +785,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       description:
         'Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document. MUT-646: 409 ISSUING_SETUP_INCOMPLETE (`details.missing`) until the business details and the numbering answer are in.',
       security: PERSON_OR_MALAFAT,
-      middleware: [requireScope('issuing:write'), idempotent(store, 'issued_document.issue')] as const,
+      middleware: [requireScope('issuing:write'), requireTwoFactor(store), idempotent(store, 'issued_document.issue')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(IssueDocumentRequestSchema) },
       responses: { 201: json('Issued', IssuedDocumentSchema), ...conflictResponse, ...validationResponse, ...notFoundResponse, ...errorResponses },
     }),

@@ -199,7 +199,7 @@ features:
       - You › Profiles opens with from=clients and back= in the URL, and the island is aria-current
       - The second press lands back on that client, not the Clients list
       - Paid leaves You and the island is no longer current
-      - Reports is aria-current on its icon, and switching lands on the other profile's Reports
+      - Reports is aria-current on its icon, and switching profile lands on the other profile's home (MUT-657 E-3)
   - id: page-motion
     title: Going deeper slides forward, back slides the other way, mirrored in Arabic; the You page grows from the island; tabs cross-fade; drawers start no transition; reduced motion only cross-fades (MUT-426 D6)
     tier: secondary
@@ -234,14 +234,14 @@ features:
       - By default the pill's backdrop is blurred and its background see-through
       - With reduced transparency its backdrop-filter is none and its background opaque
   - id: keyboard
-    title: From the top of a page, Tab reaches Reports, Owed, Paid, Spent, Clients, then the island, each with a visible focus ring; aria-current marks the lit tab, and the island on You (MUT-426)
+    title: From the top of a page, Tab reaches Reports, Home, Owed, Paid, Spent, Clients, then the island, each with a visible focus ring; aria-current marks the lit tab, and the island on You (MUT-426)
     tier: secondary
     paths:
       - src/hosted/shell/HostedShell.tsx
       - src/hosted/shell/YouIsland.tsx
       - src/hosted/hosted.css
     steps:
-      - Open Paid and press Tab six times
+      - Open Paid and press Tab seven times
       - Press Enter on the island
     expect:
       - Focus goes Reports, Owed, Paid, Spent, Clients, You · Nour Studio, each with a focus ring; only Paid is aria-current

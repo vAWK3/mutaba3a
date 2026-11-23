@@ -109,6 +109,19 @@ const envSchema = z.object({
   /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
   TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
   /**
+   * MUT-710 (ADR-274 D4): seals two-step sign-in's authenticator secrets (AES-256-GCM) and keys its recovery-code digests.
+   * Required on production and staging with no fallback (Terraform generates it, two_factor.tf); elsewhere derived
+   * from the session pepper when unset.
+   */
+  TWO_FACTOR_SEAL_KEY: secret('TWO_FACTOR_SEAL_KEY').optional(),
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (403 TWO_FACTOR_SETUP_REQUIRED on PUT /v1/issuer, issuing, the Tax
+   * Authority connect and allocation decisions) only when exactly "true". Off by default until the portal and phone
+   * screens that turn two-step sign-in on have shipped, so nobody already issuing is locked out. The second step at
+   * sign-in, for people who turned it on, does not depend on it.
+   */
+  TWO_FACTOR_ISSUING_GATE_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).
@@ -539,6 +552,9 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
       for (const name of ['TAX_AUTHORITY_BASE_URL', 'TAX_AUTHORITY_SOFTWARE_NUMBER', 'TAX_AUTHORITY_TOKEN_KEY'] as const) if (!config[name]) refuse(name, 'the production Tax Authority takes no sandbox defaults: set it');
     }
     if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TAX_AUTHORITY_TOKEN_KEY) refuse('TAX_AUTHORITY_TOKEN_KEY', `stored tokens need their own key on ${config.NODE_ENV}`);
+  }
+  if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TWO_FACTOR_SEAL_KEY) {
+    refuse('TWO_FACTOR_SEAL_KEY', `two-step sign-in secrets need their own key on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

@@ -162,6 +162,27 @@ export const STORE_ACCESS: StoreAccess = {
   externalIdentities: { syncMembers: { write: 'integration' }, findBySubject: 'operator', claim: 'operator', listByUser: 'sessionOnly', listByOrganization: 'sessionOnly', link: 'operator' },
   // MUT-618: emailed sign-in codes, on public routes, unguarded, like sign-in.
   signInCodes: { issue: 'operator', attempt: 'operator', prune: 'operator' },
+  // MUT-710 (ADR-274): the second step runs on the public sign-in routes (no guard) and on the person's own /v1/me
+  // routes. Turning it on or off and new recovery codes are identity writes; the challenge bookkeeping is the person's
+  // own; pruning is the server's timer.
+  twoFactor: {
+    get: 'sessionOnly',
+    enable: { write: 'identity' },
+    disable: { write: 'identity' },
+    recordStep: 'sessionOnly',
+    reserveTry: 'sessionOnly',
+    clearFailures: 'sessionOnly',
+    replaceRecoveryCodes: { write: 'identity' },
+    useRecoveryCode: 'sessionOnly',
+    recoveryCodesLeft: 'sessionOnly',
+    createChallenge: 'sessionOnly',
+    findChallenge: 'sessionOnly',
+    spendAttempt: 'sessionOnly',
+    consumeChallenge: 'sessionOnly',
+    recordCodeSent: 'sessionOnly',
+    pruneChallenges: 'operator',
+    ownsIssuingProfile: 'sessionOnly',
+  },
   // MUT-595: Sign in with Malafat runs on public routes, unguarded, like sign-in.
   malafatSignIns: { create: 'operator', claimCallback: 'operator', recordResult: 'operator', claimResult: 'operator', issueTicket: 'operator', findByTicket: 'operator', proveLink: 'operator', claimCompletion: 'operator' },
   integrations: {
