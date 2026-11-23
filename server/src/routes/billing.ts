@@ -28,6 +28,7 @@ import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } 
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
+import { currentPlanOf } from '../billing/plans.js';
 import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
 import { catalogOf, catalogOrNothing, NO_CATALOG, yearlySwitchLine } from '../billing/yearly-switch-line.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
@@ -117,18 +118,20 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         '`offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it ' +
         '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. ' +
         '`comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back ' +
-        'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.',
+        'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. ' +
+        '`currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, ' +
+        'a subscription, or the running trial, which is business); null when nothing covers them.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
     async (c) => {
       const { user } = c.get('identity');
-      const [summary, catalog, covered] = await Promise.all([
+      const now = c.get('now')();
+      const [summary, catalog, owned] = await Promise.all([
         store.billing.summaryOf(user.id),
         options.checkout ? catalogOrNothing(options.checkout, options.logger, c.get('requestId')) : NO_CATALOG,
-        ownedProfilesOf(store, user.id),
+        ownedWithEntitlements(store, user.id, now),
       ]);
-      const now = c.get('now')();
       // MUT-565 (ADR-251): everything below is the profile plan's; the Accountant plan has its own field.
       const subscriptions = profilePlanSubscriptions(summary.subscriptions);
       const shown = currentSubscription(subscriptions, now);
@@ -144,11 +147,13 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           trial: summary.trialStartedAt ? trialView(summary.trialStartedAt) : null,
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
           countries: countriesView(options.countries),
-          coveredProfileIds: covered.map((p) => p.id),
+          coveredProfileIds: owned.profiles.map((p) => p.id),
           offer: offer ? offerView(offer, offerEligible(offer, subscriptions, offer.interval), catalog) : null,
           yearlySwitch,
           comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
           accountantPlan,
+          // MUT-702 (ADR-275): provider-neutral, from the same entitlements the gate reads.
+          currentPlan: currentPlanOf(owned.entitlements),
         },
         200,
       );

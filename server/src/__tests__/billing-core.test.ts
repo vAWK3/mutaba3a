@@ -77,7 +77,7 @@ describe('GET /v1/me billing (AC3)', () => {
     const h = harness();
     const u = await person(h);
     await h.store.billing.setTrialStart(u.userId, new Date(NOW.getTime() - 2 * DAY));
-    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date(NOW.getTime() + 12 * DAY).toISOString(), paused: false });
+    expect(billingOf(await u.me(), u.personalId)).toEqual({ state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: new Date(NOW.getTime() + 12 * DAY).toISOString(), paused: false });
 
     const periodEnd = new Date(NOW.getTime() + 20 * DAY);
     await h.store.billing.saveAccount({ stripeCustomerId: 'cus_A1', userId: u.userId, country: 'IL', currency: 'ILS', at: NOW, linkAudit: [] });

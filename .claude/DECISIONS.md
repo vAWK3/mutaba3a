@@ -4406,7 +4406,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Build stories MUT-359, MUT-366..371 (brief §12).
 ## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
 
-**Status**: Active (spike decision; built by MUT-358, MUT-360…365)
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365). *Point 2's tiers amended by ADR-275 (MUT-702, 2026-11-22): Solo, Business and Firm are the plans; Freelancer is legacy.*
 **Date**: 2026-10-20
 **Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
 **Decision** (Basel, 2026-10-20):
@@ -7004,3 +7004,34 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 8. Authentication events are `auth_event` stdout lines (never a code, token, password or unknown address) copied by a pinned sink into a Cloud Logging bucket kept 365 days (Google-managed AES-256 at rest); locking the bucket is an operator step after a month.
 
 **Consequences.** Old phone builds show the server's message for a two-step sign-in until the phone half ships (then the minimum build rises). Support load from lost factors is covered by recovery codes and the audited operator reset (`two-factor-reset`, plus `rotate --lock` for a suspected takeover).
+
+---
+
+## ADR-275: Three Plans: Solo, Business, Firm as Provider-Neutral Tiers (MUT-702 Part A)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/mut-702-three-plans-plan.md`, section "Split after MUT-700 and the eng review", Part A). Amends ADR-160 point 2's tier list (Freelancer and Firm) and ADR-162's "Firm includes Freelancer" ranking.
+
+**Context:** Epic MUT-701 (Basel, 2026-11-22) sells three plans: Solo, Business and Firm. Who sells them, and through which payment provider, is open until MUT-700's decision 1 (Narabnd Studio Ltd owns Mutaba3a; MUT-701 comment 13467: no new Stripe or "Barmajiyat sells" assumptions, and plan logic stays apart from the provider). So the plans are built in two parts: Part A, provider-neutral, now; Part B (per-plan prices, Checkout per plan, plan change, the catalog script, the mirror's product tags, offers and retention per plan) held for MUT-700.
+
+**Decision:**
+1. **Tiers.** Prisma `enum BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, `ADD VALUE` only, like MUT-565's). `FREELANCER` stays as the legacy plan of the ₪29 payers and the ₪21 founders: never sold again, still mirrored, granted and covering exactly as before, until MUT-707 moves them. `ACCOUNTANT` (ADR-251) is unchanged and is never a profile's plan.
+2. **One source.** `server/src/billing/plans.ts` (pure) holds the plan names (`solo | business | firm`, legacy `freelancer`), `TIER_OF` / `planOfTier`, `RANK` (Solo = Freelancer 1 < Business 2 < Firm 3), `changeTimingOf` (a higher rank takes effect now; the same or a lower rank waits for the period end; the same plan is `same`), `nextPlanAbove`, `PLAN_LIMITS` and `currentPlanOf`. It names no provider, price or lookup key. `entitlement.ts` ranks grants and subscriptions by `RANK` (ACCOUNTANT ranks 0 and is filtered out before ranking anyway).
+3. **A trial is Business.** A running trial, and the trial's READ_ONLY and LOCKED ends, resolve to tier `BUSINESS` (was `FREELANCER`). Nothing reads the entitlement tier today (checked in the server and the portal), so this changes no behaviour until MUT-704 enforces limits.
+4. **Plan limits, defined here and enforced by MUT-704.** Businesses exclude the personal profile.
+
+   | Plan | Businesses | Partners | Documents / month | Scans / month |
+   |---|---|---|---|---|
+   | Solo | 1 | 0 | 50 | 100 |
+   | Business | 3 | 2 | 250 | 500 |
+   | Firm | 6 | 2 | 1,000 | 2,000 |
+
+   Legacy Freelancer has no row: MUT-704 decides whether it keeps today's limits until MUT-707 moves it (the plan suggests 6 businesses and 3 owners). Every pre-billing user holds a no-expiry FREELANCER grant (`mut358_billing_core`), so this matters.
+5. **Operator grants.** `POST /admin/v1/billing/grants`, `POST /v1/operator/accounts/{id}/billing-grants` and `users billing-grant` accept SOLO and BUSINESS, so the plans can be given and tested with no payment provider. The operator console lists Solo, Business, Firm, then "Freelancer (legacy)", with Solo chosen first.
+6. **`GET /v1/billing` gains `currentPlan`** (`solo | business | firm | freelancer | null`): the highest-ranked tier that covers (ACTIVE or GRACE) any profile the person created, from a grant, a subscription or the running trial; on a tie of rank the plan on sale beats legacy Freelancer. Null when nothing covers them (lapsed, read-only, locked, or only Malafat, which has no tier). `catalog` and every other field are unchanged.
+7. **Schemas.** `BillingTierSchema` gains SOLO and BUSINESS; one inline `ProfilePlanTierSchema` (FREELANCER, SOLO, BUSINESS, FIRM) replaces the `FREELANCER | FIRM` enums on `/v1/me`'s `billing.tier`, `BillingEntitlement.tier` and `BillingOverview.subscription.tier`; the operator status list's subscription tier is `BillingTier`. Additive only. API 1.136.0-mut702.
+
+**Consequences:**
+- Per-plan prices, Checkout for a chosen plan, changing plan, the catalog script, the mirror's `solo`/`business` product tags, and offers and retention per plan are held for MUT-700 (the seller). A Stripe product tagged `solo` or `business` today is still UNKNOWN_TIER in the mirror (on purpose).
+- Clients that read `billing.tier` see BUSINESS for a trial. The portal never reads it; Flutter's `BillingTier.tryParse` gives null for an unknown tier and `ProfileBilling` never reads `tier`.
+- Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
+- Merging the migration restarts the shared dev API: warn the orchestrator before the merge.

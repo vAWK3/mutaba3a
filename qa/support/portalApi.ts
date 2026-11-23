@@ -767,6 +767,7 @@ const BILLING_OFF: Json = {
   yearlySwitch: null,
   comeback: null,
   accountantPlan: null,
+  currentPlan: null,
 };
 
 export class FakeApi {

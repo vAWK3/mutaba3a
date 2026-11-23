@@ -9,7 +9,7 @@ planned in a MUT-710 comment, not built.
 
 ADR: **ADR-274** (number reserved above the in-flight ADR-269…271 of MUT-657/660/662/701/709; renumber at merge if
 needed). API: **1.135.0-mut710** (renumbered at merge). Migration: `20261124120000_mut710_two_factor` (sorts after
-MUT-660 `20261122230000`, MUT-662 `20261123000100`, MUT-709 `20261123000000`, MUT-702 `20261123100000`).
+MUT-660 `20261122230000`, MUT-662 `20261123000100`, MUT-709 `20261123000000`, MUT-702 `20261124130000`).
 
 ## 1. Problem and acceptance criteria
 

@@ -2200,12 +2200,16 @@
         "drawerFor": "For the profiles created by",
         "tierLabel": "Plan",
         "tier": {
-          "FREELANCER": "Freelancer",
-          "FIRM": "Firm"
+          "SOLO": "Solo",
+          "BUSINESS": "Business",
+          "FIRM": "Firm",
+          "FREELANCER": "Freelancer (legacy)"
         },
         "tierNote": {
-          "FREELANCER": "One person's own work",
-          "FIRM": "A firm's books with its team"
+          "SOLO": "One business, run by one person",
+          "BUSINESS": "A few businesses, with partners",
+          "FIRM": "A firm's books with its team",
+          "FREELANCER": "The old plan, for people who already pay for it"
         },
         "reason": "Reason",
         "reasonHint": "Kept in the audit trail, for example \"Pilot comp\".",

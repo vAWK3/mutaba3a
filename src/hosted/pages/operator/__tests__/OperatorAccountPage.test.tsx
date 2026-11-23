@@ -377,7 +377,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
       ],
     });
     const rows = await billing();
-    expect(await rows.findByText(grantLabel('Freelancer · Pilot comp'))).toBeInTheDocument();
+    expect(await rows.findByText(grantLabel('Freelancer (legacy) · Pilot comp'))).toBeInTheDocument();
     expect(rows.getByText('Until Nov 26, 2026')).toBeInTheDocument();
     expect(rows.getByText('Revoked Oct 21, 2026')).toBeInTheDocument();
     expect(rows.getByText('Ended Oct 25, 2026')).toBeInTheDocument();
@@ -393,7 +393,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
     await user.click((await billing()).getByRole('button', { name: /Grant coverage/ }));
     await waitFor(() => expect(locationOf(router)).toBe(`/operator/accounts/${SARA}?grant=new`));
     const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
-    expect(drawer.getByRole('radio', { name: /Freelancer/ })).toBeChecked();
+    expect(drawer.getByRole('radio', { name: /Solo/ })).toBeChecked();
     await user.click(drawer.getByRole('radio', { name: /Firm/ }));
     await user.type(drawer.getByLabelText('Reason'), 'Pilot comp');
     await user.click(drawer.getByRole('button', { name: '90 days' }));
@@ -405,6 +405,21 @@ describe('billing grants (MUT-462, design 14A)', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/operator/accounts/${SARA}`));
     expect(await (await billing()).findByText(grantLabel('Firm · Pilot comp'))).toBeInTheDocument();
     expect(api.count('POST /v1/operator/step-up/options')).toBe(0);
+  });
+
+  // MUT-702 (ADR-275): the three plans on sale first, then legacy Freelancer; Solo is the default.
+  it('offers Solo, Business, Firm and Freelancer (legacy), in that order; granting Business sends BUSINESS and lists it', async () => {
+    const { user, api } = portal({ path: `/operator/accounts/${SARA}?grant=new` });
+    const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));
+    const names = drawer.getAllByRole('radio').map((radio) => radio.closest('label')?.textContent ?? '');
+    expect(names.map((name) => /^(Solo|Business|Firm|Freelancer \(legacy\))/.exec(name)?.[1])).toEqual(['Solo', 'Business', 'Firm', 'Freelancer (legacy)']);
+    await user.click(drawer.getByRole('radio', { name: /Business/ }));
+    await user.type(drawer.getByLabelText('Reason'), 'Pilot comp');
+    await user.click(drawer.getByRole('button', { name: 'No end date' }));
+    await user.click(drawer.getByRole('button', { name: 'Grant' }));
+    await toasted('Coverage granted to sara@studio.example');
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'BUSINESS', reason: 'Pilot comp' });
+    expect(await (await billing()).findByText(grantLabel('Business · Pilot comp'))).toBeInTheDocument();
   });
 
   it('asks for a reason and a day after today before sending anything; No end date sends no expiry', async () => {
@@ -422,7 +437,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
     expect(drawer.getByText('It lasts until you revoke it.')).toBeInTheDocument();
     await user.click(drawer.getByRole('button', { name: 'Grant' }));
     await toasted('Coverage granted to sara@studio.example');
-    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'FREELANCER', reason: 'Pilot comp' });
+    expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'SOLO', reason: 'Pilot comp' });
   });
 
   it('a stale step-up says "Grant with passkey" and runs the passkey sheet on the same tap', async () => {
@@ -439,7 +454,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
     const { user, api } = portal({ grants: [grantOf()] });
     const rows = await billing();
     await user.click(await rows.findByRole('button', { name: 'Revoke' }));
-    expect(screen.getByText(sentence('sara@studio.example loses this Freelancer coverage. Their profiles go back to their own plan or trial.'))).toBeInTheDocument();
+    expect(screen.getByText(sentence('sara@studio.example loses this Freelancer (legacy) coverage. Their profiles go back to their own plan or trial.'))).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await user.click(rows.getByRole('button', { name: 'Revoke' }));
     await user.click(within(screen.getByRole('group')).getByRole('button', { name: 'Revoke' }));

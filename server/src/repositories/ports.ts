@@ -2453,8 +2453,11 @@ export interface SignupReviewRepository {
 
 // ---- MUT-358 (ADR-160): billing core ---------------------------------------
 
-/** MUT-565 (ADR-251): ACCOUNTANT is a person's plan (client books), never a profile's; see billing/accountant-plan.ts. */
-export type BillingTierRecord = 'FREELANCER' | 'FIRM' | 'ACCOUNTANT';
+/**
+ * MUT-565 (ADR-251): ACCOUNTANT is a person's plan (client books), never a profile's; see billing/accountant-plan.ts.
+ * MUT-702 (ADR-275): SOLO and BUSINESS are plans on sale; FREELANCER is legacy (billing/plans.ts).
+ */
+export type BillingTierRecord = 'FREELANCER' | 'SOLO' | 'BUSINESS' | 'FIRM' | 'ACCOUNTANT';
 
 /** One Stripe customer; `userId` is null until the operator (or MUT-360's checkout) links it to a person. */
 export interface BillingAccountRecord {

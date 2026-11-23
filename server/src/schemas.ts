@@ -300,8 +300,15 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
 
 // ---- MUT-358 (ADR-160): operator billing ------------------------------------
 
+/**
+ * MUT-702 (ADR-275): the tiers a profile can be entitled by. SOLO, BUSINESS and FIRM are the plans on sale (Solo < Business
+ * < Firm); FREELANCER is legacy (the ₪29 payers and ₪21 founders). Inline everywhere, never a ref: a ref's null is written
+ * as `nullable`, which OpenAPI 3.1 ignores. Additive since 1.136.0-mut702.
+ */
+const ProfilePlanTierSchema = z.enum(['FREELANCER', 'SOLO', 'BUSINESS', 'FIRM']);
+
 /** MUT-565 (ADR-251): ACCOUNTANT is the person's Accountant plan (client books), only ever on a person, never a profile. */
-const BillingTierSchema = z.enum(['FREELANCER', 'FIRM', 'ACCOUNTANT']).openapi('BillingTier');
+const BillingTierSchema = z.enum([...ProfilePlanTierSchema.options, 'ACCOUNTANT']).openapi('BillingTier');
 
 /** An operator grant: covers a person's own profiles (`userId`) or one profile (`organizationId`), never both. */
 export const EntitlementGrantSchema = z
@@ -372,7 +379,8 @@ const BillingEntitlementSchema = z
   .object({
     state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
     source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-    tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
+    /** MUT-702: a running trial (and its read-only and locked ends) is BUSINESS from 1.136.0-mut702 (FREELANCER before). */
+    tier: ProfilePlanTierSchema.nullable(),
     until: z.string().datetime().nullable(),
     /** MUT-532: READ_ONLY because the person paused their plan; `until` is when it restarts on its own (null: no end set). */
     paused: z.boolean(),
@@ -407,7 +415,7 @@ export const BillingStatusSchema = z
       z.object({
         stripeSubscriptionId: z.string(),
         /** MUT-565: ACCOUNTANT is the person's Accountant plan; it never covers a profile (see `profiles`). */
-        tier: z.enum(['FREELANCER', 'FIRM', 'ACCOUNTANT']),
+        tier: BillingTierSchema,
         status: z.string(),
         currentPeriodEnd: z.string().datetime(),
         cancelAtPeriodEnd: z.boolean(),
@@ -599,7 +607,7 @@ export const BillingOverviewSchema = z
     /** The subscription Billing shows: the most current open one (live first), else the latest that ended; null if none. */
     subscription: z
       .object({
-        tier: z.enum(['FREELANCER', 'FIRM']),
+        tier: ProfilePlanTierSchema,
         status: z.string(),
         interval: z.enum(['month', 'year']).nullable(),
         currency: z.string(),
@@ -644,6 +652,12 @@ export const BillingOverviewSchema = z
      * above is never the Accountant plan. Additive since 1.108.0-mut565.
      */
     accountantPlan: z.union([BillingAccountantPlanSchema, z.null()]),
+    /**
+     * MUT-702 (ADR-275): the person's plan, from their own profiles' entitlements (an operator grant, a subscription or the
+     * running trial, which is business): the highest-ranked one that covers any of them. `freelancer` is the legacy plan.
+     * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.136.0-mut702.
+     */
+    currentPlan: z.enum(['solo', 'business', 'firm', 'freelancer']).nullable(),
   })
   .openapi('BillingOverview');
 
@@ -1117,7 +1131,8 @@ export const HostedProfileSchema = z
         state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
         /** What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, or nothing. */
         source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-        tier: z.enum(['FREELANCER', 'FIRM']).nullable(),
+        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). */
+        tier: ProfilePlanTierSchema.nullable(),
         /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
         until: z.string().datetime().nullable(),
         /**
@@ -1332,7 +1347,7 @@ export const MeSchema = z
        * so no one else's /v1/me hints at it. Additive since 1.79.0-mut459.
        */
       operator: z.literal(true).optional(),
-      /** MUT-710 (ADR-274 D8): two-step sign-in. Additive since 1.135.0-mut710. */
+      /** MUT-710 (ADR-274 D8): two-step sign-in. Additive since 1.136.0-mut702. */
       twoFactor: TwoFactorStateSchema,
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */

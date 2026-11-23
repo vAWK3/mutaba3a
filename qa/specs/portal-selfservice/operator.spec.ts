@@ -407,7 +407,7 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
     await expect(page).not.toHaveURL(/grant=new/);
   });
   await step('The grant is listed, and the CLI’s list shows it granted by the operator', async () => {
-    await expect(billing.getByText('Freelancer · Pilot comp for Khatib Law')).toBeVisible();
+    await expect(billing.getByText('Freelancer (legacy) · Pilot comp for Khatib Law')).toBeVisible();
     await expect(billing.getByText(`Until ${dayIn(30)}`)).toBeVisible();
     await expectNoHorizontalOverflow(page, 'the account page with a grant at 375 px');
     const [grant] = await adminGrants(person.id);
@@ -415,12 +415,46 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
   });
   await step('Revoke the grant and confirm: the row says Revoked, and the CLI’s list agrees', async () => {
     await billing.getByRole('button', { name: 'Revoke' }).click();
-    await expect.poll(() => confirmText(page)).toContain(`${person.email} loses this Freelancer coverage.`);
+    await expect.poll(() => confirmText(page)).toContain(`${person.email} loses this Freelancer (legacy) coverage.`);
     await page.getByRole('group').first().getByRole('button', { name: 'Revoke' }).click();
     await expect.poll(() => toastText(page)).toContain(`Coverage revoked for ${person.email}`);
     await expect(billing.getByText(/^Revoked /)).toBeVisible();
     await expect(billing.getByRole('button', { name: 'Revoke' })).toHaveCount(0);
     expect((await adminGrants(person.id))[0]?.revokedAt).not.toBeNull();
+  });
+});
+
+// MUT-702 Part A (ADR-275): the plans on sale can be given with no payment provider at all.
+test('Grant a person the Business plan', { tag: '@portal-selfservice.operator.billing-grant-business' }, async ({ page, step }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await chooseLanguage(page, 'en');
+  const op = await operator(page);
+  const person = await targetWithId('business');
+  const billing = page.getByRole('region', { name: 'Billing' });
+  await step('Open their account and press Grant coverage: the plans are Solo, Business, Firm and Freelancer (legacy), Solo chosen', async () => {
+    await openAccount(page, person.email);
+    await billing.getByRole('button', { name: /Grant coverage/ }).click();
+    const drawer = page.getByRole('dialog', { name: 'Grant coverage' });
+    await expect(drawer.getByRole('radio')).toHaveCount(4);
+    for (const [index, name] of ['Solo', 'Business', 'Firm', 'Freelancer (legacy)'].entries()) {
+      await expect(drawer.locator('label').filter({ has: page.getByRole('radio') }).nth(index)).toContainText(name);
+    }
+    await expect(drawer.getByRole('radio', { name: /Solo/ })).toBeChecked();
+    await expectNoHorizontalOverflow(page, 'the grant drawer with four plans at 375 px');
+  });
+  await step('Choose Business, give the reason "Business pilot", choose No end date, and grant with the passkey', async () => {
+    const drawer = page.getByRole('dialog', { name: 'Grant coverage' });
+    await drawer.getByRole('radio', { name: /Business/ }).check();
+    await drawer.getByLabel('Reason').fill('Business pilot');
+    await drawer.getByRole('button', { name: 'No end date' }).click();
+    await drawer.getByRole('button', { name: 'Grant with passkey' }).click();
+    await expect.poll(() => toastText(page)).toContain(`Coverage granted to ${person.email}`);
+    await expect(page.getByRole('dialog')).toHaveCount(0);
+  });
+  await step('The grant is listed as Business, and the CLI’s list shows a BUSINESS grant by the operator', async () => {
+    await expect(billing.getByText('Business · Business pilot')).toBeVisible();
+    const [grant] = await adminGrants(person.id);
+    expect(grant).toMatchObject({ reason: 'Business pilot', tier: 'BUSINESS', expiresAt: null, grantedBy: `operator:${op.id}`, revokedAt: null });
   });
 });
 

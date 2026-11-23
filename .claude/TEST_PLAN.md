@@ -4735,3 +4735,15 @@ Release-qa flows (brief §5) wait for the portal and phone screens.
 
 The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning session's.
 
+## MUT-702 Part A — three plans, provider-neutral (2026-11-22, ADR-275)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/billing/__tests__/plans.test.ts` | plan names; `TIER_OF` round trip; `RANK` (Solo = Freelancer < Business < Firm); `changeTimingOf` for every current tier × target plan; `nextPlanAbove`; the `PLAN_LIMITS` table and its monotony; `currentPlanOf` (none, read-only/locked/Malafat ignored, GRACE counts, highest rank, Solo over Freelancer on a tie) |
+| Pure | `server/src/billing/__tests__/entitlement.test.ts` | a trial is BUSINESS (active, read-only, locked); grants and subscriptions rank Firm > Business > Solo = Freelancer (ties fall to expiry / period end); legacy Freelancer still covers its owner's profiles; ACCOUNTANT neither covers nor outranks |
+| Routes | `server/src/__tests__/routes-operator-billing-firms.test.ts` | SOLO and BUSINESS granted and revoked on the console route and the admin route; the profile resolves to the tier; audit carries it |
+| Routes | `server/src/__tests__/billing-routes.test.ts` | `currentPlan`: null with nothing, business in a running trial and null after it, solo / business / firm grants, a legacy Freelancer subscription, a lapsed one alone null, best tier across profiles, Malafat names no plan |
+| Routes | `server/src/__tests__/billing-core.test.ts` | `/v1/me` reports a trial as BUSINESS |
+| Portal | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | Solo, Business, Firm, Freelancer (legacy) in order, Solo chosen; granting Business sends BUSINESS and lists it |
+| Release-QA | `qa/specs/portal-selfservice/operator.spec.ts` `@portal-selfservice.operator.billing-grant-business` | the operator grants Business on a 375 px phone; the CLI's list shows it. Written, not yet run (needs the shared local API). |
+| CI only | `test:db` | the Prisma enum accepts SOLO and BUSINESS (existing grant round trips run against Postgres in CI) |

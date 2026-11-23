@@ -105,6 +105,29 @@ describe('MUT-462 billing grants on an account', () => {
     expect((await h.store.billing.getGrant(grant.id))?.revokedAt).toBeNull();
   });
 
+  // MUT-702 Part A (ADR-275): Solo and Business can be given with no payment provider at all.
+  it.each(['SOLO', 'BUSINESS'] as const)('grants and revokes %s on the console route and the admin route; the profile resolves to it', async (tier) => {
+    const h = harness();
+    const op = await operator(h);
+    const p = await person(h);
+    const granted = await post(h, accountPath(p.id, 'billing-grants'), op.token, { tier, reason: 'Plan test' });
+    expect(granted.status).toBe(201);
+    const grant = await read(granted);
+    expect(grant).toMatchObject({ userId: p.id, tier, grantedBy: `operator:${op.id}`, revokedAt: null });
+    const view = await read(await get(h, `/v1/operator/accounts/${p.id}`, op.token));
+    expect(view.account.profiles[0].billing).toMatchObject({ source: 'OPERATOR', state: 'ACTIVE', tier });
+    expect(await read(await send(h, 'DELETE', accountPath(p.id, `billing-grants/${grant.id}`), op.token))).toMatchObject({ grant: { id: grant.id, tier }, revoked: true });
+
+    const viaAdmin = await adminSend(h, 'POST', '/admin/v1/billing/grants', { userId: p.id, tier, reason: 'Plan test (CLI)' });
+    expect(viaAdmin.status).toBe(201);
+    const adminGrant = await read(viaAdmin);
+    expect(adminGrant).toMatchObject({ userId: p.id, tier });
+    expect(await read(await adminSend(h, 'DELETE', `/admin/v1/billing/grants/${adminGrant.id}`))).toMatchObject({ grant: { tier }, revoked: true });
+    expect(await auditOn(h, await personalOf(h, p.id), 'billing.')).toEqual(
+      expect.arrayContaining([expect.objectContaining({ action: 'billing.grant_created', metadata: expect.objectContaining({ tier }) })]),
+    );
+  });
+
   it('refuses an expiry in the past (422) and an unknown account (404 ACCOUNT_NOT_FOUND)', async () => {
     const h = harness();
     const op = await operator(h);

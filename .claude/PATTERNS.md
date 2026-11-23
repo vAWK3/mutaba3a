@@ -2955,3 +2955,6 @@ A "to do" that follows from the ledger (a document due, an income class) is a pu
 ### Pattern: a split that must reconcile is computed per item and summed, and a property test checks the sum (MUT-660)
 `splitIncome` adds each payment's split, so All = Invoice + Not for invoice holds by construction; a seeded random test asserts it for every currency.
 
+## Pattern: plan names, rank and limits live only in `billing/plans.ts` (MUT-702, ADR-275)
+**Where**: `server/src/billing/plans.ts`; read by `billing/entitlement.ts` (rank) and `routes/billing.ts` (`currentPlan`).
+**Rule**: any code that compares plans, picks the better one, decides when a change takes effect, or reads a plan's limits imports `RANK`, `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` or `currentPlanOf` from `plans.ts`. Never compare tiers by hand (`tier === 'FIRM'`) and never spell a limit elsewhere. `plans.ts` stays pure and provider-neutral: no payment provider, price or lookup key (those belong to the provider adapter, MUT-702 Part B).

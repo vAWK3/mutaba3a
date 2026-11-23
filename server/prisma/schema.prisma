@@ -1663,11 +1663,16 @@ model ExpenseGroupOverride {
 // truth for subscriptions: MUT-360's webhook and nightly reconcile write them. Nothing here is enforced until MUT-361.
 
 enum BillingTier {
+  /// Legacy (MUT-702, ADR-275): the ₪29 payers and ₪21 founders; never sold again, ranks with SOLO.
   FREELANCER
   FIRM
   /// MUT-565 (ADR-251): the Accountant plan, a person's (client books), never a profile's. A grant with it names a
   /// person only (CHECK in 20261108120100); a subscription with it has no organization (mirror.ts).
   ACCOUNTANT
+  /// MUT-702 (ADR-275): the three plans on sale are SOLO < BUSINESS < FIRM (server/src/billing/plans.ts RANK).
+  /// Listed in the order the migration added them.
+  SOLO
+  BUSINESS
 }
 
 /// MUT-358: one Stripe customer. userId is NULL while the customer is unlinked (MUT-360 stores those; the

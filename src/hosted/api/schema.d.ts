@@ -18463,7 +18463,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them.
          */
         get: {
             parameters: {
@@ -27764,7 +27764,7 @@ export interface components {
                 /** @enum {string} */
                 source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
                 /** @enum {string|null} */
-                tier: "FREELANCER" | "FIRM" | null;
+                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
                 /** Format: date-time */
                 until: string | null;
                 paused?: boolean;
@@ -31917,7 +31917,7 @@ export interface components {
             configured: boolean;
             subscription: {
                 /** @enum {string} */
-                tier: "FREELANCER" | "FIRM";
+                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM";
                 status: string;
                 /** @enum {string|null} */
                 interval: "month" | "year" | null;
@@ -31972,6 +31972,8 @@ export interface components {
             yearlySwitch: components["schemas"]["BillingYearlySwitch"] | unknown;
             comeback: components["schemas"]["BillingComeback"] | unknown;
             accountantPlan: components["schemas"]["BillingAccountantPlan"] | unknown;
+            /** @enum {string|null} */
+            currentPlan: "solo" | "business" | "firm" | "freelancer" | null;
         };
         BillingOffer: {
             id: string;
@@ -32673,7 +32675,7 @@ export interface components {
             /** @enum {string} */
             source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
             /** @enum {string|null} */
-            tier: "FREELANCER" | "FIRM" | null;
+            tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
             /** Format: date-time */
             until: string | null;
             paused: boolean;
@@ -32705,7 +32707,7 @@ export interface components {
             revokedAt: string | null;
         };
         /** @enum {string} */
-        BillingTier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
+        BillingTier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | "ACCOUNTANT";
         OperatorCreateBillingGrantRequest: {
             tier: components["schemas"]["BillingTier"];
             reason: string;
@@ -32788,8 +32790,7 @@ export interface components {
             accounts: components["schemas"]["BillingAccount"][];
             subscriptions: {
                 stripeSubscriptionId: string;
-                /** @enum {string} */
-                tier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
+                tier: components["schemas"]["BillingTier"];
                 status: string;
                 /** Format: date-time */
                 currentPeriodEnd: string;
