@@ -11,7 +11,7 @@ import {
   type ProfilePlanTier,
 } from '../plans.js';
 
-/** MUT-702 Part A (ADR-270): Solo, Business and Firm as provider-neutral tiers; legacy Freelancer kept. */
+/** MUT-702 Part A (ADR-275): Solo, Business and Firm as provider-neutral tiers; legacy Freelancer kept. */
 describe('plans', () => {
   it('sells Solo, Business and Firm, in rank order', () => {
     expect(PLAN_NAMES).toEqual(['solo', 'business', 'firm']);

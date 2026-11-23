@@ -86,4 +86,8 @@ export const bufferShim = {
   from(data: string | ArrayLike<number> | ArrayBufferLike, encoding?: ShimBufferEncoding): BufferShim {
     return typeof data === 'string' ? BufferShim.encode(data, encoding ?? 'utf8') : new BufferShim(data as ArrayLike<number>);
   },
+  /** MUT-710: `TwoFactorKeys`/`TokenBox` (built by `createApp`, so in local mode too) pass `Buffer.alloc(0)` as an HKDF salt. */
+  alloc(size: number): BufferShim {
+    return new BufferShim(size);
+  },
 };

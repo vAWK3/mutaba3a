@@ -28,11 +28,11 @@
 
 ---
 
-## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-270, API 1.127.0-mut702)
+## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
 
 ### Added
 - `server/src/billing/plans.ts`: the one source for the plans (solo, business, firm; legacy freelancer): `TIER_OF`, `RANK` (Solo = Freelancer < Business < Firm), `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` (enforced by MUT-704) and `currentPlanOf`. No provider, price or lookup key.
-- Prisma `BillingTier` gains `SOLO` and `BUSINESS` (migration `20261123100000_mut702_plan_tiers`, ADD VALUE only).
+- Prisma `BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, ADD VALUE only).
 - `GET /v1/billing` `currentPlan`: the best plan covering any profile the person created (grant, subscription or trial); null when nothing covers them.
 - Operator grants of Solo and Business (admin route, console route, `users billing-grant`); the console lists Solo, Business, Firm and Freelancer (legacy), Solo first (en + ar; Arabic names await Basel).
 - Release-QA feature `portal-selfservice.operator.billing-grant-business` and its spec (not yet run).
@@ -44,7 +44,144 @@
 
 **Why:** epic MUT-701 sells Solo, Business and Firm. The seller and provider are open (MUT-700), so only the provider-neutral half is built; per-plan prices, Checkout per plan, plan change and the catalog script (Part B) are held.
 
-**Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261123100000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+**Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261124130000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-274, API 1.135.0-mut710)
+
+### Added
+- Two-step sign-in, authenticator app (RFC 6238 TOTP, QR drawn on the server) or an emailed code, the person's choice, with 10 one-time recovery codes. Every first step (password, passkey, emailed sign-in code, Malafat `/exchange`; cookie and device) answers 403 `TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }` when it is on; `POST /v1/sessions/two-factor` and `/v1/device-sessions/two-factor` finish it; `POST /v1/two-factor/email-code` re-sends.
+- Every person setup link (reset, setup, operator links, after `--lock` too) asks for the second step: `POST /v1/account-setup/two-factor`, `/check` reports `twoFactor`, the redeem takes `challengeToken` + `code | recoveryCode`.
+- `/v1/me/two-factor` (GET, `challenge`, `enrolment`, `enrolment/confirm`, `recovery-codes`, DELETE); Me `user.twoFactor`; mails `two-factor-code` and `two-factor-changed` (ar/en).
+- The issuing gate: `PUT /v1/issuer`, `POST /v1/issued-documents`, `POST /v1/issuing/tax-authority/connect`, `POST /v1/issuing/allocation-decisions` answer 403 `TWO_FACTOR_SETUP_REQUIRED { enrolled }` unless it is on and this session passed it. Disconnecting stays open. Enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false; `tests/two_factor_issuing_gate.tftest.hcl`): the gate ships dark.
+- Operator reset: `DELETE /admin/v1/users/{id}/two-factor`, `npm run users -- two-factor-reset --email …`.
+- `auth_event` log lines (sign-in success/failure/lockout, every two-step event, password change/reset, Tax Authority connect/disconnect/token refresh) and the Terraform bucket kept 365 days (`auth_log.tf`).
+- Error codes `TWO_FACTOR_REQUIRED`, `TWO_FACTOR_CODE_WRONG`, `TWO_FACTOR_CHALLENGE_EXPIRED`, `TWO_FACTOR_TOO_MANY_TRIES`, `TWO_FACTOR_SETUP_REQUIRED`, `TWO_FACTOR_USE_PASSWORD`, `TWO_FACTOR_LINK_UNAVAILABLE`, `TWO_FACTOR_REQUIRED_FOR_ISSUING`.
+
+### Security
+- Review 4: the setup-link gate covers every person link whatever its purpose (an operator SETUP link after `--lock` no longer skips it).
+- Review 2: parallel requests can't race the second step. Each try is reserved on the person under their `two_factor` row lock before the code is read (`reserveTry`, replacing `recordFailure`), so no more than 5 guesses pass before the lock; the challenge's tries are one `UPDATE … RETURNING`; the TOTP step, a recovery code and the challenge are each claimed by one conditional update.
+- With two-step on the first step no longer clears the email key's throttle; finish rechecks status, closure and `passwordChangedAt`.
+
+### Technical
+- Migration `20261124120000_mut710_two_factor`; `TWO_FACTOR_SEAL_KEY` (required on production and staging); `issueSession` is no longer exported (`beginOrIssue`, `finishTwoFactor`).
+- Tests: `routes-two-factor-sign-in`, `routes-two-factor-enrolment`, `routes-two-factor-gate`, the two-step store contract on memory and Postgres. Issuing tests use `issuingHarness` (people with two-step on). `no-self-registration` lists the four second-step routes as public (their credential is the challenge token); `config.test` and `two_factor_issuing_gate.tftest.hcl` cover the gate switch on and off.
+
+---
+
+## [Unreleased] - 2026-11-22 — Manual allocation number before issuing (MUT-711, ADR-273, API 1.133.0-mut711)
+
+### Added
+- The issue preview answers `allocation` (null, or `{ mode: AUTOMATIC|MANUAL, nextNumber, documentDate, net, customerTaxId, requestUrl }`) so the review step knows a number is needed and whether MTB3A can request it.
+- `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`: a number requested by hand, saved with source MANUAL. Refusals: 409 ALLOCATION_NUMBER_REQUIRED, 409 ALLOCATION_NUMBER_MOVED (the previewed number was taken; nothing is reserved), 422 ALLOCATION_NUMBER_INVALID, 422 ALLOCATION_NOT_NEEDED.
+- `IssuedDocument.allocationSource` (API | MANUAL | null); migration `20261123000400_mut711_manual_allocation` adds the column with a CHECK; earlier rows are not touched (immutable) and read as API.
+- `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https; default the Tax Authority's site until the page is confirmed).
+- Portal: `ManualAllocationPanel` in the issue drawer (details with Copy and Copy all, the link, the 9-digit input, "change the amount"); Issue disabled until the number is well formed. QA feature `portal.invoicing.manual-allocation`.
+
+### Changed
+- With the Tax Authority off on a server, a tax invoice that needs an allocation number is refused until one is entered (it used to issue without one).
+
+
+---
+
+## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-272, API 1.134.0-mut569)
+
+### Added
+- `GET /v1/issuing/uniform-file?from&to&lang`: every document dated in the range (inclusive, `to` ≤ today) as the OPENFRMT zip: `OPENFRMT/<VAT 8>.<YY>/<MMDDhhmm>/INI.TXT`, `…/BKMVDATA.zip` (holding `BKMVDATA.TXT`) and `report.html` (the printable production summary and documents report, ar | en).
+  - Owner, or an accountant with a grant, on the `invoicing` gate.
+  - `X-Uniform-File-Documents` / `X-Uniform-File-Records` carry the counts.
+  - A member's export is audited (`issuing.uniform_file_exported`, `issuer_details`).
+- `server/src/issuing/uniform-file/` (pure):
+  - `layout.ts`: the spec's record tables: A000 466, summary 19, A100 95, C100 444, D110 339, D120 222, Z900 110.
+  - `format.ts`: field formats, and `toFileText`/`encodeLine` for ISO-8859-8, with Arabic in Hebrew letters.
+  - `export.ts`: documents → C100/D110/D120 and the counts; no B100/B110 (A000 1013 = 0).
+  - `report.ts`, `zip.ts`.
+- `IssuingRepository.inRange` (memory + Prisma, the existing `(organizationId, documentDate)` index; lines fetched in chunks of 5,000).
+- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`. The defaults are placeholders; Terraform's `software_house_*` and `uniform_file_registration_number` set the registering owner, Narabnd Studio Ltd, 517108775 (MUT-700). The operator step is in before-release.md.
+- Portal: You › Invoicing's "Uniform file (מבנה אחיד)" card (`UniformFileExport`). Last year, This year or Other dates; download; the counts or "no documents"; failure toast with Try again. The phone has none (D6).
+- `docs/operations/tax-authority/uniform-file/`: the simulator fixture (2,345 records, every type, Hebrew and Arabic) and Basel's run steps.
+
+### Technical
+- QA: `portal.invoicing.uniform-file`, `portal.invoicing.uniform-file-empty`; the FakeApi answers the route.
+- Route lists (`route-security`, `accountant-route-matrix`) name the route; no migration.
+- Pre-landing review fixes:
+  - The uniform-file code uses no Node `Buffer` or `randomInt`, because these routes also run in the signed-out portal's shims. `build:hosted` passes.
+  - A document too large for the file answers 422 `UNIFORM_FILE_AMOUNT_TOO_LARGE`, naming the document.
+  - VAT-inclusive unit prices round up, so every D110 line adds up to the agora.
+  - The documents report lists every type, with zero where none.
+  - `from`/`to` must be real calendar days from 2000.
+- Merged after MUT-662: a payment request is written as record type 300 (C100 and its D110 lines), and the documents report lists it; ADR-271's "wired by whichever merges second" is this.
+
+---
+## [Unreleased] - 2026-11-22 — Client ledger: Ledger card | Documents | Details (MUT-664a, API 1.131.0-mut664)
+
+### Added
+- `GET /v1/customer-balances`: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals; negative = the client is in credit). Clients with no movement are absent; money with no client is not listed. Dated installments that have come due are posted first, as on the statement.
+- The client statement takes `order=desc` (newest first, for the ledger card); each line carries its document tags and due date (`server/src/statements/tags.ts`).
+- Issued-document list items carry `settled` and `settlement` (OPEN / PARTLY_PAID / PAID / CANCELLED; null on a credit note): receipts and invoice-receipts are paid when issued; a tax invoice is paid + credited on its Owed, at most its gross, CANCELLED when credit notes cover it (`server/src/issuing/settlement.ts`).
+- Portal client page (`/p/$profileId/clients/$customerId`): three tabs, Ledger card | Documents | Details. The ledger card (`components/ledger/LedgerCard.tsx`) is newest first with tags, due and "Client in credit"; the Documents tab has type and status filters and shows settled amounts. A legacy `?tab=payments` lands on the ledger.
+
+### Changed
+- A payment request settles by what is issued against it: the 320s/400s that apply it (MUT-662's status, UNPAID shown as OPEN), not PAID on issue.
+
+### Technical
+- Files: `server/src/routes/{customers,issuing}.ts`, `server/src/statements/{balances,build,serialize,tags}.ts`, `server/src/issuing/settlement.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/schemas.ts`, `src/hosted/components/ledger/LedgerCard.tsx`, `src/hosted/data/{statementQueries,filters,issuedQueries}.ts`, `src/hosted/format/ledger.ts`, i18n en + ar. Tests: `customer-statement.test.ts`, `routes-issuing.test.ts`, `settlement.test.ts`, `statements/__tests__/{balances,build,tags}.test.ts`, `LedgerCard.test.tsx`. QA: `portal.shell.client-detail` reads the ledger card, then Documents and Details.
+
+---
+
+## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
+
+### Added
+- **Re-consent reminder (MUT-571 AC3).** `POST /jobs/v1/issuing/tax-authority-reminders` (job token, daily) and `POST /admin/v1/issuing/tax-authority-reminders` (operator, `dryRun`): the owner of each connected profile is mailed ten days before the 90-day consent ends and once when it has ended (for 7 days), in their language. Each stage once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`); retries and later runs answer `duplicate`. New mail template `tax-authority-reconnect` (en + formal ar), exempt from the per-recipient cap like the other job mails. Store: `issuing.taxConnectionsEndingBetween` (operator-only in the guard).
+- Terraform: `tax_authority_reminders_enabled` (default false) creates the `tax_authority_reminders` Scheduler job (09:00 Jerusalem); `tests/tax_authority_reminders.tftest.hcl`. Operator steps in `docs/operations/before-release.md`.
+- Portal: the setup's Tax Authority step says when the connection ends within 10 days and offers Connect again (`endsSoon`, `RECONNECT_NOTICE_DAYS`); a declined consent (`?taxAuthority=refused`) has its own words.
+
+### Fixed
+- **Where the browser lands after the Tax Authority (MUT-571).** The callback redirected to `PORTAL_ORIGIN/p/<id>/you/invoicing` even where no portal is served there (a local API with PORTAL_ORIGIN set to itself: "No route for GET …"). The connect state now signs the portal the person pressed Connect on (its Origin, when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server); the callback returns there, else to this server's own portal when it serves one (PORTAL_DIST_DIR), else answers its own page in Arabic and English. `error=access_denied` → `taxAuthority=refused`.
+- **The after-save Issue offer (MUT-648).** Leaving Owed (or Payments, or a client) inside the save toast's six seconds unmounted IncomeDrawerHost and its issue state, so the toast's Issue button did nothing. The issue drawer now belongs to the profile's layout (`IssueOfferProvider` / `useOfferIssue`, keyed by profile).
+
+### Technical
+- Files: `server/src/routes/tax-authority.ts`, `server/src/israel/tax-authority/{service,reconnect-reminder}.ts`, `server/src/routes/tax-authority-reminders.ts`, `server/src/email/{ports.ts,templates/copy.ts,templates/look.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/infrastructure/terraform/{main,variables}.tf`, `src/hosted/components/IssueOffer.tsx`, `src/hosted/components/IncomeDrawerHost.tsx`, `src/hosted/session/AuthGate.tsx`, `src/hosted/pages/invoicing/{InvoicingSteps.tsx,setupSteps.ts}`, i18n en + ar. Tests: `routes-tax-authority.test.ts` (landing cases), `routes-tax-authority-reminders.test.ts`, `service.test.ts`, `IssueOffer.test.tsx`, `InvoicingSteps.test.tsx`, the mail template samples.
+
+---
+## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.129.0-mut662)
+
+### Added
+- Issued document type PAYMENT_REQUEST (חשבון עסקה, code 300): own series, shows VAT so the invoice-receipts that follow match, never allocated and never in VAT or tax totals. From an Owed it is linked (posts nothing); with no entry it posts an ordinary ADJUSTMENT Owed.
+- A 320 (or an exempt dealer's 400) with `appliesToDocumentId` = a payment request pays that request's Owed and posts no Owed of its own.
+- Derived `paymentRequest` facts (UNPAID / PARTLY_PAID / PAID / CANCELLED, covered, linked documents, cancellation) and `displayNumber` (PR-0007) on issued documents.
+- `POST /v1/issued-documents/{documentId}/cancel`: a cancellation record (CX series, insert-only table `issued_document_cancellations`), refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while a live 320/400 refers to it (D18).
+- PDF: the framed "not a tax invoice" notice (D16), "Total requested", the cancelled mark on later copies.
+- Portal: the drawer's Payment request type, a Status column, the request's page (progress, linked documents, record a payment, cancel panel), numbering step and exempt offer.
+
+### Changed
+- Documents due: PAYMENT_REQUEST items are issuable (PAYMENT_REQUEST_PENDING no longer produced); an Owed with a live request is settled; a payment on it is due a linked 320 (400 for exempt) applying the request.
+- An exempt dealer may issue payment requests (EXEMPT_DEALER_TAX_INVOICE still refuses tax invoices).
+
+### Technical
+- Migrations 20261123000200_mut662_doc_type (enum value alone) and 20261123000300_mut662_cancellations. A 320 applying a request locks the request's Owed before reading its cancellation; cancelling takes the same lock (R4).
+## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.128.0-mut709)
+
+### Fixed
+- A retry after a 5xx could record a payment twice: the 5xx releases the Idempotency-Key, so the handler ran again. `POST /v1/receivables/{id}/settle`, `POST /v1/income` (Received) and `POST /v1/payments` now store `sha256(claim key + "payment")` as `Payment.clientRequestKey` (unique per organization, migration `20261123000000_mut709_payment_client_request_key`) and answer a retry with the payment the first attempt committed, before checks it would now fail (nothing outstanding, a stale preview token). Why: found planning MUT-661 (R1). Files: `idempotency.ts` `paymentRequestKey`, the three routes, both stores, `payments.findByClientRequestKey`.
+- Reversing (`POST /v1/payments/{id}/reverse`), correcting (`/correct` and its preview) or undoing (`DELETE /v1/income/{id}`) a payment an issued receipt or invoice-receipt stands on is refused with 409 CONFLICT `HAS_DOCUMENT` (details `documentId`, `docType`, `number`); the way out is a credit note. Why: an issued document is final, so its money must stay (MUT-661 R2). Files: `payments/document-guard.ts`, `issuing.moneyDocumentOn` (store-guard `read`, so a key can be refused too). The portal's correction pane says so (`hosted.correct.errors.hasDocument`).
+
+---
+
+## [Unreleased] - 2026-11-22 — Documents due per client, To issue, "not for invoice", invoice income in the books (MUT-660, ADR-270, API 1.127.0-mut660)
+
+### Added
+- Server: `documentsDue` (`server/src/issuing/documents-due.ts`), `splitIncome`/`invoiceStatusOf` (`server/src/income/invoice-class.ts`), `invoiceSplitOf` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`). Routes in `routes/documents-due.ts`: GET /v1/documents-due (by client; view=not-for-invoice; olderThanMonths), GET /v1/documents-due/count, POST /v1/documents-due/issue, POST /v1/documents-due/not-for-invoice, PUT /v1/{receivables,payments}/{id}/not-for-invoice. Store: `issuing.dueInputs`, `incomeContext`, `setNotForInvoice` (memory + Prisma, contract-tested).
+- Migration `20261122230000_mut660_documents_due`: `DocumentsPreference` enum, `customers.documentsPreference`, `issuer_details.defaultDocumentsPreference`, `receivables/payments.notForInvoice`, `issued_documents (organizationId, receivableId|paymentId)` indexes.
+- Portal: Documents › To issue (`DocumentsDuePage`), Home's `ToIssueGroup`, `NotForInvoiceAction` on Owed and Paid rows, `DocumentsPreferenceField` on the client page, the profile default in the invoicing defaults step, Reports' `InvoiceSplitCard`; `documentsDueQueries`. i18n ar+en.
+- Books: `invoiceSplit` on GET /v1/summaries/activity and the share-link summary; two lines in the monthly summary; `invoice_status` in the Excel Income sheet.
+- Release-QA: `portal.invoicing.to-issue-issue-all`, `to-issue-bulk-not-for-invoice`, `not-for-invoice-refused`, `client-documents-preference`, `portal.reports.invoice-split`.
+
+### Changed
+- Issuing for an entry decides take vs link (`fromEntryMode`): agreements' charges, credited Owed, allocated payments and no-client invoice-receipts are issued linked only (nothing posted). A no-client 320 is accepted for a Received entry.
+- `issueOne` extracted from POST /v1/issued-documents and reused by Issue all. Receivables and payments carry `notForInvoice`; customers `documentsPreference`; issuer details `defaultDocumentsPreference`.
+- This device's snapshot 21 → 22 (`addDocumentsFields`).
+
+### Why
+- Home's To issue box, MUT-661 and the books all need to know what each income entry is due, per client, without a stored flag that can drift.
 
 ## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
 

@@ -54,6 +54,8 @@ export const INCOME_COLUMNS: readonly Column[] = [
   col('method', 'Method', 'طريقة الدفع', 14),
   col('reference', 'Reference', 'المرجع', 18),
   col('receiptNumber', 'Receipt number', 'رقم الإيصال', 16),
+  // MUT-660: invoicing profiles only (report.ts drops it elsewhere).
+  col('invoiceStatus', 'invoice_status', 'invoice_status', 16),
   col('notes', 'Notes', 'ملاحظات', 30),
   col('source', 'Source', 'المصدر', 11),
   col('loggedBy', 'Logged by', 'سجّله', 20),

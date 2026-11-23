@@ -53,6 +53,21 @@
 **Status**: Open (2026-11-22, MUT-641 review)
 - **What:** SIGNING_UNAVAILABLE is reported without its root cause (that lives in the `issued document could not be signed` log line, with the document), and SIGNING_NOT_CONFIGURED (503) is reported on every PDF request while production is deliberately off. Fine while issuing is behind the `invoicing` feature; before it opens, report the cause and exempt the deliberate off state (app-shell's onError reports every status >= 500).
 
+### TD-320: Payment requests are listed but can't be issued (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** PAYMENT_REQUEST_FIRST clients' Owed entries show in To issue with "can't be issued here yet"; the person attaches one or marks it.
+- **Fix:** MUT-662 adds the payment request type; `documentsDue` then marks those items issuable.
+
+### TD-321: A held allocation number in Issue all resumes only through the single issue (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** Issue all reports a held item (MUT-572) and leaves it in the list; the person issues it on its own to choose CANCEL/CONTINUE. The batch can't resume it itself.
+- **Fix:** return the held key per item and let the page offer the four choices inline.
+
+### TD-322: Documents due are read whole for the count (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** GET /v1/documents-due/count runs the same reads as the list (open and undocumented receivables, undocumented payments, their allocations). Indexed, but not measured on a 5k-payment profile.
+- **Fix:** measure; if slow, a COUNT-only SQL path, or cache per profile until a write.
+
 ### TD-319: The view-copy cache is per instance
 **Status**: Open (2026-11-22, MUT-641 review)
 - **What:** each Cloud Run instance signs a document's view copy once per 10 minutes, so N instances can each sign it. Fine at today's 1-3 instances; a shared cache (or storing view copies) if signing volume grows.
@@ -2858,6 +2873,26 @@ empty option and list the profiles only), with a drawer test for each.
 
 ---
 
+### TD-324: Linking Malafat to an account with two-step sign-in on is refused
+**Status**: Open (2026-11-22, MUT-710 D6, review 8)
+- **What:** `/v1/auth/malafat/link` and `/consent` write the link before any session exists, so with two-step on they answer `TWO_FACTOR_LINK_UNAVAILABLE`.
+- **Fix:** link after the second step (a challenge between link and consent), then lift the refusal.
+
+### TD-325: TWO_FACTOR_SEAL_KEY can't be rotated without re-enrolment
+**Status**: Open (2026-11-22, MUT-710 D4)
+- **What:** one key seals every TOTP secret and keys every recovery-code digest; there is no key id or second key.
+- **Fix:** a versioned key list (seal with the newest, open with any), and a re-seal job.
+
+### TD-326: A setup link's second step is consumed before the redeem, not inside its transaction
+**Status**: Open (2026-11-22, MUT-710 D11)
+- **What:** the challenge is claimed by a conditional update just before `accountSetup.redeem`; if the redeem then loses a race (another tab, a newer link) the person starts the second step again. Never weaker, only a retry.
+- **Fix:** pass the challenge id into both stores' redeem and consume it in the same transaction.
+
+### TD-327: Tax Authority token refreshes are logged, not audited
+**Status**: Open (2026-11-22, MUT-710 D13)
+- **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.
+- **Fix:** after that branch merges, append the audit rows in `accessTokenFor`.
+
 ## Resolved Debt
 
 ### TD-314: The monthly summary's catch-up days re-read everyone already mailed
@@ -3292,3 +3327,9 @@ When resolving debt:
 1. Move to "Resolved Debt" section
 2. Add resolution date and description
 3. Update status to "Resolved"
+
+### TD-323: The uniform file is built in memory (MUT-569)
+- **What:** `GET /v1/issuing/uniform-file` reads every document in the range with its lines and builds INI, BKMVDATA, the report and the zip in memory. That's about 1 KB per document, so a 10k-document history is about 10 MB for a moment.
+- **When to pay:** a profile nearing 100k issued documents, or exports showing up in memory alerts. Stream BKMVDATA in document pages (keyset on type and number) into a streamed zip, as `period-pack/receipts-zip.ts` does.
+- **Also:** the Prisma side of `inRange` runs in server CI's `test:db`. The shared local test database was behind main's schema on 2026-11-22, so it wasn't run locally.
+

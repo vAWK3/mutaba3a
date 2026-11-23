@@ -165,7 +165,7 @@ describe('resolveEntitlement', () => {
     });
   });
 
-  // MUT-702 (ADR-270): a trial gets Business, in every trial state.
+  // MUT-702 (ADR-275): a trial gets Business, in every trial state.
   describe('TRIAL (D3: 14 days active, read-only until day 30, then locked)', () => {
     const started = (days: number) => facts({ trialStarts: new Map([[OWNER, daysFromNow(-days)]]) });
     const end = (days: number) => daysFromNow(TRIAL_DAYS - days);
@@ -205,7 +205,7 @@ describe('resolveEntitlement', () => {
     });
   });
 
-  // MUT-702 Part A (ADR-270): plans.ts RANK orders grants and subscriptions: Firm > Business > Solo = Freelancer.
+  // MUT-702 Part A (ADR-275): plans.ts RANK orders grants and subscriptions: Firm > Business > Solo = Freelancer.
   describe('plan rank (MUT-702)', () => {
     it('bestGrant prefers Firm, then Business, then Solo', () => {
       const grants = [grant({ tier: 'SOLO' }), grant({ tier: 'FIRM', expiresAt: daysFromNow(3) }), grant({ tier: 'BUSINESS' })];

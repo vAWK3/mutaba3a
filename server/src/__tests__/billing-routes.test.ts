@@ -202,7 +202,7 @@ describe('GET /v1/billing (MUT-362)', () => {
   });
 });
 
-// MUT-702 Part A (ADR-270): the person's plan, read from their own profiles' entitlements, whatever covers them.
+// MUT-702 Part A (ADR-275): the person's plan, read from their own profiles' entitlements, whatever covers them.
 describe('GET /v1/billing currentPlan (MUT-702)', () => {
   const grantTier = (h: Harness, userId: string, tier: 'SOLO' | 'BUSINESS' | 'FIRM' | 'FREELANCER', organizationId: string | null = null) =>
     h.store.billing.createGrant({ id: randomUUID(), userId: organizationId ? null : userId, organizationId, tier, reason: 'plan test', expiresAt: null, grantedBy: 'admin', at: NOW, audit: [] });

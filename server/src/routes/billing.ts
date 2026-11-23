@@ -152,7 +152,7 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           yearlySwitch,
           comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
           accountantPlan,
-          // MUT-702 (ADR-270): provider-neutral, from the same entitlements the gate reads.
+          // MUT-702 (ADR-275): provider-neutral, from the same entitlements the gate reads.
           currentPlan: currentPlanOf(owned.entitlements),
         },
         200,

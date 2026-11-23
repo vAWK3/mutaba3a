@@ -105,7 +105,7 @@ describe('MUT-462 billing grants on an account', () => {
     expect((await h.store.billing.getGrant(grant.id))?.revokedAt).toBeNull();
   });
 
-  // MUT-702 Part A (ADR-270): Solo and Business can be given with no payment provider at all.
+  // MUT-702 Part A (ADR-275): Solo and Business can be given with no payment provider at all.
   it.each(['SOLO', 'BUSINESS'] as const)('grants and revokes %s on the console route and the admin route; the profile resolves to it', async (tier) => {
     const h = harness();
     const op = await operator(h);

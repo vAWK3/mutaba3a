@@ -12,6 +12,7 @@ paths:
   - src/hosted/queryClient.ts
   - src/hosted/api/client.ts
   - src/hosted/api/schema.d.ts
+  - src/hosted/api/serverErrorCodes.ts
   - src/hosted/i18n/en.json
   - src/hosted/i18n/ar.json
   - src/hosted/hosted.css

@@ -25,7 +25,7 @@ import { dayText } from '../../operator/time';
  */
 type Tier = EntitlementGrant['tier'];
 
-/** MUT-702 (ADR-270): the three plans on sale, cheapest first, then legacy Freelancer (still grantable, labelled as legacy). */
+/** MUT-702 (ADR-275): the three plans on sale, cheapest first, then legacy Freelancer (still grantable, labelled as legacy). */
 const TIERS: readonly Tier[] = ['SOLO', 'BUSINESS', 'FIRM', 'FREELANCER'];
 
 interface BillingSectionProps {

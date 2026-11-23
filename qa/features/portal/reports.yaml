@@ -158,3 +158,13 @@ features:
     expect:
       - The profile is named as not included, and the rest still renders
       - Its own Reports says you can't see its payments and to ask an owner
+  - id: invoice-split
+    title: On an invoicing profile, Reports splits income into Invoice income and Not for invoice
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/InvoiceSplitCard.tsx
+    steps:
+      - Open Reports on Nour Studio
+    expect:
+      - The income card shows Invoice income, Not for invoice and All income in shekels, and All income is their sum

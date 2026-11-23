@@ -126,7 +126,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -205,7 +205,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -293,7 +293,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in), or TWO_FACTOR_USE_PASSWORD — the second step is a code by email, so sign in with the password (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -312,6 +312,85 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in (sets the session cookie) (MUT-710)
+         * @description After a sign-in answered 403 TWO_FACTOR_REQUIRED: send its `challengeToken` with the 6-digit code (authenticator app or email), or one recovery code instead. The challenge works once, for 10 minutes and 5 tries; 5 wrong second steps in 15 minutes lock the second step for 15 minutes (429). Answers what the first step would have: the signed-in person, and the cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step (disabled, closed) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -708,7 +787,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token */
+                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/device-sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -787,7 +866,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -875,7 +954,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -894,6 +973,85 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in from a native app (returns a bearer token) (MUT-710)
+         * @description As POST /v1/sessions/two-factor, for a challenge a device sign-in started; answers what the first step would have: the person and the token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -957,6 +1115,525 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your two-step sign-in (MUT-710) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorState"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Turn off two-step sign-in (MUT-710)
+         * @description Needs the current password (when you have your own) and the current second step. Refused while you own a profile that issues documents or is connected to the Tax Authority.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description Off */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_REQUIRED_FOR_ISSUING, or CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a second step to change your two-step sign-in (MUT-710)
+         * @description While it is on, switching method, new recovery codes and turning it off each need the current second step. With the email method the code is mailed now.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The challenge (the TWO_FACTOR_REQUIRED details) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            method: "totp" | "email";
+                            /** Format: date-time */
+                            expiresAt: string;
+                            emailHint?: string;
+                            challengeToken: string;
+                        };
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start turning on (or switching) two-step sign-in (MUT-710)
+         * @description Proof (D8): the current password when you have your own; while it is already on, the current second step too (POST /v1/me/two-factor/challenge). The app method answers a new secret, its otpauth:// address and a QR code; the email method mails a code. Without a password of your own, the app method also mails a code (`emailCodeRequired`). Confirm within 10 minutes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEnrolmentRequest"];
+                };
+            };
+            responses: {
+                /** @description What to confirm */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEnrolment"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED (send the current second step), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn on two-step sign-in with a code from the new method (MUT-710)
+         * @description Turns it on (or switches it), answers the 10 recovery codes once, stamps this session as having passed it, signs out your other sessions, and mails a notice. Runs under your row lock, so two confirmations can’t leave two sets of codes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorConfirmRequest"];
+                };
+            };
+            responses: {
+                /** @description On; the recovery codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make new recovery codes (the old ones stop working) (MUT-710) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description The new codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/two-factor/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a fresh second-step code (MUT-710)
+         * @description For a challenge whose method is email (sign-in or a setup link). At most once every 30 seconds and 5 times per challenge, and 10 codes an hour per person; the newest code replaces the last. A browser call must come from the portal itself.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEmailCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description A new code is on its way */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEmailCodeResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or TWO_FACTOR_CHALLENGE_EXPIRED (unknown, used, expired, or not an email challenge) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — too soon after the last code, too many codes, or too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1645,6 +2322,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account-setup/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the second step a setup link needs (MUT-710)
+         * @description For a valid person link (setup, reset, an operator link) whose person has two-step sign-in on, whatever the link is for. Creates a challenge bound to this link (10 minutes, 5 tries) and, with the email method, mails the code. Send its `challengeToken` with the code (or a recovery code) to POST /v1/account-setup.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkCheckRequest"];
+                };
+            };
+            responses: {
+                /** @description The challenge */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkTwoFactor"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF — this link needs no second step */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account-setup": {
         parameters: {
             query?: never;
@@ -1677,7 +2442,7 @@ export interface paths {
                         "application/json": components["schemas"]["SetupLinkRedeemResponse"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST */
+                /** @description CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -2234,6 +2999,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description TWO_FACTOR_REQUIRED — the account has two-step sign-in on: finish with POST /v1/sessions/two-factor (web) or /v1/device-sessions/two-factor (app) (MUT-710) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match */
                 404: {
                     headers: {
@@ -2304,6 +3078,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account has two-step sign-in on (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID */
                 404: {
                     headers: {
@@ -2363,6 +3146,15 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account turned on two-step sign-in after /link (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
                 /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven */
@@ -7751,6 +8543,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every client's balance per currency
+         * @description MUT-664: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals). Negative: the client is in credit. Clients with no movement are absent; money with no client is not here. Dated installments whose date has arrived are posted first, as on the statement.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The balances */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CustomerBalances"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customers/{customerId}/statement": {
         parameters: {
             query?: never;
@@ -7777,6 +8635,8 @@ export interface paths {
                     limit?: number;
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way. */
+                    order?: "asc" | "desc";
                 };
                 header?: never;
                 path: {
@@ -8634,7 +9494,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves).
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -8899,7 +9759,7 @@ export interface paths {
         put?: never;
         /**
          * Record a payment with its allocations, from a preview
-         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment.
+         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment. MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -9369,7 +10229,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a payment: every allocation undone, status REVERSED
-         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
+         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-709: a payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT (details documentId, docType, number); issue a credit note instead. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
          */
         post: {
             parameters: {
@@ -12108,7 +12968,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future. MUT-709: a Received capture retried with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded (without receivedCount), never a second one.
          */
         post: {
             parameters: {
@@ -12191,7 +13051,7 @@ export interface paths {
         post?: never;
         /**
          * Undo an income entry this session created
-         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. MUT-709: a Received payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT; issue a credit note instead. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
          */
         delete: {
             parameters: {
@@ -14250,7 +15110,7 @@ export interface paths {
                 query?: never;
                 header?: never;
                 path: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType: components["schemas"]["IssuedDocType"];
                 };
                 cookie?: never;
@@ -14432,9 +15292,15 @@ export interface paths {
         get: {
             parameters: {
                 query?: {
-                    /** @description 305, 320, 330 and 400 in the Tax Authority's codes */
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
                     docType?: components["schemas"]["IssuedDocType"];
                     customerId?: string;
+                    /** @description MUT-664 */
+                    currency?: components["schemas"]["Currency"] & unknown;
+                    /** @description MUT-664: documentDate on or after */
+                    from?: string;
+                    /** @description MUT-664: documentDate on or before */
+                    to?: string;
                     limit?: number;
                     cursor?: string;
                 };
@@ -14669,6 +15535,108 @@ export interface paths {
         };
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment request (MUT-662)
+         * @description D18: a payment request is cancelled by a record of its own (CX series); the document and its Owed never change, and the Owed goes back to documents due. Refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while an invoice-receipt or receipt refers to it (cancel that with a credit note first), 409 ALREADY_CANCELLED, 422 NOT_A_PAYMENT_REQUEST. Owner only. The same Idempotency-Key returns the same cancellation.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancelPaymentRequest"];
+                };
+            };
+            responses: {
+                /** @description Cancelled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         delete?: never;
         options?: never;
         head?: never;
@@ -15616,7 +16584,7 @@ export interface paths {
         };
         /**
          * Where the Tax Authority sends the browser back after sign-in
-         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the portal's invoicing setup with `taxAuthority=connected` or `failed`.
+         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened.
          */
         get: {
             parameters: {
@@ -15752,6 +16720,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/issuing/uniform-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the uniform file (מבנה אחיד 1.31) for a date range
+         * @description MUT-569 (ADR-272): every document dated `from`…`to` (inclusive; `to` no later than today) as the Tax Authority’s uniform file: a zip with `OPENFRMT/<vat>.<YY>/<MMDDhhmm>/INI.TXT` and `BKMVDATA.zip`, and `report.html` (the printable summary, in `lang`). Documents only (C100, D110, D120); no journal records. `X-Uniform-File-Documents` and `X-Uniform-File-Records` carry the counts.
+         */
+        get: {
+            parameters: {
+                query: {
+                    from: string;
+                    to: string;
+                    lang?: "ar" | "en";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The zip */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/issuing/gaps": {
         parameters: {
             query?: never;
@@ -15820,6 +16876,573 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents due, grouped by client
+         * @description MUT-660: what each income entry is due, derived from the client’s documents preference (else the profile default) and what is issued or attached; never stored. view=not-for-invoice lists the entries marked not for invoice instead (kind null). olderThanMonths keeps items dated before today minus N months. Groups are by customerId (null: no client), in the order the items sort; the client’s name is the caller’s. 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    view?: "to-issue" | "not-for-invoice";
+                    /** @description Only items dated before today minus N months (0 = all) */
+                    olderThanMonths?: number | null;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The documents due */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDue"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many documents are due (Home’s To issue)
+         * @description MUT-660: every listed item counts (N2), including those that can’t be issued in MTB3A yet (they can be attached or marked). 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDueCount"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue all: one client’s due documents, each with its type and amount
+         * @description MUT-660: issues each item (at most 25, one client per call) in turn, through the same single issue as POST /v1/issued-documents: a tax invoice, receipt or invoice-receipt linked to its entry, dated today, one line for its amount with VAT included. Each item answers issued, held (the Tax Authority held its allocation number: issue it on its own to choose) or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue’s own reason). Irreversible per item. The same Idempotency-Key returns the same answer, and an item is never issued twice. 409 ISSUING_SETUP_INCOMPLETE before the setup is done.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDueRequest"];
+                };
+            };
+            responses: {
+                /** @description What happened to each item */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueDueResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark entries not for invoice, or bring them back (bulk)
+         * @description MUT-660: all or nothing, in one transaction. A marked entry is due no document and counts outside Invoice income (it stays in All income, the accountant’s view and exports). An entry already at `value` is left alone, so a replay changes nothing (`changed` counts what changed). Marking an entry with a tax document (a live tax invoice or an invoice-receipt; a receipt doesn’t count) is 409 HAS_TAX_DOCUMENT and changes nothing: a credit note comes first.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Done */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receivables/{receivableId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark an Owed entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/{paymentId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark a Received entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -21038,6 +22661,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/users/{userId}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset a person's two-step sign-in after checking who they are (MUT-710 D9)
+         * @description For a person who lost their authenticator and recovery codes. Turns two-step sign-in off, signs them out everywhere, audits it on each of their profiles (ADMIN) and mails them a notice. A suspected takeover is `rotate --lock` plus this (the attacker may have enrolled their own factor).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reset */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorResetResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown user or organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/signup-reviews": {
         parameters: {
             query?: never;
@@ -24387,6 +26078,133 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily Tax Authority re-consent reminders (Cloud Scheduler)
+         * @description MUT-571 AC3. The Tax Authority consent lasts 90 days. Mails the owner of each connected profile, in their language: once when it ends within 10 days, and once when it has ended (for 7 days after), each with a link to connect again. Each stage is sent once per consent (the send log), so a retry or a second run sends nothing new. Answers counts only; an empty run where the Tax Authority connection is not configured.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the Tax Authority re-consent reminders now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per profile looked at: the stage it mails or why not. `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -25847,6 +27665,7 @@ export interface components {
                 features: string[];
                 /** @enum {boolean} */
                 operator?: true;
+                twoFactor: components["schemas"]["TwoFactorState"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -25902,6 +27721,13 @@ export interface components {
              */
             deleteAfter: string;
         } | null;
+        TwoFactorState: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            method: "totp" | "email" | null;
+            recoveryCodesLeft: number;
+            requiredForIssuing: boolean;
+        };
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -26040,6 +27866,13 @@ export interface components {
             email: string;
             code: string;
         };
+        TwoFactorFinishRequest: {
+            challengeToken: string;
+            /** @description The authenticator app's code, or the emailed one */
+            code?: string;
+            /** @description One of the ten recovery codes (xxxx-xxxx), in place of `code`; works once */
+            recoveryCode?: string;
+        };
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
@@ -26075,6 +27908,51 @@ export interface components {
         NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
+        };
+        TwoFactorEnrolment: {
+            enrolmentToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            secret?: string;
+            otpauthUri?: string;
+            qrSvg?: string;
+            emailHint?: string;
+            emailCodeRequired: boolean;
+        };
+        TwoFactorEnrolmentRequest: {
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorRecoveryCodes: {
+            recoveryCodes: string[];
+        };
+        TwoFactorConfirmRequest: {
+            enrolmentToken: string;
+            code: string;
+            emailCode?: string;
+        };
+        TwoFactorManageRequest: {
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorEmailCodeResponse: {
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        TwoFactorEmailCodeRequest: {
+            challengeToken: string;
         };
         PasskeyList: {
             items: components["schemas"]["Passkey"][];
@@ -26212,6 +28090,10 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             termsVersion: components["schemas"]["TermsVersion"];
+            twoFactor?: {
+                /** @enum {string} */
+                method: "totp" | "email";
+            } | null;
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -26221,6 +28103,14 @@ export interface components {
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
         SetupLinkCheckRequest: {
             token: string;
+        };
+        SetupLinkTwoFactor: {
+            challengeToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            emailHint?: string;
         };
         SetupLinkRedeemResponse: {
             email: string;
@@ -26240,6 +28130,9 @@ export interface components {
             displayName?: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
         };
         SelfServiceDoors: {
             signup: boolean;
@@ -27337,6 +29230,7 @@ export interface components {
             outstanding: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
+            notForInvoice: boolean;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -27887,6 +29781,7 @@ export interface components {
             vatTreatment: components["schemas"]["VatTreatment"] & unknown;
             taxId: string | null;
             address: string | null;
+            documentsPreference: components["schemas"]["DocumentsPreference"];
             status: components["schemas"]["EntityStatus"];
             /** Format: date-time */
             archivedAt: string | null;
@@ -27897,6 +29792,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).
+         * @enum {string|null}
+         */
+        DocumentsPreference: "TAX_INVOICE_FIRST" | "PAYMENT_REQUEST_FIRST" | "ON_PAYMENT" | "NO_DOCUMENT" | null;
         /** @enum {string} */
         EntityStatus: "ACTIVE" | "ARCHIVED";
         ExternalReference: {
@@ -27927,6 +29827,18 @@ export interface components {
             vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
             taxId?: string | null;
             address?: string | null;
+            documentsPreference?: components["schemas"]["DocumentsPreference"];
+        };
+        CustomerBalances: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            asOf: string;
+            balances: {
+                /** Format: uuid */
+                customerId: string;
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                balance: string;
+            }[];
         };
         CustomerStatement: {
             /** Format: uuid */
@@ -27966,6 +29878,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CHARGE";
             /** Format: uuid */
@@ -27996,6 +29911,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CREDIT";
             /** Format: uuid */
@@ -28016,6 +29934,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT";
             /** Format: uuid */
@@ -28040,6 +29961,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT_REVERSAL";
             /** Format: uuid */
@@ -28047,6 +29971,18 @@ export interface components {
             receiptNumber: string | null;
             reason: string | null;
             reasonCode: components["schemas"]["CreditReasonCode"];
+        };
+        StatementDocumentTag: {
+            /**
+             * Format: uuid
+             * @description The issued document; null for one issued elsewhere
+             */
+            id: string | null;
+            /** @enum {string} */
+            source: "ISSUED" | "EXTERNAL";
+            /** @enum {string} */
+            docType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
+            number: string;
         };
         StatementChargeOrigin: {
             /** @enum {string} */
@@ -28167,6 +30103,7 @@ export interface components {
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
             receiptNumber: string | null;
+            notForInvoice: boolean;
             notes: string | null;
             status: components["schemas"]["PaymentStatus"];
             /** Format: date-time */
@@ -28659,6 +30596,17 @@ export interface components {
                 /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
                 samples: number[];
             };
+            /** @description MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
+        };
+        InvoiceSplitRow: {
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            invoiceIncome: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            notForInvoice: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            all: string;
         };
         Verdict: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -29344,6 +31292,7 @@ export interface components {
             footerNote: string | null;
             /** @description MUT-648: offer to issue a document after saving income */
             offerAfterSave: boolean;
+            defaultDocumentsPreference: components["schemas"]["DocumentsPreference"] & unknown;
             version: number;
         };
         /**
@@ -29386,6 +31335,7 @@ export interface components {
             footerNote?: string | null;
             /** @description MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted) */
             offerAfterSave?: boolean;
+            defaultDocumentsPreference?: components["schemas"]["DocumentsPreference"] & unknown;
         };
         /** @enum {string} */
         DocumentLanguage: "ar" | "he" | "en";
@@ -29416,6 +31366,7 @@ export interface components {
                 TAX_INVOICE_RECEIPT?: number;
                 CREDIT_NOTE?: number;
                 RECEIPT?: number;
+                PAYMENT_REQUEST?: number;
             };
         };
         IssuingStyles: {
@@ -29434,10 +31385,10 @@ export interface components {
             hasDocuments: boolean;
         };
         /**
-         * @description 305, 320, 330 and 400 in the Tax Authority's codes
+         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
          * @enum {string}
          */
-        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT";
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
         StartingNumberRequest: {
             start: number;
         };
@@ -29470,7 +31421,29 @@ export interface components {
                 /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
                 vat: string;
             }[];
+            allocation: components["schemas"]["IssueAllocation"];
         };
+        /** @description MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711. */
+        IssueAllocation: {
+            /**
+             * @description AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`.
+             * @enum {string}
+             */
+            mode: "AUTOMATIC" | "MANUAL";
+            /** @description The number this document would take if issued now. A preview, never a reservation. */
+            nextNumber: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /** @description The amount before VAT the Tax Authority asks for */
+            net: string;
+            /** @description The client’s VAT number */
+            customerTaxId: string;
+            /**
+             * Format: uri
+             * @description Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)
+             */
+            requestUrl: string;
+        } | null;
         IssueDocumentRequest: {
             docType: components["schemas"]["IssuedDocType"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -29495,7 +31468,7 @@ export interface components {
             originalId?: string;
             /**
              * Format: uuid
-             * @description A receipt: the open tax invoice it pays
+             * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
              */
             appliesToDocumentId?: string;
             /** @description An invoice-receipt or a receipt: how the money came in */
@@ -29522,6 +31495,13 @@ export interface components {
             withoutAllocation?: {
                 heldKey: string;
             };
+            /** @description MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711. */
+            manualAllocation?: {
+                /** @description The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise). */
+                number: string;
+                /** @description The document number it was requested for: the preview's `allocation.nextNumber` at the time. */
+                forNumber: number;
+            };
             lines: {
                 description: string;
                 /** @enum {string} */
@@ -29538,7 +31518,35 @@ export interface components {
                 vatExempt?: boolean;
             }[];
         };
-        IssuedDocument: components["schemas"]["IssuedDocumentPreview"] & {
+        IssuedDocument: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            subtotal: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            discount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            vatRateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            pricesIncludeVat: boolean;
+            lines: {
+                index: number;
+                description: string;
+                kind: string;
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                pricesIncludeVat: boolean;
+                vatRateBasisPoints: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
             /** Format: uuid */
             id: string;
             docType: components["schemas"]["IssuedDocType"];
@@ -29569,15 +31577,57 @@ export interface components {
                 receivedOn: string;
             } | null;
             allocationNumber: string | null;
+            /**
+             * @description MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.
+             * @enum {string|null}
+             */
+            allocationSource: "API" | "MANUAL" | null;
             /** Format: uuid */
             receivableId: string | null;
             /** Format: uuid */
             paymentId: string | null;
             coreVersion: string;
+            /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
+            displayNumber: string;
+            paymentRequest: components["schemas"]["PaymentRequestFacts"];
         };
+        /** @description MUT-662: a payment request's derived status; null for other types */
+        PaymentRequestFacts: {
+            /** @enum {string} */
+            status: "UNPAID" | "PARTLY_PAID" | "PAID" | "CANCELLED";
+            /** @description What the referring invoice-receipts and receipts cover, after their credit notes */
+            covered: string;
+            linked: {
+                /** Format: uuid */
+                id: string;
+                docType: components["schemas"]["IssuedDocType"];
+                number: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            }[];
+            cancellation: {
+                number: number;
+                displayNumber: string;
+                /** Format: date-time */
+                cancelledAt: string;
+                reason: string | null;
+            } | null;
+        } | null;
         IssuedDocumentPage: {
-            items: components["schemas"]["IssuedDocument"][];
+            items: components["schemas"]["IssuedDocumentListItem"][];
             nextCursor: string | null;
+        };
+        IssuedDocumentListItem: components["schemas"]["IssuedDocument"] & {
+            /** @description Paid + credited on its Owed, at most its gross; null on a credit note */
+            settled: string | null;
+            /**
+             * @description CANCELLED: credit notes cover its gross. Null on a credit note
+             * @enum {string|null}
+             */
+            settlement: "OPEN" | "PARTLY_PAID" | "PAID" | "CANCELLED" | null;
+        };
+        CancelPaymentRequest: {
+            reason?: string | null;
         };
         IssuedCopyRequest: {
             /** @enum {string} */
@@ -29650,6 +31700,94 @@ export interface components {
                 last: number;
                 missing: number[];
             }[];
+        };
+        DocumentsDue: {
+            /** @enum {string} */
+            view: "to-issue" | "not-for-invoice";
+            groups: {
+                /** Format: uuid */
+                customerId: string | null;
+                items: components["schemas"]["DueItem"][];
+            }[];
+            counts: {
+                total: number;
+                byKind: {
+                    [key: string]: number;
+                };
+            };
+        };
+        DueItem: {
+            kind: components["schemas"]["DueKind"];
+            entry: components["schemas"]["DueEntryRef"] & {
+                number: string;
+            };
+            /** Format: uuid */
+            customerId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description The Owed’s posting date or the Received’s date */
+            date: string;
+            issuable: boolean;
+            reason: components["schemas"]["DueReason"];
+            /**
+             * Format: uuid
+             * @description A receipt: the tax invoice it pays
+             */
+            appliesToDocumentId: string | null;
+        };
+        /**
+         * @description The document due; null in the not-for-invoice view
+         * @enum {string|null}
+         */
+        DueKind: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+        DueEntryRef: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+        };
+        /**
+         * @description Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice
+         * @enum {string|null}
+         */
+        DueReason: "PAYMENT_REQUEST_PENDING" | "CURRENCY_NOT_ILS" | "MIXED_ALLOCATION" | "RECORDED_ELSEWHERE" | null;
+        DocumentsDueCount: {
+            total: number;
+        };
+        IssueDueResult: {
+            results: {
+                entry: components["schemas"]["DueEntryRef"];
+                /** @enum {string} */
+                status: "issued" | "held" | "refused";
+                /** @description Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason) */
+                reason: string | null;
+                document: components["schemas"]["IssuedDocument"] & unknown;
+            }[];
+            issued: number;
+        };
+        IssueDueRequest: {
+            /** Format: uuid */
+            customerId: string | null;
+            items: components["schemas"]["DueEntryRef"][];
+        };
+        NotForInvoiceResult: {
+            changed: number;
+        };
+        NotForInvoiceRequest: {
+            items: components["schemas"]["DueEntryRef"][];
+            value: boolean;
+        };
+        NotForInvoiceEntry: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+            notForInvoice: boolean;
+            version: number;
+        };
+        SetNotForInvoiceRequest: {
+            value: boolean;
         };
         FxRatesResponse: {
             base: components["schemas"]["Currency"];
@@ -30427,6 +32565,11 @@ export interface components {
             /** @description MUT-434 (D12): connected agents disconnected too */
             agentGrantsRevoked: number;
         };
+        TwoFactorResetResponse: {
+            /** @enum {boolean} */
+            reset: true;
+            revoked: number;
+        };
         SignupReviewList: {
             data: components["schemas"]["SignupReview"][];
             nextCursor: string | null;
@@ -30957,6 +33100,34 @@ export interface components {
             token: string;
             on: boolean;
         };
+        TaxAuthorityReminderSummary: {
+            dryRun: boolean;
+            /** @description Connections whose consent ends within 10 days or ended within 7 */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description This stage of this consent was already mailed */
+            duplicate: number;
+            /** @description Due but not sent: a read or the mailer failed, mail off, capped or refused */
+            notSent: number;
+            /** @description Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed */
+            skipped: number;
+        };
+        TaxAuthorityReminderRun: {
+            summary: components["schemas"]["TaxAuthorityReminderSummary"];
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string|null} */
+                stage: "soon" | "ended" | null;
+                /** @enum {string} */
+                action: "send" | "skip";
+                /** @enum {string|null} */
+                skip: "other-environment" | "no-refresh" | "profile-gone" | "owner-gone" | "owner-inactive" | "suppressed" | null;
+                outcome: string | null;
+            }[];
+        };
         AccountPurgeSummary: {
             dryRun: boolean;
             /** @description Accounts in their 30 days of grace or due */
@@ -31314,6 +33485,8 @@ export interface components {
                 total: string;
                 count: number;
             }[];
+            /** @description MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
         };
         ShareLinkViewRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */

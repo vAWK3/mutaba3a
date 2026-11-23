@@ -207,7 +207,7 @@ test('switching profile from You › Profiles lands on that profile’s home, an
   });
 });
 
-test('a client opens to its summary and matters, then its own receivables, payments and documents', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
+test('a client opens to its ledger card, then its documents and its details with the matters', { tag: '@portal.shell.client-detail' }, async ({ page, step }) => {
   const logo = project(1, C1, 'Logo redesign');
   const site = project(2, C1, 'Website');
   const api = new FakeApi({
@@ -242,32 +242,19 @@ test('a client opens to its summary and matters, then its own receivables, payme
     await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
   });
 
-  await step('The summary shows the last payment, the ILS figures and each matter', async () => {
-    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
-    const strip = page.getByRole('group', { name: 'ILS' });
-    await expect(strip).toContainText('Outstanding');
-    await expect(strip).toContainText('1,200.00');
-    await expect(strip).toContainText('Overdue');
-    const matters = page.getByRole('table', { name: 'Matters' });
-    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
-    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
-  });
-
-  await step('Receivables tab: only this client’s, with no client column', async () => {
-    await page.getByRole('tab', { name: 'Receivables' }).click();
-    await expect(page).toHaveURL(/tab=receivables/);
-    const table = page.getByRole('table', { name: 'Receivables' });
-    await expect(table.getByRole('row')).toHaveCount(2);
-    await expect(table).toContainText('Logo redesign');
-    await expect(table.getByRole('columnheader', { name: 'Client' })).toHaveCount(0);
-    expect(api.last('GET', /^\/v1\/receivables$/)?.query.get('customerId')).toBe(C1);
-  });
-
-  await step('Payments tab: this client’s payments', async () => {
-    await page.getByRole('tab', { name: 'Payments' }).click();
-    const table = page.getByRole('table', { name: 'Payments' });
-    await expect(table).toContainText('PAY-0101');
-    await expect(table).not.toContainText('PAY-0202');
+  await step('The ledger card shows this client’s movements, newest first, with the running balance', async () => {
+    const card = page.getByTestId('ledger-card');
+    await expect(card).toBeVisible();
+    // 1,200 owed against 1,800 paid in the fake: the client is in credit, shown without a minus sign (D15).
+    await expect(page.getByTestId('ledger-closing')).toContainText('Client in credit · ');
+    await expect(page.getByTestId('ledger-closing')).toContainText('600.00');
+    const lines = card.getByTestId('ledger-line');
+    await expect(lines).toHaveCount(2);
+    await expect(lines.first()).toContainText('PAY-0101');
+    await expect(card).not.toContainText('PAY-0202');
+    const asked = api.last('GET', new RegExp(`^/v1/customers/${C1}/statement$`));
+    expect(asked?.query.get('order')).toBe('desc');
+    expect(asked?.query.get('currency')).toBe('ILS');
   });
 
   await step('Documents tab: this client’s documents', async () => {
@@ -275,6 +262,18 @@ test('a client opens to its summary and matters, then its own receivables, payme
     const table = page.getByRole('table', { name: 'Documents' });
     await expect(table).toContainText('invoice-logo.pdf');
     await expect(table).not.toContainText('other.pdf');
+  });
+
+  await step('Details tab: the last payment, the ILS figures and each matter', async () => {
+    await page.getByRole('tab', { name: 'Details' }).click();
+    await expect(page).toHaveURL(/tab=details/);
+    await expect(page.getByText('Last payment: Sep 20, 2026')).toBeVisible();
+    const strip = page.getByRole('group', { name: 'ILS' });
+    await expect(strip).toContainText('Outstanding');
+    await expect(strip).toContainText('1,200.00');
+    const matters = page.getByRole('table', { name: 'Matters' });
+    await expect(matters.getByRole('row', { name: /Logo redesign/ })).toContainText('Overdue');
+    await expect(matters.getByRole('row', { name: /Website/ })).toContainText('Paid in full');
   });
 
   await step('Back to All clients', async () => {
@@ -296,7 +295,8 @@ test('a client’s VAT or company number fills its name and address from the reg
   const card = page.getByRole('region', { name: 'Business details' });
 
   await step('Open Client 1 and choose Add business details', async () => {
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    // MUT-664: business details are on the client's Details tab
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=details`);
     await expect(page.getByRole('heading', { level: 1, name: 'Client 1' })).toBeVisible();
     await card.getByRole('button', { name: 'Add business details' }).click();
   });
@@ -330,7 +330,7 @@ test('a client’s VAT or company number fills its name and address from the reg
   });
 
   await step('In Arabic the card reads بيانات المنشأة, right to left, the number left to right', async () => {
-    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`, 'ar');
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}?tab=details`, 'ar');
     const ar = page.getByRole('region', { name: 'بيانات المنشأة' });
     await expect(ar).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -610,7 +610,7 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await expect(island).not.toHaveAttribute('aria-current', 'page');
   });
 
-  await step('From a profile’s Reports (through the Glance), switching profile lands on the other profile’s Reports', async () => {
+  await step('From a profile’s Reports (through the Glance), switching profile lands on the other profile’s home (MUT-657 E-3)', async () => {
     await page.locator('.hp-reports').click();
     await expect(page).toHaveURL(/\/reports\?back=/);
     await page.getByRole('list', { name: 'Your profiles' }).getByRole('link', { name: /^Nour Studio,/ }).click();
@@ -618,7 +618,7 @@ test('the You island names the profile, opens You › Profiles lit, and a second
     await expect(page.locator('.hp-reports')).toHaveAttribute('aria-current', 'page');
     await openYou(page, 'profiles');
     await page.getByRole('main').getByRole('button', { name: /Nour Accounting/ }).click();
-    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}/reports$`));
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}$`));
   });
 });
 
@@ -741,7 +741,7 @@ test('with reduced transparency the pill and the island are solid, with no blur'
   });
 });
 
-test('the keyboard meets Reports, the four tabs, then the island, each with a visible focus ring', { tag: '@portal.shell.keyboard' }, async ({ page, step }) => {
+test('the keyboard meets Reports, Home and the four tabs, then the island, each with a visible focus ring', { tag: '@portal.shell.keyboard' }, async ({ page, step }) => {
   const api = seeded();
   const focused = () =>
     page.evaluate(() => {
@@ -755,14 +755,14 @@ test('the keyboard meets Reports, the four tabs, then the island, each with a vi
     await expect(page.getByRole('heading', { level: 1, name: 'Paid' })).toBeVisible();
     await page.evaluate(() => (document.activeElement as HTMLElement | null)?.blur());
     const seen = [];
-    for (let i = 0; i < 6; i += 1) {
+    for (let i = 0; i < 7; i += 1) {
       await page.keyboard.press('Tab');
       const now = await focused();
       expect(now.ring, `${now.name} shows a focus ring`).not.toBe('none');
       seen.push(now);
     }
-    expect(seen.map((item) => item.name)).toEqual(['Reports', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Nour Studio']);
-    expect(seen.map((item) => item.current)).toEqual([null, null, 'page', null, null, null]);
+    expect(seen.map((item) => item.name)).toEqual(['Reports', 'Home', 'Owed', 'Paid', 'Spent', 'Clients', 'You · Nour Studio']);
+    expect(seen.map((item) => item.current)).toEqual([null, null, null, 'page', null, null, null]);
   });
 
   await step('Enter on the island opens You, where the island is aria-current', async () => {

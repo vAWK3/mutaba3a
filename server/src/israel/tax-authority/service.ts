@@ -4,18 +4,20 @@ import type { IssuedDocType } from '../../issuing/types.js';
 import type { AllocationOutcome, LedgerStore, TaxAuthorityConnectionRecord } from '../../repositories/ports.js';
 import { aboveAllocationThreshold, ALLOCATION_NUMBER_DIGITS } from '../allocation-number.js';
 import type { ApprovalItem, ApprovalRequest, TaxAuthorityClient, TaxAuthorityTokens } from './client.js';
+import { authLog, type AuthLogSink } from '../../observability/auth-log.js';
 import type { TokenBox } from './token-box.js';
 
 /**
  * MUT-571/572 (ADR-264): a profile's connection and its allocation numbers, over the injected client.
  *
- * - The connect `state` is an HMAC over (profile, person, expiry): the unauthenticated callback trusts nothing else.
+ * - The connect `state` is an HMAC over (profile, person, expiry, and the portal origin the person started from): the
+ *   unauthenticated callback trusts nothing else.
  * - An access token lives about 10 minutes. It is refreshed under the connection's lock, so the single-use refresh
  *   token is sent once even when two issues need a token at the same moment.
  * - The consent lasts 90 days from `consented_on`. After that the connection is expired and the owner connects again.
  */
 const STATE_TTL_MS = 10 * 60_000;
-const CONSENT_DAYS = 90;
+export const CONSENT_DAYS = 90;
 /** Refresh a little before the access token ends, so a request never leaves with one about to lapse. */
 const EXPIRY_MARGIN_MS = 60_000;
 
@@ -27,31 +29,45 @@ export interface TaxAuthorityDeps {
   stateSecret: string;
   /** The registration number of the software (the sandbox's test one until MUT-567). */
   accountingSoftwareNumber: number;
+  /** MUT-710 (ADR-274 D12): token issue, refresh and disconnects go to the 12-month authentication log. Absent = nowhere. */
+  authLog?: AuthLogSink;
 }
 
-export function signState(secret: string, payload: { profileId: string; userId: string; expiresAt: number }): string {
+/** MUT-710 (D12): one auth_event line for a Tax Authority event (never a token). */
+export function logTaxAuthority(deps: Pick<TaxAuthorityDeps, 'authLog'>, kind: 'tax_authority.connected' | 'tax_authority.connect_failed' | 'tax_authority.disconnected' | 'tax_authority.token_refreshed' | 'tax_authority.token_refresh_failed', entry: { userId: string | null; organizationId: string; outcome?: string; requestId?: string | null }): void {
+  if (deps.authLog) authLog(deps.authLog, { kind, ...entry });
+}
+
+/** The signed connect claim. `returnOrigin`: the portal the person pressed Connect on, checked by the route before signing. */
+export interface StateClaim {
+  profileId: string;
+  userId: string;
+  returnOrigin: string | null;
+}
+
+export function signState(secret: string, payload: { profileId: string; userId: string; expiresAt: number; returnOrigin?: string }): string {
   const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
   const mac = createHmac('sha256', `tax-authority-state:${secret}`).update(body).digest('base64url');
   return `${body}.${mac}`;
 }
 
-export function readState(secret: string, state: string, now: Date): { profileId: string; userId: string } | null {
+export function readState(secret: string, state: string, now: Date): StateClaim | null {
   const [body, mac] = state.split('.');
   if (!body || !mac) return null;
   const expected = createHmac('sha256', `tax-authority-state:${secret}`).update(body).digest();
   const given = Buffer.from(mac, 'base64url');
   if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   try {
-    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { profileId?: unknown; userId?: unknown; expiresAt?: unknown };
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8')) as { profileId?: unknown; userId?: unknown; expiresAt?: unknown; returnOrigin?: unknown };
     if (typeof payload.profileId !== 'string' || typeof payload.userId !== 'string' || typeof payload.expiresAt !== 'number' || payload.expiresAt < now.getTime()) return null;
-    return { profileId: payload.profileId, userId: payload.userId };
+    return { profileId: payload.profileId, userId: payload.userId, returnOrigin: typeof payload.returnOrigin === 'string' ? payload.returnOrigin : null };
   } catch {
     return null;
   }
 }
 
-export function newState(secret: string, profileId: string, userId: string, now: Date): string {
-  return signState(secret, { profileId, userId, expiresAt: now.getTime() + STATE_TTL_MS });
+export function newState(secret: string, profileId: string, userId: string, now: Date, returnOrigin: string | null = null): string {
+  return signState(secret, { profileId, userId, expiresAt: now.getTime() + STATE_TTL_MS, ...(returnOrigin ? { returnOrigin } : {}) });
 }
 
 /** The record a fresh consent (or a refresh) stores: tokens sealed, the consent's end kept from the first consent. */
@@ -97,8 +113,10 @@ export async function accessTokenFor(deps: TaxAuthorityDeps, organizationId: str
     try {
       const tokens = await deps.client.refresh(refreshToken);
       const update = connectionFrom(deps, tokens, current, now);
+      logTaxAuthority(deps, 'tax_authority.token_refreshed', { userId: null, organizationId });
       return { update, result: tokens.accessToken };
-    } catch {
+    } catch (err) {
+      logTaxAuthority(deps, 'tax_authority.token_refresh_failed', { userId: null, organizationId, outcome: err instanceof Error ? err.name : 'error' });
       return { update: null, result: null };
     }
   });
@@ -179,7 +197,7 @@ export function allocator(deps: TaxAuthorityDeps, organizationId: string, now: D
     }
     switch (answer.kind) {
       case 'approved':
-        return { kind: 'allocated', number: answer.confirmationNumber.slice(-ALLOCATION_NUMBER_DIGITS) };
+        return { kind: 'allocated', number: answer.confirmationNumber.slice(-ALLOCATION_NUMBER_DIGITS), source: 'API' };
       case 'held':
         return { kind: 'held', message: answer.message };
       case 'refused':
@@ -190,4 +208,19 @@ export function allocator(deps: TaxAuthorityDeps, organizationId: string, now: D
         return { kind: 'unavailable' };
     }
   };
+}
+
+/**
+ * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't. The Tax Authority's own
+ * site until the exact page is confirmed; TAX_AUTHORITY_MANUAL_ALLOCATION_URL overrides it.
+ */
+export const DEFAULT_MANUAL_ALLOCATION_URL = 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page';
+
+/**
+ * MUT-711: the `allocate` hook for a number requested by hand. The document number it was requested for is only what
+ * the preview showed (never reserved, so the numbering has no gaps): the issue goes ahead only if that is still the
+ * number this document takes, under the counter's lock; otherwise nothing is written and the person asks again.
+ */
+export function manualAllocator(allocationNumber: string, forNumber: number): (number: number) => Promise<AllocationOutcome> {
+  return async (number) => (number === forNumber ? { kind: 'allocated', number: allocationNumber, source: 'MANUAL' } : { kind: 'number_moved', requestedFor: forNumber, next: number });
 }

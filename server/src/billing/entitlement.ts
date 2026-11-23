@@ -15,7 +15,7 @@
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
  *
  * MUT-361 enforces it at the door (billing/gate.ts, ADR-181).
- * MUT-702 (ADR-270): tiers rank by plans.ts `RANK` (Firm > Business > Solo = legacy Freelancer); a trial is Business.
+ * MUT-702 (ADR-275): tiers rank by plans.ts `RANK` (Firm > Business > Solo = legacy Freelancer); a trial is Business.
  */
 import { RANK, type ProfilePlanTier } from './plans.js';
 
@@ -26,7 +26,7 @@ import { RANK, type ProfilePlanTier } from './plans.js';
 export type BillingTier = ProfilePlanTier | 'ACCOUNTANT';
 /** The tiers a profile can be entitled by. */
 export type ProfileBillingTier = Exclude<BillingTier, 'ACCOUNTANT'>;
-/** MUT-702 (ADR-270): what a running trial, and the trial's read-only and locked ends, resolve to. */
+/** MUT-702 (ADR-275): what a running trial, and the trial's read-only and locked ends, resolve to. */
 export const TRIAL_TIER: ProfileBillingTier = 'BUSINESS';
 export type EntitlementState = 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED';
 export type EntitlementSource = 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE';

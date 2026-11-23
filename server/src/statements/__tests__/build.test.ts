@@ -14,6 +14,7 @@ const at = (iso: string) => new Date(`${iso}T09:00:00Z`);
 function receivable(o: Partial<ReceivableRecord> & { gross: bigint; postingDate: string }): ReceivableRecord {
   const { gross, ...rest } = o;
   return {
+    notForInvoice: false,
     id: uuid(),
     organizationId: ORG,
     customerId: CUST,
@@ -399,5 +400,34 @@ describe('buildStatement line edges (MUT-483)', () => {
     s.receivables.push(gone);
     expect(buildStatement(s, view(), all).lines).toEqual([]);
     expect(buildStatement(s, view({ projectId: P1 }), all).lines).toEqual([]);
+  });
+});
+
+describe('buildStatement order=desc (MUT-664, D14)', () => {
+  it('is the asc lines reversed, with the same running balances, opening, totals and closing', () => {
+    const s = ledger();
+    const asc = buildStatement(s, view(), all);
+    const desc = buildStatement(s, view(), { ...all, order: 'desc' });
+    expect(desc.lines.map((l) => [l.id, l.runningMinor])).toEqual([...asc.lines].reverse().map((l) => [l.id, l.runningMinor]));
+    expect({ o: desc.openingMinor, t: desc.totals, c: desc.closingMinor }).toEqual({ o: asc.openingMinor, t: asc.totals, c: asc.closingMinor });
+  });
+
+  it('page 1 starts with the latest in-period line, whose running balance is the closing balance', () => {
+    const page = buildStatement(ledger(), view({ from: '2026-02-01' }), { limit: 2, cursor: null, order: 'desc' });
+    expect(page.lines[0]!.date).toBe('2026-09-01');
+    expect(page.lines[0]!.runningMinor).toBe(page.closingMinor);
+  });
+
+  it('pages newest first through every line exactly once with a cursor round trip', () => {
+    const s = ledger();
+    const whole = buildStatement(s, view(), { ...all, order: 'desc' });
+    const seen: string[] = [];
+    let cursor = null;
+    do {
+      const page = buildStatement(s, view(), { limit: 2, cursor, order: 'desc' });
+      seen.push(...page.lines.map((l) => l.id));
+      cursor = page.nextCursor ? decodeStatementCursor(encodeStatementCursor(page.nextCursor)) : null;
+    } while (cursor);
+    expect(seen).toEqual(whole.lines.map((l) => l.id));
   });
 });

@@ -15,10 +15,13 @@ import { isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
 import { isLiveGrant } from '../accountants/grants.js';
 import type {
+  IncomeContextRecord,
   IssueDocumentInput,
   IssueResult,
   IssuedDocumentCounterRecord,
   IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
   IssuerLogoRecord,
@@ -116,6 +119,9 @@ import type {
   MalafatSignInRepository,
   SignInCodeRecord,
   SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorRecord,
+  TwoFactorRepository,
   ExternalIdentityRepository,
   MemberSyncResult,
   OAuthClientRecord,
@@ -228,8 +234,11 @@ import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
+import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
+import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
+import { DOC_TYPE_CODES } from '../issuing/types.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -252,8 +261,11 @@ import { numberGaps } from '../issuing/gaps.js';
  * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
  * 18 (MUT-594): `orgs` gained `memberSyncAt`.
  * 19 (MUT-596): `people` gained `passwordChosen`.
+ * 20 (MUT-535): `people` gained `monthlySummaryMail`.
+ * 21 (MUT-642): `custs` gained `taxId` and `address`.
+ * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 21;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 22;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -336,6 +348,9 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
   private readonly seats = new Map<string, ExternalIdentityRecord>();
   /** MUT-618: emailed sign-in codes, with their digest and use. */
+  private readonly twoFactorRows = new Map<string, TwoFactorRecord>();
+  private readonly twoFactorCodeRows = new Map<string, { id: string; userId: string; codeDigest: string; createdAt: Date; usedAt: Date | null }>();
+  private readonly twoFactorChallengeRows = new Map<string, TwoFactorChallengeRecord>();
   private readonly signInCodeRows = new Map<string, SignInCodeRecord & { codeDigest: string; usedAt: Date | null; cancelledAt: Date | null }>();
   /** MUT-595: Sign in with Malafat round trips, with their digests (state, result, ticket). Outside the snapshot. */
   private readonly malafatFlows = new Map<string, MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }>();
@@ -395,6 +410,9 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
   private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  /** MUT-662: payment request cancellations by documentId, and each profile's next CX number. */
+  private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
+  private readonly cancellationCounters = new Map<string, number>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
@@ -767,6 +785,7 @@ export class MemoryLedgerStore implements LedgerStore {
         passkeyId: input.passkeyId ?? null,
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         stepUpAt: input.passkeyId ? input.at : null,
+        twoFactorAt: input.twoFactorAt ?? null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -988,6 +1007,11 @@ export class MemoryLedgerStore implements LedgerStore {
       return { ...next };
     },
     deleteTaxConnection: async (organizationId) => this.taxConnectionMap.delete(organizationId),
+    taxConnectionsEndingBetween: async (from, to) =>
+      [...this.taxConnectionMap.values()]
+        .filter((r) => r.refreshExpiresAt !== null && r.refreshExpiresAt >= from && r.refreshExpiresAt < to)
+        .sort((a, b) => a.refreshExpiresAt!.getTime() - b.refreshExpiresAt!.getTime())
+        .map((r) => ({ ...r })),
     withTaxConnectionLock: async (organizationId, fn) => {
       // One caller at a time per profile, as the Prisma store's row lock.
       const before = this.taxConnectionLocks.get(organizationId) ?? Promise.resolve();
@@ -1016,7 +1040,7 @@ export class MemoryLedgerStore implements LedgerStore {
         const counter = this.issuedCounterMap.get(`${input.organizationId}:${input.docType}`);
         const outcome = await input.allocate(counter?.next ?? 1);
         if (outcome.kind !== 'allocated') return { kind: 'allocation_failed', outcome };
-        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number };
+        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number, allocationSource: outcome.source };
         delete allocated.allocate;
         return this.issueNow(allocated, at);
       }
@@ -1026,9 +1050,16 @@ export class MemoryLedgerStore implements LedgerStore {
       const d = this.issuedDocMap.get(id);
       return d && d.organizationId === organizationId ? cloneIssued(d) : null;
     },
+    moneyDocumentOn: async (organizationId, paymentId) => {
+      const d = [...this.issuedDocMap.values()]
+        .filter((x) => x.organizationId === organizationId && x.paymentId === paymentId && (x.docType === 'RECEIPT' || x.docType === 'TAX_INVOICE_RECEIPT'))
+        .sort((a, b) => a.issuedAt.getTime() - b.issuedAt.getTime())[0];
+      return d ? { id: d.id, docType: d.docType, number: d.number } : null;
+    },
     list: async (organizationId, filter, page) => {
       const rows = [...this.issuedDocMap.values()]
         .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
+        .filter((d) => (!filter.currency || d.currency === filter.currency) && (!filter.from || d.documentDate >= filter.from) && (!filter.to || d.documentDate <= filter.to))
         .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime() || (a.id < b.id ? 1 : -1))
         .filter((d) => !page.cursor || d.issuedAt < page.cursor.createdAt || (d.issuedAt.getTime() === page.cursor.createdAt.getTime() && d.id < page.cursor.id));
       const items = rows.slice(0, page.limit);
@@ -1067,6 +1098,70 @@ export class MemoryLedgerStore implements LedgerStore {
       if (file && !file.deletedAt) file.deletedAt = at;
       return { ...x };
     },
+    dueInputs: async (organizationId) => {
+      const issuer = this.issuerMap.get(organizationId);
+      const receivables = [...this.recs.values()].filter((r) => r.organizationId === organizationId && !r.deletedAt).map((r) => this.dueReceivable(r));
+      const payments = [...this.pays.values()]
+        .filter((p) => p.organizationId === organizationId && p.status === 'POSTED' && p.origin !== 'ISSUED_DOCUMENT' && !this.paymentDocumented(p))
+        .map((p) => ({
+          id: p.id,
+          number: p.number,
+          customerId: p.customerId,
+          origin: p.origin,
+          status: p.status,
+          currency: p.currency,
+          amountMinor: p.amountMinor,
+          receivedOn: p.receivedOn,
+          notForInvoice: p.notForInvoice,
+          receiptNumber: p.receiptNumber,
+          documented: false,
+          externalInvoice: this.hasLiveExternal(organizationId, 'RECEIVED', p.id),
+          allocations: this.liveAllocations(p.id),
+        }));
+      return { dealerType: issuer?.dealerType ?? null, defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE, preferences: this.preferencesOf(organizationId), receivables, payments };
+    },
+    incomeContext: async (organizationId, paymentIds) => {
+      const payments: IncomeContextRecord['payments'] = new Map();
+      const receivables: IncomeContextRecord['receivables'] = new Map();
+      for (const id of paymentIds) {
+        const p = this.pays.get(id);
+        if (!p || p.organizationId !== organizationId) continue;
+        const allocations = this.liveAllocations(p.id);
+        payments.set(p.id, { documented: this.paymentDocumented(p), externalInvoice: this.hasLiveExternal(organizationId, 'RECEIVED', p.id), allocations });
+        for (const a of allocations) {
+          const r = this.recs.get(a.receivableId);
+          if (r) receivables.set(r.id, { customerId: r.customerId, notForInvoice: r.notForInvoice });
+        }
+      }
+      const issuer = this.issuerMap.get(organizationId);
+      return { defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE, preferences: this.preferencesOf(organizationId), receivables, payments };
+    },
+    setNotForInvoice: async (organizationId, items, value, at) => {
+      const found: Array<ReceivableRecord | PaymentRecord> = [];
+      for (const item of items) {
+        const record = item.kind === 'receivable' ? this.recs.get(item.id) : this.pays.get(item.id);
+        const live = record && record.organizationId === organizationId && (item.kind === 'receivable' ? !(record as ReceivableRecord).deletedAt : (record as PaymentRecord).status === 'POSTED');
+        if (!record || !live) return { kind: 'not_found', item };
+        // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+        if (item.expectedVersion !== undefined && record.version !== item.expectedVersion && record.notForInvoice !== value) return { kind: 'stale', item, version: record.version };
+        if (value && this.hasTaxDocument(organizationId, item.kind, item.id)) return { kind: 'has_tax_document', item };
+        found.push(record);
+      }
+      let changed = 0;
+      for (const record of found) {
+        if (record.notForInvoice === value) continue;
+        record.notForInvoice = value;
+        record.version += 1;
+        if ('updatedAt' in record) record.updatedAt = at;
+        changed += 1;
+      }
+      return {
+        kind: 'done',
+        changed,
+        receivables: found.filter((r): r is ReceivableRecord => 'grossMinor' in r).map((r) => ({ ...r })),
+        payments: found.filter((r): r is PaymentRecord => 'amountMinor' in r).map((r) => ({ ...r })),
+      };
+    },
     getOriginalPdf: async (organizationId, documentId) => {
       const r = this.issuedOriginals.get(documentId);
       return r && r.organizationId === organizationId ? { ...r, bytes: new Uint8Array(r.bytes) } : null;
@@ -1082,11 +1177,117 @@ export class MemoryLedgerStore implements LedgerStore {
       this.issuedOriginals.set(documentId, kept);
       return { ...kept, bytes: new Uint8Array(kept.bytes) };
     },
+    inRange: async (organizationId, from, to) =>
+      [...this.issuedDocMap.values()]
+        .filter((d) => d.organizationId === organizationId && d.documentDate >= from && d.documentDate <= to)
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number)
+        .map(cloneIssued),
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at): Promise<CancelPaymentRequestResult> => {
+      const replay = [...this.issuedCancellations.values()].find((c) => c.organizationId === organizationId && c.requestKey === cancel.requestKey);
+      if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: { ...replay }, created: false } : { kind: 'not_found' };
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return { kind: 'not_found' };
+      if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+      const existing = this.issuedCancellations.get(documentId);
+      if (existing) return { kind: 'already_cancelled', cancellation: { ...existing } };
+      if (blocksCancel(this.referringDocuments(organizationId, documentId))) return { kind: 'has_documents' };
+      const number = this.cancellationCounters.get(organizationId) ?? 1;
+      this.cancellationCounters.set(organizationId, number + 1);
+      const cancellation: IssuedDocumentCancellationRecord = { id: randomUUID(), organizationId, documentId, number, cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey };
+      this.issuedCancellations.set(documentId, cancellation);
+      return { kind: 'cancelled', cancellation: { ...cancellation }, created: true };
+    },
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      for (const id of documentIds) {
+        const d = this.issuedDocMap.get(id);
+        if (!d || d.organizationId !== organizationId || d.docType !== 'PAYMENT_REQUEST') continue;
+        const c = this.issuedCancellations.get(id);
+        out.set(id, paymentRequestFacts(d.grossMinor, this.referringDocuments(organizationId, id), c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
+    },
     gaps: async (organizationId) => {
       const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
       return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
     },
   };
+
+  /** MUT-662: the 320s and 400s that refer to a payment request, each with its credit notes. */
+  private referringDocuments(organizationId: string, requestId: string): ReferringDocument[] {
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    return docs
+      .filter((d) => d.originalId === requestId && referringToRequest(d.docType))
+      .sort((a, b) => a.number - b.number)
+      .map((d) => ({ id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n) }));
+  }
+
+  /** MUT-660: the documents linked to an entry, credit notes aside. */
+  private linkedDocuments(organizationId: string, kind: 'receivable' | 'payment', id: string): IssuedDocumentRecord[] {
+    // MUT-662: a cancelled payment request no longer counts (its Owed goes back to To issue).
+    return [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId && d.docType !== 'CREDIT_NOTE' && !(d.docType === 'PAYMENT_REQUEST' && this.issuedCancellations.has(d.id)) && (kind === 'receivable' ? d.receivableId === id : d.paymentId === id));
+  }
+
+  /** MUT-660: a document is linked to the payment, or to the payment it corrected. */
+  private paymentDocumented(p: PaymentRecord): boolean {
+    if (this.linkedDocuments(p.organizationId, 'payment', p.id).length > 0) return true;
+    return !!p.replacesPaymentId && this.linkedDocuments(p.organizationId, 'payment', p.replacesPaymentId).length > 0;
+  }
+
+  /** MUT-660: a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't count. */
+  private hasTaxDocument(organizationId: string, kind: 'receivable' | 'payment', id: string): boolean {
+    return this.linkedDocuments(organizationId, kind, id).some((d) => {
+      if (d.docType === 'TAX_INVOICE_RECEIPT') return true;
+      if (d.docType !== 'TAX_INVOICE') return false;
+      const credited = [...this.issuedDocMap.values()].filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n);
+      return credited < d.grossMinor;
+    });
+  }
+
+  private hasLiveExternal(organizationId: string, entryKind: 'OWED' | 'RECEIVED', entryId: string): boolean {
+    return [...this.externalInvoiceMap.values()].some((x) => x.organizationId === organizationId && x.entryKind === entryKind && x.entryId === entryId && !x.removedAt);
+  }
+
+  private liveAllocations(paymentId: string): Array<{ receivableId: string; amountMinor: bigint }> {
+    return [...this.allocs.values()].filter((a) => a.paymentId === paymentId && !a.releasedAt).map((a) => ({ receivableId: a.receivableId, amountMinor: a.amountMinor }));
+  }
+
+  private preferencesOf(organizationId: string): Map<string, DocumentsPreference | null> {
+    return new Map([...this.custs.values()].filter((c) => c.organizationId === organizationId).map((c) => [c.id, c.documentsPreference]));
+  }
+
+  private dueReceivable(r: ReceivableRecord): DueReceivableInput {
+    const docs = this.linkedDocuments(r.organizationId, 'receivable', r.id).filter((d) => d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT');
+    return {
+      id: r.id,
+      number: r.number,
+      customerId: r.customerId,
+      origin: r.origin,
+      currency: r.currency,
+      grossMinor: r.grossMinor,
+      paidMinor: r.paidMinor,
+      creditedMinor: r.creditedMinor,
+      postingDate: r.postingDate,
+      notForInvoice: r.notForInvoice,
+      deleted: !!r.deletedAt,
+      documented: docs.length > 0,
+      taxInvoiceId: docs.find((d) => d.docType === 'TAX_INVOICE')?.id ?? null,
+      paymentRequestId: this.linkedDocuments(r.organizationId, 'receivable', r.id).find((d) => d.docType === 'PAYMENT_REQUEST')?.id ?? null,
+      externalInvoice: this.hasLiveExternal(r.organizationId, 'OWED', r.id),
+    };
+  }
+
+  /** MUT-660: what fromEntryMode reads of an entry, or null when it isn't this profile's. */
+  private entryState(organizationId: string, fromEntry: NonNullable<IssueDocumentInput['fromEntry']>): EntryState | null {
+    if (fromEntry.kind === 'receivable') {
+      const r = this.recs.get(fromEntry.id);
+      if (!r || r.organizationId !== organizationId) return null;
+      return { kind: 'receivable', origin: r.origin, deleted: !!r.deletedAt, posted: true, customerId: r.customerId, currency: r.currency, grossMinor: r.grossMinor, creditedMinor: r.creditedMinor, allocatedMinor: 0n, documented: this.linkedDocuments(organizationId, 'receivable', r.id).length > 0 };
+    }
+    const p = this.pays.get(fromEntry.id);
+    if (!p || p.organizationId !== organizationId) return null;
+    return { kind: 'payment', origin: p.origin, deleted: false, posted: p.status === 'POSTED', customerId: p.customerId, currency: p.currency, grossMinor: p.amountMinor, creditedMinor: 0n, allocatedMinor: p.allocatedMinor, documented: this.linkedDocuments(organizationId, 'payment', p.id).length > 0 };
+  }
 
   /** MUT-572: the issue's refusals (a replay included), without writing anything; null when it would issue. */
   private issueRefusal(input: IssueDocumentInput): IssueResult | null {
@@ -1099,6 +1300,28 @@ export class MemoryLedgerStore implements LedgerStore {
     return null;
   }
 
+  /**
+   * MUT-660: a linked document: numbered and written like any other, linked to its entry, posting nothing. The entry's
+   * version moves so a stale edit of it is caught.
+   */
+  private issueLinked(input: IssueDocumentInput, at: Date, entry: EntryState): IssueResult {
+    const refusal = fromEntryRefusal({ ok: true, customerId: entry.customerId, currency: entry.currency, amountMinor: entryAmount(entry) }, input);
+    if (refusal) return refusal;
+    const from = input.fromEntry!;
+    const record = from.kind === 'receivable' ? this.recs.get(from.id)! : this.pays.get(from.id)!;
+    record.version += 1;
+    if ('updatedAt' in record) record.updatedAt = at;
+    const number = this.takeIssuedNumber(input);
+    return { kind: 'issued', document: this.writeIssued(input, at, randomUUID(), number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null }), created: true };
+  }
+
+  private takeIssuedNumber(input: IssueDocumentInput): number {
+    const counterKey = `${input.organizationId}:${input.docType}`;
+    const counter = this.issuedCounterMap.get(counterKey) ?? { organizationId: input.organizationId, docType: input.docType, start: 1, next: 1 };
+    this.issuedCounterMap.set(counterKey, { ...counter, next: counter.next + 1 });
+    return counter.next;
+  }
+
   private issueNow(input: IssueDocumentInput, at: Date): IssueResult {
     const { organizationId } = input;
     const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
@@ -1107,12 +1330,18 @@ export class MemoryLedgerStore implements LedgerStore {
     const lastDate = docs.filter((d) => d.docType === input.docType).reduce<string | null>((max, d) => (max === null || d.documentDate > max ? d.documentDate : max), null);
     if (lastDate !== null && lastDate > input.documentDate) return { kind: 'date_before_last', lastDate };
     if (input.customerId && this.custs.get(input.customerId)?.organizationId !== organizationId) return { kind: 'customer_not_found' };
+    const entry = input.fromEntry ? this.entryState(organizationId, input.fromEntry) : null;
+    const mode = input.fromEntry ? fromEntryMode(entry, input.docType) : null;
+    const linked = mode === 'link';
     const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
     let originalReceivable: ReceivableRecord | null = null;
     if (originalId) {
-      const original = docs.find((d) => d.id === originalId && d.docType === 'TAX_INVOICE');
+      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
+      const original = docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || (input.docType !== 'CREDIT_NOTE' && d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
       const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
       if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
+      // MUT-660: a linked receipt names the invoice its payment already paid; nothing is allocated, so no outstanding check.
+      if (linked) return this.issueLinked(input, at, entry!);
       const outstandingMinor = r.status === 'OPEN' ? outstanding(r) : 0n;
       if (input.composed.grossMinor > outstandingMinor) {
         return input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor };
@@ -1122,21 +1351,12 @@ export class MemoryLedgerStore implements LedgerStore {
     const fromReceivable = input.fromEntry?.kind === 'receivable' ? this.recs.get(input.fromEntry.id) : undefined;
     const fromPayment = input.fromEntry?.kind === 'payment' ? this.pays.get(input.fromEntry.id) : undefined;
     if (input.fromEntry) {
-      const r = fromReceivable?.organizationId === organizationId ? fromReceivable : undefined;
-      const p = fromPayment?.organizationId === organizationId ? fromPayment : undefined;
-      const entry = r
-        ? { ok: r.origin === 'ADJUSTMENT' && !r.deletedAt && r.creditedMinor === 0n, customerId: r.customerId as string | null, currency: r.currency, amountMinor: r.grossMinor }
-        : p
-          ? { ok: p.origin === 'CAPTURE' && p.status === 'POSTED' && p.allocatedMinor === 0n, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor }
-          : { ok: false, customerId: null, currency: '', amountMinor: 0n };
-      const refusal = fromEntryRefusal(entry, input);
+      const refusal = fromEntryRefusal({ ok: mode !== null, customerId: entry?.customerId ?? null, currency: entry?.currency ?? '', amountMinor: entry ? entryAmount(entry) : 0n }, input);
       if (refusal) return refusal;
+      if (linked) return this.issueLinked(input, at, entry!);
     }
     // Every check passed: from here on nothing refuses, so the number is never wasted.
-    const counterKey = `${organizationId}:${input.docType}`;
-    const counter = this.issuedCounterMap.get(counterKey) ?? { organizationId, docType: input.docType, start: 1, next: 1 };
-    const number = counter.next;
-    this.issuedCounterMap.set(counterKey, { ...counter, next: number + 1 });
+    const number = this.takeIssuedNumber(input);
     const plan = ledgerPlan(input, number);
     const id = randomUUID();
     let receivableId: string | null = null;
@@ -1149,7 +1369,8 @@ export class MemoryLedgerStore implements LedgerStore {
       receivableId = fromReceivable.id;
     } else if (plan.receivable) {
       const { title, ...rest } = plan.receivable;
-      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, origin: 'ISSUED_DOCUMENT', originId: id, postedAt: at, createdByUserId: input.createdByUserId }).id;
+      // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, originId: rest.origin === 'ISSUED_DOCUMENT' ? id : null, postedAt: at, createdByUserId: input.createdByUserId }).id;
     }
     if (plan.payment && fromPayment) {
       // I1-a: the captured Received becomes the document's and pays its Owed (320) or the invoice it names (400).
@@ -1185,6 +1406,12 @@ export class MemoryLedgerStore implements LedgerStore {
       settle(originalReceivable);
       creditId = credit.id;
     }
+    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId }), created: true };
+  }
+
+  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'>): IssuedDocumentRecord {
+    const { organizationId } = input;
+    const { receivableId, paymentId, creditId } = links;
     const { composed } = input;
     const document: IssuedDocumentRecord = {
       id,
@@ -1211,6 +1438,7 @@ export class MemoryLedgerStore implements LedgerStore {
       originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : null,
       allocationNumber: input.allocationNumber,
+      allocationSource: input.allocationNumber ? (input.allocationSource ?? 'API') : null,
       receivableId,
       paymentId,
       creditId,
@@ -1231,7 +1459,7 @@ export class MemoryLedgerStore implements LedgerStore {
       })),
     };
     this.issuedDocMap.set(id, cloneIssued(document));
-    return { kind: 'issued', document, created: true };
+    return document;
   }
 
   /** MUT-314 (ADR-248): the same rules as the entries feed and `listReadyByExpenseIds`, counted. */
@@ -1426,6 +1654,146 @@ export class MemoryLedgerStore implements LedgerStore {
       return count;
     },
   };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => cloneTwoFactor(this.twoFactorRows.get(userId)),
+    enable: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor.userId');
+      const existing = this.twoFactorRows.get(input.userId);
+      this.twoFactorRows.set(input.userId, {
+        userId: input.userId,
+        method: input.method,
+        totpSecretSealed: input.totpSecretSealed,
+        lastUsedStep: input.lastUsedStep,
+        failures: 0,
+        failuresSince: null,
+        lockedUntil: null,
+        enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+        updatedAt: input.at,
+      });
+      this.replaceTwoFactorCodes(input.userId, input.recoveryDigests, input.at);
+      const revokedSessions = this.revokeSessionsOf(input.userId, 'two_factor_enabled', input.at, input.keepSessionId ?? undefined);
+      const kept = input.keepSessionId ? this.sessionsById.get(input.keepSessionId) : undefined;
+      if (kept && !kept.revokedAt) kept.twoFactorAt = input.at;
+      this.pushEvents(input.audit, input.at);
+      return { revokedSessions };
+    },
+    disable: async (userId, at, audit) => {
+      if (!this.twoFactorRows.delete(userId)) return false;
+      for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+      for (const [id, row] of this.twoFactorChallengeRows) if (row.userId === userId) this.twoFactorChallengeRows.delete(id);
+      for (const session of this.sessionsById.values()) if (session.userId === userId) session.twoFactorAt = null;
+      this.pushEvents(audit, at);
+      return true;
+    },
+    recordStep: async (userId, step, at) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row || (row.lastUsedStep !== null && row.lastUsedStep >= step)) return false;
+      Object.assign(row, { lastUsedStep: step, updatedAt: at });
+      return true;
+    },
+    reserveTry: async (userId, at, policy) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row) return { allowed: false, lockedUntil: null };
+      if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+      const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+      row.failures = fresh ? 1 : row.failures + 1;
+      row.failuresSince = fresh ? at : row.failuresSince;
+      if (row.failures < policy.lockAfter) return { allowed: true, lockedUntil: null };
+      const lockedUntil = new Date(at.getTime() + policy.lockMs);
+      Object.assign(row, { lockedUntil, failures: 0, failuresSince: null });
+      return { allowed: true, lockedUntil };
+    },
+    clearFailures: async (userId) => {
+      const row = this.twoFactorRows.get(userId);
+      if (row) Object.assign(row, { failures: 0, failuresSince: null, lockedUntil: null });
+    },
+    replaceRecoveryCodes: async (userId, digests, at, audit) => {
+      this.replaceTwoFactorCodes(userId, digests, at);
+      this.pushEvents(audit, at);
+    },
+    useRecoveryCode: async (userId, digest, at) => {
+      const row = [...this.twoFactorCodeRows.values()].find((r) => r.userId === userId && r.codeDigest === digest && r.usedAt === null);
+      if (row) row.usedAt = at;
+      return { used: row !== undefined, left: this.twoFactorCodesLeft(userId) };
+    },
+    recoveryCodesLeft: async (userId) => this.twoFactorCodesLeft(userId),
+    createChallenge: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor_challenges.userId');
+      for (const row of this.twoFactorChallengeRows.values()) if (row.tokenDigest === input.tokenDigest) throw new UniqueViolation('two_factor_challenges.tokenDigest');
+      const row: TwoFactorChallengeRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        purpose: input.purpose,
+        method: input.method,
+        sessionKind: input.sessionKind ?? null,
+        firstStep: input.firstStep ? { ...input.firstStep } : null,
+        passwordChangedAt: input.passwordChangedAt ?? null,
+        linkId: input.linkId ?? null,
+        pendingSecretSealed: input.pendingSecretSealed ?? null,
+        codeDigest: null,
+        codeSentAt: null,
+        codesSent: 0,
+        attempts: 0,
+        createdAt: input.at,
+        expiresAt: input.expiresAt,
+        consumedAt: null,
+      };
+      this.twoFactorChallengeRows.set(row.id, row);
+      return cloneChallenge(row)!;
+    },
+    findChallenge: async (tokenDigest, at) =>
+      cloneChallenge([...this.twoFactorChallengeRows.values()].find((r) => r.tokenDigest === tokenDigest && r.consumedAt === null && r.expiresAt.getTime() > at.getTime())),
+    spendAttempt: async (id, at, maxAttempts) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.attempts >= maxAttempts) return { spent: false, triesLeft: 0 };
+      row.attempts += 1;
+      return { spent: true, triesLeft: maxAttempts - row.attempts };
+    },
+    consumeChallenge: async (id, at) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime()) return false;
+      row.consumedAt = at;
+      return true;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.codesSent >= limits.maxCodes) return false;
+      if (row.codeSentAt && at.getTime() - row.codeSentAt.getTime() < limits.minGapMs) return false;
+      Object.assign(row, { codeDigest, codeSentAt: at, codesSent: row.codesSent + 1 });
+      return true;
+    },
+    pruneChallenges: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.twoFactorChallengeRows) {
+        if (row.expiresAt.getTime() < before.getTime()) {
+          this.twoFactorChallengeRows.delete(id);
+          count += 1;
+        }
+      }
+      return count;
+    },
+    ownsIssuingProfile: async (userId) => {
+      for (const org of this.orgs.values()) {
+        if (!this.issuerMap.has(org.id) && !this.taxConnectionMap.has(org.id)) continue;
+        if (ownsProfile(org, userId, this.members.get(membershipKey(userId, org.id))?.role ?? null)) return true;
+      }
+      return false;
+    },
+  };
+
+  private replaceTwoFactorCodes(userId: string, digests: readonly string[], at: Date): void {
+    for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+    for (const codeDigest of digests) {
+      const id = randomUUID();
+      this.twoFactorCodeRows.set(id, { id, userId, codeDigest, createdAt: at, usedAt: null });
+    }
+  }
+
+  private twoFactorCodesLeft(userId: string): number {
+    return [...this.twoFactorCodeRows.values()].filter((r) => r.userId === userId && r.usedAt === null).length;
+  }
 
   readonly passkeys: PasskeyRepository = {
     listByUser: async (userId) =>
@@ -2322,7 +2690,7 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly customers: CustomerRepository = {
     create: async (input: CreateCustomerInput, at, reference?: ExternalReferenceInput) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('customers.organizationId');
-      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, taxId: input.taxId ?? null, address: input.address ?? null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, taxId: input.taxId ?? null, address: input.address ?? null, documentsPreference: null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
       if (reference) {
         // "atomic": the reference is checked before the customer is stored
         await this.externalReferences.link({ organizationId: input.organizationId, entityType: 'CUSTOMER', entityId: record.id, ...reference }, at);
@@ -2352,6 +2720,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (patch.vatTreatment !== undefined) c.vatTreatment = patch.vatTreatment;
       if (patch.taxId !== undefined) c.taxId = patch.taxId;
       if (patch.address !== undefined) c.address = patch.address;
+      if (patch.documentsPreference !== undefined) c.documentsPreference = patch.documentsPreference;
       c.version += 1;
       c.updatedAt = at;
       return { kind: 'updated', record: { ...c } };
@@ -3073,6 +3442,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const created = this.insertPayment(input, new Date(at.getTime() + 1));
       return { reversed: { ...payment }, ...created };
     },
+    findByClientRequestKey: async (organizationId, clientRequestKey) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.clientRequestKey === clientRequestKey)),
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
       const { payment } = await this.payments.create({ ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
@@ -3144,7 +3514,9 @@ export class MemoryLedgerStore implements LedgerStore {
     const seq = (this.counters.get(counterKey) ?? 0) + 1;
     this.counters.set(counterKey, seq);
     const { allocations: requested, ...rest } = input;
-    const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, version: 1, createdAt: at, updatedAt: at };
+    // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
+    if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
+    const payment: PaymentRecord = { id: randomUUID(), ...rest, clientRequestKey: rest.clientRequestKey ?? null, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
     const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);
     return { payment: { ...payment }, allocations };
@@ -3190,7 +3562,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   private newReceivable(
-    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number'> & {
+    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number' | 'notForInvoice'> & {
       title?: string | null;
       createdByUserId?: string | null;
     },
@@ -3210,6 +3582,7 @@ export class MemoryLedgerStore implements LedgerStore {
       creditedMinor: 0n,
       status: 'OPEN',
       deletedAt: null,
+      notForInvoice: false,
       version: 1,
       createdAt: input.postedAt,
     };
@@ -4696,6 +5069,14 @@ export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendor
 function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
   target.clear();
   for (const [key, value] of source) target.set(key, value);
+}
+
+function cloneTwoFactor(row: TwoFactorRecord | undefined): TwoFactorRecord | null {
+  return row ? { ...row } : null;
+}
+
+function cloneChallenge(row: TwoFactorChallengeRecord | undefined): TwoFactorChallengeRecord | null {
+  return row ? { ...row, firstStep: row.firstStep ? { ...row.firstStep } : null } : null;
 }
 
 function membershipKey(userId: string, organizationId: string): string {

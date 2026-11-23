@@ -394,10 +394,9 @@
         "body": "It may have been archived or belong to another profile."
       },
       "tabs": {
-        "summary": "Summary",
-        "receivables": "Receivables",
-        "payments": "Payments",
-        "documents": "Documents"
+        "ledger": "Ledger card",
+        "documents": "Documents",
+        "details": "Details"
       },
       "lastPayment": "Last payment: {date}",
       "noPayments": "No payments yet",
@@ -433,6 +432,40 @@
         "saveFailed": "The details were not saved. Try again.",
         "useName": "Rename this client to the registered name, “{name}”",
         "changedElsewhere": "This client was changed elsewhere. The latest version is loaded; review it and save again."
+      },
+      "documents": {
+        "label": "Documents",
+        "default": "Profile default ({choice})",
+        "choices": {
+          "TAX_INVOICE_FIRST": "Tax invoice first",
+          "PAYMENT_REQUEST_FIRST": "Payment request first",
+          "ON_PAYMENT": "On payment",
+          "NO_DOCUMENT": "No document"
+        },
+        "help": "Sets which documents are due for this client, and how their past income counts in the books.",
+        "dueTitle": "What's due:",
+        "saved": "Saved",
+        "due": {
+          "TAX_INVOICE_FIRST": "a tax invoice when an amount is owed, then a receipt for each payment.",
+          "PAYMENT_REQUEST_FIRST": "a payment request when an amount is owed, then a tax invoice-receipt for each payment.",
+          "ON_PAYMENT": "a tax invoice-receipt for each payment, partial ones included.",
+          "NO_DOCUMENT": "nothing. Their income stays in All income, the accountant's view and exports, and counts as not for invoice."
+        }
+      },
+      "documentsTab": {
+        "toIssue": "Documents to issue · {count}",
+        "type": "Document type",
+        "allTypes": "All types",
+        "currency": "Currency",
+        "allCurrencies": "All currencies",
+        "status": "Status",
+        "settledOf": "{settled} of {gross} settled",
+        "settlement": {
+          "OPEN": "Open",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid",
+          "CANCELLED": "Cancelled by credit note"
+        }
       }
     },
     "matters": {
@@ -1865,6 +1898,14 @@
           "note": "Your Reports total counts the profiles you own. These aren't yours, so open one for its own Reports.",
           "linkName": "{name}, not in this total"
         }
+      },
+      "invoiceSplit": {
+        "title": "Income and invoices",
+        "invoice": "Invoice income",
+        "invoiceHint": "Has its document, or is due one",
+        "notForInvoice": "Not for invoice",
+        "notForInvoiceHint": "Marked, or a No document client",
+        "all": "All income"
       }
     },
     "passkeys": {
@@ -1968,6 +2009,7 @@
         "exceedsNow": "That’s more than what’s left now ({outstanding})",
         "nothingLeft": "Nothing is left on this entry any more.",
         "alreadyReversed": "This payment was already reversed. Showing the latest.",
+        "hasDocument": "A receipt was issued for this payment, so it can’t be reversed. Issue a credit note first.",
         "changed": "This changed while you were saving. Showing the latest."
       },
       "owedTitle": "Amount owed",
@@ -2797,6 +2839,30 @@
       "linkBroken": "This link no longer works. You can turn it off in You › Account."
     },
     "invoicing": {
+      "uniformFile": {
+        "title": "Uniform file (מבנה אחיד)",
+        "lead": "For the Tax Authority and your auditor: every document you issued between two dates, in format 1.31.",
+        "leadReader": "For the Tax Authority and an audit: every document this profile issued between two dates, in format 1.31.",
+        "rangeLabel": "Which dates",
+        "lastYear": "Last year",
+        "thisYear": "This year",
+        "otherDates": "Other dates",
+        "from": "From",
+        "to": "To",
+        "toBeforeFrom": "“To” comes before “From”.",
+        "download": "Download the file",
+        "preparing": "Preparing…",
+        "done": "Downloaded",
+        "counts": "Documents: {documents} · Records: {records}",
+        "emptyTitle": "No documents in these dates.",
+        "emptyBody": "The file is still valid: it holds only the opening and closing records.",
+        "failed": "Couldn’t prepare the file.",
+        "retry": "Try again",
+        "insideTitle": "What’s in the file?",
+        "insideIni": "the file’s summary and record counts",
+        "insideBkmv": "the documents, their lines and payments",
+        "insideReport": "a summary to print: count and total per document type"
+      },
       "entryRow": "Invoicing",
       "entrySub": "Set up issuing tax invoices and receipts",
       "entryReady": "Ready to issue documents",
@@ -2889,7 +2955,9 @@
         "paymentTermsInvalid": "Enter a number of days from 0 to 365.",
         "bankDetails": "Bank details",
         "footerNote": "Footer note",
-        "offerAfterSave": "After saving income, offer to issue its document"
+        "offerAfterSave": "After saving income, offer to issue its document",
+        "documentsPreference": "Documents for clients with no preference",
+        "documentsPreferenceHint": "Clients with a preference of their own follow it."
       },
       "numbering": {
         "question": "Are you already issuing documents from another system?",
@@ -2905,7 +2973,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "taxAuthority": {
         "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
@@ -2915,7 +2984,10 @@
         "connected": "Connected to the Tax Authority until {until}.",
         "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
         "disconnect": "Disconnect",
-        "returnedFailed": "The connection was not completed. Please try again."
+        "returnedFailed": "The connection was not completed. Please try again.",
+        "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
+        "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
+        "reconnect": "Connect again"
       },
       "ready": {
         "title": "Your letterhead is ready",
@@ -2947,7 +3019,8 @@
         "TAX_INVOICE": "Tax invoice",
         "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
         "RECEIPT": "Receipt",
-        "CREDIT_NOTE": "Credit note"
+        "CREDIT_NOTE": "Credit note",
+        "PAYMENT_REQUEST": "Payment request"
       },
       "client": "Client",
       "clientPlaceholder": "Search by name or number",
@@ -3001,7 +3074,12 @@
         "TOTAL_NOT_POSITIVE": "The document's total must be more than zero.",
         "EXEMPT_DEALER_TAX_INVOICE": "An exempt dealer issues receipts only.",
         "ENTRY_MISMATCH": "The document must keep the entry's client and amount; change the entry first if it was recorded wrong.",
-        "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here."
+        "EXTERNAL_INVOICE_ATTACHED": "This entry already has invoice {number}, issued elsewhere. Remove it to issue a document here.",
+        "ALLOCATION_NUMBER_MOVED": "This invoice's number is now {next}. Request the allocation number again for invoice number {next} and enter it.",
+        "ALLOCATION_NUMBER_REQUIRED": "This invoice needs an allocation number. Request it on the Tax Authority's site and enter it.",
+        "ALLOCATION_NUMBER_INVALID": "An allocation number is 9 digits.",
+        "ALLOCATION_NOT_NEEDED": "This document no longer needs an allocation number. Clear it and issue again.",
+        "TAX_AUTHORITY_NOT_CONNECTED": "This invoice needs an allocation number, and this profile isn't connected to the Tax Authority."
       },
       "backToList": "Issued documents",
       "issuedTitle": "{document} was issued",
@@ -3024,6 +3102,45 @@
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
         "column": "Document"
+      },
+      "colStatus": "Status",
+      "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
+      "paymentRequest": {
+        "issued": "Issued",
+        "status": {
+          "UNPAID": "Unpaid",
+          "PARTLY_PAID": "Partly paid",
+          "PAID": "Paid in full",
+          "CANCELLED": "Cancelled"
+        },
+        "covered": "{covered} of {gross}",
+        "notTax": "A payment request is not a tax document. The invoice-receipts that follow it are.",
+        "linkedTitle": "Documents for its payments",
+        "cancelledLine": "Cancelled {number} on {date}",
+        "cancel": "Cancel payment request…",
+        "cancelTitle": "Cancel {document}?",
+        "cancelBody": "The request is kept and marked cancelled with a number of its own. What the client owes doesn’t change. This can’t be undone.",
+        "reason": "Reason (optional)",
+        "cancelConfirm": "Cancel payment request",
+        "cancelled": "{number} cancelled ({cancellation})",
+        "cancelBlocked": "An invoice-receipt refers to this request. Cancel the invoice-receipt with a credit note first."
+      },
+      "allocation": {
+        "title": "This invoice needs an allocation number",
+        "why": "Its amount before VAT reaches the threshold and the client is VAT-registered. MTB3A can't request the number for this profile, so request it on the Tax Authority's site and enter it here.",
+        "details": "The details the Tax Authority asks for",
+        "invoiceNumber": "Invoice number",
+        "date": "Date",
+        "net": "Amount before VAT",
+        "customerTaxId": "Client's VAT number",
+        "copyOne": "Copy {field}",
+        "copyAll": "Copy all",
+        "open": "Open the Tax Authority's allocation page",
+        "label": "Allocation number (9 digits)",
+        "hint": "Request it for invoice number {number}. The number isn't held: if another document is issued first, you'll be asked to request it again.",
+        "invalid": "An allocation number is 9 digits.",
+        "orChange": "Or",
+        "changeAmount": "change the amount"
       }
     },
     "home": {
@@ -3116,6 +3233,150 @@
       "attachShort": "Attach",
       "showRow": "Invoice {number}, issued elsewhere, for {client}",
       "removeFailed": "The invoice could not be removed. Try again."
+    },
+    "documentsDue": {
+      "title": "To issue",
+      "tab": "To issue",
+      "seeAll": "See all documents to issue",
+      "noClient": "No client",
+      "count": {
+        "one": "{count} document to issue",
+        "other": "{count} documents to issue"
+      },
+      "viewLabel": "Show",
+      "viewToIssue": "To issue",
+      "viewNotForInvoice": "Not for invoice",
+      "olderThan": "Older than",
+      "anyDate": "Any date",
+      "months": {
+        "one": "{count} month",
+        "other": "{count} months"
+      },
+      "selectAll": "Select all shown",
+      "selectGroup": "Select all for {client}",
+      "issueAll": "Issue all",
+      "issue": "Issue",
+      "attach": "Attach",
+      "notForInvoice": "Not for invoice",
+      "back": "Back to invoice",
+      "issueAllConfirm": {
+        "one": "Issue {count} document for {client}? Issuing is final.",
+        "other": "Issue {count} documents for {client}? Issuing is final."
+      },
+      "issueN": {
+        "one": "Issue {count}",
+        "other": "Issue {count}"
+      },
+      "issuedN": {
+        "one": "{count} document issued for {client}.",
+        "other": "{count} documents issued for {client}."
+      },
+      "heldN": {
+        "one": "{count} was held by the Tax Authority: issue it on its own to choose.",
+        "other": "{count} were held by the Tax Authority: issue each on its own to choose."
+      },
+      "refusedN": {
+        "one": "{count} couldn't be issued.",
+        "other": "{count} couldn't be issued."
+      },
+      "issueFailed": "Nothing was issued. Check your connection and try again.",
+      "issuedOne": "{document} issued.",
+      "kinds": {
+        "TAX_INVOICE": "Tax invoice",
+        "TAX_INVOICE_RECEIPT": "Tax invoice-receipt",
+        "RECEIPT": "Receipt",
+        "PAYMENT_REQUEST": "Payment request"
+      },
+      "forOwed": "For Owed {number}",
+      "forReceived": "For payment {number}",
+      "reasons": {
+        "PAYMENT_REQUEST_PENDING": "Payment requests can't be issued here yet. Attach one issued elsewhere, or mark it not for invoice.",
+        "CURRENCY_NOT_ILS": "Documents are issued in shekels only. Attach an invoice issued elsewhere, or mark it not for invoice.",
+        "MIXED_ALLOCATION": "This payment covers entries that need different documents. Attach one issued elsewhere, or mark it not for invoice.",
+        "RECORDED_ELSEWHERE": "Recorded through a connected app. Attach its invoice, or mark it not for invoice."
+      },
+      "selected": {
+        "one": "{count} selected",
+        "other": "{count} selected"
+      },
+      "clear": "Clear",
+      "cancel": "Cancel",
+      "undo": "Undo",
+      "markConfirm": {
+        "one": "Mark {count} entry not for invoice?",
+        "other": "Mark {count} entries not for invoice?"
+      },
+      "markConfirmBody": "They leave To issue and count outside Invoice income. You can bring them back.",
+      "backConfirm": {
+        "one": "Bring {count} entry back to invoice?",
+        "other": "Bring {count} entries back to invoice?"
+      },
+      "backConfirmBody": "They return to To issue if they need a document.",
+      "markN": {
+        "one": "Mark {count}",
+        "other": "Mark {count}"
+      },
+      "backN": {
+        "one": "Bring back {count}",
+        "other": "Bring back {count}"
+      },
+      "toastMarked": {
+        "one": "{count} marked not for invoice",
+        "other": "{count} marked not for invoice"
+      },
+      "toastBack": {
+        "one": "{count} back to invoice",
+        "other": "{count} back to invoice"
+      },
+      "creditNoteFirst": "This entry has a tax invoice. Issue a credit note first, then mark it not for invoice.",
+      "markFailed": "That didn't save. Check your connection and try again.",
+      "emptyTitle": "Nothing to issue.",
+      "emptyBody": "Every income that needs a document has one.",
+      "emptyNfiTitle": "Nothing marked not for invoice.",
+      "emptyNfiBody": "Entries you mark not for invoice show here.",
+      "rowMarked": "Marked not for invoice",
+      "rowBack": "Back to invoice",
+      "markRow": "Mark the entry for {client} not for invoice",
+      "backRow": "Bring the entry for {client} back to invoice"
+    },
+    "ledger": {
+      "title": "Ledger card",
+      "period": "Period",
+      "periods": {
+        "all": "All movements",
+        "month": "This month",
+        "quarter": "Last 3 months",
+        "year": "This year"
+      },
+      "viewOnly": "View only",
+      "closing": "Balance",
+      "opening": "Opening balance",
+      "inCredit": "Client in credit · {amount}",
+      "showEarlier": "Show earlier",
+      "cols": {
+        "date": "Date",
+        "movement": "Movement",
+        "document": "Document",
+        "debit": "Debit",
+        "credit": "Credit",
+        "balance": "Balance"
+      },
+      "kinds": {
+        "CHARGE": "Owed",
+        "CREDIT": "Credit",
+        "PAYMENT": "Payment",
+        "PAYMENT_REVERSAL": "Payment reversed"
+      },
+      "due": {
+        "TAX_INVOICE": "Tax invoice due",
+        "PAYMENT_REQUEST": "Payment request due",
+        "RECEIPT": "Receipt due",
+        "TAX_INVOICE_RECEIPT": "Invoice-receipt due"
+      },
+      "empty": {
+        "title": "No movements yet",
+        "body": "Owed amounts, payments and credits for this client will show here with a running balance."
+      }
     }
   }
 }

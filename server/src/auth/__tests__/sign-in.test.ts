@@ -7,6 +7,9 @@ import { ARGON2_MINIMUMS, createArgon2Hasher } from '../users.js';
 import type { ApiError } from '../../errors.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import type { LedgerStore } from '../../repositories/ports.js';
+import { testTwoFactorFlow } from '../../__tests__/helpers/two-factor.js';
+
+const TEST_TWO_FACTOR = testTwoFactorFlow();
 
 const PEPPER = 'p'.repeat(32);
 const PASSWORD = 'correct horse battery staple';
@@ -42,7 +45,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const throttle = new SignInThrottle();
     const result = await signIn(
       fakeContext(t0),
-      { store, passwordHasher: hasher, throttle, pepper: PEPPER },
+      { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR },
       { email: user.email, password: PASSWORD },
       'device',
       LIFETIME,
@@ -59,7 +62,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const { user, hasher } = await activeUser(store, t0);
     const throttle = new SignInThrottle();
     await expect(
-      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER }, { email: user.email, password: 'nope' }, 'cookie', LIFETIME),
+      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR }, { email: user.email, password: 'nope' }, 'cookie', LIFETIME),
     ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' } satisfies Partial<ApiError>);
     expect((await store.users.findByEmail(user.email))?.failedSignIns).toBe(1);
   });
@@ -69,7 +72,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const hasher = createArgon2Hasher(ARGON2_MINIMUMS);
     const throttle = new SignInThrottle();
     await expect(
-      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER }, { email: 'ghost@firm.ps', password: 'whatever' }, 'cookie', LIFETIME),
+      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR }, { email: 'ghost@firm.ps', password: 'whatever' }, 'cookie', LIFETIME),
     ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' } satisfies Partial<ApiError>);
   });
 
@@ -79,7 +82,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     await store.users.setStatus(user.id, 'DISABLED', t0);
     const throttle = new SignInThrottle();
     await expect(
-      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER }, { email: user.email, password: PASSWORD }, 'cookie', LIFETIME),
+      signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR }, { email: user.email, password: PASSWORD }, 'cookie', LIFETIME),
     ).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' } satisfies Partial<ApiError>);
   });
 
@@ -87,7 +90,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const store = new MemoryLedgerStore();
     const { user, hasher } = await activeUser(store, t0);
     const throttle = new SignInThrottle();
-    const deps = { store, passwordHasher: hasher, throttle, pepper: PEPPER };
+    const deps = { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR };
     for (let i = 0; i < 5; i++) {
       await expect(signIn(fakeContext(t0), deps, { email: user.email, password: 'nope' }, 'cookie', LIFETIME)).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
     }
@@ -98,7 +101,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const store = new MemoryLedgerStore();
     const { user, hasher } = await activeUser(store, t0);
     const throttle = new SignInThrottle();
-    const deps = { store, passwordHasher: hasher, throttle, pepper: PEPPER };
+    const deps = { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR };
     await expect(signIn(fakeContext(t0), deps, { email: user.email, password: 'nope' }, 'cookie', LIFETIME)).rejects.toMatchObject({ code: 'INVALID_CREDENTIALS' });
     await signIn(fakeContext(new Date(t0.getTime() + 1000)), deps, { email: user.email, password: PASSWORD }, 'cookie', LIFETIME);
     const found = await store.users.findByEmail(user.email);
@@ -110,7 +113,7 @@ describe('signIn (MUT-64 shared credential-verification core)', () => {
     const store = new MemoryLedgerStore();
     const { user, hasher, org } = await activeUser(store, t0);
     const throttle = new SignInThrottle();
-    await signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER }, { email: user.email, password: PASSWORD }, 'device', LIFETIME);
+    await signIn(fakeContext(t0), { store, passwordHasher: hasher, throttle, pepper: PEPPER, twoFactor: TEST_TWO_FACTOR }, { email: user.email, password: PASSWORD }, 'device', LIFETIME);
     const events = await store.audit.listByOrganization(org.id, 10);
     const signedIn = events.find((e) => e.action === 'user.signed_in');
     expect(signedIn?.metadata).toMatchObject({ sessionKind: 'device' });

@@ -108,6 +108,8 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issuing/settings',
   'PUT /v1/issuing/starting-numbers/{docType}',
   'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
   'POST /v1/issued-documents/preview',
   'POST /v1/issued-documents',
   'GET /v1/issued-documents',
@@ -116,6 +118,15 @@ const ISSUING_OPERATIONS = [
   'GET /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/{documentId}/pdf',
   'POST /v1/issued-documents/preview/pdf',
+  // MUT-662: cancelling a payment request (owner only).
+  'POST /v1/issued-documents/{documentId}/cancel',
+  // MUT-660: documents due, Issue all and the not-for-invoice marks.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
+  'POST /v1/documents-due/issue',
+  'POST /v1/documents-due/not-for-invoice',
+  'PUT /v1/receivables/{receivableId}/not-for-invoice',
+  'PUT /v1/payments/{paymentId}/not-for-invoice',
 ];
 
 /**
@@ -272,6 +283,8 @@ const SESSION_OPERATIONS = [
   'GET /v1/agreements/{agreementId}',
   'GET /v1/attachments',
   'GET /v1/attachments/{attachmentId}/download',
+  // MUT-664: every client's balance, the client page's ledger figures
+  'GET /v1/customer-balances',
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   // MUT-478: the statement is a read like the customer summary, so the portal (and its local mode) can show it later
@@ -283,6 +296,13 @@ const SESSION_OPERATIONS = [
   // MUT-191: the person's Malafat suggestion preferences (organization-independent, like GET /v1/me)
   'PATCH /v1/me/malafat-suggestions',
   // MUT-237: a person changes their own password (organization-independent, like GET /v1/me)
+  // MUT-710 (ADR-274 D8)
+  'GET /v1/me/two-factor',
+  'POST /v1/me/two-factor/challenge',
+  'POST /v1/me/two-factor/enrolment',
+  'POST /v1/me/two-factor/enrolment/confirm',
+  'POST /v1/me/two-factor/recovery-codes',
+  'DELETE /v1/me/two-factor',
   'POST /v1/me/password',
   // MUT-324: a person accepts the current terms (organization-independent, like GET /v1/me)
   'POST /v1/me/terms-acceptance',
@@ -335,6 +355,8 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   'GET /v1/issuing/tax-authority/callback',
   // MUT-618 (ADR-256): the emailed sign-in code, asked for and used while signed out.
   'POST /v1/sign-in-codes', 'POST /v1/device-sign-in-codes', 'POST /v1/sessions/code', 'POST /v1/device-sessions/code',
+  // MUT-710 (ADR-274): finishing a two-step sign-in, a fresh emailed code, and a setup link's second step: signed out, the challenge or link token in the body.
+  'POST /v1/sessions/two-factor', 'POST /v1/device-sessions/two-factor', 'POST /v1/two-factor/email-code', 'POST /v1/account-setup/two-factor',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
   'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
   // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
@@ -347,9 +369,11 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   'POST /v1/mail-preferences/monthly-summary'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+// MUT-710 (ADR-274 D8): the person's own two-step sign-in, cookie or device.
+const TWO_FACTOR_OPERATIONS = ['GET /v1/me/two-factor', 'POST /v1/me/two-factor/challenge', 'POST /v1/me/two-factor/enrolment', 'POST /v1/me/two-factor/enrolment/confirm', 'POST /v1/me/two-factor/recovery-codes', 'DELETE /v1/me/two-factor'];
+const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 
 interface Operation {
   key: string;
@@ -552,7 +576,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared session mid-loop; routes-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'session') && o.key !== 'DELETE /v1/sessions/current')) {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });
@@ -562,7 +588,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared device session mid-loop; routes-device-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'deviceSession') && o.key !== 'DELETE /v1/device-sessions/current')) {
       const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });

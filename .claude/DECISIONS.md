@@ -4406,7 +4406,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Build stories MUT-359, MUT-366..371 (brief §12).
 ## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
 
-**Status**: Active (spike decision; built by MUT-358, MUT-360…365). *Point 2's tiers amended by ADR-270 (MUT-702, 2026-11-22): Solo, Business and Firm are the plans; Freelancer is legacy.*
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365). *Point 2's tiers amended by ADR-275 (MUT-702, 2026-11-22): Solo, Business and Firm are the plans; Freelancer is legacy.*
 **Date**: 2026-10-20
 **Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
 **Decision** (Basel, 2026-10-20):
@@ -6823,6 +6823,10 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
 - Asking before the transaction with a predicted number: a concurrent issue could take it.
 
+**Amendment (2026-11-22, invoicing follow-ups, API 1.130.0-followups):**
+- **Where the callback lands.** PORTAL_ORIGIN alone doesn't say a portal page exists there (a local API sets it to itself and serves no portal), so the callback used to redirect to an API 404. Now the state also signs the portal the person pressed Connect on: the connect request's Origin, kept only when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server (the Vite dev portal on another port). The callback returns there; with none, to this server's own portal when it serves one (PORTAL_DIST_DIR); with neither (a phone's start, a forged or late state), to its own short page in Arabic and English. A declined consent (`error=access_denied`) lands as `taxAuthority=refused` with its own words.
+- **The re-consent reminder (AC3).** A daily job (`POST /jobs/v1/issuing/tax-authority-reminders`, Terraform `tax_authority_reminders_enabled`, off by default) mails the profile's owner ten days before the consent ends and once when it has ended (for 7 days), each once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`), with no new column: the windows stay inside the log's 30 days. The setup page's Tax Authority step says the same from `until` and offers Connect again.
+
 ## ADR-265: Issued-Document PDFs Leave Signed (PAdES B-T), With a Pluggable Key; Production Refuses Until Its Certificate Is In Place (MUT-641)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-641-signed-pdf.md`). The production certificate is Basel's open decision (accountant's answer to MUT-567 Q3 first), queued in `~/Work/tools/heavy-gate/DECISIONS.md`.
@@ -6915,16 +6919,102 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** the one-time notices (Trial, Passkey, Second way in, Malafat created, Firm on) moved from Owed to home (`LandingNotices`). The To invoice group waits for MUT-648 and a not-for-invoice flag (`TODO(blocked-by …)` in `HomeTodo`); MUT-604's period cards will sit under the Waiting lane. AASA claims neither path.
 
 
+## ADR-270: Documents Due Are Derived per Client; "Not for Invoice" Is a Mark; Issue Linked Where Taking Over Would Rewrite Money (MUT-660)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/mut-660-documents-due.md`, wireframes `mut-660-wireframes.html`, approved by Basel; decisions D1–D4 in Jira 13423, N1–N3 in the brief; canvas D21 and D24 from the MUT-660..665 planning session).
+
+**Decision:**
+1. **A client's documents preference** (`Customer.documentsPreference`: TAX_INVOICE_FIRST, PAYMENT_REQUEST_FIRST, ON_PAYMENT, NO_DOCUMENT; null follows `IssuerDetails.defaultDocumentsPreference`, ON_PAYMENT by default). Money received with no client counts as ON_PAYMENT and is due an invoice-receipt (N1).
+2. **What is due is derived on every read, never stored** (`server/src/issuing/documents-due.ts`). One function feeds the list, Home's count, Issue all and MUT-661's offer. TAX_INVOICE_FIRST: an Owed is due a 305, and a payment on an Owed with no 305 yet is not due (no double invoicing); after the 305 each payment is due a 400 on it. PAYMENT_REQUEST_FIRST and ON_PAYMENT: each payment, partial ones included, is due a 320 for its own amount. An exempt dealer: payments are due a 400 only. Issued documents (`receivableId` / `paymentId`), attached invoices (MUT-647) and a receipt number (MUT-481, a receipt only) settle what is due. All open income counts, with no cutoff (D1).
+3. **Home's count counts every listed item** (N2), including what MTB3A can't issue yet (payment requests until MUT-662, non-₪, split payments mixing invoiced and uninvoiced Owed, API-recorded payments): those rows say why and offer Attach and Not for invoice.
+4. **"Not for invoice" is a mark** on an Owed or a Received (`notForInvoice`, versioned, If-Match on one entry, all or nothing in bulk). No reason. Refused (409 HAS_TAX_DOCUMENT) while a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't block. No hidden mode: marked income stays in All income, the accountant's view and exports.
+5. **Take over or link** (`fromEntryMode`, both stores). A document takes its entry over (I1-a, MUT-648) only for an untouched ADJUSTMENT Owed or an unallocated captured Received. Otherwise it is issued **linked only**: numbered and linked to the entry, nothing posted or changed: an agreement's charge or a credited Owed (taking over would cut the agreement or the credit), an allocated Received (a 320 taking over a 3,400 Owed for a 1,000 payment would rewrite it), and no-client money taking a 320 (no Owed can be posted without a client). This revises the plan's review item C1 during the build.
+6. **The books split** (`server/src/income/invoice-class.ts`): every received payment's money is Invoice income or Not for invoice, so All income = Invoice income + Not for invoice per currency. A document on the money wins; then the payment's mark; then each allocated share follows its Owed (marked, or a NO_DOCUMENT client); the rest follows the payment's client. Cash basis. Only where invoicing is on (`issuing/invoicing-on.ts`); every other profile's answers are unchanged (no key at all). It feeds Reports (`invoiceSplit`), the monthly summary (two lines), the share-link summary and the Excel Income sheet's `invoice_status` column (English codes: due, issued, not_for_invoice, no_document; canvas D24).
+7. **Issue all** is one client per call, at most 25 items, each through the single issue (`issueOne`) with its own derived idempotency key, dated today, one line for its amount with VAT included. Each item answers issued, held (MUT-572: issue it on its own to choose) or refused.
+
+**Consequences:** migration 20261122230000 (additive) and API 1.127.0-mut660. The portal gains Documents › To issue (a third tab), Home's To issue group (replacing MUT-657's TODO), the row mark, the client field, the profile default and the Reports card. This device keeps the fields (snapshot 22) but has no invoicing, so nothing changes there. The phone half runs in its own session (N3). MUT-666 is narrowed to splits of mixed status.
+
+## ADR-271: A Payment Request Is a Non-Tax Document Tied to an Owed, Settled by Referring Documents and Cancelled by Record (MUT-662)
+
+**Date:** 2026-11-23 · **Status:** Accepted (Basel approved the canvas, D16/D18)
+
+**Context.** Businesses whose clients get a payment request first must not report VAT before the money arrives. The approval spec lists חשבון עסקה as code 300.
+
+**Decision.**
+- PAYMENT_REQUEST is an issued document with its own series. It shows VAT (exempt dealers: none) so the invoice-receipts that follow match it, but it is not in `TAX_DOCUMENTS`: never allocated, never in VAT or tax totals.
+- It is always tied to an Owed: linked to an existing one (never taking it over), or posting an ordinary ADJUSTMENT Owed when issued with no entry. Cancelling never changes the Owed.
+- Each payment gets its own 320 (400 for exempt dealers) referring to it by `originalId`; status is derived (UNPAID, PARTLY_PAID, PAID, CANCELLED), nothing stored.
+- It is cancelled by an insert-only cancellation record (CX series), refused while a live 320/400 refers to it (D18). A credit note never targets it.
+- Shown as PR-0007 / CX-0002 in every language; the stored number and the uniform file use the plain int.
+
+**Consequences.** One live request per Owed (a cancelled one doesn't count). Old phone builds skip the unknown type. The uniform-file mapping (record 300) is wired by whichever of MUT-569 / MUT-662 merges second.
+
+## ADR-272: The Uniform File Is the Issued Documents Only, Written in ISO-8859-8 With Arabic in Hebrew Letters (MUT-569)
+
+**Status:** Accepted (2026-11-22; Basel approved the plan D1–D7 and the wireframe).
+
+**Context:** The Instruction 36 registration (MUT-567) declares the uniform-file module, version 1.31, and attaches the Tax Authority simulator's result. The spec (10.05.2009) separates the bookkeeping module (B100/B110, trial balance) from the document module (C100/D110/D120, documents report), and the file's character set (ISO-8859-8 or CP-862) holds no Arabic.
+
+**Decision:**
+1. **Documents only (D1).**
+   - The file holds what MTB3A issued: C100 per document, D110 per line of a 305/320/330, and D120 for the payment of a 320/400 (a 400 has no D110, D4). A000 1013 = 0 ("not relevant").
+   - No B100/B110/M100: MTB3A keeps no journal or chart of accounts.
+   - Documents issued elsewhere (ADR-267) and plain Owed/Received entries are never in it.
+   - The accountant's answer (MUT-567 Q2) may add a single-entry B100/B110 follow-up; nothing here changes then.
+2. **ISO-8859-8, logical order, one byte per character (A000 1029 = 1).**
+   - Every text field goes through `toFileText`: Hebrew points and direction marks are dropped, typographic punctuation becomes ASCII, Arabic letters are written in Hebrew letters with final forms (D2), Arabic-Indic digits become ASCII, and anything else is `?`.
+   - `encodeLine` refuses any other character, so a field that skipped `toFileText` fails loudly.
+   - The PDF keeps the original script.
+3. **Amounts in agorot and positive, with the type carrying the meaning** (a 330 is positive). Discounts are negative (spec §2.4 יב). D110 1265 is the unit price before VAT, and 1266 is the discount that makes quantity × price − discount equal the line net to the agora, so lines add up to C100 1219.
+4. **INI summary lines** only for the document record types present (the spec's §2.5 table). A100 and Z900 are counted in A000 1002, which equals Z900 1155.
+5. **Times are Israel time** (1206, 1026/1027, the folder). The range is document dates (1230), multi-year software (1011 = 2), and one random 15-digit primary id per export.
+6. **Built on request, never stored.** A 10k-document history is a few MB in memory (TD-323 for streaming).
+7. **Same gate as the issuing reads.** An accountant may export; only a member's export is audited (an accountant runs under the read-only store).
+
+## ADR-273: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
+
+**Status:** Accepted (2026-11-22; wireframe A "Number first, then issue", chosen by Basel; canvas https://claude.ai/artifact/Ev11vFMKsFAuXVXVp2nx4e).
+
+**Context:** MTB3A requests allocation numbers itself only where the Tax Authority is on (`TAX_AUTHORITY_ENV`) and the profile is connected (ADR-264). Until the software is registered (MUT-567/638) that is nowhere in production, and until now a server with the Tax Authority off issued such an invoice with no number at all.
+
+**Decision:**
+1. **The preview says what the review step needs.** `POST /v1/issued-documents/preview` answers `allocation`: null when the document needs no number (`needsAllocation`), else `{ mode, nextNumber, documentDate, net, customerTaxId, requestUrl }`. `mode` is AUTOMATIC when the Tax Authority is on here and the profile is connected, else MANUAL.
+2. **The number is entered before issuing.** `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`. The number is normalized like an expense's (`normalizeAllocationNumber`, 422 ALLOCATION_NUMBER_INVALID). A document that needs none refuses it (422 ALLOCATION_NOT_NEEDED). Without one, a document that needs a number is refused: 409 ALLOCATION_NUMBER_REQUIRED (`details.next`) when the Tax Authority is off here, 409 TAX_AUTHORITY_NOT_CONNECTED as before when it is on.
+3. **The invoice number is a preview, never a reservation.** The manual number runs through the same `allocate` hook as the API's, inside the issue with the counter locked: if the number this document takes is not `forNumber`, nothing is written and the answer is 409 ALLOCATION_NUMBER_MOVED (`details.requestedFor`, `details.next`). Walking away consumes nothing, so the numbering has no gaps, and a number requested for another invoice number is never printed.
+4. **The source is kept.** `issued_documents.allocationSource` is API or MANUAL (null with no number; a CHECK keeps a source from standing without a number). Issued documents are immutable (MUT-568), so rows issued before the column are not backfilled: a number with no source reads as API, the only source there was. The API answers it as `allocationSource`. The PDF prints a manual number exactly like an API one.
+5. **The link is configuration.** `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https), default the Tax Authority's site (`DEFAULT_MANUAL_ALLOCATION_URL`) until the exact page is confirmed.
+6. **Clients.** The portal drawer and the phone's issue sheet show the panel for MANUAL: the four details with Copy and Copy all, the link, a 9-digit input and "change the amount". Issue stays disabled until the number is well formed. On ALLOCATION_NUMBER_MOVED the entered number is cleared and the preview read again.
+
+**Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.133.0-mut711.
+
+## ADR-274: Two-Step Sign-In (Authenticator App or Emailed Code) and a 12-Month Authentication Log (MUT-710)
+
+**Date**: 2026-11-22 · **Status**: Accepted (Basel: build first, then sign the SHAAM security appendix; wireframes approved 2026-11-22) · **Number**: reserved above in-flight ADR-269…271; renumber at merge if needed.
+
+**Context.** The SHAAM security appendix (22-07-2025) §17 requires a second factor, §19 authentication logs kept encrypted for 12 months. The full design (D1–D14) is `.claude/designs/mut-710-two-factor.md`.
+
+**Decision.**
+1. The second factor is an authenticator app (TOTP, RFC 6238) or an emailed 6-digit code, the person's choice; no SMS; passkeys stay a first step and are not relied on as a second.
+2. One way to mint a session: `beginOrIssue` after any first step (password, passkey, emailed sign-in code, Malafat) creates a challenge when the person has two-step on; `finishTwoFactor` issues the session (twoFactorAt). `issueSession` is private.
+3. Every person setup link (any purpose) asks for the second step when it is on (review 4). The challenge is bound to the link and consumed before the redeem's transaction; a redeem that then loses its race leaves it spent (stricter, see TD-326).
+4. Counting is atomic (review 2): a try is reserved on the person under their `two_factor` row lock before the code is read; 5 in 15 minutes lock the second step 15 minutes (429). Challenges: 10 minutes, 5 tries, single use; TOTP steps and recovery codes are claimed by conditional updates.
+5. Issuing and the Tax Authority need two-step on and a session that passed it (`requireTwoFactor`, before idempotency so a refusal is never replayed); disconnecting always works; turning it off is refused while the person owns an issuing profile. The gate (and that refusal, and Me's `requiredForIssuing`) is enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false): it ships dark so nobody already issuing is locked out before the screens that turn it on are live; the second step at sign-in is always on for people who turned it on.
+6. With the email method an emailed sign-in code is refused as a first step (`TWO_FACTOR_USE_PASSWORD`), and a reset rests on the mailbox alone (link and code both mailed); the enrolment screen recommends the app. Linking a Malafat identity to an account with two-step on is refused for now (TD-324).
+7. TOTP secrets are sealed with AES-256-GCM under `TWO_FACTOR_SEAL_KEY` (own key on production and staging); recovery codes are keyed digests from the same secret, so rotating the session pepper doesn't void them.
+8. Authentication events are `auth_event` stdout lines (never a code, token, password or unknown address) copied by a pinned sink into a Cloud Logging bucket kept 365 days (Google-managed AES-256 at rest); locking the bucket is an operator step after a month.
+
+**Consequences.** Old phone builds show the server's message for a two-step sign-in until the phone half ships (then the minimum build rises). Support load from lost factors is covered by recovery codes and the audited operator reset (`two-factor-reset`, plus `rotate --lock` for a suspected takeover).
+
 ---
 
-## ADR-270: Three Plans: Solo, Business, Firm as Provider-Neutral Tiers (MUT-702 Part A)
+## ADR-275: Three Plans: Solo, Business, Firm as Provider-Neutral Tiers (MUT-702 Part A)
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/mut-702-three-plans-plan.md`, section "Split after MUT-700 and the eng review", Part A). Amends ADR-160 point 2's tier list (Freelancer and Firm) and ADR-162's "Firm includes Freelancer" ranking.
 
 **Context:** Epic MUT-701 (Basel, 2026-11-22) sells three plans: Solo, Business and Firm. Who sells them, and through which payment provider, is open until MUT-700's decision 1 (Narabnd Studio Ltd owns Mutaba3a; MUT-701 comment 13467: no new Stripe or "Barmajiyat sells" assumptions, and plan logic stays apart from the provider). So the plans are built in two parts: Part A, provider-neutral, now; Part B (per-plan prices, Checkout per plan, plan change, the catalog script, the mirror's product tags, offers and retention per plan) held for MUT-700.
 
 **Decision:**
-1. **Tiers.** Prisma `enum BillingTier` gains `SOLO` and `BUSINESS` (migration `20261123100000_mut702_plan_tiers`, `ADD VALUE` only, like MUT-565's). `FREELANCER` stays as the legacy plan of the ₪29 payers and the ₪21 founders: never sold again, still mirrored, granted and covering exactly as before, until MUT-707 moves them. `ACCOUNTANT` (ADR-251) is unchanged and is never a profile's plan.
+1. **Tiers.** Prisma `enum BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, `ADD VALUE` only, like MUT-565's). `FREELANCER` stays as the legacy plan of the ₪29 payers and the ₪21 founders: never sold again, still mirrored, granted and covering exactly as before, until MUT-707 moves them. `ACCOUNTANT` (ADR-251) is unchanged and is never a profile's plan.
 2. **One source.** `server/src/billing/plans.ts` (pure) holds the plan names (`solo | business | firm`, legacy `freelancer`), `TIER_OF` / `planOfTier`, `RANK` (Solo = Freelancer 1 < Business 2 < Firm 3), `changeTimingOf` (a higher rank takes effect now; the same or a lower rank waits for the period end; the same plan is `same`), `nextPlanAbove`, `PLAN_LIMITS` and `currentPlanOf`. It names no provider, price or lookup key. `entitlement.ts` ranks grants and subscriptions by `RANK` (ACCOUNTANT ranks 0 and is filtered out before ranking anyway).
 3. **A trial is Business.** A running trial, and the trial's READ_ONLY and LOCKED ends, resolve to tier `BUSINESS` (was `FREELANCER`). Nothing reads the entitlement tier today (checked in the server and the portal), so this changes no behaviour until MUT-704 enforces limits.
 4. **Plan limits, defined here and enforced by MUT-704.** Businesses exclude the personal profile.
@@ -6938,7 +7028,7 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
    Legacy Freelancer has no row: MUT-704 decides whether it keeps today's limits until MUT-707 moves it (the plan suggests 6 businesses and 3 owners). Every pre-billing user holds a no-expiry FREELANCER grant (`mut358_billing_core`), so this matters.
 5. **Operator grants.** `POST /admin/v1/billing/grants`, `POST /v1/operator/accounts/{id}/billing-grants` and `users billing-grant` accept SOLO and BUSINESS, so the plans can be given and tested with no payment provider. The operator console lists Solo, Business, Firm, then "Freelancer (legacy)", with Solo chosen first.
 6. **`GET /v1/billing` gains `currentPlan`** (`solo | business | firm | freelancer | null`): the highest-ranked tier that covers (ACTIVE or GRACE) any profile the person created, from a grant, a subscription or the running trial; on a tie of rank the plan on sale beats legacy Freelancer. Null when nothing covers them (lapsed, read-only, locked, or only Malafat, which has no tier). `catalog` and every other field are unchanged.
-7. **Schemas.** `BillingTierSchema` gains SOLO and BUSINESS; one inline `ProfilePlanTierSchema` (FREELANCER, SOLO, BUSINESS, FIRM) replaces the `FREELANCER | FIRM` enums on `/v1/me`'s `billing.tier`, `BillingEntitlement.tier` and `BillingOverview.subscription.tier`; the operator status list's subscription tier is `BillingTier`. Additive only. API 1.127.0-mut702.
+7. **Schemas.** `BillingTierSchema` gains SOLO and BUSINESS; one inline `ProfilePlanTierSchema` (FREELANCER, SOLO, BUSINESS, FIRM) replaces the `FREELANCER | FIRM` enums on `/v1/me`'s `billing.tier`, `BillingEntitlement.tier` and `BillingOverview.subscription.tier`; the operator status list's subscription tier is `BillingTier`. Additive only. API 1.136.0-mut702.
 
 **Consequences:**
 - Per-plan prices, Checkout for a chosen plan, changing plan, the catalog script, the mirror's `solo`/`business` product tags, and offers and retention per plan are held for MUT-700 (the seller). A Stripe product tagged `solo` or `business` today is still UNKNOWN_TIER in the mirror (on purpose).

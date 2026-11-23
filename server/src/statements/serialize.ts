@@ -2,11 +2,13 @@ import { formatMoney, type Currency } from '../money.js';
 import type { IsoDate } from '../dates.js';
 import type { CreditReasonCode } from '../payments/credit.js';
 import { encodeStatementCursor, type StatementLine, type StatementPage, type StatementView } from './build.js';
+import { NO_TAGS, type StatementLineTags } from './tags.js';
 import type { PeriodTotals } from './period.js';
 
 /** MUT-478: the wire shape of a statement page (`CustomerStatementSchema`); every amount gross, in the statement's currency. */
-export function serializeStatement(input: { customerId: string; currency: Currency; view: StatementView; page: StatementPage }) {
+export function serializeStatement(input: { customerId: string; currency: Currency; view: StatementView; page: StatementPage; tags?: ReadonlyMap<string, StatementLineTags> | undefined }) {
   const { customerId, currency, view, page } = input;
+  const tagsOf = (line: StatementLine) => input.tags?.get(line.id) ?? NO_TAGS;
   const money = (minor: bigint) => formatMoney({ minor, currency });
   return {
     customerId,
@@ -18,13 +20,13 @@ export function serializeStatement(input: { customerId: string; currency: Curren
     openingBalance: money(page.openingMinor),
     totals: { debit: money(page.totals.debitMinor), credit: money(page.totals.creditMinor) },
     closingBalance: money(page.closingMinor),
-    lines: page.lines.map((line) => serializeLine(line, money)),
+    lines: page.lines.map((line) => serializeLine(line, money, tagsOf(line))),
     nextCursor: page.nextCursor ? encodeStatementCursor(page.nextCursor) : null,
   };
 }
 
-function serializeLine(line: StatementLine, money: (minor: bigint) => string) {
-  const base = { id: line.id, date: line.date, number: line.number, projectId: line.projectId, debit: money(line.debitMinor), credit: money(line.creditMinor), runningBalance: money(line.runningMinor) };
+function serializeLine(line: StatementLine, money: (minor: bigint) => string, tags: StatementLineTags) {
+  const base = { id: line.id, date: line.date, number: line.number, projectId: line.projectId, debit: money(line.debitMinor), credit: money(line.creditMinor), runningBalance: money(line.runningMinor), documents: tags.documents, due: tags.due };
   switch (line.kind) {
     case 'CHARGE': {
       const r = line.receivable!;

@@ -1,4 +1,4 @@
--- MUT-702 Part A (ADR-270): the Solo and Business plans join Freelancer (legacy), Firm and Accountant. Additive: no row
+-- MUT-702 Part A (ADR-275): the Solo and Business plans join Freelancer (legacy), Firm and Accountant. Additive: no row
 -- changes. Nothing uses the new values in this migration (Postgres refuses a new enum value inside the transaction that
 -- adds it), so there is no follow-up.
 --

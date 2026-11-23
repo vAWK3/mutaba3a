@@ -58,7 +58,7 @@ export interface UsersCliDeps {
   err: (line: string) => void;
 }
 
-const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'billing-card-failed-mail', 'billing-comeback-mail', 'billing-monthly-summary-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
+const COMMANDS = ['create', 'grant', 'revoke', 'rotate', 'disable', 'enable', 'revoke-sessions', 'two-factor-reset', 'terms', 'firm-requests', 'firm-enable', 'firm-disable', 'firm-decline', 'billing-grant', 'billing-revoke', 'billing-grants', 'billing-link', 'billing-unlinked', 'billing-reconcile', 'billing-status', 'billing-uncovered', 'billing-trial-mail', 'billing-renewal-mail', 'billing-card-failed-mail', 'billing-comeback-mail', 'billing-monthly-summary-mail', 'signup-reviews', 'accounts-purge', 'feature-grant', 'feature-revoke', 'feature-list', 'operator-grant', 'operator-revoke'] as const;
 type Command = (typeof COMMANDS)[number];
 
 const USAGE = [
@@ -75,6 +75,7 @@ const USAGE = [
   '  disable --email <email>',
   '  enable  --email <email>',
   '  revoke-sessions --email <email>',
+  '  two-factor-reset --email <email>   (MUT-710: after checking who they are; turns two-step sign-in off, signs them out, mails a notice)',
   '  terms   lists every user with the terms version they last accepted and the client release that showed it, flagging who is behind the current terms',
   '  firm-requests   (pending requests for firm features, oldest first)',
   '  firm-enable  --organization-id <uuid> [--owner <email>[,<email>]]',
@@ -595,6 +596,11 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
     const user = await client.userByEmail(need('email'));
     const { revoked } = await client.call<{ revoked: number }>('POST', `/admin/v1/users/${user.id}/sessions/revoke`);
     out(`${user.email}: ${revoked} ${revoked === 1 ? 'session' : 'sessions'} revoked`);
+  },
+  'two-factor-reset': async ({ client, need, out }) => {
+    const user = await client.userByEmail(need('email'));
+    const { revoked } = await client.call<{ revoked: number }>('DELETE', `/admin/v1/users/${user.id}/two-factor`);
+    out(`${user.email}: two-step sign-in reset; ${revoked} ${revoked === 1 ? 'session' : 'sessions'} signed out`);
   },
   ...FIRM_HANDLERS,
   ...BILLING_HANDLERS,

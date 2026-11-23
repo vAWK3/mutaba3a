@@ -407,7 +407,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
     expect(api.count('POST /v1/operator/step-up/options')).toBe(0);
   });
 
-  // MUT-702 (ADR-270): the three plans on sale first, then legacy Freelancer; Solo is the default.
+  // MUT-702 (ADR-275): the three plans on sale first, then legacy Freelancer; Solo is the default.
   it('offers Solo, Business, Firm and Freelancer (legacy), in that order; granting Business sends BUSINESS and lists it', async () => {
     const { user, api } = portal({ path: `/operator/accounts/${SARA}?grant=new` });
     const drawer = within(await screen.findByRole('dialog', { name: 'Grant coverage' }));

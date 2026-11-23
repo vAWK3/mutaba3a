@@ -463,6 +463,61 @@ const signInCode: Copy<'sign-in-code'> = {
   }),
 };
 
+/** MUT-710 (ADR-274 D5): the second step's code, in the subject too for one-time-code detection. Never a link. */
+const twoFactorCode: Copy<'two-factor-code'> = {
+  en: ({ code, validMinutes }) => ({
+    subject: `${code} is your MTB3A two-step code`,
+    preheader: `It works once, for ${enMinutes(validMinutes)}.`,
+    headline: 'Your two-step code',
+    intro: [[`Your password was just entered. Enter this code to finish signing in to MTB3A. It works once and expires in ${enMinutes(validMinutes)}.`]],
+    code,
+    outro: [["If you didn't just sign in, someone may know your password: change it right away."], ['Never share this code. MTB3A will never ask you for it.']],
+  }),
+  ar: ({ code, validMinutes }) => ({
+    subject: `رمز التحقق بخطوتين في متابعة: ${code}`,
+    preheader: `يعمل مرة واحدة، لمدة ${arMinutes(validMinutes)}.`,
+    headline: 'رمز التحقق بخطوتين',
+    intro: [[`أُدخلت كلمة مرورك للتو. أدخل هذا الرمز لإكمال تسجيل الدخول إلى متابعة. يعمل مرة واحدة وتنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
+    code,
+    outro: [['إذا لم تسجّل الدخول للتو، فقد يعرف أحدٌ كلمة مرورك: غيّرها فورًا.'], ['لا تشارك هذا الرمز مع أحد. لن تطلبه منك متابعة أبدًا.']],
+  }),
+};
+
+const TWO_FACTOR_EN = {
+  enabled: { subject: 'Two-step sign-in is on for your MTB3A account', headline: 'Two-step sign-in is on', body: 'Two-step sign-in was just turned on for your MTB3A account, and your other devices were signed out.' },
+  switched: { subject: 'Your MTB3A two-step sign-in method changed', headline: 'Your two-step method changed', body: 'The second step for your MTB3A account was just changed, and your other devices were signed out.' },
+  disabled: { subject: 'Two-step sign-in is off for your MTB3A account', headline: 'Two-step sign-in is off', body: 'Two-step sign-in was just turned off for your MTB3A account. Signing in now needs only your password or passkey.' },
+  recovery_codes: { subject: 'New MTB3A recovery codes were made', headline: 'New recovery codes', body: 'New recovery codes were just made for your MTB3A account. The old ones no longer work.' },
+  reset: { subject: 'Two-step sign-in was reset on your MTB3A account', headline: 'Two-step sign-in was reset', body: 'At your request, our support team turned off two-step sign-in for your MTB3A account and signed out every device.' },
+} as const;
+const TWO_FACTOR_AR = {
+  enabled: { subject: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين مفعّل', body: 'تم للتو تفعيل التحقق بخطوتين لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
+  switched: { subject: 'تغيّرت طريقة التحقق بخطوتين في متابعة', headline: 'تغيّرت طريقة الخطوة الثانية', body: 'تم للتو تغيير الخطوة الثانية لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
+  disabled: { subject: 'تم إيقاف التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين متوقف', body: 'تم للتو إيقاف التحقق بخطوتين لحسابك في متابعة. يكفي الآن لتسجيل الدخول كلمة المرور أو مفتاح المرور.' },
+  recovery_codes: { subject: 'أُنشئت رموز استرداد جديدة في متابعة', headline: 'رموز استرداد جديدة', body: 'أُنشئت للتو رموز استرداد جديدة لحسابك في متابعة. الرموز القديمة لم تعد تعمل.' },
+  reset: { subject: 'أُعيد ضبط التحقق بخطوتين لحسابك في متابعة', headline: 'أُعيد ضبط التحقق بخطوتين', body: 'بناءً على طلبك، أوقف فريق الدعم التحقق بخطوتين لحسابك في متابعة وسجّل خروج كل الأجهزة.' },
+} as const;
+
+/** MUT-710 (D8, D9): two-step sign-in changed on the account. */
+const twoFactorChanged: Copy<'two-factor-changed'> = {
+  en: ({ change, method, signInLink }) => ({
+    subject: TWO_FACTOR_EN[change].subject,
+    preheader: "If this was you, there's nothing to do.",
+    headline: TWO_FACTOR_EN[change].headline,
+    intro: [[TWO_FACTOR_EN[change].body], [`Method: ${method === 'totp' ? 'authenticator app' : 'code by email'}.`], ['If this was you, there is nothing else to do.']],
+    action: { label: 'Sign in', href: signInLink },
+    outro: [["If this wasn't you, set a new password from the sign-in page right away, then reply to this email so we can help."]],
+  }),
+  ar: ({ change, method, signInLink }) => ({
+    subject: TWO_FACTOR_AR[change].subject,
+    preheader: 'إن كنت أنت، فلا حاجة لأي إجراء.',
+    headline: TWO_FACTOR_AR[change].headline,
+    intro: [[TWO_FACTOR_AR[change].body], [`الطريقة: ${method === 'totp' ? 'تطبيق المصادقة' : 'رمز بالبريد الإلكتروني'}.`], ['إذا كنت أنت من قام بذلك، فلا حاجة لأي إجراء آخر.']],
+    action: { label: 'تسجيل الدخول', href: signInLink },
+    outro: [['إذا لم تكن أنت، عيّن كلمة مرور جديدة من صفحة تسجيل الدخول فورًا، ثم ردّ على هذه الرسالة لنساعدك.']],
+  }),
+};
+
 const passkeyAdded: Copy<'passkey-added'> = {
   en: ({ passkeyName, signInLink }) => ({
     subject: 'A passkey was added to your MTB3A account',
@@ -696,6 +751,13 @@ const monthlySummary: Copy<'monthly-summary'> = {
       title: p.name,
       rows: [
         { label: `Came in during ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'Nothing recorded' },
+        // MUT-660: invoicing profiles only.
+        ...(p.invoiceSplit
+          ? [
+              { label: 'Invoice income', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'None' },
+              { label: 'Not for invoice', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'None' },
+            ]
+          : []),
         { label: 'Still owed', value: p.owed.length > 0 ? amounts(p.owed) : 'Nothing owed' },
         { label: 'Overdue', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${enEntries(p.overdueCount)})` : 'Nothing overdue' },
       ],
@@ -720,6 +782,12 @@ const monthlySummary: Copy<'monthly-summary'> = {
       title: p.name,
       rows: [
         { label: `المستلَم في ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'لا شيء مسجّل' },
+        ...(p.invoiceSplit
+          ? [
+              { label: 'دخل مفوتر', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'لا شيء' },
+              { label: 'خارج الفوترة', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'لا شيء' },
+            ]
+          : []),
         { label: 'المستحق', value: p.owed.length > 0 ? amounts(p.owed) : 'لا شيء مستحق' },
         { label: 'المتأخر', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${arEntries(p.overdueCount)})` : 'لا شيء متأخر' },
       ],
@@ -736,6 +804,61 @@ const monthlySummary: Copy<'monthly-summary'> = {
       optOut: { text: 'لا تريد هذه الرسالة الشهرية؟', label: 'أوقفها.', href: offLink, after: 'ويمكنك إعادتها من أنت › الحساب.' },
     };
   },
+};
+
+/**
+ * MUT-571 AC3: the Tax Authority asks the business owner to approve the connection again every 90 days. Ten days
+ * before it ends, then once it has ended. Formal Arabic (MSA). The day count only: no date (ADR-159 §5).
+ */
+const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
+  en: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `Your MTB3A connection to the Tax Authority ends within ${enDays(daysLeft)}`,
+          preheader: 'Connect again so invoices keep receiving allocation numbers.',
+          headline: 'Approve the Tax Authority connection again',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority ends within ${enDays(daysLeft)}.`],
+            ['The Tax Authority asks the business owner to approve it again every 90 days. It takes a minute: sign in on the Tax Authority’s site and approve.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Once it ends, invoices that need an allocation number wait until you connect again.']],
+        }
+      : {
+          subject: 'Your MTB3A connection to the Tax Authority has ended',
+          preheader: 'Connect again so invoices receive allocation numbers again.',
+          headline: 'The Tax Authority connection has ended',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority has ended.`],
+            ['Invoices that need an allocation number wait until you connect again. Sign in on the Tax Authority’s site and approve; it takes a minute.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Reply to this email if you need help.']],
+        },
+  ar: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `ينتهي ربط متابعة بسلطة الضرائب خلال ${arDays(daysLeft)}`,
+          preheader: 'أعد الربط لتواصل الفواتير الحصول على أرقام التخصيص.',
+          headline: 'جدّد الموافقة على الربط بسلطة الضرائب',
+          intro: [
+            [`ينتهي ربط ملف «${profileName}» بسلطة الضرائب خلال ${arDays(daysLeft)}.`],
+            ['تطلب سلطة الضرائب من صاحب العمل تجديد موافقته كل 90 يومًا. لا يستغرق ذلك سوى دقيقة: سجّل الدخول في موقع سلطة الضرائب ووافق.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['بعد انتهائه، تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط.']],
+        }
+      : {
+          subject: 'انتهى ربط متابعة بسلطة الضرائب',
+          preheader: 'أعد الربط لتحصل الفواتير على أرقام التخصيص من جديد.',
+          headline: 'انتهى الربط بسلطة الضرائب',
+          intro: [
+            [`انتهى ربط ملف «${profileName}» بسلطة الضرائب.`],
+            ['تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط. سجّل الدخول في موقع سلطة الضرائب ووافق، ولا يستغرق ذلك سوى دقيقة.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+        },
 };
 
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
@@ -759,5 +882,8 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'comeback-offer': comebackOffer,
   'accountant-invite': accountantInvite,
   'sign-in-code': signInCode,
+  'two-factor-code': twoFactorCode,
+  'two-factor-changed': twoFactorChanged,
   'monthly-summary': monthlySummary,
+  'tax-authority-reconnect': taxAuthorityReconnect,
 };

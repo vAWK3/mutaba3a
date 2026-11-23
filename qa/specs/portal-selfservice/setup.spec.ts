@@ -15,8 +15,8 @@ const PASSWORD = 'the first long passphrase';
 const HOME = /\/p\/[0-9a-f-]{36}$/;
 const SUGGESTION = 'Add a passkey: the more secure way to sign in.';
 const COPY = {
-  en: { password: 'New password', terms: /terms of service/, save: 'Save and sign in', home: 'Owed' },
-  ar: { password: 'كلمة المرور الجديدة', terms: /شروط الخدمة/, save: 'احفظ وسجّل الدخول', home: 'المستحق' },
+  en: { password: 'New password', terms: /terms of service/, save: 'Save and sign in', home: 'Home' },
+  ar: { password: 'كلمة المرور الجديدة', terms: /شروط الخدمة/, save: 'احفظ وسجّل الدخول', home: 'الرئيسية' },
 } as const;
 
 /** An operator-created account's setup link, opened on the QA origin; the password set. Returns the address. */

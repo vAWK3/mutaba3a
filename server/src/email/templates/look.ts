@@ -77,6 +77,9 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'password-changed': { mood: 'safety', header: 'spot-lock', chip: 'lock' },
   'passkey-added': { mood: 'safety', header: 'spot-badge', chip: 'badge' },
   'sign-in-code': { mood: 'safety', header: 'spot-lock', chip: 'password' },
+  // MUT-710: the existing art only.
+  'two-factor-code': { mood: 'safety', header: 'spot-lock', chip: 'password' },
+  'two-factor-changed': { mood: 'safety', header: 'spot-lock', chip: 'lock' },
   'account-exists': { mood: 'safety', header: 'spot-person', chip: 'person' },
   'trial-ending-soon': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
   'trial-ended': { mood: 'trial', header: 'spot-schedule', chip: 'schedule' },
@@ -93,6 +96,8 @@ export const LOOK: Record<CustomerTemplateId, Look> = {
   'accountant-invite': { mood: 'hello', header: 'spot-email', chip: 'email' },
   // MUT-535: a month's summary, so the calendar.
   'monthly-summary': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
+  // MUT-571 AC3: the existing art only: a consent that ends on a day.
+  'tax-authority-reconnect': { mood: 'trial', header: 'spot-calendar', chip: 'calendar' },
 };
 
 export function isCustomerTemplate(template: MailTemplateId): template is CustomerTemplateId {

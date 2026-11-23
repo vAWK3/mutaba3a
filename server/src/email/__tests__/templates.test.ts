@@ -31,9 +31,12 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
   'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
+  'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618: a sign-in code, typed, never a link.
   'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://app.example.test/' },
   // MUT-535 (ADR-259): one profile in two currencies, and the yearly line.
   'monthly-summary': {
     month: { year: 2026, month: 11 },
@@ -63,6 +66,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'trial-ending-soon': ['3'],
   'trial-locking-soon': ['2'],
   'card-failed-reminder': ['6'],
+  // MUT-571 AC3: the days left and the Tax Authority's 90-day rule; no date.
+  'tax-authority-reconnect': ['90', '6'],
   // MUT-534 (ADR-243, overriding ADR-159 §5): the come-back prices, longest first so none hides inside another.
   'comeback-offer': ['₪290', '₪270', '₪29', '₪9'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
@@ -73,6 +78,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'accountant-invite': [mailDay({ year: 2026, month: 11, day: 20 }, 'en'), mailDay({ year: 2026, month: 11, day: 20 }, 'ar')],
   // MUT-618 (ADR-256 D8): the code itself and its ten minutes; a code, never an amount or a date.
   'sign-in-code': ['482913', '10'],
+  // MUT-710 (ADR-274 D5): the same as the sign-in code.
+  'two-factor-code': ['482913', '10'],
   // MUT-535 (ADR-259, overriding ADR-159 §5): the person's own amounts per currency, the yearly saving, the overdue
   // count, the month's year and the day owed is read on. Longest first, so none hides inside another.
   'monthly-summary': [mailDay({ year: 2026, month: 12, day: 1 }, 'en'), mailDay({ year: 2026, month: 12, day: 1 }, 'ar'), '₪12,400', '$450.50', '₪3,200', '₪1,100', '$900', '$200', '₪58', '2026', '3'],
@@ -296,6 +303,9 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'accountant-invite': { en: 'Basel Sader shared “Sader Studio” with you on MTB3A', ar: 'Basel Sader يشاركك ملف «Sader Studio» في متابعة' },
   'sign-in-code': { en: '482913 is your MTB3A sign-in code', ar: 'رمز تسجيل الدخول إلى متابعة: 482913' },
   'monthly-summary': { en: 'Your November in MTB3A', ar: 'تشرين الثاني في متابعة' },
+  'two-factor-code': { en: '482913 is your MTB3A two-step code', ar: 'رمز التحقق بخطوتين في متابعة: 482913' },
+  'two-factor-changed': { en: 'Two-step sign-in is on for your MTB3A account', ar: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة' },
+  'tax-authority-reconnect': { en: 'Your MTB3A connection to the Tax Authority ends within 6 days', ar: 'ينتهي ربط متابعة بسلطة الضرائب خلال 6 أيام' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];

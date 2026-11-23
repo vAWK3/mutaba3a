@@ -317,7 +317,7 @@ Hosted accounts are covered by terms of service at `/terms/<version>`. The texts
   - an operator grant;
   - the owner's (or the profile's own) Stripe subscription mirror; a subscription tied to an organization covers it only when nobody owns it or the payer does (ADR-165);
   - the 14-day trial (read-only until day 30, then locked if never paid).
-- Plans (MUT-702 Part A, ADR-270): `BillingTier` is SOLO < BUSINESS < FIRM (plans on sale) plus legacy FREELANCER (ranks with Solo) and ACCOUNTANT (never a profile's). `server/src/billing/plans.ts` is the one source for names, rank, change timing and `PLAN_LIMITS` (enforced by MUT-704). A trial is BUSINESS. `GET /v1/billing.currentPlan` names the person's best covering plan. Operators can grant SOLO and BUSINESS; selling them (prices, Checkout per plan, plan change) waits for MUT-700's seller decision.
+- Plans (MUT-702 Part A, ADR-275): `BillingTier` is SOLO < BUSINESS < FIRM (plans on sale) plus legacy FREELANCER (ranks with Solo) and ACCOUNTANT (never a profile's). `server/src/billing/plans.ts` is the one source for names, rank, change timing and `PLAN_LIMITS` (enforced by MUT-704). A trial is BUSINESS. `GET /v1/billing.currentPlan` names the person's best covering plan. Operators can grant SOLO and BUSINESS; selling them (prices, Checkout per plan, plan change) waits for MUT-700's seller decision.
 - Stripe fills the mirror (MUT-360): a signed webhook (`POST /v1/billing/stripe/webhook`) re-reads each subscription an event names, and a nightly Cloud Scheduler job (`/jobs/v1/billing/stripe-reconcile`, 03:30 Israel time) re-reads them all, so a missed or out-of-order event heals by morning. A customer is linked through `mutaba3a_user_id` metadata; an operator's link always wins. Off until `stripe_enabled` is applied (DEPLOYMENT.md §6e).
 - Operators grant coverage and link pilot Stripe customers with `npm run billing:*` (admin `/admin/v1/billing/*`), audited.
 - Per-user feature flags (MUT-433, ADR-196): every flag is off until the operator grants it with `npm --prefix server run feature:grant|feature:revoke|feature:list` (admin `/admin/v1/users/{userId}/features/{feature}`, `/admin/v1/features/{feature}`), audited on every profile the person belongs to. `/v1/me` lists `user.features`. The first flag, `agent_access`, gates the person's own AI agent over MCP (epic MUT-432; enforcement arrives with MUT-434).
@@ -398,6 +398,10 @@ Signed in, Your data › Download my records writes the chosen profiles to the s
 - MUT-568 (ADR-260): issued invoices, receipts and credit notes are a separate INSERT-only record (database triggers
   refuse UPDATE, DELETE and TRUNCATE), numbered gap-free per type, kept 7 years after an account closes, and corrected
   only by a credit note. Behind the `invoicing` feature on business profiles; server only until MUT-570.
+- MUT-569 (ADR-272): the uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors: You › Invoicing downloads
+  the OPENFRMT zip for a date range (`GET /v1/issuing/uniform-file`; INI.TXT, BKMVDATA, a printable report). Documents
+  only (C100/D110/D120), ISO-8859-8 with Arabic in Hebrew letters; the simulator fixture is in
+  `docs/operations/tax-authority/uniform-file/`.
 - MUT-640 (ADR-261): issued documents print server-side as PDFs (Hebrew, Arabic, English; Professional, Modern or Minimal; black
   or blue ink), with Malafat's tri-script engine; the first produced copy is the original, later ones copies.
 - MUT-641 (ADR-265): every issued-document PDF that leaves is signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp);
@@ -656,3 +660,19 @@ mini-crm/
 - **Suggestion (MUT-370, ADR-191):** after a sign-in, Home shows "Add a passkey: the more secure way to sign in" while `/v1/me` `user.passkeyPrompt.due` (no passkey, fewer than 3 Not nows, not hidden 30 days; stored on `users.passkeyPrompt`, `PATCH /v1/me/passkey-prompt`). It waits for the trial's first-run step. The phone half reads the same field.
 - **At setup (MUT-619, ADR-257):** right after `/setup` sets the password and signs in, a device that can make a passkey is offered one before Home ("Create a passkey" / Not now). Same `passkeyPrompt` rules (`passkeyOfferable`): Not now spends one of the three offers, so Home doesn't ask again for 30 days. The password stays required (ADR-159 d9). `/accountant-invite` doesn't offer it yet.
 - Accountant pages (MUT-562, ADR-250): `/client-books` (the desk of profiles shared with an accountant, outside any profile, with a corner beside Reports) and `/client-books/$profileId` (one client read-only by whole months, totals per currency, receipts); the public `/accountant-invite` (accept, or sign up then sign in) and `/share` (a share link opened with a PIN). Public pages count cookieless only.
+
+## MUT-710 — Two-step sign-in and the 12-month authentication log (2026-11-22, ADR-274, server half)
+
+- A person can turn on a second step: an authenticator app (TOTP) or an emailed code, with 10 recovery codes (`/v1/me/two-factor…`). With it on, every first step (password, passkey, emailed sign-in code, Malafat) and every setup link answers `TWO_FACTOR_REQUIRED` with a challenge; `POST /v1/sessions/two-factor` / `/v1/device-sessions/two-factor` finish it. `auth/sign-in.ts` `beginOrIssue` / `finishTwoFactor` are the only session minters; `auth/two-factor-flow.ts` holds challenges, codes and the atomic counting.
+- Issuing and the Tax Authority need it (`requireTwoFactor`, 403 `TWO_FACTOR_SETUP_REQUIRED`); disconnecting doesn't.
+- Every authentication event is an `auth_event` line (`observability/auth-log.ts`) kept 365 days in the `auth-events` Cloud Logging bucket (`auth_log.tf`).
+- Portal and phone screens follow `.claude/designs/mut-710-wireframes.html` (approved 2026-11-22); not built yet.
+
+## MUT-660 — Documents due per client (2026-11-22, ADR-270)
+
+- **What is due** is derived on each read from the client's documents preference (else the profile default, On payment) and what is issued or attached: `server/src/issuing/documents-due.ts`. Served by GET /v1/documents-due (grouped by client) and /count; Issue all is POST /v1/documents-due/issue (one client, ≤25, through the single issue).
+- **Not for invoice** is a mark on an Owed or a Received (bulk or If-Match on one), refused while a tax document is linked. It takes the entry out of documents due and out of Invoice income; the income stays in All income and every export.
+- **Take over or link**: a document takes over an untouched recorded Owed or an unallocated captured Received; anything else is issued linked only (`fromEntryMode`).
+- **Books split** on invoicing profiles only: Reports (`invoiceSplit`), the monthly summary, share links, the Excel `invoice_status` column.
+- **Portal**: Documents › To issue (Issued · To issue · Files), Home's To issue group, the row mark on Owed and Paid, the client's Documents field, the profile default in the invoicing setup, Reports' income card. Hidden where invoicing is off and on this device.
+

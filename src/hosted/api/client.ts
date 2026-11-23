@@ -102,10 +102,26 @@ export type IssuingNumberingRequest = Schemas['IssuingNumberingRequest'];
 export type IssuingSettings = Schemas['IssuingSettings'];
 export type IssuedDocument = Schemas['IssuedDocument'];
 export type IssuedDocumentPage = Schemas['IssuedDocumentPage'];
+export type IssuedDocumentListItem = Schemas['IssuedDocumentListItem'];
+/** MUT-664: the ledger card (כרטסת). */
+export type CustomerStatement = Schemas['CustomerStatement'];
+export type StatementLine = Schemas['StatementLine'];
+export type StatementDocumentTag = Schemas['StatementDocumentTag'];
 export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
 export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
 export type IssuedDocType = Schemas['IssuedDocType'];
 export type IssuingStyles = Schemas['IssuingStyles'];
+// MUT-660: documents due.
+export type DocumentsDue = Schemas['DocumentsDue'];
+export type DueItem = Schemas['DueItem'];
+export type DueKind = Schemas['DueKind'];
+export type DueReason = Schemas['DueReason'];
+export type DueEntryRef = Schemas['DueEntryRef'];
+export type IssueDueResult = Schemas['IssueDueResult'];
+/** The component is nullable where a client has none of its own; a choice itself never is. */
+export type DocumentsPreference = NonNullable<Schemas['DocumentsPreference']>;
+export type InvoiceSplitRow = Schemas['InvoiceSplitRow'];
+export type NotForInvoiceEntry = Schemas['NotForInvoiceEntry'];
 export type ExternalInvoice = Schemas['ExternalInvoice'];
 export type ExternalInvoiceReading = Schemas['ExternalInvoiceReading'];
 export type ExternalEntryKind = Schemas['ExternalEntryKind'];
@@ -804,7 +820,10 @@ export const api = {
   externalInvoiceFile: (profileId: string, id: string) => request<Schemas['ExternalInvoiceFile']>('GET', `/v1/issuing/external-invoices/${encodeURIComponent(id)}/file`, { profileId }),
   removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
   issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
-  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; cursor?: string | null } = {}, signal?: AbortSignal) =>
+  /** MUT-664: one page of a client's ledger card in one currency (newest first for the portal). */
+  customerStatement: (profileId: string, customerId: string, query: Query<'/v1/customers/{customerId}/statement'>, signal?: AbortSignal) =>
+    request<CustomerStatement>('GET', `/v1/customers/${encodeURIComponent(customerId)}/statement`, { profileId, query, signal }),
+  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string; cursor?: string | null } = {}, signal?: AbortSignal) =>
     request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),
   issuedDocument: (profileId: string, documentId: string, signal?: AbortSignal) =>
     request<IssuedDocument>('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}`, { profileId, signal }),
@@ -814,9 +833,40 @@ export const api = {
   /** Irreversible: the document takes the next number. A retry with the same key returns the same document. */
   issueDocument: (profileId: string, body: IssueDocumentRequest, idempotencyKey: string) =>
     request<IssuedDocument>('POST', '/v1/issued-documents', { profileId, body, idempotencyKey }),
+  /** MUT-660: what each income entry is due, grouped by client (or the entries marked not for invoice). */
+  documentsDue: (profileId: string, query: { view: 'to-issue' | 'not-for-invoice'; olderThanMonths: number }, signal?: AbortSignal) =>
+    request<DocumentsDue>('GET', '/v1/documents-due', { profileId, query, signal }),
+  documentsDueCount: (profileId: string, signal?: AbortSignal) => request<{ total: number }>('GET', '/v1/documents-due/count', { profileId, signal }),
+  /** Irreversible per item: one client's due documents, each issued in turn. */
+  issueDue: (profileId: string, body: { customerId: string | null; items: DueEntryRef[] }, idempotencyKey: string) =>
+    request<IssueDueResult>('POST', '/v1/documents-due/issue', { profileId, body, idempotencyKey }),
+  markNotForInvoice: (profileId: string, body: { items: DueEntryRef[]; value: boolean }, idempotencyKey: string) =>
+    request<{ changed: number }>('POST', '/v1/documents-due/not-for-invoice', { profileId, body, idempotencyKey }),
+  setEntryNotForInvoice: (profileId: string, entry: DueEntryRef, value: boolean, version: number) =>
+    request<NotForInvoiceEntry>('PUT', `/v1/${entry.kind === 'owed' ? 'receivables' : 'payments'}/${encodeURIComponent(entry.id)}/not-for-invoice`, { profileId, body: { value }, ifMatchVersion: String(version) }),
+  /** MUT-662 (D18): cancels a payment request with a record of its own; no Undo. The same key returns the same result. */
+  cancelPaymentRequest: (profileId: string, documentId: string, reason: string | null, idempotencyKey: string) =>
+    request<IssuedDocument>('POST', `/v1/issued-documents/${encodeURIComponent(documentId)}/cancel`, { profileId, body: { reason }, idempotencyKey }),
   /** The draft PDF (watermarked), as a file. */
   draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
     (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),
+  /**
+   * MUT-569: the uniform file (מבנה אחיד 1.31) for the documents dated `from`…`to`, as the OPENFRMT zip, with its counts
+   * and file name from the response headers.
+   */
+  uniformFile: async (profileId: string, query: { from: string; to: string; lang: 'ar' | 'en' }) => {
+    const response = await send('GET', '/v1/issuing/uniform-file', { profileId, query, accept: 'application/zip' });
+    const filename = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? `OPENFRMT-${query.from}_${query.to}.zip`;
+    return {
+      blob: await response.blob(),
+      filename,
+      // Not amounts: whole counts of documents and records.
+      // eslint-disable-next-line no-restricted-syntax
+      documents: Number.parseInt(response.headers.get('x-uniform-file-documents') ?? '0', 10),
+      // eslint-disable-next-line no-restricted-syntax
+      records: Number.parseInt(response.headers.get('x-uniform-file-records') ?? '0', 10),
+    };
+  },
   /** A view copy: counts nothing (the original or a copy, as the record stands). */
   viewPdf: async (profileId: string, documentId: string) =>
     (await send('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, accept: 'application/pdf' })).blob(),

@@ -151,8 +151,8 @@ describe('Client detail', () => {
     };
   }
 
-  it('shows the per-currency summary and the matters', async () => {
-    portal(`/p/${ORG_A}/clients/${C1}`, {
+  it('shows the per-currency summary and the matters on Details', async () => {
+    portal(`/p/${ORG_A}/clients/${C1}?tab=details`, {
       'GET /v1/customers/c1111111-1111-4111-8111-111111111111': () => ok(CUSTOMERS[0]),
       'GET /v1/summaries/customers/c1111111-1111-4111-8111-111111111111': () => ok(summary()),
       'GET /v1/projects': () => ok(page([{ ...PROJECTS[0], id: '00000000-0000-4000-8000-000000000001' }])),
@@ -164,15 +164,16 @@ describe('Client detail', () => {
     expect(within(matters).getByText('₪20,000.00')).toBeInTheDocument();
   });
 
-  it('shows the receivables tab filtered to this client, with the read-only notice', async () => {
+  it('opens on the ledger card for this client (MUT-664); Details carries the read-only notice', async () => {
     const { user, api } = portal(`/p/${ORG_A}/clients/${C1}`, {
       'GET /v1/customers/c1111111-1111-4111-8111-111111111111': () => ok(CUSTOMERS[0]),
       'GET /v1/summaries/customers/c1111111-1111-4111-8111-111111111111': () => ok(summary()),
-      'GET /v1/receivables': () => ok(page([RECEIVABLES[0]])),
+      [`GET /v1/customers/${C1}/statement`]: () => ok({ customerId: C1, currency: 'ILS', projectId: null, from: null, to: null, asOf: '2026-10-11', openingBalance: '0.00', totals: { debit: '9000.00', credit: '0.00' }, closingBalance: '9000.00', lines: [{ id: 'r1', kind: 'CHARGE', date: '2026-10-01', number: null, projectId: null, debit: '9000.00', credit: '0.00', runningBalance: '9000.00', documents: [], due: null, receivableId: 'r1', outstanding: '9000.00' }], nextCursor: null }),
+      'GET /v1/projects': () => ok(page([{ ...PROJECTS[0], id: '00000000-0000-4000-8000-000000000001' }])),
     });
-    await user.click(await screen.findByRole('tab', { name: 'Receivables' }));
-    await screen.findByRole('table', { name: 'Receivables' });
-    expect(api.calls.some((c) => c.url.pathname === '/v1/receivables' && c.url.searchParams.get('customerId') === C1)).toBe(true);
+    expect(await screen.findAllByTestId('ledger-line')).toHaveLength(1);
+    expect(api.calls.some((c) => c.url.pathname === `/v1/customers/${C1}/statement` && c.url.searchParams.get('order') === 'desc')).toBe(true);
+    await user.click(screen.getByRole('tab', { name: 'Details' }));
     expect(screen.getByRole('note')).toHaveTextContent('Malafat records income and payments for this profile.');
   });
 
@@ -489,10 +490,11 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     expect(document.activeElement).toBe(screen.getByRole('button', { name: '+ Add income' }));
   });
 
-  it('prefills the client on Client detail and records a payment from its Receivables tab', SLOW_UNDER_COVERAGE, async () => {
+  it('prefills the client on Client detail and records a payment from its ledger card', SLOW_UNDER_COVERAGE, async () => {
     const { user, router } = portal(`/p/${ORG_A}/clients/${C1}`, {
       [`GET /v1/customers/${C1}`]: () => ok(CUSTOMERS[0]),
-      [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [] }),
+      [`GET /v1/summaries/customers/${C1}`]: () => ok({ customerId: C1, lastPaymentOn: null, currencies: [{ currency: 'ILS' }] }),
+      [`GET /v1/customers/${C1}/statement`]: () => ok({ customerId: C1, currency: 'ILS', projectId: null, from: null, to: null, asOf: '2026-10-11', openingBalance: '0.00', totals: { debit: '1170.00', credit: '0.00' }, closingBalance: '1170.00', lines: [{ id: R1, kind: 'CHARGE', date: '2026-10-01', number: 'CHG-1', projectId: null, debit: '1170.00', credit: '0.00', runningBalance: '1170.00', documents: [], due: null, receivableId: R1, outstanding: '1170.00' }], nextCursor: null }),
       'GET /v1/receivables': () => ok(page([OPEN_OWED[0]])),
       [`GET /v1/receivables/${R1}`]: () => ok(OPEN_OWED[0]),
     }, [PERSONAL]);
@@ -502,9 +504,7 @@ describe('Income writes on a personal profile (MUT-133)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
 
-    await user.click(screen.getByRole('tab', { name: 'Receivables' }));
-    const table = await screen.findByRole('table', { name: 'Receivables' });
-    await user.click(within(table).getByRole('button', { name: /Record payment/ }));
+    await user.click(await screen.findByRole('button', { name: 'Owed CHG-1' }));
     await waitFor(() => expect(locationOf(router)).toContain(`settle=${R1}`));
     expect(await screen.findByLabelText('Amount (ILS)')).toHaveValue('1170.00');
   });

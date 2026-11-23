@@ -92,6 +92,8 @@ export type AppEnv = {
     expectedVersion: number;
     /** MUT-361: whether the lapse gate is enforced on this server (app-shell.ts, from BILLING_GATE). */
     billingGate: boolean;
+    /** MUT-710 (D10): whether the issuing gate is enforced on this server (app-shell.ts, from TWO_FACTOR_ISSUING_GATE_ENABLED). */
+    twoFactorIssuingGate: boolean;
     /** MUT-370 (D9): whether this server offers passkeys (app-shell.ts, from WEBAUTHN_RP_ID); /v1/me's suggestion reads it. */
     passkeys: boolean;
     /** MUT-474: a dev server's owned-profile cap (app-shell.ts, from QA_MAX_OWNED_PROFILES); unset = the product limit. */

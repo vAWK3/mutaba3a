@@ -51,7 +51,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
     }),
     async (c) => {
       const { user, via } = c.get('identity');
-      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'));
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
       return c.json(via ? delegatedMe(me, via) : me, 200);
     },
   );
@@ -78,6 +78,7 @@ export async function buildMe(
   maxOwnedProfiles = MAX_OWNED_PROFILES,
   accountantAccess = false,
   accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
+  twoFactorIssuingGate = false,
 ) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
@@ -106,7 +107,7 @@ export async function buildMe(
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount] = await Promise.all([
+  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount, twoFactor] = await Promise.all([
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
@@ -116,6 +117,8 @@ export async function buildMe(
     accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
     // MUT-596: only when it decides ownSignIn (a password the person never chose).
     user.passwordChosen ? 0 : store.passkeys.listByUser(user.id).then((keys) => keys.length),
+    // MUT-710 (D8): three small reads by the person's id.
+    twoFactorStateOf(store, user.id, twoFactorIssuingGate),
   ]);
   return {
     user: {
@@ -137,6 +140,7 @@ export async function buildMe(
       features,
       // MUT-459: only an operator's /v1/me names it; the console's link and pages hang off this.
       ...(user.operatorAt ? { operator: true as const } : {}),
+      twoFactor,
     },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles },
@@ -161,4 +165,11 @@ function delegatedMe(me: Awaited<ReturnType<typeof buildMe>>, via: DelegatedVia)
 async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
   const latest = await store.users.latestTermsAcceptance(userId);
   return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
+}
+
+/** MUT-710 (ADR-274 D8): Me's and GET /v1/me/two-factor's view of the person's two-step sign-in. */
+export async function twoFactorStateOf(store: LedgerStore, userId: string, issuingGate: boolean): Promise<{ enabled: boolean; method: 'totp' | 'email' | null; recoveryCodesLeft: number; requiredForIssuing: boolean }> {
+  // With the issuing gate off (TWO_FACTOR_ISSUING_GATE_ENABLED), nothing requires it, so it can always be turned off.
+  const [state, recoveryCodesLeft, requiredForIssuing] = await Promise.all([store.twoFactor.get(userId), store.twoFactor.recoveryCodesLeft(userId), issuingGate ? store.twoFactor.ownsIssuingProfile(userId) : false]);
+  return { enabled: state !== null, method: state?.method ?? null, recoveryCodesLeft: state ? recoveryCodesLeft : 0, requiredForIssuing };
 }

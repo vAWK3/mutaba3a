@@ -95,13 +95,13 @@ test('A first visit chooses this device on the welcome and opens the app in Arab
     await page.getByRole('button', { name: 'جرّبها على هذا الجهاز' }).click();
     await expect(page.getByRole('navigation', { name: 'الأقسام' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByRole('heading', { level: 1, name: 'المستحق' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'الرئيسية' })).toBeVisible();
     await expect(page.getByLabel('البريد الإلكتروني')).toHaveCount(0);
   });
 
-  await step('The nav has the same four destinations as signed in (MUT-424)', async () => {
+  await step('The nav has home and the same four destinations as signed in (MUT-424, MUT-657)', async () => {
     const links = page.getByRole('navigation', { name: 'الأقسام' }).getByRole('link');
-    await expect(links).toHaveText(['المستحق', 'المدفوع', 'المصروف', 'العملاء']);
+    await expect(links).toHaveText(['الرئيسية', 'المستحق', 'المدفوع', 'المصروف', 'العملاء']);
   });
 
   await step('You is this device\'s: Sign in, Your data and What is MTB3A?, then Language and the terms, nothing that needs an account', async () => {

@@ -63,6 +63,8 @@ export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   issued_documents: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
   issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
+  issued_document_cancellations: 'kept 7 years after closing: a payment request\'s cancellation, INSERT-only (MUT-662, MUT-644)',
+  issued_cancellation_counters: 'kept 7 years after closing: numbering of the retained cancellations (MUT-662, MUT-644)',
   issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
   issued_document_originals: 'kept 7 years after closing: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
 };
@@ -95,6 +97,10 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
   'malafat_sign_ins.userId': 'delete',
   // MUT-618: the person's emailed sign-in codes (also ON DELETE CASCADE).
   'sign_in_codes.userId': 'delete',
+  // MUT-710: the person's two-step sign-in, recovery codes and pending challenges (also ON DELETE CASCADE).
+  'two_factor.userId': 'delete',
+  'two_factor_recovery_codes.userId': 'delete',
+  'two_factor_challenges.userId': 'delete',
   'user_idempotency_keys.userId': 'delete',
   'webauthn_challenges.userId': 'delete',
   // MUT-559: the person's grants as an accountant go with them; invites they sent as an owner lose their name.

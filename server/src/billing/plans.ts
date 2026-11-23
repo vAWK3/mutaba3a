@@ -1,5 +1,5 @@
 /**
- * MUT-702 Part A (ADR-270): the one source of truth for the profile plans. Pure, and provider-neutral: no payment
+ * MUT-702 Part A (ADR-275): the one source of truth for the profile plans. Pure, and provider-neutral: no payment
  * provider, price or lookup key is named here (that is Part B, held for MUT-700's seller decision).
  *
  *   solo      SOLO        rank 1   one business, one person

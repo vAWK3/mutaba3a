@@ -424,7 +424,7 @@ test('Grant a person billing coverage with a reason and an expiry, then revoke i
   });
 });
 
-// MUT-702 Part A (ADR-270): the plans on sale can be given with no payment provider at all.
+// MUT-702 Part A (ADR-275): the plans on sale can be given with no payment provider at all.
 test('Grant a person the Business plan', { tag: '@portal-selfservice.operator.billing-grant-business' }, async ({ page, step }) => {
   await page.setViewportSize({ width: 375, height: 812 });
   await chooseLanguage(page, 'en');

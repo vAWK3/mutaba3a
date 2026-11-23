@@ -11,6 +11,8 @@ import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
 import { allocationNumberRequired } from './israel/allocation-number.js';
+import { documentNumberLabel } from './issuing/labels.js';
+import type { PaymentRequestFacts } from './issuing/payment-request.js';
 import type { CreditReasonCode } from './payments/credit.js';
 import type {
   IssuedDocumentLineRecord,
@@ -200,6 +202,7 @@ export function serializeCustomer(c: CustomerRecord, reference?: ExternalReferen
     vatTreatment: c.vatTreatment,
     taxId: c.taxId,
     address: c.address,
+    documentsPreference: c.documentsPreference,
     status: c.status,
     archivedAt: iso(c.archivedAt),
     externalReference: serializeReference(reference),
@@ -341,6 +344,7 @@ export function serializeReceivable(r: ReceivableRecord, today: IsoDate) {
     outstanding: amt(r.grossMinor - r.paidMinor - r.creditedMinor, r.currency),
     vatTreatment: r.vatTreatment,
     vatRateBasisPoints: r.vatRateBasisPoints,
+    notForInvoice: r.notForInvoice,
     dueDate: r.dueDate,
     postingDate: r.postingDate,
     postedAt: r.postedAt.toISOString(),
@@ -422,6 +426,7 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
     method: p.method,
     reference: p.reference,
     receiptNumber: p.receiptNumber,
+    notForInvoice: p.notForInvoice,
     notes: p.notes,
     status: p.status,
     reversedAt: iso(p.reversedAt),
@@ -843,7 +848,8 @@ export function serializeComposedTotals(d: { currency: string; subtotalMinor: bi
   };
 }
 
-export function serializeIssuedDocument(d: IssuedDocumentRecord) {
+/** MUT-662: a payment request's facts ride along when the caller read them (`paymentRequestFacts`). */
+export function serializeIssuedDocument(d: IssuedDocumentRecord, facts: PaymentRequestFacts | null = null) {
   return {
     ...serializeComposedTotals(d),
     id: d.id,
@@ -862,12 +868,25 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord) {
     originalId: d.originalId,
     paymentDetails: d.paymentDetails ? { method: d.paymentDetails.method, reference: d.paymentDetails.reference, receivedOn: d.paymentDetails.receivedOn } : null,
     allocationNumber: d.allocationNumber,
+    allocationSource: d.allocationSource,
     receivableId: d.receivableId,
     paymentId: d.paymentId,
     coreVersion: d.coreVersion,
+    displayNumber: documentNumberLabel(d.docType, d.number),
+    paymentRequest:
+      d.docType === 'PAYMENT_REQUEST' && facts
+        ? {
+            status: facts.status,
+            covered: amt(facts.coveredMinor, d.currency),
+            linked: facts.linked.map((l) => ({ id: l.id, docType: l.docType, number: l.number, gross: amt(l.grossMinor, d.currency) })),
+            cancellation: facts.cancellation
+              ? { number: facts.cancellation.number, displayNumber: documentNumberLabel('CANCELLATION', facts.cancellation.number), cancelledAt: facts.cancellation.cancelledAt.toISOString(), reason: facts.cancellation.reason }
+              : null,
+          }
+        : null,
   };
 }
 
 export function serializeIssuer(r: IssuerDetailsRecord) {
-  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, defaultLanguage: r.defaultLanguage, paymentTermsDays: r.paymentTermsDays, bankDetails: r.bankDetails, footerNote: r.footerNote, offerAfterSave: r.offerAfterSave, version: r.version };
+  return { legalName: r.legalName, vatId: r.vatId, dealerType: r.dealerType, address: r.address, city: r.city, phone: r.phone, email: r.email, website: r.website, ink: r.ink, documentStyle: r.documentStyle, pricesIncludeVat: r.pricesIncludeVat, defaultLanguage: r.defaultLanguage, paymentTermsDays: r.paymentTermsDays, bankDetails: r.bankDetails, footerNote: r.footerNote, offerAfterSave: r.offerAfterSave, defaultDocumentsPreference: r.defaultDocumentsPreference, version: r.version };
 }

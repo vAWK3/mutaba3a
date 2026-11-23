@@ -8,6 +8,7 @@ import { SCOPES } from './auth/scopes.js';
 import { TURNSTILE_TOKEN_MAX_LENGTH } from './auth/turnstile.js';
 import { normalizeEmail } from './auth/users.js';
 import { isPlainAddress } from './email/ports.js';
+import { DOCUMENTS_PREFERENCES } from './issuing/documents-due.js';
 import { ERROR_CODES } from './errors.js';
 import { DOCUMENT_STYLES, INK_COLOURS } from './issuing/types.js';
 import { CONTINGENCY_OUTCOMES, MAX_COMMISSION_RATE_BASIS_POINTS, MIN_COMMISSION_RATE_BASIS_POINTS, UPFRONT_TREATMENTS } from './agreements/contingency.js';
@@ -300,9 +301,9 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
 // ---- MUT-358 (ADR-160): operator billing ------------------------------------
 
 /**
- * MUT-702 (ADR-270): the tiers a profile can be entitled by. SOLO, BUSINESS and FIRM are the plans on sale (Solo < Business
+ * MUT-702 (ADR-275): the tiers a profile can be entitled by. SOLO, BUSINESS and FIRM are the plans on sale (Solo < Business
  * < Firm); FREELANCER is legacy (the ₪29 payers and ₪21 founders). Inline everywhere, never a ref: a ref's null is written
- * as `nullable`, which OpenAPI 3.1 ignores. Additive since 1.127.0-mut702.
+ * as `nullable`, which OpenAPI 3.1 ignores. Additive since 1.136.0-mut702.
  */
 const ProfilePlanTierSchema = z.enum(['FREELANCER', 'SOLO', 'BUSINESS', 'FIRM']);
 
@@ -378,7 +379,7 @@ const BillingEntitlementSchema = z
   .object({
     state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
     source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-    /** MUT-702: a running trial (and its read-only and locked ends) is BUSINESS from 1.127.0-mut702 (FREELANCER before). */
+    /** MUT-702: a running trial (and its read-only and locked ends) is BUSINESS from 1.136.0-mut702 (FREELANCER before). */
     tier: ProfilePlanTierSchema.nullable(),
     until: z.string().datetime().nullable(),
     /** MUT-532: READ_ONLY because the person paused their plan; `until` is when it restarts on its own (null: no end set). */
@@ -652,9 +653,9 @@ export const BillingOverviewSchema = z
      */
     accountantPlan: z.union([BillingAccountantPlanSchema, z.null()]),
     /**
-     * MUT-702 (ADR-270): the person's plan, from their own profiles' entitlements (an operator grant, a subscription or the
+     * MUT-702 (ADR-275): the person's plan, from their own profiles' entitlements (an operator grant, a subscription or the
      * running trial, which is business): the highest-ranked one that covers any of them. `freelancer` is the legacy plan.
-     * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.127.0-mut702.
+     * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.136.0-mut702.
      */
     currentPlan: z.enum(['solo', 'business', 'firm', 'freelancer']).nullable(),
   })
@@ -1130,7 +1131,7 @@ export const HostedProfileSchema = z
         state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
         /** What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, or nothing. */
         source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-        /** MUT-702: SOLO and BUSINESS since 1.127.0-mut702; a trial is BUSINESS (FREELANCER before). */
+        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). */
         tier: ProfilePlanTierSchema.nullable(),
         /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
         until: z.string().datetime().nullable(),
@@ -1303,6 +1304,17 @@ export const AccountantClientWithStatsSchema = AccountantClientSchema.extend({
 
 export const AccountantClientListSchema = z.object({ items: z.array(AccountantClientWithStatsSchema) }).openapi('AccountantClientList');
 
+/** MUT-710 (D8): the person's two-step sign-in, in Me and GET /v1/me/two-factor. */
+export const TwoFactorStateSchema = z
+  .object({
+    enabled: z.boolean(),
+    method: z.enum(['totp', 'email']).nullable(),
+    recoveryCodesLeft: z.number().int(),
+    /** True while the person owns a profile that issues documents or is connected to the Tax Authority: it can't be turned off. */
+    requiredForIssuing: z.boolean(),
+  })
+  .openapi('TwoFactorState');
+
 export const MeSchema = z
   .object({
     user: z.object({
@@ -1335,6 +1347,8 @@ export const MeSchema = z
        * so no one else's /v1/me hints at it. Additive since 1.79.0-mut459.
        */
       operator: z.literal(true).optional(),
+      /** MUT-710 (ADR-274 D8): two-step sign-in. Additive since 1.136.0-mut702. */
+      twoFactor: TwoFactorStateSchema,
     }),
     /** Firm profiles in membership order (oldest first), then profiles the caller created (oldest first), then their own personal profile last (MUT-120, MUT-182). */
     profiles: z.array(HostedProfileSchema),
@@ -1519,6 +1533,8 @@ export const SetupLinkCheckResponseSchema = z
       expiresAt: z.string().datetime(),
       /** MUT-324: the terms version the setup page shows and sends back as `acceptedTermsVersion`. */
       termsVersion: TermsVersionSchema,
+      /** MUT-710 (D11): the person's second step, which redeeming this link asks for; null when two-step sign-in is off. */
+      twoFactor: z.object({ method: z.enum(['totp', 'email']) }).nullable().optional(),
     }),
     z.object({
       state: z.enum(['expired', 'used', 'superseded', 'invalid']),
@@ -1551,8 +1567,25 @@ export const SetupLinkRedeemRequestSchema = z
     defaultCurrency: CurrencySchema.optional(),
     /** MUT-366: required for a SIGNUP link (the personal profile's IANA timezone); ignored otherwise. */
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }).optional(),
+    /**
+     * MUT-710 (ADR-274 D11): a person with two-step sign-in on proves it for every person link (setup, reset, an
+     * operator's link after --lock): the challenge from POST /v1/account-setup/two-factor and its code, or a recovery code.
+     */
+    challengeToken: z.string().regex(/^[A-Za-z0-9_-]{43}$/).optional(),
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+    recoveryCode: z.string().min(8).max(20).optional(),
   })
   .openapi('SetupLinkRedeemRequest');
+
+/** MUT-710 (D11): what a setup link's second step needs, from POST /v1/account-setup/two-factor (the TWO_FACTOR_REQUIRED details). */
+export const SetupLinkTwoFactorResponseSchema = z
+  .object({
+    challengeToken: z.string(),
+    method: z.enum(['totp', 'email']),
+    expiresAt: z.string().datetime(),
+    emailHint: z.string().optional(),
+  })
+  .openapi('SetupLinkTwoFactor');
 
 // ---- MUT-559 (ADR-245): accountant grants ---------------------------------------
 
@@ -1699,6 +1732,59 @@ export const CodeSignInRequestSchema = z
     code: z.string().regex(/^\d{6}$/),
   })
   .openapi('CodeSignInRequest');
+
+/** MUT-710 (ADR-274 D2): the challenge token from TWO_FACTOR_REQUIRED's details (43 base64url characters). */
+export const TwoFactorChallengeTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+
+/** MUT-710 (D2): finishing a sign-in (or a setup link, D11): a 6-digit code, or one recovery code instead. */
+export const TwoFactorFinishRequestSchema = z
+  .object({
+    challengeToken: TwoFactorChallengeTokenSchema,
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional().openapi({ description: 'The authenticator app\'s code, or the emailed one' }),
+    recoveryCode: z.string().min(8).max(20).optional().openapi({ description: 'One of the ten recovery codes (xxxx-xxxx), in place of `code`; works once' }),
+  })
+  .refine((body) => (body.code === undefined) !== (body.recoveryCode === undefined), { message: 'Send either code or recoveryCode' })
+  .openapi('TwoFactorFinishRequest');
+
+/** MUT-710 (D5): POST /v1/two-factor/email-code. */
+export const TwoFactorEmailCodeRequestSchema = z.object({ challengeToken: TwoFactorChallengeTokenSchema }).openapi('TwoFactorEmailCodeRequest');
+export const TwoFactorEmailCodeResponseSchema = z.object({ expiresAt: z.string().datetime() }).openapi('TwoFactorEmailCodeResponse');
+
+/** MUT-710 (D8): the current second step, for changing a person's two-step sign-in while it is on. */
+const ManageProof = {
+  currentPassword: z.string().max(1024).optional().openapi({ description: 'Required when the person has a password of their own (Me ownPassword)' }),
+  challengeToken: TwoFactorChallengeTokenSchema.optional().openapi({ description: 'From POST /v1/me/two-factor/challenge; required while two-step sign-in is on' }),
+  code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+  recoveryCode: z.string().min(8).max(20).optional(),
+};
+export const TwoFactorManageRequestSchema = z.object(ManageProof).openapi('TwoFactorManageRequest');
+
+export const TwoFactorEnrolmentRequestSchema = z.object({ method: z.enum(['totp', 'email']), ...ManageProof }).openapi('TwoFactorEnrolmentRequest');
+
+export const TwoFactorEnrolmentSchema = z
+  .object({
+    enrolmentToken: z.string(),
+    method: z.enum(['totp', 'email']),
+    expiresAt: z.string().datetime(),
+    /** totp: the base32 secret to type, the otpauth:// address, and its QR code (SVG, drawn on the server). */
+    secret: z.string().optional(),
+    otpauthUri: z.string().optional(),
+    qrSvg: z.string().optional(),
+    /** email, or totp for a person without their own password: a code was mailed here, to send as `code` / `emailCode`. */
+    emailHint: z.string().optional(),
+    emailCodeRequired: z.boolean(),
+  })
+  .openapi('TwoFactorEnrolment');
+
+export const TwoFactorConfirmRequestSchema = z
+  .object({
+    enrolmentToken: TwoFactorChallengeTokenSchema,
+    code: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/),
+    emailCode: z.string().regex(/^\s*\d{3}\s?\d{3}\s*$/).optional(),
+  })
+  .openapi('TwoFactorConfirmRequest');
+
+export const TwoFactorRecoveryCodesSchema = z.object({ recoveryCodes: z.array(z.string()) }).openapi('TwoFactorRecoveryCodes');
 
 /** The one answer for every address, account or not (ADR-037 §4). */
 export const SelfServiceAcceptedSchema = z.object({ status: z.literal('sent') }).openapi('SelfServiceAccepted');
@@ -2115,6 +2201,11 @@ export const IsoMonthSchema = z.string().regex(/^\d{4}-\d{2}$/, 'YYYY-MM').opena
 /** Canonical decimal amount in the project currency, e.g. "10000.00". Validated against the currency exponent server-side. */
 export const AmountSchema = z.string().regex(/^-?\d+(\.\d+)?$/, 'canonical decimal').openapi({ description: 'Canonical decimal string; exactly the currency\'s fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID' });
 
+/** MUT-660 (ADR-270): which documents a client is due on an invoicing profile. */
+export const DocumentsPreferenceSchema = z.enum(DOCUMENTS_PREFERENCES).openapi('DocumentsPreference', {
+  description: 'TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).',
+});
+
 export const CustomerSchema = z
   .object({
     id: uuid,
@@ -2127,6 +2218,8 @@ export const CustomerSchema = z
     /** MUT-642: VAT, company or ID number, 9 digits; printed on issued documents. */
     taxId: z.string().nullable(),
     address: z.string().nullable(),
+    /** MUT-660: null follows the profile default (issuer details’ defaultDocumentsPreference, else ON_PAYMENT). */
+    documentsPreference: DocumentsPreferenceSchema.nullable(),
     status: EntityStatusSchema,
     archivedAt: z.string().datetime().nullable(),
     externalReference: ExternalReferenceSchema.nullable(),
@@ -2161,6 +2254,8 @@ export const UpdateCustomerRequestSchema = z
     vatTreatment: VatTreatmentSchema.nullable().optional(),
     taxId: z.string().max(20).nullable().optional(),
     address: z.string().trim().max(300).nullable().optional(),
+    /** MUT-660: invoicing profiles only, from a person (404 elsewhere); null = the profile default. */
+    documentsPreference: DocumentsPreferenceSchema.nullable().optional(),
   })
   .strict()
   .openapi('UpdateCustomerRequest');
@@ -2355,6 +2450,9 @@ export const CONFLICT_REASONS = [
   'ACCOUNTANT_LIMIT',
   'ALREADY_HAS_ACCESS',
   'ACCOUNT_EXISTS',
+  // MUT-709: reversing, correcting or undoing a payment an issued receipt or invoice-receipt stands on. details carry
+  // documentId, docType and number; the way out is a credit note.
+  'HAS_DOCUMENT',
 ] as const;
 export type ConflictReason = (typeof CONFLICT_REASONS)[number];
 
@@ -2924,6 +3022,8 @@ export const ReceivableSchema = z
     outstanding: AmountSchema,
     vatTreatment: VatTreatmentSchema,
     vatRateBasisPoints: z.number().int(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     dueDate: IsoDateSchema,
     postingDate: IsoDateSchema,
     postedAt: z.string().datetime(),
@@ -3104,7 +3204,18 @@ export const CustomerStatementQuerySchema = z.object({
   to: IsoDateSchema.optional().openapi({ description: 'Lines after this date are left out. Omitted: every line, including ones dated after asOf.' }),
   limit: z.coerce.number().int().min(1).max(500).default(200).openapi({ description: 'Lines per page, 1–500.' }),
   cursor: z.string().optional().openapi({ description: 'Opaque `nextCursor` from the previous page.' }),
+  order: z.enum(['asc', 'desc']).default('asc').openapi({ description: 'MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way.' }),
 });
+
+/** MUT-664: a document standing on a statement line (issued here, or attached from elsewhere: MUT-647, MUT-481). */
+export const StatementDocumentTagSchema = z
+  .object({
+    id: uuid.nullable().openapi({ description: 'The issued document; null for one issued elsewhere' }),
+    source: z.enum(['ISSUED', 'EXTERNAL']),
+    docType: z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST']),
+    number: z.string(),
+  })
+  .openapi('StatementDocumentTag');
 
 const StatementLineBase = {
   /** The source row's id (receivable, credit, payment, or allocation on a project statement); a reversal adds ":reversal". */
@@ -3117,6 +3228,10 @@ const StatementLineBase = {
   debit: AmountSchema,
   credit: AmountSchema,
   runningBalance: AmountSchema,
+  /** MUT-664: the documents on the line; always [] when invoicing is off for the profile. */
+  documents: z.array(StatementDocumentTagSchema),
+  /** MUT-664: the document the line is still due (MUT-660's rule); null when none, or invoicing is off. */
+  due: z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).nullable(),
 };
 
 export const StatementChargeOriginSchema = z
@@ -3170,6 +3285,14 @@ export const StatementLineSchema = z
   ])
   .openapi('StatementLine');
 
+/** MUT-664 (for MUT-663's Clients list): every client's balance per currency; negative = in credit (D15). */
+export const CustomerBalancesSchema = z
+  .object({
+    asOf: IsoDateSchema,
+    balances: z.array(z.object({ customerId: uuid, currency: CurrencySchema, balance: AmountSchema })),
+  })
+  .openapi('CustomerBalances');
+
 export const CustomerStatementSchema = z
   .object({
     customerId: uuid,
@@ -3185,7 +3308,7 @@ export const CustomerStatementSchema = z
     totals: z.object({ debit: AmountSchema, credit: AmountSchema }),
     /** openingBalance + debits − credits for the period. With no project and no period: the customer summary's outstanding − unallocated. */
     closingBalance: AmountSchema,
-    /** Oldest first; runningBalance carries across pages. */
+    /** In `order` (oldest first by default); runningBalance carries across pages. */
     lines: z.array(StatementLineSchema),
     nextCursor: z.string().nullable(),
   })
@@ -3305,6 +3428,8 @@ export const PaymentSchema = z
     reference: z.string().nullable(),
     /** MUT-481: the legal receipt's number; null when none was given, and always on person-made payments. */
     receiptNumber: z.string().nullable(),
+    /** MUT-660: marked "not for invoice" (due no document; outside Invoice income). */
+    notForInvoice: z.boolean(),
     notes: z.string().nullable(),
     status: PaymentStatusSchema,
     reversedAt: z.string().datetime().nullable(),
@@ -4330,6 +4455,9 @@ const currencyActivity = z.object({
   byCustomer: z.array(z.object({ customerId: uuid.nullable(), ...expenseBucket })).openapi({ description: 'Received per client, largest first; null = no client, last' }),
 });
 const daysToPaid = { median: z.number().int(), n: z.number().int() };
+/** MUT-660 (ADR-270): one currency's received money, split. */
+export const InvoiceSplitRowSchema = z.object({ currency: CurrencySchema, invoiceIncome: AmountSchema, notForInvoice: AmountSchema, all: AmountSchema }).openapi('InvoiceSplitRow');
+
 export const ActivitySummarySchema = z
   .object({
     from: IsoDateSchema,
@@ -4348,6 +4476,7 @@ export const ActivitySummarySchema = z
         samples: z.array(z.number().int()).openapi({ description: 'Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median' }),
       })
       .openapi({ description: 'Days from an Owed entry’s date to its last payment read in the window, over entries paid in full (settled, not closed by a credit). The median, with n; null (or no row) below 3 entries' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received' }),
   })
   .openapi('ActivitySummary');
 
@@ -4849,6 +4978,7 @@ export const ShareLinkSummarySchema = z
       )
       .openapi({ description: 'Per currency, never summed across currencies; breakdowns by name.' }),
     received: z.array(z.object({ currency: CurrencySchema, ...visitorBucket })).openapi({ description: 'Received payments per currency (reversed ones left out), never summed across currencies.' }),
+    invoiceSplit: z.array(InvoiceSplitRowSchema).optional().openapi({ description: 'MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency' }),
   })
   .openapi('ShareLinkSummary');
 
@@ -5009,7 +5139,9 @@ export const ShareLinkDownloadTicketRequestSchema = z.object({ viewerToken, type
 
 // ---- MUT-568 (ADR-260): the issuing core ---------------------------------------------------------------------------
 
-export const IssuedDocTypeSchema = z.enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT']).openapi('IssuedDocType', { description: '305, 320, 330 and 400 in the Tax Authority\'s codes' });
+export const IssuedDocTypeSchema = z
+  .enum(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST'])
+  .openapi('IssuedDocType', { description: '305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority\'s codes. Clients skip types they don\'t know.' });
 export const DealerTypeSchema = z.enum(['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT']).openapi('DealerType', { description: 'עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה' });
 export const DocumentLanguageSchema = z.enum(['ar', 'he', 'en']).openapi('DocumentLanguage');
 
@@ -5045,11 +5177,40 @@ export const IssuerDetailsSchema = z
     bankDetails: z.string().nullable(),
     footerNote: z.string().nullable(),
     offerAfterSave: z.boolean().openapi({ description: 'MUT-648: offer to issue a document after saving income' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.openapi({ description: 'MUT-660: the documents a client with no preference of its own is due' }),
     version: z.number().int(),
   })
   .openapi('IssuerDetails');
 
 /** MUT-571: a profile's connection to the Tax Authority. */
+/** MUT-571 AC3: one run of the Tax Authority re-consent reminders (counts only for the job). */
+export const TaxAuthorityReminderSummarySchema = z
+  .object({
+    dryRun: z.boolean(),
+    checked: z.number().int().openapi({ description: 'Connections whose consent ends within 10 days or ended within 7' }),
+    due: z.number().int().openapi({ description: 'Mailed, or in a dry run would be' }),
+    sent: z.number().int(),
+    duplicate: z.number().int().openapi({ description: 'This stage of this consent was already mailed' }),
+    notSent: z.number().int().openapi({ description: 'Due but not sent: a read or the mailer failed, mail off, capped or refused' }),
+    skipped: z.number().int().openapi({ description: 'Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed' }),
+  })
+  .openapi('TaxAuthorityReminderSummary');
+
+export const TaxAuthorityReminderRunSchema = z
+  .object({
+    summary: TaxAuthorityReminderSummarySchema,
+    rows: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        stage: z.enum(['soon', 'ended']).nullable(),
+        action: z.enum(['send', 'skip']),
+        skip: z.enum(['other-environment', 'no-refresh', 'profile-gone', 'owner-gone', 'owner-inactive', 'suppressed']).nullable(),
+        outcome: z.string().nullable(),
+      }),
+    ),
+  })
+  .openapi('TaxAuthorityReminderRun');
+
 export const TaxAuthorityStatusSchema = z
   .object({
     state: z.enum(['none', 'connected', 'expired']),
@@ -5127,6 +5288,7 @@ export const IssuerDefaultsRequestSchema = z
     bankDetails: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed for paying by transfer' }),
     footerNote: z.string().trim().max(300).nullable().optional().openapi({ description: 'Printed at the foot of every document' }),
     offerAfterSave: z.boolean().optional().openapi({ description: 'MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted)' }),
+    defaultDocumentsPreference: DocumentsPreferenceSchema.optional().openapi({ description: 'MUT-660: the documents a client with no preference is due (unchanged when omitted)' }),
   })
   .openapi('IssuerDefaultsRequest');
 
@@ -5177,7 +5339,7 @@ export const IssueDocumentRequestSchema = z
     customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
     dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
     originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
-    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice it pays' }),
+    appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
     discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
     pricesIncludeVat: z.boolean().optional().openapi({ description: 'V1-a: whether the prices typed include VAT; default from the business details' }),
@@ -5190,17 +5352,54 @@ export const IssueDocumentRequestSchema = z
       .object({ heldKey: z.string().min(8).max(128) })
       .optional()
       .openapi({ description: 'MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first.' }),
+    manualAllocation: z
+      .object({
+        number: z.string().max(40).openapi({ description: 'The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise).' }),
+        forNumber: z.number().int().min(1).max(999_999_999).openapi({ description: 'The document number it was requested for: the preview\'s `allocation.nextNumber` at the time.' }),
+      })
+      .optional()
+      .openapi({
+        description:
+          'MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711.',
+      }),
     lines: z.array(IssueLineRequestSchema).min(1).max(200),
   })
   .openapi('IssueDocumentRequest');
 
 const IssuedLineSchema = z.object({ index: z.number().int(), description: z.string(), kind: z.string(), quantity: z.string(), unitPrice: AmountSchema, discount: AmountSchema, net: AmountSchema, pricesIncludeVat: z.boolean(), vatRateBasisPoints: z.number().int(), vat: AmountSchema });
 
-export const IssuedDocumentPreviewSchema = z
-  .object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) })
-  .openapi('IssuedDocumentPreview');
+const IssuedTotalsSchema = z.object({ subtotal: AmountSchema, discount: AmountSchema, net: AmountSchema, vatRateBasisPoints: z.number().int(), vat: AmountSchema, gross: AmountSchema, pricesIncludeVat: z.boolean(), lines: z.array(IssuedLineSchema) });
+/** MUT-662: a payment request's status, derived from what refers to it. */
+export const PaymentRequestFactsSchema = z
+  .object({
+    status: z.enum(['UNPAID', 'PARTLY_PAID', 'PAID', 'CANCELLED']),
+    covered: AmountSchema.openapi({ description: 'What the referring invoice-receipts and receipts cover, after their credit notes' }),
+    linked: z.array(z.object({ id: uuid, docType: IssuedDocTypeSchema, number: z.number().int(), gross: AmountSchema })),
+    cancellation: z.object({ number: z.number().int(), displayNumber: z.string(), cancelledAt: z.string().datetime(), reason: z.string().nullable() }).nullable(),
+  })
+  .openapi('PaymentRequestFacts');
 
-export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
+/** MUT-662 (D18): cancelling a payment request. */
+export const CancelPaymentRequestSchema = z.object({ reason: z.string().trim().max(300).nullable().optional() }).openapi('CancelPaymentRequest');
+
+
+/** MUT-711 (ADR-273): what the review step needs when the document must carry an allocation number. */
+export const IssueAllocationSchema = z
+  .object({
+    mode: z.enum(['AUTOMATIC', 'MANUAL']).openapi({ description: 'AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`.' }),
+    nextNumber: z.number().int().openapi({ description: 'The number this document would take if issued now. A preview, never a reservation.' }),
+    documentDate: IsoDateSchema,
+    net: AmountSchema.openapi({ description: 'The amount before VAT the Tax Authority asks for' }),
+    customerTaxId: z.string().openapi({ description: 'The client’s VAT number' }),
+    requestUrl: z.string().url().openapi({ description: 'Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)' }),
+  })
+  .openapi('IssueAllocation');
+
+export const IssuedDocumentPreviewSchema = IssuedTotalsSchema.extend({
+  allocation: IssueAllocationSchema.nullable().openapi({ description: 'MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711.' }),
+}).openapi('IssuedDocumentPreview');
+
+export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   id: uuid,
   docType: IssuedDocTypeSchema,
   number: z.number().int(),
@@ -5217,15 +5416,27 @@ export const IssuedDocumentSchema = IssuedDocumentPreviewSchema.extend({
   originalId: uuid.nullable(),
   paymentDetails: z.object({ method: z.string(), reference: z.string().nullable(), receivedOn: IsoDateSchema }).nullable(),
   allocationNumber: z.string().nullable(),
+  allocationSource: z.enum(['API', 'MANUAL']).nullable().openapi({ description: 'MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.' }),
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
   coreVersion: z.string(),
+  /** MUT-662 */
+  displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
+  paymentRequest: PaymentRequestFactsSchema.nullable().openapi({ description: 'MUT-662: a payment request\'s derived status; null for other types' }),
 }).openapi('IssuedDocument');
 
-export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
+/** MUT-664 (D22): a list item carries how much of it is settled (the client page's Documents tab). */
+export const IssuedDocumentListItemSchema = IssuedDocumentSchema.extend({
+  settled: AmountSchema.nullable().openapi({ description: 'Paid + credited on its Owed, at most its gross; null on a credit note' }),
+  settlement: z.enum(['OPEN', 'PARTLY_PAID', 'PAID', 'CANCELLED']).nullable().openapi({ description: 'CANCELLED: credit notes cover its gross. Null on a credit note' }),
+}).openapi('IssuedDocumentListItem');
+export const IssuedDocumentPageSchema = z.object({ items: z.array(IssuedDocumentListItemSchema), nextCursor: z.string().nullable() }).openapi('IssuedDocumentPage');
 export const ListIssuedDocumentsQuerySchema = z.object({
   docType: IssuedDocTypeSchema.optional(),
   customerId: uuid.optional(),
+  currency: CurrencySchema.optional().openapi({ description: 'MUT-664' }),
+  from: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or after' }),
+  to: IsoDateSchema.optional().openapi({ description: 'MUT-664: documentDate on or before' }),
   limit: z.coerce.number().int().min(1).max(100).default(50),
   cursor: z.string().optional(),
 });
@@ -5234,3 +5445,57 @@ export const IssuedCopyRequestSchema = z.object({ channel: z.enum(['DOWNLOAD', '
 export const IssuingGapsSchema = z
   .object({ types: z.array(z.object({ docType: IssuedDocTypeSchema, start: z.number().int(), last: z.number().int(), missing: z.array(z.number().int()) })) })
   .openapi('IssuingGaps');
+
+// ---- MUT-660 (ADR-270): documents due, Issue all, not for invoice ----
+const DueEntryKindSchema = z.enum(['owed', 'received']);
+const DueEntryRefSchema = z.object({ kind: DueEntryKindSchema, id: uuid }).openapi('DueEntryRef');
+export const DueKindSchema = z.enum(['TAX_INVOICE', 'PAYMENT_REQUEST', 'RECEIPT', 'TAX_INVOICE_RECEIPT']).openapi('DueKind');
+export const DueReasonSchema = z
+  .enum(['PAYMENT_REQUEST_PENDING', 'CURRENCY_NOT_ILS', 'MIXED_ALLOCATION', 'RECORDED_ELSEWHERE'])
+  .openapi('DueReason', { description: 'Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice' });
+export const DueItemSchema = z
+  .object({
+    kind: DueKindSchema.nullable().openapi({ description: 'The document due; null in the not-for-invoice view' }),
+    entry: DueEntryRefSchema.extend({ number: z.string() }),
+    customerId: uuid.nullable(),
+    amount: AmountSchema,
+    currency: CurrencySchema,
+    date: IsoDateSchema.openapi({ description: 'The Owed’s posting date or the Received’s date' }),
+    issuable: z.boolean(),
+    reason: DueReasonSchema.nullable(),
+    appliesToDocumentId: uuid.nullable().openapi({ description: 'A receipt: the tax invoice it pays' }),
+  })
+  .openapi('DueItem');
+export const DocumentsDueQuerySchema = z.object({
+  view: z.enum(['to-issue', 'not-for-invoice']).default('to-issue'),
+  olderThanMonths: z.coerce.number().int().min(0).max(120).default(0).openapi({ description: 'Only items dated before today minus N months (0 = all)' }),
+});
+export const DocumentsDueSchema = z
+  .object({
+    view: z.enum(['to-issue', 'not-for-invoice']),
+    groups: z.array(z.object({ customerId: uuid.nullable(), items: z.array(DueItemSchema) })),
+    counts: z.object({ total: z.number().int(), byKind: z.record(z.string(), z.number().int()) }),
+  })
+  .openapi('DocumentsDue');
+export const DocumentsDueCountSchema = z.object({ total: z.number().int() }).openapi('DocumentsDueCount');
+export const IssueDueRequestSchema = z
+  .object({ customerId: uuid.nullable(), items: z.array(DueEntryRefSchema).min(1).max(25) })
+  .strict()
+  .openapi('IssueDueRequest');
+export const IssueDueResultSchema = z
+  .object({
+    results: z.array(
+      z.object({
+        entry: DueEntryRefSchema,
+        status: z.enum(['issued', 'held', 'refused']),
+        reason: z.string().nullable().openapi({ description: 'Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason)' }),
+        document: IssuedDocumentSchema.nullable(),
+      }),
+    ),
+    issued: z.number().int(),
+  })
+  .openapi('IssueDueResult');
+export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefSchema).min(1).max(500), value: z.boolean() }).strict().openapi('NotForInvoiceRequest');
+export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
+export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');
+export const NotForInvoiceEntrySchema = z.object({ kind: DueEntryKindSchema, id: uuid, notForInvoice: z.boolean(), version: z.number().int() }).openapi('NotForInvoiceEntry');

@@ -5,7 +5,7 @@ import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { ACCOUNTANT_EXCLUDED_ROUTES, accountantMayRead } from '../auth/writability.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
-import { accountantHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
+import { issuingHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 
 /**
  * MUT-559 (ADR-245): every profile-scoped route a session can call, enumerated from the published contract and the
@@ -21,6 +21,7 @@ const ALLOWED_GETS = [
   'GET /v1/attachments/{attachmentId}/download',
   'GET /v1/conversions',
   'GET /v1/conversions/{conversionId}',
+  'GET /v1/customer-balances', // MUT-664: the balances the statement already shows, every client at once
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   'GET /v1/customers/{customerId}/statement',
@@ -32,6 +33,9 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/streak',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-660: documents due, read under the grant when the owner holds `invoicing`.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
   // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
   'GET /v1/issued-documents',
   'GET /v1/issued-documents/{documentId}',
@@ -47,6 +51,8 @@ const ALLOWED_GETS = [
   'GET /v1/issuing/tax-authority',
   'GET /v1/issuing/styles',
   'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
   'GET /v1/issuing/settings',
   'GET /v1/payments',
   // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
@@ -77,6 +83,7 @@ const QUERIES: Record<string, string> = {
   'GET /v1/summaries/period': '?from=2026-11-01&to=2026-11-30&currency=ILS',
   'GET /v1/customers/{customerId}/statement': '?currency=ILS',
   'GET /v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10',
+  'GET /v1/issuing/uniform-file': '?from=2026-11-01&to=2026-11-05',
 };
 const PLACEHOLDER = '00000000-0000-4000-8000-0000000000aa';
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
@@ -113,7 +120,7 @@ const call = (op: Operation, query = '') =>
 
 beforeAll(async () => {
   storage = new MemoryAttachmentStorage();
-  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
+  h = issuingHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');

@@ -29,8 +29,12 @@ import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision }
 import type {
   AccountPurgeRepository,
   IssueDocumentInput,
+  NotForInvoiceItem,
+  NotForInvoiceResult,
   IssueResult,
   IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
   IssuingRepository,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
@@ -143,6 +147,10 @@ import type {
   MalafatSignInRepository,
   SignInCodeRecord,
   SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorFirstStep,
+  TwoFactorRecord,
+  TwoFactorRepository,
   ExternalIdentityRepository,
   MalafatRole,
   MembershipRole,
@@ -196,9 +204,11 @@ import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { fromEntryRefusal, ledgerPlan } from '../issuing/ledger-plan.js';
+import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, postsNewOwed, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
+import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DuePaymentInput, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
-import type { IssuedDocType } from '../issuing/types.js';
+import { DOC_TYPE_CODES, type IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -209,6 +219,8 @@ const TAX_CONNECTION_SELECT = { organizationId: true, environment: true, accessT
 const toExternal = (row: { entryKind: string } & Omit<ExternalInvoiceRecord, 'entryKind'>): ExternalInvoiceRecord => ({ ...row, entryKind: row.entryKind === 'RECEIVED' ? 'RECEIVED' : 'OWED' });
 
 /** MUT-646 */
+/** MUT-569: documents per lines query (Postgres takes at most 32,767 bind parameters). */
+const ISSUED_LINES_CHUNK = 5_000;
 const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
 const toLogo = (row: { id: string; organizationId: string; contentType: string; bytes: Uint8Array; sha256: string; createdAt: Date }): IssuerLogoRecord => ({
   ...row,
@@ -506,7 +518,7 @@ export class PrismaLedgerStore implements LedgerStore {
           // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
           const kept = await tx.session.findFirst({
             where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
-            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true },
+            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true, twoFactorAt: true },
           });
           if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
           const user = await tx.user.update({
@@ -535,6 +547,8 @@ export class PrismaLedgerStore implements LedgerStore {
                 passkeyId: kept.passkeyId,
                 // MUT-459 (review): a password change proves the password only; the rotated session has no step-up.
                 stepUpAt: null,
+                // MUT-710 (review 6): changing the password isn't losing a factor; the second step carries over.
+                twoFactorAt: kept.twoFactorAt,
               },
             });
           } else {
@@ -602,6 +616,7 @@ export class PrismaLedgerStore implements LedgerStore {
         ...(input.passkeyId === undefined ? {} : { passkeyId: input.passkeyId }),
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         ...(input.passkeyId ? { stepUpAt: input.at } : {}),
+        ...(input.twoFactorAt ? { twoFactorAt: input.twoFactorAt } : {}),
       };
       const { verifiedPasswordHash } = input;
       if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
@@ -851,6 +866,9 @@ export class PrismaLedgerStore implements LedgerStore {
         select: TAX_CONNECTION_SELECT,
       }),
     deleteTaxConnection: async (organizationId) => (await this.prisma.taxAuthorityConnection.deleteMany({ where: { organizationId } })).count > 0,
+    // A small table (one row per connected profile), read once a day: no index on the consent's end.
+    taxConnectionsEndingBetween: (from, to) =>
+      this.prisma.taxAuthorityConnection.findMany({ where: { refreshExpiresAt: { gte: from, lt: to } }, orderBy: { refreshExpiresAt: 'asc' }, select: TAX_CONNECTION_SELECT }),
     withTaxConnectionLock: (organizationId, fn) =>
       // The row is locked for the refresh's round trip, so a second caller waits and then sees the new tokens.
       this.prisma.$transaction(
@@ -896,12 +914,20 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.issuedDocument.findFirst({ where: { id, organizationId } });
       return row ? withLines(this.prisma, row) : null;
     },
+    moneyDocumentOn: (organizationId, paymentId) =>
+      this.prisma.issuedDocument.findFirst({
+        where: { organizationId, paymentId, docType: { in: ['RECEIPT', 'TAX_INVOICE_RECEIPT'] } },
+        select: { id: true, docType: true, number: true },
+        orderBy: [{ issuedAt: 'asc' }, { id: 'asc' }],
+      }),
     list: async (organizationId, filter, page) => {
       const rows = await this.prisma.issuedDocument.findMany({
         where: {
           organizationId,
           ...(filter.docType ? { docType: filter.docType } : {}),
           ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.currency ? { currency: filter.currency } : {}),
+          ...(filter.from || filter.to ? { documentDate: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } } : {}),
           ...(page.cursor ? { OR: [{ issuedAt: { lt: page.cursor.createdAt } }, { issuedAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
         },
         orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
@@ -962,6 +988,91 @@ export class PrismaLedgerStore implements LedgerStore {
         return toExternal(removed);
       });
     },
+    dueInputs: async (organizationId) => {
+      const [issuer, preferences, payments] = await Promise.all([
+        this.prisma.issuerDetails.findUnique({ where: { organizationId }, select: { dealerType: true, defaultDocumentsPreference: true } }),
+        preferencesOf(this.prisma, organizationId),
+        this.prisma.$queryRaw<DuePaymentRow[]>`
+          SELECT p."id", p."number", p."customerId", p."origin"::text AS "origin", p."status"::text AS "status", p."currency", p."amountMinor", p."receivedOn",
+                 p."notForInvoice", p."receiptNumber",
+                 EXISTS (SELECT 1 FROM "external_invoices" x WHERE x."organizationId" = p."organizationId" AND x."entryKind" = 'RECEIVED' AND x."entryId" = p."id" AND x."removedAt" IS NULL) AS "externalInvoice"
+          FROM "payments" p
+          WHERE p."organizationId" = ${organizationId}::uuid AND p."status" = 'POSTED' AND p."origin" <> 'ISSUED_DOCUMENT'
+            AND NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = p."organizationId" AND d."paymentId" = p."id")
+            AND (p."replacesPaymentId" IS NULL OR NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = p."organizationId" AND d."paymentId" = p."replacesPaymentId"))
+          ORDER BY p."createdAt", p."id"`,
+      ]);
+      const allocations = await liveAllocationsOf(this.prisma, organizationId, payments.map((p) => p.id));
+      const reached = [...new Set([...allocations.values()].flat().map((a) => a.receivableId))];
+      const receivables = await this.prisma.$queryRaw<DueReceivableRow[]>`
+        SELECT r."id", r."number", r."customerId", r."origin"::text AS "origin", r."currency", r."grossMinor", r."paidMinor", r."creditedMinor", r."postingDate", r."notForInvoice",
+               (r."deletedAt" IS NOT NULL) AS "deleted",
+               EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" IN ('TAX_INVOICE', 'TAX_INVOICE_RECEIPT')) AS "documented",
+               (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'TAX_INVOICE' ORDER BY d."issuedAt", d."id" LIMIT 1) AS "taxInvoiceId",
+               (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'PAYMENT_REQUEST'
+                  AND NOT EXISTS (SELECT 1 FROM "issued_document_cancellations" c WHERE c."documentId" = d."id") ORDER BY d."issuedAt", d."id" LIMIT 1) AS "paymentRequestId",
+               EXISTS (SELECT 1 FROM "external_invoices" x WHERE x."organizationId" = r."organizationId" AND x."entryKind" = 'OWED' AND x."entryId" = r."id" AND x."removedAt" IS NULL) AS "externalInvoice"
+        FROM "receivables" r
+        WHERE r."organizationId" = ${organizationId}::uuid AND r."deletedAt" IS NULL AND (
+          r."id" = ANY(${reached}::uuid[])
+          OR (r."origin" <> 'ISSUED_DOCUMENT' AND NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" IN ('TAX_INVOICE', 'TAX_INVOICE_RECEIPT')))
+          OR (r."status" = 'OPEN' AND EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'TAX_INVOICE'))
+        )
+        ORDER BY r."createdAt", r."id"`;
+      return {
+        dealerType: issuer?.dealerType ?? null,
+        defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE,
+        preferences,
+        receivables: receivables.map((r) => ({ ...r, origin: r.origin as DueReceivableInput['origin'] })),
+        payments: payments.map((p) => ({ ...p, origin: p.origin as DuePaymentInput['origin'], status: p.status as DuePaymentInput['status'], documented: false, allocations: allocations.get(p.id) ?? [] })),
+      };
+    },
+    incomeContext: async (organizationId, paymentIds) => {
+      const rows = await this.prisma.payment.findMany({ where: { organizationId, id: { in: [...paymentIds] } }, select: { id: true, replacesPaymentId: true } });
+      const ids = rows.map((r) => r.id);
+      const linkedTo = [...ids, ...rows.flatMap((r) => (r.replacesPaymentId ? [r.replacesPaymentId] : []))];
+      const [docs, externals, allocations, issuer, preferences] = await Promise.all([
+        this.prisma.issuedDocument.findMany({ where: { organizationId, paymentId: { in: linkedTo } }, select: { paymentId: true } }),
+        this.prisma.externalInvoice.findMany({ where: { organizationId, entryKind: 'RECEIVED', entryId: { in: ids }, removedAt: null }, select: { entryId: true } }),
+        liveAllocationsOf(this.prisma, organizationId, ids),
+        this.prisma.issuerDetails.findUnique({ where: { organizationId }, select: { defaultDocumentsPreference: true } }),
+        preferencesOf(this.prisma, organizationId),
+      ]);
+      const documented = new Set(docs.map((d) => d.paymentId));
+      const attached = new Set(externals.map((x) => x.entryId));
+      const reached = [...new Set([...allocations.values()].flat().map((a) => a.receivableId))];
+      const receivableRows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: reached } }, select: { id: true, customerId: true, notForInvoice: true } });
+      return {
+        defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE,
+        preferences,
+        receivables: new Map(receivableRows.map((r) => [r.id, { customerId: r.customerId, notForInvoice: r.notForInvoice }])),
+        payments: new Map(rows.map((r) => [r.id, { documented: documented.has(r.id) || (!!r.replacesPaymentId && documented.has(r.replacesPaymentId)), externalInvoice: attached.has(r.id), allocations: allocations.get(r.id) ?? [] }])),
+      };
+    },
+    setNotForInvoice: async (organizationId, items, value, at) =>
+      this.prisma.$transaction(async (tx): Promise<NotForInvoiceResult> => {
+        const found: Array<{ item: NotForInvoiceItem; notForInvoice: boolean }> = [];
+        for (const item of items) {
+          const table = item.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
+          const live = item.kind === 'receivable' ? Prisma.sql`"deletedAt" IS NULL` : Prisma.sql`"status" = 'POSTED'`;
+          const rows = await tx.$queryRaw<Array<{ version: number; notForInvoice: boolean }>>`SELECT "version", "notForInvoice" FROM ${table} WHERE "id" = ${item.id}::uuid AND "organizationId" = ${organizationId}::uuid AND ${live} FOR UPDATE`;
+          const row = rows[0];
+          if (!row) return { kind: 'not_found', item };
+          // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+          if (item.expectedVersion !== undefined && row.version !== item.expectedVersion && row.notForInvoice !== value) return { kind: 'stale', item, version: row.version };
+          if (value && (await hasTaxDocumentTx(tx, organizationId, item))) return { kind: 'has_tax_document', item };
+          found.push({ item, notForInvoice: row.notForInvoice });
+        }
+        const change = found.filter((f) => f.notForInvoice !== value);
+        const ids = (kind: NotForInvoiceItem['kind'], list: typeof found) => list.filter((f) => f.item.kind === kind).map((f) => f.item.id);
+        if (ids('receivable', change).length) await tx.receivable.updateMany({ where: { organizationId, id: { in: ids('receivable', change) } }, data: { notForInvoice: value, version: { increment: 1 } } });
+        if (ids('payment', change).length) await tx.payment.updateMany({ where: { organizationId, id: { in: ids('payment', change) } }, data: { notForInvoice: value, version: { increment: 1 }, updatedAt: at } });
+        const [receivables, payments] = await Promise.all([
+          tx.receivable.findMany({ where: { organizationId, id: { in: ids('receivable', found) } } }),
+          tx.payment.findMany({ where: { organizationId, id: { in: ids('payment', found) } } }),
+        ]);
+        return { kind: 'done', changed: change.length, receivables, payments };
+      }),
     getOriginalPdf: async (organizationId, documentId) => {
       const row = await this.prisma.issuedDocumentOriginal.findFirst({ where: { documentId, organizationId } });
       return row ? { ...row, bytes: new Uint8Array(row.bytes) } : null;
@@ -974,12 +1085,67 @@ export class PrismaLedgerStore implements LedgerStore {
       await this.prisma.issuedDocumentOriginal.createMany({ data: [{ documentId, organizationId, copyIndex: pdf.copyIndex, bytes: Buffer.from(pdf.bytes), sha256: pdf.sha256, createdAt: at }], skipDuplicates: true });
       return this.issuing.getOriginalPdf(organizationId, documentId);
     },
+    inRange: async (organizationId, from, to) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: { organizationId, documentDate: { gte: from, lte: to } },
+        orderBy: [{ docType: 'asc' }, { number: 'asc' }],
+      });
+      // Lines in chunks: a whole history can pass Postgres's bind-parameter limit in one IN list.
+      const byDocument = new Map<string, IssuedLineRow[]>();
+      for (let i = 0; i < rows.length; i += ISSUED_LINES_CHUNK) {
+        const ids = rows.slice(i, i + ISSUED_LINES_CHUNK).map((r) => r.id);
+        const lines = await this.prisma.issuedDocumentLine.findMany({ where: { organizationId, documentId: { in: ids } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+        for (const line of lines) byDocument.set(line.documentId, [...(byDocument.get(line.documentId) ?? []), line]);
+      }
+      return rows
+        .map((row) => issuedRecord(row, byDocument.get(row.id) ?? []))
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number);
+    },
     gaps: async (organizationId) => {
       const [counters, numbers] = await Promise.all([
         this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
         this.prisma.issuedDocument.findMany({ where: { organizationId }, select: { docType: true, number: true } }),
       ]);
       return counters.map((c) => numberGaps(c, numbers.filter((n) => n.docType === c.docType).map((n) => n.number)));
+    },
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at) =>
+      this.prisma.$transaction(async (tx): Promise<CancelPaymentRequestResult> => {
+        const replay = await tx.issuedDocumentCancellation.findFirst({ where: { organizationId, requestKey: cancel.requestKey } });
+        if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: replay, created: false } : { kind: 'not_found' };
+        const d = await tx.issuedDocument.findFirst({ where: { id: documentId, organizationId }, select: { id: true, docType: true, receivableId: true } });
+        if (!d) return { kind: 'not_found' };
+        if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+        // R4: the request's Owed first, the order a 320 applying it takes. (FOR UPDATE on the document itself is refused
+        // by its insert-only trigger's spirit; the Owed is the shared lock.)
+        if (d.receivableId) await lockReceivable(tx, d.receivableId);
+        const existing = await tx.issuedDocumentCancellation.findUnique({ where: { documentId } });
+        if (existing) return { kind: 'already_cancelled', cancellation: existing };
+        if (blocksCancel(await referringDocumentsOf(tx, organizationId, [documentId]).then((m) => m.get(documentId) ?? []))) return { kind: 'has_documents' };
+        const counter = await tx.$queryRaw<Array<{ taken: number }>>`
+          INSERT INTO "issued_cancellation_counters" ("organizationId", "next") VALUES (${organizationId}::uuid, 2)
+          ON CONFLICT ("organizationId") DO UPDATE SET "next" = "issued_cancellation_counters"."next" + 1
+          RETURNING "next" - 1 AS "taken"`;
+        const cancellation: IssuedDocumentCancellationRecord = await tx.issuedDocumentCancellation.create({
+          data: { organizationId, documentId, number: Number(counter[0]!.taken), cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey },
+        });
+        return { kind: 'cancelled', cancellation, created: true };
+      }),
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      if (documentIds.length === 0) return out;
+      const requests = await this.prisma.issuedDocument.findMany({ where: { organizationId, id: { in: [...documentIds] }, docType: 'PAYMENT_REQUEST' }, select: { id: true, grossMinor: true } });
+      if (requests.length === 0) return out;
+      const ids = requests.map((r) => r.id);
+      const [referring, cancellations] = await Promise.all([
+        referringDocumentsOf(this.prisma, organizationId, ids),
+        this.prisma.issuedDocumentCancellation.findMany({ where: { organizationId, documentId: { in: ids } } }),
+      ]);
+      const byDoc = new Map(cancellations.map((c) => [c.documentId, c]));
+      for (const r of requests) {
+        const c = byDoc.get(r.id);
+        out.set(r.id, paymentRequestFacts(r.grossMinor, referring.get(r.id) ?? [], c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
     },
   };
 
@@ -1347,6 +1513,149 @@ export class PrismaLedgerStore implements LedgerStore {
       return { kind: 'exhausted' };
     },
     prune: async (before) => (await this.prisma.signInCode.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+  };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => mapNullable(await this.prisma.twoFactor.findUnique({ where: { userId } }), toTwoFactor),
+    enable: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Review 2: under the person's row lock, so two confirmations can't leave two sets of recovery codes.
+          const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('two_factor.userId');
+          const existing = await tx.twoFactor.findUnique({ where: { userId: input.userId } });
+          const row = {
+            method: input.method,
+            totpSecretSealed: input.totpSecretSealed,
+            lastUsedStep: input.lastUsedStep === null ? null : BigInt(input.lastUsedStep),
+            failures: 0,
+            failuresSince: null,
+            lockedUntil: null,
+            enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+            updatedAt: input.at,
+          };
+          await tx.twoFactor.upsert({ where: { userId: input.userId }, create: { userId: input.userId, ...row }, update: row });
+          await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: input.userId } });
+          await tx.twoFactorRecoveryCode.createMany({ data: input.recoveryDigests.map((codeDigest) => ({ userId: input.userId, codeDigest, createdAt: input.at })) });
+          const { count } = await tx.session.updateMany({
+            where: { userId: input.userId, revokedAt: null, ...(input.keepSessionId ? { id: { not: input.keepSessionId } } : {}) },
+            data: { revokedAt: input.at, revokedReason: 'two_factor_enabled' },
+          });
+          if (input.keepSessionId) await tx.session.updateMany({ where: { id: input.keepSessionId, revokedAt: null }, data: { twoFactorAt: input.at } });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { revokedSessions: count };
+        }),
+      ),
+    disable: (userId, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.twoFactor.deleteMany({ where: { userId } });
+        if (count === 0) return false;
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorChallenge.deleteMany({ where: { userId } });
+        await tx.session.updateMany({ where: { userId, twoFactorAt: { not: null } }, data: { twoFactorAt: null } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
+    recordStep: async (userId, step, at) => {
+      const { count } = await this.prisma.twoFactor.updateMany({
+        where: { userId, OR: [{ lastUsedStep: null }, { lastUsedStep: { lt: BigInt(step) } }] },
+        data: { lastUsedStep: BigInt(step), updatedAt: at },
+      });
+      return count === 1;
+    },
+    reserveTry: (userId, at, policy) =>
+      this.prisma.$transaction(async (tx) => {
+        // Review 2: the person's two_factor row lock serializes parallel tries, so no more than `lockAfter` pass.
+        const [row] = await tx.$queryRaw<Array<{ failures: number; failuresSince: Date | null; lockedUntil: Date | null }>>`SELECT failures, "failuresSince", "lockedUntil" FROM two_factor WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        if (!row) return { allowed: false, lockedUntil: null };
+        if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+        const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+        const failures = fresh ? 1 : row.failures + 1;
+        if (failures < policy.lockAfter) {
+          await tx.twoFactor.update({ where: { userId }, data: { failures, failuresSince: fresh ? at : row.failuresSince } });
+          return { allowed: true, lockedUntil: null };
+        }
+        const lockedUntil = new Date(at.getTime() + policy.lockMs);
+        await tx.twoFactor.update({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil } });
+        return { allowed: true, lockedUntil };
+      }),
+    clearFailures: async (userId) => {
+      await this.prisma.twoFactor.updateMany({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil: null } });
+    },
+    replaceRecoveryCodes: (userId, digests, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorRecoveryCode.createMany({ data: digests.map((codeDigest) => ({ userId, codeDigest, createdAt: at })) });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+      }),
+    useRecoveryCode: async (userId, digest, at) => {
+      const { count } = await this.prisma.twoFactorRecoveryCode.updateMany({ where: { userId, codeDigest: digest, usedAt: null }, data: { usedAt: at } });
+      const left = await this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } });
+      return { used: count === 1, left };
+    },
+    recoveryCodesLeft: (userId) => this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } }),
+    createChallenge: async (input) =>
+      toTwoFactorChallenge(
+        await translate(() =>
+          this.prisma.twoFactorChallenge.create({
+            data: {
+              userId: input.userId,
+              tokenDigest: input.tokenDigest,
+              purpose: input.purpose,
+              method: input.method,
+              sessionKind: input.sessionKind ?? null,
+              firstStep: input.firstStep ? { ...input.firstStep } : Prisma.JsonNull,
+              passwordChangedAt: input.passwordChangedAt ?? null,
+              linkId: input.linkId ?? null,
+              pendingSecretSealed: input.pendingSecretSealed ?? null,
+              createdAt: input.at,
+              expiresAt: input.expiresAt,
+            },
+          }),
+        ),
+      ),
+    findChallenge: async (tokenDigest, at) =>
+      mapNullable(await this.prisma.twoFactorChallenge.findFirst({ where: { tokenDigest, consumedAt: null, expiresAt: { gt: at } } }), toTwoFactorChallenge),
+    spendAttempt: async (id, at, maxAttempts) => {
+      // One conditional UPDATE … RETURNING: the count and the tries left come from the same statement.
+      const [row] = await this.prisma.$queryRaw<Array<{ attempts: number }>>`
+        UPDATE two_factor_challenges SET attempts = attempts + 1
+        WHERE id = ${id}::uuid AND "consumedAt" IS NULL AND "expiresAt" > ${at} AND attempts < ${maxAttempts}
+        RETURNING attempts`;
+      return row ? { spent: true, triesLeft: Math.max(0, maxAttempts - Number(row.attempts)) } : { spent: false, triesLeft: 0 };
+    },
+    consumeChallenge: async (id, at) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({ where: { id, consumedAt: null, expiresAt: { gt: at } }, data: { consumedAt: at } });
+      return count === 1;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({
+        where: {
+          id,
+          consumedAt: null,
+          expiresAt: { gt: at },
+          codesSent: { lt: limits.maxCodes },
+          OR: [{ codeSentAt: null }, { codeSentAt: { lte: new Date(at.getTime() - limits.minGapMs) } }],
+        },
+        data: { codeDigest, codeSentAt: at, codesSent: { increment: 1 } },
+      });
+      return count === 1;
+    },
+    pruneChallenges: async (before) => (await this.prisma.twoFactorChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    ownsIssuingProfile: async (userId) => {
+      // A person owns a handful of profiles at most: read their ids, then whether any issues.
+      const owned = await this.prisma.organization.findMany({
+        where: { OR: [ownedBy(userId), coOwnedBy(userId), { memberSyncAt: { not: null }, memberships: { some: { userId, role: 'OWNER' } } }] },
+        select: { id: true },
+      });
+      const ids = owned.map((o) => o.id);
+      if (ids.length === 0) return false;
+      const [issuers, connections] = await Promise.all([
+        this.prisma.issuerDetails.count({ where: { organizationId: { in: ids } } }),
+        this.prisma.taxAuthorityConnection.count({ where: { organizationId: { in: ids } } }),
+      ]);
+      return issuers + connections > 0;
+    },
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -2042,6 +2351,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (patch.vatTreatment !== undefined) data.vatTreatment = patch.vatTreatment;
       if (patch.taxId !== undefined) data.taxId = patch.taxId;
       if (patch.address !== undefined) data.address = patch.address;
+      if (patch.documentsPreference !== undefined) data.documentsPreference = patch.documentsPreference;
       const { count } = await this.prisma.customer.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
       const record = await this.prisma.customer.findFirst({ where: { id, organizationId } });
       if (!record) return { kind: 'not_found' };
@@ -2685,6 +2995,7 @@ export class PrismaLedgerStore implements LedgerStore {
         throw isTransactionTimeout(err) ? new LockConflict() : err;
       });
     },
+    findByClientRequestKey: (organizationId, clientRequestKey) => this.prisma.payment.findFirst({ where: { organizationId, clientRequestKey } }),
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
     capture: (input, at) =>
       this.paymentWrite(() =>
@@ -5163,6 +5474,43 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     userAgent: row.userAgent,
     passkeyId: row.passkeyId,
     stepUpAt: row.stepUpAt,
+    twoFactorAt: row.twoFactorAt,
+  };
+}
+
+function toTwoFactor(row: Prisma.TwoFactorGetPayload<object>): TwoFactorRecord {
+  return {
+    userId: row.userId,
+    method: row.method,
+    totpSecretSealed: row.totpSecretSealed,
+    lastUsedStep: row.lastUsedStep === null ? null : Number(row.lastUsedStep),
+    failures: row.failures,
+    failuresSince: row.failuresSince,
+    lockedUntil: row.lockedUntil,
+    enabledAt: row.enabledAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toTwoFactorChallenge(row: Prisma.TwoFactorChallengeGetPayload<object>): TwoFactorChallengeRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    purpose: row.purpose,
+    method: row.method,
+    sessionKind: row.sessionKind,
+    firstStep: (row.firstStep as TwoFactorFirstStep | null) ?? null,
+    passwordChangedAt: row.passwordChangedAt,
+    linkId: row.linkId,
+    pendingSecretSealed: row.pendingSecretSealed,
+    codeDigest: row.codeDigest,
+    codeSentAt: row.codeSentAt,
+    codesSent: row.codesSent,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    consumedAt: row.consumedAt,
   };
 }
 
@@ -5216,6 +5564,8 @@ function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRec
     issuer: row.issuer as JsonObject,
     customer: row.customer as JsonObject,
     paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
+    // MUT-711: a number issued before the column has no source; the API was the only one then.
+    allocationSource: (row.allocationSource ?? (row.allocationNumber ? 'API' : null)) as IssuedDocumentRecord['allocationSource'],
     lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
   };
 }
@@ -5230,6 +5580,25 @@ async function findIssuedByKey(db: Tx | PrismaClient, organizationId: string, re
 }
 
 /** The number this document takes. One statement, so two first documents of a type never race on creating the row. */
+/** MUT-662: the 320s and 400s referring to each payment request, with their credit notes: two reads, never per row. */
+async function referringDocumentsOf(db: Pick<PrismaClient, 'issuedDocument'>, organizationId: string, requestIds: readonly string[]): Promise<Map<string, ReferringDocument[]>> {
+  const docs = await db.issuedDocument.findMany({
+    where: { organizationId, originalId: { in: [...requestIds] }, docType: { in: ['TAX_INVOICE_RECEIPT', 'RECEIPT'] } },
+    select: { id: true, docType: true, number: true, grossMinor: true, originalId: true },
+    orderBy: { number: 'asc' },
+  });
+  const credits = docs.length
+    ? await db.issuedDocument.groupBy({ by: ['originalId'], where: { organizationId, docType: 'CREDIT_NOTE', originalId: { in: docs.map((d) => d.id) } }, _sum: { grossMinor: true } })
+    : [];
+  const credited = new Map(credits.map((c) => [c.originalId, c._sum.grossMinor ?? 0n]));
+  const out = new Map<string, ReferringDocument[]>();
+  for (const d of docs) {
+    if (!d.originalId || !referringToRequest(d.docType)) continue;
+    out.set(d.originalId, [...(out.get(d.originalId) ?? []), { id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: credited.get(d.id) ?? 0n }]);
+  }
+  return out;
+}
+
 async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: IssuedDocType): Promise<number> {
   const rows = await tx.$queryRaw<Array<{ taken: number }>>`
     INSERT INTO "issued_document_counters" ("organizationId", "docType", "start", "next")
@@ -5243,27 +5612,83 @@ async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: Issue
  * I1-a: locks the recorded entry a document takes over and checks it is a person's own, untouched one for the same
  * customer, currency and amount. Refusals throw IssueRefused (inside the issue transaction, so nothing is kept).
  */
-async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput): Promise<{ kind: 'receivable' | 'payment'; id: string } | null> {
+/** MUT-660: what fromEntryMode reads of an entry, or null when it isn't this profile's. */
+async function entryStateTx(tx: Tx, organizationId: string, from: NonNullable<IssueDocumentInput['fromEntry']>): Promise<EntryState | null> {
+  // MUT-662: a cancelled payment request no longer counts (its Owed can be asked for again).
+  const linked = async (where: Prisma.IssuedDocumentWhereInput) => {
+    const docs = await tx.issuedDocument.findMany({ where: { organizationId, docType: { not: 'CREDIT_NOTE' }, ...where }, select: { id: true, docType: true } });
+    const requests = docs.filter((d) => d.docType === 'PAYMENT_REQUEST').map((d) => d.id);
+    const cancelled = requests.length ? await tx.issuedDocumentCancellation.count({ where: { documentId: { in: requests } } }) : 0;
+    return docs.length - cancelled > 0;
+  };
+  if (from.kind === 'receivable') {
+    const r = await tx.receivable.findFirst({ where: { id: from.id, organizationId } });
+    if (!r) return null;
+    return { kind: 'receivable', origin: r.origin, deleted: !!r.deletedAt, posted: true, customerId: r.customerId, currency: r.currency, grossMinor: r.grossMinor, creditedMinor: r.creditedMinor, allocatedMinor: 0n, documented: await linked({ receivableId: r.id }) };
+  }
+  const p = await tx.payment.findFirst({ where: { id: from.id, organizationId } });
+  if (!p) return null;
+  return { kind: 'payment', origin: p.origin, deleted: false, posted: p.status === 'POSTED', customerId: p.customerId, currency: p.currency, grossMinor: p.amountMinor, creditedMinor: 0n, allocatedMinor: p.allocatedMinor, documented: await linked({ paymentId: p.id }) };
+}
+
+/**
+ * Locks the entry and checks it can take this document the way the unlocked read said (`expected`): a change in
+ * between (another document, an allocation) refuses it rather than posting the wrong way.
+ */
+async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput, expected: 'take' | 'link' | null): Promise<{ kind: 'receivable' | 'payment'; id: string; mode: 'take' | 'link' } | null> {
   const from = input.fromEntry;
   if (!from) return null;
   const table = from.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
   const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM ${table} WHERE "id" = ${from.id}::uuid AND "organizationId" = ${input.organizationId}::uuid FOR UPDATE`;
   if (locked.length === 0) throw new IssueRefused({ kind: 'entry_not_found' });
-  const entry =
-    from.kind === 'receivable'
-      ? await tx.receivable.findUniqueOrThrow({ where: { id: from.id } }).then((r) => ({ ok: r.origin === 'ADJUSTMENT' && !r.deletedAt && r.creditedMinor === 0n, customerId: r.customerId as string | null, currency: r.currency, amountMinor: r.grossMinor }))
-      : await tx.payment.findUniqueOrThrow({ where: { id: from.id } }).then((p) => ({ ok: p.origin === 'CAPTURE' && p.status === 'POSTED' && p.allocatedMinor === 0n, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor }));
-  const refusal = fromEntryRefusal(entry, input);
-  if (refusal) throw new IssueRefused(refusal);
-  return from;
+  const entry = await entryStateTx(tx, input.organizationId, from);
+  const mode = fromEntryMode(entry, input.docType);
+  const refusal = fromEntryRefusal({ ok: mode !== null && mode === expected, customerId: entry?.customerId ?? null, currency: entry?.currency ?? '', amountMinor: entry ? entryAmount(entry) : 0n }, input);
+  if (refusal || !mode) throw new IssueRefused(refusal ?? { kind: 'entry_not_found' });
+  return { ...from, mode };
 }
+
+/** MUT-660: a live 305 (not fully cancelled by credit notes) or a 320 is linked to the entry; a receipt doesn't count. */
+async function hasTaxDocumentTx(tx: Tx, organizationId: string, item: Pick<NotForInvoiceItem, 'kind' | 'id'>): Promise<boolean> {
+  const docs = await tx.issuedDocument.findMany({
+    where: { organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] }, ...(item.kind === 'receivable' ? { receivableId: item.id } : { paymentId: item.id }) },
+    select: { id: true, docType: true, grossMinor: true },
+  });
+  if (docs.some((d) => d.docType === 'TAX_INVOICE_RECEIPT')) return true;
+  for (const d of docs) {
+    const credited = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: d.id }, _sum: { grossMinor: true } });
+    if ((credited._sum.grossMinor ?? 0n) < d.grossMinor) return true;
+  }
+  return false;
+}
+
+type PrismaReader = Pick<PrismaClient, 'paymentAllocation' | 'customer'>;
+
+async function liveAllocationsOf(db: PrismaReader, organizationId: string, paymentIds: readonly string[]): Promise<Map<string, Array<{ receivableId: string; amountMinor: bigint }>>> {
+  const rows = paymentIds.length ? await db.paymentAllocation.findMany({ where: { organizationId, paymentId: { in: [...paymentIds] }, releasedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { paymentId: true, receivableId: true, amountMinor: true } }) : [];
+  const out = new Map<string, Array<{ receivableId: string; amountMinor: bigint }>>();
+  for (const r of rows) out.set(r.paymentId, [...(out.get(r.paymentId) ?? []), { receivableId: r.receivableId, amountMinor: r.amountMinor }]);
+  return out;
+}
+
+async function preferencesOf(db: PrismaReader, organizationId: string): Promise<Map<string, DocumentsPreference | null>> {
+  const rows = await db.customer.findMany({ where: { organizationId }, select: { id: true, documentsPreference: true } });
+  return new Map(rows.map((c) => [c.id, c.documentsPreference]));
+}
+
+type DuePaymentRow = Omit<DuePaymentInput, 'origin' | 'status' | 'documented' | 'allocations'> & { origin: string; status: string };
+type DueReceivableRow = Omit<DueReceivableInput, 'origin'> & { origin: string };
 
 async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
   const { organizationId } = input;
   const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
+  // MUT-660: an unlocked read says whether the document takes its entry over or is linked to it (posting nothing); the
+  // locked read below must agree, so a linked document never takes a ledger number.
+  const expected = input.fromEntry ? fromEntryMode(await entryStateTx(tx, organizationId, input.fromEntry), input.docType) : null;
+  const linked = expected === 'link';
   // Review fix 7: the year counters before any receivable lock, the order every other posting writer takes (MUT-443).
-  const postsOwed = (input.docType === 'TAX_INVOICE' || input.docType === 'TAX_INVOICE_RECEIPT') && input.fromEntry?.kind !== 'receivable';
-  const postsReceived = (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
+  const postsOwed = !linked && postsNewOwed(input);
+  const postsReceived = !linked && (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
   const owedNumber = postsOwed ? await nextReceivableNumberTx(tx, organizationId, input.documentDate) : null;
   const receivedNumber = postsReceived && input.payment ? await nextPaymentNumberTx(tx, organizationId, input.payment.receivedOn) : null;
   const last = await tx.issuedDocument.findFirst({ where: { organizationId, docType: input.docType }, orderBy: { documentDate: 'desc' }, select: { documentDate: true } });
@@ -5274,29 +5699,49 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
   let originalReceivableId: string | null = null;
   if (originalId) {
-    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: 'TAX_INVOICE' }, select: { receivableId: true, customerId: true } });
+    // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
+    const types: IssuedDocType[] = input.docType === 'CREDIT_NOTE' ? ['TAX_INVOICE'] : ['TAX_INVOICE', 'PAYMENT_REQUEST'];
+    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: { in: types } }, select: { id: true, docType: true, receivableId: true, customerId: true } });
     if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
-    const r = await lockReceivable(tx, original.receivableId);
-    const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
-    if (input.composed.grossMinor > outstandingMinor) {
-      throw new IssueRefused(input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor });
+    if (original.docType === 'PAYMENT_REQUEST') {
+      // R4: the request's Owed is locked before its cancellation is read, the order cancelling takes, so a 320 can't
+      // land after a cancel passed its check (or the other way round).
+      await lockReceivable(tx, original.receivableId);
+      if ((await tx.issuedDocumentCancellation.count({ where: { documentId: original.id } })) > 0) throw new IssueRefused({ kind: 'original_not_found' });
     }
-    originalReceivableId = original.receivableId;
+    // MUT-660: a linked receipt names the invoice its payment already paid; it allocates nothing, so no outstanding check.
+    if (!linked) {
+      const r = await lockReceivable(tx, original.receivableId);
+      const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
+      if (input.composed.grossMinor > outstandingMinor) {
+        throw new IssueRefused(input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor });
+      }
+      originalReceivableId = original.receivableId;
+    }
   }
-  const from = await lockFromEntryTx(tx, input);
+  const from = await lockFromEntryTx(tx, input, expected);
   // MUT-572 (ADR-264): every check has passed and the counter is locked; the Tax Authority is asked now, so a refusal
   // rolls the whole issue back and takes no number.
   let allocationNumber = input.allocationNumber;
+  let allocationSource = input.allocationNumber ? (input.allocationSource ?? 'API') : null;
   if (input.allocate) {
     const outcome = await input.allocate(number);
     if (outcome.kind !== 'allocated') throw new IssueRefused({ kind: 'allocation_failed', outcome });
     allocationNumber = outcome.number;
+    allocationSource = outcome.source;
   }
-  const plan = ledgerPlan(input, number);
+  const plan: LedgerPlan = linked ? { receivable: null, payment: null, credit: null } : ledgerPlan(input, number);
   const documentId = randomUUID();
   let receivableId: string | null = null;
   let paymentId: string | null = null;
   let creditId: string | null = null;
+  if (linked && from) {
+    // MUT-660: linked only: the entry keeps its money; its version moves so a stale edit of it is caught.
+    if (from.kind === 'receivable') await tx.receivable.update({ where: { id: from.id }, data: { version: { increment: 1 } } });
+    else await tx.payment.update({ where: { id: from.id }, data: { version: { increment: 1 }, updatedAt: at } });
+    receivableId = from.kind === 'receivable' ? from.id : null;
+    paymentId = from.kind === 'payment' ? from.id : null;
+  }
   if (plan.receivable && from?.kind === 'receivable') {
     // I1-a: the recorded Owed becomes the document's: its money is now the document's VAT split, read-only from here.
     // Review fix 3: it also takes the document's dates, so its VAT falls in the invoice's month.
@@ -5311,8 +5756,8 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
         number: owedNumber ?? (await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate)),
         projectId: null,
         agreementId: null,
-        origin: 'ISSUED_DOCUMENT',
-        originId: documentId,
+        // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+        originId: plan.receivable.origin === 'ISSUED_DOCUMENT' ? documentId : null,
         postedAt: at,
         createdByUserId: input.createdByUserId,
         createdAt: at,
@@ -5383,6 +5828,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       originalId: input.originalId ?? input.appliesToDocumentId,
       paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
       allocationNumber,
+      allocationSource,
       receivableId,
       paymentId,
       creditId,

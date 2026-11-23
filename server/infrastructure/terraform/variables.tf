@@ -161,6 +161,12 @@ variable "monthly_summary_mail_enabled" {
   default     = false
 }
 
+variable "tax_authority_reminders_enabled" {
+  description = "MUT-571 AC3: creates the daily Tax Authority re-consent reminder job (09:00 Jerusalem): the owner of each connected profile is mailed 10 days before the 90-day consent ends and when it has ended. Off (default) until the Tax Authority connection (TAX_AUTHORITY_ENV) is configured on this service and the operator has read a dry run (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
 variable "monthly_summary_daily_sends" {
   description = "MUT-535 (D12): monthly summary mails per run (MONTHLY_SUMMARY_DAILY_SENDS). Every other mail shares mail_daily_cap with it, so keep it well under the cap: 40 of 90 leaves room for signups, trial and card mails. Seven runs a month carry 7x this many people. 40 (the API's default) leaves the variable unset."
   type        = number
@@ -522,6 +528,49 @@ variable "issuing_tsa_url" {
   validation {
     condition     = can(regex("^https://", var.issuing_tsa_url))
     error_message = "issuing_tsa_url must be an https URL (the API refuses plain http on production)."
+  }
+}
+
+
+variable "auth_log_bucket_locked" {
+  description = "MUT-710: lock the 12-month authentication-log bucket (auth_log.tf). Irreversible: the retention can't be shortened and the bucket can't be deleted. Turn on after the first month's records are checked (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "two_factor_issuing_gate_enabled" {
+  description = "MUT-710 (ADR-274 D10): sets TWO_FACTOR_ISSUING_GATE_ENABLED=true, so PUT /v1/issuer, issuing, the Tax Authority connect and allocation decisions need two-step sign-in on and a session that passed it (403 TWO_FACTOR_SETUP_REQUIRED). false (default) = issuing as before MUT-710. Turn on only after the portal and phone screens that turn two-step sign-in on are live, and after everyone already issuing has turned it on (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "uniform_file_registration_number" {
+  description = "MUT-569 (ADR-272): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.uniform_file_registration_number == null || can(regex("^[0-9]{8}$", var.uniform_file_registration_number))
+    error_message = "uniform_file_registration_number is 8 digits."
+  }
+}
+
+variable "software_house_vat_id" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_VAT_ID, the registering software house's 9-digit company number in the uniform file (A000 1009). The owner is Narabnd Studio Ltd, 517108775 (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_vat_id == null || can(regex("^[0-9]{9}$", var.software_house_vat_id))
+    error_message = "software_house_vat_id is a 9-digit company number."
+  }
+}
+
+variable "software_house_name" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_NAME, the software house's registered name in the uniform file (A000 1010, at most 20 characters), e.g. נאראבנד סטודיו בע\"מ (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_name == null || (length(var.software_house_name) >= 1 && length(var.software_house_name) <= 20)
+    error_message = "software_house_name is 1 to 20 characters."
   }
 }
 

@@ -32,7 +32,7 @@ features:
       - The job runs again
     expect:
       - 'One mail, "Your <last month> in MTB3A", with "Came in during <last month>: ₪12,400 · $900", "Still owed: ₪3,200" and "Overdue: ₪3,200 (1 entry)"'
-      - The link opens that profile's overview, which shows the same ₪3,200 owed
+      - The link opens that profile's home on In & out (MUT-657 E-5), and its Owed shows the same ₪3,200 owed
       - The second run sends nothing more
   - id: monthly-summary-off-link
     title: Turn the monthly summary off from its mail, in Arabic, and back on

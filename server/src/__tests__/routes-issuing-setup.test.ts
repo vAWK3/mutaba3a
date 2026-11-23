@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ISSUER_LOGO_MAX_BYTES } from '../routes/issuing.js';
-import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
+import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /**
  * MUT-646: the invoicing setup. Five steps (details, logo, defaults, numbering, Tax Authority); nothing is issued until
@@ -26,7 +26,7 @@ const putLogo = (h: AccountantHarness, on: Record<string, string>, bytes: Uint8A
 
 describe('invoicing setup (MUT-646)', () => {
   it('starts with every step to do; the Tax Authority waits for MUT-571', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect(await setup(h, w.on)).toEqual({
       steps: { details: 'todo', logo: 'todo', defaults: 'todo', numbering: 'todo', taxAuthority: 'later' },
@@ -38,7 +38,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('AC1: refuses to issue until the details and the numbering answer are in, and says which is missing', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     const refused = async (missing: string[]) => {
       const res = await h.app.request('/v1/issued-documents', json(w.body, { ...w.on, ...idem() }));
@@ -58,7 +58,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('the numbering answer can continue another tool’s numbers, per type; once a type has documents it is fixed', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     await h.app.request('/v1/issuer', json(ISSUER, w.on, 'PUT'));
     expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: true }, w.on, 'PUT'))).status).toBe(422);
@@ -80,7 +80,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('AC2: the defaults save on their own, keep the details, and the details keep the defaults', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect((await h.app.request('/v1/issuer/defaults', json(DEFAULTS, { ...w.on, 'if-match': '1' }, 'PUT'))).status).toBe(422);
     const details = await read(await h.app.request('/v1/issuer', json(ISSUER, w.on, 'PUT')));
@@ -97,7 +97,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('a document is printed in the style and ink of the defaults it was issued under', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     const details = await read(await h.app.request('/v1/issuer', json(ISSUER, w.on, 'PUT')));
     await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, w.on, 'PUT'));
@@ -107,7 +107,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('the logo: a PNG or JPEG by its own bytes, at most 256 KB; read back; removed for new documents only', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect((await putLogo(h, w.on, new TextEncoder().encode('<svg xmlns="http://www.w3.org/2000/svg"/>'), 'image/png')).status).toBe(422);
     expect((await putLogo(h, w.on, new Uint8Array(ISSUER_LOGO_MAX_BYTES + 1).fill(0x89))).status).toBe(413);
@@ -137,7 +137,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('refuses a file that only starts like a PNG; a document whose logo can’t be drawn still prints, without it', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect((await putLogo(h, w.on, PNG.slice(0, 40))).status).toBe(422);
     expect((await putLogo(h, w.on, new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 0, 0, 0xff, 0xd9]), 'image/jpeg')).status).toBe(422);
@@ -154,13 +154,13 @@ describe('invoicing setup (MUT-646)', () => {
   }, 30_000);
 
   it('MUT-570: lists the styles from the server', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     expect(await read(await h.app.request('/v1/issuing/styles', { headers: w.on }))).toEqual({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
   });
 
   it('MUT-648: offers to issue after saving income unless the business turns it off', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     const details = await read(await h.app.request('/v1/issuer', json(ISSUER, w.on, 'PUT')));
     expect(details.offerAfterSave).toBe(true);
@@ -173,7 +173,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('remembers that the introduction was read', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     const res = await h.app.request('/v1/issuing/setup/intro-seen', { method: 'POST', headers: w.on });
     expect(res.status).toBe(200);
@@ -182,7 +182,7 @@ describe('invoicing setup (MUT-646)', () => {
   });
 
   it('an accountant reads the setup but changes none of it', async () => {
-    const h = accountantHarness();
+    const h = issuingHarness();
     const w = await profile(h);
     const accountant = await shared(h, w.owner, w.profileId);
     const on = accountant.on(w.profileId);

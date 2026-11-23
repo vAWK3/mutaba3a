@@ -110,6 +110,8 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
     {
       organizationId: org, customerId: customer.id, projectId: project.id, currency: 'ILS', amountMinor: 20_000n, receivedOn: '2026-10-03', method: 'BANK',
       reference: null, receiptNumber: null, notes: null, replacesPaymentId: null, requestId: null, createdByUserId: user.id, origin: 'CAPTURE', captureSource: null,
+      // pays.clientRequestKey: the phone's retry key (MUT-709)
+      clientRequestKey: 'k'.repeat(64),
       allocations: [{ receivableId: posted.receivable.id, amountMinor: 20_000n }],
     },
     LATER,
@@ -265,6 +267,8 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
 
   // custs, projs: with every contact field and a VAT treatment, then archived
   const archivedClient = await store.customers.create({ organizationId: org, name: 'Old client', email: 'old@client.ps', phone: '+970590000000', notes: 'Moved away', vatTreatment: 'STANDARD_RATED', taxId: '516123452', address: '5 Herzl St, Haifa' }, AT);
+  // MUT-660: a documents preference, so the fingerprint sees the field with a value.
+  await store.customers.update(org, archivedClient.id, archivedClient.version, { documentsPreference: 'NO_DOCUMENT' }, AT);
   const archivedMatter = await store.projects.create({ organizationId: org, customerId: archivedClient.id, name: 'Old matter', currency: 'ILS', vatTreatment: 'STANDARD_RATED' }, AT);
   await store.projects.archive(org, archivedMatter.id, LATER);
   await store.customers.archive(org, archivedClient.id, LATER);
