@@ -5689,7 +5689,7 @@ async function hasTaxDocumentTx(tx: Tx, organizationId: string, item: Pick<NotFo
     where: { organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] }, ...(item.kind === 'receivable' ? { receivableId: item.id } : { paymentId: item.id }) },
     select: { id: true, docType: true, grossMinor: true },
   });
-  if (docs.some((d) => d.docType === 'TAX_INVOICE_RECEIPT')) return true;
+  // MUT-643: a 320 may be credited too; fully credited, like a 305, it no longer counts.
   for (const d of docs) {
     const credited = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: d.id }, _sum: { grossMinor: true } });
     if ((credited._sum.grossMinor ?? 0n) < d.grossMinor) return true;

@@ -3429,7 +3429,8 @@ export const PaymentSchema = z
     capturedBy: z.object({ userId: uuid, displayName: z.string() }).nullable().openapi({ description: 'Who captured it: null for payments recorded through the API key, and once that person\'s account is gone.' }),
     currency: CurrencySchema,
     amount: AmountSchema,
-    allocated: AmountSchema,
+    allocated: AmountSchema.openapi({ description: 'Applied to receivables, plus (MUT-643) what credit notes refunded from it' }),
+    refunded: AmountSchema.openapi({ description: 'MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643.' }),
     unallocated: AmountSchema,
     /** MUT-61: from allocated vs amount. */
     allocationState: AllocationStateSchema,

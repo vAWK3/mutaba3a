@@ -1240,11 +1240,10 @@ export class MemoryLedgerStore implements LedgerStore {
     return !!p.replacesPaymentId && this.linkedDocuments(p.organizationId, 'payment', p.replacesPaymentId).length > 0;
   }
 
-  /** MUT-660: a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't count. */
+  /** MUT-660: a live 305 or 320 (MUT-643: not fully cancelled by credit notes) is linked; a receipt doesn't count. */
   private hasTaxDocument(organizationId: string, kind: 'receivable' | 'payment', id: string): boolean {
     return this.linkedDocuments(organizationId, kind, id).some((d) => {
-      if (d.docType === 'TAX_INVOICE_RECEIPT') return true;
-      if (d.docType !== 'TAX_INVOICE') return false;
+      if (d.docType !== 'TAX_INVOICE' && d.docType !== 'TAX_INVOICE_RECEIPT') return false;
       const credited = [...this.issuedDocMap.values()].filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n);
       return credited < d.grossMinor;
     });

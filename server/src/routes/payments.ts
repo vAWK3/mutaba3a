@@ -70,11 +70,15 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const allocations = await store.payments.listAllocations(organizationId, payment.id);
     const receivables = new Map((await store.receivables.getByIds(organizationId, allocations.map((a) => a.receivableId))).map((r) => [r.id, r]));
     const replacedBy = await store.payments.findReplacedBy(organizationId, payment.id);
+    // MUT-643: only a document's money can be refunded (a credit note releases what issuing allocated).
+    const refunds = payment.origin === 'ISSUED_DOCUMENT' ? await store.refunds.list(organizationId, { paymentIds: [payment.id] }) : [];
+    const refundedMinor = refunds.flatMap((f) => f.sources).filter((x) => x.paymentId === payment.id).reduce((sum, x) => sum + x.amountMinor, 0n);
     return serializePayment(
       payment,
       allocations.map((a) => serializeAllocation(a, receivables.get(a.receivableId) ?? null, payment.currency, today)),
       replacedBy?.id ?? null,
       (payment.createdByUserId && people.get(payment.createdByUserId)) || null,
+      refundedMinor,
     );
   }
 
@@ -87,6 +91,9 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const users = await Promise.all(ids.map((id) => store.users.getById(id)));
     return new Map(users.filter((u) => u !== null).map((u) => [u.id, { userId: u.id, displayName: u.displayName }]));
   }
+
+  /** MUT-643 (D8): money a credit note refunded from this payment went back to the client; it can't be undone here. */
+  const paymentHasRefund = () => new ApiError('CONFLICT', 'A credit note refunded money from this payment; it can\'t be reversed or corrected', { reason: 'PAYMENT_HAS_REFUND' });
 
   const viewOf = async (organizationId: string, payment: PaymentRecord, today: IsoDate) => paymentView(organizationId, payment, today, await capturersOf([payment]));
 
@@ -477,6 +484,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       }
       const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now).catch((err: unknown) => {
         if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was reversed, send the request again', { reason: 'VERSION_MISMATCH' });
+        if (err instanceof StateConflict && err.reason === 'PAYMENT_HAS_REFUND') throw paymentHasRefund();
         throw err;
       });
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
@@ -583,6 +591,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       } catch (err) {
         // R4: reversed in between → PAYMENT_NOT_POSTED; still POSTED at another version → PREVIEW_STALE.
         if (err instanceof StateConflict && err.reason === 'PAYMENT_NOT_POSTED') throw await paymentNotPosted(store, organization.id, await mustGetPayment(organization.id, payment.id));
+        if (err instanceof StateConflict && err.reason === 'PAYMENT_HAS_REFUND') throw paymentHasRefund();
         if (err instanceof StateConflict) throw stale('The payment changed since the preview; preview again');
         if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'A receivable changed while the correction was being recorded; nothing was written, preview again', { reason: 'PREVIEW_STALE', entityId: err.entityId });
         if (err instanceof LockConflict) throw stale('A receivable was being changed at the same moment; nothing was written, preview again');

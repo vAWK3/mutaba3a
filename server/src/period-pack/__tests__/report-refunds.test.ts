@@ -10,13 +10,13 @@ const refund = (amountMinor: bigint): RefundLine => ({ ref: 'R0001', record: { c
 
 describe('totalsByCurrency', () => {
   it('takes refunds off the income total, not off the count', () => {
-    const [[currency, t]] = totalsByCurrency({ expenses: [], income: [income(10_000n), income(5_000n)], refunds: [refund(4_000n)] }) as [[string, { income: number; incomeTotal: bigint }]];
-    expect(currency).toBe('ILS');
-    expect(t).toMatchObject({ income: 2, incomeTotal: 11_000n });
+    const [first] = totalsByCurrency({ expenses: [], income: [income(10_000n), income(5_000n)], refunds: [refund(4_000n)] });
+    expect(first![0]).toBe('ILS');
+    expect(first![1]).toMatchObject({ income: 2, incomeTotal: 11_000n });
   });
 
   it('is unchanged with no refunds', () => {
-    const [[, t]] = totalsByCurrency({ expenses: [], income: [income(10_000n)] }) as [[string, { incomeTotal: bigint }]];
-    expect(t.incomeTotal).toBe(10_000n);
+    const [first] = totalsByCurrency({ expenses: [], income: [income(10_000n)] });
+    expect(first![1].incomeTotal).toBe(10_000n);
   });
 });
