@@ -3282,6 +3282,16 @@ export const StatementLineSchema = z
       /** MUT-443: set when the reversal was a correction (POST /v1/payments/{id}/correct); null for a plain reverse. */
       reasonCode: CreditReasonCodeSchema.nullable(),
     }),
+    z.object({
+      ...StatementLineBase,
+      kind: z.literal('REFUND'),
+      /** MUT-643 (since 1.137.0-mut643): money a credit note gave back to the client; a debit dated refundedOn. Whole-customer statement only. */
+      refundId: uuid,
+      /** The credit note that refunded it. */
+      creditNoteId: uuid,
+      method: PaymentMethodSchema,
+      reference: z.string().nullable(),
+    }),
   ])
   .openapi('StatementLine');
 
@@ -4498,9 +4508,10 @@ export const PeriodCurrencyTotalsSchema = z
     openingBalance: signedAmount('What clients owed at the start of `from`, net of money received and not yet applied: the statement balance of every client, plus payments with no client. May be negative.'),
     billed: signedAmount('Gross of the CHARGE lines dated in the period (postingDate).'),
     credited: signedAmount('CREDIT lines dated in the period (effectiveDate).'),
-    received: signedAmount('payments − reversals; may be negative when an earlier payment was reversed in the period.'),
+    received: signedAmount('payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period.'),
     payments: signedAmount('PAYMENT lines dated in the period (receivedOn).'),
     reversals: signedAmount("PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment."),
+    refunds: signedAmount('MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals.'),
     change: signedAmount('closingBalance − openingBalance = billed − received − credited.'),
     closingBalance: signedAmount('What clients owed at the end of `to`, on the same terms as openingBalance.'),
   })

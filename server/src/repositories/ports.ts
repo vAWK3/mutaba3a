@@ -1381,6 +1381,8 @@ export interface StatementSourceRows {
   /** Every installment of the customer's agreements in the currency (for "installment N of M"). */
   installments: InstallmentRecord[];
   charges: RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency. */
+  refunds: LedgerRefundRow[];
 }
 
 /** MUT-483: the receivable fields a ledger line reads (`statements/lines.ts`), and nothing more. */
@@ -1398,7 +1400,12 @@ export interface PeriodSourceRows {
   credits: LedgerCreditRow[];
   /** Every payment of any status, a payment with no client included (D4). */
   payments: LedgerPaymentRow[];
+  /** MUT-643: every refund (sources left out), in the same snapshot. */
+  refunds: LedgerRefundRow[];
 }
+
+/** MUT-643: the refund fields a ledger line reads (`statements/lines.ts`). */
+export type LedgerRefundRow = Pick<RefundRecord, 'id' | 'customerId' | 'currency' | 'amountMinor' | 'refundedOn' | 'createdAt' | 'issuedDocumentId' | 'method' | 'reference'>;
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;

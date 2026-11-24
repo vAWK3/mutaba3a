@@ -1,7 +1,7 @@
 import type { ItemStatus } from '../agreements/status.js';
 import { daysBetween, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
-import type { AllocationRecord, CreditRecord, InstallmentRecord, PaymentRecord, ReceivableRecord, RetainerChargeRecord } from '../repositories/ports.js';
+import type { AllocationRecord, CreditRecord, InstallmentRecord, LedgerRefundRow, PaymentRecord, ReceivableRecord, RetainerChargeRecord } from '../repositories/ports.js';
 import { receivableStatus } from '../serializers.js';
 import { outstandingOf } from '../summaries/compute.js';
 import { isStatementPayment, LINE_RANK, ledgerEntries, reversalDateOf, reversalInstantOf, type LedgerEntry, type StatementLineKind } from './lines.js';
@@ -40,6 +40,8 @@ export interface StatementSources {
   /** Every installment of the agreements the receivables belong to (for "N of M"). */
   installments: readonly InstallmentRecord[];
   charges: readonly RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency; lines on the whole-customer statement only. */
+  refunds: readonly LedgerRefundRow[];
 }
 
 export interface StatementView {
@@ -78,6 +80,8 @@ interface LineBase {
   credit: CreditRecord | null;
   /** PAYMENT and PAYMENT_REVERSAL. */
   payment: PaymentRecord | null;
+  /** MUT-643: REFUND only. */
+  refund: LedgerRefundRow | null;
   /** PAYMENT on the whole-customer statement: what is still to apply; null on a project statement. */
   unallocatedMinor: bigint | null;
   /** PAYMENT on a project statement: the allocation shown; null on the whole-customer one. */
@@ -147,7 +151,9 @@ function ledgerLines(sources: StatementSources, view: StatementView): SortedLine
   // The whole-customer statement is every line of the classifier; a project's takes its charges and their credits
   // from it, and shows payments as their allocations there (D8).
   const receivables = whole ? s.receivables : s.receivables.filter((r) => r.projectId === view.projectId);
-  const entries = ledgerEntries({ receivables, credits: s.credits, payments: whole ? s.payments : [] }, view);
+  // MUT-643: a refund is whole-customer money, like unallocated money: a project statement already drops the
+  // allocation a credit note released, so its refund would leave the project owing it.
+  const entries = ledgerEntries({ receivables, credits: s.credits, payments: whole ? s.payments : [], refunds: whole ? s.refunds : [] }, view);
   const projectOfPayment = whole ? wholePaymentProjects(s) : new Map<string, string | null>();
   const lines = entries.map((e) => decorate(e, s, view.asOf, projectOfPayment));
   if (!whole) {
@@ -175,6 +181,8 @@ function decorate(e: Entry, s: StatementSources, asOf: IsoDate, projectOfPayment
     }
     case 'PAYMENT_REVERSAL':
       return line({ ...at, projectId: projectOfPayment.get(e.source.id) ?? null, number: e.source.number, debitMinor: e.debitMinor, paymentId: e.source.id, payment: e.source });
+    case 'REFUND':
+      return line({ ...at, projectId: null, number: null, debitMinor: e.debitMinor, refund: e.source });
   }
 }
 
@@ -249,6 +257,7 @@ function line(o: Partial<SortedLine> & Pick<SortedLine, 'id' | 'kind' | 'date' |
     daysOverdue: null,
     credit: null,
     payment: null,
+    refund: null,
     unallocatedMinor: null,
     allocatedMinor: null,
     rank: LINE_RANK[o.kind],

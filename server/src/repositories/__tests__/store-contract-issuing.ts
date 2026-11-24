@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
 import { documentsDue } from '../../issuing/documents-due.js';
+import { buildStatement } from '../../statements/build.js';
+import { ledgerEntries } from '../../statements/lines.js';
+import { summarizePeriod } from '../../statements/period.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
 const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
@@ -206,6 +209,13 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
         expect(refunds).toEqual([
           expect.objectContaining({ id: credit.refundId, issuedDocumentId: credit.id, amountMinor: shekels(1_180), refundedOn: '2026-11-22', method: 'BANK', reference: 'RF-1', currency: 'ILS', customerId: w.customer.id, sources: [{ paymentId: paid.paymentId, amountMinor: shekels(1_180) }] }),
         ]);
+        // The statement: charge, payment, credit, refund; it ends at 0, and the period's Received is net of the refund.
+        const sources = await store.receivables.statementSources(w.a.id, w.customer.id, 'ILS');
+        const page = buildStatement(sources, { asOf: '2026-11-30', timezone: 'Asia/Jerusalem', from: null, to: null, projectId: null }, { limit: 50, cursor: null });
+        expect(page.lines.map((l) => l.kind)).toEqual(['CHARGE', 'PAYMENT', 'CREDIT', 'REFUND']);
+        expect(page.closingMinor).toBe(0n);
+        const period = summarizePeriod(ledgerEntries(await store.receivables.periodSources(w.a.id, 'ILS'), { asOf: '2026-11-30', timezone: 'Asia/Jerusalem' }), { from: '2026-11-01', to: '2026-11-30' }, 'ILS')[0]!;
+        expect(period).toMatchObject({ paymentsMinor: shekels(1_180), refundsMinor: shekels(1_180), closingMinor: 0n });
       });
 
       it('AC3: kept as credit, the paid part goes back to the Received as unallocated money; no refund is written', async () => {

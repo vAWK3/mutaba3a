@@ -2843,7 +2843,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // one page without the other.
     statementSources: async (organizationId, customerId, currency) => {
       const agreement = { organizationId, customerId, currency };
-      const [receivables, credits, payments, allocations, installments, charges] = await this.prisma.$transaction(
+      const [receivables, credits, payments, allocations, installments, charges, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
@@ -2851,25 +2851,28 @@ export class PrismaLedgerStore implements LedgerStore {
           this.prisma.paymentAllocation.findMany({ where: { organizationId, releasedAt: null, payment: { customerId, currency } } }),
           this.prisma.installment.findMany({ where: { organizationId, agreement } }),
           this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
+          this.prisma.refund.findMany({ where: { organizationId, customerId, currency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments, allocations, installments, charges };
+      return { receivables, credits, payments, allocations, installments, charges, refunds: refunds.map(refundLine) };
     },
     // MUT-483: three queries over the organization, each led by organizationId (the first column of an existing index on
     // every table; currency is a residual filter), with only the ledger fields: deserializing whole rows is the cost
     // (TD-291). One REPEATABLE READ snapshot, so a payment and the charge it pays never land in different reads.
     periodSources: async (organizationId, currency) => {
       const inCurrency = currency === null ? {} : { currency };
-      const [receivables, credits, payments] = await this.prisma.$transaction(
+      const [receivables, credits, payments, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, deletedAt: null, ...inCurrency }, select: PERIOD_RECEIVABLE_FIELDS }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { deletedAt: null, ...inCurrency } }, select: PERIOD_CREDIT_FIELDS }),
           this.prisma.payment.findMany({ where: { organizationId, ...inCurrency }, select: PERIOD_PAYMENT_FIELDS }),
+          // MUT-643: refunds are lines too (organizationId leads both refund indexes).
+          this.prisma.refund.findMany({ where: { organizationId, ...inCurrency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments };
+      return { receivables, credits, payments, refunds: refunds.map(refundLine) };
     },
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
@@ -4701,6 +4704,12 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 /** MUT-483: the ledger fields `periodSources` reads (ports.ts `Ledger*Row`), so a period read never loads whole rows. */
 const PERIOD_RECEIVABLE_FIELDS = { id: true, customerId: true, currency: true, origin: true, postingDate: true, grossMinor: true, paidMinor: true, creditedMinor: true, deletedAt: true, createdAt: true } as const;
 const PERIOD_CREDIT_FIELDS = { id: true, receivableId: true, amountMinor: true, effectiveDate: true, createdAt: true } as const;
+/** MUT-643: the refund fields a ledger line reads. */
+const REFUND_LINE_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, refundedOn: true, createdAt: true, issuedDocumentId: true, method: true, reference: true } as const;
+function refundLine(row: { id: string; customerId: string; currency: string; amountMinor: bigint; refundedOn: string; createdAt: Date; issuedDocumentId: string; method: string; reference: string | null }) {
+  return { ...row, method: row.method as PaymentMethod };
+}
+
 const PERIOD_PAYMENT_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, receivedOn: true, status: true, reversalReason: true, reversedAt: true, updatedAt: true, createdAt: true } as const;
 
 const RECEIPT_LOCK_TIMEOUT = '8s';

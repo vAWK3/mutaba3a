@@ -24,6 +24,7 @@ import type {
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
+  LedgerRefundRow,
   RefundRecord,
   RefundRepository,
   IssuerLogoRecord,
@@ -3371,6 +3372,7 @@ export class MemoryLedgerStore implements LedgerStore {
         allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId) && !a.releasedAt).map((a) => ({ ...a })),
         installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
         charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
+        refunds: [...this.refundMap.values()].filter((f) => f.organizationId === organizationId && f.customerId === customerId && f.currency === currency).map(refundRow),
       };
     },
     // MUT-483: the same rows and fields as Prisma's narrow select, so nothing downstream can lean on a field it won't get there.
@@ -3384,6 +3386,7 @@ export class MemoryLedgerStore implements LedgerStore {
         payments: [...this.pays.values()]
           .filter(inCurrency)
           .map((p) => ({ id: p.id, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor, receivedOn: p.receivedOn, status: p.status, reversalReason: p.reversalReason, reversedAt: p.reversedAt, updatedAt: p.updatedAt, createdAt: p.createdAt })),
+        refunds: [...this.refundMap.values()].filter(inCurrency).map(refundRow),
       };
     },
     list: async (organizationId, filter: ReceivableFilter, page) =>
@@ -5223,6 +5226,11 @@ export class InsufficientCapacity extends Error {
     super(`insufficient capacity on ${entityId}`);
     this.name = 'InsufficientCapacity';
   }
+}
+
+/** MUT-643: the ledger-line fields of a refund, as Prisma's select reads them. */
+function refundRow(f: RefundRecord): LedgerRefundRow {
+  return { id: f.id, customerId: f.customerId, currency: f.currency, amountMinor: f.amountMinor, refundedOn: f.refundedOn, createdAt: f.createdAt, issuedDocumentId: f.issuedDocumentId, method: f.method, reference: f.reference };
 }
 
 function outstanding(r: ReceivableRecord): bigint {
