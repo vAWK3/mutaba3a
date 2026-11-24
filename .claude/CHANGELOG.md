@@ -28,6 +28,24 @@
 
 ---
 
+## [Unreleased] - 2026-11-24 — A credit note against a paid invoice: refunded or kept as credit (MUT-643, ADR-276, API 1.137.0-mut643)
+
+### Added
+- Credit notes reach a paid 305 or a 320: the paid part is released off the newest allocations and either kept as the client's unallocated money (`paidPart: KEEP`) or refunded (`paidPart: REFUND`, date, method, reference). `server/src/issuing/credit-split.ts` (cap, split, newest-first release, pure) and `creditNoteRefusal` in `ledger-plan.ts`, shared by both stores.
+- Tables `refunds` and `refund_sources` (migration `20261124200000_mut643_refunds`), `issued_documents.refundId`; `store.refunds.list`.
+- Wire: issue `paidPart`; preview `creditNote { outstanding, paid, maximum }`; document `refundId`; payment `refunded`; statement line `REFUND`; period summary `refunds`.
+- Errors: 422 `CREDIT_EXCEEDS_ORIGINAL`, 422 `ORIGINAL_PAID` now with `details.paid` and `field: paidPart`, 422 `DATE_BEFORE_CREDIT_NOTE`, 422 `PAID_PART_NOT_ALLOWED`, 409 `ORIGINAL_CHANGED`, 409 `PAYMENT_HAS_REFUND`.
+
+### Changed
+- Received nets out refunds everywhere it is shown: activity (Reports, verdict, monthly mail), the period summary, client balances, the books split, the accountant's shared summary and the period pack (refunds as negative Income rows).
+- A 320 fully covered by credit notes reads CANCELLED and no longer counts as a tax document.
+- The Prisma issue of a credit note locks the paying payments before the Owed (D4) and maps lock conflicts to 409.
+- The records file carries `refunds` (unreleased format 22).
+
+**Why:** MUT-643: a business refunding a client needs the credit note and the money going back, with a statement that balances.
+
+**Files:** `server/src/issuing/{credit-split,ledger-plan,settlement}.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables,prisma-records-export}.ts`, `server/src/routes/{issuing,payments,summaries,share-links}.ts`, `server/src/statements/*`, `server/src/summaries/{activity,profile-figures}.ts`, `server/src/income/invoice-split.ts`, `server/src/period-pack/*`, `server/src/records-file/codec.ts`, `src/hosted/local/migrations/index.ts`, the schema and migration, tests beside each.
+
 ## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
 
 - Arabic plan names (Basel, 2026-11-23): مستقل / تجاري / مؤسسة, legacy Freelancer الخطة السابقة (`src/hosted/i18n/ar.json`).
