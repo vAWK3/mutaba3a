@@ -24,6 +24,8 @@ import type {
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
+  RefundRecord,
+  RefundRepository,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
   IssuedOriginalPdfRecord,
@@ -234,7 +236,8 @@ import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { planRelease, splitCredit } from '../issuing/credit-split.js';
 import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
@@ -410,6 +413,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
   private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  /** MUT-643: refunds written by credit notes, with their sources. */
+  private readonly refundMap = new Map<string, RefundRecord>();
   /** MUT-662: payment request cancellations by documentId, and each profile's next CX number. */
   private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
   private readonly cancellationCounters = new Map<string, number>();
@@ -1336,15 +1341,21 @@ export class MemoryLedgerStore implements LedgerStore {
     const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
     let originalReceivable: ReceivableRecord | null = null;
     if (originalId) {
-      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
-      const original = docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || (input.docType !== 'CREDIT_NOTE' && d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
+      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice or (MUT-643) an
+      // invoice-receipt.
+      const credits = (d: IssuedDocumentRecord) => d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT';
+      const original = docs.find((d) => d.id === originalId && (input.docType === 'CREDIT_NOTE' ? credits(d) : d.docType === 'TAX_INVOICE' || (d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
       const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
       if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
       // MUT-660: a linked receipt names the invoice its payment already paid; nothing is allocated, so no outstanding check.
       if (linked) return this.issueLinked(input, at, entry!);
       const outstandingMinor = r.status === 'OPEN' ? outstanding(r) : 0n;
-      if (input.composed.grossMinor > outstandingMinor) {
-        return input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor };
+      if (input.docType === 'CREDIT_NOTE') {
+        const noted = docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === original.id).reduce((sum, c) => sum + c.grossMinor, 0n);
+        const refusal = creditNoteRefusal({ original, owed: r, creditedByNotesMinor: noted, outstandingMinor }, input);
+        if (refusal) return refusal;
+      } else if (input.composed.grossMinor > outstandingMinor) {
+        return { kind: 'exceeds_outstanding', outstandingMinor };
       }
       originalReceivable = r;
     }
@@ -1399,17 +1410,86 @@ export class MemoryLedgerStore implements LedgerStore {
         true,
       ).payment.id;
     }
+    let refundId: string | null = null;
     if (plan.credit && originalReceivable) {
+      // MUT-643 (D2, D3): what the credit reaches past what is still owed comes back off the newest allocations first.
+      const { paidPartMinor } = splitCredit(originalReceivable, plan.credit.amountMinor);
+      if (paidPartMinor > 0n) refundId = this.releasePaidPart(input, originalReceivable, paidPartMinor, id, at);
       const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: originalReceivable.id, ...plan.credit, reasonCode: plan.credit.reasonCode ?? null, requestId: input.requestId, createdAt: at };
       this.credits.set(credit.id, credit);
       originalReceivable.creditedMinor += plan.credit.amountMinor;
       settle(originalReceivable);
       creditId = credit.id;
     }
-    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId }), created: true };
+    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId }), created: true };
   }
 
-  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'>): IssuedDocumentRecord {
+  /**
+   * MUT-643 (D3, D5): releases the paid part off the Owed's live allocations (newest first; a partial release leaves a
+   * smaller live row with the released row's own createdAt, as MUT-444 does), then either leaves it on the payments
+   * (KEEP) or records it going back to the client (REFUND), which counts in the payments' allocatedMinor again.
+   */
+  private releasePaidPart(input: IssueDocumentInput, owed: ReceivableRecord, paidPartMinor: bigint, documentId: string, at: Date): string | null {
+    const live = [...this.allocs.values()].filter((a) => a.receivableId === owed.id && !a.releasedAt && this.pays.get(a.paymentId)?.status === 'POSTED');
+    const given = new Map<string, bigint>();
+    for (const { allocation, releaseMinor } of planRelease(live, paidPartMinor)) {
+      const row = this.allocs.get(allocation.id)!;
+      row.releasedAt = at;
+      if (releaseMinor < row.amountMinor) {
+        const kept: AllocationRecord = { id: randomUUID(), organizationId: row.organizationId, paymentId: row.paymentId, receivableId: row.receivableId, amountMinor: row.amountMinor - releaseMinor, createdAt: row.createdAt };
+        this.allocs.set(kept.id, kept);
+      }
+      given.set(row.paymentId, (given.get(row.paymentId) ?? 0n) + releaseMinor);
+    }
+    owed.paidMinor -= paidPartMinor;
+    const choice = input.paidPart!;
+    for (const [paymentId, releasedMinor] of given) {
+      const p = this.pays.get(paymentId)!;
+      const back = choice.mode === 'REFUND' ? releasedMinor : 0n;
+      Object.assign(p, { allocatedMinor: p.allocatedMinor - releasedMinor + back, version: p.version + 1, updatedAt: at });
+    }
+    if (choice.mode !== 'REFUND') return null;
+    const refund: RefundRecord = {
+      id: randomUUID(),
+      organizationId: input.organizationId,
+      customerId: owed.customerId,
+      currency: owed.currency,
+      amountMinor: paidPartMinor,
+      refundedOn: choice.refundedOn,
+      method: choice.method,
+      reference: choice.reference,
+      issuedDocumentId: documentId,
+      requestId: input.requestId,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+      sources: [...given].map(([paymentId, amountMinor]) => ({ paymentId, amountMinor })),
+    };
+    this.refundMap.set(refund.id, refund);
+    return refund.id;
+  }
+
+  /** MUT-643 (D8): a payment a refund drew on. */
+  private hasRefundSource(paymentId: string): boolean {
+    return [...this.refundMap.values()].some((f) => f.sources.some((x) => x.paymentId === paymentId));
+  }
+
+  readonly refunds: RefundRepository = {
+    list: async (organizationId, filter) =>
+      [...this.refundMap.values()]
+        .filter(
+          (f) =>
+            f.organizationId === organizationId &&
+            (filter.customerId === undefined || f.customerId === filter.customerId) &&
+            (filter.currency === undefined || f.currency === filter.currency) &&
+            (filter.paymentIds === undefined || f.sources.some((x) => filter.paymentIds!.includes(x.paymentId))) &&
+            (filter.from === undefined || f.refundedOn >= filter.from) &&
+            (filter.to === undefined || f.refundedOn <= filter.to),
+        )
+        .sort((x, y) => x.refundedOn.localeCompare(y.refundedOn) || x.createdAt.getTime() - y.createdAt.getTime() || x.id.localeCompare(y.id))
+        .map((f) => ({ ...f, sources: f.sources.map((x) => ({ ...x })) })),
+  };
+
+  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'> & { refundId?: string | null }): IssuedDocumentRecord {
     const { organizationId } = input;
     const { receivableId, paymentId, creditId } = links;
     const { composed } = input;
@@ -1442,6 +1522,7 @@ export class MemoryLedgerStore implements LedgerStore {
       receivableId,
       paymentId,
       creditId,
+      refundId: links.refundId ?? null,
       coreVersion: input.coreVersion,
       createdByUserId: input.createdByUserId,
       requestKey: input.requestKey,
@@ -3425,6 +3506,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const payment = this.pays.get(paymentId);
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status === 'REVERSED') return { payment: { ...payment }, changed: false };
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       this.reverseNow(payment, reason, null, at);
       return { payment: { ...payment }, changed: true };
     },
@@ -3435,6 +3517,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status !== 'POSTED') throw new StateConflict('payment', 'PAYMENT_NOT_POSTED');
       if (payment.version !== expectedVersion) throw new StateConflict('payment', 'PREVIEW_STALE');
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       const input: CreatePaymentInput = { ...replacement, replacesPaymentId: paymentId };
       this.assertPaymentRefs(input);
       this.assertCapacity(organizationId, input.allocations, this.releasedBy(paymentId));

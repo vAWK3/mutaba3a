@@ -5338,7 +5338,17 @@ export const IssueDocumentRequestSchema = z
     language: DocumentLanguageSchema,
     customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
     dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
-    originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
+    originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice or (MUT-643) invoice-receipt it credits' }),
+    paidPart: z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('KEEP') }),
+        z.object({ mode: z.literal('REFUND'), refundedOn: IsoDateSchema, method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional() }),
+      ])
+      .optional()
+      .openapi({
+        description:
+          'MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview\'s `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note\'s date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643.',
+      }),
     appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
     discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
@@ -5395,8 +5405,18 @@ export const IssueAllocationSchema = z
   })
   .openapi('IssueAllocation');
 
+/** MUT-643: how far a credit note may go against its original, and what of it the client already paid. */
+export const CreditNoteFactsSchema = z
+  .object({
+    outstanding: AmountSchema.openapi({ description: 'Still owed on the original: credited first' }),
+    paid: AmountSchema.openapi({ description: 'The part of this credit note the client already paid: when above 0, the issue needs `paidPart`' }),
+    maximum: AmountSchema.openapi({ description: 'The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed)' }),
+  })
+  .openapi('CreditNoteFacts');
+
 export const IssuedDocumentPreviewSchema = IssuedTotalsSchema.extend({
   allocation: IssueAllocationSchema.nullable().openapi({ description: 'MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711.' }),
+  creditNote: CreditNoteFactsSchema.nullable().openapi({ description: 'MUT-643: a credit note\'s facts against its original; null for other types. Since 1.137.0-mut643.' }),
 }).openapi('IssuedDocumentPreview');
 
 export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
@@ -5419,6 +5439,7 @@ export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   allocationSource: z.enum(['API', 'MANUAL']).nullable().openapi({ description: 'MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.' }),
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
+  refundId: uuid.nullable().openapi({ description: 'MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.' }),
   coreVersion: z.string(),
   /** MUT-662 */
   displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
