@@ -16,7 +16,7 @@ import { summarizeExpenses } from '../expenses/summary.js';
 import { formatMoney, type Currency } from '../money.js';
 import { ownedProfileOf, profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ShareLinkWithViewers, UserLocale } from '../repositories/ports.js';
+import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, RefundRecord, ShareLinkWithViewers, UserLocale } from '../repositories/ports.js';
 import {
   CreateShareLinkRequestSchema,
   ErrorEnvelopeSchema,
@@ -507,9 +507,11 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         if (row.kind === 'payment' && row.record.status !== 'REVERSED') received.push(row.record);
       }
       const ctx = await visitorContext(access, rows.filter((row) => row.kind === 'expense'), lang);
+      // MUT-643: money credit notes gave back in the range comes off what was received.
+      const refunds = await store.refunds.list(organization.id, { ...(range.from ? { from: range.from } : {}), to: range.to });
       // MUT-660: the accountant's link shows the books split too (invoicing profiles only).
-      const split = await invoiceSplitOf(store, organization, received, range);
-      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received), ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
+      const split = await invoiceSplitOf(store, organization, received, refunds, range);
+      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received, refunds), ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
 
@@ -602,11 +604,16 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
 }
 
 /** Received payments per currency, never summed across currencies (ADR-004). */
-function receivedByCurrency(payments: readonly PaymentRecord[]) {
+function receivedByCurrency(payments: readonly PaymentRecord[], refunds: readonly RefundRecord[]) {
   const byCurrency = new Map<string, { minor: bigint; count: number }>();
   for (const p of payments) {
     const total = byCurrency.get(p.currency) ?? { minor: 0n, count: 0 };
     byCurrency.set(p.currency, { minor: total.minor + p.amountMinor, count: total.count + 1 });
+  }
+  // MUT-643: a refund nets out of the total; `count` stays the payments received.
+  for (const f of refunds) {
+    const total = byCurrency.get(f.currency) ?? { minor: 0n, count: 0 };
+    byCurrency.set(f.currency, { ...total, minor: total.minor - f.amountMinor });
   }
   return [...byCurrency.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))

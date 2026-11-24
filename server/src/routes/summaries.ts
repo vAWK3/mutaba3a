@@ -249,12 +249,12 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const today = todayFor(organization, c.get('now')());
       const { from, to } = reportRange(q, today);
       const bucket = q.bucket;
-      const { payments, expenses, earlierData } = await readActivityWindow(store, organization.id, from, to);
+      const { payments, expenses, refunds, earlierData } = await readActivityWindow(store, organization.id, from, to);
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
-      const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
+      const summary = summarizeActivity({ payments, expenses, allocations, receivables, refunds, from, to, bucket });
       // MUT-660: invoicing profiles only; every other profile's answer is unchanged.
-      const split = await invoiceSplitOf(store, organization, payments, { from, to });
+      const split = await invoiceSplitOf(store, organization, payments, refunds, { from, to });
       return c.json({ from, to, bucket, asOf: today, earlierData, ...summary, ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
