@@ -4441,6 +4441,8 @@ export interface ProfileExportRecords {
   /** MUT-254: vendors and their names (both, so a restored store keeps one vendor per name). */
   vendors: VendorRecord;
   vendorNames: VendorNameRecord;
+  /** MUT-643: refunds with their sources, so a restored ledger's statement still balances. */
+  refunds: RefundRecord;
 }
 
 export type ProfileExportField = keyof ProfileExportRecords;

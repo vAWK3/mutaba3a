@@ -17,6 +17,8 @@ export const SNAPSHOT_FIELDS: readonly (keyof LocalSnapshotMaps)[] = [
   'allocs', 'credits', 'counters', 'props', 'people', 'members', 'exps', 'expCats', 'expReceipts', 'convs', 'expGroups', 'groupMarks', 'inbox',
   // MUT-254 (format 6)
   'vendors', 'vendorNames',
+  // MUT-643 (format 22)
+  'refunds',
 ];
 
 /**

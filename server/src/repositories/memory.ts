@@ -268,6 +268,7 @@ import { DOC_TYPE_CODES } from '../issuing/types.js';
  * 20 (MUT-535): `people` gained `monthlySummaryMail`.
  * 21 (MUT-642): `custs` gained `taxId` and `address`.
  * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
+ *    MUT-643 (same unreleased version): a new `refunds` map.
  */
 export const CURRENT_STORE_SNAPSHOT_VERSION = 22;
 
@@ -310,6 +311,8 @@ export interface LocalSnapshotMaps {
   inbox: Map<string, InboxEntryRecord>;
   vendors: Map<string, VendorRecord>;
   vendorNames: Map<string, VendorNameRecord>;
+  /** MUT-643 (format 22): refunds credit notes wrote; a device never writes one (no issuing signed out). */
+  refunds: Map<string, RefundRecord>;
 }
 
 export interface LocalSnapshot {
@@ -4417,7 +4420,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const maps: Array<Map<string, { organizationId: string }>> = [
       this.keys, this.ints, this.idem, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps,
       this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.members, this.exps, this.expCats, this.expReceipts,
-      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames,
+      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames, this.refundMap,
     ];
     for (const map of maps) for (const [key, row] of map) if (inDeleted(row)) map.delete(key);
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
@@ -4825,7 +4828,7 @@ export class MemoryLedgerStore implements LedgerStore {
     return {
       custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
       pays: m.pays, allocs: liveAllocations(m.allocs), credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
-      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames, refunds: m.refunds,
     };
   }
 
@@ -5069,6 +5072,7 @@ export class MemoryLedgerStore implements LedgerStore {
         inbox: this.inbox,
         vendors: this.vendorMap,
         vendorNames: this.vendorNames,
+        refunds: this.refundMap,
       },
     };
   }
@@ -5113,6 +5117,7 @@ export class MemoryLedgerStore implements LedgerStore {
     replaceMap(this.inbox, maps.inbox);
     replaceMap(this.vendorMap, maps.vendors);
     replaceMap(this.vendorNames, maps.vendorNames);
+    replaceMap(this.refundMap, maps.refunds);
   }
 }
 
