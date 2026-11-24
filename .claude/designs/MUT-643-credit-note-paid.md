@@ -1,6 +1,6 @@
 # MUT-643: a credit note against a paid invoice, with a refund or a kept credit
 
-**Status:** plan revision 2, after the eng review (2026-11-24); waiting for Basel's approval. Epic MUT-566. Follows MUT-568 (ADR-260 decision 4, R-D2), which a new ADR supersedes for credit notes.
+**Status:** plan revision 2, approved by Basel 2026-11-24; server, portal and QA specs built on `feature/mut-643-credit-note-paid` (ADR-276). Phone half next. Epic MUT-566. Follows MUT-568 (ADR-260 decision 4, R-D2), which a new ADR supersedes for credit notes.
 
 **Basel's choices (2026-11-24):**
 - **C1:** each credit note says what happens to the part the client already paid. *Refunded* records money going back (date, method, reference). *Kept* leaves it as the client's credit.
@@ -135,3 +135,10 @@ These are ledger rows like `receivable_credits`: append-only in code, **no trigg
 - A business can refund a client properly: credit note, money back, a statement that balances. Without this the first refund sends it back to its old invoicing tool.
 - MUT-639 (Barmajiyat issues first) and the paid plans that include issuing both need refunds.
 - Low risk: issuing stays behind the per-account flag; wire changes are additive, and older phones keep their `ORIGINAL_PAID` message.
+
+## Settled while building (2026-11-24)
+- **Documents due needs no change.** Money a credit note releases always came from a document's payments: issuing takes a captured Received over (origin becomes ISSUED_DOCUMENT) or links a receipt to it (documented), and `documentsDue` already skips both.
+- **The portal's credit button keeps its old default.** While something is still owed it starts at that amount (as before); on a fully paid document it starts at what credit notes haven't covered yet. The amount can be raised up to that, and then the drawer asks about the paid part.
+- **Error details stay in minor units**, like the existing `outstanding`: `maximum` and `paid` are minor-unit strings; the preview's `creditNote` amounts are decimals like every other preview amount.
+- **The accountant's shared summary** (share links) also nets refunds out of `received`; `count` stays the payments.
+- **The fake QA API** credits paid parts, keeps refunds and puts issued documents' lines on the client statement in the server's rank order.
