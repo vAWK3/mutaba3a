@@ -226,10 +226,12 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
   // MUT-643: a 305 or 320 whose Owed it owns may be credited up to what credit notes haven't covered yet, paid or not
   // (the drawer then asks what happened to the paid part). Any other original credits only what is still owed.
   const ownsOwed = owed.data?.origin === 'ISSUED_DOCUMENT' && owed.data.originId === d.id;
-  const creditable = ownsOwed ? minorDigitsToDecimal(String(parseAmountToMinor(d.gross, 'ILS') - parseAmountToMinor(owed.data!.credited, 'ILS')), 2) : owing ? outstanding! : '0.00';
-  const canCredit = (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT') && creditable !== '0.00' && !creditable.startsWith('-');
-  // The whole document while nothing was credited (and, for another original, nothing paid); else one line for the rest,
-  // VAT included.
+  const uncredited = ownsOwed ? minorDigitsToDecimal(String(parseAmountToMinor(d.gross, 'ILS') - parseAmountToMinor(owed.data!.credited, 'ILS')), 2) : owing ? outstanding! : '0.00';
+  const canCredit = (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT') && uncredited !== '0.00' && !uncredited.startsWith('-');
+  // It starts at what is still owed while something is (as before MUT-643), else at all that credit notes haven't
+  // covered; the amount may be raised up to that (the drawer then asks about the paid part). The whole document while
+  // that is all of it; else one line for the amount, VAT included.
+  const creditable = owing ? outstanding! : uncredited;
   const partly = creditable !== d.gross;
   const creditLines = partly
     ? [{ description: t('hosted.issue.creditLine', { document: docTitle(t, d) }), kind: 'SERVICE' as const, quantity: '1', unitPrice: creditable, discount: '', pricesIncludeVat: true, ...(d.lines.every((l) => l.vatRateBasisPoints === 0) ? { vatExempt: true } : {}) }]
