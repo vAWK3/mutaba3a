@@ -13,6 +13,8 @@ export type CodeFailure =
   | { kind: 'wait'; minutes: number }
   /** The right code on an account waiting for review: the page shows the review notice (MUT-367). */
   | { kind: 'underReview' }
+  /** MUT-710 (D6): the right code, but the account's second step is a code by email too: one factor twice. */
+  | { kind: 'usePassword' }
   | { kind: 'unreachable' };
 
 /** Six digits; the server refuses anything else before spending a try. */
@@ -38,6 +40,8 @@ export function codeFailure(error: unknown): CodeFailure {
       return { kind: 'tooMany' };
     case 'ACCOUNT_UNDER_REVIEW':
       return { kind: 'underReview' };
+    case 'TWO_FACTOR_USE_PASSWORD':
+      return { kind: 'usePassword' };
     // No live code, or a code for an account that can no longer sign in: either way, a new code is the next step.
     case 'SIGN_IN_CODE_EXPIRED':
     case 'INVALID_CREDENTIALS':
@@ -64,6 +68,8 @@ export function refusalReason(failure: CodeFailure): 'wrong' | 'expired' | 'too_
       return 'rate_limited';
     case 'underReview':
       return 'under_review';
+    // Not a refused code (contract 2.10.0 has no reason for it), and not an error either.
+    case 'usePassword':
     case 'unreachable':
       return null;
   }

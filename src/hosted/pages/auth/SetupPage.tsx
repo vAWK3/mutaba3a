@@ -5,7 +5,7 @@ import { useLanguage, useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import { Button } from '../../../components/ui/Button';
 import { Select } from '../../../components/ui/Input';
-import { api, ApiError, retryMinutes, type SetupLinkCheck, type SetupLinkRefusal } from '../../api/client';
+import { api, ApiError, retryMinutes, type Me, type SetupLinkCheck, type SetupLinkRefusal, type TwoFactorChallenge } from '../../api/client';
 import { AlertIcon } from '../../components/Icons';
 import { TimezoneChoice } from '../../components/TimezoneChoice';
 import { DEFAULT_HOSTED_CURRENCY, HOSTED_CURRENCIES, type HostedCurrency } from '../../format/currencies';
@@ -24,6 +24,9 @@ import { CheckingSession } from './BootScreens';
 import { UnderReviewNotice } from './UnderReviewNotice';
 import { SetupPasskeyStep, type SetupLinkKind } from './SetupPasskeyStep';
 import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tokenFromHash, type PasswordProblem } from './setupLink';
+import { TwoFactorFields } from '../../twoFactor/TwoFactorFields';
+import { TwoFactorStep } from '../../twoFactor/TwoFactorStep';
+import { answerOf, EMPTY_TWO_FACTOR_INPUT, endsTheTry, twoFactorChallengeOf, twoFactorFailure, type TwoFactorAnswer, type TwoFactorFailure } from '../../twoFactor/twoFactor';
 
 /**
  * `/setup#<token>` (MUT-236, mut-236-setup-page.md): the page a setup link opens
@@ -36,9 +39,13 @@ import { NEW_PASSWORD_POLICY, answerWasLost, passwordProblem, redeemFailure, tok
  * of signing in (MUT-367). A link that can't be used says so, and offers a new
  * one where the server can mail it. Once signed in, a device that can make a
  * passkey is offered one before Home (MUT-619, SetupPasskeyStep).
+ *
+ * MUT-710 (D11): when the person has two-step sign-in on, every link asks for the second step too, beside the new
+ * password and sent with it; the sign-in after it asks again, as any sign-in does.
  */
 
 const SETUP_CHECK_KEY = ['setup-link-check'] as const;
+const SETUP_TWO_FACTOR_KEY = ['setup-link-two-factor'] as const;
 const POLICY_VARS = { min: NEW_PASSWORD_POLICY.minLength, max: NEW_PASSWORD_POLICY.maxLength };
 /** The server's displayName bound (SetupLinkRedeemRequest, MUT-366). */
 const NAME_MAX_LENGTH = 200;
@@ -97,7 +104,7 @@ function SetupLink({ token }: { token: string }) {
     const dead = check.data.state === 'valid' ? null : check.data;
     return <SetupNotice outcome={{ kind: 'refused', state: dead?.state ?? 'invalid', ...(dead?.purpose ? { purpose: dead.purpose } : {}) }} />;
   }
-  return <SetupForm token={token} email={link.email} purpose={link.purpose} termsVersion={link.termsVersion} onOutcome={setOutcome} />;
+  return <SetupForm token={token} email={link.email} purpose={link.purpose} termsVersion={link.termsVersion} twoFactor={Boolean(link.twoFactor)} onOutcome={setOutcome} />;
 }
 
 function SetupLayout({ children }: { children: ReactNode }) {
@@ -187,6 +194,8 @@ interface SetupFormProps {
   purpose: Purpose;
   /** MUT-324: the terms version the check named; replaced by the current one if it changes while the page is open. */
   termsVersion: string;
+  /** MUT-710 (D11): the person has two-step sign-in on, so the link needs the second step too. */
+  twoFactor: boolean;
   onOutcome: (outcome: Outcome) => void;
 }
 
@@ -202,7 +211,7 @@ async function recheckTermsVersion(token: string): Promise<RecheckedTerms> {
   }
 }
 
-function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, onOutcome }: SetupFormProps) {
+function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, twoFactor, onOutcome }: SetupFormProps) {
   const t = useT();
   const tp = useTp();
   const queryClient = useQueryClient();
@@ -233,6 +242,27 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const [zoneRefused, setZoneRefused] = useState(false);
   /** MUT-619: signed in, the passkey step is showing; where it goes next. */
   const [afterPasskey, setAfterPasskey] = useState<NextPlace | null>(null);
+  /**
+   * MUT-710 (D11): the link's own challenge, asked for explicitly once the form shows (it mails the email method's code),
+   * never by the check, which runs on every page load. A new one replaces it when a try ends.
+   */
+  const challengeQuery = useQuery({
+    queryKey: [...SETUP_TWO_FACTOR_KEY, token],
+    queryFn: () => api.setupLinkTwoFactor(token),
+    enabled: twoFactor,
+    staleTime: Infinity,
+    gcTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+  });
+  const [challenge, setChallenge] = useState<TwoFactorChallenge | null>(null);
+  const currentChallenge = challenge ?? challengeQuery.data ?? null;
+  const [secondStep, setSecondStep] = useState(EMPTY_TWO_FACTOR_INPUT);
+  const [secondStepMissing, setSecondStepMissing] = useState(false);
+  const [secondStepFailure, setSecondStepFailure] = useState<TwoFactorFailure | null>(null);
+  /** MUT-710: the password is set and the sign-in after it asks for the second step. */
+  const [signInStep, setSignInStep] = useState<TwoFactorChallenge | null>(null);
   if (language !== tickedIn) {
     setTickedIn(language);
     setAgreed(false);
@@ -247,24 +277,61 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   async function signIn(address: string, otherwise: Outcome) {
     setPhase('signingIn');
     try {
-      const me = await api.signIn({ email: address, password });
-      setMode('remote');
-      // Whoever was signed in on this browser before (or the local person, MUT-286) is not this person.
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
-      queryClient.setQueryData(ME_KEY, me);
-      adoptAccountLocale(me.user.locale);
-      // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
-      const home = { ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as NextPlace;
-      // MUT-619: offer a passkey first, on the MUT-370 rules. `due` means no passkey yet, so there is nothing to review.
-      if (passkeyOfferable(me, { supported: passkeySupport(), local: false })) return setAfterPasskey(home);
-      if (signup) return void navigate(home);
-      // MUT-415: a recovery lands on the passkey review when the account has passkeys; they survive the new password.
-      const review = await passkeysToReview(queryClient);
-      void navigate({ to: '/', ...(review ? { search: { passkeys: true, review: 'recovery' } } : {}), replace: true } as never);
+      await signedIn(await api.signIn({ email: address, password }));
     } catch (error) {
+      // MUT-710: the account asks for its second step at sign-in too.
+      const asked = twoFactorChallengeOf(error);
+      if (asked) return setSignInStep(asked);
       // MUT-367: the password is right but the operator hasn't approved the account yet
       onOutcome(error instanceof ApiError && error.code === 'ACCOUNT_UNDER_REVIEW' ? { kind: 'underReview' } : otherwise);
     }
+  }
+
+  async function signedIn(me: Me) {
+    setMode('remote');
+    // Whoever was signed in on this browser before (or the local person, MUT-286) is not this person.
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
+    queryClient.setQueryData(ME_KEY, me);
+    adoptAccountLocale(me.user.locale);
+    // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
+    const home = { ...(signup ? firstRunPath(me) : { to: '/' }), replace: true } as NextPlace;
+    // MUT-619: offer a passkey first, on the MUT-370 rules. `due` means no passkey yet, so there is nothing to review.
+    if (passkeyOfferable(me, { supported: passkeySupport(), local: false })) return setAfterPasskey(home);
+    if (signup) return void navigate(home);
+    // MUT-415: a recovery lands on the passkey review when the account has passkeys; they survive the new password.
+    const review = await passkeysToReview(queryClient);
+    void navigate({ to: '/', ...(review ? { search: { passkeys: true, review: 'recovery' } } : {}), replace: true } as never);
+  }
+
+  /** MUT-710 (D11): the second step to send with the password, or null after marking what's missing. */
+  function secondStepAnswer(): ({ challengeToken: string } & TwoFactorAnswer) | null | undefined {
+    if (!twoFactor) return undefined;
+    const answer = answerOf(secondStep);
+    if (!currentChallenge || !answer) {
+      setSecondStepMissing(true);
+      return null;
+    }
+    setSecondStepMissing(false);
+    return { challengeToken: currentChallenge.challengeToken, ...answer };
+  }
+
+  /** A refused second step: a wrong code keeps the challenge; an ended try gets a new one (the email method mails it). */
+  function refuseSecondStep(error: unknown): boolean {
+    const fresh = twoFactorChallengeOf(error);
+    if (fresh) {
+      setChallenge(fresh);
+      setSecondStep(EMPTY_TWO_FACTOR_INPUT);
+      return true;
+    }
+    if (!(error instanceof ApiError) || !error.code.startsWith('TWO_FACTOR_')) return false;
+    const failure = twoFactorFailure(error);
+    setSecondStepFailure(failure);
+    setSecondStep((current) => ({ ...current, code: '', recoveryCode: '' }));
+    if (endsTheTry(failure)) {
+      setChallenge(null);
+      void challengeQuery.refetch();
+    }
+    return true;
   }
 
   /** The SIGNUP redeem's new profile (D9); a blank name is left out, so the server uses the address's local part. */
@@ -286,18 +353,22 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       return;
     }
     setTermsProblem(null);
+    const second = secondStepAnswer();
+    if (second === null) return;
     setBanner(null);
+    setSecondStepFailure(null);
     setPhase('saving');
     try {
       const termsLocale = language === 'ar' ? 'ar' : 'en';
       const redeemed = await api.redeemSetupLink(
-        { token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE, ...newAccountFields() },
+        { token, password, acceptedTermsVersion: termsVersion, termsLocale, clientRelease: TERMS_CLIENT_RELEASE, ...newAccountFields(), ...second },
         requestTimeout(),
       );
       // MUT-367: an account waiting for review can't sign in yet; say so without trying
       if (redeemed.status === 'PENDING_REVIEW') return onOutcome({ kind: 'underReview' });
       await signIn(redeemed.email, { kind: 'saved' });
     } catch (error) {
+      if (refuseSecondStep(error)) return setPhase('idle');
       const failure = redeemFailure(error, answerLost.current);
       if (answerWasLost(error)) answerLost.current = true;
       if (failure.kind === 'trySignIn') return void (await signIn(email, { kind: 'usedAfterRetry' }));
@@ -332,6 +403,15 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
   const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : signup ? 'signup' : 'setup';
 
+  if (signInStep) {
+    const finish = async (answer: TwoFactorAnswer) => signedIn(await api.finishTwoFactorSignIn({ challengeToken: signInStep.challengeToken, ...answer }));
+    return (
+      <SetupLayout>
+        <TwoFactorStep challenge={signInStep} submit={finish} onRestart={() => void navigate({ to: '/sign-in', replace: true })} restartLabel={t('hosted.setup.toSignIn')} />
+      </SetupLayout>
+    );
+  }
+
   if (afterPasskey) {
     return (
       <SetupLayout>
@@ -345,6 +425,54 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
       <form className="hp-card hp-signin-card" noValidate onSubmit={onSubmit}>
         <h1>{t(`hosted.setup.title.${variant}`)}</h1>
         <p className="hp-setup-lead">{t(`hosted.setup.lead.${variant}`)}</p>
+
+        {/* MUT-710 (D11, wireframe "Reset password"): the second step first, sent with the new password */}
+        {twoFactor && (
+          <section className="hp-setup-second-step" aria-labelledby={`${ids}-second-step`}>
+            <h2 className="hp-setup-step-title" id={`${ids}-second-step`}>
+              {t('hosted.twoFactor.setupStep')}
+            </h2>
+            <p className="hp-setup-lead">{t('hosted.twoFactor.setupLede')}</p>
+            {secondStepFailure && (
+              <div className="hp-banner hp-banner-error" role="alert" id={`${ids}-second-banner`}>
+                <AlertIcon />
+                <span>
+                  {secondStepFailure.kind === 'wrong' && tp('hosted.twoFactor.wrong', secondStepFailure.triesLeft)}
+                  {(secondStepFailure.kind === 'tooMany' || secondStepFailure.kind === 'expired') && t('hosted.twoFactor.newCodeAsked')}
+                  {secondStepFailure.kind === 'wait' && tp('hosted.signInCode.wait', secondStepFailure.minutes)}
+                  {secondStepFailure.kind === 'unreachable' && t('hosted.auth.unreachable')}
+                </span>
+              </div>
+            )}
+            {currentChallenge ? (
+              <TwoFactorFields
+                key={currentChallenge.challengeToken}
+                challenge={currentChallenge}
+                value={secondStep}
+                onChange={(next) => {
+                  setSecondStep(next);
+                  setSecondStepMissing(false);
+                }}
+                missing={secondStepMissing}
+                invalid={secondStepFailure?.kind === 'wrong'}
+                disabled={pending}
+                describedBy={secondStepFailure ? `${ids}-second-banner` : undefined}
+              />
+            ) : challengeQuery.isError ? (
+              <div className="hp-banner hp-banner-error" role="alert">
+                <AlertIcon />
+                <span>{t('hosted.auth.unreachable')}</span>
+                <button type="button" className="hp-link-button press" onClick={() => void challengeQuery.refetch()}>
+                  {t('hosted.auth.boot.retry')}
+                </button>
+              </div>
+            ) : (
+              <p className="hp-setup-lead" role="status">
+                {t('hosted.setup.checking')}
+              </p>
+            )}
+          </section>
+        )}
 
         {banner && (
           <div className="hp-banner hp-banner-error" role="alert" id={bannerId}>
@@ -401,7 +529,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, o
               name="new-password"
               autoComplete="new-password"
               dir="ltr"
-              autoFocus
+              autoFocus={!twoFactor}
               readOnly={pending}
               value={password}
               aria-invalid={Boolean(fieldError)}

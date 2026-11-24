@@ -2733,7 +2733,8 @@
         "office_not_found": "There's no Malafat office at that address.",
         "identityElsewhere": "This Malafat account is already connected to another MTB3A account.",
         "emailTaken": "An MTB3A account already has this email. Sign in to it to connect Malafat.",
-        "unreachable": "We couldn't reach MTB3A. Check your connection and try again."
+        "unreachable": "We couldn't reach MTB3A. Check your connection and try again.",
+        "twoFactorLink": "Your MTB3A account has two-step sign-in on, so connecting Malafat to it isn’t available yet. Sign in with your password instead."
       },
       "consent": {
         "title": "Welcome",
@@ -3376,6 +3377,96 @@
       "empty": {
         "title": "No movements yet",
         "body": "Owed amounts, payments and credits for this client will show here with a running balance."
+      }
+    },
+    "twoFactor": {
+      "title": "Two-step sign-in",
+      "enterApp": "Enter the 6-digit code from your authenticator app.",
+      "enterEmail": "We emailed a 6-digit code to {email}. It works for 10 minutes.",
+      "code": "Code",
+      "codeRequired": "Enter the 6-digit code.",
+      "recoveryLabel": "Recovery code",
+      "recoveryHint": "One of the 10 codes you saved when you turned this on. Each works once.",
+      "recoveryRequired": "Enter a recovery code, like k7mq-2xdp.",
+      "useRecovery": "Use a recovery code instead",
+      "useCode": "Use the code instead",
+      "resend": "Send a new code",
+      "resendIn": {
+        "one": "Send a new code in {count} second",
+        "other": "Send a new code in {count} seconds"
+      },
+      "resent": "We sent a new code.",
+      "resendFailed": "We couldn’t send a new code. Try again in a moment.",
+      "continue": "Continue",
+      "backToSignIn": "Back to sign in",
+      "wrong": {
+        "one": "That code isn’t right. {count} try left.",
+        "other": "That code isn’t right. {count} tries left."
+      },
+      "tooMany": "Too many wrong codes. Start signing in again.",
+      "expired": "This step has expired. Start signing in again.",
+      "startAgain": "That step has expired. Start again.",
+      "newCodeAsked": "That step has expired. Enter the new code.",
+      "usePassword": "Your account asks for a code by email after your password. Sign in with your password instead.",
+      "recoveryUsed": {
+        "one": "You signed in with a recovery code. {count} is left. If you lost your phone, set two-step sign-in up again in You › Account.",
+        "other": "You signed in with a recovery code. {count} are left. If you lost your phone, set two-step sign-in up again in You › Account."
+      },
+      "setupStep": "First, confirm it’s you",
+      "setupLede": "Your account uses two-step sign-in, so this needs the code too.",
+      "rowOff": "Off. A code after your password, from an app or by email.",
+      "rowOnApp": "On · authenticator app",
+      "rowOnEmail": "On · code by email",
+      "chooseTitle": "Turn on two-step sign-in",
+      "chooseLede": "After your password, MTB3A will ask for a one-time code. Pick where it comes from.",
+      "method": {
+        "totp": "Authenticator app",
+        "email": "Code by email"
+      },
+      "appNote": "Recommended. Authy, Google Authenticator, 1Password and others. Works without signal.",
+      "emailNote": "Sent to your email each time you sign in.",
+      "next": "Next",
+      "scan": "Scan this with your authenticator app.",
+      "qrAlt": "QR code for your authenticator app",
+      "orKey": "Or enter this key:",
+      "copyKey": "Copy key",
+      "keyCopied": "Key copied.",
+      "copyFailed": "Couldn’t copy. Select the text and copy it.",
+      "openApp": "Open in authenticator app",
+      "appCodeLabel": "Code the app shows",
+      "emailSent": "We sent a code to {email} to check it reaches you.",
+      "emailCodeLabel": "Code from the email",
+      "turnOn": "Turn on",
+      "codesTitle": "Save your recovery codes",
+      "codesLede": "If you lose your phone or can’t get the code, each of these lets you in once. Keep them somewhere safe, away from this device.",
+      "copyAll": "Copy all",
+      "codesCopied": "Recovery codes copied.",
+      "download": "Download",
+      "saved": "I’ve saved these codes",
+      "done": "Done",
+      "onToast": "Two-step sign-in is on. Your other sessions were signed out.",
+      "renewedToast": "New recovery codes are ready. The old ones no longer work.",
+      "offToast": "Two-step sign-in is off.",
+      "manageLede": "Your account asks for a code after your password.",
+      "secondStep": "Second step",
+      "codesLeftLabel": "Recovery codes",
+      "codesLeft": {
+        "one": "{count} of 10 left",
+        "other": "{count} of 10 left"
+      },
+      "renew": "Get new recovery codes",
+      "switchToEmail": "Switch to code by email",
+      "switchToApp": "Switch to authenticator app",
+      "turnOff": "Turn off two-step sign-in",
+      "requiredNote": "Required while you issue documents or are connected to the Tax Authority.",
+      "confirmLede": "Confirm with your password and your current code.",
+      "offConfirm": "Turn off two-step sign-in? Sign-in will need only your password.",
+      "confirmCode": "Code from your app",
+      "issuing": {
+        "title": "Two-step sign-in is required to issue documents.",
+        "body": "It keeps your Tax Authority connection safe if someone learns your password. It takes about a minute.",
+        "setUp": "Set up two-step sign-in",
+        "signInAgain": "Two-step sign-in is on, but this session started before it. Sign out and sign in again to issue."
       }
     }
   }

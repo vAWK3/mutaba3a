@@ -196,6 +196,8 @@ export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
 export type UpdateProfileResponse = Schemas['UpdateProfileResponse'];
 export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
+/** MUT-710: a second step to answer: TWO_FACTOR_REQUIRED's details, and POST /v1/me/two-factor/challenge's answer. */
+export type TwoFactorChallenge = OkJson<'/v1/me/two-factor/challenge', 'post'>;
 /** MUT-368: which self-service doors the server opens. */
 export type SelfServiceDoors = Schemas['SelfServiceDoors'];
 /** MUT-596: Sign in with Malafat's next step, or the person signed in. */
@@ -407,11 +409,13 @@ const SIGN_IN_PATH = '/v1/sessions';
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
 /** MUT-618: sign-in with an emailed code; its 401s (wrong, expired, too many tries) are refused codes, never an ended session. */
 const CODE_SIGN_IN_PATH = '/v1/sessions/code';
+/** MUT-710: the second step of a sign-in; its refusals are refused codes, never an ended session. */
+const TWO_FACTOR_SIGN_IN_PATH = '/v1/sessions/two-factor';
 /** MUT-460: the server's largest page (server/src/pagination.ts MAX_LIMIT). */
 const OPERATOR_LIST_LIMIT = 200;
 /** MUT-527: the account list's page (the server's default; at most 100). */
 const OPERATOR_ACCOUNTS_PAGE = 50;
-const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH, CODE_SIGN_IN_PATH]);
+const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH, CODE_SIGN_IN_PATH, TWO_FACTOR_SIGN_IN_PATH]);
 const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
  * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
@@ -423,7 +427,8 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
 // MUT-596: Sign in with Malafat (office, exchange, link, consent) is the server's: the page is signed out while it runs.
 // MUT-618: asking for an emailed sign-in code is the server's: the in-page backend has no mailer.
 // MUT-535: the monthly summary's opt-out page is the server's: it changes an account's mail, signed in here or not.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat|mail-preferences)(\/|\?|$)/;
+// MUT-710: mailing a new second-step code is the server's: the page is signed out while it runs.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat|mail-preferences|two-factor)(\/|\?|$)/;
 /**
  * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
  * link page's own PIN-again state, never the end of whoever is signed in on this browser.
@@ -745,6 +750,24 @@ export const api = {
   requestSignInCode: (body: SignInCodeRequest, signal?: AbortSignal) => request<Schemas['SelfServiceAccepted']>('POST', '/v1/sign-in-codes', { body, signal }),
   /** MUT-618: 401 SIGN_IN_CODE_WRONG / _EXPIRED / _TOO_MANY_TRIES, 403 ACCOUNT_UNDER_REVIEW, 429. */
   signInWithCode: (body: Schemas['CodeSignInRequest']) => request<OkJson<'/v1/sessions/code', 'post'>>('POST', CODE_SIGN_IN_PATH, { body }),
+  /** MUT-710 (D2): the second step of a sign-in the first step began (TWO_FACTOR_REQUIRED); answers what the first step would have. */
+  finishTwoFactorSignIn: (body: Schemas['TwoFactorFinishRequest']) => request<OkJson<'/v1/sessions/two-factor', 'post'>>('POST', TWO_FACTOR_SIGN_IN_PATH, { body }),
+  /** MUT-710 (D5): mail a new code for an email-method challenge (once per 30 s, 5 per challenge; 429 past it). */
+  resendTwoFactorCode: (challengeToken: string) => request<Schemas['TwoFactorEmailCodeResponse']>('POST', '/v1/two-factor/email-code', { body: { challengeToken } }),
+  /** MUT-710 (D11): a challenge for a setup link's person, before the new password (the email method mails its code now). */
+  setupLinkTwoFactor: (token: string) => request<Schemas['SetupLinkTwoFactor']>('POST', '/v1/account-setup/two-factor', { body: { token } }),
+  /** MUT-710 (D8): whether two-step sign-in is on, how, and how many recovery codes are left. */
+  twoFactorState: (signal?: AbortSignal) => request<Schemas['TwoFactorState']>('GET', '/v1/me/two-factor', { signal }),
+  /** MUT-710: a challenge for the signed-in person's current second step, needed to switch, renew codes or turn off. */
+  twoFactorChallenge: () => request<TwoFactorChallenge>('POST', '/v1/me/two-factor/challenge'),
+  /** MUT-710 (D8): starts turning it on (or switching method); confirm within 10 minutes. */
+  startTwoFactorEnrolment: (body: Schemas['TwoFactorEnrolmentRequest']) => request<Schemas['TwoFactorEnrolment']>('POST', '/v1/me/two-factor/enrolment', { body }),
+  /** MUT-710 (D8): turns it on; the ten recovery codes are in this answer only. Other sessions are signed out. */
+  confirmTwoFactorEnrolment: (body: Schemas['TwoFactorConfirmRequest']) => request<Schemas['TwoFactorRecoveryCodes']>('POST', '/v1/me/two-factor/enrolment/confirm', { body }),
+  /** MUT-710 (D9): ten new recovery codes; the old ones stop working. */
+  renewRecoveryCodes: (body: Schemas['TwoFactorManageRequest']) => request<Schemas['TwoFactorRecoveryCodes']>('POST', '/v1/me/two-factor/recovery-codes', { body }),
+  /** MUT-710 (D8): 409 TWO_FACTOR_REQUIRED_FOR_ISSUING while a profile the person owns issues or is connected to the Tax Authority. */
+  turnOffTwoFactor: (body: Schemas['TwoFactorManageRequest']) => request<void>('DELETE', '/v1/me/two-factor', { body }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
   /** MUT-535 (D7): whether the monthly summary mail reaches the signed-in person (You › Account's switch). */

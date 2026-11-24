@@ -11,6 +11,7 @@ import { passkeySupport } from '../passkeys/webauthn';
 import { HostedYourDataDrawer } from '../components/HostedYourDataDrawer';
 import { YourDataDrawer } from '../components/YourDataDrawer';
 import { useIsLocalMode } from '../session/mode';
+import { TwoFactorDrawer } from '../twoFactor/TwoFactorDrawer';
 
 /**
  * The shell's account-menu drawers (MUT-237), on every page, beside `ProfileDrawers`.
@@ -44,6 +45,8 @@ export function useAccountDrawers() {
     openConnectClaude: () => go({ connectClaude: true }, false),
     /** MUT-596: Connected apps (`?connectedApps=true`): Malafat acting for the person in their firms. */
     openConnectedApps: () => go({ connectedApps: true }, false),
+    /** MUT-710: Two-step sign-in (`?twoFactor=true`); over the issue drawer, closing it returns to the invoice. */
+    openTwoFactor: () => go({ twoFactor: true }, false),
     /** MUT-415: the review after a password change, in Change password's place (Back doesn't reopen the form). */
     reviewPasskeys: () => go({ passkeys: true, review: 'password' }, true),
     close: () => go({}, true),
@@ -64,6 +67,8 @@ export function AccountDrawers() {
   if (drawers.state.connectClaude && !local) return <ConnectClaudeDrawer onClose={drawers.close} />;
   // MUT-596: an account's; the drawer says so when the server has Malafat access off.
   if (drawers.state.connectedApps && !local) return <ConnectedAppsDrawer onClose={drawers.close} />;
+  // MUT-710: an account's.
+  if (drawers.state.twoFactor && !local) return <TwoFactorDrawer onClose={drawers.close} />;
   if (drawers.state.billing && !local) {
     return <BillingDrawer step={drawers.state.step} checkout={drawers.state.checkout} portalReturned={drawers.state.portal !== undefined} cardUpdated={drawers.state.portal === 'card'} onStep={(step, replace) => (step ? drawers.openBilling(step, replace) : drawers.leaveBillingStep())} onClose={drawers.close} />;
   }
