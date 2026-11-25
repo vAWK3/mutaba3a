@@ -46,12 +46,13 @@ describe('settle and issue (MUT-661)', () => {
     await prefer(h, w, w.rami, 'TAX_INVOICE_FIRST');
     const owed = await owedOf(h, w, '3400.00', w.rami.id);
     const invoice = await issueTaxInvoice(h, w, owed.id, w.rami.id, '3400.00');
-    const res = await pay(h, w, owed.id, { amount: '1000.00', paidAt: '2026-11-05' });
+    // The tax invoice took the recorded Owed over: its own Owed is the one to pay now.
+    const res = await pay(h, w, invoice.receivableId, { amount: '1000.00', paidAt: '2026-11-05' });
     expect(res.status, await res.clone().text()).toBe(201);
     const body = await read(res);
     expect(body.payment).toMatchObject({ amount: '1000.00' });
     expect(body.receivable).toMatchObject({ outstanding: '2400.00' });
-    expect(body.issue).toMatchObject({ status: 'issued', reason: null, document: { docType: 'RECEIPT', gross: '1000.00', originalId: invoice.document?.id ?? invoice.id, paymentId: body.payment.id } });
+    expect(body.issue).toMatchObject({ status: 'issued', reason: null, document: { docType: 'RECEIPT', gross: '1000.00', originalId: invoice.id, paymentId: body.payment.id } });
   });
 
   it('AC4: the same on an On payment client issues an invoice-receipt for 1,000', async () => {
@@ -94,10 +95,12 @@ describe('settle and issue (MUT-661)', () => {
     const h = accountantHarness();
     const w = await world(h);
     // A client with a VAT number and an amount over the threshold needs an allocation number; the Tax Authority is off here.
-    const big = await read(await h.app.request('/v1/customers', json({ name: 'Big Co', taxId: '514000000' }, { ...w.on, ...idem() })));
+    const big = await read(await h.app.request('/v1/customers', json({ name: 'Big Co', taxId: '516123452' }, { ...w.on, ...idem() })));
+    expect(big.id, JSON.stringify(big)).toBeTruthy();
     const owed = await owedOf(h, w, '30000.00', big.id);
+    console.log('OWED', JSON.stringify(owed), JSON.stringify(big));
     const res = await pay(h, w, owed.id, { amount: '30000.00' });
-    expect(res.status).toBe(201);
+    expect(res.status, await res.clone().text()).toBe(201);
     const body = await read(res);
     expect(body.payment).toMatchObject({ amount: '30000.00' });
     expect(body.receivable).toMatchObject({ outstanding: '0.00' });

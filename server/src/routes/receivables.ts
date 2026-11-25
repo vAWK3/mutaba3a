@@ -28,15 +28,6 @@ import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSc
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 
 /**
- * What settle may be asked to pay: an Owed a person recorded (ADJUSTMENT) or, MUT-661 (ADR-279), one an issued tax
- * invoice posted (ISSUED_DOCUMENT; a tax invoice taking over a recorded Owed leaves that one). Malafat's installments
- * and retainer charges stay its own allocation engine's.
- */
-export function isSettleableOrigin(receivable: Pick<ReceivableRecord, 'origin'>): boolean {
-  return receivable.origin === 'ADJUSTMENT' || receivable.origin === 'ISSUED_DOCUMENT';
-}
-
-/**
  * MUT-65 / MUT-709 / MUT-661: one payment against a captured Owed, with its one allocation. The settle route and the
  * settle-and-issue route (ADR-279) both run exactly this; `earlier` is true when the Idempotency-Key had already
  * recorded the payment (a retry after a 5xx), so nothing new was recorded.
@@ -59,7 +50,7 @@ export async function settleOwed(
         const allocations = (await store.payments.listAllocations(organization.id, earlier.id)).map((a) => serializeAllocation(a, receivable, currency, today));
         return { receivable: serializeReceivable(receivable, today), payment: serializePayment(earlier, allocations, null, { userId: user.id, displayName: user.displayName }), earlier: true };
       }
-      const outstanding = outstandingMinor(receivable);
+      const outstanding = receivable.deletedAt ? 0n : outstandingMinor(receivable);
       if (outstanding <= 0n) throw validationError('RECEIVABLE_NOT_OPEN', 'Nothing is outstanding on this receivable');
       const amountMinor = body.amount ? parseAmount(body.amount, currency) : outstanding;
       if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
@@ -253,7 +244,7 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'Settle a receivable directly, with one payment and one allocation',
       description:
-        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT), or one an issued tax invoice posted (ISSUED_DOCUMENT, MUT-661), can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.',
+        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An Owed an issued tax invoice owns is paid by issuing a receipt (POST /v1/receivables/{id}/settle-and-issue, MUT-661). An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.',
       security: [{ session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.settle')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleReceivableRequestSchema) },
@@ -263,11 +254,11 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const { organization } = sessionAuth(c);
       const body = c.req.valid('json');
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      // Only ever an app-made "Owed": captured (ADJUSTMENT) or, MUT-661, a tax invoice's own (ISSUED_DOCUMENT). An INSTALLMENT or RETAINER_CHARGE belongs to
+      // Only ever an app-captured "Owed" (origin ADJUSTMENT). An INSTALLMENT or RETAINER_CHARGE belongs to
       // Malafat's allocation engine, and a disconnected integration would otherwise hand this session
       // payments:write over that whole historical ledger. 404, not 403 — same non-leaking discipline as
       // DELETE /v1/income/{id} (routes/income.ts).
-      if (!receivable || !isSettleableOrigin(receivable)) throw new ApiError('NOT_FOUND', 'No such receivable');
+      if (!receivable || receivable.origin !== 'ADJUSTMENT') throw new ApiError('NOT_FOUND', 'No such receivable');
       const { payment, receivable: settled } = await settleOwed(store, c, receivable, body);
       return c.json({ receivable: settled, payment }, 201);
     },

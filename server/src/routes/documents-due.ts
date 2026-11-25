@@ -1,7 +1,6 @@
 import { createHash } from 'node:crypto';
 import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
-import { todayFor } from '../agreements/compose.js';
 import { requireScope, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { idempotent } from '../idempotency.js';
@@ -9,7 +8,10 @@ import { ifMatch } from '../if-match.js';
 import { documentsDue, olderThan, type DocumentsDueInput, type DueItem } from '../issuing/documents-due.js';
 import { DEFAULT_LINE_DESCRIPTION, DOCUMENT_LANGUAGES, type DocumentLanguage } from '../issuing/labels.js';
 import { formatMoney, type Currency } from '../money.js';
-import type { IssuedDocumentRecord, JsonObject, LedgerStore, NotForInvoiceItem, Organization } from '../repositories/ports.js';
+import { parseAmount, todayFor, validationError } from '../agreements/compose.js';
+import { pastMoneyDate } from '../income/compose.js';
+import { outstandingMinor, serializeAllocation, serializeIssuedDocument, serializePayment, serializeReceivable } from '../serializers.js';
+import type { IssuedDocumentRecord, JsonObject, LedgerStore, NotForInvoiceItem, Organization, ReceivableRecord } from '../repositories/ports.js';
 import type { IssueDocumentRequestSchema } from '../schemas.js';
 import {
   DocumentsDueCountSchema,
@@ -23,10 +25,11 @@ import {
   NotForInvoiceResultSchema,
   SetNotForInvoiceRequestSchema,
   SettleAndIssueRequestSchema,
+  SettleReceivableRequestSchema,
   SettleAndIssueResponseSchema,
 } from '../schemas.js';
-import { serializeIssuedDocument } from '../serializers.js';
-import { isSettleableOrigin, settleOwed } from './receivables.js';
+import { settleOwed } from './receivables.js';
+import { sessionAuth } from '../auth/middleware.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -211,6 +214,42 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
   /** The key a payment's own document is issued under: derived from the request's key and the payment, so a retry never issues twice. */
   const paymentDocumentKey = (key: string, paymentId: string) => `pay:${createHash('sha256').update(`${key}\u0000${paymentId}`).digest('hex').slice(0, 64)}`;
 
+  /**
+   * ADR-279: an Owed an issued tax invoice owns is paid only by issuing (MUT-568: the store lets nothing else allocate to
+   * a document's Owed). So the payment IS the receipt: one issue of a receipt applying the tax invoice, with the payment's
+   * method and date, posts the Received and pays the Owed in the one transaction. There is no "payment only" form of it
+   * (issue false is 422 PAYMENT_NEEDS_DOCUMENT), and a refused issue records nothing (the error is the issue's own).
+   */
+  async function payTaxInvoice(c: Context<AppEnv>, organization: Organization, owed: ReceivableRecord, body: z.infer<typeof SettleReceivableRequestSchema>, issue: boolean | undefined, key: string) {
+    const document = owed.originId ? await store.issuing.getById(organization.id, owed.originId) : null;
+    if (!document || document.docType !== 'TAX_INVOICE' || owed.currency !== 'ILS') throw new ApiError('NOT_FOUND', 'No such receivable');
+    if (issue === false) throw new ApiError('VALIDATION_FAILED', 'A payment on a tax invoice is recorded by its receipt', { field: 'issue', reason: 'PAYMENT_NEEDS_DOCUMENT' });
+    const { user } = sessionAuth(c);
+    const today = todayFor(organization, c.get('now')());
+    const outstanding = outstandingMinor(owed);
+    const amountMinor = body.amount ? parseAmount(body.amount, 'ILS') : outstanding;
+    if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
+    const issuer = await store.issuing.getIssuer(organization.id);
+    const language = languageOf(issuer?.defaultLanguage ?? 'he');
+    const request = {
+      docType: 'RECEIPT',
+      documentDate: today,
+      currency: 'ILS',
+      language,
+      customerId: owed.customerId,
+      appliesToDocumentId: document.id,
+      payment: { method: body.method ?? 'CASH', receivedOn: body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today },
+      pricesIncludeVat: true,
+      lines: [{ description: owed.title?.trim() || DEFAULT_LINE_DESCRIPTION[language], kind: 'SERVICE', quantity: '1', unitPrice: formatMoney({ minor: amountMinor, currency: 'ILS' }), pricesIncludeVat: true }],
+    } as IssueRequest;
+    const { document: receipt } = await issueOne(c, organization, request, paymentDocumentKey(key, owed.id));
+    const [paid, payment] = await Promise.all([store.receivables.getById(organization.id, owed.id), receipt.paymentId ? store.payments.getById(organization.id, receipt.paymentId) : null]);
+    if (!paid || !payment) throw new ApiError('INTERNAL', 'The receipt’s payment vanished');
+    const allocations = (await store.payments.listAllocations(organization.id, payment.id)).map((a) => serializeAllocation(a, paid, 'ILS', today));
+    await audit(c, 'payment.recorded', 'payment', payment.id, { number: payment.number, receivableId: owed.id, amount: formatMoney({ minor: amountMinor, currency: 'ILS' }), currency: 'ILS' });
+    return c.json({ receivable: serializeReceivable(paid, today), payment: serializePayment(payment, allocations, null, { userId: user.id, displayName: user.displayName }), issue: { status: 'issued' as const, reason: null, document: serializeIssuedDocument(receipt) } }, 201);
+  }
+
   app.openapi(
     createRoute({
       method: 'post',
@@ -229,7 +268,8 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
       const { issue, ...settleBody } = c.req.valid('json');
       const key = c.req.valid('header')['idempotency-key'];
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      if (!receivable || !isSettleableOrigin(receivable)) throw new ApiError('NOT_FOUND', 'No such receivable');
+      if (!receivable || receivable.deletedAt || (receivable.origin !== 'ADJUSTMENT' && receivable.origin !== 'ISSUED_DOCUMENT')) throw new ApiError('NOT_FOUND', 'No such receivable');
+      if (receivable.origin === 'ISSUED_DOCUMENT') return payTaxInvoice(c, organization, receivable, settleBody, issue, key);
       const settled = await settleOwed(store, c, receivable, settleBody);
       const done = (status: 'issued' | 'not_requested' | 'not_due' | 'held' | 'failed', reason: string | null, document: IssuedDocumentRecord | null) =>
         c.json({ receivable: settled.receivable, payment: settled.payment, issue: { status, reason, document: document ? serializeIssuedDocument(document) : null } }, 201);
