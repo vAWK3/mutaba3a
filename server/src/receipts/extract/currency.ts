@@ -52,11 +52,13 @@ export function readCurrency(rows: readonly Row[], totalRow: Row | null): Curren
     const onTotal = currenciesOn(totalRow);
     if (onTotal.supported.length === 1 && !onTotal.unsupported) return { code: onTotal.supported[0]!, rule: ON_TOTAL_ROW, conf: totalRow.conf };
   }
+  // MUT-586: the clearest row naming a currency speaks for it, not the first: a header line read poorly would
+  // otherwise sink a ₪ printed clearly further down.
   const found = new Map<Currency, Row>();
   for (const row of rows) {
     const named = currenciesOn(row);
     if (named.unsupported) return null;
-    for (const code of named.supported) if (!found.has(code)) found.set(code, row);
+    for (const code of named.supported) if (row.conf > (found.get(code)?.conf ?? -1)) found.set(code, row);
   }
   if (found.size !== 1) return null;
   const [[code, row]] = [...found] as [[Currency, Row]];

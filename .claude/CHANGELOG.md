@@ -28,6 +28,17 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — A Hebrew receipt that names one currency on several rows gets it read from its clearest row (MUT-586)
+
+### Fixed
+- `readCurrency` (receipt extractor): when exactly one currency is named, it is scored by its most confident row, not the first row that names it. A first row read through a noisy engine no longer drops a currency that a later, clearer row states. Two currencies, or one the API does not take, still give none. Why: Hebrew receipts lost their currency (bench, he photos 9/12 to 10/12; he real receipts 21/53 to 29/53) while the first row was weak and a later one was clear.
+- Bench (`server/ocr/bench/run.py --rescore out/main --compare`, main 2f2ddf91 as baseline): 0 fields right before and not now; wrong-and-confident unchanged in every language, synthetic and real; the other languages' currency unchanged.
+
+### Technical
+- Files: `server/src/receipts/extract/currency.ts`, `server/src/receipts/extract/__tests__/extract.test.ts`. No API, schema or OpenAPI change.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Legal notes answered; the rewritten legal texts held back; the come-back mail is labelled «פרסומת» (Communications Law s.30A)
 
 ### Added
