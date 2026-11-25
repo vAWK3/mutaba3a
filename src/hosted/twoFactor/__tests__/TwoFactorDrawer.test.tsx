@@ -70,7 +70,7 @@ describe('Two-step sign-in drawer (MUT-710)', () => {
     const choose = await screen.findByRole('dialog', { name: 'Turn on two-step sign-in' });
     await user.type(within(choose).getByLabelText('Current password'), 'wrong');
     await user.click(screen.getByRole('button', { name: 'Next' }));
-    expect(await within(choose).findByRole('alert')).toHaveTextContent('That current password isn’t right.');
+    expect(await within(choose).findByRole('alert')).toHaveTextContent('Current password is wrong.');
     expect(screen.getByRole('dialog', { name: 'Turn on two-step sign-in' })).toBeInTheDocument();
   });
 
@@ -80,7 +80,8 @@ describe('Two-step sign-in drawer (MUT-710)', () => {
       'POST /v1/me/two-factor/challenge': () => ok(challenge, 201),
       'DELETE /v1/me/two-factor': () => new Response(null, { status: 204 }),
     });
-    const manage = await screen.findByRole('dialog', { name: 'Two-step sign-in' });
+    await screen.findByRole('button', { name: 'Turn off two-step sign-in' });
+    const manage = screen.getByRole('dialog', { name: 'Two-step sign-in' });
     expect(manage).toHaveTextContent('Authenticator app');
     expect(manage).toHaveTextContent('8 of 10 left');
     await user.click(within(manage).getByRole('button', { name: 'Turn off two-step sign-in' }));
@@ -95,8 +96,7 @@ describe('Two-step sign-in drawer (MUT-710)', () => {
 
   it('while a profile issues documents, turning off is shown but says why it can’t be done', async () => {
     portal(`/p/${ORG_A}?twoFactor=true`, { ...ON, requiredForIssuing: true });
-    const manage = await screen.findByRole('dialog', { name: 'Two-step sign-in' });
-    const off = within(manage).getByRole('button', { name: /Turn off two-step sign-in/ });
+    const off = await screen.findByRole('button', { name: /Turn off two-step sign-in/ });
     expect(off).toHaveAttribute('aria-disabled', 'true');
     expect(off).toHaveTextContent('Required while you issue documents or are connected to the Tax Authority.');
   });
