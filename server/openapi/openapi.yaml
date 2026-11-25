@@ -6408,6 +6408,76 @@ components:
             - receiptNumber
             - reason
             - reasonCode
+        - type: object
+          properties:
+            id:
+              type: string
+            date:
+              type: string
+              pattern: ^\d{4}-\d{2}-\d{2}$
+              description: Calendar date in the organization timezone, YYYY-MM-DD
+            number:
+              type: string
+              nullable: true
+            projectId:
+              type: string
+              nullable: true
+              format: uuid
+            debit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            credit:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            runningBalance:
+              type: string
+              pattern: ^-?\d+(\.\d+)?$
+              description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+            documents:
+              type: array
+              items:
+                $ref: "#/components/schemas/StatementDocumentTag"
+            due:
+              type: string
+              nullable: true
+              enum:
+                - TAX_INVOICE
+                - PAYMENT_REQUEST
+                - RECEIPT
+                - TAX_INVOICE_RECEIPT
+                - null
+            kind:
+              type: string
+              enum:
+                - REFUND
+            refundId:
+              type: string
+              format: uuid
+            creditNoteId:
+              type: string
+              format: uuid
+            method:
+              $ref: "#/components/schemas/PaymentMethod"
+            reference:
+              type: string
+              nullable: true
+          required:
+            - id
+            - date
+            - number
+            - projectId
+            - debit
+            - credit
+            - runningBalance
+            - documents
+            - due
+            - kind
+            - refundId
+            - creditNoteId
+            - method
+            - reference
     StatementDocumentTag:
       type: object
       properties:
@@ -6709,7 +6779,11 @@ components:
         allocated:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID
+          description: Applied to receivables, plus (MUT-643) what credit notes refunded from it
+        refunded:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643."
         unallocated:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -6777,6 +6851,7 @@ components:
         - currency
         - amount
         - allocated
+        - refunded
         - unallocated
         - allocationState
         - receivedOn
@@ -7544,7 +7619,7 @@ components:
         received:
           type: string
           pattern: ^-?\d+(\.\d+)?$
-          description: payments − reversals; may be negative when an earlier payment was reversed in the period.
+          description: payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period.
         payments:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -7553,6 +7628,10 @@ components:
           type: string
           pattern: ^-?\d+(\.\d+)?$
           description: "PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment."
+        refunds:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals."
         change:
           type: string
           pattern: ^-?\d+(\.\d+)?$
@@ -7569,6 +7648,7 @@ components:
         - received
         - payments
         - reversals
+        - refunds
         - change
         - closingBalance
     CustomerSummary:
@@ -10230,6 +10310,8 @@ components:
               - vat
         allocation:
           $ref: "#/components/schemas/IssueAllocation"
+        creditNote:
+          $ref: "#/components/schemas/CreditNoteFacts"
       required:
         - subtotal
         - discount
@@ -10240,6 +10322,7 @@ components:
         - pricesIncludeVat
         - lines
         - allocation
+        - creditNote
     IssueAllocation:
       type: object
       nullable: true
@@ -10276,6 +10359,27 @@ components:
         - customerTaxId
         - requestUrl
       description: "MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711."
+    CreditNoteFacts:
+      type: object
+      nullable: true
+      properties:
+        outstanding:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "Still owed on the original: credited first"
+        paid:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "The part of this credit note the client already paid: when above 0, the issue needs `paidPart`"
+        maximum:
+          type: string
+          pattern: ^-?\d+(\.\d+)?$
+          description: "The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed)"
+      required:
+        - outstanding
+        - paid
+        - maximum
+      description: "MUT-643: a credit note's facts against its original; null for other types. Since 1.137.0-mut643."
     IssueDocumentRequest:
       type: object
       properties:
@@ -10304,7 +10408,41 @@ components:
         originalId:
           type: string
           format: uuid
-          description: "A credit note: the tax invoice it credits"
+          description: "A credit note: the tax invoice or (MUT-643) invoice-receipt it credits"
+        paidPart:
+          oneOf:
+            - type: object
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - KEEP
+              required:
+                - mode
+            - type: object
+              properties:
+                mode:
+                  type: string
+                  enum:
+                    - REFUND
+                refundedOn:
+                  type: string
+                  pattern: ^\d{4}-\d{2}-\d{2}$
+                  description: Calendar date in the organization timezone, YYYY-MM-DD
+                method:
+                  type: string
+                  enum:
+                    - CASH
+                    - BANK
+                reference:
+                  type: string
+                  nullable: true
+                  maxLength: 100
+              required:
+                - mode
+                - refundedOn
+                - method
+          description: "MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview's `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note's date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643."
         appliesToDocumentId:
           type: string
           format: uuid
@@ -10572,6 +10710,11 @@ components:
           type: string
           nullable: true
           format: uuid
+        refundId:
+          type: string
+          nullable: true
+          format: uuid
+          description: "MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643."
         coreVersion:
           type: string
         displayNumber:
@@ -10607,6 +10750,7 @@ components:
         - allocationSource
         - receivableId
         - paymentId
+        - refundId
         - coreVersion
         - displayNumber
         - paymentRequest
@@ -22947,7 +23091,7 @@ paths:
       tags:
         - Summaries
       summary: Billed, received and credited over a period per currency, with the balance at its start and end
-      description: "MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies."
+      description: "MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies."
       security:
         - apiKey: []
         - session: []

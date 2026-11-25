@@ -4748,6 +4748,13 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Release-QA | `qa/specs/portal-selfservice/operator.spec.ts` `@portal-selfservice.operator.billing-grant-business` | the operator grants Business on a 375 px phone; the CLI's list shows it. Written, not yet run (needs the shared local API). |
 | CI only | `test:db` | the Prisma enum accepts SOLO and BUSINESS (existing grant round trips run against Postgres in CI) |
 
+## MUT-643 — a credit note against a paid invoice (2026-11-24, ADR-276)
+- Unit: `server/src/issuing/__tests__/credit-split.test.ts` (cap, split, newest-first release); `settlement.test.ts` (a credited 320); `statements/__tests__/period.test.ts` (refunds figure, identity); `summaries/__tests__/activity.test.ts` (refund nets out); `period-pack/__tests__/report-refunds.test.ts`.
+- Store contract (memory + Prisma): `store-contract-issuing.ts` "MUT-643" block: AC1 refund on a paid 320 with the statement ending at 0 and the period nets out; AC3 kept credit; split and choice; newest-first across two payments; AC2 cap; a non-owned Owed keeps the old rule; idempotent retry; AC5 reverse refused.
+- Routes: `routes-issuing.test.ts` "MUT-643" block (preview facts, ORIGINAL_PAID with paid, refund issue, date and paidPart guards, keep).
+- Local: the fingerprint row and fixture for `refunds`.
+- Release-QA: `portal.invoicing.credit-note-paid-refund`, `credit-note-paid-keep`, `credit-note-cap`.
+
 ## MUT-644 — closed profiles' issued documents: the retention sweep and the owner's archive (2026-11-25, ADR-277)
 
 | Layer | File | Covers |

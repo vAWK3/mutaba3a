@@ -47,7 +47,7 @@ interface SortedLine extends LineBase {
 }
 
 
-const RANK: Record<StatementLineKind, number> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3 };
+const RANK: Record<StatementLineKind, number> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3, REFUND: 4 };
 
 export function legacyBuildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null }): StatementPage {
   const lines = ledgerLines(sources, view).sort(compareLines);
@@ -63,7 +63,7 @@ export function legacyBuildStatement(sources: StatementSources, view: StatementV
     totals.debitMinor += key.debitMinor;
     totals.creditMinor += key.creditMinor;
     running += key.debitMinor - key.creditMinor;
-    const line: StatementLine = { ...key, runningMinor: running };
+    const line: StatementLine = { refund: null, ...key, runningMinor: running };
     return { line, key };
   });
   const start = page.cursor ? withBalance.findIndex((x) => compareLines(x.key, page.cursor!) > 0) : 0;

@@ -556,6 +556,19 @@ export interface DueSeed {
 }
 
 /** MUT-646: one profile's invoicing setup, as the server keeps it. */
+/** The server's same-day order of statement lines (statements/lines.ts LINE_RANK). */
+const LINE_RANK: Record<string, number> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3, REFUND: 4 };
+
+/** MUT-570/643: an Owed an issued document posted, in minor units; `credited` is what its credit notes took. */
+interface StubIssuedOwed {
+  gross: number;
+  outstanding: number;
+  credited?: number;
+  customerId: string | null;
+  docId?: string;
+  postingDate?: string;
+}
+
 interface StubIssuing {
   issuer: (Record<string, Json> & { version: number }) | null;
   logo: { type: string; bytes: Buffer } | null;
@@ -565,7 +578,9 @@ interface StubIssuing {
   starts: Record<string, number>;
   /** MUT-570: what this profile issued, newest first, and each Owed it posted (outstanding, in minor units). */
   docs: Record<string, Json>[];
-  owed: Map<string, { gross: number; outstanding: number; customerId: string | null }>;
+  owed: Map<string, StubIssuedOwed>;
+  /** MUT-643: money credit notes gave back (minor units). */
+  refunds?: { id: string; customerId: string; amount: number; refundedOn: string; creditNoteId: string; method: string; reference: string | null }[];
   /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received; a removed one leaves the list. */
   external: (Record<string, Json> & { id: string; entryKind: string; entryId: string })[];
 }
@@ -1193,7 +1208,8 @@ export class FakeApi {
     const raw = [
       ...this.receivables.filter((r) => r.customerId === customerId && r.currency === currency).map((r) => ({ id: r.id, date: r.postingDate as string, debit: toMinor(r.gross), credit: 0, line: { kind: 'CHARGE' as const, receivableId: r.id, number: (r as { number?: string }).number ?? null, outstanding: r.outstanding } })),
       ...this.payments.filter((p) => p.customerId === customerId && p.currency === currency && p.status === 'POSTED').map((p) => ({ id: p.id, date: p.receivedOn as string, debit: 0, credit: toMinor(p.amount), line: { kind: 'PAYMENT' as const, paymentId: p.id, number: p.number } })),
-    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : a.debit > 0 ? -1 : 1));
+      ...this.issuedLines(customerId),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : LINE_RANK[a.line.kind as string]! - LINE_RANK[b.line.kind as string]!));
     let running = 0;
     const lines = raw.map((x) => {
       running += x.debit - x.credit;
@@ -1201,6 +1217,27 @@ export class FakeApi {
     });
     const closing = toAmount(running);
     return json({ customerId, currency, projectId: null, from: q('from') ?? null, to: q('to') ?? null, asOf: '2026-10-15', openingBalance: '0.00', totals: { debit: toAmount(raw.reduce((s, x) => s + x.debit, 0)), credit: toAmount(raw.reduce((s, x) => s + x.credit, 0)) }, closingBalance: closing, lines: q('order') === 'desc' ? lines.reverse() : lines, nextCursor: null });
+  }
+
+  /**
+   * MUT-643: the ledger lines issued documents make for a client, in the order the server's classifier ranks them:
+   * an Owed's charge, a 320's payment, a credit note's credit, a refund's debit.
+   */
+  private issuedLines(customerId: string) {
+    type Raw = { id: string; date: string; debit: number; credit: number; line: Record<string, Json> };
+    const out: Raw[] = [];
+    for (const state of this.issuing?.values() ?? []) {
+      for (const d of [...state.docs].reverse()) {
+        if (d.customerId !== customerId) continue;
+        const gross = toMinor(String(d.gross));
+        const date = String(d.documentDate);
+        if (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT') out.push({ id: `${d.id}:charge`, date, debit: gross, credit: 0, line: { kind: 'CHARGE', receivableId: d.receivableId ?? null, number: String(d.number), outstanding: '0.00' } });
+        if (d.docType === 'TAX_INVOICE_RECEIPT') out.push({ id: `${d.id}:payment`, date, debit: 0, credit: gross, line: { kind: 'PAYMENT', paymentId: `${d.id}:payment`, number: String(d.number) } });
+        if (d.docType === 'CREDIT_NOTE') out.push({ id: `${d.id}:credit`, date, debit: 0, credit: gross, line: { kind: 'CREDIT', receivableId: null, number: null } });
+      }
+      for (const f of state.refunds ?? []) if (f.customerId === customerId) out.push({ id: f.id, date: f.refundedOn, debit: f.amount, credit: 0, line: { kind: 'REFUND', refundId: f.id, creditNoteId: f.creditNoteId, method: f.method, reference: f.reference, number: null } });
+    }
+    return out;
   }
 
   /** MUT-260: GET /v1/receipts (and counts, one, download), library uploads, approve and delete, as MUT-255 answers them. */
@@ -1464,7 +1501,9 @@ export class FakeApi {
       if (sub === 'pdf') return pdf;
       const body = e.body as Record<string, Json>;
       const totals = this.composeDoc(body);
-      return json({ ...totals, allocation: this.needsManualAllocation(body, totals.net) ? { mode: 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page' } : null });
+      const facts = body.docType === 'CREDIT_NOTE' ? this.creditFacts(state, body.originalId as string | undefined, toMinor(totals.gross)) : null;
+      const creditNote = facts ? { outstanding: toDecimal(facts.outstanding), paid: toDecimal(facts.paid), maximum: toDecimal(facts.maximum) } : null;
+      return json({ ...totals, creditNote, allocation: this.needsManualAllocation(body, totals.net) ? { mode: 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page' } : null });
     }
     if (method === 'GET' && id && !sub) {
       const d = state.docs.find((x) => x.id === id);
@@ -1491,24 +1530,51 @@ export class FakeApi {
       const docId = uid(0xd0, state.docs.length + 1);
       const gross = toMinor(totals.gross);
       let receivableId: string | null = null;
-      if (docType === 'TAX_INVOICE' || docType === 'PAYMENT_REQUEST') {
+      // MUT-643: an invoice-receipt posts its own Owed too, paid in full on issue.
+      if (docType === 'TAX_INVOICE' || docType === 'PAYMENT_REQUEST' || docType === 'TAX_INVOICE_RECEIPT') {
         receivableId = uid(0xe0, state.docs.length + 1);
-        state.owed.set(receivableId, { gross, outstanding: gross, customerId: (body.customerId as string) ?? null });
+        state.owed.set(receivableId, { gross, outstanding: docType === 'TAX_INVOICE_RECEIPT' ? 0 : gross, credited: 0, customerId: (body.customerId as string) ?? null, docId, postingDate: String(body.documentDate) });
       }
       const target = (body.originalId ?? body.appliesToDocumentId) as string | undefined;
-      if (target) {
+      let refundId: string | null = null;
+      if (target && docType === 'CREDIT_NOTE') {
+        // MUT-643 (ADR-276): the cap, then what is owed, then the paid part, which needs a choice.
+        const facts = this.creditFacts(state, target, gross);
+        const original = state.docs.find((d) => d.id === target);
+        const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+        if (!facts || !owed) return notFound();
+        if (gross > facts.maximum) return json({ error: { code: 'VALIDATION_FAILED', message: 'over the original', details: { reason: 'CREDIT_EXCEEDS_ORIGINAL', field: 'lines', maximum: String(facts.maximum) } } }, 422);
+        const paidPart = body.paidPart as { mode: string; refundedOn?: string; method?: string; reference?: string | null } | undefined;
+        if (facts.paid > 0 && !paidPart) return json({ error: { code: 'VALIDATION_FAILED', message: 'paid part', details: { reason: 'ORIGINAL_PAID', field: 'paidPart', outstanding: String(facts.outstanding), paid: String(facts.paid) } } }, 422);
+        owed.outstanding -= facts.outstanding < gross ? facts.outstanding : gross;
+        owed.credited = (owed.credited ?? 0) + gross;
+        if (facts.paid > 0 && paidPart?.mode === 'REFUND') {
+          refundId = uid(0xf0, (state.refunds ?? []).length + 1);
+          (state.refunds ??= []).push({ id: refundId, customerId: String(body.customerId), amount: facts.paid, refundedOn: paidPart.refundedOn ?? String(body.documentDate), creditNoteId: docId, method: paidPart.method ?? 'BANK', reference: paidPart.reference ?? null });
+        }
+      } else if (target) {
         const original = state.docs.find((d) => d.id === target);
         const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
         if (owed) {
-          if (gross > owed.outstanding) return json({ error: { code: 'VALIDATION_FAILED', message: 'too much', details: { reason: docType === 'CREDIT_NOTE' ? 'ORIGINAL_PAID' : 'EXCEEDS_OUTSTANDING' } } }, 422);
+          if (gross > owed.outstanding) return json({ error: { code: 'VALIDATION_FAILED', message: 'too much', details: { reason: 'EXCEEDS_OUTSTANDING' } } }, 422);
           owed.outstanding -= gross;
         }
       }
-      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource: allocationNumber ? 'MANUAL' : null, receivableId, paymentId: null, coreVersion: '1.0.0' };
+      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource: allocationNumber ? 'MANUAL' : null, receivableId, paymentId: null, refundId, coreVersion: '1.0.0' };
       state.docs.unshift(doc);
       return json(withFacts(doc), 201);
     }
     return notFound();
+  }
+
+  /** MUT-643: a credit note's facts against its original: still owed, the part of this credit already paid, the cap. */
+  private creditFacts(state: StubIssuing, originalId: string | undefined, creditMinor: number): { outstanding: number; paid: number; maximum: number } | null {
+    const original = state.docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT'));
+    const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+    if (!owed) return null;
+    const maximum = owed.gross - (owed.credited ?? 0);
+    const upTo = creditMinor < maximum ? creditMinor : maximum;
+    return { outstanding: owed.outstanding, paid: upTo > owed.outstanding ? upTo - owed.outstanding : 0, maximum };
   }
 
   /** The number the next document of this type takes (gap-free per type). */
@@ -1534,7 +1600,10 @@ export class FakeApi {
   private issuedOwed(receivableId: string) {
     for (const state of this.issuing?.values() ?? []) {
       const owed = state.owed.get(receivableId);
-      if (owed) return { id: receivableId, customerId: owed.customerId, origin: 'ISSUED_DOCUMENT', currency: 'ILS', gross: toDecimal(owed.gross), outstanding: toDecimal(owed.outstanding), paid: toDecimal(owed.gross - owed.outstanding), credited: '0.00', status: owed.outstanding === 0 ? 'PAID' : 'OPEN', version: 1 };
+      if (owed) {
+        const credited = owed.credited ?? 0;
+        return { id: receivableId, customerId: owed.customerId, origin: 'ISSUED_DOCUMENT', originId: owed.docId ?? null, currency: 'ILS', gross: toDecimal(owed.gross), outstanding: toDecimal(owed.outstanding), paid: toDecimal(owed.gross - owed.outstanding - credited), credited: toDecimal(credited), status: owed.outstanding === 0 ? 'PAID' : 'OPEN', version: 1 };
+      }
     }
     return undefined;
   }

@@ -3066,7 +3066,10 @@
       "openSetup": "Open the invoicing setup",
       "refusals": {
         "DATE_BEFORE_LAST_DOCUMENT": "A document of this type was already issued with a later date. Choose that date or a later one.",
-        "ORIGINAL_PAID": "A credit note credits only what is still owed on its tax invoice.",
+        "ORIGINAL_PAID": "The client already paid part of this. Choose whether it was refunded or kept as their credit.",
+        "CREDIT_EXCEEDS_ORIGINAL": "The credit notes on this document can't add up to more than it. At most {maximum} is left to credit.",
+        "DATE_BEFORE_CREDIT_NOTE": "A refund can't be dated before its credit note.",
+        "ORIGINAL_CHANGED": "A payment on this document changed while you were issuing. Try again.",
         "EXCEEDS_OUTSTANDING": "The receipt is more than the tax invoice still owes.",
         "ISSUING_SETUP_INCOMPLETE": "Finish the invoicing setup before issuing.",
         "DATE_BEFORE_ORIGINAL": "A credit note can't be dated before its tax invoice.",
@@ -3097,6 +3100,15 @@
       "pdfFailed": "The PDF could not be prepared. Please try again.",
       "notFound": "This document could not be found.",
       "creditLine": "Credit for {document}",
+      "creditPaid": {
+        "title": "The client already paid {amount} of this",
+        "choice": "What happened to the money they paid",
+        "refunded": "Refunded to the client",
+        "kept": "Kept as their credit",
+        "keptNote": "It stays on the client's account as credit toward what they owe next.",
+        "refundedOn": "Refunded on",
+        "required": "Choose whether the money was refunded or kept as credit."
+      },
       "offer": {
         "line": "Services",
         "TAX_INVOICE": "Issue a tax invoice",
@@ -3366,7 +3378,8 @@
         "CHARGE": "Owed",
         "CREDIT": "Credit",
         "PAYMENT": "Payment",
-        "PAYMENT_REVERSAL": "Payment reversed"
+        "PAYMENT_REVERSAL": "Payment reversed",
+        "REFUND": "Refund"
       },
       "due": {
         "TAX_INVOICE": "Tax invoice due",

@@ -116,8 +116,63 @@ describe('issuing routes (MUT-568)', () => {
     const res = await issue(h, w.on, note);
     expect(res.status, await res.clone().text()).toBe(201);
     expect(await h.store.receivables.getById(w.profileId, invoice.receivableId)).toMatchObject({ creditedMinor: 118_000n });
+    // MUT-643: nothing was paid, so past what is owed is past the original: the cap answers (minor units, like `outstanding`).
     const tooMuch = await read(await issue(h, w.on, { ...note, lines: [{ description: 'All', kind: 'SERVICE', quantity: '1', unitPrice: '30000.00' }] }));
-    expect(tooMuch.error.details.reason).toBe('ORIGINAL_PAID');
+    expect(tooMuch.error.details).toMatchObject({ reason: 'CREDIT_EXCEEDS_ORIGINAL', maximum: '2796600' });
+  });
+
+  describe('MUT-643: a credit note against what the client already paid', () => {
+    const receiptBody = (customerId: string) => invoiceBody(customerId, { docType: 'TAX_INVOICE_RECEIPT', payment: { method: 'BANK', reference: 'TRX-1', receivedOn: '2026-11-05' } });
+    const creditAll = (customerId: string, originalId: string, paidPart?: unknown) => ({
+      docType: 'CREDIT_NOTE',
+      documentDate: '2026-11-06',
+      currency: 'ILS',
+      language: 'he',
+      customerId,
+      originalId,
+      lines: [{ description: 'Refund', kind: 'SERVICE', quantity: '1', unitPrice: '24700.00' }],
+      ...(paidPart ? { paidPart } : {}),
+    });
+
+    it('the preview names the paid part; without a choice the issue is ORIGINAL_PAID with details.paid', async () => {
+      const h = issuingHarness();
+      const w = await invoicing(h);
+      const paid = await read(await issue(h, w.on, receiptBody(w.customerId)));
+      const preview = await read(await h.app.request('/v1/issued-documents/preview', json(creditAll(w.customerId, paid.id), w.on)));
+      expect(preview.creditNote).toEqual({ outstanding: '0.00', paid: '29146.00', maximum: '29146.00' });
+      const refused = await read(await issue(h, w.on, creditAll(w.customerId, paid.id)));
+      expect(refused.error.details).toMatchObject({ field: 'paidPart', reason: 'ORIGINAL_PAID', outstanding: '0', paid: '2914600' });
+    });
+
+    it('AC1: refunded, the credit note carries its refund', async () => {
+      const h = issuingHarness();
+      const w = await invoicing(h);
+      const paid = await read(await issue(h, w.on, receiptBody(w.customerId)));
+      const res = await issue(h, w.on, creditAll(w.customerId, paid.id, { mode: 'REFUND', refundedOn: '2026-11-06', method: 'BANK', reference: ' RF-9 ' }));
+      expect(res.status, await res.clone().text()).toBe(201);
+      const note = await read(res);
+      expect(note.refundId).toEqual(expect.any(String));
+      expect(await h.store.refunds.list(w.profileId, {})).toEqual([expect.objectContaining({ id: note.refundId, amountMinor: 2_914_600n, reference: 'RF-9', refundedOn: '2026-11-06' })]);
+    });
+
+    it('a refund may not be dated before its credit note; a paid part is only for a credit note', async () => {
+      const h = issuingHarness();
+      const w = await invoicing(h);
+      const paid = await read(await issue(h, w.on, receiptBody(w.customerId)));
+      const early = await read(await issue(h, w.on, creditAll(w.customerId, paid.id, { mode: 'REFUND', refundedOn: '2026-11-05', method: 'CASH' })));
+      expect(early.error.details).toMatchObject({ field: 'paidPart.refundedOn', reason: 'DATE_BEFORE_CREDIT_NOTE' });
+      const onInvoice = await read(await issue(h, w.on, { ...invoiceBody(w.customerId), paidPart: { mode: 'KEEP' } }));
+      expect(onInvoice.error.details).toMatchObject({ field: 'paidPart', reason: 'PAID_PART_NOT_ALLOWED' });
+    });
+
+    it('kept as credit: issued, no refund', async () => {
+      const h = issuingHarness();
+      const w = await invoicing(h);
+      const paid = await read(await issue(h, w.on, receiptBody(w.customerId)));
+      const note = await read(await issue(h, w.on, creditAll(w.customerId, paid.id, { mode: 'KEEP' })));
+      expect(note).toMatchObject({ docType: 'CREDIT_NOTE', refundId: null });
+      expect(await h.store.refunds.list(w.profileId, {})).toEqual([]);
+    });
   });
 
   it('an invoice-receipt is received in full; an exempt dealer issues only receipts', async () => {

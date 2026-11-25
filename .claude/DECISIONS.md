@@ -7036,6 +7036,27 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
 - Merging the migration restarts the shared dev API: warn the orchestrator before the merge.
 
+## ADR-276: A Credit Note May Reach a Paid Invoice's Paid Part: Refunded or Kept as the Client's Credit (MUT-643, amends ADR-260 decision 4)
+
+**Status:** Accepted (2026-11-24, Basel; MUT-643 under epic MUT-566). Plan `.claude/designs/MUT-643-credit-note-paid.md` (revision 2, after an adversarial eng review).
+
+**Context:** ADR-260 decision 4 let a credit note (330) credit only what was still owed on its tax invoice (R-D2), and an invoice-receipt (320) could not be credited at all. A business that refunds a client had no way to issue the credit note.
+
+**Decision:**
+1. **What may be credited (D1).** A 305 or a 320 whose Owed the document owns (origin `ISSUED_DOCUMENT`, `originId` = the document). The credit notes on one original never add up to more than its gross: 422 `CREDIT_EXCEEDS_ORIGINAL` (`maximum`). An original that doesn't own its Owed (a 320 that applied a payment request, a linked 305/320) keeps the old rule: only what is still owed (MUT-730).
+2. **The split (D2).** What is still owed is credited first; the rest is the paid part. The Owed's `creditedMinor` rises by the credit and its `paidMinor` falls by the paid part, so paid + credited never exceeds gross.
+3. **The release (D3).** The paid part comes off the Owed's live allocations newest first (createdAt, then id), as MUT-444's terms correction releases (`releasedAt`; a partial release leaves a smaller live row with the released row's own createdAt).
+4. **Basel's choice per note (C1, D5).** `paidPart: KEEP` leaves the released money on its payments as unallocated (the client's credit; applying it later is MUT-729). `paidPart: REFUND` writes a refund (`refunds` + `refund_sources`) dated `refundedOn` (not before the credit note's date, `pastMoneyDate`), method `PaymentMethod`. Refunded money counts in the payments' `allocatedMinor` again, so every `amount − allocated` stays right unchanged. Without a choice while there is a paid part: 422 `ORIGINAL_PAID` with `details.paid` (older apps keep their message).
+5. **A refund is a ledger line, not a document (C2).** The 330 is the tax document; the uniform file is unchanged. Whether a refund needs its own document is accountant question 6 on MUT-567.
+6. **Lock order (D4).** For a credit note, the issue takes the counter, reads the original's paying payments, locks them in id order, then the Owed, and re-reads; if the paying payments changed: 409 `ORIGINAL_CHANGED`. That is every payment writer's order (payment, then receivables), so a reversal racing it waits instead of deadlocking; a deadlock or serialization failure is 409, not 500.
+7. **Guard (D8).** Reverse and correct refuse a payment a refund drew on, inside the store after the payment row is locked: 409 `PAYMENT_HAS_REFUND`. Undo already refuses allocated money.
+8. **Where refunds count (D7).** A `REFUND` statement line (debit on `refundedOn`, whole-customer statement only); the period summary's `refunds` (received = payments − reversals − refunds); client balances; activity (Reports, verdict, the monthly mail, the phone Glance); the MUT-660 books split; the accountant's shared summary and period pack. A 320 credited in full reads CANCELLED like a 305. Payment views gain `refunded`.
+9. **Records file (D9).** `refunds` joins the snapshot in the unreleased 21 → 22 step (an empty map for older files).
+
+**Consequences:** two additive tables (purged with the profile, no trigger); API 1.137.0-mut643, additive wire (`paidPart`, preview `creditNote`, `refundId`, `refunded`, the `REFUND` line, period `refunds`). Roll-forward only once the first refund exists (TD-328). The paid part of a document that doesn't own its Owed, and applying kept credit, are MUT-730 and MUT-729.
+
+**Alternatives rejected:** a refund as an Owed paid by the released money (it raises Billed instead of lowering Received); a refund as a negative payment (breaks every positive-amount rule); counting refunds outside `allocatedMinor` (every unallocated calculation would need to learn it); a numbered refund document (waits on the accountant, C2).
+
 ---
 
 ## ADR-277: Closed Profiles' Issued Documents Are Swept 7 Years After the End of the Year of the Newest One; the Owner's Copy Is an Operator Path (MUT-644)

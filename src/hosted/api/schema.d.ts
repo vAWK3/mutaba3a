@@ -10607,7 +10607,7 @@ export interface paths {
         };
         /**
          * Billed, received and credited over a period per currency, with the balance at its start and end
-         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
+         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
          */
         get: {
             parameters: {
@@ -30183,6 +30183,30 @@ export interface components {
             receiptNumber: string | null;
             reason: string | null;
             reasonCode: components["schemas"]["CreditReasonCode"];
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+            /** @enum {string} */
+            kind: "REFUND";
+            /** Format: uuid */
+            refundId: string;
+            /** Format: uuid */
+            creditNoteId: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
         };
         StatementDocumentTag: {
             /**
@@ -30305,8 +30329,10 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description Applied to receivables, plus (MUT-643) what credit notes refunded from it */
             allocated: string;
+            /** @description MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643. */
+            refunded: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             allocationState: components["schemas"]["AllocationState"];
@@ -30616,12 +30642,14 @@ export interface components {
             billed: string;
             /** @description CREDIT lines dated in the period (effectiveDate). */
             credited: string;
-            /** @description payments − reversals; may be negative when an earlier payment was reversed in the period. */
+            /** @description payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period. */
             received: string;
             /** @description PAYMENT lines dated in the period (receivedOn). */
             payments: string;
             /** @description PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment. */
             reversals: string;
+            /** @description MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals. */
+            refunds: string;
             /** @description closingBalance − openingBalance = billed − received − credited. */
             change: string;
             /** @description What clients owed at the end of `to`, on the same terms as openingBalance. */
@@ -31634,6 +31662,7 @@ export interface components {
                 vat: string;
             }[];
             allocation: components["schemas"]["IssueAllocation"];
+            creditNote: components["schemas"]["CreditNoteFacts"];
         };
         /** @description MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711. */
         IssueAllocation: {
@@ -31656,6 +31685,15 @@ export interface components {
              */
             requestUrl: string;
         } | null;
+        /** @description MUT-643: a credit note's facts against its original; null for other types. Since 1.137.0-mut643. */
+        CreditNoteFacts: {
+            /** @description Still owed on the original: credited first */
+            outstanding: string;
+            /** @description The part of this credit note the client already paid: when above 0, the issue needs `paidPart` */
+            paid: string;
+            /** @description The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed) */
+            maximum: string;
+        } | null;
         IssueDocumentRequest: {
             docType: components["schemas"]["IssuedDocType"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -31675,9 +31713,22 @@ export interface components {
             dueDate?: string;
             /**
              * Format: uuid
-             * @description A credit note: the tax invoice it credits
+             * @description A credit note: the tax invoice or (MUT-643) invoice-receipt it credits
              */
             originalId?: string;
+            /** @description MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview's `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note's date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643. */
+            paidPart?: {
+                /** @enum {string} */
+                mode: "KEEP";
+            } | {
+                /** @enum {string} */
+                mode: "REFUND";
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                refundedOn: string;
+                /** @enum {string} */
+                method: "CASH" | "BANK";
+                reference?: string | null;
+            };
             /**
              * Format: uuid
              * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
@@ -31798,6 +31849,11 @@ export interface components {
             receivableId: string | null;
             /** Format: uuid */
             paymentId: string | null;
+            /**
+             * Format: uuid
+             * @description MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.
+             */
+            refundId: string | null;
             coreVersion: string;
             /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
             displayNumber: string;

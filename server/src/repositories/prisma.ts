@@ -41,6 +41,8 @@ import type {
   IssuingRetentionEventRecord,
   IssuingRetentionRepository,
   RetainedIssuingProfile,
+  PaymentMethod,
+  RefundRepository,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
   MonthlySummaryChoice,
@@ -209,7 +211,8 @@ import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, postsNewOwed, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, postsNewOwed, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { planRelease, splitCredit, type LiveAllocation } from '../issuing/credit-split.js';
 import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DuePaymentInput, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
@@ -907,6 +910,9 @@ export class PrismaLedgerStore implements LedgerStore {
         return await this.prisma.$transaction((tx) => issueTx(tx, input, at), input.allocate ? ISSUE_WITH_ALLOCATION_TX_OPTIONS : CORRECT_TX_OPTIONS);
       } catch (err) {
         if (err instanceof IssueRefused) return err.result;
+        // MUT-643 (D4): a credit note locks payments then the Owed, like every payment writer; Postgres breaking a rare
+        // deadlock or serialization conflict is a retryable 409, not a 500.
+        if (isLockConflict(err)) throw new LockConflict();
         if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
           // Two requests with one key raced past the replay read: the winner's document is the answer.
           const winner = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
@@ -1158,6 +1164,24 @@ export class PrismaLedgerStore implements LedgerStore {
    * MUT-314 (ADR-248): three aggregates in parallel, each on the kind's (organizationId, money date) index; the
    * receipts' is joined to the same expense filter. The same row rules as the entries feed and listReadyByExpenseIds.
    */
+  /** MUT-643: refunds written by credit notes, oldest first, with their sources. */
+  readonly refunds: RefundRepository = {
+    list: async (organizationId, filter) => {
+      const rows = await this.prisma.refund.findMany({
+        where: {
+          organizationId,
+          ...(filter.customerId !== undefined ? { customerId: filter.customerId } : {}),
+          ...(filter.currency !== undefined ? { currency: filter.currency } : {}),
+          ...(filter.paymentIds !== undefined ? { sources: { some: { paymentId: { in: [...filter.paymentIds] } } } } : {}),
+          ...(filter.from !== undefined || filter.to !== undefined ? { refundedOn: { ...(filter.from !== undefined ? { gte: filter.from } : {}), ...(filter.to !== undefined ? { lte: filter.to } : {}) } } : {}),
+        },
+        include: { sources: { select: { paymentId: true, amountMinor: true }, orderBy: { paymentId: 'asc' } } },
+        orderBy: [{ refundedOn: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map((row) => ({ ...row, method: row.method as PaymentMethod }));
+    },
+  };
+
   readonly periodPack: PeriodPackRepository = {
     estimate: async (organizationId, bounds, asOf) => {
       const days = { ...(bounds.occurredFrom !== undefined && { gte: bounds.occurredFrom }), lt: bounds.occurredBefore };
@@ -2824,7 +2848,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // one page without the other.
     statementSources: async (organizationId, customerId, currency) => {
       const agreement = { organizationId, customerId, currency };
-      const [receivables, credits, payments, allocations, installments, charges] = await this.prisma.$transaction(
+      const [receivables, credits, payments, allocations, installments, charges, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
@@ -2832,25 +2856,28 @@ export class PrismaLedgerStore implements LedgerStore {
           this.prisma.paymentAllocation.findMany({ where: { organizationId, releasedAt: null, payment: { customerId, currency } } }),
           this.prisma.installment.findMany({ where: { organizationId, agreement } }),
           this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
+          this.prisma.refund.findMany({ where: { organizationId, customerId, currency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments, allocations, installments, charges };
+      return { receivables, credits, payments, allocations, installments, charges, refunds: refunds.map(refundLine) };
     },
     // MUT-483: three queries over the organization, each led by organizationId (the first column of an existing index on
     // every table; currency is a residual filter), with only the ledger fields: deserializing whole rows is the cost
     // (TD-291). One REPEATABLE READ snapshot, so a payment and the charge it pays never land in different reads.
     periodSources: async (organizationId, currency) => {
       const inCurrency = currency === null ? {} : { currency };
-      const [receivables, credits, payments] = await this.prisma.$transaction(
+      const [receivables, credits, payments, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, deletedAt: null, ...inCurrency }, select: PERIOD_RECEIVABLE_FIELDS }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { deletedAt: null, ...inCurrency } }, select: PERIOD_CREDIT_FIELDS }),
           this.prisma.payment.findMany({ where: { organizationId, ...inCurrency }, select: PERIOD_PAYMENT_FIELDS }),
+          // MUT-643: refunds are lines too (organizationId leads both refund indexes).
+          this.prisma.refund.findMany({ where: { organizationId, ...inCurrency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments };
+      return { receivables, credits, payments, refunds: refunds.map(refundLine) };
     },
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
@@ -2965,6 +2992,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         if (!(await markReversedTx(tx, paymentId, null, reason, null, at))) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
+        await assertNoRefundTx(tx, paymentId);
         const allocations = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
         await lockReceivablesInIdOrder(tx, allocations.map((a) => a.receivableId));
         await releaseAllocationsTx(tx, allocations);
@@ -2985,6 +3013,7 @@ export class PrismaLedgerStore implements LedgerStore {
             const current = await tx.payment.findUniqueOrThrow({ where: { id: paymentId }, select: { status: true } });
             throw new StateConflict('payment', current.status === 'POSTED' ? 'PREVIEW_STALE' : 'PAYMENT_NOT_POSTED');
           }
+          await assertNoRefundTx(tx, paymentId);
           await assertPaymentRefsTx(tx, input);
           const number = await nextPaymentNumberTx(tx, input.organizationId, input.receivedOn);
           const released = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
@@ -4717,6 +4746,12 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 /** MUT-483: the ledger fields `periodSources` reads (ports.ts `Ledger*Row`), so a period read never loads whole rows. */
 const PERIOD_RECEIVABLE_FIELDS = { id: true, customerId: true, currency: true, origin: true, postingDate: true, grossMinor: true, paidMinor: true, creditedMinor: true, deletedAt: true, createdAt: true } as const;
 const PERIOD_CREDIT_FIELDS = { id: true, receivableId: true, amountMinor: true, effectiveDate: true, createdAt: true } as const;
+/** MUT-643: the refund fields a ledger line reads. */
+const REFUND_LINE_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, refundedOn: true, createdAt: true, issuedDocumentId: true, method: true, reference: true } as const;
+function refundLine(row: { id: string; customerId: string; currency: string; amountMinor: bigint; refundedOn: string; createdAt: Date; issuedDocumentId: string; method: string; reference: string | null }) {
+  return { ...row, method: row.method as PaymentMethod };
+}
+
 const PERIOD_PAYMENT_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, receivedOn: true, status: true, reversalReason: true, reversedAt: true, updatedAt: true, createdAt: true } as const;
 
 const RECEIPT_LOCK_TIMEOUT = '8s';
@@ -5696,7 +5731,7 @@ async function hasTaxDocumentTx(tx: Tx, organizationId: string, item: Pick<NotFo
     where: { organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] }, ...(item.kind === 'receivable' ? { receivableId: item.id } : { paymentId: item.id }) },
     select: { id: true, docType: true, grossMinor: true },
   });
-  if (docs.some((d) => d.docType === 'TAX_INVOICE_RECEIPT')) return true;
+  // MUT-643: a 320 may be credited too; fully credited, like a 305, it no longer counts.
   for (const d of docs) {
     const credited = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: d.id }, _sum: { grossMinor: true } });
     if ((credited._sum.grossMinor ?? 0n) < d.grossMinor) return true;
@@ -5721,6 +5756,101 @@ async function preferencesOf(db: PrismaReader, organizationId: string): Promise<
 type DuePaymentRow = Omit<DuePaymentInput, 'origin' | 'status' | 'documented' | 'allocations'> & { origin: string; status: string };
 type DueReceivableRow = Omit<DueReceivableInput, 'origin'> & { origin: string };
 
+/**
+ * MUT-643 (D8): a payment a refund drew on can't be reversed or corrected. Asked after the payment row is written (so
+ * locked): a credit note releasing it locks the same row first, so the two can't both pass.
+ */
+async function assertNoRefundTx(tx: Tx, paymentId: string): Promise<void> {
+  if ((await tx.refundSource.count({ where: { paymentId } })) > 0) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
+}
+
+/** MUT-643: a credit note's original Owed, locked, with the live allocations that pay it (read under the same locks). */
+interface CreditTarget {
+  owed: { id: string; customerId: string; currency: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint };
+  live: LiveAllocation[];
+}
+
+/**
+ * MUT-643 (D1, D4): finds the 305 or 320 a credit note credits and locks what the credit may move. Payments first, in id
+ * order, then the Owed: the order every payment writer takes (allocate, reverse, correct, terms corrections), so a
+ * reversal racing this credit note waits instead of deadlocking. The allocations are read again under the locks; when
+ * the payments paying the Owed changed meanwhile the issue is refused, nothing written. Then the cap and the paid-part
+ * rules (`creditNoteRefusal`).
+ */
+async function creditTargetTx(tx: Tx, input: IssueDocumentInput, originalId: string): Promise<CreditTarget> {
+  const { organizationId } = input;
+  const original = await tx.issuedDocument.findFirst({
+    where: { id: originalId, organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] } },
+    select: { id: true, grossMinor: true, receivableId: true, customerId: true },
+  });
+  if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+  const receivableId = original.receivableId;
+  const payers = async () => [...new Set((await liveAllocationsOnTx(tx, receivableId)).map((a) => a.paymentId))].sort();
+  const seen = await payers();
+  for (const id of seen) await tx.$queryRaw`SELECT 1 FROM "payments" WHERE "id" = ${id}::uuid FOR UPDATE`;
+  await lockReceivable(tx, receivableId);
+  const live = await liveAllocationsOnTx(tx, receivableId);
+  const now = [...new Set(live.map((a) => a.paymentId))].sort();
+  if (now.length !== seen.length || now.some((id, i) => id !== seen[i])) throw new IssueRefused({ kind: 'original_changed' });
+  const owed = await tx.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+  const noted = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: original.id }, _sum: { grossMinor: true } });
+  const outstandingMinor = owed.status === 'OPEN' ? owed.grossMinor - owed.paidMinor - owed.creditedMinor : 0n;
+  const refusal = creditNoteRefusal({ original, owed, creditedByNotesMinor: noted._sum.grossMinor ?? 0n, outstandingMinor }, input);
+  if (refusal) throw new IssueRefused(refusal);
+  return { owed, live };
+}
+
+/** The live allocation rows of POSTED payments on one Owed. */
+async function liveAllocationsOnTx(tx: Tx, receivableId: string): Promise<LiveAllocation[]> {
+  return tx.paymentAllocation.findMany({
+    where: { receivableId, releasedAt: null, payment: { status: 'POSTED' } },
+    select: { id: true, paymentId: true, amountMinor: true, createdAt: true },
+  });
+}
+
+/**
+ * MUT-643 (D3, D5): releases the paid part off the Owed's live allocations, newest first, as MUT-444's terms correction
+ * releases (`releasedAt`; a partial release leaves a smaller live row carrying the released row's own createdAt). KEEP
+ * leaves the money on its payments as unallocated; REFUND records it going back, and it counts in their allocatedMinor
+ * again. The Owed's paidMinor is lowered by the caller, with the credit, in one settle.
+ */
+async function releasePaidPartTx(tx: Tx, input: IssueDocumentInput, target: CreditTarget, paidPartMinor: bigint, documentId: string, at: Date): Promise<string | null> {
+  const given = new Map<string, bigint>();
+  for (const { allocation, releaseMinor } of planRelease(target.live, paidPartMinor)) {
+    await tx.paymentAllocation.update({ where: { id: allocation.id }, data: { releasedAt: at } });
+    if (releaseMinor < allocation.amountMinor) {
+      await tx.paymentAllocation.create({
+        data: { organizationId: input.organizationId, paymentId: allocation.paymentId, receivableId: target.owed.id, amountMinor: allocation.amountMinor - releaseMinor, createdAt: allocation.createdAt },
+      });
+    }
+    given.set(allocation.paymentId, (given.get(allocation.paymentId) ?? 0n) + releaseMinor);
+  }
+  const choice = input.paidPart;
+  if (!choice) throw new Error('a paid part carries its choice (creditNoteRefusal checks this first)');
+  for (const [paymentId, releasedMinor] of given) {
+    const delta = choice.mode === 'REFUND' ? 0n : releasedMinor;
+    await tx.payment.update({ where: { id: paymentId }, data: { allocatedMinor: { decrement: delta }, version: { increment: 1 }, updatedAt: at } });
+  }
+  if (choice.mode !== 'REFUND') return null;
+  const refund = await tx.refund.create({
+    data: {
+      organizationId: input.organizationId,
+      customerId: target.owed.customerId,
+      currency: target.owed.currency,
+      amountMinor: paidPartMinor,
+      refundedOn: choice.refundedOn,
+      method: choice.method,
+      reference: choice.reference,
+      issuedDocumentId: documentId,
+      requestId: input.requestId,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+      sources: { create: [...given].map(([paymentId, amountMinor]) => ({ organizationId: input.organizationId, paymentId, amountMinor })) },
+    },
+  });
+  return refund.id;
+}
+
 async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
   const { organizationId } = input;
   const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
@@ -5740,9 +5870,13 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   }
   const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
   let originalReceivableId: string | null = null;
-  if (originalId) {
-    // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
-    const types: IssuedDocType[] = input.docType === 'CREDIT_NOTE' ? ['TAX_INVOICE'] : ['TAX_INVOICE', 'PAYMENT_REQUEST'];
+  let credited: CreditTarget | null = null;
+  if (originalId && input.docType === 'CREDIT_NOTE') {
+    credited = await creditTargetTx(tx, input, originalId);
+    originalReceivableId = credited.owed.id;
+  } else if (originalId) {
+    // MUT-662: a 320 or 400 may apply a live payment request.
+    const types: IssuedDocType[] = ['TAX_INVOICE', 'PAYMENT_REQUEST'];
     const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: { in: types } }, select: { id: true, docType: true, receivableId: true, customerId: true } });
     if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
     if (original.docType === 'PAYMENT_REQUEST') {
@@ -5755,9 +5889,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     if (!linked) {
       const r = await lockReceivable(tx, original.receivableId);
       const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
-      if (input.composed.grossMinor > outstandingMinor) {
-        throw new IssueRefused(input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor });
-      }
+      if (input.composed.grossMinor > outstandingMinor) throw new IssueRefused({ kind: 'exceeds_outstanding', outstandingMinor });
       originalReceivableId = original.receivableId;
     }
   }
@@ -5837,9 +5969,13 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     );
     paymentId = payment.id;
   }
-  if (plan.credit && originalReceivableId) {
-    const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: originalReceivableId, ...plan.credit, requestId: input.requestId, createdAt: at } });
-    await settleReceivable(tx, originalReceivableId, { creditedMinor: { increment: plan.credit.amountMinor } });
+  let refundId: string | null = null;
+  if (plan.credit && credited) {
+    // MUT-643 (D2, D3): what the credit reaches past what is still owed comes back off the newest allocations first.
+    const { paidPartMinor } = splitCredit(credited.owed, plan.credit.amountMinor);
+    if (paidPartMinor > 0n) refundId = await releasePaidPartTx(tx, input, credited, paidPartMinor, documentId, at);
+    const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: credited.owed.id, ...plan.credit, requestId: input.requestId, createdAt: at } });
+    await settleReceivable(tx, credited.owed.id, { creditedMinor: { increment: plan.credit.amountMinor }, paidMinor: { decrement: paidPartMinor } });
     creditId = credit.id;
   }
   const { composed } = input;
@@ -5874,6 +6010,7 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       receivableId,
       paymentId,
       creditId,
+      refundId,
       coreVersion: input.coreVersion,
       createdByUserId: input.createdByUserId,
       requestKey: input.requestKey,

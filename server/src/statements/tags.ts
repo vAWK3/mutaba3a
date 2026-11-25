@@ -74,6 +74,10 @@ export function statementTags(lines: readonly StatementLine[], inputs: Statement
       case 'PAYMENT_REVERSAL':
         tags.set(line.id, NO_TAGS);
         break;
+      case 'REFUND':
+        // MUT-643: the credit note that gave the money back.
+        tags.set(line.id, { documents: inputs.issued.filter((d) => d.id === line.refund?.issuedDocumentId).map(issuedTag), due: null });
+        break;
     }
   }
   return tags;

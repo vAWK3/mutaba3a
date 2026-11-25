@@ -537,6 +537,8 @@ export const STORE_ACCESS: StoreAccess = {
    * never reaches them; every read-only guard (accountant, share link, the download stream) lets them through.
    */
   periodPack: { estimate: { read: 'expenses' }, names: { read: 'expenses' } },
+  // MUT-643: refunds read like credits and allocations (statements, Received figures); only issuing writes them.
+  refunds: { list: 'read' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

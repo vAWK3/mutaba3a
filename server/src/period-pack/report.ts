@@ -1,5 +1,5 @@
 import { formatMoney, type Currency } from '../money.js';
-import { EXPENSE_COLUMNS, INCOME_COLUMNS, PAYMENT_METHOD_LABELS, SHEET_NAMES, SOURCE_LABELS, SUMMARY_COLUMNS, SUMMARY_LABELS, VAT_TREATMENT_LABELS, headersOf, type Column, type Lang } from './columns.js';
+import { EXPENSE_COLUMNS, INCOME_COLUMNS, PAYMENT_METHOD_LABELS, REFUND_NOTE, SHEET_NAMES, SOURCE_LABELS, SUMMARY_COLUMNS, SUMMARY_LABELS, VAT_TREATMENT_LABELS, headersOf, type Column, type Lang } from './columns.js';
 import type { PeriodRows } from './rows.js';
 import { dateSerial, dateTimeSerial, moneyCell, writeXlsx, type Cell, type Sheet } from './xlsx.js';
 
@@ -77,7 +77,25 @@ function incomeSheet(rows: PeriodRows): Sheet {
     loggedAt: { serial: dateTimeSerial(p.createdAt, tz), fmt: 'datetime' },
     id: p.id,
   }));
-  return tableSheet(SHEET_NAMES.income[lang], rows, INCOME_COLUMNS, body);
+  // MUT-643: money a credit note gave back is received going out: a negative row on its date.
+  const refunds = (rows.refunds ?? []).map(({ ref, record: f, client }): Record<string, Cell> => ({
+    ref,
+    date: { serial: dateSerial(f.refundedOn), fmt: 'date' },
+    client: text(client),
+    project: text(null),
+    currency: f.currency,
+    amount: money(-f.amountMinor, f.currency),
+    method: words(PAYMENT_METHOD_LABELS, f.method, lang),
+    reference: text(f.reference),
+    receiptNumber: text(null),
+    invoiceStatus: text('issued'),
+    notes: REFUND_NOTE[lang],
+    source: SOURCE_LABELS.ISSUED_DOCUMENT[lang],
+    loggedBy: text(null),
+    loggedAt: { serial: dateTimeSerial(f.createdAt, tz), fmt: 'datetime' },
+    id: f.id,
+  }));
+  return tableSheet(SHEET_NAMES.income[lang], rows, INCOME_COLUMNS, [...body, ...refunds]);
 }
 
 interface CurrencyTotals {
@@ -89,7 +107,7 @@ interface CurrencyTotals {
 }
 
 /** Per currency: expense count, gross, net (gross less recorded VAT), VAT; income count and total. */
-export function totalsByCurrency(rows: Pick<PeriodRows, 'expenses' | 'income'>): Array<[string, CurrencyTotals]> {
+export function totalsByCurrency(rows: Pick<PeriodRows, 'expenses' | 'income' | 'refunds'>): Array<[string, CurrencyTotals]> {
   const totals = new Map<string, CurrencyTotals>();
   const of = (currency: string) => totals.get(currency) ?? totals.set(currency, { expenses: 0, gross: 0n, vat: 0n, income: 0, incomeTotal: 0n }).get(currency)!;
   for (const { record: e } of rows.expenses) {
@@ -103,6 +121,8 @@ export function totalsByCurrency(rows: Pick<PeriodRows, 'expenses' | 'income'>):
     t.income += 1;
     t.incomeTotal += p.amountMinor;
   }
+  // MUT-643: the total is net of refunds; the count stays the money received.
+  for (const { record: f } of rows.refunds ?? []) of(f.currency).incomeTotal -= f.amountMinor;
   return [...totals.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 

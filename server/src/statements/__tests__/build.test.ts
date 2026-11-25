@@ -94,7 +94,7 @@ function reverse(p: PaymentRecord, allocations: AllocationRecord[], receivables:
 }
 
 type Sources = { -readonly [K in keyof StatementSources]: Array<StatementSources[K][number]> };
-const empty = (): Sources => ({ receivables: [], credits: [], payments: [], allocations: [], installments: [], charges: [] });
+const empty = (): Sources => ({ receivables: [], credits: [], payments: [], allocations: [], installments: [], charges: [], refunds: [] });
 const view = (o: Partial<StatementView> = {}): StatementView => ({ asOf: '2026-10-27', timezone: 'Asia/Jerusalem', from: null, to: null, projectId: null, ...o });
 const all = { limit: 500, cursor: null };
 

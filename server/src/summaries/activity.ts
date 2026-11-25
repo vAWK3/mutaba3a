@@ -1,7 +1,7 @@
 import { addDays, addMonths, compareIsoDates, daysBetween, endOfMonth, monthOf, type IsoDate, type IsoMonth } from '../dates.js';
 import { breakdown, sum, summarizeExpenses, type ExpenseBucket } from '../expenses/summary.js';
 import { formatMoney, type Currency } from '../money.js';
-import type { AllocationRecord, ExpenseRecord, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AllocationRecord, ExpenseRecord, PaymentRecord, ReceivableRecord, RefundRecord } from '../repositories/ports.js';
 
 /**
  * The activity summary behind portal Reports (MUT-175, plan §4.2 and D1): what
@@ -26,6 +26,8 @@ export interface ActivityInput {
   expenses: ReadonlyArray<Pick<ExpenseRecord, 'currency' | 'amountMinor' | 'occurredOn' | 'categoryId' | 'customerId'>>;
   allocations: ReadonlyArray<Pick<AllocationRecord, 'paymentId' | 'receivableId'>>;
   receivables: ReadonlyArray<Pick<ReceivableRecord, 'id' | 'customerId' | 'postingDate' | 'status' | 'grossMinor' | 'paidMinor'>>;
+  /** MUT-643: money credit notes gave back, counted as received going out on refundedOn. */
+  refunds: ReadonlyArray<Pick<RefundRecord, 'id' | 'currency' | 'amountMinor' | 'refundedOn' | 'customerId'>>;
   from: IsoDate;
   to: IsoDate;
   bucket: ActivityBucket;
@@ -70,7 +72,10 @@ export function historyStart(to: IsoDate): IsoDate {
 }
 
 export function summarizeActivity(input: ActivityInput): ActivitySummary {
-  const payments = input.payments.filter((p) => p.status === 'POSTED');
+  // MUT-643 (AC4): a refund is received money going back: a negative row on its own date, so every figure below
+  // (period, buckets, history, per client) nets it out. No allocation names it, so days to get paid never reads it.
+  const refunds: Pay[] = input.refunds.map((f) => ({ id: `refund:${f.id}`, currency: f.currency, amountMinor: -f.amountMinor, receivedOn: f.refundedOn, customerId: f.customerId, status: 'POSTED' }));
+  const payments = [...input.payments.filter((p) => p.status === 'POSTED'), ...refunds];
   const within = (date: IsoDate) => compareIsoDates(date, input.from) >= 0 && compareIsoDates(date, input.to) <= 0;
   const periodPayments = payments.filter((p) => within(p.receivedOn));
   const periodExpenses = input.expenses.filter((e) => within(e.occurredOn));

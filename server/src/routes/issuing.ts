@@ -18,11 +18,12 @@ import { UNIFORM_FILE_MIME, uniformFileZip } from '../issuing/uniform-file/zip.j
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
 import { settlementOf } from '../issuing/settlement.js';
 import { formatMoney, type Currency } from '../money.js';
+import { creditCap } from '../issuing/credit-split.js';
 import { registerDocumentsDueRoutes } from './documents-due.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { AllocationOutcome, CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AllocationOutcome, CreditPaidPart, CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   CancelPaymentRequestSchema,
   ErrorEnvelopeSchema,
@@ -325,6 +326,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         notes: body.notes ?? null,
         dueDate: body.docType === 'TAX_INVOICE' || body.docType === 'PAYMENT_REQUEST' ? (body.dueDate ?? null) : null,
         originalId: body.originalId ?? null,
+        paidPart: paidPartOf(body, documentDate, todayFor(organization, now)),
         payment,
         appliesToDocumentId: body.appliesToDocumentId ?? null,
         fromEntry: body.fromEntry ? { kind: body.fromEntry.kind === 'owed' ? 'receivable' : 'payment', id: body.fromEntry.id } : null,
@@ -370,7 +372,16 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         case 'original_not_found':
           throw new ApiError('NOT_FOUND', 'No such tax invoice or live payment request for this customer', { field: body.originalId ? 'originalId' : 'appliesToDocumentId' });
         case 'original_paid':
-          throw new ApiError('VALIDATION_FAILED', 'A credit note credits only what is still owed on its tax invoice', { field: 'lines', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString() });
+          // MUT-643 (D5): `paid` names the part the client already paid when a `paidPart` choice would be taken.
+          throw new ApiError(
+            'VALIDATION_FAILED',
+            result.paidMinor === undefined ? 'A credit note credits only what is still owed on this document' : 'The client already paid part of this: say whether it was refunded or kept as their credit',
+            { field: result.paidMinor === undefined ? 'lines' : 'paidPart', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString(), ...(result.paidMinor === undefined ? {} : { paid: result.paidMinor.toString() }) },
+          );
+        case 'credit_exceeds_original':
+          throw new ApiError('VALIDATION_FAILED', 'The credit notes on a document may not add up to more than it', { field: 'lines', reason: 'CREDIT_EXCEEDS_ORIGINAL', maximum: result.maximumMinor.toString() });
+        case 'original_changed':
+          throw new ApiError('CONFLICT', 'The payments on this document changed while the credit note was being issued; try again', { reason: 'ORIGINAL_CHANGED' });
         case 'exceeds_outstanding':
           throw new ApiError('VALIDATION_FAILED', 'The payment is more than the document it applies to still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
         case 'entry_not_found':
@@ -411,8 +422,37 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   async function creditedInvoice(organizationId: string, body: IssueRequest): Promise<IssuedDocumentRecord | null> {
     if (body.docType !== 'CREDIT_NOTE' || !body.originalId) return null;
     const original = await store.issuing.getById(organizationId, body.originalId);
-    if (!original || original.docType !== 'TAX_INVOICE') throw new ApiError('NOT_FOUND', 'No such tax invoice', { field: 'originalId' });
+    // MUT-643: an invoice-receipt may be credited too.
+    if (!original || (original.docType !== 'TAX_INVOICE' && original.docType !== 'TAX_INVOICE_RECEIPT')) throw new ApiError('NOT_FOUND', 'No such tax invoice or invoice-receipt', { field: 'originalId' });
     return original;
+  }
+
+  /**
+   * MUT-643 (D5): the paid-part choice, checked: only on a credit note; a refund's date follows the money-date rules
+   * and is not before the credit note's own date.
+   */
+  function paidPartOf(body: IssueRequest, documentDate: string, today: string): CreditPaidPart | null {
+    if (!body.paidPart) return null;
+    if (body.docType !== 'CREDIT_NOTE') throw new ApiError('VALIDATION_FAILED', 'Only a credit note says what happens to a paid part', { field: 'paidPart', reason: 'PAID_PART_NOT_ALLOWED' });
+    if (body.paidPart.mode === 'KEEP') return { mode: 'KEEP' };
+    const refundedOn = pastMoneyDate(body.paidPart.refundedOn, today, 'paidPart.refundedOn');
+    if (refundedOn < documentDate) {
+      throw new ApiError('VALIDATION_FAILED', `A refund can't be dated before its credit note (${documentDate})`, { field: 'paidPart.refundedOn', reason: 'DATE_BEFORE_CREDIT_NOTE', documentDate });
+    }
+    return { mode: 'REFUND', refundedOn, method: body.paidPart.method, reference: body.paidPart.reference?.trim() || null };
+  }
+
+  /** MUT-643: the preview's credit-note facts (the store re-checks all of them under its locks). */
+  async function creditNoteFacts(organizationId: string, original: IssuedDocumentRecord | null, creditMinor: bigint): Promise<{ outstandingMinor: bigint; paidMinor: bigint; maximumMinor: bigint } | null> {
+    if (!original?.receivableId) return null;
+    const owed = await store.receivables.getById(organizationId, original.receivableId);
+    if (!owed) return null;
+    const outstandingMinor = owed.status === 'OPEN' ? owed.grossMinor - owed.paidMinor - owed.creditedMinor : 0n;
+    // Only credit notes credit an Owed a document owns, so its credited sum is theirs.
+    const owned = owed.origin === 'ISSUED_DOCUMENT' && owed.originId === original.id;
+    const maximumMinor = owned ? creditCap(original.grossMinor, owed.creditedMinor) : outstandingMinor;
+    const paidMinor = owned && creditMinor > outstandingMinor ? (creditMinor < maximumMinor ? creditMinor : maximumMinor) - outstandingMinor : 0n;
+    return { outstandingMinor, paidMinor, maximumMinor };
   }
 
   function composeFrom(body: IssueRequest, issuer: IssuerDetailsRecord, today: string, original: IssuedDocumentRecord | null) {
@@ -798,10 +838,14 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const issuer = await mustIssuer(organization.id);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
+      const original = await creditedInvoice(organization.id, body);
+      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), original);
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
       const allocation = await allocationPreview(organization.id, body, documentDate, composed, customer, now);
-      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation }, 200);
+      const facts = await creditNoteFacts(organization.id, original, composed.grossMinor);
+      const ils = (minor: bigint) => formatMoney({ minor, currency: 'ILS' });
+      const creditNote = facts ? { outstanding: ils(facts.outstandingMinor), paid: ils(facts.paidMinor), maximum: ils(facts.maximumMinor) } : null;
+      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation, creditNote }, 200);
     },
   );
 
@@ -1059,6 +1103,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           receivableId: null,
           paymentId: null,
           creditId: null,
+          refundId: null,
           coreVersion: ISSUING_CORE_VERSION,
           createdByUserId: sessionAuth(c).user.id,
           requestKey: '',

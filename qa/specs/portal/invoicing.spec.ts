@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, payment, receivable, type DueSeed } from '../../support/portalApi';
+import { FakeApi, customerSummary, payment, receivable, type DueSeed } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -667,6 +667,126 @@ test('Set a client’s documents preference on the client page', { tag: '@portal
     const patch = api.last('PATCH', new RegExp(`^/v1/customers/${C1}$`));
     expect(patch?.body).toEqual({ documentsPreference: 'TAX_INVOICE_FIRST' });
     expect(patch?.headers['if-match']).toBeTruthy();
+  });
+});
+
+// ---------------------------------------------------------------- MUT-643: crediting what was already paid
+
+/** Issues a document of 1,000 before VAT to Client 1 from Documents › Issued; lands on its page. */
+async function issueThousand(page: import('@playwright/test').Page, api: FakeApi, docType: 'Tax invoice' | 'Tax invoice-receipt') {
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+  await page.getByTestId('issue-open').click();
+  await drawer.getByLabel('Client').fill('Client 1');
+  await page.getByRole('option', { name: /Client 1/ }).click();
+  await drawer.getByRole('radio', { name: docType, exact: true }).click();
+  await drawer.getByLabel('Description').fill('Website build');
+  await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+  await expect(drawer.getByTestId('issue-totals')).toContainText('1,180.00');
+  await page.getByTestId('issue-submit').click();
+  await expect(page.getByTestId('issued-doc-title')).toContainText(`${docType} 1`);
+}
+
+test('a paid invoice-receipt credited in full is refunded; the client ledger shows the refund and ends at 0 (MUT-643)', { tag: '@portal.invoicing.credit-note-paid-refund' }, async ({ page, step }) => {
+  // The client page reads Client 1's summary before its ledger card.
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 1,
+    invoicing: 'ready',
+    customerSummaries: [customerSummary(C1, { currency: 'ILS', outstanding: '0.00', overdue: '0.00', lastPaymentOn: null, status: 'UP_TO_DATE', matters: [] })],
+  });
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue an invoice-receipt of 1,000 to Client 1', async () => {
+    await issueThousand(page, api, 'Tax invoice-receipt');
+  });
+
+  await step('AC1 Credit note from it: the drawer says the client already paid 1,180.00; Issue waits for a choice', async () => {
+    await page.getByTestId('issued-credit').click();
+    await expect(paidPart.getByRole('heading', { name: /The client already paid .*1,180\.00.* of this/ })).toBeVisible();
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+  });
+
+  await step('AC1 Refunded to the client by bank transfer, reference RF-7: the credit note is issued with the refund', async () => {
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await paidPart.getByLabel('Reference').fill('RF-7');
+    await expect(page.getByTestId('issue-submit')).toBeEnabled();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', originalId: expect.any(String), paidPart: { mode: 'REFUND', method: 'BANK', reference: 'RF-7' } });
+  });
+
+  await step('AC1 Client 1\'s ledger: charge, credit, payment, then the refund; it ends at 0.00', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    const card = page.getByTestId('ledger-card');
+    await expect(card.getByTestId('ledger-line').filter({ hasText: 'Refund' })).toContainText('1,180.00');
+    await expect(card.getByTestId('ledger-closing')).toContainText('0.00');
+  });
+
+  await step('In Arabic the ledger reads right to left and names the refund', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByTestId('ledger-card').getByTestId('ledger-line').filter({ hasText: 'مبلغ مُعاد' })).toBeVisible();
+  });
+});
+
+test('a paid tax invoice credited in part keeps the paid part as the client\'s credit (MUT-643)', { tag: '@portal.invoicing.credit-note-paid-keep' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue a tax invoice of 1,000 and a receipt that pays all of it', async () => {
+    await issueThousand(page, api, 'Tax invoice');
+    await page.getByTestId('issued-receipt').click();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Receipt 1');
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Tax invoice 1/ }).click();
+  });
+
+  await step('AC3 Credit note for 400 before VAT: the client already paid 472.00 of it', async () => {
+    await page.getByTestId('issued-credit').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('400');
+    await expect(paidPart.getByRole('heading', { name: /472\.00/ })).toBeVisible();
+  });
+
+  await step('AC3 Kept as their credit: issued with KEEP and no refund', async () => {
+    await paidPart.getByRole('radio', { name: 'Kept as their credit' }).click();
+    await expect(paidPart.getByText("It stays on the client's account as credit toward what they owe next.")).toBeVisible();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', paidPart: { mode: 'KEEP' } });
+  });
+});
+
+test('credit notes on one document never add up to more than it; the refusal says what is left (MUT-643)', { tag: '@portal.invoicing.credit-note-cap' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue an invoice-receipt of 1,000 and credit 600 of it, refunded', async () => {
+    await issueThousand(page, api, 'Tax invoice-receipt');
+    await page.getByTestId('issued-credit').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('600');
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+  });
+
+  await step('AC2 Another credit note starts at what is left: 472.00, VAT included', async () => {
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Tax invoice-receipt 1/ }).click();
+    await page.getByTestId('issued-credit').click();
+    await expect(drawer.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('472.00');
+  });
+
+  await step('AC2 Raised to 1,000 and refunded, it is refused: at most 472.00 is left; nothing is issued', async () => {
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await page.getByTestId('issue-submit').click();
+    await expect(drawer.getByRole('alert')).toContainText('At most 472.00 is left to credit');
+    await expect(drawer).toBeVisible();
   });
 });
 
