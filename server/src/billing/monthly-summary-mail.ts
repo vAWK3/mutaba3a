@@ -206,7 +206,7 @@ async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummary
       yearly: await yearlyLine(options, candidate.userId, catalog, origin),
       offLink: `${origin}/mail-off#${token}`,
     },
-    // ADR-278: the mail client's own one-click unsubscribe
+    // ADR-279: the mail client's own one-click unsubscribe
     headers: unsubscribeHeaders(origin, 'monthly-summary', token),
   });
 }

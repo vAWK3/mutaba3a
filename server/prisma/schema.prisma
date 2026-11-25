@@ -330,7 +330,7 @@ model User {
   operatorAt         DateTime?
   /// MUT-535 (D6): the monthly summary mail: 'OFF' | 'ON_ALL'; NULL = the default (on, without Malafat-covered profiles).
   monthlySummaryMail String?    @db.VarChar(8)
-  /// ADR-278: promotional mail (the come-back offer): 'OFF' once opted out; NULL = the default (on).
+  /// ADR-279: promotional mail (the come-back offer): 'OFF' once opted out; NULL = the default (on).
   offerMail          String?    @db.VarChar(8)
   createdAt          DateTime
   updatedAt          DateTime

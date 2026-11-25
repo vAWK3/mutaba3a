@@ -26088,7 +26088,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Turn promotional mail off (or back on) from its link (ADR-278)
+         * Turn promotional mail off (or back on) from its link (ADR-279)
          * @description Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.
          */
         post: {
@@ -26167,7 +26167,7 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * One-click unsubscribe from a mail client (RFC 8058, ADR-278)
+         * One-click unsubscribe from a mail client (RFC 8058, ADR-279)
          * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL is the credential, and the client address’s budget applies. It only ever turns a mail off.
          */
         post: {
@@ -33510,7 +33510,7 @@ export interface components {
                 noOffer: number;
                 noPrice: number;
                 suppressed: number;
-                /** @description Since 1.140.0 (ADR-278). The person turned promotional mail off */
+                /** @description Since 1.140.0 (ADR-279). The person turned promotional mail off */
                 optedOut: number;
             };
             /** @description The time budget ran out; the next run continues */

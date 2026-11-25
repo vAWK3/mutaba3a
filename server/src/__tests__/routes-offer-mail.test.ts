@@ -10,7 +10,7 @@ import { MemoryLedgerStore } from '../repositories/memory.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
- * ADR-278 (the legal pages rewrite, Basel 2026-11-25): promotional mail (the come-back offer) has its own opt-out. The
+ * ADR-279 (the legal pages rewrite, Basel 2026-11-25): promotional mail (the come-back offer) has its own opt-out. The
  * mail-off page turns it off or back on with the mail's signed token; mail clients' one-click unsubscribe (RFC 8058)
  * posts to a door that needs no page and no origin, for the offers and for the monthly summary.
  */

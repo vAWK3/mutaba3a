@@ -82,7 +82,7 @@ describe('MailOffPage', () => {
   });
 });
 
-/** ADR-278: the come-back offer's unsubscribe lands on the same page with `?mail=offers`. */
+/** ADR-279: the come-back offer's unsubscribe lands on the same page with `?mail=offers`. */
 describe('MailOffPage for offers', () => {
   it('asks first, then turns promotional mail off and offers to turn it back on, leaving the monthly summary alone', async () => {
     hoisted.search = { mail: 'offers' };

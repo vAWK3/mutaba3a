@@ -14,7 +14,7 @@ type Mail = 'monthlySummary' | 'offerMail';
  * the token names the person. It asks for a press first, so a link scanner opening the mail changes nothing; then it
  * offers to turn the mail back on. The token is read from the fragment and kept in memory only; the URL loses it at
  * once (`replace`, as /setup does). A link that no longer works (the server's 404) points at You › Account.
- * ADR-278: `?mail=offers` is the come-back offer's unsubscribe: the same page, its own words and its own switch.
+ * ADR-279: `?mail=offers` is the come-back offer's unsubscribe: the same page, its own words and its own switch.
  */
 export function MailOffPage() {
   const t = useT();

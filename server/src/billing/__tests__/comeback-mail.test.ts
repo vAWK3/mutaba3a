@@ -164,7 +164,7 @@ describe('runComebackMail (MUT-534)', () => {
     expect(h.outbox.list({ to: user.email })).toHaveLength(1);
   });
 
-  it('is promotional: it carries a one-click unsubscribe (link and List-Unsubscribe headers), and an opted-out person is skipped (ADR-278)', async () => {
+  it('is promotional: it carries a one-click unsubscribe (link and List-Unsubscribe headers), and an opted-out person is skipped (ADR-279)', async () => {
     const h = harness();
     const { user } = await h.lapsed();
     await h.run();

@@ -687,7 +687,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
       ],
       action: { label: 'Come back to MTB3A', href: subscribeLink },
       outro: [["The price applies on its own when you subscribe; there's no code to enter. This offer is one time only."]],
-      // ADR-278: a promotional mail always offers its way out
+      // ADR-279: a promotional mail always offers its way out
       optOut: { text: "Don't want offers from MTB3A?", label: 'Unsubscribe.', href: offLink, after: 'Emails about your account still reach you.' },
     };
   },

@@ -752,7 +752,7 @@ export const api = {
   setMonthlySummaryMail: (on: boolean) => request<Schemas['MonthlySummaryMail']>('PATCH', '/v1/me/monthly-summary-mail', { body: { on } }),
   /** MUT-535 (D8): the mail's opt-out page; the token from the link's fragment, in the body. 404: the link no longer works. */
   mailPreference: (token: string, on: boolean) => request<Schemas['MonthlySummaryMail']>('POST', '/v1/mail-preferences/monthly-summary', { body: { token, on } }),
-  /** ADR-278: the come-back offer's unsubscribe page (promotional mail only). */
+  /** ADR-279: the come-back offer's unsubscribe page (promotional mail only). */
   offerMailPreference: (token: string, on: boolean) => request<Schemas['OfferMail']>('POST', '/v1/mail-preferences/offers', { body: { token, on } }),
   /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */
   changeTrialPrompt: (action: TrialPromptAction) => request<TrialPrompt>('PATCH', '/v1/me/trial-prompt', { body: { action } }),

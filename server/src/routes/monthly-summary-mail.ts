@@ -23,8 +23,8 @@ import { ErrorEnvelopeSchema, MailOffRequestSchema, MonthlySummaryMailChangeSche
  *   POST /admin/v1/billing/monthly-summary-mail    the operator (`npm run billing:monthly-summary-mail [-- --dry-run]`)
  *   GET|PATCH /v1/me/monthly-summary-mail          You › Account's switch (a session)
  *   POST /v1/mail-preferences/monthly-summary      the mail's opt-out page (public; the signed token is the credential)
- *   POST /v1/mail-preferences/offers               ADR-278: the same page for promotional mail (the come-back offer)
- *   POST /v1/mail-preferences/unsubscribe          ADR-278: a mail client's one-click unsubscribe (RFC 8058), either mail
+ *   POST /v1/mail-preferences/offers               ADR-279: the same page for promotional mail (the come-back offer)
+ *   POST /v1/mail-preferences/unsubscribe          ADR-279: a mail client's one-click unsubscribe (RFC 8058), either mail
  *
  * Without Stripe the run still mails, with no yearly line (D9).
  */
@@ -212,7 +212,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
     },
   );
 
-  /** ADR-278: the person a token names, if they are active; anything else is a link that no longer works. */
+  /** ADR-279: the person a token names, if they are active; anything else is a link that no longer works. */
   async function personOf(token: string) {
     const userId = verifyMailOffToken(settings.pepper, token);
     const person = userId ? await store.users.getById(userId) : null;
@@ -232,7 +232,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       method: 'post',
       path: '/v1/mail-preferences/offers',
       tags: ['Sessions'],
-      summary: 'Turn promotional mail off (or back on) from its link (ADR-278)',
+      summary: 'Turn promotional mail off (or back on) from its link (ADR-279)',
       description:
         'Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only ' +
         'promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.',
@@ -258,7 +258,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       method: 'post',
       path: '/v1/mail-preferences/unsubscribe',
       tags: ['Sessions'],
-      summary: 'One-click unsubscribe from a mail client (RFC 8058, ADR-278)',
+      summary: 'One-click unsubscribe from a mail client (RFC 8058, ADR-279)',
       description:
         'Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A ' +
         'mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL ' +

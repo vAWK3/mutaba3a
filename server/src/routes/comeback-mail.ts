@@ -27,7 +27,7 @@ export interface ComebackMailRouteOptions {
   mailer: Mailer;
   logger: Logger;
   portalOrigin: string | undefined;
-  /** ADR-278: signs the mail's unsubscribe token (the session pepper, as the monthly summary's mail-off link). */
+  /** ADR-279: signs the mail's unsubscribe token (the session pepper, as the monthly summary's mail-off link). */
   pepper: string;
   /** Null (either): no Stripe on this server; both doors answer 503 BILLING_NOT_CONFIGURED. */
   checkout: CheckoutGateway | null;

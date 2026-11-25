@@ -859,7 +859,7 @@ export const ComebackMailSummarySchema = z
       noOffer: z.number().int().openapi({ description: 'No running come-back coupon (missing, or not shaped as an amount off once)' }),
       noPrice: z.number().int(),
       suppressed: z.number().int(),
-      optedOut: z.number().int().openapi({ description: 'Since 1.140.0 (ADR-278). The person turned promotional mail off' }),
+      optedOut: z.number().int().openapi({ description: 'Since 1.140.0 (ADR-279). The person turned promotional mail off' }),
     }),
     incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
   })
@@ -923,9 +923,9 @@ export const MonthlySummaryMailSchema = z.object({ on: z.boolean() }).openapi('M
 export const MonthlySummaryMailChangeSchema = z.object({ on: z.boolean() }).strict().openapi('MonthlySummaryMailChange');
 /** MUT-535 (D8): the opt-out page's request; the token comes from the mail link's fragment. */
 export const MailOffRequestSchema = z.object({ token: z.string().min(1).max(200), on: z.boolean() }).strict().openapi('MailOffRequest');
-/** ADR-278: whether promotional mail (the come-back offer) reaches the person. */
+/** ADR-279: whether promotional mail (the come-back offer) reaches the person. */
 export const OfferMailSchema = z.object({ on: z.boolean() }).openapi('OfferMail');
-/** ADR-278: a mail client's one-click unsubscribe (RFC 8058): which mail, and the person's mail-off token, in the URL. */
+/** ADR-279: a mail client's one-click unsubscribe (RFC 8058): which mail, and the person's mail-off token, in the URL. */
 export const UnsubscribeQuerySchema = z.object({ mail: z.enum(['offers', 'monthly-summary']), token: z.string().min(1).max(200) }).openapi('UnsubscribeQuery');
 export const UnsubscribedSchema = z.object({ unsubscribed: z.literal(true) }).openapi('Unsubscribed');
 

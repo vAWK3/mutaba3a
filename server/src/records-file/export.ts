@@ -36,7 +36,7 @@ export function localPersonOf(person: UserRecord): UserRecord {
     operatorAt: null,
     // MUT-535: the monthly summary mail is the hosted account's.
     monthlySummaryMail: null,
-    // ADR-278: promotional mail is the hosted account's.
+    // ADR-279: promotional mail is the hosted account's.
     offerMail: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }

@@ -58,7 +58,7 @@ export function createResendTransport(options: ResendTransportOptions): MailTran
   };
 }
 
-/** ADR-278: only the unsubscribe headers pass; anything else a caller adds is dropped (MUT-359 A2: nothing rides along). */
+/** ADR-279: only the unsubscribe headers pass; anything else a caller adds is dropped (MUT-359 A2: nothing rides along). */
 function headersOf(mail: OutgoingMail): { headers?: Record<string, string> } {
   const allowed = Object.entries(mail.headers ?? {}).filter(([name]) => (ALLOWED_MAIL_HEADERS as readonly string[]).includes(name));
   return allowed.length > 0 ? { headers: Object.fromEntries(allowed) } : {};

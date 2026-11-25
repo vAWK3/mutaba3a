@@ -48,7 +48,7 @@ describe('Resend transport', () => {
     expect(headers.get('idempotency-key')).toBe('a'.repeat(64));
   });
 
-  it('passes the one-click unsubscribe headers of a promotional mail, and no other header (ADR-278)', async () => {
+  it('passes the one-click unsubscribe headers of a promotional mail, and no other header (ADR-279)', async () => {
     const fetch = stubFetch(ok());
     const unsubscribe = { 'List-Unsubscribe': '<https://app.example.test/v1/mail-preferences/unsubscribe?mail=offers&token=t>', 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' };
     await createResendTransport({ apiKey: 're_test_key', fetch }).deliver({ ...MAIL, headers: { ...unsubscribe, 'X-Tracking': 'nope' } });

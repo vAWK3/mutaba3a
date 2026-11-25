@@ -275,7 +275,7 @@ import { DOC_TYPE_CODES } from '../issuing/types.js';
  * 21 (MUT-642): `custs` gained `taxId` and `address`.
  * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
  *    MUT-643 (same unreleased version): a new `refunds` map.
- * 23 (ADR-278): `people` gained `offerMail`.
+ * 23 (ADR-279): `people` gained `offerMail`.
  */
 export const CURRENT_STORE_SNAPSHOT_VERSION = 23;
 

@@ -273,7 +273,7 @@ function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
 }
 
-/** ADR-278, 22 → 23: a person gains `offerMail`. Promotional mail is the hosted account's; a device keeps the default: null. */
+/** ADR-279, 22 → 23: a person gains `offerMail`. Promotional mail is the hosted account's; a device keeps the default: null. */
 function addOfferMail(snapshot: StoredSnapshot): StoredSnapshot {
   const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'offerMail'>>;
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, offerMail: null }])) } };

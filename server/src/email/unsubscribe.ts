@@ -1,5 +1,5 @@
 /**
- * ADR-278 (the legal pages rewrite): the mails a person can opt out of, and the one-click unsubscribe headers
+ * ADR-279 (the legal pages rewrite): the mails a person can opt out of, and the one-click unsubscribe headers
  * (RFC 2369 List-Unsubscribe, RFC 8058 List-Unsubscribe-Post) that let a mail client do it without opening a page.
  * The URL is the API under the portal's origin (the portal reaches the API at `/v1`), and its token is the person's
  * mail-off token (mail-off-token.ts): it names one person and switches only their own mail preferences.

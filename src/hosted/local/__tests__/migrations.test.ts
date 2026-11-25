@@ -389,7 +389,7 @@ describe('local snapshot migrations', () => {
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 
-  it('22 → 23 (ADR-278): a person gains offerMail, the default (null) on a device, and the store restores', async () => {
+  it('22 → 23 (ADR-279): a person gains offerMail, the default (null) on a device, and the store restores', async () => {
     const store = new MemoryLedgerStore();
     await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
     const { maps } = store.snapshot();

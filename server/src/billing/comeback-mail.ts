@@ -64,7 +64,7 @@ export interface ComebackRunOptions {
   /** Billing's Subscribe step (`/?billing=true&step=subscribe`). */
   subscribeLink: string;
   /**
-   * ADR-278: the mail is promotional, so it carries an unsubscribe: the mail-off page (`{portal}/mail-off?mail=offers#token`)
+   * ADR-279: the mail is promotional, so it carries an unsubscribe: the mail-off page (`{portal}/mail-off?mail=offers#token`)
    * and the one-click List-Unsubscribe headers, both with the person's signed mail-off token.
    */
   optOut: { portalOrigin: string; pepper: string };

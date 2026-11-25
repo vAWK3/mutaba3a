@@ -543,7 +543,7 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.users.setMonthlySummaryMail(randomUUID(), 'OFF', at(5))).toBeNull();
     });
 
-    it('setOfferMail stores the opt-out from promotional mail and back to the default (legal rewrite, ADR-278)', async () => {
+    it('setOfferMail stores the opt-out from promotional mail and back to the default (legal rewrite, ADR-279)', async () => {
       const store = await makeStore();
       const { user } = await store.users.create(userInput());
       expect(user.offerMail).toBeNull();
