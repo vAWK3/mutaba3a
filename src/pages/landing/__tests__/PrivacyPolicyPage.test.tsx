@@ -55,9 +55,10 @@ describe('PrivacyPolicyPage', () => {
     expect(section).toMatch(/the records you added stay, without your name/);
     expect(section).toMatch(/a random internal ID, never your name or email/);
     expect(section).toMatch(/invoices for what you paid/);
-    // MUT-644 (ADR-277 D7): issued documents outlive the account by 7 years after the end of the year of the last one.
-    expect(section).toMatch(/the invoices and receipts you issued with MTB3A and the business details printed on them, for 7 years after the end of the year of the last one/);
+    // MUT-644 (ADR-277 D1/D7 as amended 2026-11-25): each issued document outlives the account by 7 years from its date.
+    expect(section).toMatch(/the invoices and receipts you issued with MTB3A, each for 7 years from its date as tax law requires/);
     expect(section).toMatch(/write to us and we'll send you a copy/);
+    expect(section).toMatch(/once you have it, you can ask us to delete them sooner/);
     expect(section).toMatch(/before version 0\.1\.13/);
     // Closing is self-service now, and uninstalling never promised to clear the Keychain (MUT-382 #1, #4)
     expect(section).not.toMatch(/email info@/);
