@@ -269,6 +269,20 @@ Web (`qa/features/portal/billing.yaml`, `portal/issuing.yaml`, `portal/profiles.
 
 Phone (`qa/features/ios/billing.yaml`, issuing): Starter headline and usage; the 4th invoice sheet; a Starter manual allocation. Recorded on "QA iPhone".
 
+## 11a. Basel's answers (2026-11-25): these override the defaults below and anything above that disagrees
+
+- **Q1 changed: every document counts** toward Starter's 3 a month (tax invoices, invoice-receipts, receipts, credit notes, payment requests). **Exception:** a receipt for a payment on a document already issued is never blocked. It still counts in the usage numbers, but the cap check skips it. Only new documents are refused at the cap. The counter counts every document type; the cap check passes `kind: payment-receipt-on-existing` through.
+- **Q2 yes:** already-lapsed trial accounts move to Starter on release day.
+- **Q3 yes:** partners keep their access, nobody new can be added, and their usage counts toward the owner's limits.
+- **Q4 yes:** the phone at a cap shows the limit, the reset date and "Plans are managed in your MTB3A account on the web", with no link and no price.
+- **Q5 changed: they must pick.** Someone on Starter with more than one business gets a "pick your active business" screen before anything else (portal and phone). Until they pick, everything is read-only. They can switch later in Billing. Nothing is deleted. There is no "most recent" default.
+- **Q6 yes:** MUT-736 (invoicing for everyone) ships before Starter.
+- **Q7 changed: the Solo trial is offered only during onboarding of a NEW account.** If it is skipped there, it's gone. Accounts that exist before release never get it. Store `paidTrialOfferedAt` / `paidTrialUsedAt`; there is no "start trial" anywhere after onboarding.
+- **Q8 yes:** Starter people get the monthly summary mail, after a check of the daily mail budget.
+- **Q9 yes:** carry-over brings every business; she picks the active one (the same screen as Q5), and the rest are read-only.
+- **MUT-733 gift (Basel, MUT-733 comment 13548):** once per account, ever. It is one gift in total, for whichever limit is hit first; not on Starter. There's a heads-up at 80% of a limit and an upgrade nudge from 90%. Starter gets the 80% and 90% notices too, then the hard cap.
+- **Analytics:** the server stays off PostHog (ADR-090 stands). Retention is 13 months for events, 25 months for monthly counters, 90 days for route stats. A scan counts when its upload finishes.
+
 ## 11. Open questions for Basel (default in brackets; the plan builds the default)
 
 - **Q1** Which documents count toward Starter's 3 a month? [Tax invoices and invoice-receipts only. Receipts never count, because recording a payment on an invoice already issued makes a receipt and that must never be blocked; credit notes and payment requests never count either.]

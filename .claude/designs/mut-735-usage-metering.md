@@ -250,6 +250,14 @@ ADR (next free number at merge): "Usage is metered in a first-party ledger; mont
 
 Paths: `server/src/usage/**`, `server/src/routes/operator-usage.ts`, `src/hosted/pages/operator/OperatorUsage*.tsx`, `src/hosted/data/operatorUsageQueries.ts`.
 
+## 11a. Basel's answers (2026-11-25): these override the defaults below
+
+- **Server-side PostHog stays off** (ADR-090 stands). The operator reports read our own ledger; the portal and phone send anonymous, consented cap and upgrade events.
+- **Retention:** 13 months for usage events, 25 months for monthly counters, 90 days for route stats. This goes into the privacy text (MUT-732).
+- **A scan counts when its upload finishes.**
+- **Every document type is metered** (MUT-731 Q1). The `documents` meter counts every issued document. The cap check (MUT-731) skips receipts for payments on documents already issued, so that path never blocks.
+- **The MUT-733 gift is one marker per account,** set once ever, not one field per meter and month. Store it on the payer (e.g. `User.overCapGiftUsedAt` plus the meter and month it was used on), not in `usage_counters`. Usage lines need the 80% and 90% thresholds, so `GET /v1/billing` returns `level: ok|near(80)|nudge(90)|at_cap` per meter.
+
 ## 11. Open questions (for Basel, with the default the plan uses)
 
 - **Q1** Which documents count toward "documents a month"? Default: tax invoices (305) and invoice-receipts (320) only. Receipts, credit notes and payment requests never count: recording a payment on an invoice already issued makes a receipt, and that must never be blocked.
