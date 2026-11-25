@@ -853,3 +853,117 @@ test('a number requested by hand is entered before issuing; the invoice number i
     await expectNoHorizontalOverflow(page);
   });
 });
+
+/** MUT-722: a save on a profile where invoicing is available but the setup can't issue yet (details in, numbering not). */
+test('saving a shekel income while the setup is incomplete says Finish setting up invoicing, once a day; Receivables says Finish setup to issue', { tag: '@portal.invoicing.setup-hint' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+  const income = page.getByRole('dialog', { name: 'New income' });
+  const toast = page.getByTestId('toast-live');
+  const hintLine = 'Finish setting up invoicing to issue its invoice.';
+  const recordOwed = async (amount: string, currency?: string) => {
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill(amount);
+    if (currency) {
+      await income.locator('button.form-disclosure').click();
+      await income.getByLabel('Currency').selectOption(currency);
+    }
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(income).toHaveCount(0);
+    await expect(toast).toContainText('Saved');
+  };
+
+  await step('On Owed, record ₪590 owed by Client 1', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+  });
+
+  await step('AC3 The save toast says Finish setting up invoicing to issue its invoice, with Set up', async () => {
+    await expect(toast).toContainText(hintLine);
+    await expect(toast.getByRole('button', { name: 'Set up' })).toBeVisible();
+    await expect(toast.getByRole('button', { name: /^Issue/ })).toHaveCount(0);
+  });
+
+  await step('AC3 Receivables shows Finish setup to issue where Issue would be', async () => {
+    await expect(page.locator('[data-testid^="finish-setup-"]').first()).toHaveText('Finish setup to issue');
+    await expect(page.locator('[data-testid^="issue-from-"]')).toHaveCount(0);
+  });
+
+  await step('AC1 Set up opens the invoicing setup at the first missing step: Numbering', async () => {
+    await toast.getByRole('button', { name: 'Set up' }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you/invoicing\\?step=numbering`));
+    await expect(page.getByRole('heading', { level: 2, name: 'Numbering' })).toBeVisible();
+  });
+
+  await step('AC2 Back on Owed, a second save the same day shows no hint', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('236');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(toast.getByRole('button', { name: 'Set up' })).toHaveCount(0);
+  });
+
+  await step('AC3 Finish setup to issue opens the setup at Numbering; answer it (start from 1)', async () => {
+    await page.locator('[data-testid^="finish-setup-"]').first().click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Numbering' })).toBeVisible();
+    await page.getByRole('radio', { name: 'No, start from 1' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByTestId('setup-ready')).toBeVisible();
+  });
+
+  await step('AC2 With the setup complete, the next save gets the normal Issue offer (MUT-648)', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('1180');
+    await expect(toast.getByRole('button', { name: 'Issue a tax invoice' })).toBeVisible();
+    await expect(toast).not.toContainText(hintLine);
+  });
+
+  await step('AC4 A dollar income on an incomplete setup shows no hint', async () => {
+    const usd = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+    await usd.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('100', 'USD');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(toast.getByRole('button')).toHaveCount(0);
+  });
+
+  await step('AC4 No hint on a personal profile, a Malafat firm, or without the invoicing feature', async () => {
+    const personal = new FakeApi({ profiles: [{ id: OFFICE_A, name: 'Personal', type: 'PERSONAL', owned: true, writerOfRecord: null }], clients: 1, invoicing: true });
+    await personal.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast.getByRole('button')).toHaveCount(0);
+    expect(personal.last('GET', /^\/v1\/issuing\/setup$/)).toBeFalsy();
+
+    const firm = new FakeApi({ profiles: [{ id: OFFICE_A, name: 'Haddad & Partners', type: 'BUSINESS', owned: true, writerOfRecord: 'MALAFAT' }], clients: 1, invoicing: true });
+    await firm.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(page.locator('[data-testid^="finish-setup-"]')).toHaveCount(0);
+
+    const plain = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
+    await plain.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast.getByRole('button')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="finish-setup-"]')).toHaveCount(0);
+  });
+
+  await step('In Arabic the toast reads أكمل إعداد الفوترة لتصدر فاتورته with إعداد, right to left', async () => {
+    const ar = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+    await ar.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
+    await page.evaluate(() => localStorage.clear());
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.locator('[data-income-add]').click();
+    const arIncome = page.getByRole('dialog', { name: 'دخل جديد' });
+    await arIncome.locator('#hosted-income-amount').fill('590');
+    await arIncome.getByRole('combobox').first().fill('Client 1');
+    await arIncome.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await arIncome.getByRole('button', { name: 'حفظ الدخل' }).click();
+    await expect(toast).toContainText('أكمل إعداد الفوترة لتصدر فاتورته.');
+    await expect(toast.getByRole('button', { name: 'إعداد' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});

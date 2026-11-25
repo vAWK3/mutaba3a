@@ -7086,3 +7086,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - **D6 confirmed:** handing the archive over by the operator after an identity check is enough; TD-332 closed won't do.
 - **D7 (copy) updated:** Close my account says each issued document is kept 7 years from its date; the privacy policy says so and adds that, once they have their copy, a former owner can ask for earlier deletion. The phone's line still says "after the end of the year of the last one" (Flutter follow-up).
 - Consequences: nothing is due until 7 years after the oldest issued document's date (issuing went live in November 2026; a back-dated document counts from its own date).
+
+## ADR-278: "Finish setting up invoicing" After a Save While the Setup Can't Issue (MUT-722, addendum to MUT-648)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-722-setup-hint.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** MUT-648 offers to issue after saving an income only once the setup can issue; before that both apps said nothing, so a person who hadn't finished the setup never learned why no invoice was offered.
+
+**Decision:**
+1. Where invoicing is available (the person's `invoicing` feature, an owned business profile Malafat doesn't write) and the setup answers `canIssue: false`, saving a shekel income shows one line, "Finish setting up invoicing to issue its invoice", with **Set up**: the portal in the save toast (a new optional `detail` line on `Toast`), the phone as a SnackBar from a new `SetupHintGate` beside `IssueOfferGate`. MUT-648's offer is unchanged once the setup can issue; the two never both speak.
+2. Set up opens the profile's invoicing setup at the first missing step (Business details, else Numbering) through `?step=` on the setup route (portal `/p/:id/you/invoicing?step=`, phone `accountProfileInvoicing(id, step:)`).
+3. At most once a day per person and profile, remembered on the device (portal `localStorage`, phone secure storage), recorded when shown (dismissing counts). No server store: none exists for MUT-648's prompts and a missed or repeated hint costs nothing.
+4. Portal Receivables shows "Finish setup to issue" (a link to the setup at that step) where Issue would be, on the same rows.
+
+**Consequences:** No API change. A setup that can't be read says nothing. Another device or browser can show the hint again the same day.
+
