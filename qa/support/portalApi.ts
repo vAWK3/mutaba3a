@@ -525,7 +525,7 @@ export interface FakeApiSeed {
   /** MUT-561 + MUT-314: period downloads on (the ticket and the stream answer); absent = off, every call 404. */
   periodDownloads?: boolean;
   /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
-  invoicing?: boolean | 'ready';
+  invoicing?: boolean | 'ready' | 'details';
   /** MUT-647: what reading an invoice issued elsewhere answers (default: a read invoice 3381 of 1,500.00). */
   externalReading?: { read: boolean; number: string | null; documentDate: string | null; amount: string | null };
   /** MUT-648: the business's "offer to issue after saving" (on unless false). */
@@ -830,6 +830,8 @@ export class FakeApi {
   readonly issuing: Map<string, StubIssuing> | null;
   /** MUT-570: the setup done (details and numbering), so issuing is open. */
   private readonly invoicingReady: boolean;
+  /** MUT-722: the details saved and the introduction read, the numbering still unanswered (the setup can't issue). */
+  private readonly invoicingDetailsOnly: boolean;
   private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
   private readonly offerAfterSave: boolean;
   private readonly manualAllocation: boolean;
@@ -871,6 +873,7 @@ export class FakeApi {
     this.periodDownloads = seed.periodDownloads ?? false;
     this.issuing = seed.invoicing ? new Map() : null;
     this.invoicingReady = seed.invoicing === 'ready';
+    this.invoicingDetailsOnly = seed.invoicing === 'details';
     this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
     this.manualAllocation = seed.manualAllocation ?? false;
@@ -1356,6 +1359,9 @@ export class FakeApi {
       if (this.invoicingReady) {
         state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
         Object.assign(state, { introSeen: true, numbering: true, defaults: true });
+      } else if (this.invoicingDetailsOnly) {
+        state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
+        state.introSeen = true;
       }
       this.issuing.set(profileId!, state);
     }

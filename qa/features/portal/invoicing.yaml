@@ -152,6 +152,35 @@ features:
       - An Owed with no document offers Issue a tax invoice on its row
       - With the setting off the toast offers nothing
       - Without invoicing the toast has no action and nothing asks for the setup
+  - id: setup-hint
+    title: Saving a shekel income while the setup can't issue says "Finish setting up invoicing", once a day, with Set up at the first missing step; Receivables says "Finish setup to issue" (MUT-722)
+    tier: secondary
+    tickets: [MUT-722]
+    paths:
+      - src/hosted/components/setupHint.ts
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/Toast.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/invoicing/InvoicingSetupPage.tsx
+      - src/hosted/router.tsx
+    steps:
+      - On a business profile with invoicing whose business details are in but numbering isn't, record ₪590 owed by Client 1 on Owed
+      - Look at Owed's row for it
+      - Choose Set up on the save toast
+      - Back on Owed, record another Owed the same day
+      - Choose Finish setup to issue on the row, answer Numbering (start from 1)
+      - Record another Owed
+      - Record a dollar Owed on an incomplete setup; record an Owed on a personal profile, a Malafat firm, and without the invoicing feature
+      - In Arabic, record ₪590 owed
+    expect:
+      - The save toast says "Finish setting up invoicing to issue its invoice." with Set up, and offers no Issue
+      - The row shows "Finish setup to issue" where Issue would be
+      - Set up opens You › Invoicing at the first missing step, Numbering (?step=numbering)
+      - The second save the same day shows no hint (once a day per profile; showing it counts)
+      - With the setup complete, the toast offers Issue a tax invoice as before (MUT-648)
+      - No hint for a dollar income, a personal profile, a Malafat firm or without the feature (and nothing asks for the setup there)
+      - In Arabic the toast reads «أكمل إعداد الفوترة لتصدر فاتورته.» with إعداد, right to left, with no sideways scroll
   - id: uniform-file
     title: Download the uniform file (מבנה אחיד 1.31) for a date range from You › Invoicing; a bad range is refused in place (MUT-569)
     tier: secondary
