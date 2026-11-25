@@ -34,11 +34,6 @@ const RELEASED_TERMS: Readonly<Record<string, { en: string; ar: string }>> = {
     en: 'c81b2eaa8d880f8a2742e6aa588de421fbb0491828f7b45fa142b74fe9663669',
     ar: 'b5362228222b06304e81f3fe91d932b0c43a2e8360a368aab029753db15e8b88',
   },
-  // The legal pages rewrite: Israeli-SaaS coverage (trial, cancellation, tax documents, clients' data), MTB3A in English.
-  '2026-11-25': {
-    en: '74256cf445002506542584c6240cfe883ce456b17cd3169331cb01ff109b1e8a',
-    ar: '3204b990394ffb785f55a03fe8d5e08d550895b783e707f60949f6d2c99323fe',
-  },
 };
 
 describe('legal terms (MUT-324)', () => {
@@ -168,7 +163,10 @@ describe('releasing the terms web first (MUT-324)', () => {
   });
 });
 
-/** The legal pages rewrite (2026-11-25): a draft legal text, one with [TODO] notes for the lawyer, never ships. */
+/**
+ * The legal pages rewrite (2026-11-25): a draft legal text, one with [TODO] notes for the lawyer, never ships. The drafts
+ * live in docs/legal/drafts/, which neither the site nor the server loads and the guard does not scan.
+ */
 describe('the web preflight refuses draft legal text', () => {
   const preflight = readFileSync(join(__dirname, '../preflight.sh'), 'utf8');
   const webStart = preflight.indexOf('head_ "Web deploy');
@@ -179,6 +177,11 @@ describe('the web preflight refuses draft legal text', () => {
     const guard = web.slice(web.indexOf('LEGAL_TODOS='), web.indexOf('no draft notes'));
     expect(guard).toContain('bad "');
     expect(guard).not.toMatch(/SKIP_|fail_or_/);
+  });
+
+  it('keeps the unpublished 2026-11-25 drafts out of the published set', () => {
+    expect(readdirSync(DIR).some((name) => name.startsWith('2026-11-25'))).toBe(false);
+    expect(readdirSync(join(__dirname, '../../docs/legal/drafts')).filter((n) => n.startsWith('terms-2026-11-25'))).toHaveLength(2);
   });
 });
 
