@@ -2874,6 +2874,60 @@ export interface AccountPurgeRepository {
   finishStoragePurge(organizationId: string): Promise<void>;
 }
 
+// ---- MUT-644 (ADR-277): the retention of closed profiles' issued documents -----------
+
+/** A profile that no longer exists but still holds issuing rows (its account was purged, ADR-260 decision 2). */
+export interface RetainedIssuingProfile {
+  organizationId: string;
+  /** From the business details kept with the documents; null when the profile never saved them. */
+  legalName: string | null;
+  vatId: string | null;
+  documents: number;
+  cancellations: number;
+  /** The latest document date, or a payment-request cancellation's Israel date if later; null with neither. */
+  newestDocumentDate: IsoDate | null;
+}
+
+export interface RetainedIssuingFilter {
+  /** Only profiles whose newest document is dated before this day (or that hold no document): the sweep's due list. */
+  newestBefore?: IsoDate;
+  /** Case-insensitive match on the legal name, or a VAT number prefix. */
+  query?: string;
+}
+
+export type IssuingRetentionAction = 'SWEPT' | 'ARCHIVE_EXPORTED';
+
+export interface IssuingRetentionEventRecord {
+  id: string;
+  organizationId: string;
+  action: IssuingRetentionAction;
+  /** Counts, dates and the operator's support reference; never a name or an address (D5). */
+  metadata: JsonObject;
+  createdAt: Date;
+}
+
+export type IssuingSweepResult =
+  | { kind: 'swept'; documents: number; cancellations: number; rows: number; newestDocumentDate: IsoDate | null; event: IssuingRetentionEventRecord }
+  | { kind: 'not_closed' }
+  | { kind: 'not_due'; newestDocumentDate: IsoDate }
+  | { kind: 'nothing' };
+
+/** MUT-644: operator only (the hourly purge job and /admin), on the unguarded store. */
+export interface IssuingRetentionRepository {
+  /** Closed profiles still holding issuing rows, oldest newest-document first (none first), at most `limit`. */
+  listClosed(filter: RetainedIssuingFilter, limit: number): Promise<RetainedIssuingProfile[]>;
+  /** One closed profile; null when the profile still exists or holds no issuing row. */
+  getClosed(organizationId: string): Promise<RetainedIssuingProfile | null>;
+  /**
+   * D4: in one transaction, re-checks that the profile is gone and its newest document is dated before `newestBefore`,
+   * then deletes every retained issuing row (through the trigger's bypass) and writes a SWEPT event with the counts.
+   */
+  sweep(organizationId: string, newestBefore: IsoDate, at: Date): Promise<IssuingSweepResult>;
+  record(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): Promise<IssuingRetentionEventRecord>;
+  /** The profile's retention log, oldest first. */
+  events(organizationId: string): Promise<IssuingRetentionEventRecord[]>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -2946,6 +3000,8 @@ export interface LedgerStore {
   periodPack: PeriodPackRepository;
   /** MUT-568 (ADR-260): issued documents, INSERT-only legal records, and the details printed on them. Session only. */
   issuing: IssuingRepository;
+  /** MUT-644 (ADR-277): closed profiles' issued documents: the retention sweep and the operator's archive. Operator only. */
+  issuingRetention: IssuingRetentionRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------

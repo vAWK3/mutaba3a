@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
+import { israelDateOf, retentionSweepMetadata } from '../issuing/retention.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
@@ -24,6 +25,11 @@ import type {
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
+  JsonObject,
+  IssuingRetentionAction,
+  IssuingRetentionEventRecord,
+  IssuingRetentionRepository,
+  RetainedIssuingProfile,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
   IssuedOriginalPdfRecord,
@@ -414,6 +420,8 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
   private readonly cancellationCounters = new Map<string, number>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
+  /** MUT-644: the retention log (no profile foreign key, as in Postgres). */
+  private readonly issuingRetentionLog: IssuingRetentionEventRecord[] = [];
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -4306,6 +4314,81 @@ export class MemoryLedgerStore implements LedgerStore {
       this.storagePurges.delete(organizationId);
     },
   };
+
+  /**
+   * MUT-644 (ADR-277): closed profiles' issuing rows. The issuing maps sit outside dropProfiles (the purge leaves them,
+   * ADR-260), so a profile id found there with no profile is a closed one.
+   */
+  readonly issuingRetention: IssuingRetentionRepository = {
+    listClosed: async (filter, limit) => {
+      const ids = new Set<string>();
+      for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations] as Array<Map<string, { organizationId: string }>>) {
+        for (const row of map.values()) if (!this.orgs.has(row.organizationId)) ids.add(row.organizationId);
+      }
+      for (const id of this.cancellationCounters.keys()) if (!this.orgs.has(id)) ids.add(id);
+      const query = filter.query?.trim().toLowerCase();
+      return [...ids]
+        .map((id) => this.retainedProfile(id))
+        .filter((p) => (filter.newestBefore === undefined ? true : p.newestDocumentDate === null || p.newestDocumentDate < filter.newestBefore))
+        .filter((p) => (query ? (p.legalName ?? '').toLowerCase().includes(query) || (p.vatId ?? '').startsWith(query) : true))
+        .sort((a, b) => (a.newestDocumentDate ?? '').localeCompare(b.newestDocumentDate ?? '') || a.organizationId.localeCompare(b.organizationId))
+        .slice(0, limit);
+    },
+    getClosed: async (organizationId) => (this.orgs.has(organizationId) || !this.holdsIssuing(organizationId) ? null : this.retainedProfile(organizationId)),
+    sweep: async (organizationId, newestBefore, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const held = this.retainedProfile(organizationId);
+      if (held.newestDocumentDate !== null && held.newestDocumentDate >= newestBefore) return { kind: 'not_due', newestDocumentDate: held.newestDocumentDate };
+      const mine = (row: { organizationId: string }) => row.organizationId === organizationId;
+      let rows = 0;
+      const drop = <T extends { organizationId: string }>(map: Map<string, T>, perRow: (row: T, key: string) => number = () => 1) => {
+        for (const [key, row] of map) if (mine(row)) { rows += perRow(row, key); map.delete(key); }
+      };
+      drop(this.issuerMap);
+      drop(this.issuedCounterMap);
+      drop(this.issuerLogoMap);
+      drop(this.issuedOriginals);
+      drop(this.issuedCancellations);
+      // A document's lines and copies are rows of their own tables in Postgres.
+      drop(this.issuedDocMap, (doc, id) => {
+        const copies = this.issuedCopies.get(id)?.length ?? 0;
+        this.issuedCopies.delete(id);
+        return 1 + doc.lines.length + copies;
+      });
+      if (this.cancellationCounters.delete(organizationId)) rows += 1;
+      const event = this.appendRetentionEvent(organizationId, 'SWEPT', retentionSweepMetadata(held, rows), at);
+      return { kind: 'swept', documents: held.documents, cancellations: held.cancellations, rows, newestDocumentDate: held.newestDocumentDate, event };
+    },
+    record: async (organizationId, action, metadata, at) => this.appendRetentionEvent(organizationId, action, metadata, at),
+    events: async (organizationId) =>
+      this.issuingRetentionLog
+        .filter((e) => e.organizationId === organizationId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((e) => ({ ...e, metadata: structuredClone(e.metadata) })),
+  };
+
+  private holdsIssuing(organizationId: string): boolean {
+    const mine = (row: { organizationId: string }) => row.organizationId === organizationId;
+    return (
+      this.cancellationCounters.has(organizationId) ||
+      [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations].some((map) => [...(map as Map<string, { organizationId: string }>).values()].some(mine))
+    );
+  }
+
+  private retainedProfile(organizationId: string): RetainedIssuingProfile {
+    const issuer = this.issuerMap.get(organizationId);
+    const documents = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    const cancellations = [...this.issuedCancellations.values()].filter((c) => c.organizationId === organizationId);
+    const dates = [...documents.map((d) => d.documentDate), ...cancellations.map((c) => israelDateOf(c.cancelledAt))].sort();
+    return { organizationId, legalName: issuer?.legalName ?? null, vatId: issuer?.vatId ?? null, documents: documents.length, cancellations: cancellations.length, newestDocumentDate: dates.at(-1) ?? null };
+  }
+
+  private appendRetentionEvent(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): IssuingRetentionEventRecord {
+    const event: IssuingRetentionEventRecord = { id: randomUUID(), organizationId, action, metadata: structuredClone(metadata), createdAt: at };
+    this.issuingRetentionLog.push(event);
+    return { ...event, metadata: structuredClone(metadata) };
+  }
 
   /** MUT-333: the shared rule (accounts/purge-plan.ts) over this store's own rows. */
   private purgeDecisionFor(userId: string) {

@@ -2477,3 +2477,18 @@ model IssuedDocumentOriginal {
   @@index([organizationId])
   @@map("issued_document_originals")
 }
+
+/// MUT-644 (ADR-277 D5): the retention log of closed profiles' issued documents: each sweep that deleted them and each
+/// archive the operator exported. No foreign key (the profile is already gone, so audit_events can't hold it); kept
+/// indefinitely. metadata holds counts, dates and the operator's support reference, never a name or an address.
+model IssuingRetentionEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// SWEPT | ARCHIVE_EXPORTED
+  action         String   @db.VarChar(32)
+  metadata       Json
+  createdAt      DateTime
+
+  @@index([organizationId, createdAt])
+  @@map("issuing_retention_events")
+}
