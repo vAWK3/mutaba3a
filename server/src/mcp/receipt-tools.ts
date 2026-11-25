@@ -1,3 +1,4 @@
+import { usageStampFor } from '../usage/plan-of.js';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { agentWriteGate } from '../auth/billing-gate.js';
@@ -47,6 +48,8 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
     requestId: ctx.requestId,
     now: ctx.now(),
     audit: receiptAudit(ctx.store, { organizationId: organization.id, userId: ctx.agent.user.id, requestId: ctx.requestId }),
+    // MUT-735 (ADR-281): an agent's finished upload is a scan too; Malafat's connector acting as the person is door MALAFAT.
+    usage: () => usageStampFor(ctx.store, { organization, principal: ctx.agent.via ? { kind: 'session', sessionKind: null, delegated: true } : { kind: 'agent' }, actorUserId: ctx.agent.user.id }, ctx.now()),
   });
 
   async function writableProfile(profileId: string): Promise<Organization> {

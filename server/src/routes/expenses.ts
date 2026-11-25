@@ -1,3 +1,4 @@
+import { requestUsage } from '../usage/request.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
@@ -55,6 +56,8 @@ export interface ExpenseRouteOptions {
   urlTtlSeconds: number;
   /** MUT-255/389: this app has the receipts library (hosted with RECEIPTS_LIBRARY on), so a deleted expense's READY receipts go back to it. */
   receiptsLibrary: boolean;
+  /** MUT-735 (ADR-281): a finished receipt upload is metered as a scan; false in the portal's signed-out mode. */
+  metering?: boolean;
 }
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -83,7 +86,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
 
   function receiptActor(c: Context<AppEnv>): ReceiptActor {
     const { organization, user } = sessionAuth(c);
-    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args) };
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: options.metering ? requestUsage(store, c, organization) : undefined };
   }
 
   async function mustGet(organizationId: string, id: string): Promise<ExpenseRecord> {

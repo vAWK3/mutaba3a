@@ -1,3 +1,7 @@
+import { userSubjectKey } from '../usage/subject.js';
+import { issueUsageEvents } from '../usage/issue-events.js';
+import { usageEvent } from '../usage/event.js';
+import { prismaUsage, recordUsageTx } from './prisma-usage.js';
 import { membershipRoleOf } from '../malafat-members.js';
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue, Semaphore } from './keyed-queue.js';
@@ -3475,10 +3479,19 @@ export class PrismaLedgerStore implements LedgerStore {
     getById: async (organizationId, id) => toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } })),
     listByExpense: async (organizationId, expenseId) =>
       (await this.prisma.expenseReceipt.findMany({ where: { organizationId, expenseId, status: 'READY', deletedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExpenseReceipt),
-    complete: async (organizationId, id, at, read) => {
+    complete: async (organizationId, id, at, read, usage) => {
       // MUT-441 (R10 #5): the reading state rides the same UPDATE as the flip, so a READY receipt is never left unasked.
       const reading = read ? { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) } : {};
-      await this.prisma.expenseReceipt.updateMany({ where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' }, data: { status: 'READY', completedAt: at, ...reading } });
+      const flip = { where: { id, organizationId, deletedAt: null, status: 'PENDING_UPLOAD' as const }, data: { status: 'READY' as const, completedAt: at, ...reading } };
+      if (usage) {
+        // MUT-735 (ADR-281): the scan counts with the flip, in its transaction; only the call that flipped it counts.
+        await this.prisma.$transaction(async (tx) => {
+          const { count } = await tx.expenseReceipt.updateMany(flip);
+          if (count === 1) await recordUsageTx(tx, usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), null);
+        });
+      } else {
+        await this.prisma.expenseReceipt.updateMany(flip);
+      }
       return toExpenseReceiptOrNull(await this.prisma.expenseReceipt.findFirst({ where: { id, organizationId, deletedAt: null } }));
     },
     claimRead: async (id, now, leaseMs) => {
@@ -3703,6 +3716,8 @@ export class PrismaLedgerStore implements LedgerStore {
           if (receiptRow.status === 'READY') return { kind: 'already_ready' as const, receipt: toExpenseReceipt(await tx.expenseReceipt.findUniqueOrThrow({ where: { id: params.receiptId } })) };
           if ((await countReadyOnExpense(tx, params.organizationId, params.expenseId)) >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
           const receipt = await tx.expenseReceipt.update({ where: { id: params.receiptId }, data: { status: 'READY', completedAt: at } });
+          // MUT-735 (ADR-281): the scan counts with the flip, under the same locks.
+          if (params.usage) await recordUsageTx(tx, usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: params.receiptId, organizationId: params.organizationId }, at), null);
           return { kind: 'completed' as const, receipt: toExpenseReceipt(receipt) };
         },
         RECEIPT_TX_OPTIONS,
@@ -3722,6 +3737,9 @@ export class PrismaLedgerStore implements LedgerStore {
   // ---- MUT-270: the entries feed -------------------------------------------
 
   readonly recordsExport = prismaRecordsExport(() => this.prisma);
+
+  // ---- MUT-735 (ADR-281): usage metering ----
+  readonly usage = prismaUsage(() => this.prisma);
 
   /** MUT-358 (ADR-160): three queries whatever the number of profiles (brief §2.3). */
   readonly billing: BillingRepository = {
@@ -4064,6 +4082,9 @@ export class PrismaLedgerStore implements LedgerStore {
           const [table, field] = column.split('.') as [string, string];
           await tx.$executeRawUnsafe(`UPDATE "${table}" SET "${field}" = NULL WHERE "${field}" = $1::uuid`, userId);
         }
+        // MUT-735 (ADR-281): the person's usage, as the payer, goes (their actorUserId elsewhere was nulled above).
+        await tx.usageEvent.deleteMany({ where: { subjectKey: userSubjectKey(userId) } });
+        await tx.usageCounter.deleteMany({ where: { subjectKey: userSubjectKey(userId) } });
         // R3: a stored replay or an audit row that names the person loses that detail; the action and time stay.
         const needle = `%${userId}%`;
         await tx.$executeRaw`DELETE FROM idempotency_keys WHERE "responseBody"::text LIKE ${needle}`;
@@ -6059,6 +6080,11 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
     vatMinor: l.vatMinor,
   }));
   await tx.issuedDocumentLine.createMany({ data: lines });
+  // MUT-735 (ADR-281): metered strictly after the document row, so two requests racing on one key resolve through the
+  // P2002 replay above, never through the meter. No cap yet (MUT-731 passes one).
+  if (input.usage) {
+    for (const event of issueUsageEvents(input.usage, input, documentId, allocationSource, at)) await recordUsageTx(tx, event, null);
+  }
   return { kind: 'issued', document: issuedRecord(row, lines), created: true };
 }
 

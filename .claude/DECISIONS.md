@@ -7133,3 +7133,27 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** the address-level suppression list (stops all mail, security notices included); a billing retention event as the opt-out (needs a subscription id the token doesn't carry); a token purpose per mail (the token already names one person and switches only their own mail).
 
+
+## ADR-281: Usage Is Metered in a First-Party Ledger; Monthly Caps Read a Per-Payer Counter Written in the Action's Transaction; Routes Are Aggregated Without a Person (MUT-735)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/mut-735-usage-metering.md`, Basel's answers §11a). Metering and reports only: nothing is refused (caps are MUT-731/733).
+
+**Context:** nothing was metered and `PLAN_LIMITS` (ADR-275) was read nowhere. Caps on documents and scans need one counter that cannot be raced past; the operator needs to see who uses what, on which plan.
+
+**Decision:**
+1. **Three stores, each for one job.** `usage_events` (the ledger: one row per metered action, idempotent on `(kind, entityKey)`; indexes `(subjectKey, month, kind)` for a person's rollup and `(month, kind)` for plan totals); `usage_counters` (`(subjectKey, month, meter)` → count, the O(1) read a cap makes); `route_usage_daily` (Jerusalem day × route template × plan × status class, a 12-bucket duration histogram, no person, no raw path).
+2. **Who pays:** `subjectKey` = `user:<profileOwnerOf(org)>` (a co-owner's act counts to the creator's meter; the event keeps the actor), `org:<id>` for an owner-less firm. The plan is the payer's (`payerPlanOf`: `currentPlanOf` over the payer's own profiles, read only on metered actions); anything Malafat writes (an API key, a delegated call, writer of record MALAFAT, an entitlement source MALAFAT) is plan `malafat` and never capped (ADR-160 d4).
+3. **The month** is the Asia/Jerusalem calendar month, decided only in `usage/month.ts` (built on `todayIn`).
+4. **Closed vocabularies in code, not Postgres enums** (`usage/kinds.ts`): kinds, meters, doors, plans and each kind's `detail` codes. A usage row never holds an amount, a name, an email, a client or free text.
+5. **What counts (Basel, 2026-11-25):** `DOCUMENTS` counts **every** issued document type; MUT-731's cap check, not the meter, lets a receipt for a payment on an already-issued document through. `SCANS` counts a receipt when its upload **finishes** (the flip to READY), library or expense, so an abandoned upload costs nothing and a repeated complete counts once.
+6. **A hard cap is a conditional upsert in the action's transaction** (`recordUsageTx`): the event (ON CONFLICT DO NOTHING), then `INSERT … ON CONFLICT DO UPDATE SET count = count + 1 WHERE $cap::int IS NULL OR count < $cap::int RETURNING count`. Postgres re-checks the WHERE on the locked row, so two writers at cap − 1 can't both pass; no row back = at the cap, the transaction rolls back. A cap ≤ 0 admits nothing. In `issueTx` it runs strictly after the document row (a same-key race resolves through the P2002 replay, never the meter). The memory store refuses before writing (no rollback). MUT-735 passes no caps; the mechanism is contract-tested on Postgres (race ×5).
+7. **Stock caps read the records**, not the ledger: businesses owned and partners on a profile are counted live (they can't drift); the ledger keeps `PROFILE_CREATED` / `PARTNER_*` kinds for history.
+8. **Route statistics ride the access log** in `app.ts` (the shell also runs in the browser for signed-out mode): an in-memory increment per request; a flush is due-driven (a request that finds the last flush ≥ 60 s old starts one, fire and forget) plus one on SIGTERM, because Cloud Run's `cpu_idle` stops timers between requests. A failed flush is logged and its batch dropped; at most a minute of counts is lost on a hard kill. `/health`, `/ready` and static assets are not counted.
+9. **The MUT-733 gift is one marker per account** (`users.overCapGiftUsedAt`, `overCapGiftMeter`, `overCapGiftMonth`), set once ever by MUT-733; nothing writes it here. It replaces the brief's per-counter `graceUntil`.
+10. **`GET /v1/billing.usage`**: the month, its reset day, the payer's plan and each meter's `used`, `limit` (null = no cap) and `level` (`ok`, `near` ≥ 80%, `nudge` ≥ 90%, `at_cap`).
+11. **Server-side PostHog stays off** (ADR-090 stands, Basel 2026-11-25): the operator reports read this ledger; cap and upgrade funnel events are the portal's and the phone's (anonymous, consented), added with MUT-731's UI.
+12. **Retention** (Basel, 2026-11-25): events 13 months, counters 25 months, route statistics 90 days, by a daily prune job; account closure deletes the payer's events and counters and nulls their name as an actor. These periods go into the privacy text (MUT-732).
+
+**Consequences:** migration `20261125230000_mut735_usage_metering` (additive; backfills this month's counters from issued documents and finished receipts, plan `none` until the payer's next count; events start at release). Merging it restarts the shared dev API. The signed-out portal meters nothing (`metering` off in its `PortalRouteDependencies`).
+
+**Alternatives rejected:** `COUNT(*)` over events on every cap check (a read per action, and no race-free hard cap without an advisory lock); a Postgres enum per vocabulary (a migration per new kind); a separate route middleware in `app-shell.ts` (runs in the browser too); a timer flush (doesn't fire on Cloud Run between requests); server-side PostHog (ADR-090).

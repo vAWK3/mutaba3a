@@ -1,3 +1,6 @@
+import { issueUsageEvents } from '../usage/issue-events.js';
+import { usageEvent } from '../usage/event.js';
+import { MemoryUsage } from './memory-usage.js';
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
 import { handsOverArchive, retentionDateOf, retentionSweepMetadata } from '../issuing/retention.js';
@@ -1439,7 +1442,10 @@ export class MemoryLedgerStore implements LedgerStore {
       settle(originalReceivable);
       creditId = credit.id;
     }
-    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId }), created: true };
+    const document = this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId });
+    // MUT-735 (ADR-281): metered after the document, with no await in between (the memory store's transaction).
+    if (input.usage) for (const event of issueUsageEvents(input.usage, input, id, document.allocationSource, at)) this.usage.recordNow(event, null);
+    return { kind: 'issued', document, created: true };
   }
 
   /**
@@ -4101,12 +4107,14 @@ export class MemoryLedgerStore implements LedgerStore {
         .filter((r) => r.organizationId === organizationId && r.expenseId === expenseId && r.status === 'READY' && !r.deletedAt)
         .sort(compareByCreatedAtThenId)
         .map((r) => ({ ...r })),
-    complete: async (organizationId, id, at, read) => {
+    complete: async (organizationId, id, at, read, usage) => {
       const r = this.expReceipts.get(id);
       if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'READY') {
         r.status = 'READY';
         r.completedAt = at;
+        // MUT-735 (ADR-281): only the call that flips it counts the scan.
+        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), null);
         // MUT-441 (R10 #5): with the flip, never on its own.
         if (read) Object.assign(r, { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) });
       }
@@ -4295,6 +4303,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (held >= params.maxReceipts) return { kind: 'too_many_receipts' };
       r.status = 'READY';
       r.completedAt = at;
+      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), null);
       return { kind: 'completed', receipt: { ...r } };
     },
     editRates: async (range) =>
@@ -4305,6 +4314,9 @@ export class MemoryLedgerStore implements LedgerStore {
 
 
   // ---- MUT-270: the entries feed -------------------------------------------
+
+  // ---- MUT-735 (ADR-281): usage metering ----
+  readonly usage = new MemoryUsage();
 
   readonly recordsExport: RecordsExportRepository = {
     profilePage: async (organizationId, field, afterKey, limit) => {
@@ -4397,6 +4409,8 @@ export class MemoryLedgerStore implements LedgerStore {
       this.dropProfiles(deleted);
       for (const id of deleted) this.storagePurges.set(id, at);
       const auditRowsScrubbed = this.anonymize(userId);
+      // MUT-735 (ADR-281): the person's usage as the payer, the deleted profiles' events, and their name as an actor.
+      this.usage.forgetPerson(userId, deleted);
       for (const event of purgeAuditRows(userId, decision)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
       this.dropPerson(u);
       return { ...decision, auditRowsScrubbed };

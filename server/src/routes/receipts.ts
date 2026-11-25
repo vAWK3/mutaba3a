@@ -1,3 +1,4 @@
+import { requestUsage } from '../usage/request.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
@@ -88,7 +89,8 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
 
   function receiptActor(c: Context<AppEnv>): ReceiptActor {
     const { organization, user } = sessionAuth(c);
-    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args) };
+    // MUT-735 (ADR-281): the library is hosted only, so a finished upload is always metered as a scan.
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: requestUsage(store, c, organization) };
   }
 
   function signUpload(receipt: ExpenseReceiptRecord, now: Date) {

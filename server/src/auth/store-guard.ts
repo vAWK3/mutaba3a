@@ -543,6 +543,20 @@ export const STORE_ACCESS: StoreAccess = {
   refunds: { list: 'read' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
+  // MUT-735 (ADR-281): the server writes usage on any principal's action (bookkeeping, like audit rows); a person reads
+  // only their own counters (GET /v1/billing); the reports, the prune and the purge are the operator's.
+  usage: {
+    record: 'control',
+    addRouteUsage: 'control',
+    countersFor: 'sessionOnly',
+    rollup: 'operator',
+    standing: 'operator',
+    people: 'operator',
+    byProfile: 'operator',
+    routeTotals: 'operator',
+    prune: 'operator',
+    purgeSubject: 'operator',
+  },
 };
 
 export interface StoreGuard {

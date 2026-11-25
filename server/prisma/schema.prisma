@@ -332,6 +332,11 @@ model User {
   monthlySummaryMail String?    @db.VarChar(8)
   /// ADR-279: promotional mail (the come-back offer): 'OFF' once opted out; NULL = the default (on).
   offerMail          String?    @db.VarChar(8)
+  /// MUT-735 (ADR-281, Basel 2026-11-25): MUT-733's over-cap gift is one per account, ever. When it was used, and on
+  /// which meter (DOCUMENTS | SCANS) and usage month (YYYY-MM). Nothing writes these until MUT-733; NULL = not used.
+  overCapGiftUsedAt  DateTime?
+  overCapGiftMeter   String?    @db.VarChar(16)
+  overCapGiftMonth   String?    @db.Char(7)
   createdAt          DateTime
   updatedAt          DateTime
 
@@ -2532,4 +2537,79 @@ model IssuingRetentionEvent {
 
   @@index([organizationId, createdAt])
   @@map("issuing_retention_events")
+}
+
+/// MUT-735 (ADR-281): the usage ledger, one row per metered action. Counts and closed codes only (server/src/usage/kinds.ts):
+/// never an amount, a name or free text. `month` is the Asia/Jerusalem month (usage/month.ts). Idempotent on
+/// (kind, entityKey): the issued document, the receipt, the export. subjectKey is who pays (`user:<id>`, or `org:<id>` for
+/// an owner-less firm). No foreign keys: rows outlive a deleted profile; account closure purges them by subjectKey.
+/// Kept 13 months (the prune job). Indexes: (subjectKey, month, kind) the per-person rollup; (month, kind) plan totals.
+model UsageEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  occurredAt     DateTime
+  month          String   @db.Char(7)
+  subjectKey     String   @db.VarChar(64)
+  /// Who did it (a co-owner's issue counts to the creator's meter; the actor is kept for reports). Null for a job.
+  actorUserId    String?  @db.Uuid
+  /// Null for a person-level action.
+  organizationId String?  @db.Uuid
+  kind           String   @db.VarChar(40)
+  detail         String?  @db.VarChar(40)
+  /// The payer's plan at the time: starter | solo | business | firm | freelancer | malafat | none.
+  plan           String   @db.VarChar(16)
+  /// PORTAL | PHONE | MCP | MALAFAT | OPERATOR | JOB
+  door           String   @db.VarChar(16)
+  entityKey      String   @db.VarChar(200)
+
+  @@unique([kind, entityKey])
+  @@index([subjectKey, month, kind])
+  @@index([month, kind])
+  @@map("usage_events")
+}
+
+/// MUT-735 (ADR-281): the hot counter a monthly cap reads in one primary-key lookup, written in the same transaction as
+/// its event by a conditional upsert (the hard cap, race-free: PATTERNS "A hard cap is a conditional upsert"). `plan` is
+/// the payer's plan at the last count. Kept 25 months.
+model UsageCounter {
+  subjectKey String   @db.VarChar(64)
+  month      String   @db.Char(7)
+  /// DOCUMENTS | SCANS
+  meter      String   @db.VarChar(16)
+  count      Int
+  plan       String   @db.VarChar(16)
+  updatedAt  DateTime
+
+  @@id([subjectKey, month, meter])
+  @@index([month, meter])
+  @@map("usage_counters")
+}
+
+/// MUT-735 (ADR-281): requests per day, route template, payer plan and status class, with a duration histogram. No
+/// person, no raw path (never an id). Flushed from the access log's in-memory aggregate. Kept 90 days.
+model RouteUsageDaily {
+  /// YYYY-MM-DD, the Asia/Jerusalem day.
+  day           String @db.VarChar(10)
+  /// The Hono route template, e.g. "POST /v1/issued-documents"; UNMATCHED for no route.
+  routeKey      String @db.VarChar(200)
+  plan          String @db.VarChar(16)
+  /// 2xx | 3xx | 4xx | 5xx
+  statusClass   String @db.VarChar(3)
+  count         Int
+  durationMsSum BigInt
+  /// Requests per duration bucket: ≤5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000, 10000, >10000 ms.
+  b0            Int    @default(0)
+  b1            Int    @default(0)
+  b2            Int    @default(0)
+  b3            Int    @default(0)
+  b4            Int    @default(0)
+  b5            Int    @default(0)
+  b6            Int    @default(0)
+  b7            Int    @default(0)
+  b8            Int    @default(0)
+  b9            Int    @default(0)
+  b10           Int    @default(0)
+  b11           Int    @default(0)
+
+  @@id([day, routeKey, plan, statusClass])
+  @@map("route_usage_daily")
 }

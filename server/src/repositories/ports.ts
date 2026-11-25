@@ -12,6 +12,8 @@ import type { ComposedDocument } from '../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../issuing/types.js';
 import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
 import type { PaymentRequestFacts } from '../issuing/payment-request.js';
+import type { UsageDoor, UsageKind, UsageMeter, UsagePlan } from '../usage/kinds.js';
+import type { StatusClass } from '../usage/route-buckets.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -3048,6 +3050,8 @@ export interface LedgerStore {
   issuingRetention: IssuingRetentionRepository;
   /** MUT-643: refunds written by credit notes. */
   refunds: RefundRepository;
+  /** MUT-735 (ADR-281): the usage ledger, its per-payer counters and the route statistics. Written by the server; read by the operator. */
+  usage: UsageRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -4309,7 +4313,8 @@ export interface ExpenseReceiptRepository {
    * PENDING_UPLOAD → READY. MUT-441 (R10 #5): `read` is the reading state set in the same UPDATE, only when this call
    * makes the receipt READY (PENDING also stamps `readRequestedAt`); absent leaves it as it is (NONE).
    */
-  complete(organizationId: string, id: string, at: Date, read?: ReceiptReadRequest): Promise<ExpenseReceiptRecord | null>;
+  /** MUT-735: with `usage`, the flip to READY records the SCAN (LIBRARY) in the same transaction; a repeat counts nothing. */
+  complete(organizationId: string, id: string, at: Date, read?: ReceiptReadRequest, usage?: UsageStamp | null): Promise<ExpenseReceiptRecord | null>;
   softDelete(organizationId: string, id: string, at: Date): Promise<ExpenseReceiptRecord | null>;
   /**
    * MUT-441: take the read of one receipt, atomically: a PENDING receipt whose lease is free (never taken, or
@@ -4405,7 +4410,8 @@ export interface ExpenseReceiptRepository {
    * MUT-44 completion goes through here so it and `fileOntoExpense` serialise on the expense and can't overfill it.
    * Lock order for receipts that sit on an expense: expense first, then receipt (as `expenses.softDelete`).
    */
-  completeOnExpense(params: { organizationId: string; expenseId: string; receiptId: string; maxReceipts: number }, at: Date): Promise<CompleteOnExpenseResult>;
+  /** MUT-735: with `usage`, a `completed` flip records the SCAN (EXPENSE) in the same transaction. */
+  completeOnExpense(params: { organizationId: string; expenseId: string; receiptId: string; maxReceipts: number; usage?: UsageStamp | null }, at: Date): Promise<CompleteOnExpenseResult>;
   /** MUT-255 operator figure, across every profile: receipts approved in `[from, to)`. Counts only. */
   editRates(range: { from: Date; to: Date }): Promise<ReceiptEditRates>;
 }
@@ -4936,6 +4942,12 @@ export interface IssueDocumentInput {
   /** The issue request's idempotency key: the same key returns the same document. */
   requestKey: string;
   requestId: string | null;
+  /**
+   * MUT-735 (ADR-281): who pays and how it came. A created document records DOCUMENT_ISSUED (and ALLOCATION_REQUESTED
+   * when it carries an allocation number) in the issue's own transaction, strictly after the document row; a replay
+   * records nothing. Absent or null: nothing is metered (the signed-out portal).
+   */
+  usage?: UsageStamp | null;
 }
 
 /** MUT-711 (ADR-273): API = requested by MTB3A (MUT-572); MANUAL = requested by hand on the Tax Authority site. */
@@ -5118,4 +5130,150 @@ export interface IncomeContextRecord {
   receivables: Map<string, { customerId: string; notForInvoice: boolean }>;
   /** paymentId → a document is linked / a live external invoice is attached / its live allocations. */
   payments: Map<string, { documented: boolean; externalInvoice: boolean; allocations: Array<{ receivableId: string; amountMinor: bigint }> }>;
+}
+
+// ---- MUT-735 (ADR-281): usage metering ------------------------------------------
+
+/**
+ * Who pays and how the action came, decided by the route on a metered action and handed to the store as data (never
+ * a closure), so the store writes the event and its counter in the action's own transaction.
+ */
+export interface UsageStamp {
+  /** `user:<payer>` or `org:<id>` (usage/subject.ts). */
+  subjectKey: string;
+  plan: UsagePlan;
+  door: UsageDoor;
+  actorUserId: string | null;
+}
+
+export interface UsageEventInput extends UsageStamp {
+  occurredAt: Date;
+  /** The Asia/Jerusalem month of `occurredAt` (usage/month.ts). */
+  month: IsoMonth;
+  organizationId: string | null;
+  kind: UsageKind;
+  /** From the kind's closed vocabulary (usage/kinds.ts), or null. */
+  detail: string | null;
+  /** What makes it idempotent: the document, the receipt, the export. */
+  entityKey: string;
+}
+
+export type UsageRecordResult =
+  /** `count`: the meter's count after this event; null for a kind with no meter. */
+  | { kind: 'recorded'; count: number | null }
+  /** The same (kind, entityKey) was recorded before: nothing written, nothing counted. */
+  | { kind: 'duplicate' }
+  /** The meter is at `cap`: nothing written. MUT-731 passes caps; nothing in MUT-735 does. */
+  | { kind: 'cap_reached'; used: number; cap: number };
+
+export interface UsageCounterRecord {
+  subjectKey: string;
+  month: IsoMonth;
+  meter: UsageMeter;
+  count: number;
+  /** The payer's plan at the last count ('none' for a backfilled row until its next count). */
+  plan: UsagePlan;
+}
+
+/** The per-plan, per-kind totals of a month. */
+export interface UsageRollupRow {
+  plan: UsagePlan;
+  kind: UsageKind;
+  events: number;
+  /** Distinct payers. */
+  subjects: number;
+}
+
+/** Per profile, per month and kind: the account page's section. */
+export interface UsageProfileRow {
+  organizationId: string | null;
+  month: IsoMonth;
+  kind: UsageKind;
+  events: number;
+}
+
+/** near: ≥80% of the cap and under it; capped: at the cap; over: past it (a plan that changed down). */
+export type UsagePeopleFilter = 'near' | 'capped' | 'over';
+
+export interface UsagePeopleQuery {
+  month: IsoMonth;
+  plan?: UsagePlan;
+  filter?: UsagePeopleFilter;
+  limit: number;
+  /** Keyset: the last subjectKey of the previous page. */
+  after: string | null;
+}
+
+export interface UsagePeoplePage {
+  /** Each payer with every counter they hold this month. */
+  items: Array<{ subjectKey: string; plan: UsagePlan; counters: UsageCounterRecord[] }>;
+  nextAfter: string | null;
+}
+
+/** How many payers of a plan are near, at or over a cap this month (any meter). */
+export interface UsagePlanStanding {
+  plan: UsagePlan;
+  payers: number;
+  near: number;
+  capped: number;
+  over: number;
+}
+
+export interface RouteUsageKey {
+  day: IsoDate;
+  routeKey: string;
+  plan: UsagePlan | 'unknown';
+  statusClass: StatusClass;
+}
+
+/** One aggregate to add: `buckets` holds the 12 histogram counts. */
+export interface RouteUsageDelta extends RouteUsageKey {
+  count: number;
+  durationMsSum: number;
+  buckets: number[];
+}
+
+/** A route's totals over a range of days, every plan together, per status class. */
+export interface RouteUsageTotal {
+  routeKey: string;
+  statusClass: StatusClass;
+  count: number;
+  durationMsSum: number;
+  buckets: number[];
+}
+
+export interface UsagePruneBefore {
+  /** Events whose occurredAt is before this (13 months). */
+  events: Date;
+  /** Counters whose month is before this (25 months). */
+  countersMonth: IsoMonth;
+  /** Route rows whose day is before this (90 days). */
+  routesDay: IsoDate;
+}
+
+export interface UsageRepository {
+  /**
+   * Writes the event and, for a metered kind, adds one to the payer's counter, in one transaction. With a `cap`, the
+   * counter moves only while under it (Postgres re-checks on the locked row, so two racing at cap − 1 can't both pass);
+   * at the cap nothing is written. The same (kind, entityKey) again writes and counts nothing.
+   */
+  record(event: UsageEventInput, cap: number | null): Promise<UsageRecordResult>;
+  /** The payer's counters for these months, a zero row (plan 'none') where there is none. */
+  countersFor(subjectKey: string, months: readonly IsoMonth[]): Promise<UsageCounterRecord[]>;
+  /** One grouped read over the (month, kind) index. */
+  rollup(month: IsoMonth): Promise<UsageRollupRow[]>;
+  /** Per plan: payers holding a counter this month, and how many are near, at or over a cap (caps from usage/caps.ts). */
+  standing(month: IsoMonth): Promise<UsagePlanStanding[]>;
+  /** The payers with counters this month, filtered and keyset-paged by subjectKey. */
+  people(query: UsagePeopleQuery): Promise<UsagePeoplePage>;
+  /** A payer's events per profile, month and kind, over these months. */
+  byProfile(subjectKey: string, months: readonly IsoMonth[]): Promise<UsageProfileRow[]>;
+  /** Adds the aggregates in one statement (counts and bucket columns add up). */
+  addRouteUsage(deltas: readonly RouteUsageDelta[]): Promise<void>;
+  /** Every route's totals over [from, to] (Jerusalem days, both inclusive). */
+  routeTotals(from: IsoDate, to: IsoDate): Promise<RouteUsageTotal[]>;
+  /** Deletes what retention no longer keeps (ADR-281: events 13 months, counters 25, routes 90 days). */
+  prune(before: UsagePruneBefore): Promise<{ events: number; counters: number; routes: number }>;
+  /** Account closure (MUT-333): the payer's events and counters. */
+  purgeSubject(subjectKey: string): Promise<{ events: number; counters: number }>;
 }

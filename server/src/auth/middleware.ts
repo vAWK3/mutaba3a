@@ -1,3 +1,4 @@
+import type { UsagePlan } from '../usage/kinds.js';
 import type { Context, MiddlewareHandler } from 'hono';
 import { getCookie } from 'hono/cookie';
 import { matchedRoutes } from 'hono/route';
@@ -106,6 +107,8 @@ export type AppEnv = {
     personEntitlements: ReadonlyMap<string, Entitlement>;
     /** MUT-447: report an error a route handled itself (a partial answer), as the shell reports an unhandled one (ADR-091). */
     reportError: (err: unknown) => void;
+    /** MUT-735 (ADR-281): the payer's plan, when a metered action resolved it this request; the access log's route statistics read it. */
+    meterPlan: UsagePlan;
   };
 };
 

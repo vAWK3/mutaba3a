@@ -646,6 +646,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
     terms,
     billing: true,
+    // MUT-735 (ADR-281): the hosted server meters issued documents and scans.
+    metering: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
     // MUT-571/572: hosted only, like the PDF.
