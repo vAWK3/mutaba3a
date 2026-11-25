@@ -37,7 +37,7 @@
       "title": "5. Cancelling and refunds",
       "body": [
         "You can cancel your subscription at any time in the web portal (Billing › Cancel plan), or by writing to info@mtb3a.com. Cancelling stops the next renewal. You keep full use of MTB3A until the end of the period you have paid for; after that, your account becomes read-only as section 4 describes, and your records stay available to read and download.",
-        "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows. You may cancel a new subscription within 14 days of the transaction and get your money back, less any cancellation fee the law permits, but only if you have not used MTB3A since you subscribed: once you have added or changed records, issued a document or downloaded your data under the subscription, the service has been supplied to you and this 14-day right no longer applies. [TODO(lawyer): confirm this against the Consumer Protection Law and its regulations on services and digital content already supplied; whether use during the free trial counts; business customers; the refund for an unused part of a yearly plan; and whether we waive the cancellation fee.]",
+        "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows. You may cancel a new subscription within 14 days of the transaction and get your money back, less any cancellation fee the law permits, but only if you have not used MTB3A since you subscribed: once you have added or changed records, issued a document or downloaded your data under the subscription, the service has been supplied to you and this 14-day right no longer applies. During the free trial nothing is charged: your paid subscription starts only after the 14-day trial, so cancelling during the trial costs nothing.",
         "Fees for a period that has already started are not refunded, except where the law requires a refund, which we will then make."
       ]
     },
@@ -47,8 +47,8 @@
         "Where issuing is turned on for your business profile, you can issue tax invoices, tax invoice-receipts, receipts and credit notes, and payment requests, which are not tax documents. MTB3A produces each document from the details you enter, numbers it in sequence for its type, and signs its PDF electronically.",
         "You are responsible for every document you issue: that your business details and your client's, the lines, amounts, VAT, dates and the type of document are correct and complete; that you issue it on time and as the law requires; that you report it to the tax authorities and record it in your own books; and that you check it before you send it. An issued document can't be edited or deleted: a mistake is corrected with a credit note or a new document, as the bookkeeping rules require.",
         "Some tax invoices need an allocation number from the Israel Tax Authority before your client may deduct their VAT. To get one through MTB3A, you connect your business profile to the Tax Authority yourself, with your own sign-in there, and you authorize us to ask for allocation numbers in your name for the invoices you issue. The connection lasts as long as the Tax Authority allows (currently 90 days), and you can disconnect at any time. The Tax Authority decides whether to give a number. If its systems are unavailable, refuse or answer late, we can't give you one, but you may enter a number you obtained from the Tax Authority yourself. We are not responsible for the Tax Authority's decisions or the availability of its systems.",
-        "The Tax Authority connection is for your own profile's documents. Don't pass it on, lend it, resell it, or let anyone outside your profile use it. [TODO(MUT-700 ע3): confirm this wording, including an accountant who works in a client's profile.]",
-        "We are registering MTB3A with the Israel Tax Authority as invoicing software, as its software house. [TODO(MUT-567): add the registration number once it is issued, and confirm the rest of this section with the lawyer.]",
+        "The Tax Authority connection is for your own profile's documents. Don't pass it on, lend it, resell it, or let anyone outside your profile use it. An accountant you have shared your profile with works inside your profile, which is allowed.",
+        "We are registering MTB3A with the Israel Tax Authority as invoicing software, as its software house. Once it is registered, its registration number will be shown here.",
         "We keep the documents you issue for 7 years from each document's date, as our privacy policy describes. The legal duty to keep your books is still yours: download your documents and the uniform file, and keep your own copies."
       ]
     },
@@ -56,7 +56,7 @@
       "title": "7. Your records are yours",
       "body": [
         "You own everything you enter. We use it only to run MTB3A for you, as our privacy policy describes, and we never sell it.",
-        "For the details you record about your own clients and suppliers, you decide what is recorded and why. We hold them on your behalf and act on them only to run MTB3A for you: we keep them confidential and secure, let only the people who run MTB3A reach them when needed, use only the providers our privacy policy lists, and delete them as it describes. You are responsible for having the right to record them, and for telling the people concerned where the law requires it. [TODO(MUT-700 ע3, Amendment 13): whether this is enough as a data processing agreement, or a separate one is needed.]",
+        "For the details you record about your own clients and suppliers, you decide what is recorded and why. We hold them on your behalf and act on them only to run MTB3A for you: we keep them confidential and secure, let only the people who run MTB3A reach them when needed, use only the providers our privacy policy lists, and delete them as it describes. You are responsible for having the right to record them, and for telling the people concerned where the law requires it.",
         "You can download a copy of your records at any time from Your data, or ask us and we'll send them to you as a file."
       ]
     },
@@ -105,7 +105,7 @@
       "body": [
         "MTB3A is provided as it is. We are not liable for indirect or consequential losses, such as lost profit or lost business; for losses caused by records or documents you entered incorrectly; or for losses caused by others, such as the Tax Authority, a payment provider or an app you connected.",
         "Our total liability to you under these terms is limited to the fees you paid us in the 12 months before the claim.",
-        "Nothing in these terms limits liability that the law does not allow to be limited, such as for fraud or wilful harm, or takes away rights you have as a consumer under the law that applies to you. [TODO(lawyer): the liability wording under Israeli law, including the Standard Contracts Law, 5743-1982.]"
+        "Nothing in these terms limits liability that the law does not allow to be limited, such as for fraud or wilful harm, or takes away rights you have as a consumer under the law that applies to you."
       ]
     },
     {

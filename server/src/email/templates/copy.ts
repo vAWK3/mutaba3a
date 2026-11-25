@@ -669,12 +669,14 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
  * after a paid plan ended. The records are still there; the first month back costs the list price less the come-back
  * coupon's amount. Only the subject differs between the two stages.
  */
+/** Communications Law s.30A: an advertisement's subject opens with this word (Hebrew, whatever the mail's language). */
+export const ADVERTISEMENT_LABEL = 'פרסומת';
 const comebackOffer: Copy<'comeback-offer'> = {
   en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
     const money = (amount: number) => formatMinor(amount, currency);
     const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
     return {
-      subject: stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`,
+      subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`}`,
       preheader: `Your first month back is ${first}, then ${month} a month.`,
       headline: 'Your records are still here',
       intro: [
@@ -689,6 +691,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
       outro: [["The price applies on its own when you subscribe; there's no code to enter. This offer is one time only."]],
       // ADR-279: a promotional mail always offers its way out
       optOut: { text: "Don't want offers from MTB3A?", label: 'Unsubscribe.', href: offLink, after: 'Emails about your account still reach you.' },
+      sender: 'Sent by Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel. Contact: info@mtb3a.com.',
     };
   },
   ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
@@ -696,7 +699,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
     const money = (amount: number) => `\u2068${formatMinor(amount, currency)}\u2069`;
     const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
     return {
-      subject: stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`,
+      subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`}`,
       preheader: `شهرك الأول عند العودة بـ ${first}، ثم ${month} شهريًا.`,
       headline: 'سجلاتك ما زالت هنا',
       intro: [
@@ -710,6 +713,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
       action: { label: 'عُد إلى متابعة', href: subscribeLink },
       outro: [['يُطبَّق السعر تلقائيًا عند الاشتراك، دون أي رمز. هذا العرض مرة واحدة فقط.']],
       optOut: { text: 'لا تريد عروضًا من متابعة؟', label: 'ألغِ الاشتراك.', href: offLink, after: 'وتبقى الرسائل المتعلقة بحسابك تصلك.' },
+      sender: 'أرسلتها Narabnd Studio Ltd (نارابند ستوديو م.ض.)، شارع الزهراء 18، القدس، إسرائيل. للتواصل: info@mtb3a.com.',
     };
   },
 };

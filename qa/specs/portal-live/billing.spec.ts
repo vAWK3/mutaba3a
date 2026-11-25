@@ -980,7 +980,7 @@ test('The come-back offer - mailed 30 days after a paid plan ended; the first mo
   });
   const mail = await step('The daily job runs: one mail, the records are still here, ₪9 the first month back', async () => {
     const m = await comebackMailed(person);
-    expect(m.subject).toBe('Your MTB3A records are still here');
+    expect(m.subject).toBe('פרסומת: Your MTB3A records are still here');
     expect(m.text).toContain('Come back for ₪9 for your first month, then ₪29 a month. Prefer a year? Your first year is ₪270, then ₪290.');
     return m;
   });
@@ -1085,7 +1085,7 @@ test('The come-back offer at day 90 - the second mail, its own subject, still �
   await step('The daily job runs: the day-90 mail, in Arabic, names the price in its subject', async () => {
     const mail = await comebackMailed(person);
     expect(mail.locale).toBe('ar');
-    expect(mail.subject).toBe('عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
+    expect(mail.subject).toBe('פרסומת: عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
     expect(mail.text).toContain('سجلاتك ما زالت هنا');
   });
 });

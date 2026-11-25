@@ -36,8 +36,8 @@ const RELEASED_TERMS: Readonly<Record<string, { en: string; ar: string }>> = {
   },
   // The legal pages rewrite: Israeli-SaaS coverage (trial, cancellation, tax documents, clients' data), MTB3A in English.
   '2026-11-25': {
-    en: '74256cf445002506542584c6240cfe883ce456b17cd3169331cb01ff109b1e8a',
-    ar: '3204b990394ffb785f55a03fe8d5e08d550895b783e707f60949f6d2c99323fe',
+    en: 'd38aef2a4637737f74ede4d065d643e2ff56b423c7a96f6fb3937d020b492d42',
+    ar: 'c80744b0da87946f3e3f8e49294470ec32c8fe8f48826a611ab767a5d11daa9f',
   },
 };
 
