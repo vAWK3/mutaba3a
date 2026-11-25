@@ -1,4 +1,20 @@
 {
+  "0.4.0": {
+    "en": [
+      "Credit a paid invoice: when the client has already paid, choose whether the money was refunded or stays as their credit.",
+      "Choose once per client how you issue documents. After that, saving an income offers the right one, and Record payment can issue the payment's document in the same step.",
+      "After you save a shekel income on a profile whose invoicing setup isn't finished, a hint says so and takes you to the missing step.",
+      "Our plans now read Solo, Business and Firm.",
+      "Promotional emails now carry an Unsubscribe link, and Close my account says issued invoices and receipts are kept for 7 years from the date of each one."
+    ],
+    "ar": [
+      "أصدِر إشعارًا دائنًا لفاتورة مدفوعة: إذا دفع العميل مسبقًا، فاختر بين أن المبلغ أُعيد إليه أو بقي رصيدًا له.",
+      "حدّد مرة واحدة لكل عميل طريقة إصدار مستنداته. وبعدها يعرض حفظ الدخل المستند المناسب، ويمكن لتسجيل الدفعة أن يصدر مستندها في الخطوة نفسها.",
+      "بعد حفظ دخل بالشيكل في ملف لم يكتمل إعداد الفوترة فيه، تنبّهك رسالة إلى ذلك وتنقلك إلى الخطوة الناقصة.",
+      "تحمل خططنا الآن أسماء «مستقل» و«تجاري» و«مؤسسة».",
+      "تحمل الرسائل الترويجية الآن رابط إلغاء الاشتراك، ويوضّح «إغلاق حسابي» أن الفواتير والإيصالات الصادرة تُحفظ 7 سنوات من تاريخ كل منها."
+    ]
+  },
   "0.3.7": {
     "en": [
       "The privacy policy now describes the monthly summary email and how to turn it off."
