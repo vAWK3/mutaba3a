@@ -62,7 +62,7 @@ No new job or service. One small table. The sweep reads one aggregate query an h
 ## Impact
 
 - Purge summary gains a field (additive). Portal types regenerated.
-- A big business with many never-produced documents makes a slow archive (one signature each): TD-331.
+- A big business with many never-produced documents makes a slow archive (one signature each): TD-331. The archive is handed over by hand: TD-332.
 
 ## QA scenarios
 
