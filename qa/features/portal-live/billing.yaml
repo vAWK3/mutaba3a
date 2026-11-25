@@ -413,11 +413,11 @@ features:
     steps:
       - A monthly subscriber paid once, and the plan ended 31 days ago
       - The daily come-back job runs
-      - Open the mail's Unsubscribe link and press Unsubscribe
-      - Press Send me offers again, then use the mail app's one-click unsubscribe
+      - Open the mail's Unsubscribe link (the portal opens in Arabic) and press ألغِ الاشتراك
+      - Press أرسلوا لي العروض مجددًا, then use the mail app's one-click unsubscribe
     expect:
       - The mail says "Don't want offers from MTB3A? Unsubscribe." and carries List-Unsubscribe and List-Unsubscribe-Post headers
-      - The page asks first, then says "You won't get offers from MTB3A."
+      - The page asks first, then says لن تصلك عروض من متابعة.
       - After turning offers back on, the one-click POST answers that it unsubscribed
   - id: comeback-yearly
     title: The come-back offer on Yearly - the same ₪20 off the first year, ₪270 then ₪290

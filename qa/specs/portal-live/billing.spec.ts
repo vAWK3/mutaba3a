@@ -1017,17 +1017,17 @@ test('The come-back offer carries an unsubscribe: its link turns offers off, and
     expect(m.headers?.['List-Unsubscribe']).toMatch(/^<https?:\/\/\S+\/v1\/mail-preferences\/unsubscribe\?mail=offers&token=[A-Za-z0-9_.-]+>$/);
     return m;
   });
-  await step('Open its Unsubscribe link: the page asks first, then turns offers off', async () => {
+  await step('Open its Unsubscribe link (the portal opens in Arabic): the page asks first, then turns offers off', async () => {
     const link = mail.text.match(/https?:\/\/\S+\/mail-off\?mail=offers#[A-Za-z0-9_.-]+/)?.[0];
     expect(link).toBeTruthy();
     await page.goto(link!);
-    await expect(page.getByRole('heading', { name: 'Stop offers from MTB3A?' })).toBeVisible({ timeout: 30_000 });
-    await page.getByRole('button', { name: 'Unsubscribe' }).click();
-    await expect(page.getByRole('heading', { name: "You won't get offers from MTB3A." })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'إيقاف عروض متابعة؟' })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'ألغِ الاشتراك' }).click();
+    await expect(page.getByRole('heading', { name: 'لن تصلك عروض من متابعة.' })).toBeVisible();
   });
-  await step('Press Send me offers again, then the mail app’s one-click unsubscribe: offers are off again', async () => {
-    await page.getByRole('button', { name: 'Send me offers again' }).click();
-    await expect(page.getByRole('heading', { name: 'Offers from MTB3A are on.' })).toBeVisible();
+  await step('Press أرسلوا لي العروض مجددًا, then the mail app’s one-click unsubscribe: offers are off again', async () => {
+    await page.getByRole('button', { name: 'أرسلوا لي العروض مجددًا' }).click();
+    await expect(page.getByRole('heading', { name: 'عروض متابعة مُفعَّلة.' })).toBeVisible();
     const url = mail.headers!['List-Unsubscribe']!.slice(1, -1);
     const res = await page.request.post(url, { headers: { 'content-type': 'application/x-www-form-urlencoded' }, data: 'List-Unsubscribe=One-Click' });
     expect(res.status()).toBe(200);
