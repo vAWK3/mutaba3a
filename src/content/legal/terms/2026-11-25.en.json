@@ -1,0 +1,137 @@
+{
+  "version": "2026-11-25",
+  "title": "Terms of service",
+  "updated": "Version of 25 November 2026",
+  "intro": "These terms are the agreement between you and Barmajiyat Ltd, a company registered in England and Wales (\"we\", \"us\"), for using MTB3A: its website, its web portal and its iPhone and Android apps. [TODO(MUT-700): the contracting company is being decided. The MUT-700 draft proposes Narabnd Studio Ltd (נאראבנד סטודיו בע\"מ, company number 517108775) for customers in Israel and Barmajiyat Ltd outside Israel; replace this sentence once the lawyer (ע3) and the accountant (D1) answer.] By creating an account or using MTB3A, you accept these terms and our privacy policy, which is part of them. If you don't accept them, please don't use MTB3A. These terms apply equally to everyone, whatever their gender.",
+  "sections": [
+    {
+      "title": "1. The service",
+      "body": [
+        "MTB3A helps freelancers and small businesses record what they earn, what they're owed, what they've been paid and what they spend, in each currency, across their personal money and the businesses they run. With an account, your records are kept on our servers, behind your sign-in, so every device you sign in on shows the same numbers. Where it is turned on for your business profile, MTB3A can also issue Israeli tax documents, as section 6 describes.",
+        "You can also try the web portal without an account. Your records then stay in your browser on that device and never reach our servers; these terms apply to that use too, apart from what they say about accounts, fees and our servers.",
+        "We may improve, change or remove features. If a change takes away something you rely on, we'll tell you in advance."
+      ]
+    },
+    {
+      "title": "2. Who may use MTB3A",
+      "body": [
+        "You must be at least 18 years old and able to make a binding agreement. When you accept these terms for a business profile you own, you confirm that you may agree to them on that business's behalf. People you share a profile with accept these terms for themselves."
+      ]
+    },
+    {
+      "title": "3. Your account",
+      "body": [
+        "You create your account yourself on the web portal, or we set it up for you; either way, you choose your password through a link we email you. Give us correct details and keep them up to date.",
+        "Keep your password, passkeys and two-step sign-in codes to yourself: you are responsible for what is done with your account. If you think someone else has used it, tell us straight away. Before you issue tax documents or connect a profile to the Israel Tax Authority, we may require you to turn on two-step sign-in."
+      ]
+    },
+    {
+      "title": "4. Free trial, fees and payment",
+      "body": [
+        "A new account may start with a free trial, for the period shown when you sign up. Nothing is charged during the trial. If it ends without a subscription, your account becomes read-only for a further period and is then locked; even then, you can still subscribe or download your records.",
+        "The price is the one shown when you subscribe, or the one in the offer we sent you. Prices exclude VAT, which we add where the law requires. You pay monthly or yearly in advance, by card through our payment provider, and your subscription renews for the same period until you cancel it. Before a price change for your plan takes effect, we'll tell you in advance, and you can cancel before then. [TODO(MUT-700 D1): who sells the subscription and through which payment provider; whether prices shown to consumers in Israel must include VAT; the notice period for a price change.]",
+        "If a payment fails and stays unpaid after we have reminded you, your account becomes read-only: you can still see and download everything, but you can't add or change records until you pay. We never delete your records because a payment lapsed."
+      ]
+    },
+    {
+      "title": "5. Cancelling and refunds",
+      "body": [
+        "You can cancel your subscription at any time in the web portal (Billing › Cancel plan), or by writing to info@mtb3a.com. Cancelling stops the next renewal. You keep full use of MTB3A until the end of the period you have paid for; after that, your account becomes read-only as section 4 describes, and your records stay available to read and download.",
+        "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows, and you keep every right it gives you, including the right to cancel a distance purchase within 14 days of the transaction, subject to the cancellation fee the law permits. [TODO(lawyer): whether that right applies to a subscription that follows a free trial and to business customers; the refund for an unused part of a yearly plan; and whether we waive the cancellation fee.]",
+        "Fees for a period that has already started are not refunded, except where the law requires a refund, which we will then make."
+      ]
+    },
+    {
+      "title": "6. Issuing tax documents",
+      "body": [
+        "Where issuing is turned on for your business profile, you can issue tax invoices, tax invoice-receipts, receipts and credit notes, and payment requests, which are not tax documents. MTB3A produces each document from the details you enter, numbers it in sequence for its type, and signs its PDF electronically.",
+        "You are responsible for every document you issue: that your business details and your client's, the lines, amounts, VAT, dates and the type of document are correct and complete; that you issue it on time and as the law requires; that you report it to the tax authorities and record it in your own books; and that you check it before you send it. An issued document can't be edited or deleted: a mistake is corrected with a credit note or a new document, as the bookkeeping rules require.",
+        "Some tax invoices need an allocation number from the Israel Tax Authority before your client may deduct their VAT. To get one through MTB3A, you connect your business profile to the Tax Authority yourself, with your own sign-in there, and you authorize us to ask for allocation numbers in your name for the invoices you issue. The connection lasts as long as the Tax Authority allows (currently 90 days), and you can disconnect at any time. The Tax Authority decides whether to give a number. If its systems are unavailable, refuse or answer late, we can't give you one, but you may enter a number you obtained from the Tax Authority yourself. We are not responsible for the Tax Authority's decisions or the availability of its systems.",
+        "The Tax Authority connection is for your own profile's documents. Don't pass it on, lend it, resell it, or let anyone outside your profile use it. [TODO(MUT-700 ע3): confirm this wording, including an accountant who works in a client's profile.]",
+        "[TODO(MUT-567): MTB3A's registration as invoicing software with the Israel Tax Authority is in progress. Once it is registered, name the registration number and the registered software house here, and confirm the rest of this section with the lawyer.]",
+        "We keep the documents you issue for 7 years from each document's date, as our privacy policy describes. The legal duty to keep your books is still yours: download your documents and the uniform file, and keep your own copies."
+      ]
+    },
+    {
+      "title": "7. Your records are yours",
+      "body": [
+        "You own everything you enter. We use it only to run MTB3A for you, as our privacy policy describes, and we never sell it.",
+        "For the details you record about your own clients and suppliers, you decide what is recorded and why. We hold them on your behalf and act on them only to run MTB3A for you: we keep them confidential and secure, let only the people who run MTB3A reach them when needed, use only the providers our privacy policy lists, and delete them as it describes. You are responsible for having the right to record them, and for telling the people concerned where the law requires it. [TODO(MUT-700 ע3, Amendment 13): whether this is enough as a data processing agreement, or a separate one is needed.]",
+        "You can download a copy of your records at any time from Your data, or ask us and we'll send them to you as a file."
+      ]
+    },
+    {
+      "title": "8. Sharing with others",
+      "body": [
+        "You choose who else sees your records: co-owners and team members of a profile, an accountant you give read access, or anyone you give a share link and its PIN. You can end their access at any time, but files they have already downloaded are their copy, and we can't recall them.",
+        "If a profile is connected to Malafat, or you connect another app to your account where MTB3A offers it, the records you allow are shared with it, and its own terms apply to what it does with them."
+      ]
+    },
+    {
+      "title": "9. Using it fairly",
+      "body": [
+        "Don't use MTB3A for anything illegal, including issuing false or fictitious documents. Don't try to reach anyone else's records, test or get around our security, copy, take apart or resell the service, collect data from it automatically, overload it, or upload anything harmful such as malware.",
+        "If you break these rules, we may suspend your account. We'll tell you first and give you a chance to fix it, unless we must act at once to protect the service, other people or the law. If you issued false documents or misused the Tax Authority connection, we may also disconnect it and report it where the law requires."
+      ]
+    },
+    {
+      "title": "10. Our rights in MTB3A",
+      "body": [
+        "MTB3A, its software, design, name and logo belong to us or to those who license them to us. While these terms apply, you may use MTB3A for yourself and your business; you get no other right in it. What you enter stays yours, and you allow us only what we need to store, process and show it to run MTB3A for you. [TODO(MUT-700 ע2): the IP assignment to Narabnd and the licence to Barmajiyat are not yet signed; confirm who owns MTB3A before release.]"
+      ]
+    },
+    {
+      "title": "11. We are not your accountant",
+      "body": [
+        "MTB3A records what you enter, adds it up and produces the documents you ask for. It is not accounting, tax or legal advice, and it doesn't file tax returns or reports for you. Totals, VAT figures, reports and the suggestions MTB3A makes, including the amounts, dates and vendors it reads from receipts, can be wrong. Conversion rates are for reference only.",
+        "Check important figures and every document yourself, or with your accountant, before you rely on them or send them."
+      ]
+    },
+    {
+      "title": "12. Availability",
+      "body": [
+        "We work to keep MTB3A available and your records safe, and we back them up every day. We can't promise the service will never be interrupted, for example during maintenance, an outage at our hosting provider, or a fault in the Tax Authority's systems. If we ever stop offering MTB3A, we'll tell you at least 60 days in advance, so you can download your records and documents."
+      ]
+    },
+    {
+      "title": "13. Closing your account",
+      "body": [
+        "You can close your account yourself at any time with Close my account: in the web portal under You › Account, or in the iPhone and Android apps on the Account tab. You then have 30 days to change your mind and keep it. After that we delete your account, the profiles you own with every record in them, and the record that you accepted these terms. Profiles you share with others stay with them, and what you added stays without your name. A few things are kept after that, as our privacy policy lists, among them the tax documents you issued, which are kept for 7 years from each document's date. Our backups clear 14 days after deletion.",
+        "Before you close it, download your records and your issued documents: once they are deleted, we can't get them back. Closing your account doesn't end your own duty to keep your books."
+      ]
+    },
+    {
+      "title": "14. Liability",
+      "body": [
+        "MTB3A is provided as it is. We are not liable for indirect or consequential losses, such as lost profit or lost business; for losses caused by records or documents you entered incorrectly; or for losses caused by others, such as the Tax Authority, a payment provider or an app you connected.",
+        "Our total liability to you under these terms is limited to the fees you paid us in the 12 months before the claim.",
+        "Nothing in these terms limits liability that the law does not allow to be limited, such as for fraud or wilful harm, or takes away rights you have as a consumer under the law that applies to you. [TODO(lawyer): the liability wording under Israeli law, including the Standard Contracts Law, 5743-1982.]"
+      ]
+    },
+    {
+      "title": "15. Changes to these terms",
+      "body": [
+        "We may update these terms. When we do, we'll ask you to read and accept the new version, by email or the next time you open your account. Every earlier version stays available at its own address, so you can always see what you agreed to."
+      ]
+    },
+    {
+      "title": "16. Law and language",
+      "body": [
+        "These terms are governed by the law of England and Wales, and the courts of England and Wales decide any dispute about them. If you are a consumer, you also keep the protection of the mandatory consumer law of the country where you live, and you may bring a claim in its courts. [TODO(MUT-700 ע3): for customers who contract with Narabnd Studio Ltd, Israeli law and the competent courts in Jerusalem.]",
+        "These terms are written in English and Arabic. If the two texts differ, the English text prevails."
+      ]
+    },
+    {
+      "title": "17. General",
+      "body": [
+        "If a court finds part of these terms unenforceable, the rest stays in force. If we don't enforce a right straight away, we haven't given it up. We may transfer these terms to a company that takes over MTB3A, and we'll tell you if we do; you may transfer them only with our written agreement."
+      ]
+    },
+    {
+      "title": "18. Contact",
+      "body": [
+        "Write to us at info@mtb3a.com. We reply within 2 working days. [TODO(MUT-700): add the contracting company's postal address.]"
+      ]
+    }
+  ]
+}

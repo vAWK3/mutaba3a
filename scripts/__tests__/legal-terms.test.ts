@@ -34,6 +34,11 @@ const RELEASED_TERMS: Readonly<Record<string, { en: string; ar: string }>> = {
     en: 'c81b2eaa8d880f8a2742e6aa588de421fbb0491828f7b45fa142b74fe9663669',
     ar: 'b5362228222b06304e81f3fe91d932b0c43a2e8360a368aab029753db15e8b88',
   },
+  // The legal pages rewrite: Israeli-SaaS coverage (trial, cancellation, tax documents, clients' data), MTB3A in English.
+  '2026-11-25': {
+    en: 'f46662e6b19b537b6cc50cb6c05a19c1861beb87a2459c54950f74bb5733e674',
+    ar: '8015bb26c4a4d94fea3d2056ed5ca03e266c9b237f1289610392269e0143a736',
+  },
 };
 
 describe('legal terms (MUT-324)', () => {
@@ -160,6 +165,20 @@ describe('releasing the terms web first (MUT-324)', () => {
     expect(terms).toContain('SKIP_TERMS_CHECK');
     expect(terms).not.toContain('SKIP_REMOTE');
     expect(makefile).toMatch(/SKIP_TERMS_CHECK=1/);
+  });
+});
+
+/** The legal pages rewrite (2026-11-25): a draft legal text, one with [TODO] notes for the lawyer, never ships. */
+describe('the web preflight refuses draft legal text', () => {
+  const preflight = readFileSync(join(__dirname, '../preflight.sh'), 'utf8');
+  const webStart = preflight.indexOf('head_ "Web deploy');
+  const web = preflight.slice(webStart, preflight.indexOf('if [[ "$MODE" == "server" ]]; then', webStart));
+
+  it('greps the terms and the privacy policy for [TODO] in the web release, with no override', () => {
+    expect(web).toContain("grep -l '\\[TODO' src/content/legal/terms/*.json src/lib/i18n/translations/*/landing.json");
+    const guard = web.slice(web.indexOf('LEGAL_TODOS='), web.indexOf('no draft notes'));
+    expect(guard).toContain('bad "');
+    expect(guard).not.toMatch(/SKIP_|fail_or_/);
   });
 });
 

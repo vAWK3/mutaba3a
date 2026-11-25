@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { LATEST_TERMS_VERSION } from '../../../content/legal/terms';
-import en from '../../../content/legal/terms/2026-10-26.en.json';
-import ar from '../../../content/legal/terms/2026-10-26.ar.json';
+import en from '../../../content/legal/terms/2026-11-25.en.json';
+import ar from '../../../content/legal/terms/2026-11-25.ar.json';
 import enFrozen from '../../../content/legal/terms/2026-10-19.en.json';
 import { TermsPage } from '../TermsPage';
 
@@ -35,7 +35,7 @@ describe('TermsPage (MUT-324)', () => {
     renderPage('en');
     await loaded(en);
     expect(screen.getByRole('heading', { level: 1, name: en.title })).toBeInTheDocument();
-    expect(LATEST_TERMS_VERSION).toBe('2026-10-26');
+    expect(LATEST_TERMS_VERSION).toBe('2026-11-25');
     for (const section of en.sections) expect(screen.getByRole('heading', { level: 2, name: section.title })).toBeInTheDocument();
     expect(screen.getByText(en.updated)).toBeInTheDocument();
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
@@ -74,6 +74,22 @@ describe('TermsPage (MUT-324)', () => {
     const text = document.querySelector('main')?.textContent ?? '';
     expect(text).toContain('قانون إنجلترا وويلز');
     expect(text).toContain('يسود النص الإنجليزي');
+  });
+
+  it('covers what an Israeli invoicing service must: trial, cancellation, tax documents, clients\' data (2026-11-25 rewrite)', async () => {
+    renderPage('en');
+    await loaded(en);
+    const text = document.querySelector('main')?.textContent ?? '';
+    expect(text).toContain('Consumer Protection Law, 5741-1981');
+    expect(text).toMatch(/cancel a distance purchase within 14 days/);
+    expect(text).toMatch(/You are responsible for every document you issue/);
+    expect(text).toMatch(/allocation numbers in your name/);
+    expect(text).toMatch(/An issued document can't be edited or deleted/);
+    expect(text).toMatch(/We hold them on your behalf/);
+    expect(text).toMatch(/for 7 years from each document's date/);
+    expect(text).toMatch(/at least 18 years old/);
+    expect(text).not.toContain('Mutaba3a');
+    expect(text).not.toMatch(/doesn't file tax returns or issue official e-invoices/);
   });
 
   it('is busy only while the text loads', async () => {
