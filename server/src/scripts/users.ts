@@ -508,14 +508,14 @@ const COMMAND_HANDLERS: Record<Command, (ctx: HandlerContext) => Promise<void>> 
   'accounts-purge': async ({ client, flag, out }) => {
     const dryRun = flag('dry-run');
     type Row = { userId: string; outcome: string; reason: string | null; deleteProfileIds: string[]; transfers: { organizationId: string; toUserId: string }[]; leaveProfileIds: string[]; stripeCustomers: number };
-    type Summary = { closing: number; due: number; purged: number; skipped: number; failed: number; storagePrefixesEmptied: number; storagePending: number; incomplete: boolean };
+    type Summary = { closing: number; due: number; purged: number; skipped: number; failed: number; storagePrefixesEmptied: number; storagePending: number; incomplete: boolean; issuingProfilesSwept?: number };
     const { summary: s, rows } = await client.call<{ summary: Summary; rows: Row[] }>('POST', '/admin/v1/accounts/purge', { dryRun });
     for (const r of rows) {
       const what = `delete ${r.deleteProfileIds.length} profile(s), pass ${r.transfers.length} to a co-owner, leave ${r.leaveProfileIds.length}, ${r.stripeCustomers} Stripe customer(s)`;
       out(`${r.reason ? `${r.outcome} (${r.reason})` : r.outcome}  ${r.userId}  ${r.reason ? '' : what}`.trimEnd());
     }
     if (s.incomplete) out('Stopped at its cap or time budget; run it again to continue.');
-    out(`${s.closing} closing, ${s.due} due. ${dryRun ? `Dry run: ${s.purged} would be deleted.` : `Deleted ${s.purged}, skipped ${s.skipped}, failed ${s.failed}; bucket prefixes emptied ${s.storagePrefixesEmptied}, still queued ${s.storagePending}.`}`);
+    out(`${s.closing} closing, ${s.due} due. ${dryRun ? `Dry run: ${s.purged} would be deleted.` : `Deleted ${s.purged}, skipped ${s.skipped}, failed ${s.failed}; bucket prefixes emptied ${s.storagePrefixesEmptied}, still queued ${s.storagePending}; closed profiles' issued documents deleted after 7 years: ${s.issuingProfilesSwept ?? 0}.`}`);
   },
   create: async ({ client, need, optional, out }) => {
     const locale = optional('locale');

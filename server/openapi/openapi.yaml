@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.136.0-mut702
+  version: 1.138.0-mut644
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -14731,6 +14731,9 @@ components:
         incomplete:
           type: boolean
           description: The time budget or the per-run cap ran out; the next run continues
+        issuingProfilesSwept:
+          type: integer
+          description: Since 1.138.0 (MUT-644). Closed profiles whose issued documents this run deleted, 7 years after the end of the year of their newest document; 0 in a dry run
       required:
         - dryRun
         - closing
@@ -14741,6 +14744,7 @@ components:
         - storagePrefixesEmptied
         - storagePending
         - incomplete
+        - issuingProfilesSwept
     AccountPurgeRun:
       type: object
       properties:
@@ -14825,6 +14829,130 @@ components:
           type: boolean
       required:
         - dryRun
+      additionalProperties: false
+    RetainedIssuingList:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/RetainedIssuingProfile"
+      required:
+        - data
+    RetainedIssuingProfile:
+      type: object
+      properties:
+        organizationId:
+          type: string
+          format: uuid
+        legalName:
+          type: string
+          nullable: true
+          description: From the business details kept with the documents
+        vatId:
+          type: string
+          nullable: true
+        documents:
+          type: integer
+        cancellations:
+          type: integer
+        newestDocumentDate:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The latest document date, or a payment-request cancellation’s date if later
+        retainedUntil:
+          type: string
+          nullable: true
+          pattern: ^\d{4}-\d{2}-\d{2}$
+          description: The first day the sweep may delete them; null when the profile issued nothing (deleted on the next run)
+      required:
+        - organizationId
+        - legalName
+        - vatId
+        - documents
+        - cancellations
+        - newestDocumentDate
+        - retainedUntil
+    IssuingRetentionSweepRun:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+        due:
+          type: integer
+        swept:
+          type: integer
+          description: Deleted by this run (in a dry run, would be)
+        failed:
+          type: integer
+        incomplete:
+          type: boolean
+          description: More were due than the per-run cap (25); the next run continues
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              organizationId:
+                type: string
+                format: uuid
+              outcome:
+                type: string
+                enum:
+                  - swept
+                  - would-sweep
+                  - skipped
+                  - failed
+              documents:
+                type: integer
+              newestDocumentDate:
+                type: string
+                nullable: true
+                pattern: ^\d{4}-\d{2}-\d{2}$
+              retainedUntil:
+                type: string
+                nullable: true
+                pattern: ^\d{4}-\d{2}-\d{2}$
+            required:
+              - organizationId
+              - outcome
+              - documents
+              - newestDocumentDate
+              - retainedUntil
+      required:
+        - dryRun
+        - due
+        - swept
+        - failed
+        - incomplete
+        - rows
+    IssuingRetentionSweepRequest:
+      type: object
+      properties:
+        dryRun:
+          type: boolean
+      required:
+        - dryRun
+      additionalProperties: false
+    IssuingArchiveRequest:
+      type: object
+      properties:
+        reference:
+          type: string
+          minLength: 1
+          maxLength: 100
+          description: The support request this answers (a ticket number, never an address); kept in the retention log
+          example: SUP-1042
+        lang:
+          type: string
+          enum:
+            - ar
+            - en
+          default: ar
+          description: The uniform file report’s language
+      required:
+        - reference
       additionalProperties: false
     EmailWebhookResponse:
       type: object
@@ -33303,6 +33431,143 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/issuing/retained:
+    get:
+      tags:
+        - Admin
+      summary: Closed profiles whose issued documents are still kept
+      description: "MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are kept 7 years after the end of the year of the newest document. Oldest first; `query` matches the business name (any part) or the start of a VAT number."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            description: A business name (any part, any case) or the start of a VAT number
+          required: false
+          description: A business name (any part, any case) or the start of a VAT number
+          name: query
+          in: query
+        - schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 50
+          required: false
+          name: limit
+          in: query
+      responses:
+        "200":
+          description: The profiles
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RetainedIssuingList"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/issuing/retention/sweep:
+    post:
+      tags:
+        - Admin
+      summary: Delete closed profiles’ issued documents whose 7 years have passed, or see which are due
+      description: "MUT-644 (ADR-277 D3): what the hourly account purge also runs. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing."
+      security:
+        - adminToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssuingRetentionSweepRequest"
+      responses:
+        "200":
+          description: The run
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/IssuingRetentionSweepRun"
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /admin/v1/issuing/retained/{organizationId}/archive:
+    post:
+      tags:
+        - Admin
+      summary: A closed profile’s archive of issued documents, for its former owner
+      description: "MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over; the export is written to the retention log with `reference`. `X-Archive-Documents` carries the count."
+      security:
+        - adminToken: []
+      parameters:
+        - schema:
+            type: string
+            format: uuid
+          required: true
+          name: organizationId
+          in: path
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/IssuingArchiveRequest"
+      responses:
+        "200":
+          description: The zip
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Missing or invalid admin token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "404":
+          description: "NOT_FOUND: no issued documents or business details are kept under this id"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT, details.reason PROFILE_NOT_CLOSED: the profile still exists"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: "SIGNING_NOT_CONFIGURED or SIGNING_UNAVAILABLE: a copy had to be signed and could not be; nothing was exported"
           content:
             application/json:
               schema:

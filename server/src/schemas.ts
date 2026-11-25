@@ -2038,6 +2038,7 @@ export const AccountPurgeSummarySchema = z
     storagePrefixesEmptied: z.number().int().openapi({ description: "Deleted profiles' bucket prefixes emptied by this run" }),
     storagePending: z.number().int().openapi({ description: 'Bucket prefixes still waiting to be emptied' }),
     incomplete: z.boolean().openapi({ description: 'The time budget or the per-run cap ran out; the next run continues' }),
+    issuingProfilesSwept: z.number().int().openapi({ description: 'Since 1.138.0 (MUT-644). Closed profiles whose issued documents this run deleted, 7 years after the end of the year of their newest document; 0 in a dry run' }),
   })
   .openapi('AccountPurgeSummary');
 
@@ -2057,6 +2058,58 @@ export const AccountPurgeRowSchema = z
 export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySchema, rows: z.array(AccountPurgeRowSchema) }).openapi('AccountPurgeRun');
 
 export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
+
+// ---- MUT-644 (ADR-277): closed profiles' issued documents ---------------------------------
+
+const IsoDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const RetainedIssuingProfileSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    legalName: z.string().nullable().openapi({ description: 'From the business details kept with the documents' }),
+    vatId: z.string().nullable(),
+    documents: z.number().int(),
+    cancellations: z.number().int(),
+    newestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'The latest document date, or a payment-request cancellation’s date if later' }),
+    retainedUntil: IsoDaySchema.nullable().openapi({ description: 'The first day the sweep may delete them; null when the profile issued nothing (deleted on the next run)' }),
+  })
+  .openapi('RetainedIssuingProfile');
+
+export const RetainedIssuingListSchema = z.object({ data: z.array(RetainedIssuingProfileSchema) }).openapi('RetainedIssuingList');
+
+export const RetainedIssuingQuerySchema = z.object({
+  query: z.string().trim().min(1).max(100).optional().openapi({ description: 'A business name (any part, any case) or the start of a VAT number' }),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export const IssuingRetentionSweepRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('IssuingRetentionSweepRequest');
+
+export const IssuingRetentionSweepRunSchema = z
+  .object({
+    dryRun: z.boolean(),
+    due: z.number().int(),
+    swept: z.number().int().openapi({ description: 'Deleted by this run (in a dry run, would be)' }),
+    failed: z.number().int(),
+    incomplete: z.boolean().openapi({ description: 'More were due than the per-run cap (25); the next run continues' }),
+    rows: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        outcome: z.enum(['swept', 'would-sweep', 'skipped', 'failed']),
+        documents: z.number().int(),
+        newestDocumentDate: IsoDaySchema.nullable(),
+        retainedUntil: IsoDaySchema.nullable(),
+      }),
+    ),
+  })
+  .openapi('IssuingRetentionSweepRun');
+
+export const IssuingArchiveRequestSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(100).openapi({ description: 'The support request this answers (a ticket number, never an address); kept in the retention log', example: 'SUP-1042' }),
+    lang: z.enum(['ar', 'en']).default('ar').openapi({ description: 'The uniform file report’s language' }),
+  })
+  .strict()
+  .openapi('IssuingArchiveRequest');
 
 // ---- MUT-115: passkeys (ADR-190) ------------------------------------------------------
 // The WebAuthn JSON shapes are the W3C Level 3 serializations (PublicKeyCredential.toJSON / parse*OptionsFromJSON),

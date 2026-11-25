@@ -26323,6 +26323,218 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/issuing/retained": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closed profiles whose issued documents are still kept
+         * @description MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are kept 7 years after the end of the year of the newest document. Oldest first; `query` matches the business name (any part) or the start of a VAT number.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description A business name (any part, any case) or the start of a VAT number */
+                    query?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The profiles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RetainedIssuingList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retention/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete closed profiles’ issued documents whose 7 years have passed, or see which are due
+         * @description MUT-644 (ADR-277 D3): what the hourly account purge also runs. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingRetentionSweepRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingRetentionSweepRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A closed profile’s archive of issued documents, for its former owner
+         * @description MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over; the export is written to the retention log with `reference`. `X-Archive-Documents` carries the count.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingArchiveRequest"];
+                };
+            };
+            responses: {
+                /** @description The zip */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED: the profile still exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SIGNING_NOT_CONFIGURED or SIGNING_UNAVAILABLE: a copy had to be signed and could not be; nothing was exported */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/email/resend/webhook": {
         parameters: {
             query?: never;
@@ -33145,6 +33357,8 @@ export interface components {
             storagePending: number;
             /** @description The time budget or the per-run cap ran out; the next run continues */
             incomplete: boolean;
+            /** @description Since 1.138.0 (MUT-644). Closed profiles whose issued documents this run deleted, 7 years after the end of the year of their newest document; 0 in a dry run */
+            issuingProfilesSwept: number;
         };
         AccountPurgeRun: {
             summary: components["schemas"]["AccountPurgeSummary"];
@@ -33172,6 +33386,56 @@ export interface components {
         };
         AccountPurgeRequest: {
             dryRun: boolean;
+        };
+        RetainedIssuingList: {
+            data: components["schemas"]["RetainedIssuingProfile"][];
+        };
+        RetainedIssuingProfile: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description From the business details kept with the documents */
+            legalName: string | null;
+            vatId: string | null;
+            documents: number;
+            cancellations: number;
+            /** @description The latest document date, or a payment-request cancellation’s date if later */
+            newestDocumentDate: string | null;
+            /** @description The first day the sweep may delete them; null when the profile issued nothing (deleted on the next run) */
+            retainedUntil: string | null;
+        };
+        IssuingRetentionSweepRun: {
+            dryRun: boolean;
+            due: number;
+            /** @description Deleted by this run (in a dry run, would be) */
+            swept: number;
+            failed: number;
+            /** @description More were due than the per-run cap (25); the next run continues */
+            incomplete: boolean;
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string} */
+                outcome: "swept" | "would-sweep" | "skipped" | "failed";
+                documents: number;
+                newestDocumentDate: string | null;
+                retainedUntil: string | null;
+            }[];
+        };
+        IssuingRetentionSweepRequest: {
+            dryRun: boolean;
+        };
+        IssuingArchiveRequest: {
+            /**
+             * @description The support request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1042
+             */
+            reference: string;
+            /**
+             * @description The uniform file report’s language
+             * @default ar
+             * @enum {string}
+             */
+            lang: "ar" | "en";
         };
         EmailWebhookResponse: {
             /** @enum {boolean} */
