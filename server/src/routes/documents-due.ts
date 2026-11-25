@@ -12,7 +12,8 @@ import { parseAmount, todayFor, validationError } from '../agreements/compose.js
 import { pastMoneyDate } from '../income/compose.js';
 import { outstandingMinor, serializeAllocation, serializeIssuedDocument, serializePayment, serializeReceivable } from '../serializers.js';
 import type { IssuedDocumentRecord, JsonObject, LedgerStore, NotForInvoiceItem, Organization, ReceivableRecord } from '../repositories/ports.js';
-import type { IssueDocumentRequestSchema } from '../schemas.js';
+import type { IssueDocumentRequestSchema ,
+  SettleReceivableRequestSchema} from '../schemas.js';
 import {
   DocumentsDueCountSchema,
   DocumentsDueQuerySchema,
@@ -25,7 +26,6 @@ import {
   NotForInvoiceResultSchema,
   SetNotForInvoiceRequestSchema,
   SettleAndIssueRequestSchema,
-  SettleReceivableRequestSchema,
   SettleAndIssueResponseSchema,
 } from '../schemas.js';
 import { settleOwed } from './receivables.js';
