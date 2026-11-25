@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, payment, receivable, type DueSeed } from '../../support/portalApi';
+import { FakeApi, customerSummary, payment, receivable, type DueSeed } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -688,7 +688,13 @@ async function issueThousand(page: import('@playwright/test').Page, api: FakeApi
 }
 
 test('a paid invoice-receipt credited in full is refunded; the client ledger shows the refund and ends at 0 (MUT-643)', { tag: '@portal.invoicing.credit-note-paid-refund' }, async ({ page, step }) => {
-  const api = ready();
+  // The client page reads Client 1's summary before its ledger card.
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 1,
+    invoicing: 'ready',
+    customerSummaries: [customerSummary(C1, { currency: 'ILS', outstanding: '0.00', overdue: '0.00', lastPaymentOn: null, status: 'UP_TO_DATE', matters: [] })],
+  });
   const drawer = page.getByRole('dialog', { name: 'Issue a document' });
   const paidPart = drawer.getByTestId('issue-paid-part');
 
