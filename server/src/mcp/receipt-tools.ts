@@ -49,7 +49,9 @@ export function registerReceiptTools(server: McpServer, ctx: McpContext, options
     now: ctx.now(),
     audit: receiptAudit(ctx.store, { organizationId: organization.id, userId: ctx.agent.user.id, requestId: ctx.requestId }),
     // MUT-735 (ADR-281): an agent's finished upload is a scan too; Malafat's connector acting as the person is door MALAFAT.
-    usage: () => usageStampFor(ctx.store, { organization, principal: ctx.agent.via ? { kind: 'session', sessionKind: null, delegated: true } : { kind: 'agent' }, actorUserId: ctx.agent.user.id }, ctx.now()),
+    // The payer's plan is server bookkeeping, read on the raw store the lapse gate reads (billing facts are session-only
+    // under the agent guard).
+    usage: () => usageStampFor(ctx.gateStore, { organization, principal: ctx.agent.via ? { kind: 'session', sessionKind: null, delegated: true } : { kind: 'agent' }, actorUserId: ctx.agent.user.id }, ctx.now()),
   });
 
   async function writableProfile(profileId: string): Promise<Organization> {

@@ -139,6 +139,8 @@ describe('receipts (AC4)', () => {
     expect(await tool(h, bearer, 'complete_receipt_upload', { profileId: p.personalId, receiptId: started.receiptId })).toMatchObject({ status: 'READY', filingStatus: 'FILED', expenseId: expense.id });
     const audit = await h.store.audit.list(p.personalId, { entityId: started.receiptId }, { limit: 10, cursor: null });
     expect(audit.items).toEqual([expect.objectContaining({ action: 'expense_receipt.added', metadata: expect.objectContaining({ captureSource: 'mcp' }) })]);
+    // MUT-735 (ADR-281): the agent's finished upload is a scan, door MCP, the person's.
+    expect(h.store.usage.allEvents()).toEqual([expect.objectContaining({ kind: 'SCAN', detail: 'EXPENSE', door: 'MCP', entityKey: started.receiptId, subjectKey: `user:${p.userId}` })]);
   });
 
   it('refuses a file type outside PDF/JPEG/PNG, and offers To review only where the receipts library is on', async () => {
