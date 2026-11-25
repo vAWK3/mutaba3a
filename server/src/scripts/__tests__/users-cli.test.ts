@@ -527,7 +527,7 @@ describe('billing verbs (MUT-358)', () => {
 
     h.out.length = 0;
     expect(await h.run(['accounts-purge'])).toBe(0);
-    expect(h.out.at(-1)).toBe('1 closing, 1 due. Deleted 1, skipped 0, failed 0; bucket prefixes emptied 0, still queued 1; closed profiles' issued documents deleted after 7 years: 0.');
+    expect(h.out.at(-1)).toBe("1 closing, 1 due. Deleted 1, skipped 0, failed 0; bucket prefixes emptied 0, still queued 1; closed profiles' issued documents deleted after 7 years: 0.");
     expect(await store.users.getById(user.id)).toBeNull();
   });
 
