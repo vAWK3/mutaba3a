@@ -813,6 +813,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       mailer,
       logger: deps.logger,
       portalOrigin: sessions.portalOrigin,
+      pepper: sessions.pepper,
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,

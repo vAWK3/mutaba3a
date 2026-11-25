@@ -1,5 +1,7 @@
 import { performance } from 'node:perf_hooks';
 import { normalizeEmail } from '../auth/users.js';
+import { mailOffToken } from '../email/mail-off-token.js';
+import { unsubscribeHeaders } from '../email/unsubscribe.js';
 import type { Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import { StateConflict } from '../repositories/memory.js';
@@ -22,7 +24,7 @@ import type { OfferEntry } from './offer.js';
 export const COMEBACK_MAIL_TIME_BUDGET_MS = 200_000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'firm' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-profile' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed';
+export type ComebackSkip = 'paying' | 'no-lapse' | 'too-soon' | 'firm' | 'already-had' | 'stay-offer-recent' | 'covered' | 'no-profile' | 'no-stage' | 'already-mailed' | 'never-paid' | 'no-offer' | 'no-price' | 'suppressed' | 'opted-out';
 
 export interface ComebackMailRow {
   userId: string;
@@ -43,7 +45,7 @@ export interface ComebackMailSummary {
   sent: number;
   duplicate: number;
   notSent: number;
-  skipped: Record<'paying' | 'noLapse' | 'tooSoon' | 'firm' | 'alreadyHad' | 'stayOfferRecent' | 'covered' | 'noProfile' | 'noStage' | 'alreadyMailed' | 'neverPaid' | 'noOffer' | 'noPrice' | 'suppressed', number>;
+  skipped: Record<'paying' | 'noLapse' | 'tooSoon' | 'firm' | 'alreadyHad' | 'stayOfferRecent' | 'covered' | 'noProfile' | 'noStage' | 'alreadyMailed' | 'neverPaid' | 'noOffer' | 'noPrice' | 'suppressed' | 'optedOut', number>;
   incomplete: boolean;
 }
 
@@ -61,6 +63,11 @@ export interface ComebackRunOptions {
   };
   /** Billing's Subscribe step (`/?billing=true&step=subscribe`). */
   subscribeLink: string;
+  /**
+   * ADR-278: the mail is promotional, so it carries an unsubscribe: the mail-off page (`{portal}/mail-off?mail=offers#token`)
+   * and the one-click List-Unsubscribe headers, both with the person's signed mail-off token.
+   */
+  optOut: { portalOrigin: string; pepper: string };
   offers?: readonly OfferEntry[];
   dryRun: boolean;
   elapsedMs?: () => number;
@@ -150,6 +157,7 @@ async function skipReason(options: ComebackRunOptions, candidate: ComebackCandid
   if (!offer) return 'no-offer';
   if (offer.firstMonth[candidate.currency] === null) return 'no-price';
   if (await store.email.isSuppressed(normalizeEmail(candidate.email))) return 'suppressed';
+  if ((await store.users.getById(candidate.userId))?.offerMail === 'OFF') return 'opted-out';
   if ((await options.stripe.paidInvoices(candidate.stripeSubscriptionId)) < 1) return 'never-paid';
   return null;
 }
@@ -166,12 +174,15 @@ async function claimStage(store: LedgerStore, candidate: ComebackCandidate, stag
 
 function send(options: ComebackRunOptions, candidate: ComebackCandidate, stage: ComebackStage, offer: ComebackOffer): Promise<SendResult> {
   const c = candidate.currency;
+  const origin = options.optOut.portalOrigin.replace(/\/+$/, '');
+  const token = mailOffToken(options.optOut.pepper, candidate.userId);
   return options.mailer.send({
     to: candidate.email,
     locale: candidate.locale,
     template: 'comeback-offer',
     idempotencyKey: `comeback:${candidate.userId}:${stage}`,
-    vars: { stage, firstMonth: offer.firstMonth[c]!, listMonth: offer.listMonth[c]!, firstYear: offer.firstYear[c]!, listYear: offer.listYear[c]!, currency: c, subscribeLink: options.subscribeLink },
+    vars: { stage, firstMonth: offer.firstMonth[c]!, listMonth: offer.listMonth[c]!, firstYear: offer.firstYear[c]!, listYear: offer.listYear[c]!, currency: c, subscribeLink: options.subscribeLink, offLink: `${origin}/mail-off?mail=offers#${token}` },
+    headers: unsubscribeHeaders(origin, 'offers', token),
   });
 }
 
@@ -200,6 +211,7 @@ function summarize(rows: readonly ComebackMailRow[], dryRun: boolean, incomplete
       noOffer: skipped('no-offer'),
       noPrice: skipped('no-price'),
       suppressed: skipped('suppressed'),
+      optedOut: skipped('opted-out'),
     },
     incomplete,
   };

@@ -2,6 +2,7 @@ import { performance } from 'node:perf_hooks';
 import { normalizeEmail } from '../auth/users.js';
 import { todayIn } from '../dates.js';
 import { mailOffToken } from '../email/mail-off-token.js';
+import { unsubscribeHeaders } from '../email/unsubscribe.js';
 import type { MailSummaryProfile, Mailer, SendResult } from '../email/ports.js';
 import type { Logger } from '../logger.js';
 import { verdictProfilesOf } from '../personal-profile.js';
@@ -192,6 +193,7 @@ async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummary
   const [asOfYear, asOfMonth, asOfDay] = todayIn(SUMMARY_ZONE, options.now).split('-').map(Number) as [number, number, number];
   // MUT-657 (E-5): each profile's link opens its home on In & out, the portal's view of the month the mail sums up
   const profiles: MailSummaryProfile[] = blocks.map((b) => ({ name: b.name, link: `${origin}/p/${b.profileId}?view=in-out`, cameIn: b.cameIn, owed: b.owed, overdue: b.overdue, overdueCount: b.overdueCount, ...(b.invoiceSplit ? { invoiceSplit: b.invoiceSplit } : {}) }));
+  const token = mailOffToken(options.pepper, candidate.userId);
   return options.mailer.send({
     to: candidate.email,
     locale: candidate.locale,
@@ -202,8 +204,10 @@ async function send(options: MonthlySummaryRunOptions, candidate: MonthlySummary
       asOf: { year: asOfYear, month: asOfMonth, day: asOfDay },
       profiles,
       yearly: await yearlyLine(options, candidate.userId, catalog, origin),
-      offLink: `${origin}/mail-off#${mailOffToken(options.pepper, candidate.userId)}`,
+      offLink: `${origin}/mail-off#${token}`,
     },
+    // ADR-278: the mail client's own one-click unsubscribe
+    headers: unsubscribeHeaders(origin, 'monthly-summary', token),
   });
 }
 

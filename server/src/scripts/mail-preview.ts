@@ -42,7 +42,7 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: SAMPLE_SIGN_IN },
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
   'card-failed': { updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
-  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=subscribe` },
+  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=subscribe`, offLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/mail-off?mail=offers#sample-token` },
   'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile/you/invoicing` },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/accountant-invite#sample-token`, expiresOn: { year: 2026, month: 11, day: 20 } },
   // MUT-618

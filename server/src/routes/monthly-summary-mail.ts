@@ -14,7 +14,7 @@ import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
-import { ErrorEnvelopeSchema, MailOffRequestSchema, MonthlySummaryMailChangeSchema, MonthlySummaryMailRunSchema, MonthlySummaryMailSchema, MonthlySummaryMailSummarySchema, TrialMailRequestSchema } from '../schemas.js';
+import { ErrorEnvelopeSchema, MailOffRequestSchema, MonthlySummaryMailChangeSchema, MonthlySummaryMailRunSchema, MonthlySummaryMailSchema, MonthlySummaryMailSummarySchema, OfferMailSchema, TrialMailRequestSchema, UnsubscribedSchema, UnsubscribeQuerySchema } from '../schemas.js';
 
 /**
  * MUT-535 (plan D6–D8, D12, D13; ADR-259): the monthly summary mail's doors.
@@ -23,6 +23,8 @@ import { ErrorEnvelopeSchema, MailOffRequestSchema, MonthlySummaryMailChangeSche
  *   POST /admin/v1/billing/monthly-summary-mail    the operator (`npm run billing:monthly-summary-mail [-- --dry-run]`)
  *   GET|PATCH /v1/me/monthly-summary-mail          You › Account's switch (a session)
  *   POST /v1/mail-preferences/monthly-summary      the mail's opt-out page (public; the signed token is the credential)
+ *   POST /v1/mail-preferences/offers               ADR-278: the same page for promotional mail (the come-back offer)
+ *   POST /v1/mail-preferences/unsubscribe          ADR-278: a mail client's one-click unsubscribe (RFC 8058), either mail
  *
  * Without Stripe the run still mails, with no yearly line (D9).
  */
@@ -207,6 +209,81 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       const person = userId ? await store.users.getById(userId) : null;
       if (!person || person.status !== 'ACTIVE') throw new ApiError('NOT_FOUND', 'This link no longer works');
       return c.json(await setSwitch(store, person.id, on, now), 200);
+    },
+  );
+
+  /** ADR-278: the person a token names, if they are active; anything else is a link that no longer works. */
+  async function personOf(token: string) {
+    const userId = verifyMailOffToken(settings.pepper, token);
+    const person = userId ? await store.users.getById(userId) : null;
+    if (!person || person.status !== 'ACTIVE') throw new ApiError('NOT_FOUND', 'This link no longer works');
+    return person;
+  }
+
+  const setOffers = async (userId: string, on: boolean, now: Date) => {
+    const user = await store.users.setOfferMail(userId, on ? null : 'OFF', now);
+    if (!user) throw new ApiError('NOT_FOUND', 'No such person');
+    options.logger.info({ userId, offerMail: user.offerMail ?? 'DEFAULT' }, 'offer mail choice changed');
+    return { on: user.offerMail !== 'OFF' };
+  };
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/mail-preferences/offers',
+      tags: ['Sessions'],
+      summary: 'Turn promotional mail off (or back on) from its link (ADR-278)',
+      description:
+        'Since 1.139.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only ' +
+        'promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: MailOffRequestSchema } } } },
+      responses: {
+        200: { description: 'Promotional mail now', content: { 'application/json': { schema: OfferMailSchema } } },
+        403: errorResponse('CROSS_SITE_REQUEST'),
+        404: errorResponse('NOT_FOUND: the link no longer works'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      const now = await publicGuard(c);
+      const { token, on } = c.req.valid('json');
+      return c.json(await setOffers((await personOf(token)).id, on, now), 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/mail-preferences/unsubscribe',
+      tags: ['Sessions'],
+      summary: 'One-click unsubscribe from a mail client (RFC 8058, ADR-278)',
+      description:
+        'Since 1.139.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A ' +
+        'mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL ' +
+        'is the credential, and the client address’s budget applies. It only ever turns a mail off.',
+      security: [],
+      request: { query: UnsubscribeQuerySchema },
+      responses: {
+        200: { description: 'Unsubscribed', content: { 'application/json': { schema: UnsubscribedSchema } } },
+        404: errorResponse('NOT_FOUND: the link no longer works'),
+        422: errorResponse('Validation failed'),
+        429: errorResponse('Too many attempts from this address'),
+      },
+    }),
+    async (c) => {
+      const now = c.get('now')();
+      const ip = await options.ipLimiter.check(`mail-off:${requestClientIp((name) => c.req.header(name), settings)}`, now);
+      if (!ip.allowed) {
+        c.header('Retry-After', String(ip.retryAfterSeconds));
+        throw new ApiError('RATE_LIMITED', 'Too many attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
+      }
+      const { mail, token } = c.req.valid('query');
+      const person = await personOf(token);
+      if (mail === 'offers') await setOffers(person.id, false, now);
+      else await setSwitch(store, person.id, false, now);
+      return c.json({ unsubscribed: true as const }, 200);
     },
   );
 

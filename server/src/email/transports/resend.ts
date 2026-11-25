@@ -1,3 +1,4 @@
+import { ALLOWED_MAIL_HEADERS } from '../unsubscribe.js';
 import { MailTransportError, type MailTransport, type OutgoingMail } from '../ports.js';
 
 /**
@@ -31,6 +32,7 @@ export function createResendTransport(options: ResendTransportOptions): MailTran
         html: mail.html,
         text: mail.text,
         ...(mail.replyTo ? { reply_to: mail.replyTo } : {}),
+        ...headersOf(mail),
       };
       let res: Response;
       try {
@@ -54,6 +56,12 @@ export function createResendTransport(options: ResendTransportOptions): MailTran
       return { id: json.id };
     },
   };
+}
+
+/** ADR-278: only the unsubscribe headers pass; anything else a caller adds is dropped (MUT-359 A2: nothing rides along). */
+function headersOf(mail: OutgoingMail): { headers?: Record<string, string> } {
+  const allowed = Object.entries(mail.headers ?? {}).filter(([name]) => (ALLOWED_MAIL_HEADERS as readonly string[]).includes(name));
+  return allowed.length > 0 ? { headers: Object.fromEntries(allowed) } : {};
 }
 
 /** Resend's `{ name }` (e.g. validation_error), never its message, which may echo addresses. */

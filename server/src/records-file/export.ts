@@ -35,7 +35,9 @@ export function localPersonOf(person: UserRecord): UserRecord {
     // MUT-459: operators are hosted accounts only.
     operatorAt: null,
     // MUT-535: the monthly summary mail is the hosted account's.
-    monthlySummaryMail: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    monthlySummaryMail: null,
+    // ADR-278: promotional mail is the hosted account's.
+    offerMail: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 

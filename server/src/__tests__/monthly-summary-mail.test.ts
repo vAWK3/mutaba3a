@@ -128,6 +128,11 @@ describe('MUT-535: the monthly summary run', () => {
     expect(mail!.text).toContain(`${PORTAL}/p/${p.personal}?view=in-out`);
     const token = /mail-off#([A-Za-z0-9_.-]+)/.exec(mail!.text)?.[1] ?? '';
     expect(verifyMailOffToken(PEPPER, token)).toBe(p.userId);
+    // ADR-278: mail clients offer their own one-click unsubscribe (RFC 8058)
+    expect(mail!.headers).toEqual({
+      'List-Unsubscribe': `<${PORTAL}/v1/mail-preferences/unsubscribe?mail=monthly-summary&token=${token}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
     // One paid invoice: no yearly line yet (AC4).
     expect(mail!.text).not.toContain('Switch to yearly');
   });

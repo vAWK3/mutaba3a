@@ -543,6 +543,16 @@ export function describeLedgerStoreBillingContract(name: string, makeStore: () =
       expect(await store.users.setMonthlySummaryMail(randomUUID(), 'OFF', at(5))).toBeNull();
     });
 
+    it('setOfferMail stores the opt-out from promotional mail and back to the default (legal rewrite, ADR-278)', async () => {
+      const store = await makeStore();
+      const { user } = await store.users.create(userInput());
+      expect(user.offerMail).toBeNull();
+      expect((await store.users.setOfferMail(user.id, 'OFF', at(3)))?.offerMail).toBe('OFF');
+      expect((await store.users.getById(user.id))?.offerMail).toBe('OFF');
+      expect((await store.users.setOfferMail(user.id, null, at(4)))?.offerMail).toBeNull();
+      expect(await store.users.setOfferMail(randomUUID(), 'OFF', at(5))).toBeNull();
+    });
+
     it('MUT-534 (D10): keeps when Stripe ended a subscription; absent is null', async () => {
       const store = await makeStore();
       const customer = `cus_${unique()}`;
