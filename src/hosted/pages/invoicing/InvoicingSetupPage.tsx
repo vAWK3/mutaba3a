@@ -20,7 +20,7 @@ import { DEFAULT_INK, REQUIRED_STEPS, SETUP_STEPS, type PaperModel, type SetupSt
  * step saves on its own; the progress is the server's (GET /v1/issuing/setup), which also decides whether issuing is
  * open. A profile without issuing (the owner's feature off, signed out) has no such page: back to Profiles.
  */
-export function InvoicingSetupPage({ profile }: { profile: HostedProfile }) {
+export function InvoicingSetupPage({ profile, initialStep }: { profile: HostedProfile; /** MUT-722: the step to open on. */ initialStep?: SetupStep }) {
   const t = useT();
   const setup = useIssuingSetup(profile.id);
   const issuer = useIssuer(profile.id);
@@ -60,7 +60,7 @@ export function InvoicingSetupPage({ profile }: { profile: HostedProfile }) {
         <Intro profileId={profile.id} />
       ) : (
         <>
-          <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} owner={owner} />
+          <Workspace profile={profile} setup={setup.data} issuer={issuer.data ?? null} owner={owner} initialStep={initialStep} />
           {/* MUT-569: the uniform file, once the business details it carries exist. */}
           {issuer.data && <UniformFileExport profile={profile} />}
         </>
@@ -117,14 +117,14 @@ function paperOf(issuer: IssuerDetails | null, logoUrl: string | null, nextNumbe
   };
 }
 
-function Workspace({ profile, setup, issuer, owner }: { profile: HostedProfile; setup: IssuingSetup; issuer: IssuerDetails | null; owner: boolean }) {
+function Workspace({ profile, setup, issuer, owner, initialStep }: { profile: HostedProfile; setup: IssuingSetup; issuer: IssuerDetails | null; owner: boolean; initialStep?: SetupStep }) {
   const t = useT();
   const writable = useWritableFor(profile) && owner;
   const counters = useIssuingCounters(profile.id);
   const logoUrl = useIssuerLogoUrl(profile.id, setup.hasLogo);
   const done = doneSteps(setup);
   // Opens on the first step still to do; picking a region (or a step's Next) moves it.
-  const [current, setCurrent] = useState<SetupStep>(() => (new URLSearchParams(window.location.search).has('taxAuthority') ? 'taxAuthority' : (SETUP_STEPS.find((step) => setup.steps[step] === 'todo') ?? 'details')));
+  const [current, setCurrent] = useState<SetupStep>(() => initialStep ?? (new URLSearchParams(window.location.search).has('taxAuthority') ? 'taxAuthority' : (SETUP_STEPS.find((step) => setup.steps[step] === 'todo') ?? 'details')));
   // What the open step's form holds, over what is saved: the letterhead follows the typing (AC3).
   const [draft, setDraft] = useState<Partial<PaperModel>>({});
   const nextNumber = counters.data?.counters.find((c) => c.docType === 'TAX_INVOICE')?.next ?? 1;

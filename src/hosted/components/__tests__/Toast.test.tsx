@@ -121,3 +121,27 @@ describe('Toast actions (MUT-268)', () => {
     expect(screen.getByTestId('toast-live')).toHaveTextContent('Undone');
   });
 });
+
+describe('Toast detail line (MUT-722)', () => {
+  function WithDetail() {
+    const show = useToast();
+    return (
+      <button type="button" onClick={() => show('Saved · ₪590.00 owed', { tone: 'info', detail: 'Finish setting up invoicing to issue its invoice.', action: { label: 'Set up', onAction: () => {} } })}>
+        go
+      </button>
+    );
+  }
+
+  it('reads the quieter line with the message, beside the action', async () => {
+    render(
+      <ToastProvider>
+        <WithDetail />
+      </ToastProvider>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'go' }));
+    const region = screen.getByTestId('toast-live');
+    expect(region).toHaveTextContent('Saved · ₪590.00 owed');
+    expect(region).toHaveTextContent('Finish setting up invoicing to issue its invoice.');
+    expect(screen.getByRole('button', { name: 'Set up' })).toBeInTheDocument();
+  });
+});

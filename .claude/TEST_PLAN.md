@@ -4748,6 +4748,12 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Release-QA | `qa/specs/portal-selfservice/operator.spec.ts` `@portal-selfservice.operator.billing-grant-business` | the operator grants Business on a 375 px phone; the CLI's list shows it. Written, not yet run (needs the shared local API). |
 | CI only | `test:db` | the Prisma enum accepts SOLO and BUSINESS (existing grant round trips run against Postgres in CI) |
 
+### MUT-722 — "Finish setting up invoicing" after a save (2026-11-25)
+- Unit: `src/hosted/components/__tests__/setupHint.test.ts` (availability rules incl. personal, Malafat, not owned, no feature, local mode; first missing step; `?step=` parse; once-a-day memory incl. storage that throws; the hook due/not due and never asking where unavailable). `Toast.test.tsx` › detail line.
+- Release-QA: `portal.invoicing.setup-hint` (AC1–AC4 and Arabic) passing; neighbours `portal.invoicing.setup`, `issue-gate`, `offer-after-save` re-run and passing.
+- Phone (Flutter repo): `test/presentation/screens/invoicing/setup_hint_gate_test.dart`, `invoicing_setup_screen_test.dart` › initial step; flow `ios.invoicing.setup-hint`.
+
+
 ## MUT-643 — a credit note against a paid invoice (2026-11-24, ADR-276)
 - Unit: `server/src/issuing/__tests__/credit-split.test.ts` (cap, split, newest-first release); `settlement.test.ts` (a credited 320); `statements/__tests__/period.test.ts` (refunds figure, identity); `summaries/__tests__/activity.test.ts` (refund nets out); `period-pack/__tests__/report-refunds.test.ts`.
 - Store contract (memory + Prisma): `store-contract-issuing.ts` "MUT-643" block: AC1 refund on a paid 320 with the statement ending at 0 and the period nets out; AC3 kept credit; split and choice; newest-first across two payments; AC2 cap; a non-owned Owed keeps the old rule; idempotent retry; AC5 reverse refused.
