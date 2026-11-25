@@ -250,6 +250,16 @@ export type OperatorCreateBillingGrantRequest = Schemas['OperatorCreateBillingGr
 export type OperatorFirmRequestList = Schemas['OperatorFirmRequestList'];
 export type OperatorFirmRequestDetail = Schemas['OperatorFirmRequestDetail'];
 export type FirmRequest = Schemas['FirmRequest'];
+/** MUT-735 (ADR-281): Operator › Usage. */
+export type OperatorUsageOverview = Schemas['OperatorUsageOverview'];
+export type OperatorUsagePeople = Schemas['OperatorUsagePeople'];
+export type OperatorUsagePerson = OperatorUsagePeople['items'][number];
+export type OperatorAccountUsage = Schemas['OperatorAccountUsage'];
+export type OperatorUsageRoutes = Schemas['OperatorUsageRoutes'];
+export type UsageMeterView = Schemas['UsageMeterView'];
+export type UsagePlan = OperatorUsagePerson['plan'];
+export type UsagePeopleFilter = 'near' | 'capped' | 'over';
+export type UsageCsvView = 'overview' | 'people' | 'routes';
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
@@ -696,6 +706,18 @@ export const api = {
     request<OperatorFirmRequestDetail>('GET', `/v1/operator/firm-requests/${encodeURIComponent(organizationId)}`, { signal }),
   decideOperatorFirmRequest: (organizationId: string, decision: { verb: 'enable'; ownerUserIds: string[] } | { verb: 'decline' }) =>
     request<Schemas['OrganizationResponse']>('POST', `/v1/operator/firm-requests/${encodeURIComponent(organizationId)}/${decision.verb}`, decision.verb === 'enable' ? { body: { ownerUserIds: decision.ownerUserIds } } : {}),
+  /** MUT-735 (ADR-281): Operator › Usage, read from the usage ledger; `month` absent = this month. */
+  operatorUsageOverview: (month: string | undefined, signal?: AbortSignal) => request<OperatorUsageOverview>('GET', '/v1/operator/usage/overview', { query: { month }, signal }),
+  operatorUsagePeople: (page: { month: string | undefined; filter: UsagePeopleFilter | undefined; cursor: string | null }, signal?: AbortSignal) =>
+    request<OperatorUsagePeople>('GET', '/v1/operator/usage/people', { query: { month: page.month, filter: page.filter, cursor: page.cursor, limit: OPERATOR_ACCOUNTS_PAGE }, signal }),
+  operatorAccountUsage: (userId: string, signal?: AbortSignal) => request<OperatorAccountUsage>('GET', `/v1/operator/accounts/${encodeURIComponent(userId)}/usage`, { signal }),
+  operatorUsageRoutes: (signal?: AbortSignal) => request<OperatorUsageRoutes>('GET', '/v1/operator/usage/routes', { signal }),
+  /** The CSV export (needs a fresh step-up): the file and its name. */
+  operatorUsageCsv: async (query: { view: UsageCsvView; month: string | undefined; filter: UsagePeopleFilter | undefined }) => {
+    const response = await send('GET', '/v1/operator/usage/export.csv', { query, accept: 'text/csv' });
+    const filename = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? `usage-${query.view}.csv`;
+    return { blob: await response.blob(), filename };
+  },
   /** MUT-460: the operator's passkey step-up (MUT-459): options for the system sheet, then the assertion. */
   operatorStepUpOptions: () => request<Schemas['PasskeySignInChallenge']>('POST', '/v1/operator/step-up/options'),
   operatorStepUp: (body: Schemas['PasskeySignInRequest']) => request<Schemas['OperatorStepUp']>('POST', '/v1/operator/step-up', { body }),

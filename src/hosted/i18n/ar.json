@@ -2140,7 +2140,8 @@
         "accounts": "الحسابات",
         "firms": "المكاتب",
         "firmsCount": "المكاتب · {count}",
-        "you": "إعداداتك"
+        "you": "إعداداتك",
+        "usage": "الاستخدام"
       },
       "signups": {
         "listLabel": "طلبات تسجيل بانتظار المراجعة",
@@ -2416,6 +2417,79 @@
       "noPasskey": {
         "banner": "تغييرات المشغّل تحتاج مفتاح مرور. أضف واحدًا من أنت › الحساب › مفاتيح المرور، ثم عد إلى هنا.",
         "link": "أضف مفتاح مرور"
+      },
+      "usage": {
+        "sectionTitle": "الاستخدام",
+        "viewLabel": "عرض الاستخدام",
+        "month": "الشهر",
+        "views": {
+          "plans": "حسب الباقة",
+          "people": "الأشخاص",
+          "routes": "المسارات"
+        },
+        "plansLabel": "الاستخدام حسب الباقة",
+        "peopleLabel": "الأشخاص حسب الاستخدام",
+        "routesLabel": "أكثر المسارات طلبًا",
+        "filterLabel": "اعرض",
+        "filters": {
+          "near": "قريبون من الحد",
+          "capped": "عند الحد",
+          "over": "فوق الحد",
+          "all": "الجميع"
+        },
+        "plan": {
+          "starter": "البداية",
+          "solo": "مستقل",
+          "business": "تجاري",
+          "firm": "مؤسسة",
+          "freelancer": "الخطة السابقة",
+          "malafat": "ملفات",
+          "none": "بلا باقة"
+        },
+        "kind": {
+          "DOCUMENT_ISSUED": "مستندات",
+          "SCAN": "مسح",
+          "EXTERNAL_INVOICE_READ": "فواتير مقروءة",
+          "ALLOCATION_REQUESTED": "أرقام تخصيص",
+          "PROFILE_CREATED": "ملفات أُنشئت",
+          "PARTNER_ADDED": "شركاء أُضيفوا",
+          "PARTNER_REMOVED": "شركاء أُزيلوا",
+          "RECORDS_EXPORTED": "تصدير السجلات",
+          "PERIOD_DOWNLOAD": "تنزيلات الفترات",
+          "UNIFORM_FILE": "ملفات موحّدة",
+          "MCP_TOOL_CALL": "طلبات الوكلاء",
+          "MAIL_SENT": "رسائل بريد"
+        },
+        "meter": {
+          "documents": "المستندات",
+          "scans": "المسح"
+        },
+        "level": {
+          "ok": "جيد",
+          "near": "80%",
+          "nudge": "90%",
+          "at_cap": "عند الحد"
+        },
+        "noCap": "بلا حد",
+        "payers": "الدافعون: {count}",
+        "near": "قرب الحد: {count}",
+        "capped": "عند الحد: {count}",
+        "over": "فوق الحد: {count}",
+        "requests": "الطلبات: {count}",
+        "errors": "أخطاء: {client} من العميل، {server} من الخادم",
+        "p95": "p95 ≤ {ms} م.ث",
+        "p95Over": "p95 أكثر من 10 ث",
+        "routesRange": "من {from} إلى {to} (أيام القدس)",
+        "emptyMonthTitle": "لا استخدام هذا الشهر",
+        "emptyMonthBody": "لم يُصدَر أو يُمسح شيء في هذا الشهر بعد.",
+        "emptyPeopleTitle": "لا أحد هنا",
+        "emptyPeopleBody": "لا أحد يطابق هذا الاختيار في هذا الشهر.",
+        "emptyRoutesTitle": "لم تُحسب طلبات بعد",
+        "emptyRoutesBody": "تصل إحصاءات المسارات بعد الطلبات بدقيقة تقريبًا.",
+        "export": "تصدير CSV",
+        "exportWithPasskey": "تصدير CSV بمفتاح المرور",
+        "personLevel": "ليس على ملف",
+        "profileThisMonth": "هذا الشهر: {documents} مستندات، {scans} مسح"
       }
     },
     "welcome": {

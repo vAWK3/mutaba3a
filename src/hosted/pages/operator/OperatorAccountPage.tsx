@@ -20,6 +20,7 @@ import { ME_KEY, useMe } from '../../session/me';
 import { AccountStatusBadge } from './AccountStatusBadge';
 import { OperatorBillingSection } from './OperatorBillingSection';
 import { OperatorFeaturesSection } from './OperatorFeaturesSection';
+import { OperatorUsageSection } from './OperatorUsageSection';
 
 /**
  * MUT-461 (design 3A, 4A, 5A, 12A): one account, as the operator sees it before acting. The header says who and how
@@ -90,6 +91,7 @@ function AccountDetail({ account, stepUpUntil, grantOpen, onGrantOpen }: { accou
       {!own && <AccessGroup account={account} stepUpUntil={stepUpUntil} />}
       <OperatorBillingSection account={account} stepUpUntil={stepUpUntil} own={own} grantOpen={grantOpen} onGrantOpen={onGrantOpen} />
       <OperatorFeaturesSection account={account} stepUpUntil={stepUpUntil} />
+      <OperatorUsageSection userId={account.id} />
       <ProfilesGroup account={account} />
     </div>
   );
