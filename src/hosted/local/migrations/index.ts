@@ -273,6 +273,12 @@ function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
 }
 
+/** ADR-279, 22 → 23: a person gains `offerMail`. Promotional mail is the hosted account's; a device keeps the default: null. */
+function addOfferMail(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'offerMail'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, offerMail: null }])) } };
+}
+
 /** MUT-642, 20 → 21: a customer gains a VAT/company number and an address, both unknown on a device: null. */
 function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
   const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'taxId' | 'address'>>;
@@ -283,6 +289,7 @@ function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
  * MUT-660, 21 → 22: a customer gains a documents preference (null: the profile default), and every Owed and Received a
  * "not for invoice" mark (false). Invoicing is off on a device, so they are kept and round-trip but change nothing here.
  * MUT-709 (same unreleased version): a Received also carries its client request key, null when none was sent.
+ * MUT-643 (same unreleased version): an empty `refunds` map; a device never writes a refund (no issuing signed out).
  */
 function addDocumentsFields(snapshot: StoredSnapshot): StoredSnapshot {
   const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'documentsPreference'>>;
@@ -295,6 +302,7 @@ function addDocumentsFields(snapshot: StoredSnapshot): StoredSnapshot {
       custs: new Map([...custs].map(([id, c]) => [id, { ...c, documentsPreference: null }])),
       recs: new Map([...recs].map(([id, r]) => [id, { ...r, notForInvoice: false }])),
       pays: new Map([...pays].map(([id, p]) => [id, { ...p, notForInvoice: false, clientRequestKey: p.clientRequestKey ?? null }])),
+      refunds: new Map(),
     },
   };
 }
@@ -327,6 +335,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 19, to: 20, migrate: addMonthlySummaryMail },
   { from: 20, to: 21, migrate: addCustomerTaxId },
   { from: 21, to: 22, migrate: addDocumentsFields },
+  { from: 22, to: 23, migrate: addOfferMail },
 ];
 
 /**

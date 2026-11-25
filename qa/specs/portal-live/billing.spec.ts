@@ -980,7 +980,7 @@ test('The come-back offer - mailed 30 days after a paid plan ended; the first mo
   });
   const mail = await step('The daily job runs: one mail, the records are still here, ₪9 the first month back', async () => {
     const m = await comebackMailed(person);
-    expect(m.subject).toBe('Your MTB3A records are still here');
+    expect(m.subject).toBe('פרסומת: Your MTB3A records are still here');
     expect(m.text).toContain('Come back for ₪9 for your first month, then ₪29 a month. Prefer a year? Your first year is ₪270, then ₪290.');
     return m;
   });
@@ -1001,6 +1001,37 @@ test('The come-back offer - mailed 30 days after a paid plan ended; the first mo
     await expect.poll(async () => (await (await page.request.get('/v1/billing')).json()).comeback, { timeout: 60_000 }).toBeNull();
     await runMailJob('comeback-mail');
     expect((await outboxOf(person.email)).filter((m) => m.template === 'comeback-offer')).toHaveLength(1);
+  });
+});
+
+test('The come-back offer carries an unsubscribe: its link turns offers off, and the mail client’s one-click works too (ADR-279)', { tag: '@portal-live.billing.comeback-unsubscribe' }, async ({ page, step }) => {
+  const person = await provisionPerson('en', 'unsub');
+  await step('A monthly subscriber paid once; the plan ended 31 days ago', async () => {
+    const lapse = await paidLapse(person, 31);
+    await expect.poll(async () => (await stripeApi('GET', `subscriptions/${lapse.subscriptionId}`)).status, { timeout: 60_000 }).toBe('canceled');
+  });
+  const mail = await step('The daily job runs: the mail says how to stop offers, and carries List-Unsubscribe for the mail app', async () => {
+    const m = (await comebackMailed(person)) as Awaited<ReturnType<typeof comebackMailed>> & { headers?: Record<string, string> };
+    expect(m.text).toContain("Don't want offers from MTB3A? Unsubscribe. Emails about your account still reach you.");
+    expect(m.headers?.['List-Unsubscribe-Post']).toBe('List-Unsubscribe=One-Click');
+    expect(m.headers?.['List-Unsubscribe']).toMatch(/^<https?:\/\/\S+\/v1\/mail-preferences\/unsubscribe\?mail=offers&token=[A-Za-z0-9_.-]+>$/);
+    return m;
+  });
+  await step('Open its Unsubscribe link (the portal opens in Arabic): the page asks first, then turns offers off', async () => {
+    const link = mail.text.match(/https?:\/\/\S+\/mail-off\?mail=offers#[A-Za-z0-9_.-]+/)?.[0];
+    expect(link).toBeTruthy();
+    await page.goto(link!);
+    await expect(page.getByRole('heading', { name: 'إيقاف عروض متابعة؟' })).toBeVisible({ timeout: 30_000 });
+    await page.getByRole('button', { name: 'ألغِ الاشتراك' }).click();
+    await expect(page.getByRole('heading', { name: 'لن تصلك عروض من متابعة.' })).toBeVisible();
+  });
+  await step('Press أرسلوا لي العروض مجددًا, then the mail app’s one-click unsubscribe: offers are off again', async () => {
+    await page.getByRole('button', { name: 'أرسلوا لي العروض مجددًا' }).click();
+    await expect(page.getByRole('heading', { name: 'عروض متابعة مُفعَّلة.' })).toBeVisible();
+    const url = mail.headers!['List-Unsubscribe']!.slice(1, -1);
+    const res = await page.request.post(url, { headers: { 'content-type': 'application/x-www-form-urlencoded' }, data: 'List-Unsubscribe=One-Click' });
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toEqual({ unsubscribed: true });
   });
 });
 
@@ -1054,7 +1085,7 @@ test('The come-back offer at day 90 - the second mail, its own subject, still �
   await step('The daily job runs: the day-90 mail, in Arabic, names the price in its subject', async () => {
     const mail = await comebackMailed(person);
     expect(mail.locale).toBe('ar');
-    expect(mail.subject).toBe('عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
+    expect(mail.subject).toBe('פרסומת: عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول');
     expect(mail.text).toContain('سجلاتك ما زالت هنا');
   });
 });

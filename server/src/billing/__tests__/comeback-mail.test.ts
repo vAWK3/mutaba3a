@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
+import { mailOffToken } from '../../email/mail-off-token.js';
+import { unsubscribeToken } from '../../email/unsubscribe.js';
 import { createMailer } from '../../email/mailer.js';
 import { MemoryMailTransport } from '../../email/transports/memory.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
@@ -18,6 +20,8 @@ const DAY = 24 * 60 * 60 * 1000;
 const NOW = new Date('2027-03-10T08:30:00Z');
 const ago = (days: number) => new Date(NOW.getTime() - days * DAY);
 const SUBSCRIBE = 'https://portal.example.test/?billing=true&step=subscribe';
+const PORTAL = 'https://portal.example.test';
+const PEPPER = 'session-pepper-with-at-least-32-chars!!';
 const OFFER: ComebackOffer = {
   id: 'comeback-2026',
   couponIds: { ILS: 'mtb3a_comeback_first_month_ils', USD: 'mtb3a_comeback_first_month_usd' },
@@ -73,6 +77,7 @@ function harness() {
     now: NOW,
     stripe: { offer: async () => OFFER, paidInvoices: async (id) => paid.get(id) ?? 0 },
     subscribeLink: SUBSCRIBE,
+    optOut: { portalOrigin: PORTAL, pepper: PEPPER },
     dryRun: false,
     ...over,
   });
@@ -88,7 +93,7 @@ describe('runComebackMail (MUT-534)', () => {
     expect(first.summary).toMatchObject({ checked: 1, due: 1, sent: 1 });
     const [mail] = h.outbox.list({ to: user.email });
     expect(mail!.template).toBe('comeback-offer');
-    expect(mail!.subject).toBe('سجلاتك في متابعة ما زالت هنا');
+    expect(mail!.subject).toBe('פרסומת: سجلاتك في متابعة ما زالت هنا');
     expect(mail!.text).toContain('⁨₪9⁩');
     expect(mail!.text).toContain('⁨₪270⁩');
     expect(mail!.html).toContain('step=subscribe');
@@ -103,7 +108,7 @@ describe('runComebackMail (MUT-534)', () => {
     const { user } = await h.lapsed({ endedDaysAgo: 91, currency: 'USD' });
     await h.run();
     const [mail] = h.outbox.list({ to: user.email });
-    expect(mail!.subject).toBe('Come back to MTB3A for $3 your first month');
+    expect(mail!.subject).toBe('פרסומת: Come back to MTB3A for $3 your first month');
     expect(mail!.text).toContain('then $9 a month');
   });
 
@@ -158,5 +163,27 @@ describe('runComebackMail (MUT-534)', () => {
     expect(await h.store.billing.retentionEventsOf(user.id)).toEqual([]);
     await h.run();
     expect(h.outbox.list({ to: user.email })).toHaveLength(1);
+  });
+
+  it('is promotional: it carries a one-click unsubscribe (link and List-Unsubscribe headers), and an opted-out person is skipped (ADR-279)', async () => {
+    const h = harness();
+    const { user } = await h.lapsed();
+    await h.run();
+    const [mail] = h.outbox.list({ to: user.email });
+    const token = mailOffToken(PEPPER, user.id);
+    expect(mail!.html).toContain(`${PORTAL}/mail-off?mail=offers#${token}`);
+    expect(mail!.text).toContain(`${PORTAL}/mail-off?mail=offers#${token}`);
+    expect(mail!.headers).toEqual({
+      'List-Unsubscribe': `<${PORTAL}/v1/mail-preferences/unsubscribe?mail=offers&token=${unsubscribeToken(PEPPER, 'offers', user.id)}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
+
+    const quiet = await h.lapsed();
+    await h.store.users.setOfferMail(quiet.user.id, 'OFF', NOW);
+    const { summary, rows } = await h.run();
+    expect(rows.find((r) => r.userId === quiet.user.id)).toMatchObject({ action: 'skip', skip: 'opted-out' });
+    expect(summary.skipped.optedOut).toBe(1);
+    expect(h.outbox.list({ to: quiet.user.email })).toHaveLength(0);
+    expect(await h.store.billing.retentionEventsOf(quiet.user.id)).toEqual([]);
   });
 });

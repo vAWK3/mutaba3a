@@ -399,10 +399,26 @@ features:
       - Continue to payment and pay
       - The job runs again
     expect:
-      - One mail, "Your MTB3A records are still here", saying the records are still there and "Come back for ₪9 for your first month, then ₪29 a month"
+      - One mail, "פרסומת: Your MTB3A records are still here" (the advertisement label first, and the sender's details in the footer), saying the records are still there and "Come back for ₪9 for your first month, then ₪29 a month"
       - Subscribe says "Welcome back - your first month is ₪9.00, then ₪29.00 a month."
       - Stripe's page says the welcome-back price, and the first invoice takes ₪20 off ₪29
       - Once back, Billing offers it no more and the job mails nothing more
+  - id: comeback-unsubscribe
+    title: The come-back offer carries an unsubscribe - its link turns offers off, and the mail app's one-click does too (ADR-279)
+    tier: secondary
+    paths:
+      - server/src/email/unsubscribe.ts
+      - server/src/email/transports/resend.ts
+      - src/hosted/pages/mail-off/MailOffPage.tsx
+    steps:
+      - A monthly subscriber paid once, and the plan ended 31 days ago
+      - The daily come-back job runs
+      - Open the mail's Unsubscribe link (the portal opens in Arabic) and press ألغِ الاشتراك
+      - Press أرسلوا لي العروض مجددًا, then use the mail app's one-click unsubscribe
+    expect:
+      - The mail says "Don't want offers from MTB3A? Unsubscribe." and carries List-Unsubscribe and List-Unsubscribe-Post headers
+      - The page asks first, then says لن تصلك عروض من متابعة.
+      - After turning offers back on, the one-click POST answers that it unsubscribed
   - id: comeback-yearly
     title: The come-back offer on Yearly - the same ₪20 off the first year, ₪270 then ₪290
     tier: secondary
@@ -432,5 +448,5 @@ features:
       - A monthly subscriber in Arabic paid once, and the plan ended 91 days ago
       - The daily come-back job runs
     expect:
-      - One mail in Arabic, "عُد إلى متابعة بـ ₪9 لشهرك الأول", saying the records are still there
+      - One mail in Arabic, "פרסומת: عُد إلى متابعة بـ ₪9 لشهرك الأول" (the advertisement label first), saying the records are still there
 

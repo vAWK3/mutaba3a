@@ -79,6 +79,8 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-535: the person's monthly summary choice from You › Account (identity row); the signed opt-out link writes
     // through the unguarded store, its token standing in for the session.
     setMonthlySummaryMail: { write: 'identity' },
+    // ADR-279: the promotional-mail opt-out; only the signed links write it (unguarded store), listed for completeness.
+    setOfferMail: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.
@@ -127,6 +129,8 @@ export const STORE_ACCESS: StoreAccess = {
     listStoragePurges: 'operator',
     finishStoragePurge: 'operator',
   },
+  // MUT-644 (ADR-277): closed profiles' issued documents, swept by the hourly purge job and exported from /admin only.
+  issuingRetention: { listClosed: 'operator', getClosed: 'operator', sweep: 'operator', erase: 'operator', record: 'operator', events: 'operator' },
   // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
   // lists them. MUT-434's agent principal reads activeFor on the raw store, as authenticate() reads sessions (C4).
   features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },
@@ -535,6 +539,8 @@ export const STORE_ACCESS: StoreAccess = {
    * never reaches them; every read-only guard (accountant, share link, the download stream) lets them through.
    */
   periodPack: { estimate: { read: 'expenses' }, names: { read: 'expenses' } },
+  // MUT-643: refunds read like credits and allocations (statements, Received figures); only issuing writes them.
+  refunds: { list: 'read' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

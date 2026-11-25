@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { cleanup, render, screen, within } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { PrivacyPolicyPage } from '../PrivacyPolicyPage';
@@ -55,6 +55,10 @@ describe('PrivacyPolicyPage', () => {
     expect(section).toMatch(/the records you added stay, without your name/);
     expect(section).toMatch(/a random internal ID, never your name or email/);
     expect(section).toMatch(/invoices for what you paid/);
+    // MUT-644 (ADR-277 D1/D7 as amended 2026-11-25): each issued document outlives the account by 7 years from its date.
+    expect(section).toMatch(/the invoices and receipts you issued with MTB3A, each for 7 years from its date as tax law requires/);
+    expect(section).toMatch(/write to us and we'll send you a copy/);
+    expect(section).toMatch(/once you have it, you can ask us to delete them sooner/);
     expect(section).toMatch(/before version 0\.1\.13/);
     // Closing is self-service now, and uninstalling never promised to clear the Keychain (MUT-382 #1, #4)
     expect(section).not.toMatch(/email info@/);
@@ -293,7 +297,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     const sharing = headings.indexOf('Who else handles your data');
     expect(headings.slice(sharing + 1, sharing + 3)).toEqual(['Sharing with your accountant', 'Share links']);
-    expect(document.querySelector('main')?.textContent).toContain('Last updated November 21, 2026');
+    expect(document.querySelector('main')?.textContent).toContain('Last updated November 25, 2026');
   });
 
   it('says what an accountant reads, for how long an invite works, that they change nothing, and who ends it', () => {
@@ -345,7 +349,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(links).toContain('بعد مرور 30 يومًا على انتهاء الرابط، نحذف سجلات أجهزته');
     expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('رابط مشاركة ورمزه');
     expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('صفحتا روابط المشاركة ودعوات المحاسبين');
-    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 21 تشرين الثاني 2026');
+    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 25 تشرين الثاني 2026');
   });
 });
 
@@ -402,6 +406,20 @@ describe('PrivacyPolicyPage self-service signup (MUT-369)', () => {
     renderPage('en');
     const usage = sectionOf(/Anonymous usage counts/);
     expect(usage).toMatch(/an income, an expense or a payment received, and when it shows the free trial's reminder to add a card and whether you chose to add one or not/);
+  });
+
+  it('says the come-back offer is the one promotional email: labelled «פרסומת», with the sender and an unsubscribe (s.30A, ADR-279)', () => {
+    renderPage('en');
+    const email = sectionOf(/Emails we send/);
+    expect(email).toContain('«פרסומת»');
+    expect(email).toContain('Narabnd Studio Ltd');
+    expect(email).toMatch(/Unsubscribe link, which also works with your email app's own unsubscribe button/);
+    expect(email).not.toContain('[TODO');
+    cleanup();
+    renderPage('ar');
+    const ar = sectionOf('الرسائل التي نرسلها');
+    expect(ar).toContain('«פרסומת»');
+    expect(ar).toContain('Narabnd Studio Ltd');
   });
 
   it('names the product MTB3A throughout the English text (MUT-400 D4: this is the next real revision)', () => {

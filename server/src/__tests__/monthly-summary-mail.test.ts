@@ -5,6 +5,7 @@ import { runMonthlySummaryMail, type MonthlySummaryRunOptions } from '../billing
 import type { Catalog } from '../billing/checkout.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { verifyMailOffToken } from '../email/mail-off-token.js';
+import { unsubscribeToken } from '../email/unsubscribe.js';
 import { createMailer } from '../email/mailer.js';
 import { MemoryMailTransport } from '../email/transports/memory.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -128,6 +129,11 @@ describe('MUT-535: the monthly summary run', () => {
     expect(mail!.text).toContain(`${PORTAL}/p/${p.personal}?view=in-out`);
     const token = /mail-off#([A-Za-z0-9_.-]+)/.exec(mail!.text)?.[1] ?? '';
     expect(verifyMailOffToken(PEPPER, token)).toBe(p.userId);
+    // ADR-279: mail clients offer their own one-click unsubscribe (RFC 8058)
+    expect(mail!.headers).toEqual({
+      'List-Unsubscribe': `<${PORTAL}/v1/mail-preferences/unsubscribe?mail=monthly-summary&token=${unsubscribeToken(PEPPER, 'monthly-summary', p.userId)}>`,
+      'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    });
     // One paid invoice: no yearly line yet (AC4).
     expect(mail!.text).not.toContain('Switch to yearly');
   });

@@ -8,9 +8,9 @@ import { googleKms, interimCertificate, kmsCertificateRequest } from '../issuing
  * roles/cloudkms.signer on that key only). No key material is read, written or printed; the output is public.
  *
  * Interim certificate (self-issued, until a certifying authority certifies the key), for ISSUING_SIGNING_CERT_CHAIN:
- *   npm run signing:interim-cert -- --key projects/…/cryptoKeyVersions/1 --organization "Barmajiyat Ltd." [--years 2] [--out interim.pem]
+ *   npm run signing:interim-cert -- --key projects/…/cryptoKeyVersions/1 --organization "Narabnd Studio Ltd" [--years 2] [--out interim.pem]
  * Certificate request (CSR) for the certifying authority, for the same key:
- *   npm run signing:interim-cert -- --csr --key projects/…/cryptoKeyVersions/1 --organization "Barmajiyat Ltd." [--company-number 51…] [--common-name "…"] [--out request.csr]
+ *   npm run signing:interim-cert -- --csr --key projects/…/cryptoKeyVersions/1 --organization "Narabnd Studio Ltd" [--company-number 51…] [--common-name "…"] [--out request.csr]
  */
 const { values } = parseArgs({
   options: {

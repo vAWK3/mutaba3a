@@ -60,7 +60,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // MUT-569: the file names (OPENFRMT…zip, INI.TXT, BKMVDATA.zip, report.html) read left to right.
   'src/hosted/pages/invoicing/UniformFileExport.tsx': { ltr: 4 },
   // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
-  'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 4, auto: 2 },
+  // MUT-643: + the refund reference.
+  'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 5, auto: 2 },
   // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
   'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
   'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)

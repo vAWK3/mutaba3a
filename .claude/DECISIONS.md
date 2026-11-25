@@ -7035,3 +7035,101 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Clients that read `billing.tier` see BUSINESS for a trial. The portal never reads it; Flutter's `BillingTier.tryParse` gives null for an unknown tier and `ProfileBilling` never reads `tier`.
 - Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
 - Merging the migration restarts the shared dev API: warn the orchestrator before the merge.
+
+## ADR-276: A Credit Note May Reach a Paid Invoice's Paid Part: Refunded or Kept as the Client's Credit (MUT-643, amends ADR-260 decision 4)
+
+**Status:** Accepted (2026-11-24, Basel; MUT-643 under epic MUT-566). Plan `.claude/designs/MUT-643-credit-note-paid.md` (revision 2, after an adversarial eng review).
+
+**Context:** ADR-260 decision 4 let a credit note (330) credit only what was still owed on its tax invoice (R-D2), and an invoice-receipt (320) could not be credited at all. A business that refunds a client had no way to issue the credit note.
+
+**Decision:**
+1. **What may be credited (D1).** A 305 or a 320 whose Owed the document owns (origin `ISSUED_DOCUMENT`, `originId` = the document). The credit notes on one original never add up to more than its gross: 422 `CREDIT_EXCEEDS_ORIGINAL` (`maximum`). An original that doesn't own its Owed (a 320 that applied a payment request, a linked 305/320) keeps the old rule: only what is still owed (MUT-730).
+2. **The split (D2).** What is still owed is credited first; the rest is the paid part. The Owed's `creditedMinor` rises by the credit and its `paidMinor` falls by the paid part, so paid + credited never exceeds gross.
+3. **The release (D3).** The paid part comes off the Owed's live allocations newest first (createdAt, then id), as MUT-444's terms correction releases (`releasedAt`; a partial release leaves a smaller live row with the released row's own createdAt).
+4. **Basel's choice per note (C1, D5).** `paidPart: KEEP` leaves the released money on its payments as unallocated (the client's credit; applying it later is MUT-729). `paidPart: REFUND` writes a refund (`refunds` + `refund_sources`) dated `refundedOn` (not before the credit note's date, `pastMoneyDate`), method `PaymentMethod`. Refunded money counts in the payments' `allocatedMinor` again, so every `amount − allocated` stays right unchanged. Without a choice while there is a paid part: 422 `ORIGINAL_PAID` with `details.paid` (older apps keep their message).
+5. **A refund is a ledger line, not a document (C2).** The 330 is the tax document; the uniform file is unchanged. Whether a refund needs its own document is accountant question 6 on MUT-567.
+6. **Lock order (D4).** For a credit note, the issue takes the counter, reads the original's paying payments, locks them in id order, then the Owed, and re-reads; if the paying payments changed: 409 `ORIGINAL_CHANGED`. That is every payment writer's order (payment, then receivables), so a reversal racing it waits instead of deadlocking; a deadlock or serialization failure is 409, not 500.
+7. **Guard (D8).** Reverse and correct refuse a payment a refund drew on, inside the store after the payment row is locked: 409 `PAYMENT_HAS_REFUND`. Undo already refuses allocated money.
+8. **Where refunds count (D7).** A `REFUND` statement line (debit on `refundedOn`, whole-customer statement only); the period summary's `refunds` (received = payments − reversals − refunds); client balances; activity (Reports, verdict, the monthly mail, the phone Glance); the MUT-660 books split; the accountant's shared summary and period pack. A 320 credited in full reads CANCELLED like a 305. Payment views gain `refunded`.
+9. **Records file (D9).** `refunds` joins the snapshot in the unreleased 21 → 22 step (an empty map for older files).
+
+**Consequences:** two additive tables (purged with the profile, no trigger); API 1.137.0-mut643, additive wire (`paidPart`, preview `creditNote`, `refundId`, `refunded`, the `REFUND` line, period `refunds`). Roll-forward only once the first refund exists (TD-328). The paid part of a document that doesn't own its Owed, and applying kept credit, are MUT-730 and MUT-729.
+
+**Alternatives rejected:** a refund as an Owed paid by the released money (it raises Billed instead of lowering Received); a refund as a negative payment (breaks every positive-amount rule); counting refunds outside `allocatedMinor` (every unallocated calculation would need to learn it); a numbered refund document (waits on the accountant, C2).
+
+---
+
+## ADR-277: Closed Profiles' Issued Documents Are Swept 7 Years After the End of the Year of the Newest One; the Owner's Copy Is an Operator Path (MUT-644)
+
+**Status:** Accepted (2026-11-25; built under Basel's standing go-ahead while he was away; plan `.claude/designs/MUT-644-issuing-retention.md`). Completes ADR-260 decision 2. **Amended the same day** by Basel's answers (MUT-644 comment 13504): D1, D4 and D8 replaced, see the override log at the end.
+
+**Context:** the account purge (ADR-188) deletes a closed account's profiles but leaves their issuing tables (ADR-260 decision 2: legal records kept 7 years, no foreign keys, an immutability trigger with one sanctioned bypass). Nothing deleted them afterwards, and a former owner had no way to get a copy.
+
+**Decision:**
+1. **Retention date:** a closed profile's issuing rows may be deleted from 1 January of the 8th year after the calendar year of its newest document (a document's date, or a payment-request cancellation's Israel date if later): 7 full years after the end of that tax year. One constant, `ISSUING_RETENTION_YEARS = 7` (`server/src/issuing/retention.ts`). The year boundary is read in UTC (never early in Israel). A profile that never issued anything holds nothing to keep and goes on the next run.
+2. **Closed = the profile row is gone.** A live profile is never swept, however old its documents.
+3. **Where it runs:** inside the hourly account purge (like MUT-382's share-link viewer sweep), at most 25 profiles a run, never in a dry run; a failure is logged and never stops the purge. The purge summary gains `issuingProfilesSwept`. The operator can run or dry-run it alone (`POST /admin/v1/issuing/retention/sweep`, `npm run issuing:retained -- sweep`). No new scheduler job or Terraform.
+4. **How:** one transaction per profile that re-checks closed + due, runs `SET LOCAL mutaba3a.issuing_bypass = 'on'` and deletes from `RETAINED_ISSUING_TABLES` (the nine "kept 7 years" exemptions, pinned by a unit test).
+5. **Audit:** a new table `issuing_retention_events` (`SWEPT`, `ARCHIVE_EXPORTED`; counts, dates, the operator's support reference; never a name or address), no foreign keys, kept indefinitely, exempt from the purge. `audit_events` can't hold these rows: its profile foreign key is gone.
+6. **The former owner's copy is an operator path:** `GET /admin/v1/issuing/retained` finds the profile (business name or VAT number); `POST /admin/v1/issuing/retained/{id}/archive {reference}` returns a zip of the signed originals as kept, freshly signed copies of documents never produced, and the uniform file (MUT-569), and logs `ARCHIVE_EXPORTED`. A live profile is refused (409 `PROFILE_NOT_CLOSED`). The operator checks who is asking and hands the zip over; the server never mails it (ADR-159 §5: a mail never carries a money record).
+7. **Copy:** Close my account (portal and phone) always lists in Kept that issued invoices and receipts and the business details printed on them are kept 7 years after the end of the year of the last one, then deleted; the privacy policy's deletion section says the same.
+8. **Erasure requests** do not shorten the 7 years (pending the lawyer).
+
+**Consequences:** nothing is due before 1 January 2034. API 1.138.0-mut644 (additive: a summary field and admin routes); migration `20261125120000_mut644_issuing_retention_events` (one table). `issuing.ts` now exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf`, shared with the archive. An archive with many never-produced documents signs each one in the request (TD-331).
+
+**Alternatives rejected:** a retention date per document (keeps a business's history half-deleted for years; **overridden 2026-11-25, below**); counting from the account's closing (not what the bookkeeping rules count); a new Cloud Scheduler job (infra for one cheap query an hour); writing the audit to `audit_events` (foreign key to a deleted profile); mailing the archive or a self-service download (no account left to authenticate, and mail never carries money records).
+
+**Override log (2026-11-25, Basel, MUT-644 comment 13504; API 1.139.0-mut644, branch `feature/mut-644-per-document`):**
+- **D1 replaced: 7 years from each document's own date.** Why: Basel decided the 7 years run from each document's creation, not from the profile's newest one. What replaces it: a document's retention date is its `documentDate` (a cancelled payment request: its cancellation's Israel date when later, `retentionDateOf`); it is kept through its 7th anniversary and due the next day (`retainedUntil`; a 29 February document's anniversary in a common year is 28 February, as Postgres adds years). `sweepCutoff(now)` is seven years before today's UTC day (rolled forward when that day doesn't exist), so nothing goes before its day in Israel. Still one constant, `ISSUING_RETENTION_YEARS = 7`. The rejected alternative "a retention date per document" is now the decision: a business's history may be half-deleted for years, which Basel accepts.
+- **D4 replaced: one document at a time.** The sweep deletes each due document with its lines, copies, kept original and cancellation (`RETAINED_ISSUING_DOCUMENT_TABLES`), and the profile's own rows (business details, numbering, cancellation numbering, logos: `RETAINED_ISSUING_PROFILE_TABLES`) with its last document; still one transaction per profile under the bypass, still only for closed profiles. SWEPT records `{ documents, cancellations, rows, remaining, oldestDocumentDate, newestDocumentDate, profileRows }`. The listing and sweep rows add `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run adds `documentsDeleted`.
+- **D8 replaced: an erasure may shorten the 7 years, only after the archive was handed over (D7).** Why: Basel decided a former owner may have their records erased once they were given everything and told to keep it 7 years. What replaces it: the archive's README carries a 7-year keep notice (English, Arabic, Hebrew; `ARCHIVE_KEEP_NOTICE`), and each export logs `noticeVersion` (`ARCHIVE_KEEP_NOTICE_VERSION = 1`). `POST /admin/v1/issuing/retained/{organizationId}/erase {reference}` (`npm run issuing:retained -- erase --org <id> --reference <ref>`) deletes every retained row through the same bypass and logs `ERASED` (`reference`, counts, `archiveEventId`) only when an `ARCHIVE_EXPORTED` entry with a notice version was logged no later than the erasure (`handsOverArchive`); otherwise 409 `ARCHIVE_NOT_HANDED_OVER`; a live profile 409 `PROFILE_NOT_CLOSED`. Archives exported under 1.138.0 (no notice) never count. `ERASED` needs no migration (`action` is a string).
+- **D6 confirmed:** handing the archive over by the operator after an identity check is enough; TD-332 closed won't do.
+- **D7 (copy) updated:** Close my account says each issued document is kept 7 years from its date; the privacy policy says so and adds that, once they have their copy, a former owner can ask for earlier deletion. The phone's line still says "after the end of the year of the last one" (Flutter follow-up).
+- Consequences: nothing is due until 7 years after the oldest issued document's date (issuing went live in November 2026; a back-dated document counts from its own date).
+
+## ADR-278: "Finish setting up invoicing" After a Save While the Setup Can't Issue (MUT-722, addendum to MUT-648)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-722-setup-hint.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** MUT-648 offers to issue after saving an income only once the setup can issue; before that both apps said nothing, so a person who hadn't finished the setup never learned why no invoice was offered.
+
+**Decision:**
+1. Where invoicing is available (the person's `invoicing` feature, an owned business profile Malafat doesn't write) and the setup answers `canIssue: false`, saving a shekel income shows one line, "Finish setting up invoicing to issue its invoice", with **Set up**: the portal in the save toast (a new optional `detail` line on `Toast`), the phone as a SnackBar from a new `SetupHintGate` beside `IssueOfferGate`. MUT-648's offer is unchanged once the setup can issue; the two never both speak.
+2. Set up opens the profile's invoicing setup at the first missing step (Business details, else Numbering) through `?step=` on the setup route (portal `/p/:id/you/invoicing?step=`, phone `accountProfileInvoicing(id, step:)`).
+3. At most once a day per person and profile, remembered on the device (portal `localStorage`, phone secure storage), recorded when shown (dismissing counts). No server store: none exists for MUT-648's prompts and a missed or repeated hint costs nothing.
+4. Portal Receivables shows "Finish setup to issue" (a link to the setup at that step) where Issue would be, on the same rows.
+
+**Consequences:** No API change. A setup that can't be read says nothing. Another device or browser can show the hint again the same day.
+
+
+## ADR-280: Issue as You Record: the Documents Preference Is Asked Once, and a Payment and Its Document Are One Step (MUT-661, Design B)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-661-issue-as-you-record.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** Documents follow a moment the person is already in. MUT-660 derives what is due; MUT-648 offered "Issue invoice" regardless of the client; MUT-722 says "Finish setting up" while the setup can't issue.
+
+**Decision:**
+1. **Ask once.** After an income is saved for a client whose `documentsPreference` is null, on a profile that can issue (MUT-648's conditions: setup `canIssue`, offer-after-save on) and in shekels, the portal opens a drawer «كيف تُصدر المستندات لـ…؟» with the four choices; the answer is saved on the client (version read fresh, If-Match). "Not now" saves nothing (asked again at the next income; the profile default applies meanwhile). MUT-722's hint speaks only while the setup can't issue, so the two never both speak.
+2. **The next action follows the answer** (`issueOffers`): Tax invoice first -> "Issue tax invoice"; Payment request first -> "Issue payment request"; On payment and No document -> none. An exempt dealer is offered a payment request for an Owed unless the client takes none first. A Received offers its documents unless No document. This absorbs MUT-648's rule.
+3. **One server step.** `POST /v1/receivables/{id}/settle-and-issue` (Idempotency-Key): the payment is recorded exactly as settle records it (`settleOwed`, shared), then the document that payment is due (`documentsDue`, the same function as the list and Issue all) is issued through the single issue, linked to the payment, under a key derived from the request's key and the payment. Not one database transaction: the payment is the commitment and a refused issue is a message, not a rollback (AC7: 201, `issue.status` failed or held with the reason, the document stays in To issue). A retry finds the payment by its request key and the document by `moneyDocumentOn`, so neither is made twice. `issue:false` records only the payment; a payment due nothing answers `not_due`.
+4. **A tax invoice's own Owed** (origin ISSUED_DOCUMENT) can't take a captured payment (MUT-568: only issuing pays a document's Owed), so the payment there is a receipt applying the tax invoice (`appliesToDocumentId`, with the payment's method and date), issued in the one transaction the issue already is. There is no payment-only form (`issue:false` is 422 PAYMENT_NEEDS_DOCUMENT) and a refused issue records nothing. The portal shows the control on and locked. **Open question for Basel:** whether Tax invoice first clients should be able to say "Later" there too (it would need an unallocated payment the receipt later allocates).
+5. **The control** shows only where the setup can issue, the Owed is in shekels, the entry isn't marked not for invoice, and the client isn't No document. Receipt when the Owed has a tax invoice, else an invoice-receipt for the amount paid. After a partial payment the rest stays owed; the next payment gets its own document.
+
+**Consequences:** API 1.140.0-mut661, no migration. A held allocation (MUT-572) leaves its request open at the Tax Authority as Issue all does; the person issues it from To issue. Portal local mode is untouched (no invoicing). The phone half mirrors this.
+
+## ADR-279: Promotional Mail Has Its Own Opt-Out, a Link and One-Click List-Unsubscribe (legal pages rewrite)
+
+**Status:** Accepted (Basel, 2026-11-25: "marketing emails must have a proper opt-out with an unsubscribe link").
+
+**Context:** the come-back offer (MUT-534, ADR-243) is promotional, and Israeli law (Communications Law s.30A) and mail providers expect a way to refuse in every such message. Only the monthly summary (MUT-535, ADR-259) had an opt-out.
+
+**Decision:**
+1. **Promotional mail** is the come-back offer today. Account, security and billing mail (trial, card failed, renewal notice, Tax Authority reconnect) is not promotional and has no unsubscribe.
+2. **A person-level switch** `users.offerMail` ('OFF' | NULL = on), in both stores (migration `20261125160000_offer_mail_opt_out`; local snapshot 22 → 23, a device keeps null). The come-back run skips 'OFF' (`opted-out`).
+3. **Two ways out, one token:** the footer links `{portal}/mail-off?mail=offers#token` (the MUT-535 page and token, asked before it acts; `POST /v1/mail-preferences/offers`, same origin), and the mail carries `List-Unsubscribe: <{portal}/v1/mail-preferences/unsubscribe?mail=offers&token=…>` (its own token, signed for one person and one mail, so a logged URL can only turn that mail off; the one exception to "no token in a query", pinned in routes-share-links.test.ts) + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). The one-click door has no origin check (mail clients post it), keeps the IP budget, and only ever turns a mail off. The monthly summary gets the same headers (`mail=monthly-summary`).
+4. **The transport passes only those two headers** (MUT-359 A2: nothing else rides along).
+
+**Consequences:** API 1.140.0-adr279 (two routes, a summary field `skipped.optedOut`). Turning offers back on is the mail-off page's second button; there is no You › Account row for offers yet. The s.30A "פרסומת" subject label and sender details are a lawyer question (privacy policy TODO).
+
+**Alternatives rejected:** the address-level suppression list (stops all mail, security notices included); a billing retention event as the opt-out (needs a subscription id the token doesn't carry); a token purpose per mail (the token already names one person and switches only their own mail).
+

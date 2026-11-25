@@ -9494,7 +9494,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An Owed an issued tax invoice owns is paid by issuing a receipt (POST /v1/receivables/{id}/settle-and-issue, MUT-661). An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -10607,7 +10607,7 @@ export interface paths {
         };
         /**
          * Billed, received and credited over a period per currency, with the balance at its start and end
-         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
+         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
          */
         get: {
             parameters: {
@@ -17082,6 +17082,108 @@ export interface paths {
                     };
                     content: {
                         "application/json": components["schemas"]["IssueDueResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receivables/{receivableId}/settle-and-issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a payment against an Owed and issue its document in the same step
+         * @description MUT-661 (ADR-280): the payment is recorded exactly as POST /v1/receivables/{id}/settle records it (the amount defaults to what is outstanding, paidAt to today). Then, unless issue is false, the document that payment is due (MUT-660, derived from the client’s documents preference: a receipt on the Owed’s tax invoice, or an invoice-receipt for the amount paid; a payment request first client’s payment gets the document that refers to its request) is issued through the same single issue as POST /v1/issued-documents, linked to the payment. The payment is the commitment: if issuing is refused (no allocation number, the Tax Authority held it, the setup incomplete) the answer is still 201, issue.status says held or failed and why, and the document stays in To issue. A payment due no document (a No document client, marked not for invoice) answers issue.status not_due. The Idempotency-Key covers both: a retry returns the payment recorded before and the document issued before, never a second of either. 404 unless invoicing is on for the profile; 403 for a profile the person doesn’t own.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SettleAndIssueRequest"];
+                };
+            };
+            responses: {
+                /** @description Recorded, and issued where it could be */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SettleAndIssueResponse"];
                     };
                 };
                 /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
@@ -26078,6 +26180,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail-preferences/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn promotional mail off (or back on) from its link (ADR-279)
+         * @description Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Promotional mail now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferMail"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail-preferences/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-click unsubscribe from a mail client (RFC 8058, ADR-279)
+         * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check. RFC 8058 puts the recipient in the URL, so its token is its own: signed for one person and one mail, it can only turn that mail off (never the mail-off page’s token). The client address’s budget applies.
+         */
+        post: {
+            parameters: {
+                query: {
+                    mail: "offers" | "monthly-summary";
+                    token: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unsubscribed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Unsubscribed"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/issuing/tax-authority-reminders": {
         parameters: {
             query?: never;
@@ -26299,6 +26549,299 @@ export interface paths {
                 };
                 /** @description Missing or invalid admin token */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closed profiles whose issued documents are still kept
+         * @description MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are still kept: each document 7 years from its own date (since 1.139.0), the business details until the last document goes. Oldest document first; `query` matches the business name (any part) or the start of a VAT number.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description A business name (any part, any case) or the start of a VAT number */
+                    query?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The profiles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RetainedIssuingList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retention/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete closed profiles’ issued documents whose 7 years have passed, or see which are due
+         * @description MUT-644 (ADR-277 D3): what the hourly account purge also runs. Since 1.139.0 each document goes 7 years after its own date, with its lines, copies, kept original and cancellation; the business details, logos and numbering go with the last. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingRetentionSweepRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingRetentionSweepRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A closed profile’s archive of issued documents, for its former owner
+         * @description MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over. Its README tells the owner to keep it 7 years (in English, Arabic and Hebrew); the export is written to the retention log with `reference` and, since 1.139.0, the notice’s version, which an erasure needs. `X-Archive-Documents` carries the count.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingArchiveRequest"];
+                };
+            };
+            responses: {
+                /** @description The zip */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED: the profile still exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SIGNING_NOT_CONFIGURED or SIGNING_UNAVAILABLE: a copy had to be signed and could not be; nothing was exported */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase a closed profile’s issued documents before their 7 years, at its former owner’s request
+         * @description Since 1.139.0. MUT-644 (ADR-277 D7): an erasure request may shorten the 7 years only once the former owner was given everything first: an archive exported (`…/archive`) and logged no later than now, whose README told them to keep it 7 years. Then every retained row of the profile is deleted (documents, lines, copies, originals, cancellations, business details, logos, numbering) and an ERASED entry with `reference` is written to the retention log. Only for a profile deleted with its account (409 PROFILE_NOT_CLOSED).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingEraseRequest"];
+                };
+            };
+            responses: {
+                /** @description Erased */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingErased"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED (the profile still exists) or ARCHIVE_NOT_HANDED_OVER (export the archive for the former owner first) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -29971,6 +30514,30 @@ export interface components {
             receiptNumber: string | null;
             reason: string | null;
             reasonCode: components["schemas"]["CreditReasonCode"];
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+            /** @enum {string} */
+            kind: "REFUND";
+            /** Format: uuid */
+            refundId: string;
+            /** Format: uuid */
+            creditNoteId: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
         };
         StatementDocumentTag: {
             /**
@@ -30093,8 +30660,10 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description Applied to receivables, plus (MUT-643) what credit notes refunded from it */
             allocated: string;
+            /** @description MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643. */
+            refunded: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             allocationState: components["schemas"]["AllocationState"];
@@ -30404,12 +30973,14 @@ export interface components {
             billed: string;
             /** @description CREDIT lines dated in the period (effectiveDate). */
             credited: string;
-            /** @description payments − reversals; may be negative when an earlier payment was reversed in the period. */
+            /** @description payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period. */
             received: string;
             /** @description PAYMENT lines dated in the period (receivedOn). */
             payments: string;
             /** @description PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment. */
             reversals: string;
+            /** @description MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals. */
+            refunds: string;
             /** @description closingBalance − openingBalance = billed − received − credited. */
             change: string;
             /** @description What clients owed at the end of `to`, on the same terms as openingBalance. */
@@ -31422,6 +31993,7 @@ export interface components {
                 vat: string;
             }[];
             allocation: components["schemas"]["IssueAllocation"];
+            creditNote: components["schemas"]["CreditNoteFacts"];
         };
         /** @description MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711. */
         IssueAllocation: {
@@ -31444,6 +32016,15 @@ export interface components {
              */
             requestUrl: string;
         } | null;
+        /** @description MUT-643: a credit note's facts against its original; null for other types. Since 1.137.0-mut643. */
+        CreditNoteFacts: {
+            /** @description Still owed on the original: credited first */
+            outstanding: string;
+            /** @description The part of this credit note the client already paid: when above 0, the issue needs `paidPart` */
+            paid: string;
+            /** @description The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed) */
+            maximum: string;
+        } | null;
         IssueDocumentRequest: {
             docType: components["schemas"]["IssuedDocType"];
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -31463,9 +32044,22 @@ export interface components {
             dueDate?: string;
             /**
              * Format: uuid
-             * @description A credit note: the tax invoice it credits
+             * @description A credit note: the tax invoice or (MUT-643) invoice-receipt it credits
              */
             originalId?: string;
+            /** @description MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview's `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note's date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643. */
+            paidPart?: {
+                /** @enum {string} */
+                mode: "KEEP";
+            } | {
+                /** @enum {string} */
+                mode: "REFUND";
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                refundedOn: string;
+                /** @enum {string} */
+                method: "CASH" | "BANK";
+                reference?: string | null;
+            };
             /**
              * Format: uuid
              * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
@@ -31586,6 +32180,11 @@ export interface components {
             receivableId: string | null;
             /** Format: uuid */
             paymentId: string | null;
+            /**
+             * Format: uuid
+             * @description MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.
+             */
+            refundId: string | null;
             coreVersion: string;
             /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
             displayNumber: string;
@@ -31770,6 +32369,30 @@ export interface components {
             /** Format: uuid */
             customerId: string | null;
             items: components["schemas"]["DueEntryRef"][];
+        };
+        SettleAndIssueResponse: {
+            receivable: components["schemas"]["Receivable"];
+            payment: components["schemas"]["Payment"];
+            issue: {
+                /**
+                 * @description issued: the document was issued (or already was, on a retry). not_requested: issue was false. not_due: the payment is due no document (a No document client, marked not for invoice). held: the Tax Authority held the allocation number. failed: issuing was refused; the payment is recorded and its document waits in To issue.
+                 * @enum {string}
+                 */
+                status: "issued" | "not_requested" | "not_due" | "held" | "failed";
+                /** @description The refusal’s reason (ALLOCATION_NUMBER_REQUIRED, ALLOCATION_HELD, ISSUING_SETUP_INCOMPLETE, a DueReason, …) when status is held or failed */
+                reason: string | null;
+                document: components["schemas"]["IssuedDocument"] & unknown;
+            };
+        };
+        SettleAndIssueRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
+            paidAt?: string;
+            method?: components["schemas"]["PaymentMethod"];
+            captureSource?: components["schemas"]["CaptureSource"];
+            /** @description Issue the payment’s document in the same step (default true). false records the payment only; the document waits in To issue. */
+            issue?: boolean;
         };
         NotForInvoiceResult: {
             changed: number;
@@ -33013,6 +33636,8 @@ export interface components {
                 noOffer: number;
                 noPrice: number;
                 suppressed: number;
+                /** @description Since 1.140.0 (ADR-279). The person turned promotional mail off */
+                optedOut: number;
             };
             /** @description The time budget ran out; the next run continues */
             incomplete: boolean;
@@ -33033,7 +33658,7 @@ export interface components {
             /** @enum {string} */
             action: "send" | "skip";
             /** @enum {string|null} */
-            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
+            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | "opted-out" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}
@@ -33100,6 +33725,13 @@ export interface components {
             token: string;
             on: boolean;
         };
+        OfferMail: {
+            on: boolean;
+        };
+        Unsubscribed: {
+            /** @enum {boolean} */
+            unsubscribed: true;
+        };
         TaxAuthorityReminderSummary: {
             dryRun: boolean;
             /** @description Connections whose consent ends within 10 days or ended within 7 */
@@ -33145,6 +33777,8 @@ export interface components {
             storagePending: number;
             /** @description The time budget or the per-run cap ran out; the next run continues */
             incomplete: boolean;
+            /** @description Since 1.138.0 (MUT-644). Closed profiles some of whose issued documents this run deleted, each 7 years after its own date (since 1.139.0); 0 in a dry run */
+            issuingProfilesSwept: number;
         };
         AccountPurgeRun: {
             summary: components["schemas"]["AccountPurgeSummary"];
@@ -33172,6 +33806,87 @@ export interface components {
         };
         AccountPurgeRequest: {
             dryRun: boolean;
+        };
+        RetainedIssuingList: {
+            data: components["schemas"]["RetainedIssuingProfile"][];
+        };
+        RetainedIssuingProfile: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description From the business details kept with the documents */
+            legalName: string | null;
+            vatId: string | null;
+            documents: number;
+            cancellations: number;
+            /** @description Since 1.140.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later) */
+            oldestDocumentDate: string | null;
+            /** @description The latest such date */
+            newestDocumentDate: string | null;
+            /** @description Since 1.140.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing */
+            nextSweepOn: string | null;
+            /** @description The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run) */
+            retainedUntil: string | null;
+        };
+        IssuingRetentionSweepRun: {
+            dryRun: boolean;
+            due: number;
+            /** @description Profiles some of whose documents this run deleted (in a dry run, would) */
+            swept: number;
+            /** @description Since 1.140.0. Documents this run deleted; 0 in a dry run */
+            documentsDeleted: number;
+            failed: number;
+            /** @description More were due than the per-run cap (25); the next run continues */
+            incomplete: boolean;
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string} */
+                outcome: "swept" | "would-sweep" | "skipped" | "failed";
+                /** @description Documents the profile held before this run */
+                documents: number;
+                /** @description Since 1.140.0. Documents this run deleted; null in a dry run, or when skipped or failed */
+                deleted: number | null;
+                /** @description Since 1.140.0. Documents still kept after this run; null as for `deleted` */
+                remaining: number | null;
+                oldestDocumentDate: string | null;
+                newestDocumentDate: string | null;
+                nextSweepOn: string | null;
+                retainedUntil: string | null;
+            }[];
+        };
+        IssuingRetentionSweepRequest: {
+            dryRun: boolean;
+        };
+        IssuingArchiveRequest: {
+            /**
+             * @description The support request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1042
+             */
+            reference: string;
+            /**
+             * @description The uniform file report’s language
+             * @default ar
+             * @enum {string}
+             */
+            lang: "ar" | "en";
+        };
+        IssuingErased: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description Documents deleted */
+            documents: number;
+            cancellations: number;
+            /** @description Rows deleted in all, the business details, logos and numbering included */
+            rows: number;
+            /** Format: date-time */
+            erasedAt: string;
+        };
+        IssuingEraseRequest: {
+            /**
+             * @description The erasure request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1043
+             */
+            reference: string;
         };
         EmailWebhookResponse: {
             /** @enum {boolean} */

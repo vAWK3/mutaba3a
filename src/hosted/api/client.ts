@@ -190,6 +190,8 @@ export type CreditsResponse = Schemas['CreditsResponse'];
 export type UpdateIncomeRequest = Schemas['UpdateIncomeRequest'];
 export type UpdatePaymentRequest = Schemas['UpdatePaymentRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
+export type SettleAndIssueRequest = Schemas['SettleAndIssueRequest'];
+export type SettleAndIssueResponse = Schemas['SettleAndIssueResponse'];
 export type ProfileType = Schemas['ProfileType'];
 export type CreateProfileRequest = Schemas['CreateProfileRequest'];
 export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
@@ -775,6 +777,8 @@ export const api = {
   setMonthlySummaryMail: (on: boolean) => request<Schemas['MonthlySummaryMail']>('PATCH', '/v1/me/monthly-summary-mail', { body: { on } }),
   /** MUT-535 (D8): the mail's opt-out page; the token from the link's fragment, in the body. 404: the link no longer works. */
   mailPreference: (token: string, on: boolean) => request<Schemas['MonthlySummaryMail']>('POST', '/v1/mail-preferences/monthly-summary', { body: { token, on } }),
+  /** ADR-279: the come-back offer's unsubscribe page (promotional mail only). */
+  offerMailPreference: (token: string, on: boolean) => request<Schemas['OfferMail']>('POST', '/v1/mail-preferences/offers', { body: { token, on } }),
   /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */
   changeTrialPrompt: (action: TrialPromptAction) => request<TrialPrompt>('PATCH', '/v1/me/trial-prompt', { body: { action } }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
@@ -1011,6 +1015,9 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+  /** MUT-661: the payment and its document in one step, under the one Idempotency-Key. */
+  settleAndIssue: (profileId: string, receivableId: string, body: SettleAndIssueRequest, idempotencyKey: string) =>
+    request<SettleAndIssueResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle-and-issue`, { profileId, body, idempotencyKey }),
   // MUT-453: correcting money a person recorded. Both carry the attempt's Idempotency-Key.
   reversePayment: (profileId: string, paymentId: string, body: ReversePaymentRequest, idempotencyKey: string) =>
     request<Payment>('POST', `/v1/payments/${encodeURIComponent(paymentId)}/reverse`, { profileId, body, idempotencyKey }),

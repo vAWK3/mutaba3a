@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
+import { handsOverArchive, retentionDateOf, retentionSweepMetadata } from '../issuing/retention.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
@@ -24,6 +25,14 @@ import type {
   CancelPaymentRequestResult,
   IssuerDetailsRecord,
   IssuingRepository,
+  JsonObject,
+  IssuingRetentionAction,
+  IssuingRetentionEventRecord,
+  IssuingRetentionRepository,
+  RetainedIssuingProfile,
+  LedgerRefundRow,
+  RefundRecord,
+  RefundRepository,
   IssuerLogoRecord,
   ExternalInvoiceRecord,
   IssuedOriginalPdfRecord,
@@ -234,7 +243,8 @@ import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
-import { entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { planRelease, splitCredit } from '../issuing/credit-split.js';
 import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
@@ -264,8 +274,10 @@ import { DOC_TYPE_CODES } from '../issuing/types.js';
  * 20 (MUT-535): `people` gained `monthlySummaryMail`.
  * 21 (MUT-642): `custs` gained `taxId` and `address`.
  * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
+ *    MUT-643 (same unreleased version): a new `refunds` map.
+ * 23 (ADR-279): `people` gained `offerMail`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 22;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 23;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -306,6 +318,8 @@ export interface LocalSnapshotMaps {
   inbox: Map<string, InboxEntryRecord>;
   vendors: Map<string, VendorRecord>;
   vendorNames: Map<string, VendorNameRecord>;
+  /** MUT-643 (format 22): refunds credit notes wrote; a device never writes one (no issuing signed out). */
+  refunds: Map<string, RefundRecord>;
 }
 
 export interface LocalSnapshot {
@@ -410,10 +424,14 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
   private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
   private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  /** MUT-643: refunds written by credit notes, with their sources. */
+  private readonly refundMap = new Map<string, RefundRecord>();
   /** MUT-662: payment request cancellations by documentId, and each profile's next CX number. */
   private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
   private readonly cancellationCounters = new Map<string, number>();
   private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
+  /** MUT-644: the retention log (no profile foreign key, as in Postgres). */
+  private readonly issuingRetentionLog: IssuingRetentionEventRecord[] = [];
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
@@ -671,6 +689,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const u = this.people.get(id);
       if (!u) return null;
       Object.assign(u, { monthlySummaryMail: choice, updatedAt: at });
+      return { ...u };
+    },
+    setOfferMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { offerMail: choice, updatedAt: at });
       return { ...u };
     },
     updateTrialPrompt: async (id, action, at) => {
@@ -1234,11 +1258,10 @@ export class MemoryLedgerStore implements LedgerStore {
     return !!p.replacesPaymentId && this.linkedDocuments(p.organizationId, 'payment', p.replacesPaymentId).length > 0;
   }
 
-  /** MUT-660: a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't count. */
+  /** MUT-660: a live 305 or 320 (MUT-643: not fully cancelled by credit notes) is linked; a receipt doesn't count. */
   private hasTaxDocument(organizationId: string, kind: 'receivable' | 'payment', id: string): boolean {
     return this.linkedDocuments(organizationId, kind, id).some((d) => {
-      if (d.docType === 'TAX_INVOICE_RECEIPT') return true;
-      if (d.docType !== 'TAX_INVOICE') return false;
+      if (d.docType !== 'TAX_INVOICE' && d.docType !== 'TAX_INVOICE_RECEIPT') return false;
       const credited = [...this.issuedDocMap.values()].filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n);
       return credited < d.grossMinor;
     });
@@ -1336,15 +1359,21 @@ export class MemoryLedgerStore implements LedgerStore {
     const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
     let originalReceivable: ReceivableRecord | null = null;
     if (originalId) {
-      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice only.
-      const original = docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || (input.docType !== 'CREDIT_NOTE' && d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
+      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice or (MUT-643) an
+      // invoice-receipt.
+      const credits = (d: IssuedDocumentRecord) => d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT';
+      const original = docs.find((d) => d.id === originalId && (input.docType === 'CREDIT_NOTE' ? credits(d) : d.docType === 'TAX_INVOICE' || (d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
       const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
       if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
       // MUT-660: a linked receipt names the invoice its payment already paid; nothing is allocated, so no outstanding check.
       if (linked) return this.issueLinked(input, at, entry!);
       const outstandingMinor = r.status === 'OPEN' ? outstanding(r) : 0n;
-      if (input.composed.grossMinor > outstandingMinor) {
-        return input.docType === 'CREDIT_NOTE' ? { kind: 'original_paid', outstandingMinor } : { kind: 'exceeds_outstanding', outstandingMinor };
+      if (input.docType === 'CREDIT_NOTE') {
+        const noted = docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === original.id).reduce((sum, c) => sum + c.grossMinor, 0n);
+        const refusal = creditNoteRefusal({ original, owed: r, creditedByNotesMinor: noted, outstandingMinor }, input);
+        if (refusal) return refusal;
+      } else if (input.composed.grossMinor > outstandingMinor) {
+        return { kind: 'exceeds_outstanding', outstandingMinor };
       }
       originalReceivable = r;
     }
@@ -1399,17 +1428,86 @@ export class MemoryLedgerStore implements LedgerStore {
         true,
       ).payment.id;
     }
+    let refundId: string | null = null;
     if (plan.credit && originalReceivable) {
+      // MUT-643 (D2, D3): what the credit reaches past what is still owed comes back off the newest allocations first.
+      const { paidPartMinor } = splitCredit(originalReceivable, plan.credit.amountMinor);
+      if (paidPartMinor > 0n) refundId = this.releasePaidPart(input, originalReceivable, paidPartMinor, id, at);
       const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: originalReceivable.id, ...plan.credit, reasonCode: plan.credit.reasonCode ?? null, requestId: input.requestId, createdAt: at };
       this.credits.set(credit.id, credit);
       originalReceivable.creditedMinor += plan.credit.amountMinor;
       settle(originalReceivable);
       creditId = credit.id;
     }
-    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId }), created: true };
+    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId }), created: true };
   }
 
-  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'>): IssuedDocumentRecord {
+  /**
+   * MUT-643 (D3, D5): releases the paid part off the Owed's live allocations (newest first; a partial release leaves a
+   * smaller live row with the released row's own createdAt, as MUT-444 does), then either leaves it on the payments
+   * (KEEP) or records it going back to the client (REFUND), which counts in the payments' allocatedMinor again.
+   */
+  private releasePaidPart(input: IssueDocumentInput, owed: ReceivableRecord, paidPartMinor: bigint, documentId: string, at: Date): string | null {
+    const live = [...this.allocs.values()].filter((a) => a.receivableId === owed.id && !a.releasedAt && this.pays.get(a.paymentId)?.status === 'POSTED');
+    const given = new Map<string, bigint>();
+    for (const { allocation, releaseMinor } of planRelease(live, paidPartMinor)) {
+      const row = this.allocs.get(allocation.id)!;
+      row.releasedAt = at;
+      if (releaseMinor < row.amountMinor) {
+        const kept: AllocationRecord = { id: randomUUID(), organizationId: row.organizationId, paymentId: row.paymentId, receivableId: row.receivableId, amountMinor: row.amountMinor - releaseMinor, createdAt: row.createdAt };
+        this.allocs.set(kept.id, kept);
+      }
+      given.set(row.paymentId, (given.get(row.paymentId) ?? 0n) + releaseMinor);
+    }
+    owed.paidMinor -= paidPartMinor;
+    const choice = input.paidPart!;
+    for (const [paymentId, releasedMinor] of given) {
+      const p = this.pays.get(paymentId)!;
+      const back = choice.mode === 'REFUND' ? releasedMinor : 0n;
+      Object.assign(p, { allocatedMinor: p.allocatedMinor - releasedMinor + back, version: p.version + 1, updatedAt: at });
+    }
+    if (choice.mode !== 'REFUND') return null;
+    const refund: RefundRecord = {
+      id: randomUUID(),
+      organizationId: input.organizationId,
+      customerId: owed.customerId,
+      currency: owed.currency,
+      amountMinor: paidPartMinor,
+      refundedOn: choice.refundedOn,
+      method: choice.method,
+      reference: choice.reference,
+      issuedDocumentId: documentId,
+      requestId: input.requestId,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+      sources: [...given].map(([paymentId, amountMinor]) => ({ paymentId, amountMinor })),
+    };
+    this.refundMap.set(refund.id, refund);
+    return refund.id;
+  }
+
+  /** MUT-643 (D8): a payment a refund drew on. */
+  private hasRefundSource(paymentId: string): boolean {
+    return [...this.refundMap.values()].some((f) => f.sources.some((x) => x.paymentId === paymentId));
+  }
+
+  readonly refunds: RefundRepository = {
+    list: async (organizationId, filter) =>
+      [...this.refundMap.values()]
+        .filter(
+          (f) =>
+            f.organizationId === organizationId &&
+            (filter.customerId === undefined || f.customerId === filter.customerId) &&
+            (filter.currency === undefined || f.currency === filter.currency) &&
+            (filter.paymentIds === undefined || f.sources.some((x) => filter.paymentIds!.includes(x.paymentId))) &&
+            (filter.from === undefined || f.refundedOn >= filter.from) &&
+            (filter.to === undefined || f.refundedOn <= filter.to),
+        )
+        .sort((x, y) => x.refundedOn.localeCompare(y.refundedOn) || x.createdAt.getTime() - y.createdAt.getTime() || x.id.localeCompare(y.id))
+        .map((f) => ({ ...f, sources: f.sources.map((x) => ({ ...x })) })),
+  };
+
+  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'> & { refundId?: string | null }): IssuedDocumentRecord {
     const { organizationId } = input;
     const { receivableId, paymentId, creditId } = links;
     const { composed } = input;
@@ -1442,6 +1540,7 @@ export class MemoryLedgerStore implements LedgerStore {
       receivableId,
       paymentId,
       creditId,
+      refundId: links.refundId ?? null,
       coreVersion: input.coreVersion,
       createdByUserId: input.createdByUserId,
       requestKey: input.requestKey,
@@ -2153,6 +2252,7 @@ export class MemoryLedgerStore implements LedgerStore {
       closure: null,
       operatorAt: null,
       monthlySummaryMail: null,
+      offerMail: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
@@ -3290,6 +3390,7 @@ export class MemoryLedgerStore implements LedgerStore {
         allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId) && !a.releasedAt).map((a) => ({ ...a })),
         installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
         charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
+        refunds: [...this.refundMap.values()].filter((f) => f.organizationId === organizationId && f.customerId === customerId && f.currency === currency).map(refundRow),
       };
     },
     // MUT-483: the same rows and fields as Prisma's narrow select, so nothing downstream can lean on a field it won't get there.
@@ -3303,6 +3404,7 @@ export class MemoryLedgerStore implements LedgerStore {
         payments: [...this.pays.values()]
           .filter(inCurrency)
           .map((p) => ({ id: p.id, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor, receivedOn: p.receivedOn, status: p.status, reversalReason: p.reversalReason, reversedAt: p.reversedAt, updatedAt: p.updatedAt, createdAt: p.createdAt })),
+        refunds: [...this.refundMap.values()].filter(inCurrency).map(refundRow),
       };
     },
     list: async (organizationId, filter: ReceivableFilter, page) =>
@@ -3425,6 +3527,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const payment = this.pays.get(paymentId);
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status === 'REVERSED') return { payment: { ...payment }, changed: false };
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       this.reverseNow(payment, reason, null, at);
       return { payment: { ...payment }, changed: true };
     },
@@ -3435,6 +3538,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status !== 'POSTED') throw new StateConflict('payment', 'PAYMENT_NOT_POSTED');
       if (payment.version !== expectedVersion) throw new StateConflict('payment', 'PREVIEW_STALE');
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       const input: CreatePaymentInput = { ...replacement, replacesPaymentId: paymentId };
       this.assertPaymentRefs(input);
       this.assertCapacity(organizationId, input.allocations, this.releasedBy(paymentId));
@@ -4307,6 +4411,122 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  /**
+   * MUT-644 (ADR-277): closed profiles' issuing rows. The issuing maps sit outside dropProfiles (the purge leaves them,
+   * ADR-260), so a profile id found there with no profile is a closed one.
+   */
+  readonly issuingRetention: IssuingRetentionRepository = {
+    listClosed: async (filter, limit) => {
+      const ids = new Set<string>();
+      for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations] as Array<Map<string, { organizationId: string }>>) {
+        for (const row of map.values()) if (!this.orgs.has(row.organizationId)) ids.add(row.organizationId);
+      }
+      for (const id of this.cancellationCounters.keys()) if (!this.orgs.has(id)) ids.add(id);
+      const query = filter.query?.trim().toLowerCase();
+      return [...ids]
+        .map((id) => this.retainedProfile(id))
+        .filter((p) => (filter.dueBefore === undefined ? true : p.oldestDocumentDate === null || p.oldestDocumentDate < filter.dueBefore))
+        .filter((p) => (query ? (p.legalName ?? '').toLowerCase().includes(query) || (p.vatId ?? '').startsWith(query) : true))
+        .sort((a, b) => (a.oldestDocumentDate ?? '').localeCompare(b.oldestDocumentDate ?? '') || a.organizationId.localeCompare(b.organizationId))
+        .slice(0, limit);
+    },
+    getClosed: async (organizationId) => (this.orgs.has(organizationId) || !this.holdsIssuing(organizationId) ? null : this.retainedProfile(organizationId)),
+    sweep: async (organizationId, dueBefore, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const all = this.retainedDocuments(organizationId);
+      const due = all.filter((d) => d.retainedFrom < dueBefore);
+      if (due.length === 0 && all.length > 0) return { kind: 'not_due', oldestDocumentDate: all[0]!.retainedFrom };
+      let rows = 0;
+      for (const { doc } of due) rows += this.dropRetainedDocument(doc);
+      const remaining = all.length - due.length;
+      const profileRows = remaining === 0;
+      if (profileRows) rows += this.dropRetainedProfileRows(organizationId);
+      const swept = { documents: due.length, cancellations: due.filter((d) => d.cancelled).length, oldest: due[0]?.retainedFrom ?? null, newest: due.at(-1)?.retainedFrom ?? null };
+      const event = this.appendRetentionEvent(organizationId, 'SWEPT', retentionSweepMetadata(swept, rows, remaining, profileRows), at);
+      return { kind: 'swept', documents: swept.documents, cancellations: swept.cancellations, rows, remaining, profileRows, event };
+    },
+    erase: async (organizationId, reference, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const handed = this.issuingRetentionLog.filter((e) => e.organizationId === organizationId && handsOverArchive(e, at)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
+      if (!handed) return { kind: 'archive_not_handed_over' };
+      const all = this.retainedDocuments(organizationId);
+      let rows = 0;
+      for (const { doc } of all) rows += this.dropRetainedDocument(doc);
+      rows += this.dropRetainedProfileRows(organizationId);
+      const documents = all.length;
+      const cancellations = all.filter((d) => d.cancelled).length;
+      const event = this.appendRetentionEvent(organizationId, 'ERASED', { reference, documents, cancellations, rows, archiveEventId: handed.id }, at);
+      return { kind: 'erased', documents, cancellations, rows, event };
+    },
+    record: async (organizationId, action, metadata, at) => this.appendRetentionEvent(organizationId, action, metadata, at),
+    events: async (organizationId) =>
+      this.issuingRetentionLog
+        .filter((e) => e.organizationId === organizationId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((e) => ({ ...e, metadata: structuredClone(e.metadata) })),
+  };
+
+  private holdsIssuing(organizationId: string): boolean {
+    const mine = (row: { organizationId: string }) => row.organizationId === organizationId;
+    return (
+      this.cancellationCounters.has(organizationId) ||
+      [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations].some((map) => [...(map as Map<string, { organizationId: string }>).values()].some(mine))
+    );
+  }
+
+  /** A closed profile's documents with the date each one's 7 years count from, oldest first. */
+  private retainedDocuments(organizationId: string): Array<{ doc: IssuedDocumentRecord; retainedFrom: string; cancelled: boolean }> {
+    return [...this.issuedDocMap.values()]
+      .filter((d) => d.organizationId === organizationId)
+      .map((doc) => {
+        const cancellation = this.issuedCancellations.get(doc.id);
+        return { doc, retainedFrom: retentionDateOf(doc.documentDate, cancellation?.cancelledAt ?? null), cancelled: cancellation !== undefined };
+      })
+      .sort((a, b) => a.retainedFrom.localeCompare(b.retainedFrom) || a.doc.id.localeCompare(b.doc.id));
+  }
+
+  /** One document with its lines, copies, kept original and cancellation; the rows Postgres would count. */
+  private dropRetainedDocument(doc: IssuedDocumentRecord): number {
+    let rows = 1 + doc.lines.length + (this.issuedCopies.get(doc.id)?.length ?? 0);
+    this.issuedCopies.delete(doc.id);
+    if (this.issuedOriginals.delete(doc.id)) rows++;
+    if (this.issuedCancellations.delete(doc.id)) rows++;
+    this.issuedDocMap.delete(doc.id);
+    return rows;
+  }
+
+  /** The profile's own rows: business details, counters, logos, the cancellation counter. */
+  private dropRetainedProfileRows(organizationId: string): number {
+    let rows = 0;
+    for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap] as Array<Map<string, { organizationId: string }>>) {
+      for (const [key, row] of map) if (row.organizationId === organizationId) { map.delete(key); rows++; }
+    }
+    if (this.cancellationCounters.delete(organizationId)) rows++;
+    return rows;
+  }
+
+  private retainedProfile(organizationId: string): RetainedIssuingProfile {
+    const issuer = this.issuerMap.get(organizationId);
+    const documents = this.retainedDocuments(organizationId);
+    return {
+      organizationId,
+      legalName: issuer?.legalName ?? null,
+      vatId: issuer?.vatId ?? null,
+      documents: documents.length,
+      cancellations: documents.filter((d) => d.cancelled).length,
+      oldestDocumentDate: documents[0]?.retainedFrom ?? null,
+      newestDocumentDate: documents.at(-1)?.retainedFrom ?? null,
+    };
+  }
+
+  private appendRetentionEvent(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): IssuingRetentionEventRecord {
+    const event: IssuingRetentionEventRecord = { id: randomUUID(), organizationId, action, metadata: structuredClone(metadata), createdAt: at };
+    this.issuingRetentionLog.push(event);
+    return { ...event, metadata: structuredClone(metadata) };
+  }
+
   /** MUT-333: the shared rule (accounts/purge-plan.ts) over this store's own rows. */
   private purgeDecisionFor(userId: string) {
     const ids = new Set([...this.members.values()].filter((m) => m.userId === userId).map((m) => m.organizationId));
@@ -4332,7 +4552,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const maps: Array<Map<string, { organizationId: string }>> = [
       this.keys, this.ints, this.idem, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps,
       this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.members, this.exps, this.expCats, this.expReceipts,
-      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames,
+      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames, this.refundMap,
     ];
     for (const map of maps) for (const [key, row] of map) if (inDeleted(row)) map.delete(key);
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
@@ -4740,7 +4960,7 @@ export class MemoryLedgerStore implements LedgerStore {
     return {
       custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
       pays: m.pays, allocs: liveAllocations(m.allocs), credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
-      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames, refunds: m.refunds,
     };
   }
 
@@ -4984,6 +5204,7 @@ export class MemoryLedgerStore implements LedgerStore {
         inbox: this.inbox,
         vendors: this.vendorMap,
         vendorNames: this.vendorNames,
+        refunds: this.refundMap,
       },
     };
   }
@@ -5028,6 +5249,7 @@ export class MemoryLedgerStore implements LedgerStore {
     replaceMap(this.inbox, maps.inbox);
     replaceMap(this.vendorMap, maps.vendors);
     replaceMap(this.vendorNames, maps.vendorNames);
+    replaceMap(this.refundMap, maps.refunds);
   }
 }
 
@@ -5140,6 +5362,11 @@ export class InsufficientCapacity extends Error {
     super(`insufficient capacity on ${entityId}`);
     this.name = 'InsufficientCapacity';
   }
+}
+
+/** MUT-643: the ledger-line fields of a refund, as Prisma's select reads them. */
+function refundRow(f: RefundRecord): LedgerRefundRow {
+  return { id: f.id, customerId: f.customerId, currency: f.currency, amountMinor: f.amountMinor, refundedOn: f.refundedOn, createdAt: f.createdAt, issuedDocumentId: f.issuedDocumentId, method: f.method, reference: f.reference };
 }
 
 function outstanding(r: ReceivableRecord): bigint {

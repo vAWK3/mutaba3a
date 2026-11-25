@@ -150,7 +150,7 @@ export interface TemplateVars {
    * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;
    * `subscribeLink` opens Billing's Subscribe step.
    */
-  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string };
+  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string; /** ADR-279: the mail-off page for promotional mail, `{portal}/mail-off?mail=offers#{token}`. */ offLink: string };
   /**
    * MUT-559 (ADR-245): an owner invites an accountant to read one profile. `link` is `{portal}/accountant-invite#{token}`
    * (the token in the fragment, D3); `expiresOn` is the last day it works (14 days, in the profile's zone). Not exempt
@@ -220,6 +220,8 @@ export interface OutgoingMail extends RenderedMail {
   locale: UserLocale;
   /** sha256 of the caller's idempotency key, hex. Resend's Idempotency-Key. */
   idempotencyKey: string;
+  /** ADR-279: the one-click unsubscribe headers of a mail a person can opt out of (unsubscribe.ts); absent otherwise. */
+  headers?: Record<string, string>;
 }
 
 export interface MailTransport {
@@ -248,6 +250,8 @@ export interface SendInput<T extends MailTemplateId> {
   vars: TemplateVars[T];
   /** Stable per logical mail (e.g. `password-notice:<user>:<instant>`); the same key never sends twice. */
   idempotencyKey: string;
+  /** ADR-279: List-Unsubscribe headers for a mail a person can opt out of (unsubscribeHeaders). */
+  headers?: Record<string, string>;
 }
 
 export type SendResult =

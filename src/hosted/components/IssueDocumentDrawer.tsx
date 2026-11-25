@@ -14,6 +14,7 @@ import { todayInZone } from '../format/dates';
 import { useWritableFor } from '../session/me';
 import { ClientPicker } from './ClientPicker';
 import { allocationDigits } from './expenseForm/useHostedExpenseForm';
+import { minorDigitsToDecimal } from '../lib/receiptSuggestion';
 import { ManualAllocationPanel } from './ManualAllocationPanel';
 import { Drawer } from './Drawer';
 import { Skeleton } from './QueryView';
@@ -106,6 +107,11 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const [tried, setTried] = useState(false);
   // MUT-711: the allocation number requested by hand, when MTB3A can't request it.
   const [allocationInput, setAllocationInput] = useState('');
+  // MUT-643: what happened to the part of a credit note the client already paid.
+  const [paidChoice, setPaidChoice] = useState<'REFUND' | 'KEEP' | null>(null);
+  const [refundedOn, setRefundedOn] = useState(today);
+  const [refundMethod, setRefundMethod] = useState<'BANK' | 'CASH'>('BANK');
+  const [refundReference, setRefundReference] = useState('');
   const pricesIncludeVat = vatIncluded ?? issuer.data?.pricesIncludeVat ?? false;
   const language_ = (issuer.data?.defaultLanguage ?? 'he') as IssueDocumentRequest['language'];
   const takesPayment = docType === 'TAX_INVOICE_RECEIPT' || docType === 'RECEIPT';
@@ -164,6 +170,14 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   }, [serialized]);
   const preview = useDocumentPreview(profile.id, asked);
   const [drafting, setDrafting] = useState(false);
+  // MUT-643 (ADR-276): the preview says how much of this credit note the client already paid; that part needs a choice.
+  const paidPart = docType === 'CREDIT_NOTE' ? (preview.data?.creditNote?.paid ?? null) : null;
+  const hasPaidPart = paidPart !== null && /[1-9]/.test(paidPart) && !paidPart.startsWith('-');
+  const awaitingPaidChoice = hasPaidPart && paidChoice === null;
+  const withPaidPart = (b: IssueDocumentRequest): IssueDocumentRequest =>
+    hasPaidPart && paidChoice
+      ? { ...b, paidPart: paidChoice === 'KEEP' ? { mode: 'KEEP' } : { mode: 'REFUND', refundedOn: refundedOn < documentDate ? documentDate : refundedOn, method: refundMethod, reference: refundReference.trim() || null } }
+      : b;
 
   const setLine = (index: number, patch: Partial<Line>) => setLines(lines.map((l, i) => (i === index ? { ...l, ...patch } : l)));
   // Review fix: a refusal of an earlier attempt goes once the draft changes.
@@ -187,8 +201,9 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setTried(true);
-    if (!body || awaitingAllocation) return;
-    const sent: IssueDocumentRequest = manual && allocationNumber ? { ...body, manualAllocation: { number: allocationNumber, forNumber: manual.nextNumber } } : body;
+    if (!body || awaitingAllocation || awaitingPaidChoice) return;
+    const chosen = withPaidPart(body);
+    const sent: IssueDocumentRequest = manual && allocationNumber ? { ...chosen, manualAllocation: { number: allocationNumber, forNumber: manual.nextNumber } } : chosen;
     setIssuedFor(serialized);
     issue.mutate(
       { body: sent, key: attempt.keyFor(sent) },
@@ -243,7 +258,15 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
               <Button type="button" variant="secondary" onClick={() => void draftPdf()} disabled={!body || drafting}>
                 {t('hosted.issue.draftPdf')}
               </Button>
-              <Button type="submit" form={formId} isLoading={issue.isPending} keepLabelWhileLoading disabled={awaitingAllocation} aria-describedby={awaitingAllocation ? `${formId}-allocation-note` : undefined} data-testid="issue-submit">
+              <Button
+                type="submit"
+                form={formId}
+                isLoading={issue.isPending}
+                keepLabelWhileLoading
+                disabled={awaitingAllocation || awaitingPaidChoice}
+                aria-describedby={awaitingAllocation ? `${formId}-allocation-note` : awaitingPaidChoice ? `${formId}-paid-part` : undefined}
+                data-testid="issue-submit"
+              >
                 {t('hosted.issue.issueAs', { type: typeLabel(docType) })}
               </Button>
             </div>
@@ -401,6 +424,38 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
             </section>
           )}
 
+          {hasPaidPart && (
+            <section className="hp-issue-payment" aria-labelledby={`${formId}-paid-part`} data-testid="issue-paid-part">
+              <h3 id={`${formId}-paid-part`}>{t('hosted.issue.creditPaid.title', { amount: formatDecimal(paidPart!, 'ILS', language) })}</h3>
+              <SegmentedControl
+                ariaLabel={t('hosted.issue.creditPaid.choice')}
+                value={paidChoice ?? ''}
+                options={[
+                  { value: 'REFUND', label: t('hosted.issue.creditPaid.refunded') },
+                  { value: 'KEEP', label: t('hosted.issue.creditPaid.kept') },
+                ]}
+                onChange={(value) => setPaidChoice(value as 'REFUND' | 'KEEP')}
+              />
+              {paidChoice === 'KEEP' && <p className="hp-muted">{t('hosted.issue.creditPaid.keptNote')}</p>}
+              {paidChoice === 'REFUND' && (
+                <>
+                  <SegmentedControl
+                    ariaLabel={t('hosted.issue.method')}
+                    value={refundMethod}
+                    options={[
+                      { value: 'BANK', label: t('hosted.issue.methods.BANK') },
+                      { value: 'CASH', label: t('hosted.issue.methods.CASH') },
+                    ]}
+                    onChange={setRefundMethod}
+                  />
+                  <Input label={t('hosted.issue.creditPaid.refundedOn')} id={`${formId}-refunded-on`} type="date" value={refundedOn < documentDate ? documentDate : refundedOn} min={documentDate} max={today} onChange={(e) => setRefundedOn(e.target.value)} />
+                  <Input label={t('hosted.issue.reference')} id={`${formId}-refund-ref`} value={refundReference} dir="ltr" maxLength={100} onChange={(e) => setRefundReference(e.target.value)} />
+                </>
+              )}
+              {tried && awaitingPaidChoice && <p className="input-error-message">{t('hosted.issue.creditPaid.required')}</p>}
+            </section>
+          )}
+
           <Input label={t('hosted.issue.notes')} id={`${formId}-notes`} value={notes} dir="auto" maxLength={500} onChange={(e) => setNotes(e.target.value)} />
 
           {manual && (
@@ -454,6 +509,8 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
   if (reason === 'EXTERNAL_INVOICE_ATTACHED') return t('hosted.issue.refusals.EXTERNAL_INVOICE_ATTACHED', { number: String((error.details as { number?: unknown }).number ?? '') });
   // MUT-711 (AC3): the previewed number was taken first; the allocation number must be requested again for the new one.
   if (reason === 'ALLOCATION_NUMBER_MOVED') return t('hosted.issue.refusals.ALLOCATION_NUMBER_MOVED', { next: String((error.details as { next?: unknown }).next ?? '') });
+  // MUT-643: the credit notes on the original reached its total; `maximum` is in minor units.
+  if (reason === 'CREDIT_EXCEEDS_ORIGINAL') return t('hosted.issue.refusals.CREDIT_EXCEEDS_ORIGINAL', { maximum: minorDigitsToDecimal(String((error.details as { maximum?: unknown }).maximum ?? '0'), 2) });
   const known = [
     'ENTRY_MISMATCH',
     'DATE_BEFORE_LAST_DOCUMENT',
@@ -469,6 +526,9 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
     'ALLOCATION_NUMBER_INVALID',
     'ALLOCATION_NOT_NEEDED',
     'TAX_AUTHORITY_NOT_CONNECTED',
+    // MUT-643
+    'DATE_BEFORE_CREDIT_NOTE',
+    'ORIGINAL_CHANGED',
   ];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');

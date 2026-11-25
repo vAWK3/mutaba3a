@@ -62,6 +62,7 @@ import { oauthCleanupRoutes } from './routes/oauth-cleanup.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
 import { accountPurgeRoutes } from './routes/account-purge.js';
+import { issuingRetentionRoutes } from './routes/issuing-retention.js';
 import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
 import type { PlanGateway } from './billing/stripe/plan-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
@@ -99,7 +100,7 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
-import type { UniformFileHouse } from './issuing/uniform-file/export.js';
+import { UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFileHouse } from './issuing/uniform-file/export.js';
 import type { RegistryLookup } from './israel/registry.js';
 import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
@@ -225,7 +226,7 @@ export interface AppDependencies {
    * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
    */
   documentSigner?: DocumentSigner | null;
-  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, Barmajiyat). */
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, "MTB3A"). */
   uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
@@ -408,7 +409,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.136.0-mut702';
+export const API_VERSION = '1.141.0-mut661';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -812,6 +813,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       mailer,
       logger: deps.logger,
       portalOrigin: sessions.portalOrigin,
+      pepper: sessions.pepper,
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
@@ -849,6 +851,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   );
   // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.
   app.route('/', accountPurgeRoutes({ store: deps.store, stripe: deps.stripe?.accountGateway ?? null, storage: deps.attachments ?? null, logger: deps.logger }));
+  // MUT-644 (ADR-277): closed profiles' issued documents: the operator's search, archive and sweep (admin token only).
+  app.route('/', issuingRetentionRoutes({ store: deps.store, logger: deps.logger, issuedPdf: portalRouteDeps.issuedPdf ?? null, uniformFileHouse: deps.uniformFileSoftware ?? UNIFORM_FILE_HOUSE_PLACEHOLDER }));
   // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.
   app.route(
     '/',

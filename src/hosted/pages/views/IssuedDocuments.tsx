@@ -19,6 +19,8 @@ import { useIssuingSetup } from '../../data/issuingQueries';
 import { formatDecimal } from '../../format/DecimalAmount';
 import { profileKey, useWritableFor } from '../../session/me';
 import { useAttemptKey } from '../../data/attemptKey';
+import { parseAmountToMinor } from '../../../lib/utils';
+import { minorDigitsToDecimal } from '../../lib/receiptSuggestion';
 import { DocIssuedArt, DocTypeIcon } from './docTypeIcons';
 import { documentTabs } from './issuedTabs';
 import { PageHeader, useBackTo } from './shared';
@@ -221,10 +223,18 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
     pricesIncludeVat: l.pricesIncludeVat,
     ...(l.vatRateBasisPoints === 0 ? { vatExempt: true } : {}),
   }));
-  // A credit note credits only what is still owed: after a part payment, one line for that amount, VAT included.
-  const partlyPaid = owing && outstanding !== d.gross;
-  const creditLines = partlyPaid
-    ? [{ description: t('hosted.issue.creditLine', { document: docTitle(t, d) }), kind: 'SERVICE' as const, quantity: '1', unitPrice: outstanding!, discount: '', pricesIncludeVat: true, ...(d.lines.every((l) => l.vatRateBasisPoints === 0) ? { vatExempt: true } : {}) }]
+  // MUT-643: a 305 or 320 whose Owed it owns may be credited up to what credit notes haven't covered yet, paid or not
+  // (the drawer then asks what happened to the paid part). Any other original credits only what is still owed.
+  const ownsOwed = owed.data?.origin === 'ISSUED_DOCUMENT' && owed.data.originId === d.id;
+  const uncredited = ownsOwed ? minorDigitsToDecimal(String(parseAmountToMinor(d.gross, 'ILS') - parseAmountToMinor(owed.data!.credited, 'ILS')), 2) : owing ? outstanding! : '0.00';
+  const canCredit = (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT') && uncredited !== '0.00' && !uncredited.startsWith('-');
+  // It starts at what is still owed while something is (as before MUT-643), else at all that credit notes haven't
+  // covered; the amount may be raised up to that (the drawer then asks about the paid part). The whole document while
+  // that is all of it; else one line for the amount, VAT included.
+  const creditable = owing ? outstanding! : uncredited;
+  const partly = creditable !== d.gross;
+  const creditLines = partly
+    ? [{ description: t('hosted.issue.creditLine', { document: docTitle(t, d) }), kind: 'SERVICE' as const, quantity: '1', unitPrice: creditable, discount: '', pricesIncludeVat: true, ...(d.lines.every((l) => l.vatRateBasisPoints === 0) ? { vatExempt: true } : {}) }]
     : lines;
   const pdf = async (produce: boolean) => {
     setBusy(true);
@@ -331,8 +341,8 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
             {t('hosted.issue.recordPayment')}
           </Button>
         )}
-        {writable && d.docType === 'TAX_INVOICE' && owing && (
-          <Button variant="secondary" data-testid="issued-credit" onClick={() => setDrawer({ docType: 'CREDIT_NOTE', customerId: d.customerId ?? undefined, originalId: d.id, lines: creditLines, pricesIncludeVat: partlyPaid ? true : d.pricesIncludeVat })}>
+        {writable && canCredit && (
+          <Button variant="secondary" data-testid="issued-credit" onClick={() => setDrawer({ docType: 'CREDIT_NOTE', customerId: d.customerId ?? undefined, originalId: d.id, lines: creditLines, pricesIncludeVat: partly ? true : d.pricesIncludeVat })}>
             {t('hosted.issue.creditNote')}
           </Button>
         )}

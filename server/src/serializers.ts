@@ -408,7 +408,7 @@ export function paymentOriginWire(origin: PaymentOrigin): PaymentOriginWire {
   return origin === 'CAPTURE' ? 'capture' : origin === 'ISSUED_DOCUMENT' ? 'issued_document' : 'integration';
 }
 
-export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null, capturedBy: CapturedBy | null) {
+export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType<typeof serializeAllocation>>, replacedByPaymentId: string | null, capturedBy: CapturedBy | null, refundedMinor = 0n) {
   return {
     id: p.id,
     number: p.number,
@@ -420,6 +420,8 @@ export function serializePayment(p: PaymentRecord, allocations: Array<ReturnType
     currency: p.currency as Currency,
     amount: amt(p.amountMinor, p.currency),
     allocated: amt(p.allocatedMinor, p.currency),
+    // MUT-643: refunded money counts in allocated (it is used); this says how much of it went back to the client.
+    refunded: amt(refundedMinor, p.currency),
     unallocated: amt(p.status === 'REVERSED' ? 0n : p.amountMinor - p.allocatedMinor, p.currency),
     allocationState: allocationStateOf(p),
     receivedOn: p.receivedOn,
@@ -871,6 +873,7 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord, facts: PaymentR
     allocationSource: d.allocationSource,
     receivableId: d.receivableId,
     paymentId: d.paymentId,
+    refundId: d.refundId,
     coreVersion: d.coreVersion,
     displayNumber: documentNumberLabel(d.docType, d.number),
     paymentRequest:

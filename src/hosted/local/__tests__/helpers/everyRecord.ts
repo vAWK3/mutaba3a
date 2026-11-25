@@ -1,4 +1,6 @@
+import { composeDocument } from '../../../../../server/src/issuing/compose.js';
 import { MemoryLedgerStore } from '../../../../../server/src/repositories/memory.js';
+import type { IssueDocumentInput } from '../../../../../server/src/repositories/ports.js';
 
 /**
  * A store with at least one record in every map of `LocalSnapshotMaps`
@@ -218,6 +220,21 @@ export async function storeWithEveryRecord(): Promise<MemoryLedgerStore> {
   // inbox: a captured, not yet filed entry
   await store.inboxEntries.create({ userId: user.id, kind: 'EXPENSE', amountMinor: 1_200n, currency: 'ILS', occurredOn: '2026-10-04', note: 'Parking', captureSource: null }, AT);
 
+  // refunds (MUT-643): two paid invoice-receipts credited and refunded, one refund with a reference and one without
+  for (const [n, reference] of [[1, 'RF-1'], [2, null]] as const) {
+    const issue = (docType: 'TAX_INVOICE_RECEIPT' | 'CREDIT_NOTE', originalId: string | null, paidPart: IssueDocumentInput['paidPart']): IssueDocumentInput => ({
+      organizationId: org, docType, documentDate: '2026-10-04', currency: 'ILS',
+      composed: composeDocument({ docType, currency: 'ILS', documentDate: '2026-10-04', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
+      issuer: { legalName: 'Studio', vatId: '123456789', dealerType: 'COMPANY' }, customerId: customer.id, customer: { name: 'Client' }, language: 'en', style: 'PROFESSIONAL', ink: 'BLACK', notes: null,
+      dueDate: null, originalId, paidPart, payment: docType === 'TAX_INVOICE_RECEIPT' ? { method: 'BANK', reference: null, receivedOn: '2026-10-04' } : null, appliesToDocumentId: null, fromEntry: null,
+      allocationNumber: null, titlePrefix: docType, coreVersion: '1.0.0', createdByUserId: user.id, requestKey: `refund-${n}-${docType}`, requestId: n === 1 ? 'req-refund' : null,
+    });
+    const paid = await store.issuing.issue(issue('TAX_INVOICE_RECEIPT', null, null), AT);
+    if (paid.kind !== 'issued') throw new Error('the fixture invoice-receipt was not issued');
+    const credited = await store.issuing.issue(issue('CREDIT_NOTE', paid.document.id, { mode: 'REFUND', refundedOn: '2026-10-04', method: 'BANK', reference }), AT);
+    if (credited.kind !== 'issued' || !credited.document.refundId) throw new Error('the fixture credit note wrote no refund');
+  }
+
   await fillEveryNullableField(store, org, user.id, { customer: customer.id, project: project.id, posted: posted.receivable.id, fixed: fixed.agreement.id, retainer: retainer.agreement.id });
   return store;
 }
@@ -258,6 +275,8 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   // MUT-459: and an operator (a hosted person's; the export writes null for a device)
   await store.users.setOperator({ userId: other.id, operator: true, at: LATER, audit: [] });
   await store.users.setMonthlySummaryMail(other.id, 'OFF', LATER);
+  // ADR-279: the promotional-mail opt-out, so the fingerprint sees offerMail with a value
+  await store.users.setOfferMail(other.id, 'OFF', LATER);
 
   // ints: a connection that was later disconnected (on the other person's profile: one connection per profile and provider)
   const [otherMembership] = await store.memberships.listByUser(other.id);

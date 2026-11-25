@@ -37,6 +37,7 @@ import { ReceiptsGallery } from './pages/views/ReceiptsGallery';
 import { ReceiptReviewPage } from './pages/views/ReceiptReview';
 import { YouPage } from './pages/you/YouPage';
 import { InvoicingSetupPage } from './pages/invoicing/InvoicingSetupPage';
+import { parseSetupStepSearch } from './components/setupHint';
 import { IssuedDocumentPage, IssuedDocumentsPage } from './pages/views/IssuedDocuments';
 import { DocumentsDuePage } from './pages/views/DocumentsDuePage';
 import { SharingPage } from './pages/sharing/SharingPage';
@@ -491,9 +492,10 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     getParentRoute: () => profileRoute,
     ...PAGE_CRASH,
     path: '/you/invoicing',
-    validateSearch: (raw: Raw) => pickShellOverlay(raw),
+    // MUT-722: `?step=` opens a step (Set up after a save opens the first one issuing still waits for).
+    validateSearch: (raw: Raw) => ({ ...pickShellOverlay(raw), ...parseSetupStepSearch(raw) }),
     component: function Invoicing() {
-      return <InvoicingSetupPage profile={useProfile()} />;
+      return <InvoicingSetupPage profile={useProfile()} initialStep={invoicingRoute.useSearch().step} />;
     },
   });
 

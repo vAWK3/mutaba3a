@@ -15,7 +15,7 @@ const exp = (occurredOn: string, amountMinor: bigint, extra: Partial<Exp> = {}):
 const rec = (postingDate: string, extra: Partial<Rec> = {}): Rec => ({ id: id(), customerId: 'c1', postingDate, status: 'SETTLED', grossMinor: 100n, paidMinor: 100n, ...extra });
 
 function input(extra: Partial<ActivityInput>): ActivityInput {
-  return { payments: [], expenses: [], allocations: [], receivables: [], from: '2026-10-01', to: '2026-10-31', bucket: 'day', ...extra };
+  return { payments: [], expenses: [], allocations: [], receivables: [], refunds: [], from: '2026-10-01', to: '2026-10-31', bucket: 'day', ...extra };
 }
 
 describe('historyStart', () => {
@@ -26,6 +26,14 @@ describe('historyStart', () => {
 });
 
 describe('summarizeActivity — buckets and totals', () => {
+  it('MUT-643: a refund comes off received on its own date, in the period, its bucket, its month and its client', () => {
+    const out = summarizeActivity(input({ payments: [pay('2026-10-02', 10_000n)], refunds: [{ id: 'f1', currency: 'ILS', amountMinor: 4_000n, refundedOn: '2026-10-20', customerId: 'c1' }] }));
+    expect(out.currencies[0]).toMatchObject({ currency: 'ILS', received: '60.00' });
+    expect(out.buckets.find((b) => b.start === '2026-10-20')!.currencies[0]).toMatchObject({ received: '-40.00' });
+    expect(out.history.find((h) => h.month === '2026-10')!.currencies[0]).toMatchObject({ received: '60.00' });
+    expect(out.currencies[0]!.byCustomer[0]).toMatchObject({ customerId: 'c1' });
+  });
+
   it('zero-fills one day bucket per day, counts POSTED payments by receivedOn and never REVERSED ones', () => {
     const out = summarizeActivity(
       input({

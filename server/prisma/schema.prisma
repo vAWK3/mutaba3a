@@ -330,6 +330,8 @@ model User {
   operatorAt         DateTime?
   /// MUT-535 (D6): the monthly summary mail: 'OFF' | 'ON_ALL'; NULL = the default (on, without Malafat-covered profiles).
   monthlySummaryMail String?    @db.VarChar(8)
+  /// ADR-279: promotional mail (the come-back offer): 'OFF' once opted out; NULL = the default (on).
+  offerMail          String?    @db.VarChar(8)
   createdAt          DateTime
   updatedAt          DateTime
 
@@ -1143,7 +1145,8 @@ model Payment {
   number             String
   currency           String        @db.VarChar(3)
   amountMinor        BigInt
-  /// Σ allocations; unallocated = amount − allocated. 0 once reversed.
+  /// Σ live allocations + MUT-643 refund sources (refunded money counts as used); unallocated = amount − allocated.
+  /// 0 once reversed.
   allocatedMinor     BigInt        @default(0)
   receivedOn         String        @db.VarChar(10)
   method             PaymentMethod
@@ -1213,6 +1216,42 @@ model PaymentAllocation {
   @@index([organizationId, paymentId])
   @@index([organizationId, receivableId])
   @@map("payment_allocations")
+}
+
+/// MUT-643 (ADR-276): money going back to a client with a credit note. Append-only in code, like credits; purged with
+/// the profile. Its sources name the payments it came from: refunded money counts in their allocatedMinor.
+model Refund {
+  id               String         @id @default(uuid()) @db.Uuid
+  organizationId   String         @db.Uuid
+  customerId       String         @db.Uuid
+  currency         String         @db.VarChar(3)
+  amountMinor      BigInt
+  refundedOn       String         @db.VarChar(10)
+  method           PaymentMethod
+  reference        String?
+  issuedDocumentId String         @db.Uuid
+  requestId        String?
+  createdByUserId  String         @db.Uuid
+  createdAt        DateTime       @default(now())
+  sources          RefundSource[]
+
+  @@unique([organizationId, issuedDocumentId])
+  @@index([organizationId, customerId, refundedOn])
+  @@index([organizationId, refundedOn])
+  @@map("refunds")
+}
+
+model RefundSource {
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @db.Uuid
+  refundId       String @db.Uuid
+  refund         Refund @relation(fields: [refundId], references: [id])
+  paymentId      String @db.Uuid
+  amountMinor    BigInt
+
+  @@index([organizationId, paymentId])
+  @@index([refundId])
+  @@map("refund_sources")
 }
 
 /// Append-only credits against a posted receivable (M4 brief decision 5).
@@ -2364,6 +2403,8 @@ model IssuedDocument {
   receivableId       String?       @db.Uuid
   paymentId          String?       @db.Uuid
   creditId           String?       @db.Uuid
+  /// MUT-643: a credit note whose paid part went back to the client (refunds.id; no FK, like creditId).
+  refundId           String?       @db.Uuid
   coreVersion        String        @db.VarChar(16)
   createdByUserId    String        @db.Uuid
   /// The issue request's idempotency key: a retry returns this document instead of issuing another.
@@ -2476,4 +2517,19 @@ model IssuedDocumentOriginal {
 
   @@index([organizationId])
   @@map("issued_document_originals")
+}
+
+/// MUT-644 (ADR-277 D5): the retention log of closed profiles' issued documents: each sweep that deleted them and each
+/// archive the operator exported. No foreign key (the profile is already gone, so audit_events can't hold it); kept
+/// indefinitely. metadata holds counts, dates and the operator's support reference, never a name or an address.
+model IssuingRetentionEvent {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @db.Uuid
+  /// SWEPT | ARCHIVE_EXPORTED | ERASED (MUT-644 D7, 2026-11-25)
+  action         String   @db.VarChar(32)
+  metadata       Json
+  createdAt      DateTime
+
+  @@index([organizationId, createdAt])
+  @@map("issuing_retention_events")
 }

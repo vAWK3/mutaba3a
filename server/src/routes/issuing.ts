@@ -18,11 +18,12 @@ import { UNIFORM_FILE_MIME, uniformFileZip } from '../issuing/uniform-file/zip.j
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
 import { settlementOf } from '../issuing/settlement.js';
 import { formatMoney, type Currency } from '../money.js';
+import { creditCap } from '../issuing/credit-split.js';
 import { registerDocumentsDueRoutes } from './documents-due.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
-import type { AllocationOutcome, CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
+import type { AllocationOutcome, CreditPaidPart, CustomerRecord, IssueDocumentInput, IssuedDocumentRecord, IssuerDetailsInput, IssuerDetailsRecord, IssuingSetupRecord, JsonObject, LedgerStore, Organization } from '../repositories/ports.js';
 import {
   CancelPaymentRequestSchema,
   ErrorEnvelopeSchema,
@@ -76,6 +77,31 @@ const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): Jso
   ...(logoId ? { logoId } : {}),
 });
 
+/**
+ * MUT-646: a document always prints. The logo is the one its snapshot names (else, a draft, none); a logo the PDF engine
+ * can't read (it passed the upload's checks but is broken inside) costs the logo, never the copy the customer is owed.
+ * MUT-644: also the operator's archive of a closed profile (routes/issuing-retention.ts).
+ */
+export async function renderIssuedWithLogo(store: LedgerStore, issuedPdf: IssuedPdf | null, render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>): Promise<Uint8Array> {
+  const logoId = doc.issuer.logoId;
+  const logo = typeof logoId === 'string' ? ((await store.issuing.getLogo(doc.organizationId, logoId))?.bytes ?? null) : null;
+  if (!logo) return render(doc, { ...options, logo: null });
+  try {
+    return await render(doc, { ...options, logo });
+  } catch (error) {
+    issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
+    return render(doc, { ...options, logo: null });
+  }
+}
+
+/** MUT-569: a credit note's tax invoice, which may be dated before the range: id → type and number (the uniform file). */
+export async function creditedOriginalsOf(store: LedgerStore, organizationId: string, documents: readonly IssuedDocumentRecord[]): Promise<Map<string, { docType: IssuedDocType; number: number }>> {
+  const inFile = new Map(documents.map((d) => [d.id, d]));
+  const ids = [...new Set(documents.flatMap((d) => (d.docType === 'CREDIT_NOTE' && d.originalId ? [d.originalId] : [])))];
+  const found = await Promise.all(ids.map(async (id) => inFile.get(id) ?? (await store.issuing.getById(organizationId, id))));
+  return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
+}
+
 /** MUT-569: the product's name in the uniform file (A000 1007). */
 const UNIFORM_FILE_SOFTWARE_NAME = 'MTB3A';
 
@@ -87,6 +113,29 @@ const UNIFORM_FILE_ID_FLOOR = 10n ** 14n;
 /** No document predates this (the issuing core shipped in 2026; the spec's dates are 8 digits). */
 const UNIFORM_FILE_EARLIEST = '2000-01-01';
 const uniformFilePrimaryId = () => String(UNIFORM_FILE_ID_FLOOR + (BigInt(`0x${randomBytes(8).toString('hex')}`) % (9n * UNIFORM_FILE_ID_FLOOR)));
+
+/**
+ * MUT-569: the uniform file's zip for these documents. MUT-644: also the operator's archive of a closed profile.
+ * A document too large for the file's fields is a 422 naming it.
+ */
+export async function uniformFileZipOf(
+  store: LedgerStore,
+  house: UniformFileHouse,
+  input: { organizationId: string; issuer: IssuerDetailsRecord; documents: IssuedDocumentRecord[]; range: { from: string; to: string }; now: Date; lang: 'ar' | 'en' },
+): Promise<{ file: UniformFile; zip: Uint8Array }> {
+  const { organizationId, issuer, documents, range, now, lang } = input;
+  const originals = await creditedOriginalsOf(store, organizationId, documents);
+  const software = { ...house, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
+  let file: UniformFile;
+  try {
+    file = buildUniformFile({ issuer, documents, originals, range, producedAt: now, primaryId: uniformFilePrimaryId(), software });
+  } catch (err) {
+    if (!(err instanceof DocumentTooLargeError)) throw err;
+    throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
+  }
+  const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range, producedAt: now, software }, lang);
+  return { file, zip: uniformFileZip(file, report) };
+}
 
 /** A real calendar day (the regex lets 2026-02-31 through). */
 const isCalendarDay = (iso: string) => {
@@ -277,6 +326,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         notes: body.notes ?? null,
         dueDate: body.docType === 'TAX_INVOICE' || body.docType === 'PAYMENT_REQUEST' ? (body.dueDate ?? null) : null,
         originalId: body.originalId ?? null,
+        paidPart: paidPartOf(body, documentDate, todayFor(organization, now)),
         payment,
         appliesToDocumentId: body.appliesToDocumentId ?? null,
         fromEntry: body.fromEntry ? { kind: body.fromEntry.kind === 'owed' ? 'receivable' : 'payment', id: body.fromEntry.id } : null,
@@ -322,7 +372,16 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         case 'original_not_found':
           throw new ApiError('NOT_FOUND', 'No such tax invoice or live payment request for this customer', { field: body.originalId ? 'originalId' : 'appliesToDocumentId' });
         case 'original_paid':
-          throw new ApiError('VALIDATION_FAILED', 'A credit note credits only what is still owed on its tax invoice', { field: 'lines', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString() });
+          // MUT-643 (D5): `paid` names the part the client already paid when a `paidPart` choice would be taken.
+          throw new ApiError(
+            'VALIDATION_FAILED',
+            result.paidMinor === undefined ? 'A credit note credits only what is still owed on this document' : 'The client already paid part of this: say whether it was refunded or kept as their credit',
+            { field: result.paidMinor === undefined ? 'lines' : 'paidPart', reason: 'ORIGINAL_PAID', outstanding: result.outstandingMinor.toString(), ...(result.paidMinor === undefined ? {} : { paid: result.paidMinor.toString() }) },
+          );
+        case 'credit_exceeds_original':
+          throw new ApiError('VALIDATION_FAILED', 'The credit notes on a document may not add up to more than it', { field: 'lines', reason: 'CREDIT_EXCEEDS_ORIGINAL', maximum: result.maximumMinor.toString() });
+        case 'original_changed':
+          throw new ApiError('CONFLICT', 'The payments on this document changed while the credit note was being issued; try again', { reason: 'ORIGINAL_CHANGED' });
         case 'exceeds_outstanding':
           throw new ApiError('VALIDATION_FAILED', 'The payment is more than the document it applies to still owes', { field: 'lines', reason: 'EXCEEDS_OUTSTANDING', outstanding: result.outstandingMinor.toString() });
         case 'entry_not_found':
@@ -356,34 +415,44 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     return expected;
   }
 
-  /** MUT-646: the logo a document prints: the one its snapshot names, else (a draft) the profile's current one. */
-  async function logoBytes(organizationId: string, logoId: unknown): Promise<Uint8Array | null> {
-    if (typeof logoId !== 'string') return null;
-    return (await store.issuing.getLogo(organizationId, logoId))?.bytes ?? null;
-  }
-
-  /**
-   * MUT-646: a document always prints. A logo the PDF engine can't read (it passed the upload's checks but is broken
-   * inside) costs the logo, never the copy the customer is owed.
-   */
-  async function renderPdf(render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>): Promise<Uint8Array> {
-    const logo = await logoBytes(doc.organizationId, doc.issuer.logoId);
-    if (!logo) return render(doc, { ...options, logo: null });
-    try {
-      return await render(doc, { ...options, logo });
-    } catch (error) {
-      issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
-      return render(doc, { ...options, logo: null });
-    }
-  }
+  const renderPdf = (render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>) => renderIssuedWithLogo(store, issuedPdf, render, doc, options);
 
   /** The request's shape rules per type, then the pure compose (both the preview and the issue run this). */
   /** A credit note's tax invoice: it credits at that invoice's rate and can't be dated before it (review fix 1). */
   async function creditedInvoice(organizationId: string, body: IssueRequest): Promise<IssuedDocumentRecord | null> {
     if (body.docType !== 'CREDIT_NOTE' || !body.originalId) return null;
     const original = await store.issuing.getById(organizationId, body.originalId);
-    if (!original || original.docType !== 'TAX_INVOICE') throw new ApiError('NOT_FOUND', 'No such tax invoice', { field: 'originalId' });
+    // MUT-643: an invoice-receipt may be credited too.
+    if (!original || (original.docType !== 'TAX_INVOICE' && original.docType !== 'TAX_INVOICE_RECEIPT')) throw new ApiError('NOT_FOUND', 'No such tax invoice or invoice-receipt', { field: 'originalId' });
     return original;
+  }
+
+  /**
+   * MUT-643 (D5): the paid-part choice, checked: only on a credit note; a refund's date follows the money-date rules
+   * and is not before the credit note's own date.
+   */
+  function paidPartOf(body: IssueRequest, documentDate: string, today: string): CreditPaidPart | null {
+    if (!body.paidPart) return null;
+    if (body.docType !== 'CREDIT_NOTE') throw new ApiError('VALIDATION_FAILED', 'Only a credit note says what happens to a paid part', { field: 'paidPart', reason: 'PAID_PART_NOT_ALLOWED' });
+    if (body.paidPart.mode === 'KEEP') return { mode: 'KEEP' };
+    const refundedOn = pastMoneyDate(body.paidPart.refundedOn, today, 'paidPart.refundedOn');
+    if (refundedOn < documentDate) {
+      throw new ApiError('VALIDATION_FAILED', `A refund can't be dated before its credit note (${documentDate})`, { field: 'paidPart.refundedOn', reason: 'DATE_BEFORE_CREDIT_NOTE', documentDate });
+    }
+    return { mode: 'REFUND', refundedOn, method: body.paidPart.method, reference: body.paidPart.reference?.trim() || null };
+  }
+
+  /** MUT-643: the preview's credit-note facts (the store re-checks all of them under its locks). */
+  async function creditNoteFacts(organizationId: string, original: IssuedDocumentRecord | null, creditMinor: bigint): Promise<{ outstandingMinor: bigint; paidMinor: bigint; maximumMinor: bigint } | null> {
+    if (!original?.receivableId) return null;
+    const owed = await store.receivables.getById(organizationId, original.receivableId);
+    if (!owed) return null;
+    const outstandingMinor = owed.status === 'OPEN' ? owed.grossMinor - owed.paidMinor - owed.creditedMinor : 0n;
+    // Only credit notes credit an Owed a document owns, so its credited sum is theirs.
+    const owned = owed.origin === 'ISSUED_DOCUMENT' && owed.originId === original.id;
+    const maximumMinor = owned ? creditCap(original.grossMinor, owed.creditedMinor) : outstandingMinor;
+    const paidMinor = owned && creditMinor > outstandingMinor ? (creditMinor < maximumMinor ? creditMinor : maximumMinor) - outstandingMinor : 0n;
+    return { outstandingMinor, paidMinor, maximumMinor };
   }
 
   function composeFrom(body: IssueRequest, issuer: IssuerDetailsRecord, today: string, original: IssuedDocumentRecord | null) {
@@ -769,10 +838,14 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const issuer = await mustIssuer(organization.id);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), await creditedInvoice(organization.id, body));
+      const original = await creditedInvoice(organization.id, body);
+      const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), original);
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
       const allocation = await allocationPreview(organization.id, body, documentDate, composed, customer, now);
-      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation }, 200);
+      const facts = await creditNoteFacts(organization.id, original, composed.grossMinor);
+      const ils = (minor: bigint) => formatMoney({ minor, currency: 'ILS' });
+      const creditNote = facts ? { outstanding: ils(facts.outstandingMinor), paid: ils(facts.paidMinor), maximum: ils(facts.maximumMinor) } : null;
+      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation, creditNote }, 200);
     },
   );
 
@@ -1030,6 +1103,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           receivableId: null,
           paymentId: null,
           creditId: null,
+          refundId: null,
           coreVersion: ISSUING_CORE_VERSION,
           createdByUserId: sessionAuth(c).user.id,
           requestKey: '',
@@ -1130,17 +1204,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       if (to > todayFor(organization, now)) throw new ApiError('VALIDATION_FAILED', 'A range can’t reach past today', { reason: 'PERIOD_RANGE', field: 'to' });
       const issuer = await mustIssuer(organization.id);
       const documents = await store.issuing.inRange(organization.id, from, to);
-      const originals = await originalsOf(organization.id, documents);
-      const software = { ...uniformFileHouse, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
-      let file: UniformFile;
-      try {
-        file = buildUniformFile({ issuer, documents, originals, range: { from, to }, producedAt: now, primaryId: uniformFilePrimaryId(), software });
-      } catch (err) {
-        if (!(err instanceof DocumentTooLargeError)) throw err;
-        throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
-      }
-      const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range: { from, to }, producedAt: now, software }, lang);
-      const zip = uniformFileZip(file, report);
+      const { file, zip } = await uniformFileZipOf(store, uniformFileHouse, { organizationId: organization.id, issuer, documents, range: { from, to }, now, lang });
       // A member's export is recorded; an accountant reads under a read-only store, like every issuing read (no audit).
       if (sessionAuth(c).access === 'member') await audit(c, 'issuing.uniform_file_exported', 'issuer_details', organization.id, { from, to, documents: documents.length, records: file.totalRecords });
       return c.body(new Uint8Array(zip), 200, {
@@ -1152,14 +1216,6 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       });
     },
   );
-
-  /** A credit note's tax invoice, which may be dated before the range: id → type and number. */
-  async function originalsOf(organizationId: string, documents: readonly IssuedDocumentRecord[]) {
-    const inFile = new Map(documents.map((d) => [d.id, d]));
-    const ids = [...new Set(documents.flatMap((d) => (d.docType === 'CREDIT_NOTE' && d.originalId ? [d.originalId] : [])))];
-    const found = await Promise.all(ids.map(async (id) => inFile.get(id) ?? (await store.issuing.getById(organizationId, id))));
-    return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
-  }
 
   app.openapi(
     createRoute({

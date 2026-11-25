@@ -68,6 +68,14 @@ describe('Close my account drawer (MUT-333)', () => {
     expect(within(dialog).getByText('nour@firm.ps')).toBeInTheDocument();
   });
 
+  it('MUT-644: says issued invoices and receipts are kept 7 years, even when every profile is deleted', async () => {
+    portal(`/p/${ORG_A}?closeAccount=true`, {}, [personal]);
+    const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
+    const kept = within(dialog).getByRole('heading', { name: 'Kept' });
+    expect(kept).toBeInTheDocument();
+    expect(within(dialog).getByText(/If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one/)).toBeInTheDocument();
+  });
+
   it('Download my records opens Your data in its place', async () => {
     const { user, router } = portal(`/p/${ORG_A}?closeAccount=true`, { 'GET /v1/records-export': () => ok({}) });
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });

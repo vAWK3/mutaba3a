@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api, type CreateIncomeRequest, type CreditRequest, type Payment, type SettleReceivableRequest } from '../api/client';
+import { api, type CreateIncomeRequest, type CreditRequest, type Payment, type SettleAndIssueRequest, type SettleReceivableRequest } from '../api/client';
 import { profileKey } from '../session/me';
 
 /**
@@ -119,6 +119,20 @@ export function useCreateIncome(profileId: string) {
 
 /** The settle mutation's key, so the drawer's footer can tell a save is in flight. */
 export const settleMutationKey = (profileId: string) => profileKey(profileId, 'settle');
+
+/** MUT-661: Record payment with the document issued in the same step (same mutation key as settle: one save at a time). */
+export function useSettleAndIssue(profileId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationKey: settleMutationKey(profileId),
+    mutationFn: ({ receivableId, body, idempotencyKey }: { receivableId: string; body: SettleAndIssueRequest; idempotencyKey: string }) =>
+      api.settleAndIssue(profileId, receivableId, body, idempotencyKey),
+    onSuccess: () => {
+      invalidateIncome(queryClient, profileId);
+      for (const key of ['documents-due', 'issued'] as const) void queryClient.invalidateQueries({ queryKey: profileKey(profileId, key) });
+    },
+  });
+}
 
 export function useSettleReceivable(profileId: string) {
   const queryClient = useQueryClient();

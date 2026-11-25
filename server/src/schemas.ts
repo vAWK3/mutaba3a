@@ -859,6 +859,7 @@ export const ComebackMailSummarySchema = z
       noOffer: z.number().int().openapi({ description: 'No running come-back coupon (missing, or not shaped as an amount off once)' }),
       noPrice: z.number().int(),
       suppressed: z.number().int(),
+      optedOut: z.number().int().openapi({ description: 'Since 1.140.0 (ADR-279). The person turned promotional mail off' }),
     }),
     incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
   })
@@ -873,7 +874,7 @@ export const ComebackMailRowSchema = z
     stage: z.enum(['day-30', 'day-90']).nullable(),
     action: z.enum(['send', 'skip']),
     skip: z
-      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-profile', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed'])
+      .enum(['paying', 'no-lapse', 'too-soon', 'firm', 'already-had', 'stay-offer-recent', 'covered', 'no-profile', 'no-stage', 'already-mailed', 'never-paid', 'no-offer', 'no-price', 'suppressed', 'opted-out'])
       .nullable(),
     outcome: z.enum(['sent', 'duplicate', 'suppressed', 'refused', 'capped', 'disabled', 'failed']).nullable().openapi({ description: "The mailer's answer, or failed; null on a skip or a dry run" }),
   })
@@ -922,6 +923,11 @@ export const MonthlySummaryMailSchema = z.object({ on: z.boolean() }).openapi('M
 export const MonthlySummaryMailChangeSchema = z.object({ on: z.boolean() }).strict().openapi('MonthlySummaryMailChange');
 /** MUT-535 (D8): the opt-out page's request; the token comes from the mail link's fragment. */
 export const MailOffRequestSchema = z.object({ token: z.string().min(1).max(200), on: z.boolean() }).strict().openapi('MailOffRequest');
+/** ADR-279: whether promotional mail (the come-back offer) reaches the person. */
+export const OfferMailSchema = z.object({ on: z.boolean() }).openapi('OfferMail');
+/** ADR-279: a mail client's one-click unsubscribe (RFC 8058): which mail, and the person's mail-off token, in the URL. */
+export const UnsubscribeQuerySchema = z.object({ mail: z.enum(['offers', 'monthly-summary']), token: z.string().min(1).max(200) }).openapi('UnsubscribeQuery');
+export const UnsubscribedSchema = z.object({ unsubscribed: z.literal(true) }).openapi('Unsubscribed');
 
 export const CardFailedMailRunSchema = z.object({ summary: CardFailedMailSummarySchema, rows: z.array(CardFailedMailRowSchema) }).openapi('CardFailedMailRun');
 
@@ -2038,6 +2044,7 @@ export const AccountPurgeSummarySchema = z
     storagePrefixesEmptied: z.number().int().openapi({ description: "Deleted profiles' bucket prefixes emptied by this run" }),
     storagePending: z.number().int().openapi({ description: 'Bucket prefixes still waiting to be emptied' }),
     incomplete: z.boolean().openapi({ description: 'The time budget or the per-run cap ran out; the next run continues' }),
+    issuingProfilesSwept: z.number().int().openapi({ description: 'Since 1.138.0 (MUT-644). Closed profiles some of whose issued documents this run deleted, each 7 years after its own date (since 1.139.0); 0 in a dry run' }),
   })
   .openapi('AccountPurgeSummary');
 
@@ -2057,6 +2064,82 @@ export const AccountPurgeRowSchema = z
 export const AccountPurgeRunSchema = z.object({ summary: AccountPurgeSummarySchema, rows: z.array(AccountPurgeRowSchema) }).openapi('AccountPurgeRun');
 
 export const AccountPurgeRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('AccountPurgeRequest');
+
+// ---- MUT-644 (ADR-277): closed profiles' issued documents ---------------------------------
+
+const IsoDaySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+export const RetainedIssuingProfileSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    legalName: z.string().nullable().openapi({ description: 'From the business details kept with the documents' }),
+    vatId: z.string().nullable(),
+    documents: z.number().int(),
+    cancellations: z.number().int(),
+    oldestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'Since 1.140.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later)' }),
+    newestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'The latest such date' }),
+    nextSweepOn: IsoDaySchema.nullable().openapi({ description: 'Since 1.140.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing' }),
+    retainedUntil: IsoDaySchema.nullable().openapi({ description: 'The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run)' }),
+  })
+  .openapi('RetainedIssuingProfile');
+
+export const RetainedIssuingListSchema = z.object({ data: z.array(RetainedIssuingProfileSchema) }).openapi('RetainedIssuingList');
+
+export const RetainedIssuingQuerySchema = z.object({
+  query: z.string().trim().min(1).max(100).optional().openapi({ description: 'A business name (any part, any case) or the start of a VAT number' }),
+  limit: z.coerce.number().int().min(1).max(200).default(50),
+});
+
+export const IssuingRetentionSweepRequestSchema = z.object({ dryRun: z.boolean() }).strict().openapi('IssuingRetentionSweepRequest');
+
+export const IssuingRetentionSweepRunSchema = z
+  .object({
+    dryRun: z.boolean(),
+    due: z.number().int(),
+    swept: z.number().int().openapi({ description: 'Profiles some of whose documents this run deleted (in a dry run, would)' }),
+    documentsDeleted: z.number().int().openapi({ description: 'Since 1.140.0. Documents this run deleted; 0 in a dry run' }),
+    failed: z.number().int(),
+    incomplete: z.boolean().openapi({ description: 'More were due than the per-run cap (25); the next run continues' }),
+    rows: z.array(
+      z.object({
+        organizationId: z.string().uuid(),
+        outcome: z.enum(['swept', 'would-sweep', 'skipped', 'failed']),
+        documents: z.number().int().openapi({ description: 'Documents the profile held before this run' }),
+        deleted: z.number().int().nullable().openapi({ description: 'Since 1.140.0. Documents this run deleted; null in a dry run, or when skipped or failed' }),
+        remaining: z.number().int().nullable().openapi({ description: 'Since 1.140.0. Documents still kept after this run; null as for `deleted`' }),
+        oldestDocumentDate: IsoDaySchema.nullable(),
+        newestDocumentDate: IsoDaySchema.nullable(),
+        nextSweepOn: IsoDaySchema.nullable(),
+        retainedUntil: IsoDaySchema.nullable(),
+      }),
+    ),
+  })
+  .openapi('IssuingRetentionSweepRun');
+
+export const IssuingArchiveRequestSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(100).openapi({ description: 'The support request this answers (a ticket number, never an address); kept in the retention log', example: 'SUP-1042' }),
+    lang: z.enum(['ar', 'en']).default('ar').openapi({ description: 'The uniform file report’s language' }),
+  })
+  .strict()
+  .openapi('IssuingArchiveRequest');
+
+export const IssuingEraseRequestSchema = z
+  .object({
+    reference: z.string().trim().min(1).max(100).openapi({ description: 'The erasure request this answers (a ticket number, never an address); kept in the retention log', example: 'SUP-1043' }),
+  })
+  .strict()
+  .openapi('IssuingEraseRequest');
+
+export const IssuingErasedSchema = z
+  .object({
+    organizationId: z.string().uuid(),
+    documents: z.number().int().openapi({ description: 'Documents deleted' }),
+    cancellations: z.number().int(),
+    rows: z.number().int().openapi({ description: 'Rows deleted in all, the business details, logos and numbering included' }),
+    erasedAt: z.string().datetime(),
+  })
+  .openapi('IssuingErased');
 
 // ---- MUT-115: passkeys (ADR-190) ------------------------------------------------------
 // The WebAuthn JSON shapes are the W3C Level 3 serializations (PublicKeyCredential.toJSON / parse*OptionsFromJSON),
@@ -3282,6 +3365,16 @@ export const StatementLineSchema = z
       /** MUT-443: set when the reversal was a correction (POST /v1/payments/{id}/correct); null for a plain reverse. */
       reasonCode: CreditReasonCodeSchema.nullable(),
     }),
+    z.object({
+      ...StatementLineBase,
+      kind: z.literal('REFUND'),
+      /** MUT-643 (since 1.137.0-mut643): money a credit note gave back to the client; a debit dated refundedOn. Whole-customer statement only. */
+      refundId: uuid,
+      /** The credit note that refunded it. */
+      creditNoteId: uuid,
+      method: PaymentMethodSchema,
+      reference: z.string().nullable(),
+    }),
   ])
   .openapi('StatementLine');
 
@@ -3419,7 +3512,8 @@ export const PaymentSchema = z
     capturedBy: z.object({ userId: uuid, displayName: z.string() }).nullable().openapi({ description: 'Who captured it: null for payments recorded through the API key, and once that person\'s account is gone.' }),
     currency: CurrencySchema,
     amount: AmountSchema,
-    allocated: AmountSchema,
+    allocated: AmountSchema.openapi({ description: 'Applied to receivables, plus (MUT-643) what credit notes refunded from it' }),
+    refunded: AmountSchema.openapi({ description: 'MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643.' }),
     unallocated: AmountSchema,
     /** MUT-61: from allocated vs amount. */
     allocationState: AllocationStateSchema,
@@ -3639,6 +3733,12 @@ export const SettleReceivableRequestSchema = z
 
 export const SettleReceivableResponseSchema = z.object({ receivable: ReceivableSchema, payment: PaymentSchema }).openapi('SettleReceivableResponse');
 
+/** MUT-661 (ADR-280): a payment against an Owed, and (on by default) the document that goes with it in the same step. */
+export const SettleAndIssueRequestSchema = SettleReceivableRequestSchema.extend({
+  issue: z.boolean().optional().openapi({ description: 'Issue the payment’s document in the same step (default true). false records the payment only; the document waits in To issue.' }),
+})
+  .strict()
+  .openapi('SettleAndIssueRequest');
 export const OperationKeyParamSchema = z.object({ idempotencyKey: z.string().min(8).max(128) });
 export const OperationSchema = z
   .object({
@@ -4498,9 +4598,10 @@ export const PeriodCurrencyTotalsSchema = z
     openingBalance: signedAmount('What clients owed at the start of `from`, net of money received and not yet applied: the statement balance of every client, plus payments with no client. May be negative.'),
     billed: signedAmount('Gross of the CHARGE lines dated in the period (postingDate).'),
     credited: signedAmount('CREDIT lines dated in the period (effectiveDate).'),
-    received: signedAmount('payments − reversals; may be negative when an earlier payment was reversed in the period.'),
+    received: signedAmount('payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period.'),
     payments: signedAmount('PAYMENT lines dated in the period (receivedOn).'),
     reversals: signedAmount("PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment."),
+    refunds: signedAmount('MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals.'),
     change: signedAmount('closingBalance − openingBalance = billed − received − credited.'),
     closingBalance: signedAmount('What clients owed at the end of `to`, on the same terms as openingBalance.'),
   })
@@ -5338,7 +5439,17 @@ export const IssueDocumentRequestSchema = z
     language: DocumentLanguageSchema,
     customerId: uuid.nullable().optional().openapi({ description: 'Required except for a receipt' }),
     dueDate: IsoDateSchema.optional().openapi({ description: 'A tax invoice: when its Owed falls due (default: the document date)' }),
-    originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice it credits' }),
+    originalId: uuid.optional().openapi({ description: 'A credit note: the tax invoice or (MUT-643) invoice-receipt it credits' }),
+    paidPart: z
+      .discriminatedUnion('mode', [
+        z.object({ mode: z.literal('KEEP') }),
+        z.object({ mode: z.literal('REFUND'), refundedOn: IsoDateSchema, method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional() }),
+      ])
+      .optional()
+      .openapi({
+        description:
+          'MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview\'s `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note\'s date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643.',
+      }),
     appliesToDocumentId: uuid.optional().openapi({ description: 'A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).' }),
     payment: z.object({ method: z.enum(['CASH', 'BANK']), reference: z.string().max(100).nullable().optional(), receivedOn: IsoDateSchema }).optional().openapi({ description: 'An invoice-receipt or a receipt: how the money came in' }),
     discount: AmountSchema.optional().openapi({ description: 'A discount on the whole document, in the document\'s terms (VAT included or not)' }),
@@ -5395,8 +5506,18 @@ export const IssueAllocationSchema = z
   })
   .openapi('IssueAllocation');
 
+/** MUT-643: how far a credit note may go against its original, and what of it the client already paid. */
+export const CreditNoteFactsSchema = z
+  .object({
+    outstanding: AmountSchema.openapi({ description: 'Still owed on the original: credited first' }),
+    paid: AmountSchema.openapi({ description: 'The part of this credit note the client already paid: when above 0, the issue needs `paidPart`' }),
+    maximum: AmountSchema.openapi({ description: 'The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed)' }),
+  })
+  .openapi('CreditNoteFacts');
+
 export const IssuedDocumentPreviewSchema = IssuedTotalsSchema.extend({
   allocation: IssueAllocationSchema.nullable().openapi({ description: 'MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711.' }),
+  creditNote: CreditNoteFactsSchema.nullable().openapi({ description: 'MUT-643: a credit note\'s facts against its original; null for other types. Since 1.137.0-mut643.' }),
 }).openapi('IssuedDocumentPreview');
 
 export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
@@ -5419,6 +5540,7 @@ export const IssuedDocumentSchema = IssuedTotalsSchema.extend({
   allocationSource: z.enum(['API', 'MANUAL']).nullable().openapi({ description: 'MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.' }),
   receivableId: uuid.nullable(),
   paymentId: uuid.nullable(),
+  refundId: uuid.nullable().openapi({ description: 'MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.' }),
   coreVersion: z.string(),
   /** MUT-662 */
   displayNumber: z.string().openapi({ description: 'The number as shown: PR-0007 for a payment request, the plain number otherwise' }),
@@ -5495,6 +5617,18 @@ export const IssueDueResultSchema = z
     issued: z.number().int(),
   })
   .openapi('IssueDueResult');
+export const SettleAndIssueResponseSchema = z
+  .object({
+    receivable: ReceivableSchema,
+    payment: PaymentSchema,
+    issue: z.object({
+      status: z.enum(['issued', 'not_requested', 'not_due', 'held', 'failed']).openapi({ description: 'issued: the document was issued (or already was, on a retry). not_requested: issue was false. not_due: the payment is due no document (a No document client, marked not for invoice). held: the Tax Authority held the allocation number. failed: issuing was refused; the payment is recorded and its document waits in To issue.' }),
+      reason: z.string().nullable().openapi({ description: 'The refusal’s reason (ALLOCATION_NUMBER_REQUIRED, ALLOCATION_HELD, ISSUING_SETUP_INCOMPLETE, a DueReason, …) when status is held or failed' }),
+      document: IssuedDocumentSchema.nullable(),
+    }),
+  })
+  .openapi('SettleAndIssueResponse');
+
 export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefSchema).min(1).max(500), value: z.boolean() }).strict().openapi('NotForInvoiceRequest');
 export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
 export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');

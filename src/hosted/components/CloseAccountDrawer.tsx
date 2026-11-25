@@ -109,21 +109,21 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
           </ul>
         </section>
 
-        {(impact.passesOn.length > 0 || impact.leaves.length > 0) && (
-          <section aria-labelledby={`${ids}-kept`}>
-            <h3 className="hp-section-title" id={`${ids}-kept`}>
-              {t('hosted.closeAccount.staysHeading')}
-            </h3>
-            <ul className="hp-close-list">
-              {impact.passesOn.map(({ profile, people }) => (
-                <li key={profile}>{t('hosted.closeAccount.passesOn', { profile: isolate(profile), people: list(people) })}</li>
-              ))}
-              {impact.leaves.map((profile) => (
-                <li key={profile}>{t('hosted.closeAccount.leaves', { profile: isolate(profile) })}</li>
-              ))}
-            </ul>
-          </section>
-        )}
+        {/* MUT-644 (ADR-277 D7): always shown, so the Kept section is too (the screen can't tell who issued documents). */}
+        <section aria-labelledby={`${ids}-kept`}>
+          <h3 className="hp-section-title" id={`${ids}-kept`}>
+            {t('hosted.closeAccount.staysHeading')}
+          </h3>
+          <ul className="hp-close-list">
+            {impact.passesOn.map(({ profile, people }) => (
+              <li key={profile}>{t('hosted.closeAccount.passesOn', { profile: isolate(profile), people: list(people) })}</li>
+            ))}
+            {impact.leaves.map((profile) => (
+              <li key={profile}>{t('hosted.closeAccount.leaves', { profile: isolate(profile) })}</li>
+            ))}
+            <li>{t('hosted.closeAccount.keepsIssued')}</li>
+          </ul>
+        </section>
 
         <div className="hp-close-download">
           <p>{t('hosted.closeAccount.downloadLead')}</p>

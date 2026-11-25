@@ -28,6 +28,106 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Legal notes answered; the rewritten legal texts held back; the come-back mail is labelled «פרסומת» (Communications Law s.30A)
+
+### Added
+- The come-back offer mail (ar, en) opens its subject with `פרסומת: ` and carries the sender's details (Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, contact info@mtb3a.com) in its footer and text part, beside the existing Unsubscribe link and List-Unsubscribe headers (`MailBody.sender`, `ADVERTISEMENT_LABEL`; no wire change, no API version bump). Tests: `server/src/email/__tests__/templates.test.ts`, `server/src/billing/__tests__/comeback-mail.test.ts`; QA specs `portal-live.billing.comeback-*` expect the new subject.
+- The live privacy page's "Emails we send" says the come-back offer is the only promotional email, labelled «פרסומת», names the sender and has an Unsubscribe link that works with the mail app's own button (en + ar).
+
+### Changed
+- Basel's answers (2026-11-25) applied to the 2026-11-25 drafts: notes resolved (14-day right plus "nothing is charged during the free trial", no-resale clause with the accountant case, registration number text, clients'-data clause, liability wording, PPO thresholds, s.30A, Narabnd–Barmajiyat, basic security level); kept open: terms VAT/payment provider (MUT-700 D1) and IP assignment (ע2), privacy data abroad / copy in Israel.
+- HELD BACK from publication (Basel): the terms 2026-11-25 and the rewritten privacy policy moved to `docs/legal/drafts/` (`terms-2026-11-25.{en,ar}.json`, `privacy-policy-2026-11-25.{en,ar}.json`, `[TODO]` notes intact). `CURRENT_TERMS` is 2026-10-26 again (nobody re-accepts); the live privacy page and `PrivacyPolicyPage` are as at ac0daf7c plus the sentence above; the frozen-hash list covers published versions only; the web release `[TODO` guard is unchanged and does not scan the drafts. The `web.legal.terms-rewrite` / `privacy-rewrite` QA flows and the 2026-11-25 TermsPage tests were removed with the publication (restore from commits fdb3463a..83eace15 when the drafts are published).
+- `docs/operations/before-release.md`: the legal approval / re-acceptance blockers are replaced by a held-back note pointing at the legal publication ticket. Jira MUT-731: replace the free trial with a free Starter plan.
+
+---
+
+## [Unreleased] - 2026-11-25 — Issue as you record: ask a client's documents preference once, issue each payment's document with the payment (MUT-661, ADR-280, API 1.141.0-mut661)
+
+### Added
+- `POST /v1/receivables/{id}/settle-and-issue`: a payment against an Owed and the document it is due (MUT-660's `documentsDue`), in one step under one Idempotency-Key. `issue: false` records the payment only; a refused issue (allocation number needed or held, setup incomplete) still answers 201 with `issue.status` failed/held and the reason, the document staying in To issue; a payment due nothing answers `not_due`.
+- Portal: the ask-once drawer (`DocumentsPreferenceAsk`, «كيف تُصدر المستندات لـ…؟») after the first income saved for a client with no preference; Record payment's one control (on by default) with the result in the toast.
+### Changed
+- MUT-648's save offer follows the client's preference (`issueOffers(…, preference)`): Tax invoice first -> tax invoice, Payment request first -> payment request, On payment / No document -> none.
+- An Owed a tax invoice posted (origin ISSUED_DOCUMENT) is paid in the portal: the receipt IS the payment (control locked on; `issue:false` is 422 PAYMENT_NEEDS_DOCUMENT).
+- `settleOwed` extracted from the settle route (both routes run it); a deleted Owed answers RECEIVABLE_NOT_OPEN instead of a 500.
+- Files: `server/src/routes/documents-due.ts`, `receivables.ts`, `schemas.ts`, `src/hosted/components/{DocumentsPreferenceAsk,IssueOffer,IncomeCaptureDrawer,RecordPaymentDrawer,issueOffers}`, `data/{incomeQueries,issuedQueries,incomeAffordances}`, i18n en/ar.
+
+---
+
+## [Unreleased] - 2026-11-25 — Privacy policy and terms rewritten for an Israeli invoicing service; Narabnd Studio Ltd; promotional-mail unsubscribe (ADR-279, API 1.140.0-adr279)
+
+**What:** the privacy policy and a new terms version (2026-11-25), en + ar, modelled on the topics Invoice4U's and iCount's cover, in MTB3A's own words (Basel, MUT-644 comment 13504, and his decisions of 2026-11-25). Narabnd Studio Ltd (517108775) is the party, owner and database owner; Israeli law, Jerusalem courts. New privacy sections: who is responsible, law and purposes, the portal without an account, tax documents and the Tax Authority, Malafat and connected apps, data outside Israel, security, cookies, retention, your rights. Terms: who may use (18+), trial, cancelling and refunds (14 days only before use), issuing tax documents, clients' data, our rights, 60 days' notice before MTB3A stops, general. The come-back offer gains an Unsubscribe link and List-Unsubscribe headers (the monthly summary the headers), backed by `users.offerMail` and two doors; the mail-off page reads `?mail=offers`. The web preflight refuses legal text with `[TODO` notes.
+**Why:** Basel asked for terms and a policy that cover what Israeli invoicing services' do, and for a working opt-out on every promotional mail.
+**Files:** `src/content/legal/terms/2026-11-25.{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `src/pages/landing/PrivacyPolicyPage.tsx`, `server/src/legal.ts`, `scripts/preflight.sh`, `server/src/email/unsubscribe.ts`, `server/src/email/{ports,mailer}.ts`, `server/src/email/transports/resend.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/{comeback-mail,monthly-summary-mail}.ts`, `server/src/routes/{comeback-mail,monthly-summary-mail}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/prisma/migrations/20261125160000_offer_mail_opt_out`, `src/hosted/local/migrations/index.ts` (snapshot 22 → 23), `src/hosted/pages/mail-off/MailOffPage.tsx`, `src/hosted/api/client.ts`, tests and `qa/` (web.legal.terms-rewrite, web.legal.privacy-rewrite).
+
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents kept 7 years from each one's date; erasure after the archive (MUT-644 amended, ADR-277 override log, API 1.139.0-mut644)
+
+### Changed
+- Retention is per document (Basel, MUT-644 comment 13504): each issued document of a closed profile is due the day after its 7th anniversary (its `documentDate`; a cancelled payment request from its cancellation's Israel date when later), read on the UTC day. `retention.ts`: `retainedUntil`, `sweepCutoff`, `retentionDateOf` replace `retentionEndsOn`.
+- The sweep deletes due documents one by one with their lines, copies, kept originals and cancellations; the business details, numbering and logos go with the last (`RETAINED_ISSUING_DOCUMENT_TABLES`, `RETAINED_ISSUING_PROFILE_TABLES`). `listClosed({ dueBefore })`; SWEPT records `remaining` and `profileRows`.
+- Admin listing and sweep rows: `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run: `documentsDeleted`.
+- The archive's README carries a 7-year keep notice (en, ar, he); each export logs `noticeVersion`.
+- Portal Close my account and the privacy policy: "7 years from the date of each one"; the privacy policy adds that a former owner who has their copy can ask for earlier deletion.
+
+### Added
+- `POST /admin/v1/issuing/retained/{organizationId}/erase { reference }` and `npm run issuing:retained -- erase --org <id> --reference <ref>` (`--org` also works for `archive`): refused 409 `ARCHIVE_NOT_HANDED_OVER` until an archive with the keep notice was exported, 409 `PROFILE_NOT_CLOSED` for a live profile; deletes every retained row through the bypass and logs `ERASED`. Store `issuingRetention.erase` (memory + Prisma, contract), operator-only.
+
+### Resolved
+- TD-332 won't do: the operator's hand-over after an identity check is enough.
+
+**Why:** Basel's answers to MUT-644's open questions (2026-11-25).
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/routes/issuing-retention.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/issuing-retained.ts`, `server/prisma/schema.prisma` (comment), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, docs, tests. No migration.
+
+## [Unreleased] - 2026-11-25 — "Finish setting up invoicing" after a save (MUT-722, ADR-278)
+
+### Added
+- The save toast says "Finish setting up invoicing to issue its invoice." with Set up, once a day per person and profile, after a shekel income on a profile where invoicing is available but the setup can't issue; Set up opens the setup at the first missing step (`?step=`).
+- Receivables: "Finish setup to issue" where Issue would be while the setup can't issue.
+- `Toast` `detail` option: a quieter second line under the message.
+- Release-QA `portal.invoicing.setup-hint` (spec passing); FakeApi `invoicing: 'details'`.
+
+**Why:** MUT-648's offer was silent while the setup was incomplete, so nobody learned why no invoice was offered (Basel, phone 0.2.0).
+
+**Files:** `src/hosted/components/setupHint.ts` (+ test), `src/hosted/components/{IncomeCaptureDrawer,IncomeDrawerHost,Toast}.tsx` (+ Toast test), `src/hosted/pages/views/ReceivablesList.tsx`, `src/hosted/pages/invoicing/InvoicingSetupPage.tsx`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/invoicing.yaml`, `qa/specs/portal/invoicing.spec.ts`, `qa/support/portalApi.ts`.
+
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents: the 7-year sweep and the owner's archive (MUT-644, ADR-277, API 1.138.0-mut644)
+
+### Added
+- `server/src/issuing/retention.ts`: `ISSUING_RETENTION_YEARS = 7`, `retentionEndsOn`, `sweepCutoff`: kept until 1 January of the 8th year after the year of the newest document.
+- Store `issuingRetention` (memory + Prisma, shared contract): `listClosed`, `getClosed`, `sweep` (one transaction, re-checks closed + due, `SET LOCAL mutaba3a.issuing_bypass = 'on'`, the nine retained tables), `record`, `events`. Operator-only in the store guard.
+- Table `issuing_retention_events` (migration `20261125120000_mut644_issuing_retention_events`), exempt from the purge.
+- `runIssuingRetentionSweep` (`server/src/accounts/issuing-retention-sweep.ts`), run by the hourly account purge (summary `issuingProfilesSwept`), at most 25 a run.
+- Admin: `GET /admin/v1/issuing/retained`, `POST /admin/v1/issuing/retained/{organizationId}/archive` (signed originals, signed copies of the rest, the uniform file; 409 `PROFILE_NOT_CLOSED` for a live profile), `POST /admin/v1/issuing/retention/sweep`. `npm run issuing:retained -- list|archive|sweep`.
+- Close my account's Kept section always says issued invoices and receipts are kept 7 years (portal en + ar; phone on `feature/mut-644-phone`). The privacy policy's deletion section says the same (Last updated November 25, 2026; wording awaits Basel, before-release.md).
+- Release-QA `portal.account.close-keeps-issued`.
+
+### Changed
+- `issuing.ts` exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf` (moved out of the route closure, shared with the archive). No behaviour change.
+
+**Why:** ADR-260 kept issued documents after an account closes but nothing deleted them after the 7 years, and a former owner had no way to get a copy.
+
+**Open (lawyer):** the start date; erasure requests vs the duty to keep records; whether a hand-delivered archive is enough.
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/accounts/purge-run.ts`, `server/src/routes/issuing-retention.ts`, `server/src/routes/issuing.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/{issuing-retained,users}.ts`, `server/package.json`, `server/prisma/schema.prisma`, the migration, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/CloseAccountDrawer.tsx`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `docs/operations/before-release.md`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, `qa/specs/web/legal.spec.ts`, tests.
+## [Unreleased] - 2026-11-24 — A credit note against a paid invoice: refunded or kept as credit (MUT-643, ADR-276, API 1.137.0-mut643)
+
+### Added
+- Credit notes reach a paid 305 or a 320: the paid part is released off the newest allocations and either kept as the client's unallocated money (`paidPart: KEEP`) or refunded (`paidPart: REFUND`, date, method, reference). `server/src/issuing/credit-split.ts` (cap, split, newest-first release, pure) and `creditNoteRefusal` in `ledger-plan.ts`, shared by both stores.
+- Tables `refunds` and `refund_sources` (migration `20261124200000_mut643_refunds`), `issued_documents.refundId`; `store.refunds.list`.
+- Wire: issue `paidPart`; preview `creditNote { outstanding, paid, maximum }`; document `refundId`; payment `refunded`; statement line `REFUND`; period summary `refunds`.
+- Errors: 422 `CREDIT_EXCEEDS_ORIGINAL`, 422 `ORIGINAL_PAID` now with `details.paid` and `field: paidPart`, 422 `DATE_BEFORE_CREDIT_NOTE`, 422 `PAID_PART_NOT_ALLOWED`, 409 `ORIGINAL_CHANGED`, 409 `PAYMENT_HAS_REFUND`.
+
+### Changed
+- Received nets out refunds everywhere it is shown: activity (Reports, verdict, monthly mail), the period summary, client balances, the books split, the accountant's shared summary and the period pack (refunds as negative Income rows).
+- A 320 fully covered by credit notes reads CANCELLED and no longer counts as a tax document.
+- The Prisma issue of a credit note locks the paying payments before the Owed (D4) and maps lock conflicts to 409.
+- The records file carries `refunds` (unreleased format 22).
+
+**Why:** MUT-643: a business refunding a client needs the credit note and the money going back, with a statement that balances.
+
+**Files:** `server/src/issuing/{credit-split,ledger-plan,settlement}.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables,prisma-records-export}.ts`, `server/src/routes/{issuing,payments,summaries,share-links}.ts`, `server/src/statements/*`, `server/src/summaries/{activity,profile-figures}.ts`, `server/src/income/invoice-split.ts`, `server/src/period-pack/*`, `server/src/records-file/codec.ts`, `src/hosted/local/migrations/index.ts`, the schema and migration, tests beside each.
+
 ## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
 
 - Arabic plan names (Basel, 2026-11-23): مستقل / تجاري / مؤسسة, legacy Freelancer الخطة السابقة (`src/hosted/i18n/ar.json`).

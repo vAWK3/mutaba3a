@@ -694,6 +694,13 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
 .hp-settle-line-done { color: var(--success); }
 .hp-settle-line-owed { color: var(--muted); }
 .hp-settle-line-over { color: var(--error); }
+.hp-ask-choices { display: flex; flex-direction: column; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-ask-choice { display: flex; flex-direction: column; gap: var(--space-1); text-align: start; padding: var(--space-3) var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-md); background: var(--surface); color: inherit; cursor: pointer; min-height: 44px; }
+.hp-ask-choice:hover:not(:disabled) { background: var(--surface-2); }
+.hp-ask-choice:disabled { opacity: 0.6; cursor: default; }
+.hp-ask-choice-name { font-weight: 600; }
+.hp-settle-issue { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-settle-issue input { margin-block-start: var(--space-1); }
 .hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
 
 /* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */
@@ -1883,6 +1890,7 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
 @media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }
 
+<<<<<<< HEAD
 /* MUT-710: You › Account › Two-step sign-in (TwoFactorDrawer) */
 .hp-two-factor-lead { margin: 0 0 var(--space-4); }
 .hp-two-factor-qr { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; margin: 0 0 var(--space-4); }
@@ -1896,3 +1904,8 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-two-factor-codes code { font-family: var(--font-mono); font-size: var(--text-body); }
 .hp-two-factor-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); }
 .hp-two-factor-prompt p { margin: 0 0 var(--space-2); }
+=======
+/* MUT-722: a save toast's second, quieter line (what its action is for: "Finish setting up invoicing…"). */
+.hp-toast-text { display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
+.hp-toast-detail { color: var(--muted); font-size: var(--text-label); }
+>>>>>>> main

@@ -4747,3 +4747,50 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Portal | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | Solo, Business, Firm, Freelancer (legacy) in order, Solo chosen; granting Business sends BUSINESS and lists it |
 | Release-QA | `qa/specs/portal-selfservice/operator.spec.ts` `@portal-selfservice.operator.billing-grant-business` | the operator grants Business on a 375 px phone; the CLI's list shows it. Written, not yet run (needs the shared local API). |
 | CI only | `test:db` | the Prisma enum accepts SOLO and BUSINESS (existing grant round trips run against Postgres in CI) |
+
+### MUT-722 — "Finish setting up invoicing" after a save (2026-11-25)
+- Unit: `src/hosted/components/__tests__/setupHint.test.ts` (availability rules incl. personal, Malafat, not owned, no feature, local mode; first missing step; `?step=` parse; once-a-day memory incl. storage that throws; the hook due/not due and never asking where unavailable). `Toast.test.tsx` › detail line.
+- Release-QA: `portal.invoicing.setup-hint` (AC1–AC4 and Arabic) passing; neighbours `portal.invoicing.setup`, `issue-gate`, `offer-after-save` re-run and passing.
+- Phone (Flutter repo): `test/presentation/screens/invoicing/setup_hint_gate_test.dart`, `invoicing_setup_screen_test.dart` › initial step; flow `ios.invoicing.setup-hint`.
+
+
+## MUT-643 — a credit note against a paid invoice (2026-11-24, ADR-276)
+- Unit: `server/src/issuing/__tests__/credit-split.test.ts` (cap, split, newest-first release); `settlement.test.ts` (a credited 320); `statements/__tests__/period.test.ts` (refunds figure, identity); `summaries/__tests__/activity.test.ts` (refund nets out); `period-pack/__tests__/report-refunds.test.ts`.
+- Store contract (memory + Prisma): `store-contract-issuing.ts` "MUT-643" block: AC1 refund on a paid 320 with the statement ending at 0 and the period nets out; AC3 kept credit; split and choice; newest-first across two payments; AC2 cap; a non-owned Owed keeps the old rule; idempotent retry; AC5 reverse refused.
+- Routes: `routes-issuing.test.ts` "MUT-643" block (preview facts, ORIGINAL_PAID with paid, refund issue, date and paidPart guards, keep).
+- Local: the fingerprint row and fixture for `refunds`.
+- Release-QA: `portal.invoicing.credit-note-paid-refund`, `credit-note-paid-keep`, `credit-note-cap`.
+
+## MUT-644 — closed profiles' issued documents: the retention sweep and the owner's archive (2026-11-25, ADR-277)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/issuing/__tests__/retention.test.ts` | `retentionEndsOn` (any day of the year → 1 January of year + 8; null), `sweepCutoff` at the UTC year boundary and its agreement with `retentionEndsOn`, a cancellation's Israel date |
+| Pure | `server/src/repositories/__tests__/prisma-purge-tables.test.ts` | `RETAINED_ISSUING_TABLES` equals the "kept 7 years" exemptions; none is purged; the retention log is exempt |
+| Store contract (memory + Prisma) | `store-contract-issuing-retention.ts` | AC1 with a clock: issue (receipt with a kept original, a cancelled payment request), close and purge → the rows survive and the profile is listed (by name, by VAT prefix, by due date) → not due on 31 Dec 2034 23:59:59 UTC → swept on 1 Jan 2035, every retained table empty, SWEPT logged with counts → `nothing` after; a live profile `not_closed`; a profile with only business details is due at once; `ARCHIVE_EXPORTED` rows in order |
+| Runner | `server/src/accounts/__tests__/issuing-retention-sweep.test.ts` | the purge keeps; the sweep waits for the date; dry run deletes nothing; the hourly purge runs it (`issuingProfilesSwept`), never when dry; the cap (`incomplete`); one profile's failure, or the whole sweep failing, never stops the purge |
+| Routes | `server/src/__tests__/routes-issuing-retention.test.ts` | find by name and VAT number with `retainedUntil`; the archive's zip (the original byte for byte as sent, a signed copy, the uniform file, README) and its log row; 409 for a live profile, 404, 422, 401; the sweep route before and after the date, dry and real |
+| CLI | `server/src/scripts/__tests__/issuing-retained.test.ts`, `users-cli.test.ts` | list, archive written to `--out` with the reference, a refusal, required options, sweep dry run; the purge line names the swept count |
+| Portal | `src/hosted/components/__tests__/CloseAccountDrawer.test.tsx` | Kept always shows the issued-documents line, even when every profile is deleted |
+| Privacy | `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` | the deletion section names the 7 years and the copy on request; the new date (en, ar) |
+| Release-QA | `qa/specs/portal/account.spec.ts` `@portal.account.close-keeps-issued` | the line in English, then in Arabic right to left |
+| Phone | Flutter `test/presentation/screens/account_close_test.dart`, `integration_test/qa/account_close_scenario.dart` (`ios.account.closing`) | the line in English and Arabic |
+
+**Amended 2026-11-25 (per-document retention, erasure after hand-over; API 1.139.0-mut644):**
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/issuing/__tests__/retention.test.ts` | `retainedUntil` (the day after the 7th anniversary; 29 Feb → 1 Mar), `sweepCutoff` agrees with it on every day of 9 years, the UTC day is never early in Israel, `retentionDateOf` (the later of the date and a cancellation's Israel date), `handsOverArchive` (notice version, logged no later than the erasure) |
+| Pure | `prisma-purge-tables.test.ts` | per-document and per-profile tables partition the retained set; `issued_documents` deleted last |
+| Store contract (memory + Prisma) | `store-contract-issuing-retention.ts` | clock: a 2024 receipt (copy + original) and a 2026 payment request cancelled into 2027 → the receipt goes alone on 2031-03-11 (4 rows), the request and profile rows stay; the request goes on 2034-01-02 with the business details, logo and counters; two SWEPT entries with `remaining`/`profileRows`. Erase: `not_closed` when live; refused with no archive, with a pre-notice archive, with one logged after; erased after a notice archive, ERASED with `archiveEventId`; `nothing` after |
+| Runner | `issuing-retention-sweep.test.ts` | due the day after the anniversary; two documents years apart: the older on its day, the newer kept, the profile's rows with the last; `deleted`/`remaining`/`documentsDeleted` |
+| Routes | `routes-issuing-retention.test.ts` | listing's `nextSweepOn`/`retainedUntil`; README keep notice in en/ar/he and `noticeVersion` logged; per-document sweep through the route; erase 401/422/409 `ARCHIVE_NOT_HANDED_OVER` → archive → 200, ERASED logged, then 404; 409 `PROFILE_NOT_CLOSED`; 404 unknown |
+| CLI | `issuing-retained.test.ts` | list line, sweep (dry and real), erase with `--org`, refusal reason, required reference |
+| Portal / privacy / QA | `CloseAccountDrawer.test.tsx`, `PrivacyPolicyPage.test.tsx`, `qa/specs/portal/account.spec.ts` | "7 years from the date of each one"; the privacy policy's earlier-deletion clause |
+
+### MUT-661: issue as you record
+| Layer | File | Covers |
+|---|---|---|
+| Routes | `server/src/__tests__/routes-settle-and-issue.test.ts` | AC3 receipt on the tax invoice for 1,000 (2,400 stays owed), AC4 invoice-receipt, next payment its own document, AC5 `issue:false`, AC6 No document / marked, AC7 failed issue keeps the payment (allocation number required) and the document due, setup incomplete, retry with the same key (one payment, one document), 404 without invoicing, 422 over outstanding, payment-only refused on a tax invoice's Owed |
+| Portal | `DocumentsPreferenceAsk.test.tsx`, `RecordPaymentDrawerIssue.test.tsx`, `issueOffers.test.ts` | the ask (four choices, saved with the fresh version, Arabic, failure), the control (on by default, off, failed issue message, hidden for No document, locked on a tax invoice's Owed), offers by preference |
+| QA | `portal.invoicing.issue-as-you-record`, `ios.invoicing.issue-as-you-record` | see the brief |

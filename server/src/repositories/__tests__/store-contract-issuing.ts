@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
 import { documentsDue } from '../../issuing/documents-due.js';
+import { buildStatement } from '../../statements/build.js';
+import { ledgerEntries } from '../../statements/lines.js';
+import { summarizePeriod } from '../../statements/period.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
 const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
@@ -174,17 +177,127 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const credits = await store.receivables.listCredits(w.a.id, invoice.receivableId!);
       expect(credits).toHaveLength(1);
       expect(credits[0]).toMatchObject({ id: note.creditId, amountMinor: shekels(472), netMinor: shekels(400), vatMinor: shekels(72), reasonCode: 'OTHER', reason: 'חשבונית זיכוי 1', effectiveDate: '2026-11-22' });
-      expect(await store.issuing.issue(w.issue({ docType: 'CREDIT_NOTE', amount: 1_000, originalId: invoice.id }), at(3))).toMatchObject({ kind: 'original_paid', outstandingMinor: shekels(708) });
+      // MUT-643: nothing was paid, so the cap (gross less earlier credit notes) is what is still owed.
+      expect(await store.issuing.issue(w.issue({ docType: 'CREDIT_NOTE', amount: 1_000, originalId: invoice.id }), at(3))).toEqual({ kind: 'credit_exceeds_original', maximumMinor: shekels(708) });
     });
 
-    it('refuses a credit note on a paid invoice, another customer, or anything but a tax invoice', async () => {
+    it('refuses a credit note on another customer, another profile, or anything but a tax invoice or invoice-receipt', async () => {
       const store = await makeStore();
       const w = await world(store);
-      const paid = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT' }));
+      const receipt = await w.issued(store, w.issue({ docType: 'RECEIPT' }));
       const invoice = await w.issued(store, w.issue(), 2);
-      expect(await store.issuing.issue(w.issue({ docType: 'CREDIT_NOTE', amount: 100, originalId: paid.id }), at(3))).toEqual({ kind: 'original_not_found' });
+      expect(await store.issuing.issue(w.issue({ docType: 'CREDIT_NOTE', amount: 100, originalId: receipt.id }), at(3))).toEqual({ kind: 'original_not_found' });
       expect(await store.issuing.issue(w.issue({ docType: 'CREDIT_NOTE', amount: 100, originalId: invoice.id, customerId: w.other.id }), at(4))).toEqual({ kind: 'original_not_found' });
       expect(await store.issuing.issue(w.issue({ organizationId: w.b.id, docType: 'CREDIT_NOTE', amount: 100, originalId: invoice.id, customerId: null }), at(5))).toEqual({ kind: 'original_not_found' });
+    });
+
+    describe('MUT-643: a credit note reaching what was already paid', () => {
+      const note = (originalId: string, amount: number, paidPart: IssueDocumentInput['paidPart'] = null) =>
+        ({ docType: 'CREDIT_NOTE' as const, amount, originalId, titlePrefix: 'חשבונית זיכוי', paidPart });
+      const refund = { mode: 'REFUND' as const, refundedOn: '2026-11-22', method: 'BANK' as const, reference: 'RF-1' };
+
+      it('AC1: a fully paid invoice-receipt credited in full with a refund: the Owed is credited, the money is refunded, not unallocated', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const paid = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT' }));
+        const credit = await w.issued(store, w.issue(note(paid.id, 1_000, refund)), 2);
+        expect(credit.refundId).not.toBeNull();
+        expect(await store.receivables.getById(w.a.id, paid.receivableId!)).toMatchObject({ paidMinor: 0n, creditedMinor: shekels(1_180) });
+        // Refunded money counts as used: the Received stays fully allocated, its refund explains it.
+        expect(await store.payments.getById(w.a.id, paid.paymentId!)).toMatchObject({ allocatedMinor: shekels(1_180) });
+        const refunds = await store.refunds.list(w.a.id, { customerId: w.customer.id });
+        expect(refunds).toEqual([
+          expect.objectContaining({ id: credit.refundId, issuedDocumentId: credit.id, amountMinor: shekels(1_180), refundedOn: '2026-11-22', method: 'BANK', reference: 'RF-1', currency: 'ILS', customerId: w.customer.id, sources: [{ paymentId: paid.paymentId, amountMinor: shekels(1_180) }] }),
+        ]);
+        // The statement: charge, payment, credit, refund; it ends at 0, and the period's Received is net of the refund.
+        const sources = await store.receivables.statementSources(w.a.id, w.customer.id, 'ILS');
+        const page = buildStatement(sources, { asOf: '2026-11-30', timezone: 'Asia/Jerusalem', from: null, to: null, projectId: null }, { limit: 50, cursor: null });
+        expect(page.lines.map((l) => l.kind)).toEqual(['CHARGE', 'PAYMENT', 'CREDIT', 'REFUND']);
+        expect(page.closingMinor).toBe(0n);
+        const period = summarizePeriod(ledgerEntries(await store.receivables.periodSources(w.a.id, 'ILS'), { asOf: '2026-11-30', timezone: 'Asia/Jerusalem' }), { from: '2026-11-01', to: '2026-11-30' }, 'ILS')[0]!;
+        expect(period).toMatchObject({ paymentsMinor: shekels(1_180), refundsMinor: shekels(1_180), closingMinor: 0n });
+      });
+
+      it('AC3: kept as credit, the paid part goes back to the Received as unallocated money; no refund is written', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const invoice = await w.issued(store, w.issue());
+        const receipt = await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 1_180, appliesToDocumentId: invoice.id }), 2);
+        const credit = await w.issued(store, w.issue(note(invoice.id, 400, { mode: 'KEEP' })), 3);
+        expect(credit.refundId).toBeNull();
+        expect(await store.receivables.getById(w.a.id, invoice.receivableId!)).toMatchObject({ paidMinor: shekels(708), creditedMinor: shekels(472) });
+        expect(await store.payments.getById(w.a.id, receipt.paymentId!)).toMatchObject({ allocatedMinor: shekels(708) });
+        expect(await store.refunds.list(w.a.id, { customerId: w.customer.id })).toEqual([]);
+      });
+
+      it('credits what is still owed first; only the rest is the paid part, and it needs a choice', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const invoice = await w.issued(store, w.issue());
+        await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 500, appliesToDocumentId: invoice.id }), 2);
+        expect(await store.issuing.issue(w.issue(note(invoice.id, 1_000)), at(3))).toEqual({ kind: 'original_paid', outstandingMinor: shekels(680), paidMinor: shekels(500) });
+        const credit = await w.issued(store, w.issue(note(invoice.id, 1_000, refund)), 4);
+        expect(await store.receivables.getById(w.a.id, invoice.receivableId!)).toMatchObject({ paidMinor: 0n, creditedMinor: shekels(1_180) });
+        expect((await store.refunds.list(w.a.id, {}))[0]).toMatchObject({ id: credit.refundId, amountMinor: shekels(500) });
+      });
+
+      it('releases the newest payment first, across two payments', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const invoice = await w.issued(store, w.issue());
+        const older = await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 680, appliesToDocumentId: invoice.id }), 2);
+        const newer = await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 500, appliesToDocumentId: invoice.id }), 3);
+        await w.issued(store, w.issue(note(invoice.id, 600, { mode: 'KEEP' })), 4);
+        // 708 paid back: all 500 of the newer receipt, then 208 of the older one.
+        expect(await store.payments.getById(w.a.id, newer.paymentId!)).toMatchObject({ allocatedMinor: 0n });
+        expect(await store.payments.getById(w.a.id, older.paymentId!)).toMatchObject({ allocatedMinor: shekels(472) });
+        expect(await store.receivables.getById(w.a.id, invoice.receivableId!)).toMatchObject({ paidMinor: shekels(472), creditedMinor: shekels(708) });
+      });
+
+      it('AC2: the credit notes on one original never add up to more than its total', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const paid = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT' }));
+        await w.issued(store, w.issue(note(paid.id, 700, refund)), 2);
+        expect(await store.issuing.issue(w.issue(note(paid.id, 400, refund)), at(3))).toEqual({ kind: 'credit_exceeds_original', maximumMinor: shekels(354) });
+        await w.issued(store, w.issue(note(paid.id, 300, refund)), 4);
+        expect(await store.issuing.issue(w.issue(note(paid.id, 1, refund)), at(5))).toEqual({ kind: 'credit_exceeds_original', maximumMinor: 0n });
+      });
+
+      it('an Owed the document does not own keeps the old rule: only what is still owed (MUT-730)', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const owed = await recorded(store, w, 1_416, 236);
+        const invoice = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
+        const money = await captured(store, w, 1_180);
+        expect(await store.payments.allocate(w.a.id, money.id, [{ receivableId: owed.id, amountMinor: shekels(1_180) }], at(2))).not.toBeNull();
+        expect(await store.issuing.issue(w.issue(note(invoice.id, 100, refund)), at(3))).toEqual({ kind: 'original_paid', outstandingMinor: 0n });
+      });
+
+      it('a retry of the same request returns the same credit note and writes one refund', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const paid = await w.issued(store, w.issue({ docType: 'TAX_INVOICE_RECEIPT' }));
+        const input = w.issue(note(paid.id, 1_000, refund));
+        const first = await w.issued(store, input, 2);
+        const again = await store.issuing.issue(input, at(3));
+        expect(again).toMatchObject({ kind: 'issued', created: false, document: { id: first.id } });
+        expect(await store.refunds.list(w.a.id, {})).toHaveLength(1);
+      });
+
+      it('AC5: a payment a refund drew on cannot be reversed', async () => {
+        const store = await makeStore();
+        const w = await world(store);
+        const invoice = await w.issued(store, w.issue());
+        await w.issued(store, w.issue({ docType: 'RECEIPT', amount: 1_180, appliesToDocumentId: invoice.id }), 2);
+        const refunded = (await store.refunds.list(w.a.id, {}))[0];
+        expect(refunded).toBeUndefined();
+        await w.issued(store, w.issue(note(invoice.id, 1_000, refund)), 3);
+        const [made] = await store.refunds.list(w.a.id, {});
+        const source = made!.sources[0]!.paymentId;
+        await expect(store.payments.reverse(w.a.id, source, 'bounced', at(4))).rejects.toMatchObject({ name: 'StateConflict', reason: 'PAYMENT_HAS_REFUND' });
+        expect(await store.payments.getById(w.a.id, source)).toMatchObject({ status: 'POSTED', allocatedMinor: shekels(1_180) });
+      });
     });
 
     it('records copies: the first is the original, every later one a copy (AC4)', async () => {

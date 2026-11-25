@@ -3,7 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
 import { OFFICE_A, customer, office } from '../../support/portal';
-import { FakeApi, payment, receivable, type DueSeed } from '../../support/portalApi';
+import { FakeApi, customerSummary, payment, receivable, type DueSeed } from '../../support/portalApi';
 import { openYou } from '../../support/you';
 
 /**
@@ -140,6 +140,8 @@ const ready = () =>
   new FakeApi({
     profiles: [office(OFFICE_A, 'Nour Studio')],
     clients: 1,
+    // MUT-661: these flows are about the offer, so Client 1's preference is already answered.
+    clientPreference: 'TAX_INVOICE_FIRST',
     invoicing: 'ready',
   });
 
@@ -458,7 +460,7 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
   });
 
   await step('AC2 With "offer to issue after saving" off, the toast offers nothing', async () => {
-    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', offerAfterSave: false });
+    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'ready', offerAfterSave: false });
     await off.open(page, `/p/${OFFICE_A}/receivables`);
     await page.locator('[data-income-add]').click();
     await income.getByLabel('Amount').fill('590');
@@ -670,6 +672,126 @@ test('Set a client’s documents preference on the client page', { tag: '@portal
   });
 });
 
+// ---------------------------------------------------------------- MUT-643: crediting what was already paid
+
+/** Issues a document of 1,000 before VAT to Client 1 from Documents › Issued; lands on its page. */
+async function issueThousand(page: import('@playwright/test').Page, api: FakeApi, docType: 'Tax invoice' | 'Tax invoice-receipt') {
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+  await page.getByTestId('issue-open').click();
+  await drawer.getByLabel('Client').fill('Client 1');
+  await page.getByRole('option', { name: /Client 1/ }).click();
+  await drawer.getByRole('radio', { name: docType, exact: true }).click();
+  await drawer.getByLabel('Description').fill('Website build');
+  await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+  await expect(drawer.getByTestId('issue-totals')).toContainText('1,180.00');
+  await page.getByTestId('issue-submit').click();
+  await expect(page.getByTestId('issued-doc-title')).toContainText(`${docType} 1`);
+}
+
+test('a paid invoice-receipt credited in full is refunded; the client ledger shows the refund and ends at 0 (MUT-643)', { tag: '@portal.invoicing.credit-note-paid-refund' }, async ({ page, step }) => {
+  // The client page reads Client 1's summary before its ledger card.
+  const api = new FakeApi({
+    profiles: [office(OFFICE_A, 'Nour Studio')],
+    clients: 1,
+    invoicing: 'ready',
+    customerSummaries: [customerSummary(C1, { currency: 'ILS', outstanding: '0.00', overdue: '0.00', lastPaymentOn: null, status: 'UP_TO_DATE', matters: [] })],
+  });
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue an invoice-receipt of 1,000 to Client 1', async () => {
+    await issueThousand(page, api, 'Tax invoice-receipt');
+  });
+
+  await step('AC1 Credit note from it: the drawer says the client already paid 1,180.00; Issue waits for a choice', async () => {
+    await page.getByTestId('issued-credit').click();
+    await expect(paidPart.getByRole('heading', { name: /The client already paid .*1,180\.00.* of this/ })).toBeVisible();
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+  });
+
+  await step('AC1 Refunded to the client by bank transfer, reference RF-7: the credit note is issued with the refund', async () => {
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await paidPart.getByLabel('Reference').fill('RF-7');
+    await expect(page.getByTestId('issue-submit')).toBeEnabled();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', originalId: expect.any(String), paidPart: { mode: 'REFUND', method: 'BANK', reference: 'RF-7' } });
+  });
+
+  await step('AC1 Client 1\'s ledger: charge, credit, payment, then the refund; it ends at 0.00', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`);
+    const card = page.getByTestId('ledger-card');
+    await expect(card.getByTestId('ledger-line').filter({ hasText: 'Refund' })).toContainText('1,180.00');
+    await expect(card.getByTestId('ledger-closing')).toContainText('0.00');
+  });
+
+  await step('In Arabic the ledger reads right to left and names the refund', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients/${C1}`, 'ar');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expect(page.getByTestId('ledger-card').getByTestId('ledger-line').filter({ hasText: 'مبلغ مُعاد' })).toBeVisible();
+  });
+});
+
+test('a paid tax invoice credited in part keeps the paid part as the client\'s credit (MUT-643)', { tag: '@portal.invoicing.credit-note-paid-keep' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue a tax invoice of 1,000 and a receipt that pays all of it', async () => {
+    await issueThousand(page, api, 'Tax invoice');
+    await page.getByTestId('issued-receipt').click();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Receipt 1');
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Tax invoice 1/ }).click();
+  });
+
+  await step('AC3 Credit note for 400 before VAT: the client already paid 472.00 of it', async () => {
+    await page.getByTestId('issued-credit').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('400');
+    await expect(paidPart.getByRole('heading', { name: /472\.00/ })).toBeVisible();
+  });
+
+  await step('AC3 Kept as their credit: issued with KEEP and no refund', async () => {
+    await paidPart.getByRole('radio', { name: 'Kept as their credit' }).click();
+    await expect(paidPart.getByText("It stays on the client's account as credit toward what they owe next.")).toBeVisible();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', paidPart: { mode: 'KEEP' } });
+  });
+});
+
+test('credit notes on one document never add up to more than it; the refusal says what is left (MUT-643)', { tag: '@portal.invoicing.credit-note-cap' }, async ({ page, step }) => {
+  const api = ready();
+  const drawer = page.getByRole('dialog', { name: 'Issue a document' });
+  const paidPart = drawer.getByTestId('issue-paid-part');
+
+  await step('Issue an invoice-receipt of 1,000 and credit 600 of it, refunded', async () => {
+    await issueThousand(page, api, 'Tax invoice-receipt');
+    await page.getByTestId('issued-credit').click();
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('600');
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
+  });
+
+  await step('AC2 Another credit note starts at what is left: 472.00, VAT included', async () => {
+    await page.getByRole('link', { name: 'Issued documents' }).click();
+    await page.getByRole('link', { name: /Tax invoice-receipt 1/ }).click();
+    await page.getByTestId('issued-credit').click();
+    await expect(drawer.getByRole('textbox', { name: 'Price', exact: true })).toHaveValue('472.00');
+  });
+
+  await step('AC2 Raised to 1,000 and refunded, it is refused: at most 472.00 is left; nothing is issued', async () => {
+    await drawer.getByRole('textbox', { name: 'Price', exact: true }).fill('1000');
+    await paidPart.getByRole('radio', { name: 'Refunded to the client' }).click();
+    await page.getByTestId('issue-submit').click();
+    await expect(drawer.getByRole('alert')).toContainText('At most 472.00 is left to credit');
+    await expect(drawer).toBeVisible();
+  });
+});
+
 test('a number requested by hand is entered before issuing; the invoice number is a preview, never held (MUT-711)', { tag: '@portal.invoicing.manual-allocation' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', manualAllocation: true });
   const drawer = page.getByRole('dialog', { name: 'Issue a document' });
@@ -731,5 +853,182 @@ test('a number requested by hand is entered before issuing; the invoice number i
     await expect(ar.getByTestId('issue-allocation').getByRole('heading', { name: 'تحتاج هذه الفاتورة إلى رقم تخصيص' })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expectNoHorizontalOverflow(page);
+  });
+});
+
+/** MUT-722: a save on a profile where invoicing is available but the setup can't issue yet (details in, numbering not). */
+test('saving a shekel income while the setup is incomplete says Finish setting up invoicing, once a day; Receivables says Finish setup to issue', { tag: '@portal.invoicing.setup-hint' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
+  const income = page.getByRole('dialog', { name: 'New income' });
+  const toast = page.getByTestId('toast-live');
+  const hintLine = 'Finish setting up invoicing to issue its invoice.';
+  const recordOwed = async (amount: string, currency?: string) => {
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill(amount);
+    if (currency) {
+      await income.locator('button.form-disclosure').click();
+      await income.getByLabel('Currency').selectOption(currency);
+    }
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(income).toHaveCount(0);
+    await expect(toast).toContainText('Saved');
+  };
+
+  await step('On Owed, record ₪590 owed by Client 1', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+  });
+
+  await step('AC3 The save toast says Finish setting up invoicing to issue its invoice, with Set up', async () => {
+    await expect(toast).toContainText(hintLine);
+    await expect(toast.getByRole('button', { name: 'Set up' })).toBeVisible();
+    await expect(toast.getByRole('button', { name: /^Issue/ })).toHaveCount(0);
+  });
+
+  await step('AC3 Receivables shows Finish setup to issue where Issue would be', async () => {
+    await expect(page.locator('[data-testid^="finish-setup-"]').first()).toHaveText('Finish setup to issue');
+    await expect(page.locator('[data-testid^="issue-from-"]')).toHaveCount(0);
+  });
+
+  await step('AC1 Set up opens the invoicing setup at the first missing step: Numbering', async () => {
+    await toast.getByRole('button', { name: 'Set up' }).click();
+    await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you/invoicing\\?step=numbering`));
+    await expect(page.getByRole('heading', { level: 2, name: 'Numbering' })).toBeVisible();
+  });
+
+  await step('AC2 Back on Owed, a second save the same day shows no hint', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('236');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(toast.getByRole('button', { name: 'Set up' })).toHaveCount(0);
+  });
+
+  await step('AC3 Finish setup to issue opens the setup at Numbering; answer it (start from 1)', async () => {
+    await page.locator('[data-testid^="finish-setup-"]').first().click();
+    await expect(page.getByRole('heading', { level: 2, name: 'Numbering' })).toBeVisible();
+    await page.getByRole('radio', { name: 'No, start from 1' }).click();
+    await page.getByRole('button', { name: 'Next' }).click();
+    await expect(page.getByTestId('setup-ready')).toBeVisible();
+  });
+
+  await step('AC2 With the setup complete, the next save gets the normal Issue offer (MUT-648)', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('1180');
+    await expect(toast.getByRole('button', { name: 'Issue a tax invoice' })).toBeVisible();
+    await expect(toast).not.toContainText(hintLine);
+  });
+
+  await step('AC4 A dollar income on an incomplete setup shows no hint', async () => {
+    const usd = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
+    await usd.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('100', 'USD');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(toast.getByRole('button')).toHaveCount(0);
+  });
+
+  await step('AC4 No hint on a personal profile, a Malafat firm, or without the invoicing feature', async () => {
+    const personal = new FakeApi({ profiles: [{ id: OFFICE_A, name: 'Personal', type: 'PERSONAL', owned: true, writerOfRecord: null }], clients: 1, invoicing: true });
+    await personal.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast.getByRole('button')).toHaveCount(0);
+    expect(personal.last('GET', /^\/v1\/issuing\/setup$/)).toBeFalsy();
+
+    const firm = new FakeApi({ profiles: [{ id: OFFICE_A, name: 'Haddad & Partners', type: 'BUSINESS', owned: true, writerOfRecord: 'MALAFAT' }], clients: 1, invoicing: true });
+    await firm.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast).not.toContainText(hintLine);
+    await expect(page.locator('[data-testid^="finish-setup-"]')).toHaveCount(0);
+
+    const plain = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1 });
+    await plain.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.evaluate(() => localStorage.clear());
+    await recordOwed('590');
+    await expect(toast.getByRole('button')).toHaveCount(0);
+    await expect(page.locator('[data-testid^="finish-setup-"]')).toHaveCount(0);
+  });
+
+  await step('In Arabic the toast reads أكمِل إعداد الفوترة لإصدار فاتورته with إعداد, right to left', async () => {
+    const ar = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
+    await ar.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
+    await page.evaluate(() => localStorage.clear());
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await page.locator('[data-income-add]').click();
+    const arIncome = page.getByRole('dialog', { name: 'دخل جديد' });
+    await arIncome.locator('#hosted-income-amount').fill('590');
+    await arIncome.getByRole('combobox').first().fill('Client 1');
+    await arIncome.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await arIncome.getByRole('button', { name: 'حفظ الدخل' }).click();
+    await expect(toast).toContainText('أكمِل إعداد الفوترة لإصدار فاتورته.');
+    await expect(toast.getByRole('button', { name: 'إعداد' })).toBeVisible();
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+/** MUT-661: the first income for a client asks how documents are issued, once; a payment issues its document in the same step. */
+test('the first Owed for a client asks how documents are issued, once; a payment issues its document with it', { tag: '@portal.invoicing.issue-as-you-record' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready' });
+  const income = page.getByRole('dialog', { name: 'New income' });
+  const ask = page.getByRole('dialog', { name: /How do you issue documents to .*Client 1/ });
+  const toast = page.getByTestId('toast-live');
+  const recordOwed = async (amount: string) => {
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill(amount);
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(income).toHaveCount(0);
+  };
+
+  await step('On Owed, record ₪3,400 owed by Client 1', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('3400');
+  });
+
+  await step('AC1 The save asks how documents are issued to Client 1, with the four choices', async () => {
+    await expect(ask).toBeVisible();
+    for (const choice of ['Tax invoice first', 'Payment request first', 'On payment', 'No document']) await expect(ask.getByRole('button', { name: new RegExp(`^${choice}`) })).toBeVisible();
+  });
+
+  await step('AC2 Choose Tax invoice first: the toast offers Issue a tax invoice', async () => {
+    await ask.getByRole('button', { name: /^Tax invoice first/ }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(toast.getByRole('button', { name: 'Issue a tax invoice' })).toBeVisible();
+  });
+
+  await step('AC1 A second Owed for Client 1 asks nothing', async () => {
+    await recordOwed('500');
+    await expect(toast).toContainText('Saved');
+    await expect(page.getByRole('dialog', { name: /How do you issue documents/ })).toHaveCount(0);
+  });
+
+  await step('Record a payment of ₪1,000 on an Owed of an On payment client, with its document control on', async () => {
+    const pay = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'ON_PAYMENT', invoicing: 'ready', receivables: [receivable(1, { customerId: customer(0).id, gross: '3400.00', dueDate: '2026-10-30' })] });
+    await pay.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await drawer.getByLabel('Amount (ILS)').fill('1000');
+    await expect(drawer.getByTestId('settle-issue')).toBeChecked();
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('AC4 The toast says the payment is recorded and its document is issued', async () => {
+    await expect(toast).toContainText('Document 1 issued');
+  });
+
+  await step('AC5 With the control off, only the payment is recorded', async () => {
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await drawer.getByLabel('Amount (ILS)').fill('400');
+    await drawer.getByTestId('settle-issue').uncheck();
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(toast).not.toContainText('issued');
   });
 });

@@ -154,6 +154,13 @@ describe('STORE_ACCESS', () => {
       'integrations.setDelegation',
       // MUT-571 AC3: the re-consent reminder job reads every profile's connection end, on the unguarded store.
       'issuing.taxConnectionsEndingBetween',
+      // MUT-644: closed profiles' issued documents: the hourly purge job and /admin only.
+      'issuingRetention.erase',
+      'issuingRetention.events',
+      'issuingRetention.getClosed',
+      'issuingRetention.listClosed',
+      'issuingRetention.record',
+      'issuingRetention.sweep',
       // MUT-595: Sign in with Malafat runs on public routes, unguarded.
       'malafatSignIns.claimCallback',
       'malafatSignIns.claimCompletion',

@@ -55,7 +55,7 @@ describe('createLocalApp + mintLocalSession', () => {
       to: '2026-10-31',
       asOf: '2026-10-20',
       timezone: expect.any(String),
-      currencies: [{ currency: 'ILS', openingBalance: '-40.00', billed: '300.00', credited: '0.00', received: '120.00', payments: '120.00', reversals: '0.00', change: '180.00', closingBalance: '140.00' }],
+      currencies: [{ currency: 'ILS', openingBalance: '-40.00', billed: '300.00', credited: '0.00', received: '120.00', payments: '120.00', reversals: '0.00', refunds: '0.00', change: '180.00', closingBalance: '140.00' }],
     });
   });
 

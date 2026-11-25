@@ -133,6 +133,7 @@
       "staysHeading": "Kept",
       "passesOn": "{profile} passes to {people}, with everything in it.",
       "leaves": "{profile} keeps the records you added, without your name. Only your access ends.",
+      "keepsIssued": "If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one, as tax law requires, and then deleted. Write to us if you need a copy.",
       "downloadLead": "Want a copy first? Download your records before you close.",
       "download": "Download my records",
       "grace": "For 30 days you can sign in and keep your account. After that it can't be recovered, and the copies in our backups expire two weeks later.",
@@ -802,6 +803,14 @@
         "exceedsNow": "That's more than what's left now ({amount})",
         "changed": "This entry changed while you were recording. Showing the latest.",
         "gone": "This entry can't take a payment anymore."
+      },
+      "issue": {
+        "RECEIPT": "Issue a receipt for this payment",
+        "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt for this payment",
+        "issued": "Document {number} issued.",
+        "held": "The document wasn't issued: the Tax Authority is holding its allocation number. It is waiting in To issue.",
+        "failed": "The document couldn't be issued, so it is waiting in To issue.",
+        "required": "(the receipt records the payment)"
       }
     },
     "savedFlash": {
@@ -2839,6 +2848,15 @@
       "onDone": "The monthly summary is on.",
       "linkBroken": "This link no longer works. You can turn it off in You › Account."
     },
+    "offerMail": {
+      "offAsk": "Stop offers from MTB3A?",
+      "rowSub": "Emails about your account still reach you.",
+      "offButton": "Unsubscribe",
+      "offDone": "You won't get offers from MTB3A.",
+      "onButton": "Send me offers again",
+      "onDone": "Offers from MTB3A are on.",
+      "linkBroken": "This link no longer works. Write to info@mtb3a.com and we'll stop sending you offers."
+    },
     "invoicing": {
       "uniformFile": {
         "title": "Uniform file (מבנה אחיד)",
@@ -3066,7 +3084,10 @@
       "openSetup": "Open the invoicing setup",
       "refusals": {
         "DATE_BEFORE_LAST_DOCUMENT": "A document of this type was already issued with a later date. Choose that date or a later one.",
-        "ORIGINAL_PAID": "A credit note credits only what is still owed on its tax invoice.",
+        "ORIGINAL_PAID": "The client already paid part of this. Choose whether it was refunded or kept as their credit.",
+        "CREDIT_EXCEEDS_ORIGINAL": "The credit notes on this document can't add up to more than it. At most {maximum} is left to credit.",
+        "DATE_BEFORE_CREDIT_NOTE": "A refund can't be dated before its credit note.",
+        "ORIGINAL_CHANGED": "A payment on this document changed while you were issuing. Try again.",
         "EXCEEDS_OUTSTANDING": "The receipt is more than the tax invoice still owes.",
         "ISSUING_SETUP_INCOMPLETE": "Finish the invoicing setup before issuing.",
         "DATE_BEFORE_ORIGINAL": "A credit note can't be dated before its tax invoice.",
@@ -3097,12 +3118,27 @@
       "pdfFailed": "The PDF could not be prepared. Please try again.",
       "notFound": "This document could not be found.",
       "creditLine": "Credit for {document}",
+      "creditPaid": {
+        "title": "The client already paid {amount} of this",
+        "choice": "What happened to the money they paid",
+        "refunded": "Refunded to the client",
+        "kept": "Kept as their credit",
+        "keptNote": "It stays on the client's account as credit toward what they owe next.",
+        "refundedOn": "Refunded on",
+        "required": "Choose whether the money was refunded or kept as credit."
+      },
       "offer": {
         "line": "Services",
         "TAX_INVOICE": "Issue a tax invoice",
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
-        "column": "Document"
+        "column": "Document",
+        "PAYMENT_REQUEST": "Issue a payment request"
+      },
+      "setupHint": {
+        "line": "Finish setting up invoicing to issue its invoice.",
+        "setUp": "Set up",
+        "finish": "Finish setup to issue"
       },
       "colStatus": "Status",
       "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
@@ -3142,6 +3178,18 @@
         "invalid": "An allocation number is 9 digits.",
         "orChange": "Or",
         "changeAmount": "change the amount"
+      },
+      "ask": {
+        "title": "How do you issue documents to {client}?",
+        "body": "Asked once for each client. You can change it later on the client's page.",
+        "later": "Not now",
+        "failed": "Couldn't save your choice. Try again.",
+        "hint": {
+          "TAX_INVOICE_FIRST": "A tax invoice when an amount is owed, then a receipt for each payment.",
+          "PAYMENT_REQUEST_FIRST": "A payment request when an amount is owed, then a tax invoice-receipt for each payment.",
+          "ON_PAYMENT": "A tax invoice-receipt for each payment.",
+          "NO_DOCUMENT": "No documents for this client."
+        }
       }
     },
     "home": {
@@ -3366,7 +3414,8 @@
         "CHARGE": "Owed",
         "CREDIT": "Credit",
         "PAYMENT": "Payment",
-        "PAYMENT_REVERSAL": "Payment reversed"
+        "PAYMENT_REVERSAL": "Payment reversed",
+        "REFUND": "Refund"
       },
       "due": {
         "TAX_INVOICE": "Tax invoice due",

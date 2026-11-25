@@ -103,3 +103,17 @@ features:
     expect:
       - The drawer and the closing page are right to left, in Arabic, and nothing scrolls sideways
       - The address being closed reads left to right inside the Arabic sentence
+  - id: close-keeps-issued
+    title: Close my account says issued invoices and receipts are kept 7 years, in English and Arabic
+    tier: tertiary # copy only (MUT-644); the sweep itself is server-side and proven by vitest + test:db
+    paths:
+      - src/hosted/components/CloseAccountDrawer.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+    steps:
+      - From You › Account, choose Close my account
+      - Read the Kept section
+      - Switch to Arabic and open it again
+    expect:
+      - The Kept section says invoices and receipts issued with MTB3A, and the business details printed on them, are kept for 7 years from the date of each one, then deleted, and to write for a copy
+      - The same line reads in Arabic, right to left

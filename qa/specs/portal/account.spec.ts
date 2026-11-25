@@ -209,3 +209,32 @@ test('Close my account and the closing page read right to left in Arabic on a 37
     expect(await noSideScroll()).toBe(true);
   });
 });
+
+test('Close my account says issued invoices and receipts are kept 7 years, in English and Arabic', { tag: '@portal.account.close-keeps-issued' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: closingProfiles(), currentPassword: CURRENT });
+  const dialog = page.getByRole('dialog', { name: 'Close my account' });
+
+  await step('From You › Account, choose Close my account', async () => {
+    await api.open(page, `/p/${OFFICE_A}/clients`);
+    await openCloseAccount(page);
+    await expect(dialog).toBeVisible();
+  });
+
+  await step('Read the Kept section', async () => {
+    await expect(dialog.getByRole('heading', { name: 'Kept' })).toBeVisible();
+    const line = dialog.getByText(/^If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one, as tax law requires, and then deleted\. Write to us if you need a copy\.$/);
+    await line.scrollIntoViewIfNeeded();
+    await expect(line).toBeVisible();
+  });
+
+  await step('Switch to Arabic and open it again', async () => {
+    await api.open(page, `/p/${OFFICE_A}?closeAccount=true`, 'ar');
+    const arabic = page.getByRole('dialog', { name: 'إغلاق حسابي' });
+    await expect(arabic.getByRole('heading', { name: 'ما يبقى' })).toBeVisible();
+    const line = arabic.getByText(/^إن أصدرت فواتير أو إيصالات عبر متابعة، فنحتفظ بها وبتفاصيل عملك المطبوعة عليها 7 سنوات/);
+    await line.scrollIntoViewIfNeeded();
+    await expect(line).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');
+    expect(api.last('POST', /^\/v1\/me\/closure$/)).toBeUndefined();
+  });
+});
