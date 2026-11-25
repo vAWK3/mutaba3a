@@ -4706,6 +4706,15 @@ Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated f
 
 No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
 
+## MUT-710 — two-step sign-in, portal (2026-11-25)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/twoFactor/__tests__/twoFactor.test.ts` | answer and failure mapping, challenge and setup-required parsing |
+| Component | `src/hosted/twoFactor/__tests__/TwoFactorDrawer.test.tsx`, `src/hosted/pages/auth/__tests__/SignInTwoFactor.test.tsx` | turn on with the app (password, QR, code, ten codes, Done waits for the tick), wrong password, manage and turn off, off refused while issuing, the sign-in second step |
+| Release-QA (live API) | `qa/specs/portal-selfservice/two-factor.spec.ts` | enrol-app, sign-in (en + ar), recovery-code, email, reset |
+| Release-QA (stubbed) | `qa/specs/portal/two-factor.spec.ts` | issuing-required prompt opens the drawer over the issue drawer |
+
 ## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-274)
 
 | Layer | File | Covers |

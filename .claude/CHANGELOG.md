@@ -147,6 +147,14 @@
 **Why:** epic MUT-701 sells Solo, Business and Firm. The seller and provider are open (MUT-700), so only the provider-neutral half is built; per-plan prices, Checkout per plan, plan change and the catalog script (Part B) are held.
 
 **Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261124130000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+## [Unreleased] - 2026-11-25 — Two-step sign-in, portal screens (MUT-710, ADR-274)
+
+### Added
+- Portal: the second step at sign-in (`TwoFactorStep`, app or emailed code, recovery code, resend), the same step on the setup/reset page and the Malafat return page, You › Account › Two-step sign-in row and `TwoFactorDrawer` (choose, app QR and key or email test code, ten recovery codes behind a tick, manage: switch, new codes, off, off refused while issuing), and the issuing prompt (`TwoFactorIssuingPrompt`) on `403 TWO_FACTOR_SETUP_REQUIRED` in the issue drawer, the Tax Authority step, the issuer-details save and Documents › To issue. ar and en.
+- Release-QA: `portal-selfservice.two-factor.{enrol-app,sign-in,recovery-code,email,reset}` (live API, outbox, computed TOTP codes) and `portal.two-factor.issuing-required` (stubbed refusal). `qa/support/selfService.ts`: `enableTwoFactor`, `appCode`, `codeFromMail`.
+
+**Why:** AC8 and the portal half of AC1-AC4 (SHAAM appendix §17). **Files:** `src/hosted/twoFactor/**`, `src/hosted/pages/auth/{SignInPage,SetupPage,malafat/MalafatReturnPage}.tsx`, `src/hosted/pages/you/YouAccount.tsx`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/i18n/{ar,en}.json`, `qa/**`.
+
 ## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-274, API 1.135.0-mut710)
 
 ### Added

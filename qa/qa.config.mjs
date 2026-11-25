@@ -112,6 +112,8 @@ export default {
         '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts',
         // MUT-596: Sign in with Malafat and its account screens need the live API and the Malafat stub: portal-selfservice's.
         '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
+        // MUT-710: the two-step drawer, its code fields and the sign-in's second step need the live API: portal-selfservice's.
+        '!src/hosted/twoFactor/{TwoFactorDrawer,TwoFactorFields,TwoFactorStep}.tsx',
         // MUT-535: the monthly summary's switch and turn-it-off page are read through the live API's job and outbox: portal-live's.
         '!src/hosted/components/MonthlySummarySwitchRow.tsx', '!src/hosted/pages/mail-off/**'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
@@ -276,6 +278,11 @@ export default {
         'public/brand/malafat-mark*.svg',
         'src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
         'server/src/routes/{malafat-sign-in,connected-apps,members}.ts',
+        // MUT-710: two-step sign-in (the app's and the mail's codes, the second step, the setup drawer) against the live API.
+        'src/hosted/twoFactor/**',
+        'src/hosted/pages/auth/{SignInPage,SignInCodeStep,signInCode}.*',
+        'server/src/auth/{two-factor,totp,sign-in}.ts',
+        'server/src/routes/{two-factor,sessions,account-setup}.ts',
         'server/src/malafat/**',
         'qa/stubs/**',
         'server/src/routes/receipt-reading.ts',

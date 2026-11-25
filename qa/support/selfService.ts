@@ -4,6 +4,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { expect, type Page } from '@playwright/test';
 import { CURRENT_TERMS } from '../../server/src/legal';
+import { stepOf, totpAt } from '../../server/src/auth/totp';
 
 /**
  * MUT-368 (D11): helpers for the `portal-selfservice` specs. The env is started by support/selfservice-live.mjs:
@@ -315,4 +316,37 @@ export const SETUP_PASSKEY = {
 export async function skipSetupPasskey(page: Page, language: 'en' | 'ar' = 'en'): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: SETUP_PASSKEY[language].title })).toBeVisible();
   await page.getByRole('button', { name: SETUP_PASSKEY[language].notNow }).click();
+}
+
+/**
+ * MUT-710: turns two-step sign-in on for `email`, through the API as the You › Account drawer does (sign in, start an
+ * enrolment with the current password, confirm with a code). The authenticator method returns its secret, so a spec can
+ * compute the app's codes; the email method reads its test code from the outbox. Returns the 10 recovery codes.
+ *
+ * The confirm uses the current 30 s step, which the server then refuses to accept again (replay): a spec that signs in
+ * with the app afterwards types `appCode(secret, 1)`, the next step, which the server's ±1 step window accepts.
+ */
+export async function enableTwoFactor(email: string, password: string, method: 'totp' | 'email'): Promise<{ secret: string | null; recoveryCodes: string[] }> {
+  const { origin } = liveState();
+  const cookie = await liveSession(email, password);
+  const headers = { 'content-type': 'application/json', origin, cookie, 'x-forwarded-for': randomIp() };
+  const started = await fetch(`${origin}/v1/me/two-factor/enrolment`, { method: 'POST', headers, body: JSON.stringify({ method, currentPassword: password }) });
+  expect(started.status, `start two-step ${await started.clone().text()}`).toBe(201);
+  const enrolment = (await started.json()) as { enrolmentToken: string; secret: string | null };
+  const code = method === 'totp' ? appCode(enrolment.secret!, 0) : codeFromMail(await mailTo(email, 'two-factor-code'));
+  const confirmed = await fetch(`${origin}/v1/me/two-factor/enrolment/confirm`, { method: 'POST', headers, body: JSON.stringify({ enrolmentToken: enrolment.enrolmentToken, code }) });
+  expect(confirmed.status, `confirm two-step ${await confirmed.clone().text()}`).toBe(200);
+  return { secret: enrolment.secret, recoveryCodes: ((await confirmed.json()) as { recoveryCodes: string[] }).recoveryCodes };
+}
+
+/** The authenticator app's code now (`ahead` = 0) or `ahead` 30-second steps later, from the secret the enrolment shows. */
+export function appCode(secret: string, ahead: number): string {
+  return totpAt(secret.replace(/\s/g, ''), stepOf(new Date()) + ahead);
+}
+
+/** The 6-digit code on its own line in a two-step mail. */
+export function codeFromMail(mail: Mail): string {
+  const code = mail.text.match(/^\d{6}$/m)?.[0];
+  expect(code, `a 6-digit code on its own line in the ${mail.template} mail`).toBeTruthy();
+  return code!;
 }
