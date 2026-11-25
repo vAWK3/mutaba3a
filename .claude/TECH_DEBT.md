@@ -3363,3 +3363,17 @@ When resolving debt:
 
 ### TD-334: A tax invoice's Owed has no "pay now, document later" (MUT-661)
 - **What:** an Owed a tax invoice posted is paid only by its receipt (MUT-568), so Record payment there can't leave the document for later. Basel to decide whether it matters (ADR-280 decision 4).
+
+
+### TD-337: Only documents and scans are metered; the other usage kinds are defined but unwritten (MUT-735)
+- **What:** the ledger's vocabulary has `EXTERNAL_INVOICE_READ`, `PROFILE_CREATED`, `PARTNER_ADDED/REMOVED`, `RECORDS_EXPORTED`, `PERIOD_DOWNLOAD`, `UNIFORM_FILE`, `MCP_TOOL_CALL` and `MAIL_SENT`, but nothing records them yet (brief slice S4, marked optional: no acceptance criterion needs them, and the stock caps read the records live).
+- **When to pay:** when the operator wants those counts in Operator › Usage, or MUT-581's partner funnel reads them. Each is one best-effort `store.usage.record` after the action (log and Sentry on failure, never surfaced); `MCP_TOOL_CALL`'s detail needs the tool names added to its vocabulary.
+
+### TD-338: No reconcile script for the usage counters (MUT-735)
+- **What:** the brief's `usage:reconcile --month` (recount counters from events and the source tables, print differences, `--apply`) isn't built. Counters can only drift through manual SQL or a bug.
+- **When to pay:** before MUT-731 enforces caps in production, run it once after the release.
+- **Also:** the migration backfills this month's counters with plan `none`; until each payer's next counted action stamps their real plan, Operator › Usage's near / at-cap counts and the People filters leave them out for the release month.
+
+### TD-339: The payer's plan is read on every metered action (MUT-735)
+- **What:** `payerPlanOf` reads the payer's owned profiles, their Malafat integrations and one `billing.factsFor` on each issue and each finished scan (and on an issue that turns out to be a replay). A few small reads per action, fine at today's volume.
+- **When to pay:** if issue or scan latency shows it, reuse the lapse gate's entitlement on gated servers (`personEntitlements`) or cache the plan per request.

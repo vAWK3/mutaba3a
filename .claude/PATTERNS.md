@@ -2962,3 +2962,12 @@ A "to do" that follows from the ledger (a document due, an income class) is a pu
 ## Retention sweeps of rows the purge leaves behind (MUT-644, ADR-277)
 
 Rows kept past an account's deletion carry no foreign key to the profile, so "closed" is "the profile row is gone". Issuing rows go one document at a time (each 7 years from its own date) and the profile's own rows with the last; an early erasure is gated on a logged hand-over of the owner's archive (ADR-277 as amended 2026-11-25). A sweep that removes them runs inside the hourly purge (never its own scheduler job), caps itself per run, deletes one owner per transaction after re-checking closed + due, and logs to a table of its own (the profile's `audit_events` can't outlive it). Immutable tables are passed only with `SET LOCAL mutaba3a.issuing_bypass = 'on'` inside that transaction.
+
+
+## Pattern: a hard cap is a conditional upsert in the action's transaction (MUT-735, ADR-281)
+**Where**: `server/src/repositories/prisma-usage.ts` `recordUsageTx`; called from `issueTx` and the receipt completes.
+**Rule**: a monthly cap is never `COUNT(*)` then insert. Insert the event (`ON CONFLICT (kind, entityKey) DO NOTHING`; no row = a duplicate, count nothing), then `INSERT … ON CONFLICT DO UPDATE SET count = count + 1 WHERE $cap::int IS NULL OR count < $cap::int RETURNING count`. Postgres re-checks the WHERE on the locked row, so two writers at cap − 1 can't both pass; no row back = at the cap, throw so the whole action rolls back. A cap ≤ 0 is refused before the INSERT (the first row would skip the WHERE). Write it strictly after the action's own unique row (an Idempotency-Key race resolves through its replay, not the meter). The memory store refuses before mutating (it has no rollback). Contract-test the race with `Promise.allSettled`, five rounds. This is "Serialize writes to one aggregate on its row lock" with the lock implicit in the upsert.
+
+## Pattern: request statistics are an in-memory aggregate flushed by a live request (MUT-735, ADR-281)
+**Where**: `server/src/usage/route-meter.ts`, fed by `app.ts`'s access log.
+**Rule**: on Cloud Run with `cpu_idle`, a `setInterval` doesn't fire between requests (TD-215). Count in memory on the request path (no I/O), and let the request that finds the last flush a minute old start one, fire and forget; flush once more between stop-accepting and disconnect on SIGTERM. A failed flush is logged and its batch dropped (statistics, not money). Key by the route template (`routeKeyOf`), never the raw path.

@@ -2529,3 +2529,26 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `DocumentsPreferenceAsk` — `src/hosted/components/DocumentsPreferenceAsk.tsx` (MUT-661): `profile`, `ask` ({customerId, customerName, onAnswered}). The ask-once drawer; opened through `useAskDocumentsPreference()` from `IssueOfferProvider`.
 - `useSettleAndIssue`, `useIssueWithPayment` — `data/incomeQueries.ts`, `data/issuedQueries.ts` (MUT-661): Record payment's one-step write and its control's conditions.
 - Server: `settleOwed` (`routes/receivables.ts`), the settle-and-issue route (`routes/documents-due.ts`).
+
+
+---
+
+## MUT-735 — usage metering (ADR-281)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `server/src/usage/kinds.ts` | `USAGE_KINDS`, `USAGE_METERS`, `USAGE_DOORS`, `USAGE_PLANS`, `DETAIL_VOCABULARY`, `assertDetail`, `meterOf`, `doorOf` | every usage writer |
+| `server/src/usage/month.ts` | `usageMonthOf` (Asia/Jerusalem), `resetsOn`, `lastMonths`, `monthPlus` | ledger, billing, reports, retention |
+| `server/src/usage/subject.ts` | `subjectKeyOf(org)`, `userSubjectKey`, `userIdOfSubject` | stamps, billing, reports, purge |
+| `server/src/usage/caps.ts` | `capOf(plan, meter)` (from `PLAN_LIMITS`), `levelOf` (ok/near/nudge/at_cap), `meterView`, `stockLimitOf`, `usageView` | `/v1/billing`, reports; MUT-731 passes `capOf` to the record |
+| `server/src/usage/plan-of.ts` | `payerPlanOf`, `usageStampFor` | `usage/request.ts`, MCP receipt tools |
+| `server/src/usage/request.ts` | `requestUsage(store, c, org)` (lazy stamp; sets `meterPlan`) | issuing, receipts and expense routes |
+| `server/src/usage/{event,issue-events}.ts` | `usageEvent`, `issueUsageEvents` | both stores |
+| `server/src/usage/route-{buckets,meter,key}.ts` | `bucketOf`, `p95Of`, `statusClassOf`; `RouteMeter`; `routeKeyOf`, `UNMATCHED_ROUTE` | `app.ts` access log, `index.ts` |
+| `server/src/usage/reports.ts` | `usageOverview`, `usagePeople`, `accountUsage`, `routeReport`, `toCsv` + `overviewCsv`/`peopleCsv`/`routesCsv` | `routes/operator-usage.ts` |
+| `server/src/usage/retention.ts` | `USAGE_RETENTION`, `pruneCutoffs` | `routes/usage-prune.ts` |
+| `UsageRepository` (`repositories/ports.ts`; `prisma-usage.ts` with `recordUsageTx`, `memory-usage.ts` with `recordNow`) | `record`, `countersFor`, `rollup`, `standing`, `people`, `byProfile`, `addRouteUsage`, `routeTotals`, `prune`, `purgeSubject` | stores, reports, billing |
+| `src/hosted/pages/operator/OperatorUsagePage.tsx` | `OperatorUsagePage`, `MeterLine` | `/operator/usage` |
+| `src/hosted/pages/operator/OperatorUsageSection.tsx` | `OperatorUsageSection` | `OperatorAccountPage` |
+| `src/hosted/data/operatorUsageQueries.ts` | `useOperatorUsageOverview`, `useOperatorUsagePeople`, `useOperatorUsageRoutes`, `useOperatorAccountUsage` + keys | the two above |
+| `src/hosted/operator/usageMonths.ts` | `usageMonths(now)` | the month Select |
