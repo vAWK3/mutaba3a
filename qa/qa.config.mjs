@@ -109,7 +109,7 @@ export default {
         // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
         '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts',
         // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
-        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts',
+        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,operatorUsageQueries,signupReviews}.ts',
         // MUT-596: Sign in with Malafat and its account screens need the live API and the Malafat stub: portal-selfservice's.
         '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
         // MUT-535: the monthly summary's switch and turn-it-off page are read through the live API's job and outbox: portal-live's.
@@ -260,6 +260,10 @@ export default {
         'src/hosted/operator/**',
         'src/hosted/data/operatorQueries.ts',
         'src/hosted/data/signupReviews.ts',
+        // MUT-735 (ADR-281): Operator › Usage and the usage ledger behind it, on the live API.
+        'src/hosted/data/operatorUsageQueries.ts',
+        'server/src/routes/operator-usage.ts',
+        'server/src/usage/**',
         'server/src/operator/**',
         'server/src/routes/operator.ts',
         'server/src/auth/operator-gate.ts',

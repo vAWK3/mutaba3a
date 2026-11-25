@@ -1,0 +1,29 @@
+app: portal-selfservice
+area: usage
+title: Usage metering on the live API (scans, documents, GET /v1/billing usage)
+tier: secondary
+# MUT-735 (ADR-281): issued documents and finished scans are metered in a first-party ledger, in their own
+# transactions, once each; GET /v1/billing reports this month against the payer's plan (ok, near 80%, nudge 90%,
+# at_cap). Caps are enforced by MUT-731, whose billing screen shows the line; this checks the answer it reads.
+paths:
+  - server/src/usage/**
+  - server/src/repositories/prisma-usage.ts
+  - server/src/repositories/memory-usage.ts
+  - server/src/routes/billing.ts
+features:
+  - id: billing-usage
+    title: A finished receipt upload counts one scan this month, against Solo's 100
+    tickets: [MUT-735]
+    paths:
+      - server/src/usage/plan-of.ts
+      - server/src/usage/request.ts
+      - server/src/usage/caps.ts
+      - server/src/expenses/receipts-compose.ts
+    steps:
+      - A person on the Solo plan opens Billing's usage before any upload
+      - They upload a receipt photo in Expenses › Receipts
+      - They reload the page
+    expect:
+      - Before, this Jerusalem month shows 0 of 50 documents and 0 of 100 scans, one business allowed
+      - After the upload, scans read 1 of 100, level ok
+      - Reloading counts nothing more

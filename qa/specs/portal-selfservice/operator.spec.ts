@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
 import { expectNoHorizontalOverflow } from '../../support/brand';
@@ -22,6 +23,8 @@ import {
   signInThroughForm,
   signsIn,
   SIGNUP_PASSWORD,
+  grantPlan,
+  seedUsage,
 } from '../../support/selfService';
 import { addVirtualAuthenticator, type VirtualAuthenticator } from '../../support/passkeys';
 import { openYou, youRow } from '../../support/you';
@@ -683,5 +686,123 @@ test('Your settings shows you’re an operator, your passkeys, the step-up, and 
     await page.getByRole('region', { name: 'Passkeys' }).getByRole('link', { name: /Manage passkeys/ }).click();
     await expect(page).toHaveURL(/\/you\/account\?passkeys=true$/);
     await expect(page.getByRole('dialog').getByRole('listitem')).toHaveCount(1);
+  });
+});
+
+// ---- MUT-735 (ADR-281): Operator › Usage ---------------------------------------------------------------------------
+
+/** A Solo person near their documents cap (41 of 50) and one at it (50 of 50), this month. */
+async function usagePeople(): Promise<{ near: { email: string; id: string }; capped: { email: string; id: string } }> {
+  const near = await targetWithId('usage-near');
+  const capped = await targetWithId('usage-capped');
+  await grantPlan(near.id, 'SOLO');
+  await grantPlan(capped.id, 'SOLO');
+  seedUsage(near.id, 'solo', { documents: 41, scans: 7 });
+  seedUsage(capped.id, 'solo', { documents: 50, scans: 0 });
+  return { near, capped };
+}
+const usageList = (page: Page, name: string) => page.getByRole('list', { name });
+
+test('Operator › Usage shows this month per plan, and the Solo people near or at their cap', { tag: '@portal-selfservice.operator.usage-overview' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  await operator(page);
+  const { near, capped } = await usagePeople();
+  await step('Open Operator › Usage: this month, by plan', async () => {
+    await page.goto('/operator/usage');
+    await expect(page.getByRole('link', { name: 'Usage' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByLabel('Month')).toHaveValue(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit' }).format(new Date()));
+  });
+  await step('The Solo row counts the payers, who is near a cap and who is at one, and the documents', async () => {
+    const solo = usageList(page, 'Usage by plan').getByRole('listitem', { name: 'Solo' });
+    await expect(solo).toContainText(/Payers: \d+/);
+    await expect(solo).toContainText(/near a cap: [1-9]/);
+    await expect(solo).toContainText(/at a cap: [1-9]/);
+    await expect(solo).toContainText('Documents');
+  });
+  await step('Open People: near a cap lists the person at 41 of 50', async () => {
+    await page.getByRole('radio', { name: 'People' }).click();
+    const row = usageList(page, 'People by usage').getByRole('listitem').filter({ hasText: near.email });
+    await expect(row).toContainText('41 / 50');
+    await expect(row).toContainText('80%');
+    await expect(usageList(page, 'People by usage').getByText(capped.email)).toHaveCount(0);
+  });
+  await step('Show At a cap: the person at 50 of 50, marked At cap', async () => {
+    await page.getByRole('radio', { name: 'At a cap' }).click();
+    const row = usageList(page, 'People by usage').getByRole('listitem').filter({ hasText: capped.email });
+    await expect(row).toContainText('50 / 50');
+    await expect(row).toContainText('At cap');
+  });
+});
+
+test('An account shows six months of documents and scans against the plan’s limits', { tag: '@portal-selfservice.operator.usage-account' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  await operator(page);
+  const { near } = await usagePeople();
+  const usage = page.getByRole('region', { name: 'Usage' });
+  await step('From People, open the person near their cap', async () => {
+    await page.goto('/operator/usage');
+    await page.getByRole('radio', { name: 'People' }).click();
+    await usageList(page, 'People by usage').getByRole('listitem').filter({ hasText: near.email }).getByRole('link').click();
+    await expect(page.getByRole('heading', { level: 2, name: near.email })).toBeVisible();
+  });
+  await step('Scroll to Usage: six months, this one first, against Solo’s limits', async () => {
+    await usage.scrollIntoViewIfNeeded();
+    await expect(usage.locator('[data-usage-month]')).toHaveCount(6);
+    const thisMonth = usage.locator('[data-usage-month]').first();
+    await expect(thisMonth).toContainText('Solo');
+    await expect(thisMonth).toContainText('41 / 50');
+    await expect(thisMonth).toContainText('7 / 100');
+    await expect(usage.locator('[data-usage-month]').last()).toContainText('no cap');
+  });
+});
+
+test('Routes lists the API routes this run called, with counts and p95', { tag: '@portal-selfservice.operator.usage-routes' }, async ({ page, step }) => {
+  test.setTimeout(180_000);
+  await chooseLanguage(page, 'en');
+  await operator(page);
+  await step('Open Operator › Usage › Routes', async () => {
+    await page.goto('/operator/usage');
+    await page.getByRole('radio', { name: 'Routes' }).click();
+  });
+  await step('Within about a minute the routes the run called are listed, with requests, errors and p95', async () => {
+    // The API adds what it counted at most a minute after the last flush, on the next request (ADR-281 §8).
+    const routes = usageList(page, 'Busiest routes');
+    await expect(async () => {
+      await page.reload();
+      await page.getByRole('radio', { name: 'Routes' }).click();
+      await expect(routes.getByRole('listitem', { name: 'GET /v1/me', exact: true })).toBeVisible({ timeout: 3_000 });
+    }).toPass({ timeout: 150_000, intervals: [5_000] });
+    const me = routes.getByRole('listitem', { name: 'GET /v1/me', exact: true });
+    await expect(me).toContainText(/Requests: \d+/);
+    await expect(me).toContainText(/p95 (≤ \d+ ms|over 10 s)/);
+    await expect(page.getByText(/^From \d{4}-\d{2}-\d{2} to \d{4}-\d{2}-\d{2}/)).toBeVisible();
+  });
+});
+
+test('Export the overview as CSV with the passkey; it has the same totals', { tag: '@portal-selfservice.operator.usage-csv' }, async ({ page, step }) => {
+  await chooseLanguage(page, 'en');
+  const op = await operator(page);
+  await usagePeople();
+  let csv = '';
+  await step('Open Operator › Usage, signed in with the password (the step-up is stale)', async () => {
+    await page.goto('/operator/usage');
+    await expect(usageList(page, 'Usage by plan').getByRole('listitem', { name: 'Solo' })).toBeVisible();
+  });
+  await step('Press Export CSV with passkey: the passkey sheet, then the download', async () => {
+    const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Export CSV with passkey' }).click()]);
+    expect(download.suggestedFilename()).toMatch(/^usage-overview-\d{4}-\d{2}\.csv$/);
+    csv = fs.readFileSync((await download.path())!, 'utf8');
+    expect(op.authenticator).toBeTruthy();
+  });
+  await step('The file is UTF-8 with a BOM, and its Solo rows match the page', async () => {
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    const lines = csv.slice(1).trim().split('\r\n');
+    expect(lines[0]).toBe('month,plan,payers,near,capped,over,kind,events,kind_payers');
+    const solo = lines.find((l) => l.split(',')[1] === 'solo' && l.split(',')[6] === 'DOCUMENT_ISSUED')!.split(',');
+    const row = usageList(page, 'Usage by plan').getByRole('listitem', { name: 'Solo' });
+    await expect(row).toContainText(`Payers: ${solo[2]}`);
+    await expect(row).toContainText(`near a cap: ${solo[3]}`);
+    await expect(row).toContainText(`at a cap: ${solo[4]}`);
+    await expect(row).toContainText(`Documents ${solo[7]}`);
   });
 });
