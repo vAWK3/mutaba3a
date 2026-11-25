@@ -3103,6 +3103,11 @@
         "RECEIPT": "Issue a receipt",
         "column": "Document"
       },
+      "setupHint": {
+        "line": "Finish setting up invoicing to issue its invoice.",
+        "setUp": "Set up",
+        "finish": "Finish setup to issue"
+      },
       "colStatus": "Status",
       "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
       "paymentRequest": {

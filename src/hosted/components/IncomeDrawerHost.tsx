@@ -100,7 +100,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   }
   if (drawer.newIncome && kinds.length > 0) {
     return (
-      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} onOfferIssue={onOfferIssue} writable={writable} />
+      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} onOfferIssue={onOfferIssue} onSetUpInvoicing={(step) => void navigate({ to: `/p/${profile.id}/you/invoicing`, search: { step } } as never)} writable={writable} />
     );
   }
   const redateTarget = drawer.income && redate.owed ? { kind: 'owed' as const, id: drawer.income } : drawer.payment && redate.payments ? { kind: 'payment' as const, id: drawer.payment } : null;

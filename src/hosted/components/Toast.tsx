@@ -30,6 +30,8 @@ export interface ToastOptions {
   secondaryAction?: ToastAction;
   /** MUT-338: overrides the tone's default icon (e.g. SaveFeedbackIcon instead of InfoIcon). None by default. */
   icon?: ReactNode;
+  /** MUT-722: one quieter line under the message (what the action is for), read with it. */
+  detail?: string;
 }
 export type ShowToast = (message: string, options?: ToastOptions) => void;
 
@@ -41,6 +43,7 @@ interface ToastState {
   action?: ToastAction;
   secondaryAction?: ToastAction;
   icon?: ReactNode;
+  detail?: string;
   /** Bumped on every show, so an identical second message re-renders and is announced again. */
   id: number;
 }
@@ -62,6 +65,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         action: options?.action,
         secondaryAction: options?.secondaryAction,
         icon: options?.icon,
+        detail: options?.detail,
         id: (current?.id ?? 0) + 1,
       }));
       startTimer();
@@ -109,7 +113,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           <>
             {/* Keyed by show, so a second save inside the window replays its icon (MUT-338) */}
             <Fragment key={info.id}>{info.icon ?? <InfoIcon />}</Fragment>
-            <span key={info.id}>{info.message}</span>
+            {info.detail ? (
+              <span key={info.id} className="hp-toast-text">
+                <span>{info.message}</span>
+                <span className="hp-toast-detail">{info.detail}</span>
+              </span>
+            ) : (
+              <span key={info.id}>{info.message}</span>
+            )}
             {actionButton(info)}
           </>
         )}

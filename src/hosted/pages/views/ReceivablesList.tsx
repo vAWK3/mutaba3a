@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { NotForInvoiceAction } from '../../components/NotForInvoiceAction';
-import { useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -14,6 +14,7 @@ import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type Receivab
 import { canOpenOwed, incomeAffordancesFor, isCancelledOwed, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
 import { IssueDocumentDrawer, type IssueStart } from '../../components/IssueDocumentDrawer';
+import { useSetupHint } from '../../components/setupHint';
 import { useIssuer, useIssuingSetup } from '../../data/issuingQueries';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
@@ -114,6 +115,9 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   const setup = useIssuingSetup(profile.id, useMe().user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS');
   const issuer = useIssuer(profile.id, !!setup.data?.canIssue);
   const canIssue = writable && !!setup.data?.canIssue && issuer.data != null && issuer.data.dealerType !== 'EXEMPT';
+  // MUT-722: while the setup can't issue yet, Issue's spot says "Finish setup to issue" and opens the setup there.
+  const setupHint = useSetupHint(profile);
+  const finishSetup = writable && setupHint.due;
   const [issueStart, setIssueStart] = useState<IssueStart | null>(null);
   const navigate = useNavigate();
   // MUT-648 (E4): an Owed with no document yet offers its tax invoice, in the Document column beside Attach (MUT-647);
@@ -140,12 +144,22 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
         >
           {t('hosted.issue.offer.TAX_INVOICE')}
         </Button>
+      ) : finishSetup && r.issuable && !r.notForInvoice ? (
+        <Link
+          className="hp-link hp-row-action"
+          data-testid={`finish-setup-${r.id}`}
+          to={`/p/${profile.id}/you/invoicing` as never}
+          search={{ step: setupHint.step } as never}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {t('hosted.issue.setupHint.finish')}
+        </Link>
       ) : null}
       {/* MUT-660: an Owed recorded here, with no document of MTB3A's, can be marked not for invoice. */}
       {canIssue && !r.issuedHere && <NotForInvoiceAction kind="owed" id={r.id} version={r.version} marked={r.notForInvoice} client={r.client} />}
       </>
     ),
-    [canIssue, t],
+    [canIssue, finishSetup, profile.id, setupHint.step, t],
   );
   const external = useExternalInvoiceColumn('OWED', rows, grossOf, takesExternal, issueOffer);
   const columns = useMemo<Column<ReceivableRow>[]>(
