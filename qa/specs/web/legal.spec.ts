@@ -14,8 +14,8 @@ const text = (language: 'en' | 'ar', version = '2026-10-19'): TermsText =>
   JSON.parse(readFileSync(new URL(`../../../src/content/legal/terms/${version}.${language}.json`, import.meta.url), 'utf8')) as TermsText;
 const en = text('en');
 const ar = text('ar');
-/** The latest version, which /terms shows (MUT-382); 2026-10-19 stays published at its own address. */
-const latest = { en: text('en', '2026-10-26'), ar: text('ar', '2026-10-26') };
+/** The latest version, which /terms shows (the 2026-11-25 rewrite); 2026-10-19 and 2026-10-26 stay at their own addresses. */
+const latest = { en: text('en', '2026-11-25'), ar: text('ar', '2026-11-25') };
 /** The privacy policy's copy, from the app's own translation files, so a copy change needs no spec change. */
 const privacy = { en: enCopy.landing.privacyPolicy, ar: arCopy.landing.privacyPolicy };
 
@@ -178,11 +178,11 @@ test('the terms are linked from the footer and the /hosted form, and the privacy
 });
 
 test('the website publishes the list of released terms versions', { tag: '@web.legal.terms-manifest' }, async ({ page, step }) => {
-  await step('Fetch /legal/terms-versions.json: 2026-10-19 and 2026-10-26, each with an English and an Arabic sha256', async () => {
+  await step('Fetch /legal/terms-versions.json: 2026-10-19, 2026-10-26 and 2026-11-25, each with an English and an Arabic sha256', async () => {
     const res = await page.request.get('/legal/terms-versions.json');
     expect(res.ok()).toBe(true);
     const manifest = (await res.json()) as { versions: Array<{ version: string; sha256: Record<string, string> }> };
-    for (const version of ['2026-10-19', '2026-10-26']) {
+    for (const version of ['2026-10-19', '2026-10-26', '2026-11-25']) {
       const entry = manifest.versions.find((v) => v.version === version);
       expect(entry?.sha256.en, version).toMatch(/^[0-9a-f]{64}$/);
       expect(entry?.sha256.ar, version).toMatch(/^[0-9a-f]{64}$/);
@@ -233,6 +233,74 @@ test('The privacy policy covers sharing with an accountant and share links, in E
         expect(copy.updated).toContain('November 25, 2026');
         for (const fact of ['14 days', '4 to 8 digits', 'at most 3 devices', 'after 5 wrong PINs', 'over for 30 days']) expect(copy.accountant.body + copy.shareLinks.body).toContain(fact);
         await expect(page.getByRole('main')).not.toContainText('Mutaba3a');
+      }
+    });
+  }
+});
+
+/**
+ * The legal pages rewrite (2026-11-25, MUT-644 comment 13504): the terms and the policy cover what an Israeli
+ * invoicing service's do. A draft until Basel approves it (before-release.md).
+ */
+test('The terms cover the trial, cancellation, tax documents and clients\' data, in English and Arabic (2026-11-25 rewrite)', { tag: '@web.legal.terms-rewrite' }, async ({ page, step }) => {
+  const section = (title: string) => page.locator('section', { has: page.getByRole('heading', { level: 2, name: title }) });
+  await step('Open /terms in English: the new version line and every section', async () => {
+    await preferLanguage(page, 'en');
+    await page.goto('/terms');
+    await expect(page.getByText(latest.en.updated)).toBeVisible();
+    for (const s of latest.en.sections) await expect(page.getByRole('heading', { level: 2, name: s.title })).toBeVisible();
+  });
+  await step('Read cancelling and refunds: the Consumer Protection Law and the 14-day right', async () => {
+    const cancel = section('5. Cancelling and refunds');
+    await cancel.scrollIntoViewIfNeeded();
+    await expect(cancel).toContainText('Consumer Protection Law, 5741-1981');
+    await expect(cancel).toContainText('within 14 days of the transaction');
+  });
+  await step('Read issuing tax documents: you are responsible, allocation numbers in your name, documents never change', async () => {
+    const issuing = section('6. Issuing tax documents');
+    await issuing.scrollIntoViewIfNeeded();
+    await expect(issuing).toContainText('You are responsible for every document you issue');
+    await expect(issuing).toContainText('ask for allocation numbers in your name');
+    await expect(issuing).toContainText("An issued document can't be edited or deleted");
+    await expect(issuing).toContainText("7 years from each document's date");
+  });
+  await step('Open /terms in Arabic at phone width: right to left, every section, nothing scrolls sideways', async () => {
+    await page.setViewportSize({ width: 375, height: 812 });
+    await preferLanguage(page, 'ar');
+    await page.goto('/terms');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    for (const s of latest.ar.sections) await expect(page.getByRole('heading', { level: 2, name: s.title })).toBeVisible();
+    await expect(section('٦. إصدار المستندات الضريبية')).toContainText('رقم تخصيص');
+    await expectNoHorizontalOverflow(page, '/terms 2026-11-25 in Arabic at 375px');
+  });
+});
+
+test('The privacy policy says who is responsible, the law, tax documents, retention and your rights, in English and Arabic (2026-11-25 rewrite)', { tag: '@web.legal.privacy-rewrite' }, async ({ page, step }) => {
+  const section = (title: string) => page.locator('section', { has: page.getByRole('heading', { level: 2, name: title }) });
+  for (const language of ['en', 'ar'] as const) {
+    const copy = privacy[language];
+    await step(`Open /privacy in ${language === 'en' ? 'English' : 'Arabic'}: who is responsible and the law come right after the short version`, async () => {
+      await preferLanguage(page, language);
+      await page.goto('/privacy');
+      const titles = await page.getByRole('heading', { level: 2 }).allTextContents();
+      const short = titles.indexOf(copy.scope.title);
+      expect(titles.slice(short + 1, short + 3)).toEqual([copy.whoWeAre.title, copy.lawAndPurposes.title]);
+      await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
+    });
+    await step(`Read tax documents, how long we keep information and your rights (${language})`, async () => {
+      for (const key of ['localMode', 'issuedDocuments', 'abroad', 'dataSecurity', 'cookies', 'retention', 'yourRights'] as const) {
+        const s = section(copy[key].title);
+        await s.scrollIntoViewIfNeeded();
+        await expect(s).toContainText(copy[key].body.slice(0, 60));
+      }
+      if (language === 'en') {
+        await expect(section(copy.retention.title)).toContainText("for 7 years from the document's own date, even after you close your account");
+        await expect(section(copy.retention.title)).toContainText('told you that you must keep it for 7 years yourself');
+        await expect(section(copy.issuedDocuments.title)).toContainText('payment requests, which are not tax documents');
+        await expect(section(copy.yourRights.title)).toContainText("Israel's Privacy Protection Authority");
+        await expect(page.getByRole('main')).not.toContainText('Mutaba3a');
+      } else {
+        await expect(section(copy.retention.title)).toContainText('مدة 7 سنوات من تاريخ المستند نفسه');
       }
     });
   }
