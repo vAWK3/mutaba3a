@@ -9,6 +9,7 @@ import type { CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { catalogOf } from '../billing/yearly-switch-line.js';
 import { verifyMailOffToken } from '../email/mail-off-token.js';
+import { verifyUnsubscribeToken } from '../email/unsubscribe.js';
 import type { Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
@@ -261,8 +262,9 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       summary: 'One-click unsubscribe from a mail client (RFC 8058, ADR-279)',
       description:
         'Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A ' +
-        'mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL ' +
-        'is the credential, and the client address’s budget applies. It only ever turns a mail off.',
+        'mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check. RFC 8058 puts the recipient ' +
+        'in the URL, so its token is its own: signed for one person and one mail, it can only turn that mail off (never the mail-off page’s ' +
+        'token). The client address’s budget applies.',
       security: [],
       request: { query: UnsubscribeQuerySchema },
       responses: {
@@ -280,7 +282,9 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
         throw new ApiError('RATE_LIMITED', 'Too many attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
       }
       const { mail, token } = c.req.valid('query');
-      const person = await personOf(token);
+      const userId = verifyUnsubscribeToken(settings.pepper, mail, token);
+      const person = userId ? await store.users.getById(userId) : null;
+      if (!person || person.status !== 'ACTIVE') throw new ApiError('NOT_FOUND', 'This link no longer works');
       if (mail === 'offers') await setOffers(person.id, false, now);
       else await setSwitch(store, person.id, false, now);
       return c.json({ unsubscribed: true as const }, 200);

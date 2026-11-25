@@ -182,7 +182,7 @@ function send(options: ComebackRunOptions, candidate: ComebackCandidate, stage: 
     template: 'comeback-offer',
     idempotencyKey: `comeback:${candidate.userId}:${stage}`,
     vars: { stage, firstMonth: offer.firstMonth[c]!, listMonth: offer.listMonth[c]!, firstYear: offer.firstYear[c]!, listYear: offer.listYear[c]!, currency: c, subscribeLink: options.subscribeLink, offLink: `${origin}/mail-off?mail=offers#${token}` },
-    headers: unsubscribeHeaders(origin, 'offers', token),
+    headers: unsubscribeHeaders(origin, 'offers', options.optOut.pepper, candidate.userId),
   });
 }
 

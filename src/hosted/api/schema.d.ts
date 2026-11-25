@@ -26168,7 +26168,7 @@ export interface paths {
         put?: never;
         /**
          * One-click unsubscribe from a mail client (RFC 8058, ADR-279)
-         * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL is the credential, and the client address’s budget applies. It only ever turns a mail off.
+         * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check. RFC 8058 puts the recipient in the URL, so its token is its own: signed for one person and one mail, it can only turn that mail off (never the mail-off page’s token). The client address’s budget applies.
          */
         post: {
             parameters: {

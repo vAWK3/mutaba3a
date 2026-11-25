@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
 import { mailOffToken } from '../../email/mail-off-token.js';
+import { unsubscribeToken } from '../../email/unsubscribe.js';
 import { createMailer } from '../../email/mailer.js';
 import { MemoryMailTransport } from '../../email/transports/memory.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
@@ -173,7 +174,7 @@ describe('runComebackMail (MUT-534)', () => {
     expect(mail!.html).toContain(`${PORTAL}/mail-off?mail=offers#${token}`);
     expect(mail!.text).toContain(`${PORTAL}/mail-off?mail=offers#${token}`);
     expect(mail!.headers).toEqual({
-      'List-Unsubscribe': `<${PORTAL}/v1/mail-preferences/unsubscribe?mail=offers&token=${token}>`,
+      'List-Unsubscribe': `<${PORTAL}/v1/mail-preferences/unsubscribe?mail=offers&token=${unsubscribeToken(PEPPER, 'offers', user.id)}>`,
       'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
     });
 

@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { FakeCheckoutGateway, FakePlanGateway, FakeStripeGateway } from '../billing/stripe/__tests__/fake.js';
 import { mailOffToken } from '../email/mail-off-token.js';
+import { unsubscribeToken } from '../email/unsubscribe.js';
 import { createMailer } from '../email/mailer.js';
 import { MemoryMailTransport } from '../email/transports/memory.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -111,7 +112,7 @@ describe('the one-click unsubscribe door (RFC 8058)', () => {
   it('a mail client’s POST, with no page and no origin, turns the offers off', async () => {
     const h = await harness();
     const p = await h.person();
-    const res = await oneClick(h, `mail=offers&token=${mailOffToken(PEPPER, p.userId)}`);
+    const res = await oneClick(h, `mail=offers&token=${unsubscribeToken(PEPPER, 'offers', p.userId)}`);
     expect(res.status).toBe(200);
     expect((await h.store.users.getById(p.userId))?.offerMail).toBe('OFF');
   });
@@ -119,15 +120,18 @@ describe('the one-click unsubscribe door (RFC 8058)', () => {
   it('turns the monthly summary off', async () => {
     const h = await harness();
     const p = await h.person();
-    expect((await oneClick(h, `mail=monthly-summary&token=${mailOffToken(PEPPER, p.userId)}`)).status).toBe(200);
+    expect((await oneClick(h, `mail=monthly-summary&token=${unsubscribeToken(PEPPER, 'monthly-summary', p.userId)}`)).status).toBe(200);
     expect((await h.store.users.getById(p.userId))?.monthlySummaryMail).toBe('OFF');
   });
 
-  it('answers 404 for a bad token and 422 for an unknown mail, changing nothing', async () => {
+  it('answers 404 for a bad token, the page’s token or another mail’s token, and 422 for an unknown mail, changing nothing', async () => {
     const h = await harness();
     const p = await h.person();
     expect((await oneClick(h, 'mail=offers&token=garbage')).status).toBe(404);
-    expect((await oneClick(h, `mail=everything&token=${mailOffToken(PEPPER, p.userId)}`)).status).toBe(422);
+    // A one-click URL can only turn its own mail off: the page's token and the other mail's token don't open it
+    expect((await oneClick(h, `mail=offers&token=${mailOffToken(PEPPER, p.userId)}`)).status).toBe(404);
+    expect((await oneClick(h, `mail=offers&token=${unsubscribeToken(PEPPER, 'monthly-summary', p.userId)}`)).status).toBe(404);
+    expect((await oneClick(h, `mail=everything&token=${unsubscribeToken(PEPPER, 'offers', p.userId)}`)).status).toBe(422);
     expect((await h.store.users.getById(p.userId))?.offerMail).toBeNull();
   });
 });
