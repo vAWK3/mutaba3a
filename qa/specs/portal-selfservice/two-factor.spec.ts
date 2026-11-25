@@ -25,10 +25,6 @@ const load = (language: 'en' | 'ar') => (JSON.parse(fs.readFileSync(path.join(i1
 const COPY = { en: load('en'), ar: load('ar') } as const;
 const text = (language: 'en' | 'ar', key: string) => COPY[language][key] as string;
 const plural = (language: 'en' | 'ar', key: string, form: string, count: number) => (COPY[language][key] as Plural)[form]!.replace('{count}', String(count));
-const FIRST_STEP = {
-  en: { email: 'Email', password: 'Password', submit: 'Sign in' },
-  ar: { email: 'البريد الإلكتروني', password: 'كلمة المرور', submit: 'تسجيل الدخول' },
-} as const;
 
 test.beforeEach(async ({ page }) => {
   await stubTurnstile(page, 'pass');
