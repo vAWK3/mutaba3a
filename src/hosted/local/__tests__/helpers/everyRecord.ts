@@ -275,6 +275,8 @@ async function fillEveryNullableField(store: MemoryLedgerStore, org: string, use
   // MUT-459: and an operator (a hosted person's; the export writes null for a device)
   await store.users.setOperator({ userId: other.id, operator: true, at: LATER, audit: [] });
   await store.users.setMonthlySummaryMail(other.id, 'OFF', LATER);
+  // ADR-278: the promotional-mail opt-out, so the fingerprint sees offerMail with a value
+  await store.users.setOfferMail(other.id, 'OFF', LATER);
 
   // ints: a connection that was later disconnected (on the other person's profile: one connection per profile and provider)
   const [otherMembership] = await store.memberships.listByUser(other.id);

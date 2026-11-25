@@ -859,7 +859,7 @@ export const ComebackMailSummarySchema = z
       noOffer: z.number().int().openapi({ description: 'No running come-back coupon (missing, or not shaped as an amount off once)' }),
       noPrice: z.number().int(),
       suppressed: z.number().int(),
-      optedOut: z.number().int().openapi({ description: 'Since 1.139.0 (ADR-278). The person turned promotional mail off' }),
+      optedOut: z.number().int().openapi({ description: 'Since 1.140.0 (ADR-278). The person turned promotional mail off' }),
     }),
     incomplete: z.boolean().openapi({ description: 'The time budget ran out; the next run continues' }),
   })
@@ -2076,9 +2076,9 @@ export const RetainedIssuingProfileSchema = z
     vatId: z.string().nullable(),
     documents: z.number().int(),
     cancellations: z.number().int(),
-    oldestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'Since 1.139.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later)' }),
+    oldestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'Since 1.140.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later)' }),
     newestDocumentDate: IsoDaySchema.nullable().openapi({ description: 'The latest such date' }),
-    nextSweepOn: IsoDaySchema.nullable().openapi({ description: 'Since 1.139.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing' }),
+    nextSweepOn: IsoDaySchema.nullable().openapi({ description: 'Since 1.140.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing' }),
     retainedUntil: IsoDaySchema.nullable().openapi({ description: 'The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run)' }),
   })
   .openapi('RetainedIssuingProfile');
@@ -2097,7 +2097,7 @@ export const IssuingRetentionSweepRunSchema = z
     dryRun: z.boolean(),
     due: z.number().int(),
     swept: z.number().int().openapi({ description: 'Profiles some of whose documents this run deleted (in a dry run, would)' }),
-    documentsDeleted: z.number().int().openapi({ description: 'Since 1.139.0. Documents this run deleted; 0 in a dry run' }),
+    documentsDeleted: z.number().int().openapi({ description: 'Since 1.140.0. Documents this run deleted; 0 in a dry run' }),
     failed: z.number().int(),
     incomplete: z.boolean().openapi({ description: 'More were due than the per-run cap (25); the next run continues' }),
     rows: z.array(
@@ -2105,8 +2105,8 @@ export const IssuingRetentionSweepRunSchema = z
         organizationId: z.string().uuid(),
         outcome: z.enum(['swept', 'would-sweep', 'skipped', 'failed']),
         documents: z.number().int().openapi({ description: 'Documents the profile held before this run' }),
-        deleted: z.number().int().nullable().openapi({ description: 'Since 1.139.0. Documents this run deleted; null in a dry run, or when skipped or failed' }),
-        remaining: z.number().int().nullable().openapi({ description: 'Since 1.139.0. Documents still kept after this run; null as for `deleted`' }),
+        deleted: z.number().int().nullable().openapi({ description: 'Since 1.140.0. Documents this run deleted; null in a dry run, or when skipped or failed' }),
+        remaining: z.number().int().nullable().openapi({ description: 'Since 1.140.0. Documents still kept after this run; null as for `deleted`' }),
         oldestDocumentDate: IsoDaySchema.nullable(),
         newestDocumentDate: IsoDaySchema.nullable(),
         nextSweepOn: IsoDaySchema.nullable(),

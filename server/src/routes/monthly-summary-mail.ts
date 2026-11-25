@@ -234,7 +234,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       tags: ['Sessions'],
       summary: 'Turn promotional mail off (or back on) from its link (ADR-278)',
       description:
-        'Since 1.139.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only ' +
+        'Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only ' +
         'promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.',
       security: [],
       request: { body: { required: true, content: { 'application/json': { schema: MailOffRequestSchema } } } },
@@ -260,7 +260,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       tags: ['Sessions'],
       summary: 'One-click unsubscribe from a mail client (RFC 8058, ADR-278)',
       description:
-        'Since 1.139.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A ' +
+        'Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A ' +
         'mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check; the signed token in the URL ' +
         'is the credential, and the client address’s budget applies. It only ever turns a mail off.',
       security: [],
