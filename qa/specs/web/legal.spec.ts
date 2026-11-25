@@ -282,6 +282,7 @@ test('The privacy policy says who is responsible, the law, tax documents, retent
     await step(`Open /privacy in ${language === 'en' ? 'English' : 'Arabic'}: who is responsible and the law come right after the short version`, async () => {
       await preferLanguage(page, language);
       await page.goto('/privacy');
+      await expect(page.getByRole('heading', { level: 2, name: copy.whoWeAre.title })).toBeVisible();
       const titles = await page.getByRole('heading', { level: 2 }).allTextContents();
       const short = titles.indexOf(copy.scope.title);
       expect(titles.slice(short + 1, short + 3)).toEqual([copy.whoWeAre.title, copy.lawAndPurposes.title]);
