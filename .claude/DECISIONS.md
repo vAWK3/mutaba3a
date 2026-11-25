@@ -7101,3 +7101,19 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** No API change. A setup that can't be read says nothing. Another device or browser can show the hint again the same day.
 
+## ADR-279: Promotional Mail Has Its Own Opt-Out, a Link and One-Click List-Unsubscribe (legal pages rewrite)
+
+**Status:** Accepted (Basel, 2026-11-25: "marketing emails must have a proper opt-out with an unsubscribe link").
+
+**Context:** the come-back offer (MUT-534, ADR-243) is promotional, and Israeli law (Communications Law s.30A) and mail providers expect a way to refuse in every such message. Only the monthly summary (MUT-535, ADR-259) had an opt-out.
+
+**Decision:**
+1. **Promotional mail** is the come-back offer today. Account, security and billing mail (trial, card failed, renewal notice, Tax Authority reconnect) is not promotional and has no unsubscribe.
+2. **A person-level switch** `users.offerMail` ('OFF' | NULL = on), in both stores (migration `20261125160000_offer_mail_opt_out`; local snapshot 22 → 23, a device keeps null). The come-back run skips 'OFF' (`opted-out`).
+3. **Two ways out, one token:** the footer links `{portal}/mail-off?mail=offers#token` (the MUT-535 page and token, asked before it acts; `POST /v1/mail-preferences/offers`, same origin), and the mail carries `List-Unsubscribe: <{portal}/v1/mail-preferences/unsubscribe?mail=offers&token=…>` + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). The one-click door has no origin check (mail clients post it), keeps the IP budget, and only ever turns a mail off. The monthly summary gets the same headers (`mail=monthly-summary`).
+4. **The transport passes only those two headers** (MUT-359 A2: nothing else rides along).
+
+**Consequences:** API 1.140.0-adr279 (two routes, a summary field `skipped.optedOut`). Turning offers back on is the mail-off page's second button; there is no You › Account row for offers yet. The s.30A "פרסומת" subject label and sender details are a lawyer question (privacy policy TODO).
+
+**Alternatives rejected:** the address-level suppression list (stops all mail, security notices included); a billing retention event as the opt-out (needs a subscription id the token doesn't carry); a token purpose per mail (the token already names one person and switches only their own mail).
+

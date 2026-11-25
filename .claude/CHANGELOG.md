@@ -28,6 +28,12 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Privacy policy and terms rewritten for an Israeli invoicing service; Narabnd Studio Ltd; promotional-mail unsubscribe (ADR-279, API 1.140.0-adr279)
+
+**What:** the privacy policy and a new terms version (2026-11-25), en + ar, modelled on the topics Invoice4U's and iCount's cover, in MTB3A's own words (Basel, MUT-644 comment 13504, and his decisions of 2026-11-25). Narabnd Studio Ltd (517108775) is the party, owner and database owner; Israeli law, Jerusalem courts. New privacy sections: who is responsible, law and purposes, the portal without an account, tax documents and the Tax Authority, Malafat and connected apps, data outside Israel, security, cookies, retention, your rights. Terms: who may use (18+), trial, cancelling and refunds (14 days only before use), issuing tax documents, clients' data, our rights, 60 days' notice before MTB3A stops, general. The come-back offer gains an Unsubscribe link and List-Unsubscribe headers (the monthly summary the headers), backed by `users.offerMail` and two doors; the mail-off page reads `?mail=offers`. The web preflight refuses legal text with `[TODO` notes.
+**Why:** Basel asked for terms and a policy that cover what Israeli invoicing services' do, and for a working opt-out on every promotional mail.
+**Files:** `src/content/legal/terms/2026-11-25.{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `src/pages/landing/PrivacyPolicyPage.tsx`, `server/src/legal.ts`, `scripts/preflight.sh`, `server/src/email/unsubscribe.ts`, `server/src/email/{ports,mailer}.ts`, `server/src/email/transports/resend.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/{comeback-mail,monthly-summary-mail}.ts`, `server/src/routes/{comeback-mail,monthly-summary-mail}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/prisma/migrations/20261125160000_offer_mail_opt_out`, `src/hosted/local/migrations/index.ts` (snapshot 22 → 23), `src/hosted/pages/mail-off/MailOffPage.tsx`, `src/hosted/api/client.ts`, tests and `qa/` (web.legal.terms-rewrite, web.legal.privacy-rewrite).
+
 ## [Unreleased] - 2026-11-25 — Closed profiles' issued documents kept 7 years from each one's date; erasure after the archive (MUT-644 amended, ADR-277 override log, API 1.139.0-mut644)
 
 ### Changed
