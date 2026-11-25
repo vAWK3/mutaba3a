@@ -17157,7 +17157,7 @@ export interface paths {
         put?: never;
         /**
          * Record a payment against an Owed and issue its document in the same step
-         * @description MUT-661 (ADR-279): the payment is recorded exactly as POST /v1/receivables/{id}/settle records it (the amount defaults to what is outstanding, paidAt to today). Then, unless issue is false, the document that payment is due (MUT-660, derived from the client’s documents preference: a receipt on the Owed’s tax invoice, or an invoice-receipt for the amount paid; a payment request first client’s payment gets the document that refers to its request) is issued through the same single issue as POST /v1/issued-documents, linked to the payment. The payment is the commitment: if issuing is refused (no allocation number, the Tax Authority held it, the setup incomplete) the answer is still 201, issue.status says held or failed and why, and the document stays in To issue. A payment due no document (a No document client, marked not for invoice) answers issue.status not_due. The Idempotency-Key covers both: a retry returns the payment recorded before and the document issued before, never a second of either. 404 unless invoicing is on for the profile; 403 for a profile the person doesn’t own.
+         * @description MUT-661 (ADR-280): the payment is recorded exactly as POST /v1/receivables/{id}/settle records it (the amount defaults to what is outstanding, paidAt to today). Then, unless issue is false, the document that payment is due (MUT-660, derived from the client’s documents preference: a receipt on the Owed’s tax invoice, or an invoice-receipt for the amount paid; a payment request first client’s payment gets the document that refers to its request) is issued through the same single issue as POST /v1/issued-documents, linked to the payment. The payment is the commitment: if issuing is refused (no allocation number, the Tax Authority held it, the setup incomplete) the answer is still 201, issue.status says held or failed and why, and the document stays in To issue. A payment due no document (a No document client, marked not for invoice) answers issue.status not_due. The Idempotency-Key covers both: a retry returns the payment recorded before and the document issued before, never a second of either. 404 unless invoicing is on for the profile; 403 for a profile the person doesn’t own.
          */
         post: {
             parameters: {
@@ -26180,6 +26180,154 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/mail-preferences/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn promotional mail off (or back on) from its link (ADR-279)
+         * @description Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Promotional mail now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferMail"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail-preferences/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-click unsubscribe from a mail client (RFC 8058, ADR-279)
+         * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check. RFC 8058 puts the recipient in the URL, so its token is its own: signed for one person and one mail, it can only turn that mail off (never the mail-off page’s token). The client address’s budget applies.
+         */
+        post: {
+            parameters: {
+                query: {
+                    mail: "offers" | "monthly-summary";
+                    token: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unsubscribed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Unsubscribed"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/issuing/tax-authority-reminders": {
         parameters: {
             query?: never;
@@ -33488,6 +33636,8 @@ export interface components {
                 noOffer: number;
                 noPrice: number;
                 suppressed: number;
+                /** @description Since 1.140.0 (ADR-279). The person turned promotional mail off */
+                optedOut: number;
             };
             /** @description The time budget ran out; the next run continues */
             incomplete: boolean;
@@ -33508,7 +33658,7 @@ export interface components {
             /** @enum {string} */
             action: "send" | "skip";
             /** @enum {string|null} */
-            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
+            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | "opted-out" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}
@@ -33574,6 +33724,13 @@ export interface components {
         MailOffRequest: {
             token: string;
             on: boolean;
+        };
+        OfferMail: {
+            on: boolean;
+        };
+        Unsubscribed: {
+            /** @enum {boolean} */
+            unsubscribed: true;
         };
         TaxAuthorityReminderSummary: {
             dryRun: boolean;
@@ -33661,11 +33818,11 @@ export interface components {
             vatId: string | null;
             documents: number;
             cancellations: number;
-            /** @description Since 1.139.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later) */
+            /** @description Since 1.140.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later) */
             oldestDocumentDate: string | null;
             /** @description The latest such date */
             newestDocumentDate: string | null;
-            /** @description Since 1.139.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing */
+            /** @description Since 1.140.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing */
             nextSweepOn: string | null;
             /** @description The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run) */
             retainedUntil: string | null;
@@ -33675,7 +33832,7 @@ export interface components {
             due: number;
             /** @description Profiles some of whose documents this run deleted (in a dry run, would) */
             swept: number;
-            /** @description Since 1.139.0. Documents this run deleted; 0 in a dry run */
+            /** @description Since 1.140.0. Documents this run deleted; 0 in a dry run */
             documentsDeleted: number;
             failed: number;
             /** @description More were due than the per-run cap (25); the next run continues */
@@ -33687,9 +33844,9 @@ export interface components {
                 outcome: "swept" | "would-sweep" | "skipped" | "failed";
                 /** @description Documents the profile held before this run */
                 documents: number;
-                /** @description Since 1.139.0. Documents this run deleted; null in a dry run, or when skipped or failed */
+                /** @description Since 1.140.0. Documents this run deleted; null in a dry run, or when skipped or failed */
                 deleted: number | null;
-                /** @description Since 1.139.0. Documents still kept after this run; null as for `deleted` */
+                /** @description Since 1.140.0. Documents still kept after this run; null as for `deleted` */
                 remaining: number | null;
                 oldestDocumentDate: string | null;
                 newestDocumentDate: string | null;

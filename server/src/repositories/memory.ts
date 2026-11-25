@@ -275,8 +275,9 @@ import { DOC_TYPE_CODES } from '../issuing/types.js';
  * 21 (MUT-642): `custs` gained `taxId` and `address`.
  * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
  *    MUT-643 (same unreleased version): a new `refunds` map.
+ * 23 (ADR-279): `people` gained `offerMail`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 22;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 23;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -688,6 +689,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const u = this.people.get(id);
       if (!u) return null;
       Object.assign(u, { monthlySummaryMail: choice, updatedAt: at });
+      return { ...u };
+    },
+    setOfferMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { offerMail: choice, updatedAt: at });
       return { ...u };
     },
     updateTrialPrompt: async (id, action, at) => {
@@ -2245,6 +2252,7 @@ export class MemoryLedgerStore implements LedgerStore {
       closure: null,
       operatorAt: null,
       monthlySummaryMail: null,
+      offerMail: null,
       createdAt: input.at,
       updatedAt: input.at,
     };

@@ -114,6 +114,9 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/email/resend/webhook',
       // MUT-535 (D8): the monthly summary's opt-out page. It switches one mail for the person its signed token names; no account.
       'POST /v1/mail-preferences/monthly-summary',
+      // ADR-279: promotional mail's opt-out page and the one-click unsubscribe. They only switch mail; no account.
+      'POST /v1/mail-preferences/offers',
+      'POST /v1/mail-preferences/unsubscribe',
       'POST /v1/passkey-challenges',
       // MUT-314 (ADR-248): a period download's stream; its credential is the ticket in the body. Creates no account.
       'POST /v1/period-downloads/stream',

@@ -245,6 +245,9 @@ describe('4. the token and PIN at rest (MUT-560)', () => {
     for (const [path, ops] of Object.entries(doc.paths as Record<string, Record<string, Loose>>)) {
       expect(path).not.toMatch(/token/i);
       for (const [method, op] of Object.entries(ops)) {
+        // ADR-279, the one exception: RFC 8058 puts the recipient in a one-click unsubscribe URL. Its token is signed for one
+        // person and one mail and can only turn that mail off, so a logged URL can do nothing else.
+        if (`${method} ${path}` === 'post /v1/mail-preferences/unsubscribe') continue;
         for (const param of (op.parameters ?? []) as Loose[]) expect(`${method} ${path} ${param.name}`).not.toMatch(/token$/i);
       }
     }

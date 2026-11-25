@@ -8,7 +8,7 @@ import { profileKey } from '../session/me';
 import { Drawer } from './Drawer';
 
 /**
- * MUT-661 (ADR-279): the one-time question after the first income saved for a client with no documents preference.
+ * MUT-661 (ADR-280): the one-time question after the first income saved for a client with no documents preference.
  * Four choices, each saving on the client and closing (never asked again); "Not now" leaves it unset (asked at the next
  * income, the profile default meanwhile). Read-then-write: the client's version is read fresh, since the one the save
  * toast knew may be old. A failed save keeps the drawer open with the message, the choices still there.

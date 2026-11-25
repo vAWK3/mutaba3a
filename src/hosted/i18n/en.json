@@ -2847,6 +2847,15 @@
       "onDone": "The monthly summary is on.",
       "linkBroken": "This link no longer works. You can turn it off in You › Account."
     },
+    "offerMail": {
+      "offAsk": "Stop offers from MTB3A?",
+      "rowSub": "Emails about your account still reach you.",
+      "offButton": "Unsubscribe",
+      "offDone": "You won't get offers from MTB3A.",
+      "onButton": "Send me offers again",
+      "onDone": "Offers from MTB3A are on.",
+      "linkBroken": "This link no longer works. Write to info@mtb3a.com and we'll stop sending you offers."
+    },
     "invoicing": {
       "uniformFile": {
         "title": "Uniform file (מבנה אחיד)",

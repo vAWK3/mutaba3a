@@ -129,7 +129,7 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
   // MUT-661: one control, on by default, issues this payment's document in the same step. Absent where the client takes
   // no document (No document), the entry is marked not for invoice, the setup can't issue, or it isn't shekels. On a tax
-  // invoice's own Owed the receipt IS the payment (ADR-279), so it is shown on and can't be turned off.
+  // invoice's own Owed the receipt IS the payment (ADR-280), so it is shown on and can't be turned off.
   const preference = customers.data?.get(receivable.customerId)?.documentsPreference ?? withPayment.defaultPreference;
   const documentRequired = receivable.origin === 'ISSUED_DOCUMENT';
   const offersDocument = withPayment.canIssue && (documentRequired || (currency === 'ILS' && !receivable.notForInvoice && preference !== 'NO_DOCUMENT'));

@@ -29,7 +29,7 @@ const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'appli
 
 /**
  * MUT-65 / MUT-709 / MUT-661: one payment against a captured Owed, with its one allocation. The settle route and the
- * settle-and-issue route (ADR-279) both run exactly this; `earlier` is true when the Idempotency-Key had already
+ * settle-and-issue route (ADR-280) both run exactly this; `earlier` is true when the Idempotency-Key had already
  * recorded the payment (a retry after a 5xx), so nothing new was recorded.
  */
 export async function settleOwed(

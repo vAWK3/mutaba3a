@@ -62,7 +62,7 @@ export function canAddClient(profile: HostedProfile, writable = true): boolean {
  * (MUT-661), and still open.
  */
 export function isSettleable(receivable: Receivable): boolean {
-  // MUT-661: an Owed a tax invoice posted is paid too, by the receipt that records the payment (ADR-279).
+  // MUT-661: an Owed a tax invoice posted is paid too, by the receipt that records the payment (ADR-280).
   return (receivable.origin === 'ADJUSTMENT' || (receivable.origin === 'ISSUED_DOCUMENT' && receivable.currency === 'ILS')) && !CLOSED_STATUSES.has(receivable.status);
 }
 

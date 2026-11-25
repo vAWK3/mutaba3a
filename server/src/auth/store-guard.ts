@@ -79,6 +79,8 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-535: the person's monthly summary choice from You › Account (identity row); the signed opt-out link writes
     // through the unguarded store, its token standing in for the session.
     setMonthlySummaryMail: { write: 'identity' },
+    // ADR-279: the promotional-mail opt-out; only the signed links write it (unguarded store), listed for completeness.
+    setOfferMail: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.

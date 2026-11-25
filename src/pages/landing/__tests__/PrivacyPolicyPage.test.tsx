@@ -55,10 +55,12 @@ describe('PrivacyPolicyPage', () => {
     expect(section).toMatch(/the records you added stay, without your name/);
     expect(section).toMatch(/a random internal ID, never your name or email/);
     expect(section).toMatch(/invoices for what you paid/);
-    // MUT-644 (ADR-277 D1/D7 as amended 2026-11-25): each issued document outlives the account by 7 years from its date.
-    expect(section).toMatch(/the invoices and receipts you issued with MTB3A, each for 7 years from its date as tax law requires/);
-    expect(section).toMatch(/write to us and we'll send you a copy/);
+    // MUT-644 (Basel, 2026-11-25): issued documents outlive the account, each for 7 years from its own date.
+    expect(section).toMatch(/the tax documents you issued with MTB3A and the business details printed on them, each for 7 years from its own date/);
+    expect(section).toMatch(/write to us and we'll send you the full archive/);
     expect(section).toMatch(/once you have it, you can ask us to delete them sooner/);
+    // MUT-710 (ADR-274): the security log outlives the account by 12 months
+    expect(section).toMatch(/for 12 months from each event, the security log/);
     expect(section).toMatch(/before version 0\.1\.13/);
     // Closing is self-service now, and uninstalling never promised to clear the Keychain (MUT-382 #1, #4)
     expect(section).not.toMatch(/email info@/);
@@ -427,5 +429,112 @@ describe('PrivacyPolicyPage self-service signup (MUT-369)', () => {
     expect(sectionOf('ما يصل إلى الشبكة')).toContain('إن كان التسجيل مفتوحًا');
     expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('وعند ظهور تذكير التجربة المجانية بإضافة بطاقة');
     expect(sectionOf(/iPhone وAndroid: حسابك/)).not.toContain('لا يوجد تسجيل عام');
+  });
+});
+
+/**
+ * The legal pages rewrite (2026-11-25, MUT-644 comment 13504): the topics an Israeli invoicing SaaS's policy covers.
+ * A draft until Basel approves it; these tests pin the facts the draft must keep saying.
+ */
+describe('PrivacyPolicyPage legal pages rewrite (2026-11-25)', () => {
+  const sectionOf = (name: string | RegExp) => screen.getByRole('heading', { level: 2, name }).parentElement?.textContent ?? '';
+
+  it('says who is responsible, the database roles, and marks the pending company for the lawyer', () => {
+    renderPage('en');
+    const who = sectionOf('Who is responsible for your information');
+    expect(who).toContain('Narabnd Studio Ltd (נאראבנד סטודיו בע"מ), company number 517108775');
+    expect(who).not.toContain('England and Wales');
+    expect(who).toMatch(/owner of that database/);
+    expect(who).toMatch(/a holder under the Protection of Privacy Law, a processor under the GDPR/);
+    // Basel, 2026-11-25: no officer or registration claimed; the thresholds are the lawyer's
+    expect(who).toMatch(/we have not appointed an officer or registered a database/);
+    expect(sectionOf(/Who else handles your data/)).toMatch(/Barmajiyat Ltd, a related company .* handles data only on our behalf/);
+    expect(sectionOf('Contact')).toContain('Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel');
+  });
+
+  it('names the Israeli law, Amendment 13 and the 2017 security regulations, and each purpose with its basis', () => {
+    renderPage('en');
+    const law = sectionOf(/Why we use your information/);
+    expect(law).toContain('Protection of Privacy Law, 5741-1981');
+    expect(law).toContain('Amendment 13');
+    expect(law).toContain('(Data Security) Regulations, 5777-2017');
+    for (const basis of ['to perform our agreement with you', 'to meet legal obligations', 'our legitimate interest', 'your consent']) expect(law).toContain(basis);
+    expect(law).toMatch(/never sell your information/);
+  });
+
+  it('says the portal without an account keeps records on the device only', () => {
+    renderPage('en');
+    const local = sectionOf('Trying MTB3A without an account');
+    expect(local).toMatch(/none of it is sent to our servers/);
+    expect(local).toMatch(/leave the device only if you download them as a file/);
+    expect(local).toMatch(/can't be moved into an account/);
+  });
+
+  it('says what a tax document holds, what reaches the Tax Authority and data.gov.il, and that issued documents never change', () => {
+    renderPage('en');
+    const docs = sectionOf('Tax documents and the Israel Tax Authority');
+    for (const kind of ['tax invoices', 'tax invoice-receipts', 'receipts and credit notes', 'payment requests, which are not tax documents']) expect(docs).toContain(kind);
+    expect(docs).toMatch(/allocation number/);
+    expect(docs).toMatch(/your own sign-in there/);
+    expect(docs).toMatch(/your and your client's VAT numbers/);
+    expect(docs).toContain('data.gov.il');
+    expect(docs).toMatch(/signed electronically/);
+    expect(docs).toMatch(/can't be edited or deleted: a mistake is corrected with a credit note or a new document/);
+    expect(sectionOf(/Who else handles your data/)).toMatch(/The Israel Tax Authority receives the details of the invoices/);
+  });
+
+  it('keeps issued documents 7 years from each document\'s date, and erases sooner only after the archive and the notice (MUT-644)', () => {
+    renderPage('en');
+    const retention = sectionOf('How long we keep information');
+    expect(retention).toMatch(/for 7 years from the document's own date, even after you close your account/);
+    expect(retention).toMatch(/business details, logo and document numbering go when its last document goes/);
+    expect(retention).toMatch(/a former owner can ask us for the full archive .* once we've checked who is asking/);
+    expect(retention).toMatch(/only after we have given you the full archive to download and told you that you must keep it for 7 years yourself/);
+    expect(retention).toMatch(/The security log: 12 months from each event/);
+  });
+
+  it('says where data sits outside Israel, how it is protected, the cookies used, and the rights and complaint route', () => {
+    renderPage('en');
+    const abroad = sectionOf('Information stored outside Israel');
+    expect(abroad).toContain('europe-west1 region in Belgium');
+    expect(abroad).toMatch(/Resend keeps its records .* in the United States/);
+    expect(abroad).toMatch(/don't keep a copy of your information in Israel today/);
+    const security = sectionOf('How we protect your information');
+    expect(security).toMatch(/security log .* for 12 months/);
+    expect(security).toMatch(/Privacy Protection Authority/);
+    const cookies = sectionOf('Cookies and browser storage');
+    expect(cookies).toMatch(/no advertising or cross-site tracking cookies/);
+    expect(cookies).toMatch(/one session cookie/);
+    const rights = sectionOf('Your rights');
+    expect(rights).toMatch(/corrected or deleted if it is wrong, incomplete, unclear or out of date/);
+    expect(rights).toMatch(/We answer within 30 days/);
+    expect(rights).toMatch(/Israel's Privacy Protection Authority/);
+    expect(sectionOf("Children's privacy")).toMatch(/aged 18 or over/);
+  });
+
+  it('names Malafat sign-in and connected apps, and the emails the earlier text missed', () => {
+    renderPage('en');
+    const apps = sectionOf('Malafat and apps you connect');
+    expect(apps).toMatch(/only after you have signed in to it yourself/);
+    expect(apps).toMatch(/governed by its own privacy policy/);
+    const email = sectionOf('Emails we send');
+    expect(email).toMatch(/a card payment failed/);
+    expect(email).toMatch(/connection to the Israel Tax Authority needs renewing/);
+    expect(email).toMatch(/up to twice, about 30 and 90 days later, with an offer to come back/);
+    // ADR-279: the one promotional mail always carries an unsubscribe
+    expect(email).toMatch(/It always has an Unsubscribe link, and it works with your email app's own unsubscribe button/);
+    expect(sectionOf('Your rights')).toMatch(/stop promotional emails with the Unsubscribe link/);
+  });
+
+  it('says the same in Arabic, right to left', () => {
+    renderPage('ar');
+    expect(document.documentElement.dir).toBe('rtl');
+    expect(sectionOf('من المسؤول عن معلوماتك')).toContain('حائزًا بموجب قانون حماية الخصوصية');
+    expect(sectionOf('لماذا نستخدم معلوماتك، والقانون الذي نتّبعه')).toContain('التعديل 13');
+    expect(sectionOf('تجربة متابعة دون حساب')).toContain('ولا يُرسَل شيء منه إلى خوادمنا');
+    expect(sectionOf('المستندات الضريبية وسلطة الضرائب الإسرائيلية')).toContain('رقم تخصيص');
+    expect(sectionOf('كم نحتفظ بالمعلومات')).toContain('مدة 7 سنوات من تاريخ المستند نفسه');
+    expect(sectionOf('حقوقك')).toContain('سلطة حماية الخصوصية');
+    expect(sectionOf('حذف حسابك وبياناتك')).toContain('كلٌّ منها مدة 7 سنوات من تاريخه');
   });
 });

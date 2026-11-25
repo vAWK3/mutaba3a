@@ -90,7 +90,7 @@ features:
     steps:
       - Fetch /legal/terms-versions.json from the website
     expect:
-      - It lists 2026-10-19 with a sha256 for the English and the Arabic text
+      - It lists 2026-10-19, 2026-10-26 and 2026-11-25, each with a sha256 for the English and the Arabic text
   - id: privacy-signup
     title: The privacy policy says what self-service signup and account emails involve, naming Cloudflare Turnstile, the DNS and RDAP domain lookup and Resend, in English and Arabic (MUT-369, draft pending Basel's approval)
     tier: secondary
@@ -116,4 +116,38 @@ features:
       - The policy says "Last updated November 7, 2026" and both sections follow "Who else handles your data"
       - The accountant section says the invite works for 14 days, the access is read-only and revocable, and downloaded files are the accountant's copy
       - The share-links section names the PIN of 4 to 8 digits, at most 3 devices, the lock after 5 wrong PINs and the deletion of device records 30 days after a link ends
+      - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a
+  - id: terms-rewrite
+    title: The terms of 2026-11-25, with Narabnd Studio Ltd under Israeli law, cover the free trial, cancelling under the Consumer Protection Law, issuing tax documents and allocation numbers, and clients' data, in English and Arabic (legal pages rewrite, draft pending Basel's approval)
+    tier: secondary
+    tickets: [MUT-644]
+    paths:
+      - src/content/legal/terms/2026-11-25.en.json
+      - src/content/legal/terms/2026-11-25.ar.json
+      - server/src/legal.ts
+    steps:
+      - Open /terms in English
+      - Read "5. Cancelling and refunds" and "6. Issuing tax documents"
+      - Open /terms in Arabic at phone width
+    expect:
+      - The version line says 25 November 2026 and every section shows
+      - The intro names Narabnd Studio Ltd (517108775) as the party, and the law section Israeli law
+      - Cancelling names the Consumer Protection Law, 5741-1981, and the 14-day right, which applies only if MTB3A wasn't used since subscribing
+      - Issuing says you are responsible for every document, that we ask for allocation numbers in your name, that an issued document can't be edited or deleted, and that documents are kept 7 years from each document's date
+      - The Arabic page reads right to left with every section, and nothing scrolls sideways at 375px
+  - id: privacy-rewrite
+    title: The privacy policy says who is responsible, the Israeli law it follows, what tax documents send to the Tax Authority, where data sits outside Israel, how long each kind is kept (issued documents 7 years from each date) and your rights, in English and Arabic (legal pages rewrite, draft pending Basel's approval)
+    tier: secondary
+    tickets: [MUT-644]
+    paths:
+      - src/pages/landing/PrivacyPolicyPage.tsx
+      - src/lib/i18n/translations/en/landing.json
+      - src/lib/i18n/translations/ar/landing.json
+    steps:
+      - Open /privacy in English, then in Arabic
+      - Read the sections from "Who is responsible for your information" to "Your rights"
+    expect:
+      - '"Who is responsible for your information" and "Why we use your information, and the law we follow" come right after "The short version"'
+      - The sections on the portal without an account, tax documents, data outside Israel, security, cookies, retention and your rights all show
+      - Retention keeps each issued document 7 years from its own date, even after closing, and erases sooner only after the archive and the 7-year notice
       - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a

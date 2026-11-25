@@ -1748,9 +1748,14 @@ export interface UserRecord {
   operatorAt: Date | null;
   /** MUT-535 (D6): the monthly summary mail; null = the default (on, without Malafat-covered profiles). */
   monthlySummaryMail: MonthlySummaryChoice | null;
+  /** ADR-279: promotional mail (the come-back offer); 'OFF' once the person opted out, null = the default (on). */
+  offerMail: OfferMailChoice | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** ADR-279: the one stored choice for promotional mail; turning it back on stores null. */
+export type OfferMailChoice = 'OFF';
 
 /** MUT-459: mark or unmark an operator. `audit` is written in the same transaction, and only when the mark changes. */
 export interface SetOperatorInput {
@@ -1866,6 +1871,8 @@ export interface UserRepository {
   updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
   /** MUT-535 (D6): stores the monthly summary choice (null = the default). Null for an unknown user. */
   setMonthlySummaryMail(id: string, choice: MonthlySummaryChoice | null, at: Date): Promise<UserRecord | null>;
+  /** ADR-279: stores the promotional-mail opt-out (null = the default, on). Null for an unknown user. */
+  setOfferMail(id: string, choice: OfferMailChoice | null, at: Date): Promise<UserRecord | null>;
   /** MUT-418: applies one trial-prompt action under a row lock (billing/trial-prompt.ts). Null for an unknown user. */
   updateTrialPrompt(id: string, action: TrialPromptAction, at: Date): Promise<UserRecord | null>;
   /**

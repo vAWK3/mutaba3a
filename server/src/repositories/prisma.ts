@@ -463,6 +463,10 @@ export class PrismaLedgerStore implements LedgerStore {
       const { count } = await this.prisma.user.updateMany({ where: { id }, data: { monthlySummaryMail: choice, updatedAt: at } });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
+    setOfferMail: async (id, choice, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { offerMail: choice, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
     updateTrialPrompt: async (id, action, at) =>
       this.prisma.$transaction(async (tx) => {
         const [locked] = await tx.$queryRaw<Array<{ trialPrompt: unknown }>>`SELECT "trialPrompt" FROM "users" WHERE "id" = ${id}::uuid FOR UPDATE`;
@@ -5499,6 +5503,7 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     closure: closureOf(row),
     operatorAt: row.operatorAt,
     monthlySummaryMail: monthlySummaryChoiceOf(row.monthlySummaryMail),
+    offerMail: row.offerMail === 'OFF' ? 'OFF' : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };

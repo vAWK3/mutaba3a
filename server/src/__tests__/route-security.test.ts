@@ -368,7 +368,9 @@ const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POS
   // MUT-595: Sign in with Malafat; the person is not signed in yet.
   'GET /v1/auth/malafat/office', 'GET /v1/auth/malafat/start', 'GET /v1/auth/malafat/callback', 'POST /v1/auth/malafat/exchange', 'POST /v1/auth/malafat/link', 'POST /v1/auth/malafat/consent',
   // MUT-535 (D8): the monthly summary's opt-out page; the signed token in the body is its credential and it changes one switch.
-  'POST /v1/mail-preferences/monthly-summary'];
+  'POST /v1/mail-preferences/monthly-summary',
+  // ADR-279: promotional mail's opt-out page, and a mail client's one-click unsubscribe (its own one-mail token).
+  'POST /v1/mail-preferences/offers', 'POST /v1/mail-preferences/unsubscribe'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
 // MUT-710 (ADR-274 D8): the person's own two-step sign-in, cookie or device.

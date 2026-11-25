@@ -162,7 +162,7 @@ export function kmsSigningKey(options: KmsSigningKeyOptions): SigningKey {
 
 export interface InterimCertificateOptions {
   keyVersion: string;
-  /** The business that signs: Barmajiyat's legal name, as the certifying authority will certify it later. */
+  /** The business that signs: the software house's legal name (Narabnd Studio Ltd, MUT-700 D6), as the certifying authority will certify it later. */
   organization: string;
   validFrom: Date;
   validTo: Date;

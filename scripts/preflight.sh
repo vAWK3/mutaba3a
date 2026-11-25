@@ -257,6 +257,15 @@ if [[ "$MODE" == "web" ]]; then
     ok "no frontend secrets required (download config is fetched at runtime)"
   fi
 
+  # The legal pages rewrite (2026-11-25): a legal text that still carries a [TODO(...)] note for the lawyer is a
+  # draft and never reaches the public site. No override: the notes come out once Basel and the lawyer approve.
+  if LEGAL_TODOS="$(grep -l '\[TODO' src/content/legal/terms/*.json src/lib/i18n/translations/*/landing.json 2>/dev/null)"; then
+    bad "the privacy policy or the terms still carry [TODO] notes for the lawyer: ${LEGAL_TODOS//$'\n'/, }"
+    hint "docs/operations/before-release.md: Basel approves the wording, then every [TODO] note is removed"
+  else
+    ok "no draft notes in the privacy policy or the terms"
+  fi
+
   if [[ "${SKIP_REMOTE:-0}" != "1" ]]; then
     if git ls-remote --exit-code origin HEAD >/dev/null 2>&1; then
       ok "push credentials for origin work"

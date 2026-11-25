@@ -1,6 +1,6 @@
 # MUT-661: Issue as you record
 
-Status: built 2026-11-25 on `feature/mut-661-issue-as-you-record` (mini-crm) and `feature/mut-661-phone` (Flutter), under Basel's standing authorisation (decisions in ADR-279). Blockers MUT-660 and MUT-662 are merged.
+Status: built 2026-11-25 on `feature/mut-661-issue-as-you-record` (mini-crm) and `feature/mut-661-phone` (Flutter), under Basel's standing authorisation (decisions in ADR-280). Blockers MUT-660 and MUT-662 are merged.
 
 ## Problem
 Most documents follow a moment the person is already in: an Owed just recorded, a payment. Design B puts issuing at those moments, with no setup step first.
@@ -9,7 +9,7 @@ Most documents follow a moment the person is already in: an Owed just recorded, 
 From the ticket, AC1 to AC8 (ask once; Payment request first -> "Issue payment request"; 1,000 on a 3,400 tax-invoice-first Owed -> receipt, 2,400 stays owed; the same on On payment -> invoice-receipt; control off -> To issue; No document sees nothing; a refused issue keeps the payment and says so; release-QA flows on iOS and portal).
 
 ## Solution
-See ADR-279. Server: `POST /v1/receivables/{id}/settle-and-issue` (one Idempotency-Key; payment via `settleOwed`, document via the single issue from `documentsDue`; refusal is a 201 with `issue.status` failed/held). Portal: `DocumentsPreferenceAsk` after the first income for a client with no preference, `issueOffers` by preference, one control in Record payment. Phone: the same ask as a bottom sheet, the same control in the payment sheet.
+See ADR-280. Server: `POST /v1/receivables/{id}/settle-and-issue` (one Idempotency-Key; payment via `settleOwed`, document via the single issue from `documentsDue`; refusal is a 201 with `issue.status` failed/held). Portal: `DocumentsPreferenceAsk` after the first income for a client with no preference, `issueOffers` by preference, one control in Record payment. Phone: the same ask as a bottom sheet, the same control in the payment sheet.
 
 ## Reuse
 `documentsDue`, `issueOne`, `settle` core, `DocumentsPreferenceField` choices copy, `IssueOfferProvider`, MUT-722's `useSetupHint` (unchanged; the two never both speak: the ask needs a setup that can issue).

@@ -3358,8 +3358,8 @@ When resolving debt:
 
 
 ### TD-333: Settle-and-issue is two writes, not one transaction (MUT-661)
-- **What:** `POST /v1/receivables/{id}/settle-and-issue` records the payment, then issues (ADR-279). A crash between them leaves a payment whose document is in To issue, which is the same state "Later" makes, so nothing is lost.
+- **What:** `POST /v1/receivables/{id}/settle-and-issue` records the payment, then issues (ADR-280). A crash between them leaves a payment whose document is in To issue, which is the same state "Later" makes, so nothing is lost.
 - **When to pay:** if a pair-in-one-transaction guarantee is ever wanted (a Prisma `$transaction` around `payments.create` and `issuing.issue`).
 
 ### TD-334: A tax invoice's Owed has no "pay now, document later" (MUT-661)
-- **What:** an Owed a tax invoice posted is paid only by its receipt (MUT-568), so Record payment there can't leave the document for later. Basel to decide whether it matters (ADR-279 decision 4).
+- **What:** an Owed a tax invoice posted is paid only by its receipt (MUT-568), so Record payment there can't leave the document for later. Basel to decide whether it matters (ADR-280 decision 4).
