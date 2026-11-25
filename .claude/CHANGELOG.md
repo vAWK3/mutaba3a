@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Two-step sign-in: live QA fixes, and the phone half (MUT-710, ADR-274)
+
+### Fixed
+- The six `/v1/me/two-factor` routes were missing from the lapse gate's `PERSON_LEVEL_GATE` and fell through to `person`, so a read-only or locked person got 402 and could not turn two-step sign-in on. They are identity, like the password and passkeys: now `open`, and `TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES` joins the "every organization-independent endpoint is classified" test (`server/src/billing/gate.ts`, `server/src/__tests__/billing-gate-routes.test.ts`, `server/src/billing/__tests__/gate.test.ts`). No wire change.
+- `/setup`: a reset whose sign-in then asked for the second step stayed on that step after it passed (the step rendered before the passkey offer), and the sign-in removed the link's own challenge query, which asked the used link again (410). The passkey offer now renders first and the challenge query is kept (`SetupPage.tsx`, test in `SetupPage.test.tsx`).
+- `qa/support/selfService.ts` `enableTwoFactor` expected 200 from the enrolment confirm, which answers 201.
+
+### Added
+- The phone half (mutaba3a-flutter, branch `claude/mut-710-2fa-phone`): the second step at sign-in, Settings › Two-step sign-in, the issuing prompt; QA `ios.auth.two-factor-sign-in`, `ios.issuing.two-factor-required`.
+- Release-QA: `portal-selfservice.two-factor.{enrol-app,sign-in (en + ar),recovery-code,email,reset}` all pass on a private live stack (run 20261125-174035).
+
+---
+
 ## [Unreleased] - 2026-11-25 — Legal notes answered; the rewritten legal texts held back; the come-back mail is labelled «פרסומת» (Communications Law s.30A)
 
 ### Added

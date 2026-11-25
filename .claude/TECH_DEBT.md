@@ -2901,6 +2901,16 @@ empty option and list the profiles only), with a drawer test for each.
 - **What:** `store-contract-operator.ts` "q matches any part…" searches `BaSeL` with `limit: 50` and expects its two new accounts among the results. After a full `test:db` run the database holds many "Basel" accounts (other contracts' fixtures), the two fall off the page, and the test fails; on a fresh database it passes.
 - **Fix:** search with the test's own marker, or page through all results.
 
+### TD-335: The phone's minimum build isn't raised for two-step sign-in yet
+**Status**: Open (2026-11-25, MUT-710 ADR-274 Consequences)
+- **What:** phone builds before the MUT-710 phone half show the server's message for a 403 `TWO_FACTOR_REQUIRED` and can't finish a two-step sign-in. The half is built (mutaba3a-flutter `claude/mut-710-2fa-phone`) but not released, so the floor stays.
+- **Fix:** after the phone release that carries it, raise `IOS_MIN_BUILD` / `ANDROID_MIN_BUILD` to that build.
+
+### TD-336: Settings › Two-step sign-in on the phone always asks for the password
+**Status**: Open (2026-11-25, MUT-710 D8)
+- **What:** the phone's Me has no `ownPassword`, so its enrolment and manage panes always show the current-password field; a Malafat-only person (no password of their own) leaves it empty and the server ignores it. The portal hides it for them.
+- **Fix:** read `user.ownPassword` into the phone's Me and hide the field the same way.
+
 ### TD-327: Tax Authority token refreshes are logged, not audited
 **Status**: Open (2026-11-22, MUT-710 D13)
 - **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.
