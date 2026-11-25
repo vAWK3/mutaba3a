@@ -953,7 +953,7 @@ test('saving a shekel income while the setup is incomplete says Finish setting u
     await expect(page.locator('[data-testid^="finish-setup-"]')).toHaveCount(0);
   });
 
-  await step('In Arabic the toast reads أكمل إعداد الفوترة لتصدر فاتورته with إعداد, right to left', async () => {
+  await step('In Arabic the toast reads أكمِل إعداد الفوترة لإصدار فاتورته with إعداد, right to left', async () => {
     const ar = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
     await ar.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
     await page.evaluate(() => localStorage.clear());
@@ -964,7 +964,7 @@ test('saving a shekel income while the setup is incomplete says Finish setting u
     await arIncome.getByRole('combobox').first().fill('Client 1');
     await arIncome.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
     await arIncome.getByRole('button', { name: 'حفظ الدخل' }).click();
-    await expect(toast).toContainText('أكمل إعداد الفوترة لتصدر فاتورته.');
+    await expect(toast).toContainText('أكمِل إعداد الفوترة لإصدار فاتورته.');
     await expect(toast.getByRole('button', { name: 'إعداد' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   });

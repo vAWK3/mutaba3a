@@ -180,7 +180,7 @@ features:
       - The second save the same day shows no hint (once a day per profile; showing it counts)
       - With the setup complete, the toast offers Issue a tax invoice as before (MUT-648)
       - No hint for a dollar income, a personal profile, a Malafat firm or without the feature (and nothing asks for the setup there)
-      - In Arabic the toast reads «أكمل إعداد الفوترة لتصدر فاتورته.» with إعداد, right to left, with no sideways scroll
+      - In Arabic the toast reads «أكمِل إعداد الفوترة لإصدار فاتورته.» with إعداد, right to left, with no sideways scroll
   - id: uniform-file
     title: Download the uniform file (מבנה אחיד 1.31) for a date range from You › Invoicing; a bad range is refused in place (MUT-569)
     tier: secondary
