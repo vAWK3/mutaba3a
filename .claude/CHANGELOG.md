@@ -28,6 +28,37 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents kept 7 years from each one's date; erasure after the archive (MUT-644 amended, ADR-277 override log, API 1.139.0-mut644)
+
+### Changed
+- Retention is per document (Basel, MUT-644 comment 13504): each issued document of a closed profile is due the day after its 7th anniversary (its `documentDate`; a cancelled payment request from its cancellation's Israel date when later), read on the UTC day. `retention.ts`: `retainedUntil`, `sweepCutoff`, `retentionDateOf` replace `retentionEndsOn`.
+- The sweep deletes due documents one by one with their lines, copies, kept originals and cancellations; the business details, numbering and logos go with the last (`RETAINED_ISSUING_DOCUMENT_TABLES`, `RETAINED_ISSUING_PROFILE_TABLES`). `listClosed({ dueBefore })`; SWEPT records `remaining` and `profileRows`.
+- Admin listing and sweep rows: `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run: `documentsDeleted`.
+- The archive's README carries a 7-year keep notice (en, ar, he); each export logs `noticeVersion`.
+- Portal Close my account and the privacy policy: "7 years from the date of each one"; the privacy policy adds that a former owner who has their copy can ask for earlier deletion.
+
+### Added
+- `POST /admin/v1/issuing/retained/{organizationId}/erase { reference }` and `npm run issuing:retained -- erase --org <id> --reference <ref>` (`--org` also works for `archive`): refused 409 `ARCHIVE_NOT_HANDED_OVER` until an archive with the keep notice was exported, 409 `PROFILE_NOT_CLOSED` for a live profile; deletes every retained row through the bypass and logs `ERASED`. Store `issuingRetention.erase` (memory + Prisma, contract), operator-only.
+
+### Resolved
+- TD-332 won't do: the operator's hand-over after an identity check is enough.
+
+**Why:** Basel's answers to MUT-644's open questions (2026-11-25).
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/routes/issuing-retention.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/issuing-retained.ts`, `server/prisma/schema.prisma` (comment), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, docs, tests. No migration.
+
+## [Unreleased] - 2026-11-25 — "Finish setting up invoicing" after a save (MUT-722, ADR-278)
+
+### Added
+- The save toast says "Finish setting up invoicing to issue its invoice." with Set up, once a day per person and profile, after a shekel income on a profile where invoicing is available but the setup can't issue; Set up opens the setup at the first missing step (`?step=`).
+- Receivables: "Finish setup to issue" where Issue would be while the setup can't issue.
+- `Toast` `detail` option: a quieter second line under the message.
+- Release-QA `portal.invoicing.setup-hint` (spec passing); FakeApi `invoicing: 'details'`.
+
+**Why:** MUT-648's offer was silent while the setup was incomplete, so nobody learned why no invoice was offered (Basel, phone 0.2.0).
+
+**Files:** `src/hosted/components/setupHint.ts` (+ test), `src/hosted/components/{IncomeCaptureDrawer,IncomeDrawerHost,Toast}.tsx` (+ Toast test), `src/hosted/pages/views/ReceivablesList.tsx`, `src/hosted/pages/invoicing/InvoicingSetupPage.tsx`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/invoicing.yaml`, `qa/specs/portal/invoicing.spec.ts`, `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-11-25 — Closed profiles' issued documents: the 7-year sweep and the owner's archive (MUT-644, ADR-277, API 1.138.0-mut644)
 
 ### Added

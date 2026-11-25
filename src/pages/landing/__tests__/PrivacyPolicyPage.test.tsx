@@ -58,6 +58,7 @@ describe('PrivacyPolicyPage', () => {
     // MUT-644 (Basel, 2026-11-25): issued documents outlive the account, each for 7 years from its own date.
     expect(section).toMatch(/the tax documents you issued with MTB3A and the business details printed on them, each for 7 years from its own date/);
     expect(section).toMatch(/write to us and we'll send you the full archive/);
+    expect(section).toMatch(/once you have it, you can ask us to delete them sooner/);
     // MUT-710 (ADR-274): the security log outlives the account by 12 months
     expect(section).toMatch(/for 12 months from each event, the security log/);
     expect(section).toMatch(/before version 0\.1\.13/);

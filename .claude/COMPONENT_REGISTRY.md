@@ -2185,6 +2185,10 @@ DESIGN.md's destructive confirm as one component: `InPlaceConfirm({ message, can
 
 ### Toast action — `src/hosted/components/Toast.tsx`
 `show(message, { tone, action: { label, onAction } })`: a `.press` link-button in either tone; using it closes the toast; hover/focus holds the 6 s timer.
+MUT-722: `detail?: string` adds a quieter second line under the message (`.hp-toast-detail`), read with it in the polite region; used by the save toast's "Finish setting up invoicing" hint.
+
+### useSetupHint — `src/hosted/components/setupHint.ts`
+**Purpose** (MUT-722, ADR-278): whether a profile where invoicing is available has a setup that can't issue yet (`due`), the first missing step (`step`), and `takeToday()` (true once a day per person and profile, remembered in `localStorage`). Also `invoicingAvailable`, `firstMissingStep`, `parseSetupStepSearch` (the setup route's `?step=`). Tests: `components/__tests__/setupHint.test.ts`.
 
 ## Local mode (portal) — MUT-286
 

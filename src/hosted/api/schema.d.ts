@@ -26332,7 +26332,7 @@ export interface paths {
         };
         /**
          * Closed profiles whose issued documents are still kept
-         * @description MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are kept 7 years after the end of the year of the newest document. Oldest first; `query` matches the business name (any part) or the start of a VAT number.
+         * @description MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are still kept: each document 7 years from its own date (since 1.139.0), the business details until the last document goes. Oldest document first; `query` matches the business name (any part) or the start of a VAT number.
          */
         get: {
             parameters: {
@@ -26395,7 +26395,7 @@ export interface paths {
         put?: never;
         /**
          * Delete closed profiles’ issued documents whose 7 years have passed, or see which are due
-         * @description MUT-644 (ADR-277 D3): what the hourly account purge also runs. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing.
+         * @description MUT-644 (ADR-277 D3): what the hourly account purge also runs. Since 1.139.0 each document goes 7 years after its own date, with its lines, copies, kept original and cancellation; the business details, logos and numbering go with the last. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing.
          */
         post: {
             parameters: {
@@ -26456,7 +26456,7 @@ export interface paths {
         put?: never;
         /**
          * A closed profile’s archive of issued documents, for its former owner
-         * @description MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over; the export is written to the retention log with `reference`. `X-Archive-Documents` carries the count.
+         * @description MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over. Its README tells the owner to keep it 7 years (in English, Arabic and Hebrew); the export is written to the retention log with `reference` and, since 1.139.0, the notice’s version, which an erasure needs. `X-Archive-Documents` carries the count.
          */
         post: {
             parameters: {
@@ -26520,6 +26520,87 @@ export interface paths {
                 };
                 /** @description SIGNING_NOT_CONFIGURED or SIGNING_UNAVAILABLE: a copy had to be signed and could not be; nothing was exported */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase a closed profile’s issued documents before their 7 years, at its former owner’s request
+         * @description Since 1.139.0. MUT-644 (ADR-277 D7): an erasure request may shorten the 7 years only once the former owner was given everything first: an archive exported (`…/archive`) and logged no later than now, whose README told them to keep it 7 years. Then every retained row of the profile is deleted (documents, lines, copies, originals, cancellations, business details, logos, numbering) and an ERASED entry with `reference` is written to the retention log. Only for a profile deleted with its account (409 PROFILE_NOT_CLOSED).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingEraseRequest"];
+                };
+            };
+            responses: {
+                /** @description Erased */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingErased"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED (the profile still exists) or ARCHIVE_NOT_HANDED_OVER (export the archive for the former owner first) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -33413,7 +33494,7 @@ export interface components {
             storagePending: number;
             /** @description The time budget or the per-run cap ran out; the next run continues */
             incomplete: boolean;
-            /** @description Since 1.138.0 (MUT-644). Closed profiles whose issued documents this run deleted, 7 years after the end of the year of their newest document; 0 in a dry run */
+            /** @description Since 1.138.0 (MUT-644). Closed profiles some of whose issued documents this run deleted, each 7 years after its own date (since 1.139.0); 0 in a dry run */
             issuingProfilesSwept: number;
         };
         AccountPurgeRun: {
@@ -33454,16 +33535,22 @@ export interface components {
             vatId: string | null;
             documents: number;
             cancellations: number;
-            /** @description The latest document date, or a payment-request cancellation’s date if later */
+            /** @description Since 1.139.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later) */
+            oldestDocumentDate: string | null;
+            /** @description The latest such date */
             newestDocumentDate: string | null;
-            /** @description The first day the sweep may delete them; null when the profile issued nothing (deleted on the next run) */
+            /** @description Since 1.139.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing */
+            nextSweepOn: string | null;
+            /** @description The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run) */
             retainedUntil: string | null;
         };
         IssuingRetentionSweepRun: {
             dryRun: boolean;
             due: number;
-            /** @description Deleted by this run (in a dry run, would be) */
+            /** @description Profiles some of whose documents this run deleted (in a dry run, would) */
             swept: number;
+            /** @description Since 1.139.0. Documents this run deleted; 0 in a dry run */
+            documentsDeleted: number;
             failed: number;
             /** @description More were due than the per-run cap (25); the next run continues */
             incomplete: boolean;
@@ -33472,8 +33559,15 @@ export interface components {
                 organizationId: string;
                 /** @enum {string} */
                 outcome: "swept" | "would-sweep" | "skipped" | "failed";
+                /** @description Documents the profile held before this run */
                 documents: number;
+                /** @description Since 1.139.0. Documents this run deleted; null in a dry run, or when skipped or failed */
+                deleted: number | null;
+                /** @description Since 1.139.0. Documents still kept after this run; null as for `deleted` */
+                remaining: number | null;
+                oldestDocumentDate: string | null;
                 newestDocumentDate: string | null;
+                nextSweepOn: string | null;
                 retainedUntil: string | null;
             }[];
         };
@@ -33492,6 +33586,24 @@ export interface components {
              * @enum {string}
              */
             lang: "ar" | "en";
+        };
+        IssuingErased: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description Documents deleted */
+            documents: number;
+            cancellations: number;
+            /** @description Rows deleted in all, the business details, logos and numbering included */
+            rows: number;
+            /** Format: date-time */
+            erasedAt: string;
+        };
+        IssuingEraseRequest: {
+            /**
+             * @description The erasure request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1043
+             */
+            reference: string;
         };
         EmailWebhookResponse: {
             /** @enum {boolean} */

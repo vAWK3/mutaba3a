@@ -222,7 +222,7 @@ test('Close my account says issued invoices and receipts are kept 7 years, in En
 
   await step('Read the Kept section', async () => {
     await expect(dialog.getByRole('heading', { name: 'Kept' })).toBeVisible();
-    const line = dialog.getByText(/^If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years after the end of the year of the last one, as tax law requires, and then deleted\. Write to us if you need a copy\.$/);
+    const line = dialog.getByText(/^If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one, as tax law requires, and then deleted\. Write to us if you need a copy\.$/);
     await line.scrollIntoViewIfNeeded();
     await expect(line).toBeVisible();
   });

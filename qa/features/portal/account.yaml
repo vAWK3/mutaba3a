@@ -115,5 +115,5 @@ features:
       - Read the Kept section
       - Switch to Arabic and open it again
     expect:
-      - The Kept section says invoices and receipts issued with MTB3A, and the business details printed on them, are kept for 7 years after the end of the year of the last one, then deleted, and to write for a copy
+      - The Kept section says invoices and receipts issued with MTB3A, and the business details printed on them, are kept for 7 years from the date of each one, then deleted, and to write for a copy
       - The same line reads in Arabic, right to left

@@ -130,7 +130,7 @@ export const STORE_ACCESS: StoreAccess = {
     finishStoragePurge: 'operator',
   },
   // MUT-644 (ADR-277): closed profiles' issued documents, swept by the hourly purge job and exported from /admin only.
-  issuingRetention: { listClosed: 'operator', getClosed: 'operator', sweep: 'operator', record: 'operator', events: 'operator' },
+  issuingRetention: { listClosed: 'operator', getClosed: 'operator', sweep: 'operator', erase: 'operator', record: 'operator', events: 'operator' },
   // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
   // lists them. MUT-434's agent principal reads activeFor on the raw store, as authenticate() reads sessions (C4).
   features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },

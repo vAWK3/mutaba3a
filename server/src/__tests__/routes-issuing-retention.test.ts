@@ -3,8 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { ADMIN, accountantHarness, businessOf, DAY, idem, json, person, read, T0, type AccountantHarness } from './helpers/accountants.js';
 
 /**
- * MUT-644 (ADR-277): the operator's doors to a closed profile's issued documents: find it, export its archive for the
- * former owner, and the sweep (alone, and inside the hourly purge).
+ * MUT-644 (ADR-277, amended 2026-11-25): the operator's doors to a closed profile's issued documents: find it, export
+ * its archive for the former owner, erase on request once the archive was handed over, and the per-document sweep.
  */
 const ISSUER = { legalName: 'Kept Studio Ltd.', vatId: '516161616', dealerType: 'COMPANY', city: 'Nazareth' };
 const line = (description: string) => ({ description, kind: 'SERVICE', quantity: '1', unitPrice: '100.00' });
@@ -40,12 +40,12 @@ const archive = (h: AccountantHarness, profileId: string, body: Record<string, u
   h.app.request(`/admin/v1/issuing/retained/${profileId}/archive`, json(body, ADMIN));
 
 describe('closed profiles’ issued documents (MUT-644)', () => {
-  it('finds a former owner’s profile by name or VAT number, with its deletion date', async () => {
+  it('finds a former owner’s profile by name or VAT number, with its deletion dates', async () => {
     const h = accountantHarness();
     const { profileId } = await closedIssuer(h);
     expect((await h.app.request('/admin/v1/issuing/retained')).status).toBe(401);
     const byName = await read(await h.app.request('/admin/v1/issuing/retained?query=kept%20studio', { headers: ADMIN }));
-    expect(byName.data).toEqual([{ organizationId: profileId, legalName: 'Kept Studio Ltd.', vatId: '516161616', documents: 2, cancellations: 0, newestDocumentDate: '2026-11-04', retainedUntil: '2034-01-01' }]);
+    expect(byName.data).toEqual([{ organizationId: profileId, legalName: 'Kept Studio Ltd.', vatId: '516161616', documents: 2, cancellations: 0, oldestDocumentDate: '2026-11-02', newestDocumentDate: '2026-11-04', nextSweepOn: '2033-11-03', retainedUntil: '2033-11-05' }]);
     const byVat = await read(await h.app.request('/admin/v1/issuing/retained?query=5161', { headers: ADMIN }));
     expect(byVat.data.map((p: { organizationId: string }) => p.organizationId)).toEqual([profileId]);
   });
@@ -64,10 +64,15 @@ describe('closed profiles’ issued documents (MUT-644)', () => {
     expect(strFromU8(files[`copies/400-${receipt.number}.pdf`]!.slice(0, 5))).toBe('%PDF-');
     const uniform = unzipSync(files['uniform-file/OPENFRMT-516161616-2026-11-02_2026-11-04.zip']!);
     expect(Object.keys(uniform).some((k) => k.endsWith('/INI.TXT'))).toBe(true);
-    expect(strFromU8(files['README.txt']!)).toContain('Kept until 2034-01-01');
+    const readme = strFromU8(files['README.txt']!);
+    expect(readme).toContain('the first from 2033-11-03, the last from 2033-11-05');
+    // D7: the 7-year keep notice, in English, Arabic and Hebrew; its version is logged with the export.
+    expect(readme).toContain('KEEP THIS ARCHIVE FOR 7 YEARS');
+    expect(readme).toContain('احتفظ بهذا الأرشيف 7 سنوات');
+    expect(readme).toContain('שמרו את הארכיון הזה 7 שנים');
 
     const events = await h.store.issuingRetention.events(profileId);
-    expect(events).toMatchObject([{ action: 'ARCHIVE_EXPORTED', metadata: { reference: 'SUP-1042', documents: 2, originals: 1, copies: 1 } }]);
+    expect(events).toMatchObject([{ action: 'ARCHIVE_EXPORTED', metadata: { reference: 'SUP-1042', documents: 2, originals: 1, copies: 1, noticeVersion: 1 } }]);
   });
 
   it('refuses a live profile (its owners download their own), an unknown id and a missing reference', async () => {
@@ -83,18 +88,65 @@ describe('closed profiles’ issued documents (MUT-644)', () => {
     expect((await h.app.request(`/admin/v1/issuing/retained/${live}/archive`, json({ reference: 'x' }))).status).toBe(401);
   });
 
-  it('the sweep: due only 7 years after the end of the newest document’s year; the operator can dry-run it', async () => {
+  it('the sweep: each document goes 7 years after its own date; the operator can dry-run it', async () => {
+    const h = accountantHarness();
+    const { profileId, invoice, receipt } = await closedIssuer(h);
+    const sweep = async (dryRun: boolean) => read(await h.app.request('/admin/v1/issuing/retention/sweep', json({ dryRun }, ADMIN)));
+    h.setNow(new Date('2033-11-02T23:00:00Z'));
+    expect(await sweep(false)).toMatchObject({ due: 0, swept: 0, documentsDeleted: 0 });
+    h.setNow(new Date('2033-11-03T00:00:00Z'));
+    const dry = await sweep(true);
+    expect(dry).toMatchObject({ dryRun: true, due: 1, swept: 1, documentsDeleted: 0, rows: [{ organizationId: profileId, outcome: 'would-sweep', documents: 2, deleted: null, nextSweepOn: '2033-11-03', retainedUntil: '2033-11-05' }] });
+    expect(await h.store.issuing.getById(profileId, invoice.id)).not.toBeNull();
+    // The invoice's day: it goes alone.
+    expect(await sweep(false)).toMatchObject({ dryRun: false, swept: 1, documentsDeleted: 1, failed: 0, rows: [{ outcome: 'swept', deleted: 1, remaining: 1 }] });
+    expect(await h.store.issuing.getById(profileId, invoice.id)).toBeNull();
+    expect(await h.store.issuing.getById(profileId, receipt.id)).not.toBeNull();
+    const listed = await read(await h.app.request('/admin/v1/issuing/retained?query=kept%20studio', { headers: ADMIN }));
+    expect(listed.data).toMatchObject([{ documents: 1, oldestDocumentDate: '2026-11-04', nextSweepOn: '2033-11-05' }]);
+    // The receipt's day: it goes, and the business details with it.
+    h.setNow(new Date('2033-11-05T00:00:00Z'));
+    expect(await sweep(false)).toMatchObject({ swept: 1, documentsDeleted: 1, rows: [{ deleted: 1, remaining: 0 }] });
+    expect(await h.store.issuing.getById(profileId, receipt.id)).toBeNull();
+    expect(await h.store.issuing.getIssuer(profileId)).toBeNull();
+    expect((await archive(h, profileId)).status).toBe(404);
+  });
+
+  it('erases on request only after the archive, with its keep notice, was handed over (D7)', async () => {
     const h = accountantHarness();
     const { profileId, invoice } = await closedIssuer(h);
-    h.setNow(new Date('2033-12-31T23:00:00Z'));
-    expect(await read(await h.app.request('/admin/v1/issuing/retention/sweep', json({ dryRun: false }, ADMIN)))).toMatchObject({ due: 0, swept: 0 });
-    h.setNow(new Date('2034-01-01T00:00:00Z'));
-    const dry = await read(await h.app.request('/admin/v1/issuing/retention/sweep', json({ dryRun: true }, ADMIN)));
-    expect(dry).toMatchObject({ dryRun: true, due: 1, swept: 1, rows: [{ organizationId: profileId, outcome: 'would-sweep', documents: 2, retainedUntil: '2034-01-01' }] });
+    const erase = (id: string, body: Record<string, unknown> = { reference: 'SUP-1043' }, headers: Record<string, string> = ADMIN) =>
+      h.app.request(`/admin/v1/issuing/retained/${id}/erase`, json(body, headers));
+
+    expect((await erase(profileId, { reference: 'x' }, {})).status).toBe(401);
+    expect((await erase(profileId, {})).status).toBe(422);
+    const early = await erase(profileId);
+    expect(early.status).toBe(409);
+    expect((await read(early)).error.details).toMatchObject({ reason: 'ARCHIVE_NOT_HANDED_OVER' });
     expect(await h.store.issuing.getById(profileId, invoice.id)).not.toBeNull();
-    const run = await read(await h.app.request('/admin/v1/issuing/retention/sweep', json({ dryRun: false }, ADMIN)));
-    expect(run).toMatchObject({ dryRun: false, swept: 1, failed: 0 });
+
+    expect((await archive(h, profileId)).status).toBe(200);
+    const done = await erase(profileId);
+    expect(done.status, await done.clone().text()).toBe(200);
+    const body = await read(done);
+    expect(body).toMatchObject({ organizationId: profileId, documents: 2, cancellations: 0 });
+    expect(body.rows).toBeGreaterThanOrEqual(6);
     expect(await h.store.issuing.getById(profileId, invoice.id)).toBeNull();
+    expect(await h.store.issuing.getIssuer(profileId)).toBeNull();
+    const events = await h.store.issuingRetention.events(profileId);
+    expect(events.map((e) => e.action)).toEqual(['ARCHIVE_EXPORTED', 'ERASED']);
+    expect(events[1]).toMatchObject({ metadata: { reference: 'SUP-1043', documents: 2, archiveEventId: events[0]!.id } });
+    expect((await erase(profileId)).status).toBe(404);
     expect((await archive(h, profileId)).status).toBe(404);
+  });
+
+  it('never erases a live profile', async () => {
+    const h = accountantHarness();
+    const owner = await person(h);
+    const live = await businessOf(h, owner, 'Live Studio');
+    const refused = await h.app.request(`/admin/v1/issuing/retained/${live}/erase`, json({ reference: 'SUP-1' }, ADMIN));
+    expect(refused.status).toBe(409);
+    expect((await read(refused)).error.details).toMatchObject({ reason: 'PROFILE_NOT_CLOSED' });
+    expect((await h.app.request('/admin/v1/issuing/retained/00000000-0000-4000-8000-000000000000/erase', json({ reference: 'SUP-1' }, ADMIN))).status).toBe(404);
   });
 });
