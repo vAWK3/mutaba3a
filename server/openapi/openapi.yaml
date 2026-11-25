@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.141.0-mut661
+  version: 1.142.0-mut735
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -11771,6 +11771,8 @@ components:
             - firm
             - freelancer
             - null
+        usage:
+          $ref: "#/components/schemas/BillingUsage"
       required:
         - configured
         - subscription
@@ -11784,6 +11786,7 @@ components:
         - comeback
         - accountantPlan
         - currentPlan
+        - usage
     BillingOffer:
       type: object
       properties:
@@ -11963,6 +11966,97 @@ components:
         - interval
         - currency
         - catalog
+    BillingUsage:
+      type: object
+      properties:
+        month:
+          type: string
+          example: 2026-12
+          description: The Asia/Jerusalem calendar month (YYYY-MM).
+        resetsOn:
+          type: string
+          example: 2027-01-01
+          description: The day the monthly meters start again.
+        plan:
+          type: string
+          enum:
+            - starter
+            - solo
+            - business
+            - firm
+            - freelancer
+            - malafat
+            - none
+          description: "The plan the limits are read from: the payer’s (`none` when nothing covers them)."
+        meters:
+          type: array
+          items:
+            type: object
+            properties:
+              meter:
+                type: string
+                enum:
+                  - documents
+                  - scans
+              used:
+                type: integer
+                minimum: 0
+              limit:
+                type: integer
+                nullable: true
+                minimum: 0
+                description: "Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731)."
+              level:
+                type: string
+                enum:
+                  - ok
+                  - near
+                  - nudge
+                  - at_cap
+                description: near from 80% of the limit, nudge from 90%, at_cap at it; ok with no limit.
+              graceUntil:
+                type: string
+                nullable: true
+                format: date-time
+                description: Reserved for MUT-733 (the over-cap gift); never sent yet.
+            required:
+              - meter
+              - used
+              - limit
+              - level
+        businesses:
+          type: object
+          properties:
+            used:
+              type: integer
+              minimum: 0
+            limit:
+              type: integer
+              nullable: true
+              minimum: 0
+              description: "Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731)."
+          required:
+            - used
+            - limit
+          description: Business profiles the person created (the personal one never counts).
+        partners:
+          type: object
+          properties:
+            limit:
+              type: integer
+              nullable: true
+              minimum: 0
+              description: "Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731)."
+          required:
+            - limit
+          description: Partners allowed on each business profile.
+      required:
+        - month
+        - resetsOn
+        - plan
+        - meters
+        - businesses
+        - partners
     BillingRedirect:
       type: object
       properties:

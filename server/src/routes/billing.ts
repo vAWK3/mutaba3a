@@ -1,3 +1,6 @@
+import { usageView, type UsageView } from '../usage/caps.js';
+import { resetsOn, usageMonthOf } from '../usage/month.js';
+import { userSubjectKey } from '../usage/subject.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
@@ -36,7 +39,7 @@ import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
 import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
-import { ownedProfilesOf } from '../personal-profile.js';
+import { ownedProfilesOf, profileTypeOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import { BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
@@ -154,6 +157,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           accountantPlan,
           // MUT-702 (ADR-275): provider-neutral, from the same entitlements the gate reads.
           currentPlan: currentPlanOf(owned.entitlements),
+          // MUT-735 (ADR-281): one primary-key read of this month's counters.
+          usage: await billingUsage(store, user.id, owned, now),
         },
         200,
       );
@@ -369,6 +374,21 @@ function returnUrlOf(c: Context<AppEnv>, returnPath: string, portalOrigin: strin
 }
 
 /** The person's owned profiles and each one's entitlement: one billing read (coverage.ts), at most six profiles (MUT-182). */
+/** MUT-735 (ADR-281): the person's usage this month against their plan's limits (the payer's plan, as the meters read it). */
+async function billingUsage(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>, now: Date): Promise<UsageView> {
+  const month = usageMonthOf(now);
+  const counters = await store.usage.countersFor(userSubjectKey(userId), [month]);
+  const count = (meter: 'DOCUMENTS' | 'SCANS') => counters.find((c) => c.meter === meter)?.count ?? 0;
+  const plan = currentPlanOf(owned.entitlements) ?? (owned.entitlements.some((e) => e.source === 'MALAFAT') ? 'malafat' : 'none');
+  return usageView({
+    month,
+    resetsOn: resetsOn(month),
+    plan,
+    counts: { DOCUMENTS: count('DOCUMENTS'), SCANS: count('SCANS') },
+    businessesOwned: owned.profiles.filter((p) => profileTypeOf(p) === 'BUSINESS').length,
+  });
+}
+
 async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Date) {
   const profiles = await ownedProfilesOf(store, userId);
   const withMalafat = await Promise.all(

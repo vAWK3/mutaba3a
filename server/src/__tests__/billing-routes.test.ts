@@ -115,6 +115,18 @@ describe('GET /v1/billing (MUT-362)', () => {
       accountantPlan: null,
       // MUT-702: nothing covers a person provisioned after the backfill.
       currentPlan: null,
+      // MUT-735 (ADR-281): this Jerusalem month's usage; no plan, so no limits.
+      usage: {
+        month: '2026-11',
+        resetsOn: '2026-12-01',
+        plan: 'none',
+        meters: [
+          { meter: 'documents', used: 0, limit: null, level: 'ok' },
+          { meter: 'scans', used: 0, limit: null, level: 'ok' },
+        ],
+        businesses: { used: 0, limit: null },
+        partners: { limit: null },
+      },
     });
   });
 
@@ -843,3 +855,49 @@ describe('the come-back offer in Billing and at Checkout (MUT-534 D12–D14)', (
   });
 });
 
+
+// MUT-735 (ADR-281): this month's usage against the payer's limits, with the 80% / 90% levels.
+describe('GET /v1/billing usage (MUT-735)', () => {
+  const grantTier = (h: Harness, userId: string, tier: 'SOLO' | 'BUSINESS') =>
+    h.store.billing.createGrant({ id: randomUUID(), userId, organizationId: null, tier, reason: 'usage test', expiresAt: null, grantedBy: 'admin', at: NOW, audit: [] });
+  const count = (h: Harness, userId: string, kind: 'DOCUMENT_ISSUED' | 'SCAN', n: number, month = '2026-11') =>
+    Promise.all(
+      Array.from({ length: n }, () =>
+        h.store.usage.record({ occurredAt: NOW, month, subjectKey: `user:${userId}`, actorUserId: userId, organizationId: null, kind, detail: kind === 'SCAN' ? 'LIBRARY' : 'TAX_INVOICE', plan: 'solo', door: 'PORTAL', entityKey: randomUUID() }, null),
+      ),
+    );
+
+  it('Solo: documents 41 of 50 is near, scans 92 of 100 a nudge; one business allowed, no partners', async () => {
+    const h = harness();
+    const u = await person(h);
+    await grantTier(h, u.userId, 'SOLO');
+    await count(h, u.userId, 'DOCUMENT_ISSUED', 41);
+    await count(h, u.userId, 'SCAN', 92);
+    // Last month's count is not this month's.
+    await count(h, u.userId, 'DOCUMENT_ISSUED', 3, '2026-10');
+    expect((await read(await u.get())).usage).toEqual({
+      month: '2026-11',
+      resetsOn: '2026-12-01',
+      plan: 'solo',
+      meters: [
+        { meter: 'documents', used: 41, limit: 50, level: 'near' },
+        { meter: 'scans', used: 92, limit: 100, level: 'nudge' },
+      ],
+      businesses: { used: 0, limit: 1 },
+      partners: { limit: 0 },
+    });
+  });
+
+  it('at the cap the level is at_cap; the owned business profiles are counted, the personal one never', async () => {
+    const h = harness();
+    const u = await person(h);
+    await grantTier(h, u.userId, 'BUSINESS');
+    await count(h, u.userId, 'DOCUMENT_ISSUED', 250);
+    const created = await h.store.organizations.createOwned(u.userId, { name: 'Studio', slug: `studio-${randomUUID().slice(0, 8)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', profileType: 'BUSINESS', at: NOW }, 10, { actorId: u.userId, requestId: null });
+    expect(created.kind).toBe('created');
+    const usage = (await read(await u.get())).usage;
+    expect(usage.meters[0]).toEqual({ meter: 'documents', used: 250, limit: 250, level: 'at_cap' });
+    expect(usage.businesses).toEqual({ used: 1, limit: 3 });
+    expect(usage.partners).toEqual({ limit: 2 });
+  });
+});

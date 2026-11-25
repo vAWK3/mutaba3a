@@ -42,3 +42,29 @@ export function meterView(meter: UsageMeter, used: number, plan: UsagePlan): Met
   const limit = capOf(plan, meter);
   return { meter: meter.toLowerCase() as Lowercase<UsageMeter>, used, limit, level: levelOf(used, limit) };
 }
+
+/** A stock limit of the plan (businesses owned, partners on a business), or null where the plan has no row. */
+export function stockLimitOf(plan: UsagePlan, stock: 'businesses' | 'partners'): number | null {
+  return isPlanOnSale(plan) ? PLAN_LIMITS[plan][stock] : null;
+}
+
+export interface UsageView {
+  month: string;
+  resetsOn: string;
+  plan: UsagePlan;
+  meters: MeterView[];
+  businesses: { used: number; limit: number | null };
+  partners: { limit: number | null };
+}
+
+/** GET /v1/billing's `usage`: this month's counters against the payer's limits. Pure. */
+export function usageView(input: { month: string; resetsOn: string; plan: UsagePlan; counts: Readonly<Record<UsageMeter, number>>; businessesOwned: number }): UsageView {
+  return {
+    month: input.month,
+    resetsOn: input.resetsOn,
+    plan: input.plan,
+    meters: (['DOCUMENTS', 'SCANS'] as const).map((meter) => meterView(meter, input.counts[meter], input.plan)),
+    businesses: { used: input.businessesOwned, limit: stockLimitOf(input.plan, 'businesses') },
+    partners: { limit: stockLimitOf(input.plan, 'partners') },
+  };
+}

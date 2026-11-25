@@ -32597,6 +32597,7 @@ export interface components {
             accountantPlan: components["schemas"]["BillingAccountantPlan"] | unknown;
             /** @enum {string|null} */
             currentPlan: "solo" | "business" | "firm" | "freelancer" | null;
+            usage: components["schemas"]["BillingUsage"];
         };
         BillingOffer: {
             id: string;
@@ -32653,6 +32654,51 @@ export interface components {
                 USD: {
                     month: number;
                 } | null;
+            };
+        };
+        BillingUsage: {
+            /**
+             * @description The Asia/Jerusalem calendar month (YYYY-MM).
+             * @example 2026-12
+             */
+            month: string;
+            /**
+             * @description The day the monthly meters start again.
+             * @example 2027-01-01
+             */
+            resetsOn: string;
+            /**
+             * @description The plan the limits are read from: the payer’s (`none` when nothing covers them).
+             * @enum {string}
+             */
+            plan: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+            meters: {
+                /** @enum {string} */
+                meter: "documents" | "scans";
+                used: number;
+                /** @description Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731). */
+                limit: number | null;
+                /**
+                 * @description near from 80% of the limit, nudge from 90%, at_cap at it; ok with no limit.
+                 * @enum {string}
+                 */
+                level: "ok" | "near" | "nudge" | "at_cap";
+                /**
+                 * Format: date-time
+                 * @description Reserved for MUT-733 (the over-cap gift); never sent yet.
+                 */
+                graceUntil?: string | null;
+            }[];
+            /** @description Business profiles the person created (the personal one never counts). */
+            businesses: {
+                used: number;
+                /** @description Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731). */
+                limit: number | null;
+            };
+            /** @description Partners allowed on each business profile. */
+            partners: {
+                /** @description Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731). */
+                limit: number | null;
             };
         };
         BillingRedirect: {

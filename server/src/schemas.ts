@@ -600,6 +600,28 @@ const BillingAccountantPlanSchema = z
   })
   .openapi('BillingAccountantPlan');
 
+const UsageLimitSchema = z.number().int().nonnegative().nullable().openapi({ description: 'Null: no limit on this plan (Malafat, no plan, legacy Freelancer, or Starter until MUT-731).' });
+
+/** MUT-735 (ADR-281): this Asia/Jerusalem month's usage against the payer's plan. */
+export const BillingUsageSchema = z
+  .object({
+    month: z.string().openapi({ example: '2026-12', description: 'The Asia/Jerusalem calendar month (YYYY-MM).' }),
+    resetsOn: z.string().openapi({ example: '2027-01-01', description: 'The day the monthly meters start again.' }),
+    plan: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer', 'malafat', 'none']).openapi({ description: 'The plan the limits are read from: the payer’s (`none` when nothing covers them).' }),
+    meters: z.array(
+      z.object({
+        meter: z.enum(['documents', 'scans']),
+        used: z.number().int().nonnegative(),
+        limit: UsageLimitSchema,
+        level: z.enum(['ok', 'near', 'nudge', 'at_cap']).openapi({ description: 'near from 80% of the limit, nudge from 90%, at_cap at it; ok with no limit.' }),
+        graceUntil: z.string().datetime().nullable().optional().openapi({ description: 'Reserved for MUT-733 (the over-cap gift); never sent yet.' }),
+      }),
+    ),
+    businesses: z.object({ used: z.number().int().nonnegative(), limit: UsageLimitSchema }).openapi({ description: 'Business profiles the person created (the personal one never counts).' }),
+    partners: z.object({ limit: UsageLimitSchema }).openapi({ description: 'Partners allowed on each business profile.' }),
+  })
+  .openapi('BillingUsage');
+
 export const BillingOverviewSchema = z
   .object({
     /** False on a server without Stripe keys: the portal shows "Subscriptions open soon" (design review DR5). */
@@ -658,6 +680,8 @@ export const BillingOverviewSchema = z
      * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.136.0-mut702.
      */
     currentPlan: z.enum(['solo', 'business', 'firm', 'freelancer']).nullable(),
+    /** MUT-735 (ADR-281). Additive since 1.142.0-mut735. */
+    usage: BillingUsageSchema,
   })
   .openapi('BillingOverview');
 
