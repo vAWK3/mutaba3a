@@ -6,6 +6,8 @@ record the date where the item says.
 
 ## server
 
+- **MUT-644 (API 1.138.0-mut644, ADR-277): closed profiles' issued documents are swept 7 years after the end of the year of their newest document.** The release migrates `20261125120000_mut644_issuing_retention_events` (one new table, additive; merging it restarts the shared dev API). No Terraform: the hourly purge job runs the sweep. Nothing is due before 1 January 2034. The operator's archive: `npm --prefix server run issuing:retained -- list --query …`, then `archive --organization-id … --reference <ticket> --out file.zip` after checking who is asking. **Open for the lawyer** (recorded on MUT-644): the start date, and erasure requests vs the duty to keep records.
+
 - **MUT-710 (API 1.135.0-mut710, ADR-274): two-step sign-in and the 12-month authentication log.** The release migrates `20261124120000_mut710_two_factor`.
   1. **Before the deploy:** `make release server` applies `two_factor.tf` (the generated `TWO_FACTOR_SEAL_KEY` secret, mounted on the API) and `auth_log.tf` (bucket `auth-events`, 365 days, and its sink). The API refuses to start on production without the key, so apply Terraform first. Nothing to create by hand and no `production.tfvars` line to add: Terraform generates the key (`random_password`), stores it as secret `mutaba3a-api-two-factor-seal-key`, gives the API's service account read access and mounts it before the new revision starts. Never deploy this image with a bare `gcloud run deploy` (no Terraform): the revision would refuse to boot and traffic would stay on the old one. Check after the plan: it adds `random_password.two_factor_seal_key`, `google_secret_manager_secret.two_factor_seal_key` (+ version, + IAM member) and the auth-log bucket and sink, and changes `google_cloud_run_v2_service.api` (new env `TWO_FACTOR_SEAL_KEY`, no `TWO_FACTOR_ISSUING_GATE_ENABLED`).
   2. **After the first deploy:** sign in once, then check the sink sees it: `gcloud logging read 'logName="projects/mtb3a-production/logs/run.googleapis.com%2Fstdout" AND resource.type="cloud_run_revision" AND jsonPayload.event="auth_event"' --bucket=auth-events --location=europe-west1 --view=_AllLogs --limit=1`.
@@ -122,6 +124,8 @@ record the date where the item says.
   - Delete this item once TD-278 is measured, and record the date on MUT-441.
 
 ## web
+
+- **MUT-644: the privacy policy's deletion section now says issued invoices and receipts are kept 7 years after the end of the year of the last one** (en + ar, "Last updated November 25, 2026"). Legal wording is Basel's: approve it (and the lawyer's answer on MUT-644's open questions) before this web release, or revert the two sentences in `src/lib/i18n/translations/{en,ar}/landing.json`.
 
 - **MUT-535 (ADR-259): the privacy policy names the monthly summary; You › Account gets its switch and `/mail-off` its page.** Release after the server's MUT-535 step 1 (the switch reads `GET /v1/me/monthly-summary-mail`; on an older API the row stays hidden). Nothing to set. Check: You › Account shows "Monthly summary email" for a paying or trialling account, and `https://mtb3a.com/privacy` says "Last updated November 21, 2026" (adjust the date in `landing.json` en + ar if the policy ships later). Delete this item and record the date on MUT-535.
 

@@ -8,7 +8,9 @@ import type { PaymentRequestFacts } from './payment-request.js';
  *
  * | Document            | settled                                  | settlement                                     |
  * | credit note         | null                                     | null                                           |
- * | receipt, inv-receipt| gross                                    | PAID (money documents are paid when issued)    |
+ * | receipt             | gross                                    | PAID (money documents are paid when issued)    |
+ * | invoice-receipt     | gross                                    | CANCELLED when credit notes cover the gross    |
+ * |                     |                                          | (MUT-643), else PAID                           |
  * | tax invoice         | paid + credited on its Owed, ≤ gross      | CANCELLED when credit notes cover the gross,   |
  * |                     |                                          | else PAID / PARTLY_PAID / OPEN                 |
  * | payment request     | what its 320s/400s cover (MUT-662), ≤ gross | its MUT-662 status, UNPAID shown as OPEN     |
@@ -24,9 +26,10 @@ export function settlementOf(doc: IssuedDocumentRecord, owed: ReceivableRecord |
     const status = request?.status ?? 'UNPAID';
     return { settledMinor, settlement: status === 'UNPAID' ? 'OPEN' : status };
   }
-  if (doc.docType !== 'TAX_INVOICE') return { settledMinor: doc.grossMinor, settlement: 'PAID' };
   const credited = creditNotes.filter((n) => n.originalId === doc.id).reduce((sum, n) => sum + n.grossMinor, 0n);
+  if (doc.docType === 'RECEIPT') return { settledMinor: doc.grossMinor, settlement: 'PAID' };
   if (credited >= doc.grossMinor) return { settledMinor: doc.grossMinor, settlement: 'CANCELLED' };
+  if (doc.docType === 'TAX_INVOICE_RECEIPT') return { settledMinor: doc.grossMinor, settlement: 'PAID' };
   const covered = owed ? owed.paidMinor + owed.creditedMinor : credited;
   const settledMinor = covered > doc.grossMinor ? doc.grossMinor : covered;
   return { settledMinor, settlement: settledMinor >= doc.grossMinor ? 'PAID' : settledMinor > 0n ? 'PARTLY_PAID' : 'OPEN' };

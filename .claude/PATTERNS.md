@@ -2958,3 +2958,7 @@ A "to do" that follows from the ledger (a document due, an income class) is a pu
 ## Pattern: plan names, rank and limits live only in `billing/plans.ts` (MUT-702, ADR-275)
 **Where**: `server/src/billing/plans.ts`; read by `billing/entitlement.ts` (rank) and `routes/billing.ts` (`currentPlan`).
 **Rule**: any code that compares plans, picks the better one, decides when a change takes effect, or reads a plan's limits imports `RANK`, `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` or `currentPlanOf` from `plans.ts`. Never compare tiers by hand (`tier === 'FIRM'`) and never spell a limit elsewhere. `plans.ts` stays pure and provider-neutral: no payment provider, price or lookup key (those belong to the provider adapter, MUT-702 Part B).
+
+## Retention sweeps of rows the purge leaves behind (MUT-644, ADR-277)
+
+Rows kept past an account's deletion carry no foreign key to the profile, so "closed" is "the profile row is gone". A sweep that removes them runs inside the hourly purge (never its own scheduler job), caps itself per run, deletes one owner per transaction after re-checking closed + due, and logs to a table of its own (the profile's `audit_events` can't outlive it). Immutable tables are passed only with `SET LOCAL mutaba3a.issuing_bypass = 'on'` inside that transaction.

@@ -7036,6 +7036,49 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 - Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
 - Merging the migration restarts the shared dev API: warn the orchestrator before the merge.
 
+## ADR-276: A Credit Note May Reach a Paid Invoice's Paid Part: Refunded or Kept as the Client's Credit (MUT-643, amends ADR-260 decision 4)
+
+**Status:** Accepted (2026-11-24, Basel; MUT-643 under epic MUT-566). Plan `.claude/designs/MUT-643-credit-note-paid.md` (revision 2, after an adversarial eng review).
+
+**Context:** ADR-260 decision 4 let a credit note (330) credit only what was still owed on its tax invoice (R-D2), and an invoice-receipt (320) could not be credited at all. A business that refunds a client had no way to issue the credit note.
+
+**Decision:**
+1. **What may be credited (D1).** A 305 or a 320 whose Owed the document owns (origin `ISSUED_DOCUMENT`, `originId` = the document). The credit notes on one original never add up to more than its gross: 422 `CREDIT_EXCEEDS_ORIGINAL` (`maximum`). An original that doesn't own its Owed (a 320 that applied a payment request, a linked 305/320) keeps the old rule: only what is still owed (MUT-730).
+2. **The split (D2).** What is still owed is credited first; the rest is the paid part. The Owed's `creditedMinor` rises by the credit and its `paidMinor` falls by the paid part, so paid + credited never exceeds gross.
+3. **The release (D3).** The paid part comes off the Owed's live allocations newest first (createdAt, then id), as MUT-444's terms correction releases (`releasedAt`; a partial release leaves a smaller live row with the released row's own createdAt).
+4. **Basel's choice per note (C1, D5).** `paidPart: KEEP` leaves the released money on its payments as unallocated (the client's credit; applying it later is MUT-729). `paidPart: REFUND` writes a refund (`refunds` + `refund_sources`) dated `refundedOn` (not before the credit note's date, `pastMoneyDate`), method `PaymentMethod`. Refunded money counts in the payments' `allocatedMinor` again, so every `amount − allocated` stays right unchanged. Without a choice while there is a paid part: 422 `ORIGINAL_PAID` with `details.paid` (older apps keep their message).
+5. **A refund is a ledger line, not a document (C2).** The 330 is the tax document; the uniform file is unchanged. Whether a refund needs its own document is accountant question 6 on MUT-567.
+6. **Lock order (D4).** For a credit note, the issue takes the counter, reads the original's paying payments, locks them in id order, then the Owed, and re-reads; if the paying payments changed: 409 `ORIGINAL_CHANGED`. That is every payment writer's order (payment, then receivables), so a reversal racing it waits instead of deadlocking; a deadlock or serialization failure is 409, not 500.
+7. **Guard (D8).** Reverse and correct refuse a payment a refund drew on, inside the store after the payment row is locked: 409 `PAYMENT_HAS_REFUND`. Undo already refuses allocated money.
+8. **Where refunds count (D7).** A `REFUND` statement line (debit on `refundedOn`, whole-customer statement only); the period summary's `refunds` (received = payments − reversals − refunds); client balances; activity (Reports, verdict, the monthly mail, the phone Glance); the MUT-660 books split; the accountant's shared summary and period pack. A 320 credited in full reads CANCELLED like a 305. Payment views gain `refunded`.
+9. **Records file (D9).** `refunds` joins the snapshot in the unreleased 21 → 22 step (an empty map for older files).
+
+**Consequences:** two additive tables (purged with the profile, no trigger); API 1.137.0-mut643, additive wire (`paidPart`, preview `creditNote`, `refundId`, `refunded`, the `REFUND` line, period `refunds`). Roll-forward only once the first refund exists (TD-328). The paid part of a document that doesn't own its Owed, and applying kept credit, are MUT-730 and MUT-729.
+
+**Alternatives rejected:** a refund as an Owed paid by the released money (it raises Billed instead of lowering Received); a refund as a negative payment (breaks every positive-amount rule); counting refunds outside `allocatedMinor` (every unallocated calculation would need to learn it); a numbered refund document (waits on the accountant, C2).
+
+---
+
+## ADR-277: Closed Profiles' Issued Documents Are Swept 7 Years After the End of the Year of the Newest One; the Owner's Copy Is an Operator Path (MUT-644)
+
+**Status:** Accepted (2026-11-25; built under Basel's standing go-ahead while he was away; plan `.claude/designs/MUT-644-issuing-retention.md`). Completes ADR-260 decision 2. **Open for the lawyer:** the start date, and erasure requests vs the duty to keep records (recorded on MUT-644, comment 13499).
+
+**Context:** the account purge (ADR-188) deletes a closed account's profiles but leaves their issuing tables (ADR-260 decision 2: legal records kept 7 years, no foreign keys, an immutability trigger with one sanctioned bypass). Nothing deleted them afterwards, and a former owner had no way to get a copy.
+
+**Decision:**
+1. **Retention date:** a closed profile's issuing rows may be deleted from 1 January of the 8th year after the calendar year of its newest document (a document's date, or a payment-request cancellation's Israel date if later): 7 full years after the end of that tax year. One constant, `ISSUING_RETENTION_YEARS = 7` (`server/src/issuing/retention.ts`). The year boundary is read in UTC (never early in Israel). A profile that never issued anything holds nothing to keep and goes on the next run.
+2. **Closed = the profile row is gone.** A live profile is never swept, however old its documents.
+3. **Where it runs:** inside the hourly account purge (like MUT-382's share-link viewer sweep), at most 25 profiles a run, never in a dry run; a failure is logged and never stops the purge. The purge summary gains `issuingProfilesSwept`. The operator can run or dry-run it alone (`POST /admin/v1/issuing/retention/sweep`, `npm run issuing:retained -- sweep`). No new scheduler job or Terraform.
+4. **How:** one transaction per profile that re-checks closed + due, runs `SET LOCAL mutaba3a.issuing_bypass = 'on'` and deletes from `RETAINED_ISSUING_TABLES` (the nine "kept 7 years" exemptions, pinned by a unit test).
+5. **Audit:** a new table `issuing_retention_events` (`SWEPT`, `ARCHIVE_EXPORTED`; counts, dates, the operator's support reference; never a name or address), no foreign keys, kept indefinitely, exempt from the purge. `audit_events` can't hold these rows: its profile foreign key is gone.
+6. **The former owner's copy is an operator path:** `GET /admin/v1/issuing/retained` finds the profile (business name or VAT number); `POST /admin/v1/issuing/retained/{id}/archive {reference}` returns a zip of the signed originals as kept, freshly signed copies of documents never produced, and the uniform file (MUT-569), and logs `ARCHIVE_EXPORTED`. A live profile is refused (409 `PROFILE_NOT_CLOSED`). The operator checks who is asking and hands the zip over; the server never mails it (ADR-159 §5: a mail never carries a money record).
+7. **Copy:** Close my account (portal and phone) always lists in Kept that issued invoices and receipts and the business details printed on them are kept 7 years after the end of the year of the last one, then deleted; the privacy policy's deletion section says the same.
+8. **Erasure requests** do not shorten the 7 years (pending the lawyer).
+
+**Consequences:** nothing is due before 1 January 2034. API 1.138.0-mut644 (additive: a summary field and admin routes); migration `20261125120000_mut644_issuing_retention_events` (one table). `issuing.ts` now exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf`, shared with the archive. An archive with many never-produced documents signs each one in the request (TD-331).
+
+**Alternatives rejected:** a retention date per document (keeps a business's history half-deleted for years); counting from the account's closing (not what the bookkeeping rules count); a new Cloud Scheduler job (infra for one cheap query an hour); writing the audit to `audit_events` (foreign key to a deleted profile); mailing the archive or a self-service download (no account left to authenticate, and mail never carries money records).
+
 ## ADR-278: "Finish setting up invoicing" After a Save While the Setup Can't Issue (MUT-722, addendum to MUT-648)
 
 **Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-722-setup-hint.md`). Built under Basel's standing authorisation, decisions recorded here for his review.

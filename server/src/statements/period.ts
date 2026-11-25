@@ -6,9 +6,11 @@ import type { LedgerEntry } from './lines.js';
  * over `ledgerEntries`, no sort, no store, no clock: a line before `from` adds to the opening balance, a line in
  * [from, to] adds to its kind's total, a line after `to` is ignored.
  *
- * - billed = CHARGE lines (gross), credited = CREDIT lines, payments = PAYMENT lines, reversals = PAYMENT_REVERSAL lines.
- * - closing = opening + billed + reversals − credited − payments, so closing − opening = billed − received − credited
- *   with received = payments − reversals (AC2), by construction; the tests compute both ends from the lines instead.
+ * - billed = CHARGE lines (gross), credited = CREDIT lines, payments = PAYMENT lines, reversals = PAYMENT_REVERSAL lines,
+ *   refunds = REFUND lines (MUT-643: never in reversals, the bounce figure).
+ * - closing = opening + billed + reversals + refunds − credited − payments, so closing − opening = billed − received −
+ *   credited with received = payments − reversals − refunds (AC2), by construction; the tests compute both ends from
+ *   the lines instead.
  */
 export interface PeriodTotals {
   currency: string;
@@ -17,6 +19,8 @@ export interface PeriodTotals {
   creditedMinor: bigint;
   paymentsMinor: bigint;
   reversalsMinor: bigint;
+  /** MUT-643 */
+  refundsMinor: bigint;
   closingMinor: bigint;
 }
 
@@ -29,7 +33,7 @@ export function summarizePeriod(entries: readonly LedgerEntry[], period: { from:
   const blocks = new Map<string, { totals: PeriodTotals; active: boolean }>();
   const blockOf = (code: string) => {
     let b = blocks.get(code);
-    if (!b) blocks.set(code, (b = { totals: { currency: code, openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, closingMinor: 0n }, active: false }));
+    if (!b) blocks.set(code, (b = { totals: { currency: code, openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, refundsMinor: 0n, closingMinor: 0n }, active: false }));
     return b;
   };
   if (currency !== null) blockOf(currency);
@@ -44,11 +48,12 @@ export function summarizePeriod(entries: readonly LedgerEntry[], period: { from:
     if (e.kind === 'CHARGE') b.totals.billedMinor += e.debitMinor;
     else if (e.kind === 'CREDIT') b.totals.creditedMinor += e.creditMinor;
     else if (e.kind === 'PAYMENT') b.totals.paymentsMinor += e.creditMinor;
-    else b.totals.reversalsMinor += e.debitMinor;
+    else if (e.kind === 'PAYMENT_REVERSAL') b.totals.reversalsMinor += e.debitMinor;
+    else b.totals.refundsMinor += e.debitMinor;
   }
   const result: PeriodTotals[] = [];
   for (const { totals: t, active } of blocks.values()) {
-    t.closingMinor = t.openingMinor + t.billedMinor + t.reversalsMinor - t.creditedMinor - t.paymentsMinor;
+    t.closingMinor = t.openingMinor + t.billedMinor + t.reversalsMinor + t.refundsMinor - t.creditedMinor - t.paymentsMinor;
     if (currency !== null || active || t.openingMinor !== 0n || t.closingMinor !== 0n) result.push(t);
   }
   return result.sort((a, b) => (a.currency < b.currency ? -1 : a.currency > b.currency ? 1 : 0));

@@ -230,7 +230,7 @@ test('The privacy policy covers sharing with an accountant and share links, in E
       await expect(page.getByText(copy.shareLinks.body)).toBeVisible();
       await expect(page.locator('html')).toHaveAttribute('dir', language === 'ar' ? 'rtl' : 'ltr');
       if (language === 'en') {
-        expect(copy.updated).toContain('November 21, 2026');
+        expect(copy.updated).toContain('November 25, 2026');
         for (const fact of ['14 days', '4 to 8 digits', 'at most 3 devices', 'after 5 wrong PINs', 'over for 30 days']) expect(copy.accountant.body + copy.shareLinks.body).toContain(fact);
         await expect(page.getByRole('main')).not.toContainText('Mutaba3a');
       }

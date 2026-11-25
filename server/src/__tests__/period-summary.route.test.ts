@@ -177,7 +177,7 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
     const h = harness();
     const { f } = await year(h);
     const nov = (await ok(await period(h, 'from=2025-11-01&to=2025-11-30&currency=ILS', f.auth))).currencies[0];
-    expect(nov).toEqual({ currency: 'ILS', openingBalance: '0.00', billed: '2180.00', credited: '1080.00', received: '500.00', payments: '500.00', reversals: '0.00', change: '600.00', closingBalance: '600.00' });
+    expect(nov).toEqual({ currency: 'ILS', openingBalance: '0.00', billed: '2180.00', credited: '1080.00', received: '500.00', payments: '500.00', reversals: '0.00', refunds: '0.00', change: '600.00', closingBalance: '600.00' });
     // February: the ₪300 and its ₪350 replacement are both dated 10 February; the original's reversal is May's.
     const feb = (await ok(await period(h, 'from=2026-02-01&to=2026-02-28&currency=ILS', f.auth))).currencies[0];
     expect(feb).toMatchObject({ payments: '650.00', reversals: '0.00', received: '650.00', billed: '236.00' });
@@ -239,9 +239,9 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
 
   it('AC4: the contract version is 1.97.0-mut532 and the route is published under Summaries with the API key', async () => {
     const h = harness();
-    expect(API_VERSION).toBe('1.136.0-mut702');
+    expect(API_VERSION).toBe('1.138.0-mut644');
     const doc = await read(await h.app.request('/openapi.json'));
-    expect(doc.info.version).toBe('1.136.0-mut702');
+    expect(doc.info.version).toBe('1.138.0-mut644');
     const op = doc.paths['/v1/summaries/period'].get;
     expect(op.tags).toEqual(['Summaries']);
     // MUT-593: Malafat may read it as the person too.
@@ -278,7 +278,7 @@ describe('GET /v1/summaries/period (MUT-483)', () => {
       const h = harness();
       const f = await firm(h);
       expect((await period(h, 'currency=XYZ', f.auth)).status).toBe(422);
-      expect((await ok(await period(h, 'currency=JOD', f.auth))).currencies).toEqual([{ currency: 'JOD', openingBalance: '0.000', billed: '0.000', credited: '0.000', received: '0.000', payments: '0.000', reversals: '0.000', change: '0.000', closingBalance: '0.000' }]);
+      expect((await ok(await period(h, 'currency=JOD', f.auth))).currencies).toEqual([{ currency: 'JOD', openingBalance: '0.000', billed: '0.000', credited: '0.000', received: '0.000', payments: '0.000', reversals: '0.000', refunds: '0.000', change: '0.000', closingBalance: '0.000' }]);
       expect((await ok(await period(h, '', f.auth))).currencies).toEqual([]);
     });
   });

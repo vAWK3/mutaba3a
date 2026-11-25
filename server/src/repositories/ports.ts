@@ -1381,6 +1381,8 @@ export interface StatementSourceRows {
   /** Every installment of the customer's agreements in the currency (for "installment N of M"). */
   installments: InstallmentRecord[];
   charges: RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency. */
+  refunds: LedgerRefundRow[];
 }
 
 /** MUT-483: the receivable fields a ledger line reads (`statements/lines.ts`), and nothing more. */
@@ -1398,7 +1400,12 @@ export interface PeriodSourceRows {
   credits: LedgerCreditRow[];
   /** Every payment of any status, a payment with no client included (D4). */
   payments: LedgerPaymentRow[];
+  /** MUT-643: every refund (sources left out), in the same snapshot. */
+  refunds: LedgerRefundRow[];
 }
+
+/** MUT-643: the refund fields a ledger line reads (`statements/lines.ts`). */
+export type LedgerRefundRow = Pick<RefundRecord, 'id' | 'customerId' | 'currency' | 'amountMinor' | 'refundedOn' | 'createdAt' | 'issuedDocumentId' | 'method' | 'reference'>;
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
@@ -2874,6 +2881,60 @@ export interface AccountPurgeRepository {
   finishStoragePurge(organizationId: string): Promise<void>;
 }
 
+// ---- MUT-644 (ADR-277): the retention of closed profiles' issued documents -----------
+
+/** A profile that no longer exists but still holds issuing rows (its account was purged, ADR-260 decision 2). */
+export interface RetainedIssuingProfile {
+  organizationId: string;
+  /** From the business details kept with the documents; null when the profile never saved them. */
+  legalName: string | null;
+  vatId: string | null;
+  documents: number;
+  cancellations: number;
+  /** The latest document date, or a payment-request cancellation's Israel date if later; null with neither. */
+  newestDocumentDate: IsoDate | null;
+}
+
+export interface RetainedIssuingFilter {
+  /** Only profiles whose newest document is dated before this day (or that hold no document): the sweep's due list. */
+  newestBefore?: IsoDate;
+  /** Case-insensitive match on the legal name, or a VAT number prefix. */
+  query?: string;
+}
+
+export type IssuingRetentionAction = 'SWEPT' | 'ARCHIVE_EXPORTED';
+
+export interface IssuingRetentionEventRecord {
+  id: string;
+  organizationId: string;
+  action: IssuingRetentionAction;
+  /** Counts, dates and the operator's support reference; never a name or an address (D5). */
+  metadata: JsonObject;
+  createdAt: Date;
+}
+
+export type IssuingSweepResult =
+  | { kind: 'swept'; documents: number; cancellations: number; rows: number; newestDocumentDate: IsoDate | null; event: IssuingRetentionEventRecord }
+  | { kind: 'not_closed' }
+  | { kind: 'not_due'; newestDocumentDate: IsoDate }
+  | { kind: 'nothing' };
+
+/** MUT-644: operator only (the hourly purge job and /admin), on the unguarded store. */
+export interface IssuingRetentionRepository {
+  /** Closed profiles still holding issuing rows, oldest newest-document first (none first), at most `limit`. */
+  listClosed(filter: RetainedIssuingFilter, limit: number): Promise<RetainedIssuingProfile[]>;
+  /** One closed profile; null when the profile still exists or holds no issuing row. */
+  getClosed(organizationId: string): Promise<RetainedIssuingProfile | null>;
+  /**
+   * D4: in one transaction, re-checks that the profile is gone and its newest document is dated before `newestBefore`,
+   * then deletes every retained issuing row (through the trigger's bypass) and writes a SWEPT event with the counts.
+   */
+  sweep(organizationId: string, newestBefore: IsoDate, at: Date): Promise<IssuingSweepResult>;
+  record(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): Promise<IssuingRetentionEventRecord>;
+  /** The profile's retention log, oldest first. */
+  events(organizationId: string): Promise<IssuingRetentionEventRecord[]>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -2946,6 +3007,10 @@ export interface LedgerStore {
   periodPack: PeriodPackRepository;
   /** MUT-568 (ADR-260): issued documents, INSERT-only legal records, and the details printed on them. Session only. */
   issuing: IssuingRepository;
+  /** MUT-644 (ADR-277): closed profiles' issued documents: the retention sweep and the operator's archive. Operator only. */
+  issuingRetention: IssuingRetentionRepository;
+  /** MUT-643: refunds written by credit notes. */
+  refunds: RefundRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -4432,6 +4497,8 @@ export interface ProfileExportRecords {
   /** MUT-254: vendors and their names (both, so a restored store keeps one vendor per name). */
   vendors: VendorRecord;
   vendorNames: VendorNameRecord;
+  /** MUT-643: refunds with their sources, so a restored ledger's statement still balances. */
+  refunds: RefundRecord;
 }
 
 export type ProfileExportField = keyof ProfileExportRecords;
@@ -4735,10 +4802,50 @@ export interface IssuedDocumentRecord {
   receivableId: string | null;
   paymentId: string | null;
   creditId: string | null;
+  /** MUT-643: a credit note whose paid part went back to the client. */
+  refundId: string | null;
   coreVersion: string;
   createdByUserId: string;
   requestKey: string;
   lines: IssuedDocumentLineRecord[];
+}
+
+/** MUT-643 (D5): what happens to the part of a credit note the client already paid. */
+export type CreditPaidPart = { mode: 'KEEP' } | { mode: 'REFUND'; refundedOn: IsoDate; method: PaymentMethod; reference: string | null };
+
+/**
+ * MUT-643 (D6): money going back to a client with a credit note. Insert-only ledger rows (no edit, no delete outside the
+ * profile purge). Its sources name the payments the money came from; refunded money counts in their `allocatedMinor`.
+ */
+export interface RefundRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  currency: string;
+  amountMinor: bigint;
+  refundedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  issuedDocumentId: string;
+  requestId: string | null;
+  createdByUserId: string;
+  createdAt: Date;
+  sources: { paymentId: string; amountMinor: bigint }[];
+}
+
+export interface RefundFilter {
+  customerId?: string;
+  currency?: string;
+  /** Refunds that drew on any of these payments. */
+  paymentIds?: readonly string[];
+  /** Both inclusive, on `refundedOn`. */
+  from?: IsoDate;
+  to?: IsoDate;
+}
+
+export interface RefundRepository {
+  /** Oldest first (`refundedOn`, created, id), with their sources; another organization's match nothing. */
+  list(organizationId: string, filter: RefundFilter): Promise<RefundRecord[]>;
 }
 
 /** What the route hands the store: composed and validated (issuing/compose.ts), snapshots taken. */
@@ -4758,8 +4865,14 @@ export interface IssueDocumentInput {
   notes: string | null;
   /** 305 and 320: when the Owed falls due. */
   dueDate: IsoDate | null;
-  /** 330: the tax invoice it credits. */
+  /** 330: the tax invoice or invoice-receipt it credits. */
   originalId: string | null;
+  /**
+   * MUT-643 (D5): a 330 reaching past what is still owed into what the client paid says what happens to that part:
+   * KEEP leaves it on the payments as the client's unallocated money; REFUND records it going back. Absent while the
+   * credit stays within what is owed.
+   */
+  paidPart?: CreditPaidPart | null;
   /** 320 and 400: how the money came in. */
   payment: IssuedPaymentDetails | null;
   /** 400: the open tax invoice or payment request this receipt pays; 320: the payment request it settles (MUT-662). */
@@ -4813,8 +4926,15 @@ export type IssueResult =
   | { kind: 'customer_not_found' }
   /** 330's original or 320/400's appliesTo: missing, another profile's, not an open tax invoice or a live payment request. */
   | { kind: 'original_not_found' }
-  /** R-D2: a credit note credits only what is still owed on its tax invoice (MUT-643 for paid ones). */
-  | { kind: 'original_paid'; outstandingMinor: bigint }
+  /**
+   * R-D2 / MUT-643 (D5): the credit reaches what the client paid. `paidMinor` is that part when a `paidPart` choice
+   * would be taken (the original owns its Owed); absent when only what is still owed may be credited (MUT-730).
+   */
+  | { kind: 'original_paid'; outstandingMinor: bigint; paidMinor?: bigint }
+  /** MUT-643 (D1, AC2): the credit notes on one original may not add up to more than its gross. */
+  | { kind: 'credit_exceeds_original'; maximumMinor: bigint }
+  /** MUT-643 (D4): the payments paying the original changed while the credit note was being issued; nothing written. */
+  | { kind: 'original_changed' }
   /** 400 against a 305: more than it still owes. */
   | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
   /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */

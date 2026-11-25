@@ -118,6 +118,8 @@ const VENDOR = cols<VendorRecord>()({
   id: true, organizationId: true, canonicalName: true, registrationNo: true, phone: true, email: true, lastCategoryId: true, lastCurrency: true, lastVatTreatment: true, lastVatRateBasisPoints: true, lastUsedAt: true, version: true,
   createdAt: true, updatedAt: true,
 });
+/** MUT-643: a refund with its sources (the one nested read: a refund is never without them). */
+const REFUND = { id: true, organizationId: true, customerId: true, currency: true, amountMinor: true, refundedOn: true, method: true, reference: true, issuedDocumentId: true, requestId: true, createdByUserId: true, createdAt: true, sources: { select: { paymentId: true, amountMinor: true }, orderBy: { paymentId: 'asc' } } } as unknown as Record<string, true>;
 const VENDOR_NAME = cols<VendorNameRecord>()({ id: true, organizationId: true, vendorId: true, name: true, nameKey: true, createdAt: true });
 const INBOX_ENTRY = cols<InboxEntryRecord>()({ id: true, userId: true, kind: true, amountMinor: true, currency: true, occurredOn: true, note: true, captureSource: true, version: true, createdAt: true, updatedAt: true });
 
@@ -162,6 +164,7 @@ function idKeyed(prisma: PrismaClient): { [F in Exclude<ProfileExportField, 'cou
     expGroups: { delegate: d(prisma.expenseGroup), select: EXPENSE_GROUP },
     vendors: { delegate: d(prisma.vendor), select: VENDOR },
     vendorNames: { delegate: d(prisma.vendorName), select: VENDOR_NAME },
+    refunds: { delegate: d(prisma.refund), select: REFUND },
   };
 }
 

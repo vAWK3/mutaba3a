@@ -270,6 +270,50 @@ features:
     expect:
       - The field starts on "Profile default (On payment)" and says an invoice-receipt is due for each payment
       - Choosing Tax invoice first saves PATCH /v1/customers with If-Match and says a tax invoice is due when an amount is owed, then a receipt for each payment
+  - id: credit-note-paid-refund
+    title: A paid invoice-receipt credited in full is refunded; the client's statement shows the refund and ends at 0 (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+      - src/hosted/pages/views/IssuedDocuments.tsx
+    steps:
+      - Issue an invoice-receipt of 1,000 to Client 1
+      - On its page choose Credit note
+      - Choose Refunded to the client, bank transfer, reference RF-7, and issue
+      - Open Client 1's ledger
+      - Open the ledger in Arabic
+    expect:
+      - The drawer says the client already paid 1,180.00 of this and Issue waits for a choice
+      - The credit note is issued with paidPart REFUND (bank, RF-7)
+      - The ledger lists the invoice-receipt's charge and payment, the credit note's credit and a Refund line, ending at 0.00
+      - In Arabic the ledger reads right to left and names the refund line
+  - id: credit-note-paid-keep
+    title: A paid tax invoice credited in part keeps the paid part as the client's credit (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - Issue a tax invoice of 1,000 to Client 1 and a receipt that pays all of it
+      - From the tax invoice choose Credit note and set the amount to 400
+      - Choose Kept as their credit and issue
+    expect:
+      - The drawer says the client already paid 472.00 of this (400 before VAT) and explains the credit stays on their account
+      - The credit note is issued with paidPart KEEP and no refund
+  - id: credit-note-cap
+    title: Credit notes on one document can't add up to more than it; the refusal says how much is left (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - Issue an invoice-receipt of 1,000 to Client 1 and credit 600 of it (708.00 with VAT), refunded
+      - Start another credit note from it and set the amount to 1,000 (VAT included)
+      - Choose Refunded and issue
+    expect:
+      - The new credit note starts at 472.00, what is left to credit
+      - The issue is refused with "At most 472.00 is left to credit" and nothing is issued
   - id: manual-allocation
     title: When MTB3A can't request the allocation number, enter one requested by hand before issuing; the number is a preview, never held (MUT-711)
     tier: secondary

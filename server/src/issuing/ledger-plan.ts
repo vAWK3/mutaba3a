@@ -1,5 +1,6 @@
 import type { IsoDate } from '../dates.js';
-import type { CreditInput, IssueDocumentInput, IssueResult, PaymentMethod } from '../repositories/ports.js';
+import type { CreditInput, IssueDocumentInput, IssueResult, PaymentMethod, ReceivableRecord } from '../repositories/ports.js';
+import { creditCap } from './credit-split.js';
 import type { VatTreatment } from '../vat.js';
 
 /**
@@ -9,7 +10,8 @@ import type { VatTreatment } from '../vat.js';
  *  - 305 tax invoice: an Owed
  *  - 320 invoice-receipt: an Owed and a Received that pays it in full
  *  - 400 receipt: a Received, paying an open 305 when `appliesToDocumentId` names one
- *  - 330 credit note: a credit on its tax invoice's Owed (R-D2: up to what's still owed)
+ *  - 330 credit note: a credit on its original's Owed. MUT-643: on an Owed the original owns it may reach past what is
+ *    still owed into what was paid (the paid part, `creditNoteRefusal`); the stores release it (credit-split.ts)
  *  - 300 payment request (MUT-662): nothing from an Owed (it is linked, never takes it over); an ordinary Owed when
  *    issued with no entry. A 320 or 400 that applies a payment request posts only a Received paying its Owed.
  */
@@ -168,5 +170,27 @@ export function fromEntryRefusal(
   if (entry.customerId !== input.customerId) return { kind: 'entry_mismatch', field: 'customer' };
   if (entry.currency !== input.currency) return { kind: 'entry_mismatch', field: 'currency' };
   if (entry.amountMinor !== input.composed.grossMinor) return { kind: 'entry_mismatch', field: 'amount' };
+  return null;
+}
+
+/**
+ * MUT-643 (D1, D5): why a credit note can't be issued against this original, or null when it can. Both stores ask this
+ * under the original Owed's lock.
+ *  - the credit notes on one original never add up to more than its gross (AC2)
+ *  - past what is still owed, only an Owed the original owns may give back what was paid (else MUT-730), and only with
+ *    a `paidPart` choice; without one the answer names the paid part so a client can ask
+ */
+export function creditNoteRefusal(
+  facts: { original: { id: string; grossMinor: bigint }; owed: Pick<ReceivableRecord, 'origin' | 'originId'>; creditedByNotesMinor: bigint; outstandingMinor: bigint },
+  input: Pick<IssueDocumentInput, 'composed' | 'paidPart'>,
+): Extract<IssueResult, { kind: 'credit_exceeds_original' | 'original_paid' }> | null {
+  const creditMinor = input.composed.grossMinor;
+  const maximumMinor = creditCap(facts.original.grossMinor, facts.creditedByNotesMinor);
+  if (creditMinor > maximumMinor) return { kind: 'credit_exceeds_original', maximumMinor };
+  const { outstandingMinor } = facts;
+  if (creditMinor <= outstandingMinor) return null;
+  const owned = facts.owed.origin === 'ISSUED_DOCUMENT' && facts.owed.originId === facts.original.id;
+  if (!owned) return { kind: 'original_paid', outstandingMinor };
+  if (!input.paidPart) return { kind: 'original_paid', outstandingMinor, paidMinor: creditMinor - outstandingMinor };
   return null;
 }

@@ -45,7 +45,7 @@ export const SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
  */
 const PERIOD_DESCRIPTION =
   'MUT-483 (ADR-227). Per currency, the customer statement\'s lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. ' +
-  'billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal\'s day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person\'s own undone capture counts nowhere; a payment with no client counts. ' +
+  'billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal\'s day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person\'s own undone capture counts nowhere; a payment with no client counts. ' +
   'openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. ' +
   '`to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. ' +
   'Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. ' +
@@ -249,12 +249,12 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const today = todayFor(organization, c.get('now')());
       const { from, to } = reportRange(q, today);
       const bucket = q.bucket;
-      const { payments, expenses, earlierData } = await readActivityWindow(store, organization.id, from, to);
+      const { payments, expenses, refunds, earlierData } = await readActivityWindow(store, organization.id, from, to);
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
-      const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
+      const summary = summarizeActivity({ payments, expenses, allocations, receivables, refunds, from, to, bucket });
       // MUT-660: invoicing profiles only; every other profile's answer is unchanged.
-      const split = await invoiceSplitOf(store, organization, payments, { from, to });
+      const split = await invoiceSplitOf(store, organization, payments, refunds, { from, to });
       return c.json({ from, to, bucket, asOf: today, earlierData, ...summary, ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );

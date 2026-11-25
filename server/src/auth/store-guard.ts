@@ -127,6 +127,8 @@ export const STORE_ACCESS: StoreAccess = {
     listStoragePurges: 'operator',
     finishStoragePurge: 'operator',
   },
+  // MUT-644 (ADR-277): closed profiles' issued documents, swept by the hourly purge job and exported from /admin only.
+  issuingRetention: { listClosed: 'operator', getClosed: 'operator', sweep: 'operator', record: 'operator', events: 'operator' },
   // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
   // lists them. MUT-434's agent principal reads activeFor on the raw store, as authenticate() reads sessions (C4).
   features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },
@@ -535,6 +537,8 @@ export const STORE_ACCESS: StoreAccess = {
    * never reaches them; every read-only guard (accountant, share link, the download stream) lets them through.
    */
   periodPack: { estimate: { read: 'expenses' }, names: { read: 'expenses' } },
+  // MUT-643: refunds read like credits and allocations (statements, Received figures); only issuing writes them.
+  refunds: { list: 'read' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };

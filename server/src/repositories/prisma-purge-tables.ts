@@ -14,6 +14,9 @@ export const PURGE_PROFILE_TABLES = [
   'expense_receipts',
   'agreements',
   'payment_allocations',
+  // MUT-643: refunds and their sources are ledger rows, purged with the profile (sources before refunds).
+  'refund_sources',
+  'refunds',
   'payments',
   'expenses',
   'projects',
@@ -67,7 +70,26 @@ export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   issued_cancellation_counters: 'kept 7 years after closing: numbering of the retained cancellations (MUT-662, MUT-644)',
   issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
   issued_document_originals: 'kept 7 years after closing: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
+
+  // MUT-644 (ADR-277 D5): the sweep's own log; it outlives the rows it records.
+  issuing_retention_events: 'the retention log of closed profiles\' issued documents: sweeps and exported archives (MUT-644)',
 };
+
+/**
+ * MUT-644 (ADR-277 D4): the tables the retention sweep deletes a closed profile's rows from, 7 years after the end of
+ * the year of its newest document. Exactly the "kept 7 years" exemptions above (a unit test pins it).
+ */
+export const RETAINED_ISSUING_TABLES = [
+  'issuer_details',
+  'issued_document_counters',
+  'issued_documents',
+  'issued_document_lines',
+  'issued_document_copies',
+  'issued_document_cancellations',
+  'issued_cancellation_counters',
+  'issuer_logos',
+  'issued_document_originals',
+] as const;
 
 /**
  * What the purge does with every column that points at users (`table.column`):

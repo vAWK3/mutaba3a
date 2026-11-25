@@ -2,7 +2,7 @@ import { todayFor } from '../agreements/compose.js';
 import { postDueItems, type PostingActor } from '../agreements/posting.js';
 import { addDays, compareIsoDates, type IsoDate } from '../dates.js';
 import { listAll } from '../repositories/list-all.js';
-import type { ExpenseCursor, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { ExpenseCursor, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ReceivableRecord, RefundRecord } from '../repositories/ports.js';
 import { historyEnd, historyStart, summarizeActivity, type ActivitySummary } from './activity.js';
 import { owedOf, type Owed } from './verdict.js';
 import { invoiceSplitOf } from '../income/invoice-split.js';
@@ -35,6 +35,8 @@ export interface PostingDoor {
 export interface ActivityWindow {
   payments: PaymentRecord[];
   expenses: ExpenseRecord[];
+  /** MUT-643: refunds dated in the window. */
+  refunds: RefundRecord[];
   earlierData: boolean;
 }
 
@@ -46,13 +48,14 @@ export async function readActivityWindow(store: LedgerStore, organizationId: str
   const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
   const end = historyEnd(to);
   const before = addDays(start, -1);
-  const [payments, expenses, paidEarlier, spentEarlier] = await Promise.all([
+  const [payments, expenses, paidEarlier, spentEarlier, refunds] = await Promise.all([
     listAll((cursor) => store.payments.list(organizationId, { status: 'POSTED', receivedAfter: start, receivedBefore: end }, { limit: 200, cursor })),
     listAll<ExpenseRecord, ExpenseCursor>((cursor) => store.expenses.list(organizationId, { from: start, to: end }, { limit: 200, cursor })),
     store.payments.list(organizationId, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null }),
     store.expenses.list(organizationId, { to: before }, { limit: 1, cursor: null }),
+    store.refunds.list(organizationId, { from: start, to: end }),
   ]);
-  return { payments, expenses, earlierData: paidEarlier.items.length > 0 || spentEarlier.items.length > 0 };
+  return { payments, expenses, refunds, earlierData: paidEarlier.items.length > 0 || spentEarlier.items.length > 0 };
 }
 
 /**
@@ -70,10 +73,10 @@ export async function readProfileFigures(store: LedgerStore, organization: Organ
   return {
     today,
     earlierData: window.earlierData,
-    activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
+    activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], refunds: window.refunds, from, to, bucket: 'month' }),
     owed: owedOf(receivables, today),
     entriesInRange: entriesIn(window, receivables, from, to),
-    invoiceSplit: await invoiceSplitOf(store, organization, window.payments, { from, to }),
+    invoiceSplit: await invoiceSplitOf(store, organization, window.payments, window.refunds, { from, to }),
   };
 }
 
