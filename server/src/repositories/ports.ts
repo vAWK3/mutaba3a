@@ -2891,18 +2891,23 @@ export interface RetainedIssuingProfile {
   vatId: string | null;
   documents: number;
   cancellations: number;
-  /** The latest document date, or a payment-request cancellation's Israel date if later; null with neither. */
+  /**
+   * The earliest retention date among its documents (a document's date, or its cancellation's Israel date when later;
+   * issuing/retention.ts): the next document to go goes from `retainedUntil` of it. Null with no document.
+   */
+  oldestDocumentDate: IsoDate | null;
+  /** The latest retention date: the last document, and with it the profile's own rows, go from `retainedUntil` of it. */
   newestDocumentDate: IsoDate | null;
 }
 
 export interface RetainedIssuingFilter {
-  /** Only profiles whose newest document is dated before this day (or that hold no document): the sweep's due list. */
-  newestBefore?: IsoDate;
+  /** Only profiles holding a document whose retention date is before this day, or holding no document: the sweep's due list. */
+  dueBefore?: IsoDate;
   /** Case-insensitive match on the legal name, or a VAT number prefix. */
   query?: string;
 }
 
-export type IssuingRetentionAction = 'SWEPT' | 'ARCHIVE_EXPORTED';
+export type IssuingRetentionAction = 'SWEPT' | 'ARCHIVE_EXPORTED' | 'ERASED';
 
 export interface IssuingRetentionEventRecord {
   id: string;
@@ -2914,22 +2919,47 @@ export interface IssuingRetentionEventRecord {
 }
 
 export type IssuingSweepResult =
-  | { kind: 'swept'; documents: number; cancellations: number; rows: number; newestDocumentDate: IsoDate | null; event: IssuingRetentionEventRecord }
+  | {
+      kind: 'swept';
+      /** Documents deleted (each with its lines, copies, kept original and cancellation). */
+      documents: number;
+      cancellations: number;
+      rows: number;
+      /** Documents still kept. */
+      remaining: number;
+      /** The profile's own rows (business details, logos, counters) went with its last document. */
+      profileRows: boolean;
+      event: IssuingRetentionEventRecord;
+    }
   | { kind: 'not_closed' }
-  | { kind: 'not_due'; newestDocumentDate: IsoDate }
+  | { kind: 'not_due'; oldestDocumentDate: IsoDate }
   | { kind: 'nothing' };
+
+export type IssuingEraseResult =
+  | { kind: 'erased'; documents: number; cancellations: number; rows: number; event: IssuingRetentionEventRecord }
+  | { kind: 'not_closed' }
+  | { kind: 'nothing' }
+  /** No archive carrying the 7-year keep notice was exported first (D7). */
+  | { kind: 'archive_not_handed_over' };
 
 /** MUT-644: operator only (the hourly purge job and /admin), on the unguarded store. */
 export interface IssuingRetentionRepository {
-  /** Closed profiles still holding issuing rows, oldest newest-document first (none first), at most `limit`. */
+  /** Closed profiles still holding issuing rows, oldest document first (none first), at most `limit`. */
   listClosed(filter: RetainedIssuingFilter, limit: number): Promise<RetainedIssuingProfile[]>;
   /** One closed profile; null when the profile still exists or holds no issuing row. */
   getClosed(organizationId: string): Promise<RetainedIssuingProfile | null>;
   /**
-   * D4: in one transaction, re-checks that the profile is gone and its newest document is dated before `newestBefore`,
-   * then deletes every retained issuing row (through the trigger's bypass) and writes a SWEPT event with the counts.
+   * D4 (amended 2026-11-25): in one transaction, re-checks that the profile is gone, deletes each document whose
+   * retention date is before `dueBefore` with its lines, copies, kept original and cancellation, and, once no document
+   * is left, the profile's own rows; all through the trigger's bypass. Writes a SWEPT event with the counts.
    */
-  sweep(organizationId: string, newestBefore: IsoDate, at: Date): Promise<IssuingSweepResult>;
+  sweep(organizationId: string, dueBefore: IsoDate, at: Date): Promise<IssuingSweepResult>;
+  /**
+   * D7: an erasure request that shortens the 7 years. In one transaction, re-checks that the profile is gone and that
+   * an archive carrying the keep notice was exported no later than `at` (issuing/retention.ts handsOverArchive), then
+   * deletes every retained row through the same bypass and writes an ERASED event with `reference`.
+   */
+  erase(organizationId: string, reference: string, at: Date): Promise<IssuingEraseResult>;
   record(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): Promise<IssuingRetentionEventRecord>;
   /** The profile's retention log, oldest first. */
   events(organizationId: string): Promise<IssuingRetentionEventRecord[]>;

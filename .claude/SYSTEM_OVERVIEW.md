@@ -402,11 +402,13 @@ Signed in, Your data › Download my records writes the chosen profiles to the s
   the OPENFRMT zip for a date range (`GET /v1/issuing/uniform-file`; INI.TXT, BKMVDATA, a printable report). Documents
   only (C100/D110/D120), ISO-8859-8 with Arabic in Hebrew letters; the simulator fixture is in
   `docs/operations/tax-authority/uniform-file/`.
-- MUT-644 (ADR-277): a closed profile's issuing rows (the purge left them) are deleted by the hourly purge job from
-  1 January of the 8th year after the year of its newest document (`ISSUING_RETENTION_YEARS`, `issuing/retention.ts`),
-  in one transaction under the trigger's bypass, logged in `issuing_retention_events`. A former owner's copy is an
-  operator path: `npm run issuing:retained` (list, archive: signed originals + signed copies + the uniform file, sweep).
-  Close my account (portal, phone) and the privacy policy say so.
+- MUT-644 (ADR-277, amended 2026-11-25): a closed profile's issued documents (the purge left them) are deleted by the
+  hourly purge job one by one, each the day after its 7th anniversary (`ISSUING_RETENTION_YEARS`, `issuing/retention.ts`),
+  with its lines, copies, original and cancellation; the business details, logos and numbering go with the last. One
+  transaction per profile under the trigger's bypass, logged in `issuing_retention_events`. A former owner's copy is an
+  operator path: `npm run issuing:retained` (list, archive: signed originals + signed copies + the uniform file + a
+  7-year keep notice, sweep, erase: only after an archive with the notice was exported). Close my account (portal,
+  phone) and the privacy policy say so.
 - MUT-640 (ADR-261): issued documents print server-side as PDFs (Hebrew, Arabic, English; Professional, Modern or Minimal; black
   or blue ink), with Malafat's tri-script engine; the first produced copy is the original, later ones copies.
 - MUT-641 (ADR-265): every issued-document PDF that leaves is signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp);

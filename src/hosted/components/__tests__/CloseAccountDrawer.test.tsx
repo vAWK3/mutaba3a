@@ -73,7 +73,7 @@ describe('Close my account drawer (MUT-333)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
     const kept = within(dialog).getByRole('heading', { name: 'Kept' });
     expect(kept).toBeInTheDocument();
-    expect(within(dialog).getByText(/If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years after the end of the year of the last one/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one/)).toBeInTheDocument();
   });
 
   it('Download my records opens Your data in its place', async () => {

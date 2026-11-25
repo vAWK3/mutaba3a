@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents kept 7 years from each one's date; erasure after the archive (MUT-644 amended, ADR-277 override log, API 1.139.0-mut644)
+
+### Changed
+- Retention is per document (Basel, MUT-644 comment 13504): each issued document of a closed profile is due the day after its 7th anniversary (its `documentDate`; a cancelled payment request from its cancellation's Israel date when later), read on the UTC day. `retention.ts`: `retainedUntil`, `sweepCutoff`, `retentionDateOf` replace `retentionEndsOn`.
+- The sweep deletes due documents one by one with their lines, copies, kept originals and cancellations; the business details, numbering and logos go with the last (`RETAINED_ISSUING_DOCUMENT_TABLES`, `RETAINED_ISSUING_PROFILE_TABLES`). `listClosed({ dueBefore })`; SWEPT records `remaining` and `profileRows`.
+- Admin listing and sweep rows: `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run: `documentsDeleted`.
+- The archive's README carries a 7-year keep notice (en, ar, he); each export logs `noticeVersion`.
+- Portal Close my account and the privacy policy: "7 years from the date of each one"; the privacy policy adds that a former owner who has their copy can ask for earlier deletion.
+
+### Added
+- `POST /admin/v1/issuing/retained/{organizationId}/erase { reference }` and `npm run issuing:retained -- erase --org <id> --reference <ref>` (`--org` also works for `archive`): refused 409 `ARCHIVE_NOT_HANDED_OVER` until an archive with the keep notice was exported, 409 `PROFILE_NOT_CLOSED` for a live profile; deletes every retained row through the bypass and logs `ERASED`. Store `issuingRetention.erase` (memory + Prisma, contract), operator-only.
+
+### Resolved
+- TD-332 won't do: the operator's hand-over after an identity check is enough.
+
+**Why:** Basel's answers to MUT-644's open questions (2026-11-25).
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/routes/issuing-retention.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/issuing-retained.ts`, `server/prisma/schema.prisma` (comment), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, docs, tests. No migration.
+
 ## [Unreleased] - 2026-11-25 — "Finish setting up invoicing" after a save (MUT-722, ADR-278)
 
 ### Added

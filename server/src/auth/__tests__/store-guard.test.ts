@@ -155,6 +155,7 @@ describe('STORE_ACCESS', () => {
       // MUT-571 AC3: the re-consent reminder job reads every profile's connection end, on the unguarded store.
       'issuing.taxConnectionsEndingBetween',
       // MUT-644: closed profiles' issued documents: the hourly purge job and /admin only.
+      'issuingRetention.erase',
       'issuingRetention.events',
       'issuingRetention.getClosed',
       'issuingRetention.listClosed',

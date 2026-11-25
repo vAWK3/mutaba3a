@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
-import { israelDateOf, retentionSweepMetadata } from '../issuing/retention.js';
+import { handsOverArchive, retentionDateOf, retentionSweepMetadata } from '../issuing/retention.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
@@ -4417,36 +4417,40 @@ export class MemoryLedgerStore implements LedgerStore {
       const query = filter.query?.trim().toLowerCase();
       return [...ids]
         .map((id) => this.retainedProfile(id))
-        .filter((p) => (filter.newestBefore === undefined ? true : p.newestDocumentDate === null || p.newestDocumentDate < filter.newestBefore))
+        .filter((p) => (filter.dueBefore === undefined ? true : p.oldestDocumentDate === null || p.oldestDocumentDate < filter.dueBefore))
         .filter((p) => (query ? (p.legalName ?? '').toLowerCase().includes(query) || (p.vatId ?? '').startsWith(query) : true))
-        .sort((a, b) => (a.newestDocumentDate ?? '').localeCompare(b.newestDocumentDate ?? '') || a.organizationId.localeCompare(b.organizationId))
+        .sort((a, b) => (a.oldestDocumentDate ?? '').localeCompare(b.oldestDocumentDate ?? '') || a.organizationId.localeCompare(b.organizationId))
         .slice(0, limit);
     },
     getClosed: async (organizationId) => (this.orgs.has(organizationId) || !this.holdsIssuing(organizationId) ? null : this.retainedProfile(organizationId)),
-    sweep: async (organizationId, newestBefore, at) => {
+    sweep: async (organizationId, dueBefore, at) => {
       if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
       if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
-      const held = this.retainedProfile(organizationId);
-      if (held.newestDocumentDate !== null && held.newestDocumentDate >= newestBefore) return { kind: 'not_due', newestDocumentDate: held.newestDocumentDate };
-      const mine = (row: { organizationId: string }) => row.organizationId === organizationId;
+      const all = this.retainedDocuments(organizationId);
+      const due = all.filter((d) => d.retainedFrom < dueBefore);
+      if (due.length === 0 && all.length > 0) return { kind: 'not_due', oldestDocumentDate: all[0]!.retainedFrom };
       let rows = 0;
-      const drop = <T extends { organizationId: string }>(map: Map<string, T>, perRow: (row: T, key: string) => number = () => 1) => {
-        for (const [key, row] of map) if (mine(row)) { rows += perRow(row, key); map.delete(key); }
-      };
-      drop(this.issuerMap);
-      drop(this.issuedCounterMap);
-      drop(this.issuerLogoMap);
-      drop(this.issuedOriginals);
-      drop(this.issuedCancellations);
-      // A document's lines and copies are rows of their own tables in Postgres.
-      drop(this.issuedDocMap, (doc, id) => {
-        const copies = this.issuedCopies.get(id)?.length ?? 0;
-        this.issuedCopies.delete(id);
-        return 1 + doc.lines.length + copies;
-      });
-      if (this.cancellationCounters.delete(organizationId)) rows += 1;
-      const event = this.appendRetentionEvent(organizationId, 'SWEPT', retentionSweepMetadata(held, rows), at);
-      return { kind: 'swept', documents: held.documents, cancellations: held.cancellations, rows, newestDocumentDate: held.newestDocumentDate, event };
+      for (const { doc } of due) rows += this.dropRetainedDocument(doc);
+      const remaining = all.length - due.length;
+      const profileRows = remaining === 0;
+      if (profileRows) rows += this.dropRetainedProfileRows(organizationId);
+      const swept = { documents: due.length, cancellations: due.filter((d) => d.cancelled).length, oldest: due[0]?.retainedFrom ?? null, newest: due.at(-1)?.retainedFrom ?? null };
+      const event = this.appendRetentionEvent(organizationId, 'SWEPT', retentionSweepMetadata(swept, rows, remaining, profileRows), at);
+      return { kind: 'swept', documents: swept.documents, cancellations: swept.cancellations, rows, remaining, profileRows, event };
+    },
+    erase: async (organizationId, reference, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const handed = this.issuingRetentionLog.filter((e) => e.organizationId === organizationId && handsOverArchive(e, at)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
+      if (!handed) return { kind: 'archive_not_handed_over' };
+      const all = this.retainedDocuments(organizationId);
+      let rows = 0;
+      for (const { doc } of all) rows += this.dropRetainedDocument(doc);
+      rows += this.dropRetainedProfileRows(organizationId);
+      const documents = all.length;
+      const cancellations = all.filter((d) => d.cancelled).length;
+      const event = this.appendRetentionEvent(organizationId, 'ERASED', { reference, documents, cancellations, rows, archiveEventId: handed.id }, at);
+      return { kind: 'erased', documents, cancellations, rows, event };
     },
     record: async (organizationId, action, metadata, at) => this.appendRetentionEvent(organizationId, action, metadata, at),
     events: async (organizationId) =>
@@ -4464,12 +4468,49 @@ export class MemoryLedgerStore implements LedgerStore {
     );
   }
 
+  /** A closed profile's documents with the date each one's 7 years count from, oldest first. */
+  private retainedDocuments(organizationId: string): Array<{ doc: IssuedDocumentRecord; retainedFrom: string; cancelled: boolean }> {
+    return [...this.issuedDocMap.values()]
+      .filter((d) => d.organizationId === organizationId)
+      .map((doc) => {
+        const cancellation = this.issuedCancellations.get(doc.id);
+        return { doc, retainedFrom: retentionDateOf(doc.documentDate, cancellation?.cancelledAt ?? null), cancelled: cancellation !== undefined };
+      })
+      .sort((a, b) => a.retainedFrom.localeCompare(b.retainedFrom) || a.doc.id.localeCompare(b.doc.id));
+  }
+
+  /** One document with its lines, copies, kept original and cancellation; the rows Postgres would count. */
+  private dropRetainedDocument(doc: IssuedDocumentRecord): number {
+    let rows = 1 + doc.lines.length + (this.issuedCopies.get(doc.id)?.length ?? 0);
+    this.issuedCopies.delete(doc.id);
+    if (this.issuedOriginals.delete(doc.id)) rows++;
+    if (this.issuedCancellations.delete(doc.id)) rows++;
+    this.issuedDocMap.delete(doc.id);
+    return rows;
+  }
+
+  /** The profile's own rows: business details, counters, logos, the cancellation counter. */
+  private dropRetainedProfileRows(organizationId: string): number {
+    let rows = 0;
+    for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap] as Array<Map<string, { organizationId: string }>>) {
+      for (const [key, row] of map) if (row.organizationId === organizationId) { map.delete(key); rows++; }
+    }
+    if (this.cancellationCounters.delete(organizationId)) rows++;
+    return rows;
+  }
+
   private retainedProfile(organizationId: string): RetainedIssuingProfile {
     const issuer = this.issuerMap.get(organizationId);
-    const documents = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
-    const cancellations = [...this.issuedCancellations.values()].filter((c) => c.organizationId === organizationId);
-    const dates = [...documents.map((d) => d.documentDate), ...cancellations.map((c) => israelDateOf(c.cancelledAt))].sort();
-    return { organizationId, legalName: issuer?.legalName ?? null, vatId: issuer?.vatId ?? null, documents: documents.length, cancellations: cancellations.length, newestDocumentDate: dates.at(-1) ?? null };
+    const documents = this.retainedDocuments(organizationId);
+    return {
+      organizationId,
+      legalName: issuer?.legalName ?? null,
+      vatId: issuer?.vatId ?? null,
+      documents: documents.length,
+      cancellations: documents.filter((d) => d.cancelled).length,
+      oldestDocumentDate: documents[0]?.retainedFrom ?? null,
+      newestDocumentDate: documents.at(-1)?.retainedFrom ?? null,
+    };
   }
 
   private appendRetentionEvent(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): IssuingRetentionEventRecord {
