@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Legal notes answered; the rewritten legal texts held back; the come-back mail is labelled «פרסומת» (Communications Law s.30A)
+
+### Added
+- The come-back offer mail (ar, en) opens its subject with `פרסומת: ` and carries the sender's details (Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, contact info@mtb3a.com) in its footer and text part, beside the existing Unsubscribe link and List-Unsubscribe headers (`MailBody.sender`, `ADVERTISEMENT_LABEL`; no wire change, no API version bump). Tests: `server/src/email/__tests__/templates.test.ts`, `server/src/billing/__tests__/comeback-mail.test.ts`; QA specs `portal-live.billing.comeback-*` expect the new subject.
+- The live privacy page's "Emails we send" says the come-back offer is the only promotional email, labelled «פרסומת», names the sender and has an Unsubscribe link that works with the mail app's own button (en + ar).
+
+### Changed
+- Basel's answers (2026-11-25) applied to the 2026-11-25 drafts: notes resolved (14-day right plus "nothing is charged during the free trial", no-resale clause with the accountant case, registration number text, clients'-data clause, liability wording, PPO thresholds, s.30A, Narabnd–Barmajiyat, basic security level); kept open: terms VAT/payment provider (MUT-700 D1) and IP assignment (ע2), privacy data abroad / copy in Israel.
+- HELD BACK from publication (Basel): the terms 2026-11-25 and the rewritten privacy policy moved to `docs/legal/drafts/` (`terms-2026-11-25.{en,ar}.json`, `privacy-policy-2026-11-25.{en,ar}.json`, `[TODO]` notes intact). `CURRENT_TERMS` is 2026-10-26 again (nobody re-accepts); the live privacy page and `PrivacyPolicyPage` are as at ac0daf7c plus the sentence above; the frozen-hash list covers published versions only; the web release `[TODO` guard is unchanged and does not scan the drafts. The `web.legal.terms-rewrite` / `privacy-rewrite` QA flows and the 2026-11-25 TermsPage tests were removed with the publication (restore from commits fdb3463a..83eace15 when the drafts are published).
+- `docs/operations/before-release.md`: the legal approval / re-acceptance blockers are replaced by a held-back note pointing at the legal publication ticket. Jira MUT-731: replace the free trial with a free Starter plan.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Issue as you record: ask a client's documents preference once, issue each payment's document with the payment (MUT-661, ADR-280, API 1.141.0-mut661)
 
 ### Added

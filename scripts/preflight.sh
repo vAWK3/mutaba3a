@@ -261,7 +261,7 @@ if [[ "$MODE" == "web" ]]; then
   # draft and never reaches the public site. No override: the notes come out once Basel and the lawyer approve.
   if LEGAL_TODOS="$(grep -l '\[TODO' src/content/legal/terms/*.json src/lib/i18n/translations/*/landing.json 2>/dev/null)"; then
     bad "the privacy policy or the terms still carry [TODO] notes for the lawyer: ${LEGAL_TODOS//$'\n'/, }"
-    hint "docs/operations/before-release.md: Basel approves the wording, then every [TODO] note is removed"
+    hint "a draft belongs in docs/legal/drafts/ (not scanned); a published text carries no [TODO] (docs/operations/before-release.md)"
   else
     ok "no draft notes in the privacy policy or the terms"
   fi
