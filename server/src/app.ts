@@ -226,7 +226,7 @@ export interface AppDependencies {
    * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
    */
   documentSigner?: DocumentSigner | null;
-  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, Barmajiyat). */
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, "MTB3A"). */
   uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;

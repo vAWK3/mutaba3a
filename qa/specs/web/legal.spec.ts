@@ -249,12 +249,15 @@ test('The terms cover the trial, cancellation, tax documents and clients\' data,
     await page.goto('/terms');
     await expect(page.getByText(latest.en.updated)).toBeVisible();
     for (const s of latest.en.sections) await expect(page.getByRole('heading', { level: 2, name: s.title })).toBeVisible();
+    await expect(page.locator('.privacy-policy-intro')).toContainText('Narabnd Studio Ltd');
+    await expect(section('16. Law and language')).toContainText('the law of the State of Israel');
   });
   await step('Read cancelling and refunds: the Consumer Protection Law and the 14-day right', async () => {
     const cancel = section('5. Cancelling and refunds');
     await cancel.scrollIntoViewIfNeeded();
     await expect(cancel).toContainText('Consumer Protection Law, 5741-1981');
     await expect(cancel).toContainText('within 14 days of the transaction');
+    await expect(cancel).toContainText('only if you have not used MTB3A since you subscribed');
   });
   await step('Read issuing tax documents: you are responsible, allocation numbers in your name, documents never change', async () => {
     const issuing = section('6. Issuing tax documents');

@@ -118,7 +118,7 @@ features:
       - The share-links section names the PIN of 4 to 8 digits, at most 3 devices, the lock after 5 wrong PINs and the deletion of device records 30 days after a link ends
       - The Arabic page reads right to left with the same sections, and the English page says MTB3A, never Mutaba3a
   - id: terms-rewrite
-    title: The terms of 2026-11-25 cover the free trial, cancelling under the Consumer Protection Law, issuing tax documents and allocation numbers, and clients' data, in English and Arabic (legal pages rewrite, draft pending Basel's approval)
+    title: The terms of 2026-11-25, with Narabnd Studio Ltd under Israeli law, cover the free trial, cancelling under the Consumer Protection Law, issuing tax documents and allocation numbers, and clients' data, in English and Arabic (legal pages rewrite, draft pending Basel's approval)
     tier: secondary
     tickets: [MUT-644]
     paths:
@@ -131,7 +131,8 @@ features:
       - Open /terms in Arabic at phone width
     expect:
       - The version line says 25 November 2026 and every section shows
-      - Cancelling names the Consumer Protection Law, 5741-1981, and the 14-day right to cancel a distance purchase
+      - The intro names Narabnd Studio Ltd (517108775) as the party, and the law section Israeli law
+      - Cancelling names the Consumer Protection Law, 5741-1981, and the 14-day right, which applies only if MTB3A wasn't used since subscribing
       - Issuing says you are responsible for every document, that we ask for allocation numbers in your name, that an issued document can't be edited or deleted, and that documents are kept 7 years from each document's date
       - The Arabic page reads right to left with every section, and nothing scrolls sideways at 375px
   - id: privacy-rewrite

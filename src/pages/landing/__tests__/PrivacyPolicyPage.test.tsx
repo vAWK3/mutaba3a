@@ -442,11 +442,14 @@ describe('PrivacyPolicyPage legal pages rewrite (2026-11-25)', () => {
   it('says who is responsible, the database roles, and marks the pending company for the lawyer', () => {
     renderPage('en');
     const who = sectionOf('Who is responsible for your information');
-    expect(who).toContain('Barmajiyat Ltd');
+    expect(who).toContain('Narabnd Studio Ltd (נאראבנד סטודיו בע"מ), company number 517108775');
+    expect(who).not.toContain('England and Wales');
     expect(who).toMatch(/owner of that database/);
     expect(who).toMatch(/a holder under the Protection of Privacy Law, a processor under the GDPR/);
-    expect(who).toContain('[TODO(MUT-700)');
-    expect(who).toContain('517108775');
+    // Basel, 2026-11-25: no officer or registration claimed; the thresholds are the lawyer's
+    expect(who).toMatch(/we have not appointed an officer or registered a database/);
+    expect(sectionOf(/Who else handles your data/)).toMatch(/Barmajiyat Ltd, a related company .* handles data only on our behalf/);
+    expect(sectionOf('Contact')).toContain('Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel');
   });
 
   it('names the Israeli law, Amendment 13 and the 2017 security regulations, and each purpose with its basis', () => {
@@ -518,6 +521,9 @@ describe('PrivacyPolicyPage legal pages rewrite (2026-11-25)', () => {
     expect(email).toMatch(/a card payment failed/);
     expect(email).toMatch(/connection to the Israel Tax Authority needs renewing/);
     expect(email).toMatch(/up to twice, about 30 and 90 days later, with an offer to come back/);
+    // ADR-279: the one promotional mail always carries an unsubscribe
+    expect(email).toMatch(/It always has an Unsubscribe link, and it works with your email app's own unsubscribe button/);
+    expect(sectionOf('Your rights')).toMatch(/stop promotional emails with the Unsubscribe link/);
   });
 
   it('says the same in Arabic, right to left', () => {
