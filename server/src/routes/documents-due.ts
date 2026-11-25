@@ -22,8 +22,11 @@ import {
   NotForInvoiceRequestSchema,
   NotForInvoiceResultSchema,
   SetNotForInvoiceRequestSchema,
+  SettleAndIssueRequestSchema,
+  SettleAndIssueResponseSchema,
 } from '../schemas.js';
 import { serializeIssuedDocument } from '../serializers.js';
+import { isSettleableOrigin, settleOwed } from './receivables.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, notFoundResponse, validationResponse } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
@@ -202,6 +205,54 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
         }
       }
       return c.json({ results, issued: results.filter((r) => r.status === 'issued').length }, 200);
+    },
+  );
+
+  /** The key a payment's own document is issued under: derived from the request's key and the payment, so a retry never issues twice. */
+  const paymentDocumentKey = (key: string, paymentId: string) => `pay:${createHash('sha256').update(`${key}\u0000${paymentId}`).digest('hex').slice(0, 64)}`;
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/receivables/{receivableId}/settle-and-issue',
+      tags: ['Issuing'],
+      summary: 'Record a payment against an Owed and issue its document in the same step',
+      description:
+        'MUT-661 (ADR-279): the payment is recorded exactly as POST /v1/receivables/{id}/settle records it (the amount defaults to what is outstanding, paidAt to today). Then, unless issue is false, the document that payment is due (MUT-660, derived from the client’s documents preference: a receipt on the Owed’s tax invoice, or an invoice-receipt for the amount paid; a payment request first client’s payment gets the document that refers to its request) is issued through the same single issue as POST /v1/issued-documents, linked to the payment. The payment is the commitment: if issuing is refused (no allocation number, the Tax Authority held it, the setup incomplete) the answer is still 201, issue.status says held or failed and why, and the document stays in To issue. A payment due no document (a No document client, marked not for invoice) answers issue.status not_due. The Idempotency-Key covers both: a retry returns the payment recorded before and the document issued before, never a second of either. 404 unless invoicing is on for the profile; 403 for a profile the person doesn’t own.',
+      security: [{ session: [] }, { deviceSession: [] }],
+      middleware: [requireScope('payments:write'), requireScope('issuing:write'), idempotent(store, 'receivables.settle_and_issue')] as const,
+      request: { params: ReceivableParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleAndIssueRequestSchema) },
+      responses: { 201: json('Recorded, and issued where it could be', SettleAndIssueResponseSchema), ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const organization = await issuingProfile(c, true);
+      const { issue, ...settleBody } = c.req.valid('json');
+      const key = c.req.valid('header')['idempotency-key'];
+      const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
+      if (!receivable || !isSettleableOrigin(receivable)) throw new ApiError('NOT_FOUND', 'No such receivable');
+      const settled = await settleOwed(store, c, receivable, settleBody);
+      const done = (status: 'issued' | 'not_requested' | 'not_due' | 'held' | 'failed', reason: string | null, document: IssuedDocumentRecord | null) =>
+        c.json({ receivable: settled.receivable, payment: settled.payment, issue: { status, reason, document: document ? serializeIssuedDocument(document) : null } }, 201);
+      if (issue === false) return done('not_requested', null, null);
+      const paymentId = settled.payment.id;
+      const documentKey = paymentDocumentKey(key, paymentId);
+      // A retry after the document was issued: answer with it (the payment is no longer due one).
+      const existing = await store.issuing.moneyDocumentOn(organization.id, paymentId);
+      if (existing) {
+        const document = await store.issuing.getById(organization.id, existing.id);
+        if (document) return done('issued', null, document);
+      }
+      const item = documentsDue(await store.issuing.dueInputs(organization.id)).find((d) => d.entry.kind === 'payment' && d.entry.id === paymentId);
+      if (!item) return done('not_due', 'NOT_DUE', null);
+      if (!item.issuable) return done('failed', item.reason ?? 'NOT_ISSUABLE', null);
+      try {
+        const { document } = await issueOne(c, organization, await requestFor(organization, item, todayFor(organization, c.get('now')())), documentKey);
+        return done('issued', null, document);
+      } catch (err) {
+        if (!(err instanceof ApiError)) throw err;
+        const reason = String((err.details as { reason?: unknown } | undefined)?.reason ?? err.code);
+        return done(reason === 'ALLOCATION_HELD' ? 'held' : 'failed', reason, null);
+      }
     },
   );
 

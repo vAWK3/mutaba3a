@@ -125,6 +125,8 @@ const ISSUING_OPERATIONS = [
   'GET /v1/documents-due/count',
   'POST /v1/documents-due/issue',
   'POST /v1/documents-due/not-for-invoice',
+  // MUT-661: a payment and its document in one step.
+  'POST /v1/receivables/{receivableId}/settle-and-issue',
   'PUT /v1/receivables/{receivableId}/not-for-invoice',
   'PUT /v1/payments/{paymentId}/not-for-invoice',
 ];

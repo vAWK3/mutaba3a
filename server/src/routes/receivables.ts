@@ -1,4 +1,5 @@
-import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import { createRoute, OpenAPIHono, type z } from '@hono/zod-openapi';
+import type { Context } from 'hono';
 import { actorOf, lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { assertIsoDate, parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { postDueItems } from '../agreements/posting.js';
@@ -9,7 +10,7 @@ import { notOwner } from '../personal-profile.js';
 import { formatMoney, type Currency } from '../money.js';
 import { checkCredit, splitCredit } from '../payments/credit.js';
 import { InsufficientCapacity, LockConflict } from '../repositories/memory.js';
-import type { LedgerStore } from '../repositories/ports.js';
+import type { LedgerStore, ReceivableRecord } from '../repositories/ports.js';
 import {
   CreditRequestSchema,
   CreditResponseSchema,
@@ -25,6 +26,91 @@ import { outstandingMinor, serializeAllocation, serializeCredit, serializePaymen
 import { conflictResponse, encodeNextCursor, errorResponses, IdempotencyHeaderSchema, notFoundResponse, toPageRequest, validationResponse } from './shared.js';
 
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
+
+/**
+ * What settle may be asked to pay: an Owed a person recorded (ADJUSTMENT) or, MUT-661 (ADR-279), one an issued tax
+ * invoice posted (ISSUED_DOCUMENT; a tax invoice taking over a recorded Owed leaves that one). Malafat's installments
+ * and retainer charges stay its own allocation engine's.
+ */
+export function isSettleableOrigin(receivable: Pick<ReceivableRecord, 'origin'>): boolean {
+  return receivable.origin === 'ADJUSTMENT' || receivable.origin === 'ISSUED_DOCUMENT';
+}
+
+/**
+ * MUT-65 / MUT-709 / MUT-661: one payment against a captured Owed, with its one allocation. The settle route and the
+ * settle-and-issue route (ADR-279) both run exactly this; `earlier` is true when the Idempotency-Key had already
+ * recorded the payment (a retry after a 5xx), so nothing new was recorded.
+ */
+export async function settleOwed(
+  store: LedgerStore,
+  c: Context<AppEnv>,
+  receivable: ReceivableRecord,
+  body: z.infer<typeof SettleReceivableRequestSchema>,
+): Promise<{ receivable: ReturnType<typeof serializeReceivable>; payment: ReturnType<typeof serializePayment>; earlier: boolean }> {
+  const { organization, user } = sessionAuth(c);
+  const now = c.get('now')();
+  const today = todayFor(organization, now);
+  const currency = receivable.currency as Currency;
+      // MUT-709: an earlier attempt of this request recorded the payment and then failed (a 5xx releases the key): answer
+      // with that payment, before the outstanding check it would now fail, and record nothing.
+      const clientRequestKey = paymentRequestKey(c);
+      const earlier = clientRequestKey ? await store.payments.findByClientRequestKey(organization.id, clientRequestKey) : null;
+      if (earlier) {
+        const allocations = (await store.payments.listAllocations(organization.id, earlier.id)).map((a) => serializeAllocation(a, receivable, currency, today));
+        return { receivable: serializeReceivable(receivable, today), payment: serializePayment(earlier, allocations, null, { userId: user.id, displayName: user.displayName }), earlier: true };
+      }
+      const outstanding = outstandingMinor(receivable);
+      if (outstanding <= 0n) throw validationError('RECEIVABLE_NOT_OPEN', 'Nothing is outstanding on this receivable');
+      const amountMinor = body.amount ? parseAmount(body.amount, currency) : outstanding;
+      if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
+      if (amountMinor > outstanding) {
+        throw validationError('ALLOCATION_EXCEEDS_OUTSTANDING', 'The amount exceeds what is outstanding on this receivable', { outstanding: formatMoney({ minor: outstanding, currency }) });
+      }
+      const paidAt = body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today;
+      const requestId = c.get('requestId');
+
+      let created;
+      try {
+        created = await store.payments.create(
+          {
+            organizationId: organization.id,
+            customerId: receivable.customerId,
+            projectId: receivable.projectId,
+            currency,
+            amountMinor,
+            receivedOn: paidAt,
+            method: body.method ?? 'CASH',
+            reference: null,
+            receiptNumber: null,
+            notes: null,
+            replacesPaymentId: null,
+            requestId,
+            createdByUserId: user.id,
+            // MUT-61: a person settling their own Owed is a capture too (matches the migration's backfill rule).
+            origin: 'CAPTURE',
+            captureSource: body.captureSource ?? null,
+            allocations: [{ receivableId: receivable.id, amountMinor }],
+            clientRequestKey,
+          },
+          now,
+        );
+      } catch (err) {
+        // The FOR UPDATE re-read found the capacity gone: another settle landed between our read and this write.
+        if (err instanceof InsufficientCapacity || err instanceof LockConflict) throw new ApiError('CONFLICT', 'The receivable changed while settling; re-read and retry', { reason: 'VERSION_MISMATCH' });
+        throw err;
+      }
+      const settled = await store.receivables.getById(organization.id, receivable.id);
+      if (!settled) throw new ApiError('INTERNAL', 'The receivable vanished mid-settle');
+
+      const metadata = { number: created.payment.number, receivableId: receivable.id, amount: formatMoney({ minor: amountMinor, currency }), currency, ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
+      await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.recorded', entityType: 'payment', entityId: created.payment.id, metadata, requestId });
+      if (settled.status === 'SETTLED') {
+        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'receivable.settled', entityType: 'receivable', entityId: receivable.id, metadata: { paymentId: created.payment.id }, requestId });
+      }
+
+      const allocationViews = created.allocations.map((a) => serializeAllocation(a, settled, currency, today));
+      return { receivable: serializeReceivable(settled, today), payment: serializePayment(created.payment, allocationViews, null, { userId: user.id, displayName: user.displayName }), earlier: false };
+}
 
 /** /v1/receivables — what is owed, with statuses computed in the organization timezone (M3 brief §2.3). */
 export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
@@ -167,83 +253,23 @@ export function receivableRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Receivables'],
       summary: 'Settle a receivable directly, with one payment and one allocation',
       description:
-        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.',
+        'For a session\'s own captures, not Malafat\'s multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT), or one an issued tax invoice posted (ISSUED_DOCUMENT, MUT-661), can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.',
       security: [{ session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'receivables.settle')] as const,
       request: { params: ReceivableIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(SettleReceivableRequestSchema) },
       responses: { 201: { description: 'Settled (or partially)', content: { 'application/json': { schema: SettleReceivableResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization } = sessionAuth(c);
       const body = c.req.valid('json');
-      const now = c.get('now')();
-      const today = todayFor(organization, now);
       const receivable = await store.receivables.getById(organization.id, c.req.valid('param').receivableId);
-      // Only ever an app-captured "Owed" (origin ADJUSTMENT). An INSTALLMENT or RETAINER_CHARGE belongs to
+      // Only ever an app-made "Owed": captured (ADJUSTMENT) or, MUT-661, a tax invoice's own (ISSUED_DOCUMENT). An INSTALLMENT or RETAINER_CHARGE belongs to
       // Malafat's allocation engine, and a disconnected integration would otherwise hand this session
       // payments:write over that whole historical ledger. 404, not 403 — same non-leaking discipline as
       // DELETE /v1/income/{id} (routes/income.ts).
-      if (!receivable || receivable.origin !== 'ADJUSTMENT') throw new ApiError('NOT_FOUND', 'No such receivable');
-      const currency = receivable.currency as Currency;
-      // MUT-709: an earlier attempt of this request recorded the payment and then failed (a 5xx releases the key): answer
-      // with that payment, before the outstanding check it would now fail, and record nothing.
-      const clientRequestKey = paymentRequestKey(c);
-      const earlier = clientRequestKey ? await store.payments.findByClientRequestKey(organization.id, clientRequestKey) : null;
-      if (earlier) {
-        const allocations = (await store.payments.listAllocations(organization.id, earlier.id)).map((a) => serializeAllocation(a, receivable, currency, today));
-        return c.json({ receivable: serializeReceivable(receivable, today), payment: serializePayment(earlier, allocations, null, { userId: user.id, displayName: user.displayName }) }, 201);
-      }
-      const outstanding = outstandingMinor(receivable);
-      if (outstanding <= 0n) throw validationError('RECEIVABLE_NOT_OPEN', 'Nothing is outstanding on this receivable');
-      const amountMinor = body.amount ? parseAmount(body.amount, currency) : outstanding;
-      if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
-      if (amountMinor > outstanding) {
-        throw validationError('ALLOCATION_EXCEEDS_OUTSTANDING', 'The amount exceeds what is outstanding on this receivable', { outstanding: formatMoney({ minor: outstanding, currency }) });
-      }
-      const paidAt = body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today;
-      const requestId = c.get('requestId');
-
-      let created;
-      try {
-        created = await store.payments.create(
-          {
-            organizationId: organization.id,
-            customerId: receivable.customerId,
-            projectId: receivable.projectId,
-            currency,
-            amountMinor,
-            receivedOn: paidAt,
-            method: body.method ?? 'CASH',
-            reference: null,
-            receiptNumber: null,
-            notes: null,
-            replacesPaymentId: null,
-            requestId,
-            createdByUserId: user.id,
-            // MUT-61: a person settling their own Owed is a capture too (matches the migration's backfill rule).
-            origin: 'CAPTURE',
-            captureSource: body.captureSource ?? null,
-            allocations: [{ receivableId: receivable.id, amountMinor }],
-            clientRequestKey,
-          },
-          now,
-        );
-      } catch (err) {
-        // The FOR UPDATE re-read found the capacity gone: another settle landed between our read and this write.
-        if (err instanceof InsufficientCapacity || err instanceof LockConflict) throw new ApiError('CONFLICT', 'The receivable changed while settling; re-read and retry', { reason: 'VERSION_MISMATCH' });
-        throw err;
-      }
-      const settled = await store.receivables.getById(organization.id, receivable.id);
-      if (!settled) throw new ApiError('INTERNAL', 'The receivable vanished mid-settle');
-
-      const metadata = { number: created.payment.number, receivableId: receivable.id, amount: formatMoney({ minor: amountMinor, currency }), currency, ...(body.captureSource ? { captureSource: body.captureSource } : {}) };
-      await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'payment.recorded', entityType: 'payment', entityId: created.payment.id, metadata, requestId });
-      if (settled.status === 'SETTLED') {
-        await store.audit.append({ organizationId: organization.id, actorType: 'USER', actorId: user.id, action: 'receivable.settled', entityType: 'receivable', entityId: receivable.id, metadata: { paymentId: created.payment.id }, requestId });
-      }
-
-      const allocationViews = created.allocations.map((a) => serializeAllocation(a, settled, currency, today));
-      return c.json({ receivable: serializeReceivable(settled, today), payment: serializePayment(created.payment, allocationViews, null, { userId: user.id, displayName: user.displayName }) }, 201);
+      if (!receivable || !isSettleableOrigin(receivable)) throw new ApiError('NOT_FOUND', 'No such receivable');
+      const { payment, receivable: settled } = await settleOwed(store, c, receivable, body);
+      return c.json({ receivable: settled, payment }, 201);
     },
   );
 
