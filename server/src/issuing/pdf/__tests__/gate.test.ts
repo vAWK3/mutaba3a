@@ -70,6 +70,7 @@ function fixture(lang: Lang, style: string, ink: 'BLACK' | 'BLUE'): IssuedDocume
     receivableId: null,
     paymentId: null,
     creditId: null,
+    refundId: null,
     coreVersion: '1.0.0',
     createdByUserId: '00000000-0000-4000-8000-000000000004',
     requestKey: 'k',

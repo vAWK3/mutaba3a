@@ -52,6 +52,10 @@ function serializeLine(line: StatementLine, money: (minor: bigint) => string, ta
     }
     case 'PAYMENT_REVERSAL':
       return { ...base, kind: 'PAYMENT_REVERSAL' as const, paymentId: line.payment!.id, receiptNumber: line.payment!.receiptNumber, reason: line.payment!.reversalReason, reasonCode: line.payment!.reversalReasonCode as CreditReasonCode | null };
+    case 'REFUND': {
+      const f = line.refund!;
+      return { ...base, kind: 'REFUND' as const, refundId: f.id, creditNoteId: f.issuedDocumentId, method: f.method, reference: f.reference };
+    }
   }
 }
 
@@ -69,9 +73,10 @@ export function serializePeriodSummary(input: { from: IsoDate; to: IsoDate; asOf
         openingBalance: money(t.openingMinor),
         billed: money(t.billedMinor),
         credited: money(t.creditedMinor),
-        received: money(t.paymentsMinor - t.reversalsMinor),
+        received: money(t.paymentsMinor - t.reversalsMinor - t.refundsMinor),
         payments: money(t.paymentsMinor),
         reversals: money(t.reversalsMinor),
+        refunds: money(t.refundsMinor),
         change: money(t.closingMinor - t.openingMinor),
         closingBalance: money(t.closingMinor),
       };

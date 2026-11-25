@@ -2888,6 +2888,19 @@ empty option and list the profiles only), with a drawer test for each.
 - **What:** the challenge is claimed by a conditional update just before `accountSetup.redeem`; if the redeem then loses a race (another tab, a newer link) the person starts the second step again. Never weaker, only a retry.
 - **Fix:** pass the challenge id into both stores' redeem and consume it in the same transaction.
 
+### TD-328: Refunds make the MUT-643 migration roll-forward only (MUT-643)
+- **What:** once a refund exists, a payment's `allocatedMinor` counts its refund sources. Rolling the API back past 1.137.0-mut643 would read that money as allocated with nothing behind it, and drop the REFUND lines (statements would end at −R).
+- **Why accepted:** additive tables; issuing is behind the per-account flag, so only Barmajiyat (MUT-639) writes refunds at first.
+- **Fix when:** never needed unless a rollback is; then recompute `allocatedMinor` from live allocations and keep the refunds table.
+
+### TD-329: Kept credit can't be applied by a person yet (MUT-643 → MUT-729)
+- **What:** `paidPart: KEEP` leaves money unallocated on the client's account; only an API key can allocate it, and never to a document's Owed.
+- **Fix:** MUT-729.
+
+### TD-330: The operator search contract test depends on what else is in the test database (seen in MUT-643)
+- **What:** `store-contract-operator.ts` "q matches any part…" searches `BaSeL` with `limit: 50` and expects its two new accounts among the results. After a full `test:db` run the database holds many "Basel" accounts (other contracts' fixtures), the two fall off the page, and the test fails; on a fresh database it passes.
+- **Fix:** search with the test's own marker, or page through all results.
+
 ### TD-327: Tax Authority token refreshes are logged, not audited
 **Status**: Open (2026-11-22, MUT-710 D13)
 - **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.

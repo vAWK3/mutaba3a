@@ -17,6 +17,12 @@ describe('settlementOf (MUT-664, D22)', () => {
     expect(settlementOf(doc({}), owed(0n, 600_000n), [doc({ id: 'c1', docType: 'CREDIT_NOTE', originalId: 'd1', grossMinor: 600_000n })]).settlement).toBe('CANCELLED');
   });
 
+  it('MUT-643: an invoice-receipt is paid until credit notes cover its gross, then cancelled', () => {
+    const receipt = doc({ docType: 'TAX_INVOICE_RECEIPT' });
+    expect(settlementOf(receipt, owed(300_000n, 300_000n), [doc({ id: 'c1', docType: 'CREDIT_NOTE', originalId: 'd1', grossMinor: 300_000n })])).toEqual({ settledMinor: 600_000n, settlement: 'PAID' });
+    expect(settlementOf(receipt, owed(0n, 600_000n), [doc({ id: 'c1', docType: 'CREDIT_NOTE', originalId: 'd1', grossMinor: 600_000n })])).toEqual({ settledMinor: 600_000n, settlement: 'CANCELLED' });
+  });
+
   it('a money document is paid; a credit note has no settlement', () => {
     expect(settlementOf(doc({ docType: 'RECEIPT', grossMinor: 100_000n }), null, [])).toEqual({ settledMinor: 100_000n, settlement: 'PAID' });
     expect(settlementOf(doc({ docType: 'CREDIT_NOTE' }), null, [])).toEqual({ settledMinor: null, settlement: null });

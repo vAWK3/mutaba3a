@@ -106,6 +106,9 @@ export const PAYMENT_METHOD_LABELS: Readonly<Record<string, Words>> = {
   BANK: { en: 'Bank', ar: 'تحويل بنكي' },
 };
 
+/** MUT-643: the note on a refund's Income row. */
+export const REFUND_NOTE = { en: 'Refund with a credit note', ar: 'مبلغ مُعاد مع إشعار دائن' } as const satisfies Words;
+
 export const SOURCE_LABELS = {
   CAPTURE: { en: 'MTB3A', ar: 'متابعة' },
   INTEGRATION: { en: 'Malafat', ar: 'ملفات' },

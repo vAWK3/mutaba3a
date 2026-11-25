@@ -99,7 +99,7 @@ export function describeLedgerStoreMut483Contract(name: string, makeStore: () =>
       const ils = await store.receivables.periodSources(f.o.id, 'ILS');
       expect(ils.receivables.every((r) => r.currency === 'ILS') && ils.payments.every((p) => p.currency === 'ILS')).toBe(true);
       expect(ils.credits).toHaveLength(1);
-      expect(await store.receivables.periodSources(f.o.id, 'JOD')).toEqual({ receivables: [], credits: [], payments: [] });
+      expect(await store.receivables.periodSources(f.o.id, 'JOD')).toEqual({ receivables: [], credits: [], payments: [], refunds: [] });
     });
 
     it('its lines are every customer\'s statement lines plus the clientless payments\', and the same in the memory store', async () => {

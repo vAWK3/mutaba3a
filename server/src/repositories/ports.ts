@@ -1381,6 +1381,8 @@ export interface StatementSourceRows {
   /** Every installment of the customer's agreements in the currency (for "installment N of M"). */
   installments: InstallmentRecord[];
   charges: RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency. */
+  refunds: LedgerRefundRow[];
 }
 
 /** MUT-483: the receivable fields a ledger line reads (`statements/lines.ts`), and nothing more. */
@@ -1398,7 +1400,12 @@ export interface PeriodSourceRows {
   credits: LedgerCreditRow[];
   /** Every payment of any status, a payment with no client included (D4). */
   payments: LedgerPaymentRow[];
+  /** MUT-643: every refund (sources left out), in the same snapshot. */
+  refunds: LedgerRefundRow[];
 }
+
+/** MUT-643: the refund fields a ledger line reads (`statements/lines.ts`). */
+export type LedgerRefundRow = Pick<RefundRecord, 'id' | 'customerId' | 'currency' | 'amountMinor' | 'refundedOn' | 'createdAt' | 'issuedDocumentId' | 'method' | 'reference'>;
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
@@ -2946,6 +2953,8 @@ export interface LedgerStore {
   periodPack: PeriodPackRepository;
   /** MUT-568 (ADR-260): issued documents, INSERT-only legal records, and the details printed on them. Session only. */
   issuing: IssuingRepository;
+  /** MUT-643: refunds written by credit notes. */
+  refunds: RefundRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -4432,6 +4441,8 @@ export interface ProfileExportRecords {
   /** MUT-254: vendors and their names (both, so a restored store keeps one vendor per name). */
   vendors: VendorRecord;
   vendorNames: VendorNameRecord;
+  /** MUT-643: refunds with their sources, so a restored ledger's statement still balances. */
+  refunds: RefundRecord;
 }
 
 export type ProfileExportField = keyof ProfileExportRecords;
@@ -4735,10 +4746,50 @@ export interface IssuedDocumentRecord {
   receivableId: string | null;
   paymentId: string | null;
   creditId: string | null;
+  /** MUT-643: a credit note whose paid part went back to the client. */
+  refundId: string | null;
   coreVersion: string;
   createdByUserId: string;
   requestKey: string;
   lines: IssuedDocumentLineRecord[];
+}
+
+/** MUT-643 (D5): what happens to the part of a credit note the client already paid. */
+export type CreditPaidPart = { mode: 'KEEP' } | { mode: 'REFUND'; refundedOn: IsoDate; method: PaymentMethod; reference: string | null };
+
+/**
+ * MUT-643 (D6): money going back to a client with a credit note. Insert-only ledger rows (no edit, no delete outside the
+ * profile purge). Its sources name the payments the money came from; refunded money counts in their `allocatedMinor`.
+ */
+export interface RefundRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  currency: string;
+  amountMinor: bigint;
+  refundedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  issuedDocumentId: string;
+  requestId: string | null;
+  createdByUserId: string;
+  createdAt: Date;
+  sources: { paymentId: string; amountMinor: bigint }[];
+}
+
+export interface RefundFilter {
+  customerId?: string;
+  currency?: string;
+  /** Refunds that drew on any of these payments. */
+  paymentIds?: readonly string[];
+  /** Both inclusive, on `refundedOn`. */
+  from?: IsoDate;
+  to?: IsoDate;
+}
+
+export interface RefundRepository {
+  /** Oldest first (`refundedOn`, created, id), with their sources; another organization's match nothing. */
+  list(organizationId: string, filter: RefundFilter): Promise<RefundRecord[]>;
 }
 
 /** What the route hands the store: composed and validated (issuing/compose.ts), snapshots taken. */
@@ -4758,8 +4809,14 @@ export interface IssueDocumentInput {
   notes: string | null;
   /** 305 and 320: when the Owed falls due. */
   dueDate: IsoDate | null;
-  /** 330: the tax invoice it credits. */
+  /** 330: the tax invoice or invoice-receipt it credits. */
   originalId: string | null;
+  /**
+   * MUT-643 (D5): a 330 reaching past what is still owed into what the client paid says what happens to that part:
+   * KEEP leaves it on the payments as the client's unallocated money; REFUND records it going back. Absent while the
+   * credit stays within what is owed.
+   */
+  paidPart?: CreditPaidPart | null;
   /** 320 and 400: how the money came in. */
   payment: IssuedPaymentDetails | null;
   /** 400: the open tax invoice or payment request this receipt pays; 320: the payment request it settles (MUT-662). */
@@ -4813,8 +4870,15 @@ export type IssueResult =
   | { kind: 'customer_not_found' }
   /** 330's original or 320/400's appliesTo: missing, another profile's, not an open tax invoice or a live payment request. */
   | { kind: 'original_not_found' }
-  /** R-D2: a credit note credits only what is still owed on its tax invoice (MUT-643 for paid ones). */
-  | { kind: 'original_paid'; outstandingMinor: bigint }
+  /**
+   * R-D2 / MUT-643 (D5): the credit reaches what the client paid. `paidMinor` is that part when a `paidPart` choice
+   * would be taken (the original owns its Owed); absent when only what is still owed may be credited (MUT-730).
+   */
+  | { kind: 'original_paid'; outstandingMinor: bigint; paidMinor?: bigint }
+  /** MUT-643 (D1, AC2): the credit notes on one original may not add up to more than its gross. */
+  | { kind: 'credit_exceeds_original'; maximumMinor: bigint }
+  /** MUT-643 (D4): the payments paying the original changed while the credit note was being issued; nothing written. */
+  | { kind: 'original_changed' }
   /** 400 against a 305: more than it still owes. */
   | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
   /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */

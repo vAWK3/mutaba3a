@@ -1,5 +1,5 @@
 import { todayIn, type IsoDate } from '../dates.js';
-import { CAPTURE_UNDO_REASON, type LedgerCreditRow, type LedgerPaymentRow, type LedgerReceivableRow, type PaymentRecord } from '../repositories/ports.js';
+import { CAPTURE_UNDO_REASON, type LedgerCreditRow, type LedgerPaymentRow, type LedgerReceivableRow, type LedgerRefundRow, type PaymentRecord } from '../repositories/ports.js';
 import { countsOn } from '../summaries/compute.js';
 
 /**
@@ -14,12 +14,17 @@ import { countsOn } from '../summaries/compute.js';
  * | PAYMENT          | POSTED, or REVERSED but not the person's undo     | receivedOn                          |       | amount |
  * | PAYMENT_REVERSAL | REVERSED but not the person's undo                | the reversal instant's day in the   | amount|        |
  * |                  |                                                   | organization timezone               |       |        |
+ * | REFUND           | MUT-643: money a credit note gave back            | refundedOn                          | amount|        |
+ *
+ * A refund is the paid part of a credit note going back: the credit note's CREDIT line takes the whole credit, the
+ * refund puts the paid part back on the client's balance, so a paid invoice credited and refunded in full ends at 0.
  */
 
-export type StatementLineKind = 'CHARGE' | 'CREDIT' | 'PAYMENT' | 'PAYMENT_REVERSAL';
 
-/** A payment sorts before its own reversal on the same day; the rest is tie-breaking only. */
-export const LINE_RANK: Readonly<Record<StatementLineKind, number>> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3 };
+export type StatementLineKind = 'CHARGE' | 'CREDIT' | 'PAYMENT' | 'PAYMENT_REVERSAL' | 'REFUND';
+
+/** A payment sorts before its own reversal on the same day, and a credit before its refund; the rest is tie-breaking only. */
+export const LINE_RANK: Readonly<Record<StatementLineKind, number>> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3, REFUND: 4 };
 
 /** ADR-217 §3: a charge is on the statement (and in every period figure) when the summary counts it and it isn't deleted. */
 export function isStatementCharge(r: Pick<LedgerReceivableRow, 'deletedAt' | 'origin' | 'postingDate' | 'paidMinor' | 'creditedMinor'>, asOf: IsoDate): boolean {
@@ -42,7 +47,7 @@ export function reversalDateOf(p: Pick<PaymentRecord, 'reversedAt' | 'updatedAt'
 }
 
 interface EntryBase {
-  /** CHARGE = the receivable's id, CREDIT = the credit's, PAYMENT = the payment's, PAYMENT_REVERSAL = `${paymentId}:reversal`. */
+  /** CHARGE = the receivable's id, CREDIT = the credit's, PAYMENT = the payment's, PAYMENT_REVERSAL = `${paymentId}:reversal`, REFUND = the refund's. */
   id: string;
   date: IsoDate;
   /** createdAt for a charge, a credit and a payment; the reversal instant for a reversal. */
@@ -59,7 +64,8 @@ export type LedgerEntry<R extends LedgerReceivableRow = LedgerReceivableRow, C e
   | (EntryBase & { kind: 'CHARGE'; source: R })
   | (EntryBase & { kind: 'CREDIT'; source: C; receivable: R })
   | (EntryBase & { kind: 'PAYMENT'; source: P })
-  | (EntryBase & { kind: 'PAYMENT_REVERSAL'; source: P });
+  | (EntryBase & { kind: 'PAYMENT_REVERSAL'; source: P })
+  | (EntryBase & { kind: 'REFUND'; source: LedgerRefundRow });
 
 /**
  * The whole-customer line set, undecorated and unsorted. Each line depends on its own row alone (a credit on its
@@ -67,7 +73,7 @@ export type LedgerEntry<R extends LedgerReceivableRow = LedgerReceivableRow, C e
  * is the union of every customer's, plus the lines of payments with no client.
  */
 export function ledgerEntries<R extends LedgerReceivableRow, C extends LedgerCreditRow, P extends LedgerPaymentRow>(
-  rows: { receivables: readonly R[]; credits: readonly C[]; payments: readonly P[] },
+  rows: { receivables: readonly R[]; credits: readonly C[]; payments: readonly P[]; refunds: readonly LedgerRefundRow[] },
   view: { asOf: IsoDate; timezone: string },
 ): Array<LedgerEntry<R, C, P>> {
   const entries: Array<LedgerEntry<R, C, P>> = [];
@@ -88,6 +94,9 @@ export function ledgerEntries<R extends LedgerReceivableRow, C extends LedgerCre
     if (p.status === 'REVERSED') {
       entries.push({ ...base, kind: 'PAYMENT_REVERSAL', id: `${p.id}:reversal`, date: reversalDateOf(p, view.timezone), atMs: reversalInstantOf(p).getTime(), rank: LINE_RANK.PAYMENT_REVERSAL, debitMinor: p.amountMinor, creditMinor: 0n });
     }
+  }
+  for (const f of rows.refunds) {
+    entries.push({ kind: 'REFUND', id: f.id, date: f.refundedOn, atMs: f.createdAt.getTime(), rank: LINE_RANK.REFUND, currency: f.currency, customerId: f.customerId, debitMinor: f.amountMinor, creditMinor: 0n, source: f });
   }
   return entries;
 }

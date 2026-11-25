@@ -14,6 +14,9 @@ export const PURGE_PROFILE_TABLES = [
   'expense_receipts',
   'agreements',
   'payment_allocations',
+  // MUT-643: refunds and their sources are ledger rows, purged with the profile (sources before refunds).
+  'refund_sources',
+  'refunds',
   'payments',
   'expenses',
   'projects',

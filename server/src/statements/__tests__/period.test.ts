@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { addDays, endOfMonth, todayIn, type IsoDate } from '../../dates.js';
-import { CAPTURE_UNDO_REASON, type LedgerCreditRow, type LedgerPaymentRow, type LedgerReceivableRow } from '../../repositories/ports.js';
+import { CAPTURE_UNDO_REASON, type LedgerCreditRow, type LedgerPaymentRow, type LedgerReceivableRow, type LedgerRefundRow } from '../../repositories/ports.js';
 import { listAll } from '../../routes/summaries.js';
 import { bucketize, unallocatedOf } from '../../summaries/compute.js';
 import { ledgerEntries, type LedgerEntry } from '../lines.js';
@@ -23,8 +23,8 @@ let n = 0;
 const uuid = () => `00000000-0000-4000-8000-${String(++n).padStart(12, '0')}`;
 const at = (date: IsoDate) => new Date(`${date}T09:00:00Z`);
 
-type Rows = { receivables: LedgerReceivableRow[]; credits: LedgerCreditRow[]; payments: LedgerPaymentRow[] };
-const rows = (o: Partial<Rows> = {}): Rows => ({ receivables: [], credits: [], payments: [], ...o });
+type Rows = { receivables: LedgerReceivableRow[]; credits: LedgerCreditRow[]; payments: LedgerPaymentRow[]; refunds: LedgerRefundRow[] };
+const rows = (o: Partial<Rows> = {}): Rows => ({ receivables: [], credits: [], payments: [], refunds: [], ...o });
 const charge = (gross: bigint, postingDate: IsoDate, o: Partial<LedgerReceivableRow> = {}): LedgerReceivableRow => ({ id: uuid(), customerId: CUST, currency: 'ILS', origin: 'INSTALLMENT', postingDate, grossMinor: gross, paidMinor: 0n, creditedMinor: 0n, deletedAt: null, createdAt: at(postingDate), ...o });
 const credit = (r: LedgerReceivableRow, amount: bigint, effectiveDate: IsoDate): LedgerCreditRow => {
   r.creditedMinor += amount;
@@ -35,11 +35,21 @@ const reverse = (p: LedgerPaymentRow, instant: string, reason = 'Bounced'): Ledg
 
 /** The one ILS block for `period`, as the route asks for it with ?currency=ILS. */
 const block = (r: Rows, period: { from: IsoDate; to: IsoDate }, view = VIEW) => summarizePeriod(ledgerEntries(r, view), period, 'ILS')[0]!;
-const zero = { openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, closingMinor: 0n };
+const zero = { openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, refundsMinor: 0n, closingMinor: 0n };
 const figures = (t: PeriodTotals) => ({ opening: t.openingMinor, billed: t.billedMinor, credited: t.creditedMinor, payments: t.paymentsMinor, reversals: t.reversalsMinor, closing: t.closingMinor });
-const identityHolds = (t: PeriodTotals) => t.closingMinor - t.openingMinor === t.billedMinor - (t.paymentsMinor - t.reversalsMinor) - t.creditedMinor;
+const identityHolds = (t: PeriodTotals) => t.closingMinor - t.openingMinor === t.billedMinor - (t.paymentsMinor - t.reversalsMinor - t.refundsMinor) - t.creditedMinor;
+const refund = (amount: bigint, refundedOn: IsoDate): LedgerRefundRow => ({ id: uuid(), customerId: CUST, currency: 'ILS', amountMinor: amount, refundedOn, createdAt: at(refundedOn), issuedDocumentId: uuid(), method: 'BANK', reference: null });
 
 describe('summarizePeriod: the §3.3 events', () => {
+  it('MUT-643: a paid invoice credited and refunded nets to zero; the refund is its own figure, never a reversal', () => {
+    const r = charge(10_000n, '2026-10-01', { origin: 'ISSUED_DOCUMENT' });
+    const p = pay(10_000n, '2026-10-01');
+    const c = credit(r, 10_000n, '2026-10-15');
+    const t = block(rows({ receivables: [r], credits: [c], payments: [p], refunds: [refund(10_000n, '2026-10-15')] }), OCT);
+    expect(t).toMatchObject({ billedMinor: 10_000n, creditedMinor: 10_000n, paymentsMinor: 10_000n, reversalsMinor: 0n, refundsMinor: 10_000n, closingMinor: 0n });
+    expect(identityHolds(t)).toBe(true);
+  });
+
   it('an unallocated payment counts in its own period; allocating it later moves nothing', () => {
     const r = charge(10_000n, '2026-09-10');
     const p = pay(4_000n, '2026-10-05');
@@ -209,7 +219,7 @@ function randomPeriod(r: () => number, asOf: IsoDate): { from: IsoDate; to: IsoD
 
 /** The legacy statement's lines in [from, to] for every customer, split by kind, plus its opening and closing. */
 async function fromStatements(d: DrivenLedger, currency: string, period: { from: IsoDate; to: IsoDate }) {
-  const t = { openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, closingMinor: 0n };
+  const t = { openingMinor: 0n, billedMinor: 0n, creditedMinor: 0n, paymentsMinor: 0n, reversalsMinor: 0n, refundsMinor: 0n, closingMinor: 0n };
   for (const customerId of d.customers) {
     const sources = await d.store.receivables.statementSources(d.organization.id, customerId, currency);
     const page = legacyBuildStatement(sources, { asOf: d.asOf, timezone: d.organization.timezone, from: period.from, to: period.to, projectId: null }, { limit: 1_000_000, cursor: null });
@@ -220,6 +230,7 @@ async function fromStatements(d: DrivenLedger, currency: string, period: { from:
       if (l.kind === 'CREDIT') t.creditedMinor += l.creditMinor;
       if (l.kind === 'PAYMENT') t.paymentsMinor += l.creditMinor;
       if (l.kind === 'PAYMENT_REVERSAL') t.reversalsMinor += l.debitMinor;
+      if (l.kind === 'REFUND') t.refundsMinor += l.debitMinor;
     }
   }
   // D4: payments with no client are on no statement; their lines, dated by the statement's own rules, written out here.
@@ -274,7 +285,7 @@ describe(`summarizePeriod over ${SEEDS} driven organizations`, () => {
         const [first] = summarizePeriod(entries, { from: period.from, to: split }, currency);
         const [second] = summarizePeriod(entries, { from: addDays(split, 1), to: addDays(split, 30) }, currency);
         const [union] = summarizePeriod(entries, { from: period.from, to: addDays(split, 30) }, currency);
-        expect(union, label).toEqual({ currency, openingMinor: first!.openingMinor, billedMinor: first!.billedMinor + second!.billedMinor, creditedMinor: first!.creditedMinor + second!.creditedMinor, paymentsMinor: first!.paymentsMinor + second!.paymentsMinor, reversalsMinor: first!.reversalsMinor + second!.reversalsMinor, closingMinor: second!.closingMinor });
+        expect(union, label).toEqual({ currency, openingMinor: first!.openingMinor, billedMinor: first!.billedMinor + second!.billedMinor, creditedMinor: first!.creditedMinor + second!.creditedMinor, paymentsMinor: first!.paymentsMinor + second!.paymentsMinor, reversalsMinor: first!.reversalsMinor + second!.reversalsMinor, refundsMinor: first!.refundsMinor + second!.refundsMinor, closingMinor: second!.closingMinor });
 
         // The anchor: with `to` on or after the last line, closing = the organization summary's outstanding − unallocated.
         const last = entries.reduce((m, e) => (e.date > m ? e.date : m), d.asOf);
