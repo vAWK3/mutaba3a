@@ -4794,3 +4794,12 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Routes | `server/src/__tests__/routes-settle-and-issue.test.ts` | AC3 receipt on the tax invoice for 1,000 (2,400 stays owed), AC4 invoice-receipt, next payment its own document, AC5 `issue:false`, AC6 No document / marked, AC7 failed issue keeps the payment (allocation number required) and the document due, setup incomplete, retry with the same key (one payment, one document), 404 without invoicing, 422 over outstanding, payment-only refused on a tax invoice's Owed |
 | Portal | `DocumentsPreferenceAsk.test.tsx`, `RecordPaymentDrawerIssue.test.tsx`, `issueOffers.test.ts` | the ask (four choices, saved with the fresh version, Arabic, failure), the control (on by default, off, failed issue message, hidden for No document, locked on a tax invoice's Owed), offers by preference |
 | QA | `portal.invoicing.issue-as-you-record`, `ios.invoicing.issue-as-you-record` | see the brief |
+
+---
+
+## MUT-586 — currency named on several rows (2026-11-25)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/receipts/extract/__tests__/extract.test.ts` "MUT-586" | a single named currency takes its clearest row, not the first; two currencies, or one the API does not take, still give none however clear the rows |
+| Bench | `server/ocr/bench/run.py --rescore --compare` | 0 fields lost against main; he currency up (photos 9/12 to 10/12, real 21/53 to 29/53); wrong-and-confident unchanged |
