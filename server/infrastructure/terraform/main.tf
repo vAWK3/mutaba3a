@@ -49,6 +49,8 @@ locals {
   # By name, so monitoring.tf's alert on its failed attempts never plans the job itself.
   stripe_reconcile_job = "mutaba3a-stripe-reconcile${local.suffix}"
   account_purge_job    = "mutaba3a-account-purge${local.suffix}"
+  # MUT-735 (ADR-281 §12): the daily usage retention (events 13 months, counters 25, route statistics 90 days).
+  usage_prune_job = "mutaba3a-usage-prune${local.suffix}"
   # MUT-419: the daily trial reminders need mail, Stripe (their Subscribe links) and the lapse gate (what they announce).
   trial_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.billing_gate_enabled
   # MUT-525: the launch-offer renewal notices need mail and Stripe; they announce a price, not the lapse gate.
@@ -1286,6 +1288,35 @@ resource "google_cloud_scheduler_job" "account_purge" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/accounts/purge"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-735 (ADR-281 §12): the daily prune of the usage ledger: events older than this month and the 12 before it,
+# counters older than 25 months, route statistics older than 90 days. Counts only; a retry or a second run deletes
+# nothing new.
+resource "google_cloud_scheduler_job" "usage_prune" {
+  project          = var.project_id
+  name             = local.usage_prune_job
+  region           = var.region
+  description      = "Daily usage retention (MUT-735)."
+  schedule         = "40 3 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "120s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 2
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/usage/prune"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

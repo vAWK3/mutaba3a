@@ -5766,3 +5766,11 @@ export const OperatorUsageExportQuerySchema = z.object({
   from: UsageDayQuery('from'),
   to: UsageDayQuery('to'),
 });
+
+export const UsagePruneSummarySchema = z
+  .object({
+    deleted: z.object({ events: z.number().int(), counters: z.number().int(), routes: z.number().int() }),
+    before: z.object({ eventsMonth: z.string(), countersMonth: z.string(), routesDay: z.string() }),
+    retention: z.object({ eventMonths: z.number().int(), counterMonths: z.number().int(), routeDays: z.number().int() }),
+  })
+  .openapi('UsagePruneSummary');

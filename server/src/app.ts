@@ -1,3 +1,4 @@
+import { usagePruneRoutes } from './routes/usage-prune.js';
 import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
 import { routeKeyOf } from './usage/route-key.js';
 import type { RouteMeter } from './usage/route-meter.js';
@@ -761,6 +762,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
   // MUT-735 (ADR-281): Operator › Usage, on the same unguarded store behind the same gate.
   app.route('/', operatorUsageRoutes(deps.store));
+  // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.
+  app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe

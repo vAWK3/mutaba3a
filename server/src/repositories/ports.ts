@@ -5243,8 +5243,8 @@ export interface RouteUsageTotal {
 }
 
 export interface UsagePruneBefore {
-  /** Events whose occurredAt is before this (13 months). */
-  events: Date;
+  /** Events whose month is before this (13 months: this one and the 12 before). */
+  eventsMonth: IsoMonth;
   /** Counters whose month is before this (25 months). */
   countersMonth: IsoMonth;
   /** Route rows whose day is before this (90 days). */

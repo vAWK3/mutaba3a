@@ -206,7 +206,7 @@ export function describeLedgerStoreUsageContract(name: string, makeStore: () => 
         { day: '1801-01-01', routeKey, plan: 'solo', statusClass: '2xx', count: 1, durationMsSum: 1, buckets },
         { day: '1850-01-01', routeKey, plan: 'solo', statusClass: '2xx', count: 1, durationMsSum: 1, buckets },
       ]);
-      const removed = await store.usage.prune({ events: new Date('1849-01-01T00:00:00Z'), countersMonth: '1849-12', routesDay: '1850-01-01' });
+      const removed = await store.usage.prune({ eventsMonth: '1849-12', countersMonth: '1849-12', routesDay: '1850-01-01' });
       expect(removed.events).toBeGreaterThanOrEqual(1);
       expect(removed.counters).toBeGreaterThanOrEqual(1);
       expect(removed.routes).toBeGreaterThanOrEqual(1);

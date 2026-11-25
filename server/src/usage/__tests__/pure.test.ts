@@ -142,3 +142,11 @@ describe('route buckets', () => {
     expect(p95Of(Array.from({ length: 12 }, () => 0))).toBeNull();
   });
 });
+
+describe('retention (Basel 2026-11-25: events 13 months, counters 25, routes 90 days)', () => {
+  it('keeps this month and the 12 before it for events, 24 before it for counters, 90 days of routes', async () => {
+    const { pruneCutoffs } = await import('../retention.js');
+    // 22:30 UTC on 30 Nov is 1 Dec in Jerusalem.
+    expect(pruneCutoffs(new Date('2026-11-30T22:30:00Z'))).toEqual({ today: '2026-12-01', eventsMonth: '2025-12', countersMonth: '2024-12', routesDay: '2026-09-03' });
+  });
+});

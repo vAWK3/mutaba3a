@@ -142,7 +142,7 @@ export class MemoryUsage implements UsageRepository {
   readonly prune: UsageRepository['prune'] = async (before) => {
     const removed = { events: 0, counters: 0, routes: 0 };
     for (const [k, e] of this.events) {
-      if (!(e.occurredAt < before.events)) continue;
+      if (!(e.month < before.eventsMonth)) continue;
       this.events.delete(k);
       removed.events += 1;
     }

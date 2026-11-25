@@ -14193,6 +14193,52 @@ components:
         - to
         - routes
         - stepUpUntil
+    UsagePruneSummary:
+      type: object
+      properties:
+        deleted:
+          type: object
+          properties:
+            events:
+              type: integer
+            counters:
+              type: integer
+            routes:
+              type: integer
+          required:
+            - events
+            - counters
+            - routes
+        before:
+          type: object
+          properties:
+            eventsMonth:
+              type: string
+            countersMonth:
+              type: string
+            routesDay:
+              type: string
+          required:
+            - eventsMonth
+            - countersMonth
+            - routesDay
+        retention:
+          type: object
+          properties:
+            eventMonths:
+              type: integer
+            counterMonths:
+              type: integer
+            routeDays:
+              type: integer
+          required:
+            - eventMonths
+            - counterMonths
+            - routeDays
+      required:
+        - deleted
+        - before
+        - retention
     CreateEntitlementGrantRequest:
       type: object
       properties:
@@ -33501,6 +33547,32 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
           description: Validation failed (a malformed month, day or cursor)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /jobs/v1/usage/prune:
+    post:
+      tags:
+        - Operator
+      summary: "Daily usage retention: events 13 months, counters 25 months, route statistics 90 days (Cloud Scheduler)"
+      security:
+        - jobToken: []
+      responses:
+        "200":
+          description: What was deleted, and the cut-offs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UsagePruneSummary"
+        "401":
+          description: JOB_UNAUTHORIZED
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "503":
+          description: JOBS_NOT_CONFIGURED
           content:
             application/json:
               schema:

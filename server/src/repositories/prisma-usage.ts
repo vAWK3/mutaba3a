@@ -190,7 +190,7 @@ export function prismaUsage(prisma: () => PrismaClient): UsageRepository {
     },
     prune: async (before) => {
       const [events, counters, routes] = await prisma().$transaction([
-        prisma().usageEvent.deleteMany({ where: { occurredAt: { lt: before.events } } }),
+        prisma().usageEvent.deleteMany({ where: { month: { lt: before.eventsMonth } } }),
         prisma().usageCounter.deleteMany({ where: { month: { lt: before.countersMonth } } }),
         prisma().routeUsageDaily.deleteMany({ where: { day: { lt: before.routesDay } } }),
       ]);
