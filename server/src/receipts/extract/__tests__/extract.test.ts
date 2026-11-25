@@ -185,6 +185,19 @@ describe('benchmark failure clusters', () => {
     const mixed = read(receipt(['Shop', 'Coffee 2.50', 'Subtotal 10.000', 'VAT 1.000', 'Total 11.000']));
     expect(value(mixed, 'currency')).toBeUndefined();
   });
+
+  it('MUT-586: a currency named on several rows takes its clearest row, not the first', () => {
+    const s = read(receipt(['מכולת הכרמל', { text: 'מחירים ב-ש"ח', conf: 0.3 }, 'לחם 8.90', 'חלב ₪6.50', 'סה"כ 15.40']));
+    expect(value(s, 'currency')).toBe('ILS');
+    // Read poorly everywhere, it stays out.
+    const blurred = read(receipt(['מכולת הכרמל', { text: 'מחירים ב-ש"ח', conf: 0.3 }, { text: 'חלב ₪6.50', conf: 0.4 }, 'סה"כ 15.40']));
+    expect(value(blurred, 'currency')).toBeUndefined();
+  });
+
+  it('MUT-586: two currencies, or one the API does not take, still give none however clear the rows', () => {
+    expect(value(read(receipt(['Duty free', { text: 'Prices in ₪', conf: 0.3 }, 'Gift $20.00', 'Coffee ₪12.00', 'Total 32.00'])), 'currency')).toBeUndefined();
+    expect(value(read(receipt(['Duty free', { text: 'Prices in ₪', conf: 0.3 }, 'Coffee ₪12.00', 'Paid in SAR', 'Total 12.00'])), 'currency')).toBeUndefined();
+  });
 });
 
 /**
