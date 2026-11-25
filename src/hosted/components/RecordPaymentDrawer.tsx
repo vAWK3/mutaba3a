@@ -4,10 +4,11 @@ import { Button } from '../../components/ui/Button';
 import { SegmentedControl } from '../../components/ui/SegmentedControl';
 import { useLanguage } from '../../lib/i18n/core';
 import { isolate, isolateAmount } from '../../lib/utils';
-import type { HostedProfile, PaymentMethod, Receivable, SettleReceivableResponse } from '../api/client';
+import type { HostedProfile, PaymentMethod, Receivable, SettleAndIssueResponse, SettleReceivableResponse } from '../api/client';
 import { useAttemptKey } from '../data/attemptKey';
 import { isSettleable } from '../data/incomeAffordances';
-import { settleMutationKey, useReceivable, useSettleReceivable } from '../data/incomeQueries';
+import { settleMutationKey, useReceivable, useSettleAndIssue, useSettleReceivable } from '../data/incomeQueries';
+import { useIssueWithPayment } from '../data/issuedQueries';
 import { useCustomerDirectory, useProjectDirectory } from '../data/queries';
 import { formatDecimal } from '../format/DecimalAmount';
 import { formatDay, todayInZone } from '../format/dates';
@@ -114,7 +115,9 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
   const { t, language } = useLanguage();
   const showToast = useToast();
   const attempt = useAttemptKey();
-  const settle = useSettleReceivable(profile.id);
+  const settleOnly = useSettleReceivable(profile.id);
+  const settleAndIssue = useSettleAndIssue(profile.id);
+  const withPayment = useIssueWithPayment(profile);
   const customers = useCustomerDirectory(profile.id);
   const projects = useProjectDirectory(profile.id);
   const today = todayInZone(profile.timezone);
@@ -124,6 +127,16 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [submitted, setSubmitted] = useState(false);
   const [serverErrors, setServerErrors] = useState<Record<string, string>>({});
+  // MUT-661: one control, on by default, issues this payment's document in the same step. Absent where the client takes
+  // no document (No document), the entry is marked not for invoice, the setup can't issue, or it isn't shekels. On a tax
+  // invoice's own Owed the receipt IS the payment (ADR-279), so it is shown on and can't be turned off.
+  const preference = customers.data?.get(receivable.customerId)?.documentsPreference ?? withPayment.defaultPreference;
+  const documentRequired = receivable.origin === 'ISSUED_DOCUMENT';
+  const offersDocument = withPayment.canIssue && (documentRequired || (currency === 'ILS' && !receivable.notForInvoice && preference !== 'NO_DOCUMENT'));
+  const [issueChoice, setIssueChoice] = useState(true);
+  const issueNow = offersDocument && (documentRequired || issueChoice);
+  const documentLabel = documentRequired || preference === 'TAX_INVOICE_FIRST' ? t('hosted.settle.issue.RECEIPT') : t('hosted.settle.issue.TAX_INVOICE_RECEIPT');
+  const settle = issueNow || documentRequired ? settleAndIssue : settleOnly;
 
   const parsed = parseIncomeAmount(amount, currency);
   const line = settleLine(parsed, receivable.outstanding, currency);
@@ -136,6 +149,14 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
   const dateMessage =
     serverErrors.paidAt ?? (submitted && !paidAt ? t('hosted.income.errors.dateRequired') : submitted && paidAt > today ? t('hosted.income.errors.dateFuture') : null);
 
+  /** What the toast adds about the document: issued (with its number), or why it waits in To issue (the payment is recorded either way). */
+  const issueNote = (result: SettleReceivableResponse | SettleAndIssueResponse, saved: string): string => {
+    const issue = 'issue' in result ? result.issue : null;
+    if (!issue || issue.status === 'not_requested' || issue.status === 'not_due') return saved;
+    if (issue.status === 'issued') return `${saved} ${t('hosted.settle.issue.issued', { number: issue.document ? String(issue.document.number) : '' })}`;
+    return `${saved} ${t(issue.status === 'held' ? 'hosted.settle.issue.held' : 'hosted.settle.issue.failed')}`;
+  };
+
   const onSubmit = async (event: FormEvent) => {
     event.preventDefault();
     if (settle.isPending) return;
@@ -145,14 +166,15 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
     // figure (now flagged as over) instead of silently showing the new outstanding.
     onAmountChange(amount);
     if (parsed.kind !== 'ok' || line?.tone === 'over' || !paidAt || paidAt > today) return;
-    const body = { amount: parsed.canonical, paidAt, method };
+    const body = { amount: parsed.canonical, paidAt, method, ...(offersDocument ? { issue: issueNow } : {}) };
     try {
-      const result = await settle.mutateAsync({ receivableId: receivable.id, body, idempotencyKey: attempt.keyFor(body) });
+      const result = await (offersDocument ? settleAndIssue : settleOnly).mutateAsync({ receivableId: receivable.id, body, idempotencyKey: attempt.keyFor(body) });
       attempt.succeeded();
       // Opt-in usage counts (MUT-155): the currency only, never the amount or client
       void trackPortal('payment_recorded', { currency });
       const shown = money(parsed.canonical);
-      showToast(client ? t('hosted.settle.saved', { amount: shown, client: isolate(client) }) : t('hosted.settle.savedNoClient', { amount: shown }), { tone: 'info' });
+      const saved = client ? t('hosted.settle.saved', { amount: shown, client: isolate(client) }) : t('hosted.settle.savedNoClient', { amount: shown });
+      showToast(issueNote(result, saved), { tone: 'info' });
       onSettled(result);
     } catch (error) {
       const mapped = mapSettleError(error);
@@ -214,6 +236,15 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
             options={PAYMENT_METHODS.map((value) => ({ value, label: t(`hosted.payments.method.${value}`) }))}
           />
         </div>
+        {offersDocument && (
+          <label className="hp-settle-issue">
+            <input type="checkbox" checked={issueNow} disabled={documentRequired} onChange={(e) => setIssueChoice(e.target.checked)} data-testid="settle-issue" />
+            <span>
+              {documentLabel}
+              {documentRequired && <span className="hp-muted"> {t('hosted.settle.issue.required')}</span>}
+            </span>
+          </label>
+        )}
       <p className="hp-settle-note">{t('hosted.settle.honest')}</p>
     </form>
   );

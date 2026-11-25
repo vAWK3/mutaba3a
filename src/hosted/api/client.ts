@@ -190,6 +190,8 @@ export type CreditsResponse = Schemas['CreditsResponse'];
 export type UpdateIncomeRequest = Schemas['UpdateIncomeRequest'];
 export type UpdatePaymentRequest = Schemas['UpdatePaymentRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
+export type SettleAndIssueRequest = Schemas['SettleAndIssueRequest'];
+export type SettleAndIssueResponse = Schemas['SettleAndIssueResponse'];
 export type ProfileType = Schemas['ProfileType'];
 export type CreateProfileRequest = Schemas['CreateProfileRequest'];
 export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
@@ -988,6 +990,9 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+  /** MUT-661: the payment and its document in one step, under the one Idempotency-Key. */
+  settleAndIssue: (profileId: string, receivableId: string, body: SettleAndIssueRequest, idempotencyKey: string) =>
+    request<SettleAndIssueResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle-and-issue`, { profileId, body, idempotencyKey }),
   // MUT-453: correcting money a person recorded. Both carry the attempt's Idempotency-Key.
   reversePayment: (profileId: string, paymentId: string, body: ReversePaymentRequest, idempotencyKey: string) =>
     request<Payment>('POST', `/v1/payments/${encodeURIComponent(paymentId)}/reverse`, { profileId, body, idempotencyKey }),

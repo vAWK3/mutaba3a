@@ -83,7 +83,7 @@ describe('operations', () => {
     expect(doc.openapi).toBe('3.1.0');
     expect(doc.info.version).toBe(API_VERSION);
     // MUT-560: share links (ADR-247).
-    expect(API_VERSION).toBe('1.139.0-mut644');
+    expect(API_VERSION).toBe('1.140.0-mut661');
     for (const s of SCOPES) expect(doc.info.description).toContain(s);
     expect(doc.info.description).toContain('IDEMPOTENCY_KEY_REUSED');
     expect(Object.keys(doc.paths)).toEqual(

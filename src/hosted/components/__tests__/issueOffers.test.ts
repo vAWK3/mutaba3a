@@ -24,4 +24,15 @@ describe('issueOffers (MUT-648)', () => {
     expect(offer.fromEntry).toEqual({ kind: 'received', id: 'e1' });
     expect(offer.lines?.[0]).toMatchObject({ unitPrice: '1180.00', pricesIncludeVat: true, description: 'Design work' });
   });
+
+  it('MUT-661: an Owed follows the client\'s documents preference', () => {
+    expect(types(issueOffers(saved('owed', 'c1'), 'Services', false, 'TAX_INVOICE_FIRST'))).toEqual(['TAX_INVOICE']);
+    expect(types(issueOffers(saved('owed', 'c1'), 'Services', false, 'PAYMENT_REQUEST_FIRST'))).toEqual(['PAYMENT_REQUEST']);
+    expect(issueOffers(saved('owed', 'c1'), 'Services', false, 'ON_PAYMENT')).toEqual([]);
+    expect(issueOffers(saved('owed', 'c1'), 'Services', false, 'NO_DOCUMENT')).toEqual([]);
+  });
+  it('MUT-661: a Received offers its documents unless the client takes none', () => {
+    expect(types(issueOffers(saved('received', 'c1'), 'Services', false, 'ON_PAYMENT'))).toEqual(['TAX_INVOICE_RECEIPT', 'RECEIPT']);
+    expect(issueOffers(saved('received', 'c1'), 'Services', false, 'NO_DOCUMENT')).toEqual([]);
+  });
 });

@@ -7101,3 +7101,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Consequences:** No API change. A setup that can't be read says nothing. Another device or browser can show the hint again the same day.
 
+
+## ADR-279: Issue as You Record: the Documents Preference Is Asked Once, and a Payment and Its Document Are One Step (MUT-661, Design B)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-661-issue-as-you-record.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** Documents follow a moment the person is already in. MUT-660 derives what is due; MUT-648 offered "Issue invoice" regardless of the client; MUT-722 says "Finish setting up" while the setup can't issue.
+
+**Decision:**
+1. **Ask once.** After an income is saved for a client whose `documentsPreference` is null, on a profile that can issue (MUT-648's conditions: setup `canIssue`, offer-after-save on) and in shekels, the portal opens a drawer «كيف تُصدر المستندات لـ…؟» with the four choices; the answer is saved on the client (version read fresh, If-Match). "Not now" saves nothing (asked again at the next income; the profile default applies meanwhile). MUT-722's hint speaks only while the setup can't issue, so the two never both speak.
+2. **The next action follows the answer** (`issueOffers`): Tax invoice first -> "Issue tax invoice"; Payment request first -> "Issue payment request"; On payment and No document -> none. An exempt dealer is offered a payment request for an Owed unless the client takes none first. A Received offers its documents unless No document. This absorbs MUT-648's rule.
+3. **One server step.** `POST /v1/receivables/{id}/settle-and-issue` (Idempotency-Key): the payment is recorded exactly as settle records it (`settleOwed`, shared), then the document that payment is due (`documentsDue`, the same function as the list and Issue all) is issued through the single issue, linked to the payment, under a key derived from the request's key and the payment. Not one database transaction: the payment is the commitment and a refused issue is a message, not a rollback (AC7: 201, `issue.status` failed or held with the reason, the document stays in To issue). A retry finds the payment by its request key and the document by `moneyDocumentOn`, so neither is made twice. `issue:false` records only the payment; a payment due nothing answers `not_due`.
+4. **A tax invoice's own Owed** (origin ISSUED_DOCUMENT) can't take a captured payment (MUT-568: only issuing pays a document's Owed), so the payment there is a receipt applying the tax invoice (`appliesToDocumentId`, with the payment's method and date), issued in the one transaction the issue already is. There is no payment-only form (`issue:false` is 422 PAYMENT_NEEDS_DOCUMENT) and a refused issue records nothing. The portal shows the control on and locked. **Open question for Basel:** whether Tax invoice first clients should be able to say "Later" there too (it would need an unallocated payment the receipt later allocates).
+5. **The control** shows only where the setup can issue, the Owed is in shekels, the entry isn't marked not for invoice, and the client isn't No document. Receipt when the Owed has a tax invoice, else an invoice-receipt for the amount paid. After a partial payment the rest stays owed; the next payment gets its own document.
+
+**Consequences:** API 1.140.0-mut661, no migration. A held allocation (MUT-572) leaves its request open at the Tax Authority as Issue all does; the person issues it from To issue. Portal local mode is untouched (no invoicing). The phone half mirrors this.

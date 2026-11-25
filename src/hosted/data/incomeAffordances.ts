@@ -57,11 +57,13 @@ export function canAddClient(profile: HostedProfile, writable = true): boolean {
 }
 
 /**
- * A row the settle route accepts: captured through POST /v1/income (origin
- * ADJUSTMENT; anything Malafat posted answers 404) and still open.
+ * A row the settle routes accept: captured through POST /v1/income (origin
+ * ADJUSTMENT; anything Malafat posted answers 404), or a tax invoice's own Owed
+ * (MUT-661), and still open.
  */
 export function isSettleable(receivable: Receivable): boolean {
-  return receivable.origin === 'ADJUSTMENT' && !CLOSED_STATUSES.has(receivable.status);
+  // MUT-661: an Owed a tax invoice posted is paid too, by the receipt that records the payment (ADR-279).
+  return (receivable.origin === 'ADJUSTMENT' || (receivable.origin === 'ISSUED_DOCUMENT' && receivable.currency === 'ILS')) && !CLOSED_STATUSES.has(receivable.status);
 }
 
 /**
