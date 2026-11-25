@@ -335,7 +335,7 @@ export async function enableTwoFactor(email: string, password: string, method: '
   const enrolment = (await started.json()) as { enrolmentToken: string; secret: string | null };
   const code = method === 'totp' ? appCode(enrolment.secret!, 0) : codeFromMail(await mailTo(email, 'two-factor-code'));
   const confirmed = await fetch(`${origin}/v1/me/two-factor/enrolment/confirm`, { method: 'POST', headers, body: JSON.stringify({ enrolmentToken: enrolment.enrolmentToken, code }) });
-  expect(confirmed.status, `confirm two-step ${await confirmed.clone().text()}`).toBe(200);
+  expect(confirmed.status, `confirm two-step ${await confirmed.clone().text()}`).toBe(201);
   return { secret: enrolment.secret, recoveryCodes: ((await confirmed.json()) as { recoveryCodes: string[] }).recoveryCodes };
 }
 

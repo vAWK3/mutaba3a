@@ -290,7 +290,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
   async function signedIn(me: Me) {
     setMode('remote');
     // Whoever was signed in on this browser before (or the local person, MUT-286) is not this person.
-    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] });
+    // The link's own two-step challenge stays too: removing it would ask the used link for another (410).
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== SETUP_CHECK_KEY[0] && query.queryKey[0] !== SETUP_TWO_FACTOR_KEY[0] });
     queryClient.setQueryData(ME_KEY, me);
     adoptAccountLocale(me.user.locale);
     // A new account starts on its personal profile (D13), on the trial step when one is due (MUT-418)
@@ -403,19 +404,20 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
   const termsLink = termsHref(language, termsVersion);
   const variant = purpose === 'RESET' ? 'reset' : signup ? 'signup' : 'setup';
 
+  // Signed in (after the second step too): the passkey offer comes before the step that led to it.
+  if (afterPasskey) {
+    return (
+      <SetupLayout>
+        <SetupPasskeyStep link={LINK_KIND[purpose]} password={password} onDone={() => void navigate(afterPasskey)} />
+      </SetupLayout>
+    );
+  }
+
   if (signInStep) {
     const finish = async (answer: TwoFactorAnswer) => signedIn(await api.finishTwoFactorSignIn({ challengeToken: signInStep.challengeToken, ...answer }));
     return (
       <SetupLayout>
         <TwoFactorStep challenge={signInStep} submit={finish} onRestart={() => void navigate({ to: '/sign-in', replace: true })} restartLabel={t('hosted.setup.toSignIn')} />
-      </SetupLayout>
-    );
-  }
-
-  if (afterPasskey) {
-    return (
-      <SetupLayout>
-        <SetupPasskeyStep link={LINK_KIND[purpose]} password={password} onDone={() => void navigate(afterPasskey)} />
       </SetupLayout>
     );
   }

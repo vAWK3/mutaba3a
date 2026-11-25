@@ -26,6 +26,7 @@ import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/billing-
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/account-closure.js';
 import { ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/accountants.js';
 import { SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/share-links.js';
+import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES } from '../routes/two-factor.js';
 import { provisionUser } from './helpers/provision.js';
 
 /**
@@ -206,6 +207,15 @@ describe('routes that stay open in every state (MUT-361)', () => {
       expect((await h.app.request('/v1/billing', { headers: p.session })).status).toBe(200);
       expect((await h.app.request('/v1/sessions/current', { method: 'DELETE', headers: p.session })).status).toBe(204);
     });
+    it(`${state}: two-step sign-in can be read and turned on (MUT-710)`, async () => {
+      const h = harness();
+      const p = await person(h, state);
+      const got = await h.app.request('/v1/me/two-factor', { headers: p.session });
+      expect(got.status).toBe(200);
+      expect((await read(got)).enabled).toBe(false);
+      const started = await h.app.request('/v1/me/two-factor/enrolment', json({ method: 'totp', currentPassword: p.password }, p.session));
+      expect(started.status).toBe(201);
+    });
   }
 
   it('a person who can write somewhere has standing open; with the gate off it is null', async () => {
@@ -342,6 +352,7 @@ describe('person-level routes follow the person’s best standing (MUT-361 D4)',
       ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES,
       ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES,
       ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES,
+      ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES,
     ];
     expect(all.filter((endpoint) => !(endpoint in PERSON_LEVEL_GATE))).toEqual([]);
     expect(Object.keys(PERSON_LEVEL_GATE).filter((endpoint) => !all.includes(endpoint))).toEqual([]);

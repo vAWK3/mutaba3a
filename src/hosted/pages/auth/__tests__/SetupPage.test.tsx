@@ -217,6 +217,33 @@ describe('saving', () => {
   });
 });
 
+describe('a link for an account with two-step sign-in (MUT-710 D11)', () => {
+  const CHALLENGE = { challengeToken: 'c'.repeat(43), method: 'totp', expiresAt: '2026-11-24T10:10:00.000Z' };
+  const twoStep = () => () =>
+    ok({ state: 'valid', email: EMAIL, locale: 'en', purpose: 'RESET', expiresAt: '2026-10-19T09:00:00.000Z', termsVersion: TERMS_VERSION, twoFactor: { method: 'totp' } });
+
+  it('after the link’s step, the sign-in’s own second step leads on to Home, and the used link is never asked again', async () => {
+    let session = false;
+    const { api, user, password, router } = await openForm({
+      [CHECK]: twoStep(),
+      'POST /v1/account-setup/two-factor': () => ok(CHALLENGE, 201),
+      [SIGN_IN]: () => fail(403, 'TWO_FACTOR_REQUIRED', CHALLENGE),
+      'POST /v1/sessions/two-factor': () => {
+        session = true;
+        return ok(me(), 201);
+      },
+      'GET /v1/me': () => (session ? ok(me()) : fail(401, 'UNAUTHENTICATED')),
+    });
+    await user.type(await screen.findByLabelText('Code'), '123456');
+    await save(user, password);
+    await screen.findByRole('heading', { level: 1, name: 'Two-step sign-in' });
+    await user.type(screen.getByLabelText('Code'), '654321');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
+    expect(api.count('POST /v1/account-setup/two-factor')).toBe(1);
+  });
+});
+
 describe('the terms (MUT-324)', () => {
   it('refuses to save until the terms are ticked, says why, and sends nothing', async () => {
     const { api, user, password } = await openForm();
