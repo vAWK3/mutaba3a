@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { closureDeadline, GRACE_MS } from '../../accounts/closure.js';
 import { composeDocument } from '../../issuing/compose.js';
-import { sweepCutoff } from '../../issuing/retention.js';
+import { ARCHIVE_KEEP_NOTICE_VERSION, sweepCutoff } from '../../issuing/retention.js';
 import type { IssuedDocType } from '../../issuing/types.js';
 import type { IssueDocumentInput, LedgerStore } from '../ports.js';
 
@@ -9,8 +9,9 @@ const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLa
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /**
- * MUT-644 (ADR-277) storage contract: a closed profile's issued documents survive the account purge, and the retention
- * sweep deletes them, with the clock, only once 7 years have passed after the end of the year of the newest one.
+ * MUT-644 (ADR-277, amended 2026-11-25) storage contract: a closed profile's issued documents survive the account
+ * purge; the retention sweep deletes each one, with the clock, 7 years after its own date, and the profile's own rows
+ * with the last; an erasure shortens the 7 years only after an archive carrying the keep notice was handed over.
  */
 export function describeLedgerStoreIssuingRetentionContract(name: string, makeStore: () => Promise<LedgerStore>): void {
   const unique = () => Math.random().toString(36).slice(2, 10);
@@ -74,17 +75,17 @@ export function describeLedgerStoreIssuingRetentionContract(name: string, makeSt
   }
 
   describe(`${name} LedgerStore issuing retention contract (MUT-644)`, () => {
-    it('keeps a closed profile’s documents through the purge and sweeps them only after 7 years past the newest one’s year (AC1)', async () => {
+    it('keeps a closed profile’s documents through the purge and sweeps each one 7 years after its own date; the profile’s rows go with the last (AC1)', async () => {
       const store = await makeStore();
       const label = `Retained Studio ${unique()}`;
       const o = await owner(store, label);
       const logo = await store.issuing.addLogo(o.business.id, { contentType: 'image/png', bytes: PNG, sha256: 'a'.repeat(64) }, T0);
-      const receipt = await issued(store, issueInput(o.business.id, o.user.id, 'RECEIPT', '2026-11-20'));
+      const receipt = await issued(store, issueInput(o.business.id, o.user.id, 'RECEIPT', '2024-03-10'));
       const copy = await store.issuing.recordCopy(o.business.id, receipt.id, { producedByUserId: o.user.id, channel: 'DOWNLOAD' }, T0);
       await store.issuing.keepOriginalPdf(o.business.id, receipt.id, { bytes: PNG, sha256: 'b'.repeat(64), copyIndex: copy!.copyIndex }, T0);
       const customer = await store.customers.create({ organizationId: o.business.id, name: 'Acme Ltd.', email: null, phone: null, notes: null }, T0);
       const request = await issued(store, issueInput(o.business.id, o.user.id, 'PAYMENT_REQUEST', '2026-11-22', customer.id));
-      // Cancelled at 01:00 on 1 January 2027 in Israel: the newest date is 2027-01-01, so the 7 years end with 2034.
+      // Cancelled at 01:00 on 1 January 2027 in Israel: the request counts from 2027-01-01, so it is kept through 2034-01-01.
       const cancelled = await store.issuing.cancelPaymentRequest(o.business.id, request.id, { reason: null, requestKey: `c-${unique()}`, userId: o.user.id }, new Date('2026-12-31T23:00:00Z'));
       expect(cancelled.kind).not.toBe('not_found');
 
@@ -97,35 +98,83 @@ export function describeLedgerStoreIssuingRetentionContract(name: string, makeSt
       // Survived the purge.
       expect(await store.issuing.getById(o.business.id, receipt.id)).toMatchObject({ id: receipt.id, number: receipt.number });
       expect((await store.issuing.getOriginalPdf(o.business.id, receipt.id))?.sha256).toBe('b'.repeat(64));
-      const closed = { organizationId: o.business.id, legalName: label, vatId: o.vatId, documents: 2, cancellations: 1, newestDocumentDate: '2027-01-01' };
+      const closed = { organizationId: o.business.id, legalName: label, vatId: o.vatId, documents: 2, cancellations: 1, oldestDocumentDate: '2024-03-10', newestDocumentDate: '2027-01-01' };
       expect(await store.issuingRetention.getClosed(o.business.id)).toEqual(closed);
       expect(await store.issuingRetention.listClosed({ query: label.toUpperCase() }, 10)).toEqual([closed]);
       expect(await store.issuingRetention.listClosed({ query: o.vatId.slice(0, 6) }, 500)).toContainEqual(closed);
-      expect((await store.issuingRetention.listClosed({ query: label, newestBefore: '2027-01-01' }, 10))).toEqual([]);
-      expect((await store.issuingRetention.listClosed({ query: label, newestBefore: '2027-01-02' }, 10))).toEqual([closed]);
+      expect(await store.issuingRetention.listClosed({ query: label, dueBefore: '2024-03-10' }, 10)).toEqual([]);
+      expect(await store.issuingRetention.listClosed({ query: label, dueBefore: '2024-03-11' }, 10)).toEqual([closed]);
 
-      // The clock: the last moment of 2034 is still inside the 7 years; 1 January 2035 is not.
-      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(new Date('2034-12-31T23:59:59Z')), T0)).toEqual({ kind: 'not_due', newestDocumentDate: '2027-01-01' });
+      // The clock, the older document: the last moment of its 7th anniversary keeps it; the next day it goes, alone.
+      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(new Date('2031-03-10T23:59:59Z')), T0)).toEqual({ kind: 'not_due', oldestDocumentDate: '2024-03-10' });
       expect(await store.issuing.getById(o.business.id, receipt.id)).not.toBeNull();
-      const sweptAt = new Date('2035-01-01T00:00:00Z');
-      const swept = await store.issuingRetention.sweep(o.business.id, sweepCutoff(sweptAt), sweptAt);
-      expect(swept).toMatchObject({ kind: 'swept', documents: 2, cancellations: 1, newestDocumentDate: '2027-01-01' });
-      if (swept.kind !== 'swept') throw new Error('not swept');
-      expect(swept.rows).toBeGreaterThanOrEqual(10);
+      const firstAt = new Date('2031-03-11T00:00:00Z');
+      const first = await store.issuingRetention.sweep(o.business.id, sweepCutoff(firstAt), firstAt);
+      // The receipt, its line, its copy and its kept original.
+      expect(first).toMatchObject({ kind: 'swept', documents: 1, cancellations: 0, rows: 4, remaining: 1, profileRows: false });
+      if (first.kind !== 'swept') throw new Error('not swept');
+      expect(await store.issuing.getById(o.business.id, receipt.id)).toBeNull();
+      expect(await store.issuing.getOriginalPdf(o.business.id, receipt.id)).toBeNull();
+      // The newer one and the profile's own rows stay.
+      expect(await store.issuing.getById(o.business.id, request.id)).toMatchObject({ id: request.id });
+      expect(await store.issuing.getIssuer(o.business.id)).toMatchObject({ legalName: label });
+      expect(await store.issuing.getLogo(o.business.id, logo.id)).not.toBeNull();
+      expect((await store.issuing.counters(o.business.id)).length).toBeGreaterThan(0);
+      const left = { ...closed, documents: 1, cancellations: 1, oldestDocumentDate: '2027-01-01' };
+      expect(await store.issuingRetention.getClosed(o.business.id)).toEqual(left);
+      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(firstAt), firstAt)).toEqual({ kind: 'not_due', oldestDocumentDate: '2027-01-01' });
+
+      // The newer one counts from its cancellation's Israel date: kept through 2034-01-01, gone on the 2nd with the profile's rows.
+      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(new Date('2034-01-01T23:59:59Z')), T0)).toEqual({ kind: 'not_due', oldestDocumentDate: '2027-01-01' });
+      const lastAt = new Date('2034-01-02T00:00:00Z');
+      const last = await store.issuingRetention.sweep(o.business.id, sweepCutoff(lastAt), lastAt);
+      expect(last).toMatchObject({ kind: 'swept', documents: 1, cancellations: 1, remaining: 0, profileRows: true });
+      if (last.kind !== 'swept') throw new Error('not swept');
+      // The request, its line and cancellation; the business details, the logo, the counters.
+      expect(last.rows).toBeGreaterThanOrEqual(7);
 
       // Every retained row went.
-      expect(await store.issuing.getById(o.business.id, receipt.id)).toBeNull();
       expect(await store.issuing.getById(o.business.id, request.id)).toBeNull();
-      expect(await store.issuing.getOriginalPdf(o.business.id, receipt.id)).toBeNull();
       expect(await store.issuing.getIssuer(o.business.id)).toBeNull();
       expect(await store.issuing.getLogo(o.business.id, logo.id)).toBeNull();
       expect(await store.issuing.counters(o.business.id)).toEqual([]);
       expect(await store.issuingRetention.getClosed(o.business.id)).toBeNull();
-      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(sweptAt), sweptAt)).toEqual({ kind: 'nothing' });
+      expect(await store.issuingRetention.sweep(o.business.id, sweepCutoff(lastAt), lastAt)).toEqual({ kind: 'nothing' });
 
       // Audited where the profile can't be: the retention log.
+      expect(await store.issuingRetention.events(o.business.id)).toEqual([
+        { id: first.event.id, organizationId: o.business.id, action: 'SWEPT', createdAt: firstAt, metadata: { documents: 1, cancellations: 0, rows: 4, remaining: 1, oldestDocumentDate: '2024-03-10', newestDocumentDate: '2024-03-10', profileRows: false } },
+        { id: last.event.id, organizationId: o.business.id, action: 'SWEPT', createdAt: lastAt, metadata: { documents: 1, cancellations: 1, rows: last.rows, remaining: 0, oldestDocumentDate: '2027-01-01', newestDocumentDate: '2027-01-01', profileRows: true } },
+      ]);
+    });
+
+    it('erasure shortens the 7 years only after an archive carrying the keep notice was handed over (D7)', async () => {
+      const store = await makeStore();
+      const o = await owner(store, `Erased Studio ${unique()}`);
+      const receipt = await issued(store, issueInput(o.business.id, o.user.id, 'RECEIPT', '2026-11-20'));
+      expect(await store.issuingRetention.erase(o.business.id, 'SUP-9', T0)).toEqual({ kind: 'not_closed' });
+      await closeAndPurge(store, o);
+
+      const at = new Date('2027-03-01T10:00:00Z');
+      expect(await store.issuingRetention.erase(o.business.id, 'SUP-9', at)).toEqual({ kind: 'archive_not_handed_over' });
+      // An archive exported before the notice existed doesn't count; nor does one logged after the erasure.
+      await store.issuingRetention.record(o.business.id, 'ARCHIVE_EXPORTED', { reference: 'SUP-1', documents: 1 }, new Date('2027-02-01T10:00:00Z'));
+      await store.issuingRetention.record(o.business.id, 'ARCHIVE_EXPORTED', { reference: 'SUP-2', documents: 1, noticeVersion: ARCHIVE_KEEP_NOTICE_VERSION }, new Date(at.getTime() + 1000));
+      expect(await store.issuingRetention.erase(o.business.id, 'SUP-9', at)).toEqual({ kind: 'archive_not_handed_over' });
+      expect(await store.issuing.getById(o.business.id, receipt.id)).not.toBeNull();
+
+      const handed = await store.issuingRetention.record(o.business.id, 'ARCHIVE_EXPORTED', { reference: 'SUP-3', documents: 1, noticeVersion: ARCHIVE_KEEP_NOTICE_VERSION }, new Date('2027-02-15T10:00:00Z'));
+      const erased = await store.issuingRetention.erase(o.business.id, 'SUP-9', at);
+      expect(erased).toMatchObject({ kind: 'erased', documents: 1, cancellations: 0 });
+      if (erased.kind !== 'erased') throw new Error('not erased');
+      expect(erased.rows).toBeGreaterThanOrEqual(3);
+      expect(await store.issuing.getById(o.business.id, receipt.id)).toBeNull();
+      expect(await store.issuing.getIssuer(o.business.id)).toBeNull();
+      expect(await store.issuingRetention.getClosed(o.business.id)).toBeNull();
+      expect(await store.issuingRetention.erase(o.business.id, 'SUP-9', at)).toEqual({ kind: 'nothing' });
       const events = await store.issuingRetention.events(o.business.id);
-      expect(events).toEqual([{ id: swept.event.id, organizationId: o.business.id, action: 'SWEPT', createdAt: sweptAt, metadata: { documents: 2, cancellations: 1, rows: swept.rows, newestDocumentDate: '2027-01-01', retainedUntil: '2035-01-01' } }]);
+      expect(events.at(-2)).toMatchObject({ id: erased.event.id, action: 'ERASED', createdAt: at, metadata: { reference: 'SUP-9', documents: 1, cancellations: 0, rows: erased.rows, archiveEventId: handed.id } });
+      expect(events.map((e) => e.action)).toEqual(['ARCHIVE_EXPORTED', 'ARCHIVE_EXPORTED', 'ERASED', 'ARCHIVE_EXPORTED']);
     });
 
     it('a closed profile that never issued a document has nothing to keep: due at once', async () => {
@@ -134,9 +183,9 @@ export function describeLedgerStoreIssuingRetentionContract(name: string, makeSt
       const o = await owner(store, label);
       await closeAndPurge(store, o);
       const closed = await store.issuingRetention.getClosed(o.business.id);
-      expect(closed).toMatchObject({ documents: 0, cancellations: 0, newestDocumentDate: null, legalName: label });
-      expect(await store.issuingRetention.listClosed({ query: label, newestBefore: '2000-01-01' }, 10)).toEqual([closed]);
-      expect(await store.issuingRetention.sweep(o.business.id, '2000-01-01', DUE)).toMatchObject({ kind: 'swept', documents: 0, rows: 1 });
+      expect(closed).toMatchObject({ documents: 0, cancellations: 0, oldestDocumentDate: null, newestDocumentDate: null, legalName: label });
+      expect(await store.issuingRetention.listClosed({ query: label, dueBefore: '2000-01-01' }, 10)).toEqual([closed]);
+      expect(await store.issuingRetention.sweep(o.business.id, '2000-01-01', DUE)).toMatchObject({ kind: 'swept', documents: 0, rows: 1, remaining: 0, profileRows: true });
       expect(await store.issuing.getIssuer(o.business.id)).toBeNull();
     });
 

@@ -59,37 +59,41 @@ export const PURGE_PROFILE_TABLES = [
 export const PURGE_PROFILE_TABLES_EXEMPT: Readonly<Record<string, string>> = {
   billing_subscriptions: 'SET NULL: a subscription is its payer’s; the closing person’s own are deleted with their billing account',
   storage_purges: 'the queue of deleted profiles whose bucket prefix still has to be emptied (R1)',
-  // MUT-568 (ADR-260, Basel 2026-11-22): issued documents and the details printed on them are kept 7 years after the
-  // account closes; no foreign keys hold them, a trigger refuses their deletion, and MUT-644's sweep removes them.
-  issuer_details: 'kept 7 years after closing: the business details printed on its issued documents (MUT-644)',
-  issued_document_counters: 'kept 7 years after closing: numbering of the retained documents (MUT-644)',
-  issued_documents: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
-  issued_document_lines: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
-  issued_document_copies: 'kept 7 years after closing: legal records, INSERT-only (MUT-644)',
-  issued_document_cancellations: 'kept 7 years after closing: a payment request\'s cancellation, INSERT-only (MUT-662, MUT-644)',
-  issued_cancellation_counters: 'kept 7 years after closing: numbering of the retained cancellations (MUT-662, MUT-644)',
-  issuer_logos: 'kept 7 years after closing: the logo each retained document prints (MUT-646, MUT-644)',
-  issued_document_originals: 'kept 7 years after closing: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
+  // MUT-568 (ADR-260, Basel 2026-11-22): issued documents and the details printed on them outlive the account; no
+  // foreign keys hold them, a trigger refuses their deletion, and MUT-644's sweep removes each document 7 years after
+  // its own date, the profile's own rows with the last (ADR-277 as amended 2026-11-25).
+  issuer_details: 'kept 7 years, until its last document goes: the business details printed on its issued documents (MUT-644)',
+  issued_document_counters: 'kept 7 years, until its last document goes: numbering of the retained documents (MUT-644)',
+  issued_documents: 'kept 7 years from each document\'s date: legal records, INSERT-only (MUT-644)',
+  issued_document_lines: 'kept 7 years from each document\'s date: legal records, INSERT-only (MUT-644)',
+  issued_document_copies: 'kept 7 years from each document\'s date: legal records, INSERT-only (MUT-644)',
+  issued_document_cancellations: 'kept 7 years from each document\'s date: a payment request\'s cancellation, INSERT-only (MUT-662, MUT-644)',
+  issued_cancellation_counters: 'kept 7 years, until its last document goes: numbering of the retained cancellations (MUT-662, MUT-644)',
+  issuer_logos: 'kept 7 years, until its last document goes: the logo each retained document prints (MUT-646, MUT-644)',
+  issued_document_originals: 'kept 7 years from each document\'s date: each retained document\'s signed original, INSERT-only (MUT-641, MUT-644)',
 
   // MUT-644 (ADR-277 D5): the sweep's own log; it outlives the rows it records.
   issuing_retention_events: 'the retention log of closed profiles\' issued documents: sweeps and exported archives (MUT-644)',
 };
 
 /**
- * MUT-644 (ADR-277 D4): the tables the retention sweep deletes a closed profile's rows from, 7 years after the end of
- * the year of its newest document. Exactly the "kept 7 years" exemptions above (a unit test pins it).
+ * MUT-644 (ADR-277 D4, amended 2026-11-25): what the retention sweep deletes one document at a time, 7 years after its
+ * own date, each with the column naming the document: the document itself, its lines, copies, kept original and
+ * cancellation.
  */
-export const RETAINED_ISSUING_TABLES = [
-  'issuer_details',
-  'issued_document_counters',
-  'issued_documents',
-  'issued_document_lines',
-  'issued_document_copies',
-  'issued_document_cancellations',
-  'issued_cancellation_counters',
-  'issuer_logos',
-  'issued_document_originals',
+export const RETAINED_ISSUING_DOCUMENT_TABLES = [
+  ['issued_document_lines', 'documentId'],
+  ['issued_document_copies', 'documentId'],
+  ['issued_document_originals', 'documentId'],
+  ['issued_document_cancellations', 'documentId'],
+  ['issued_documents', 'id'],
 ] as const;
+
+/** The profile's own retained rows, deleted with its last document (or by an erasure, D7). */
+export const RETAINED_ISSUING_PROFILE_TABLES = ['issuer_details', 'issued_document_counters', 'issued_cancellation_counters', 'issuer_logos'] as const;
+
+/** Every retained issuing table: exactly the "kept 7 years" exemptions above (a unit test pins it). */
+export const RETAINED_ISSUING_TABLES = [...RETAINED_ISSUING_DOCUMENT_TABLES.map(([table]) => table), ...RETAINED_ISSUING_PROFILE_TABLES] as const;
 
 /**
  * What the purge does with every column that points at users (`table.column`):
