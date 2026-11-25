@@ -27,6 +27,8 @@ export interface ComebackMailRouteOptions {
   mailer: Mailer;
   logger: Logger;
   portalOrigin: string | undefined;
+  /** ADR-279: signs the mail's unsubscribe token (the session pepper, as the monthly summary's mail-off link). */
+  pepper: string;
   /** Null (either): no Stripe on this server; both doors answer 503 BILLING_NOT_CONFIGURED. */
   checkout: CheckoutGateway | null;
   plan: PlanGateway | null;
@@ -56,6 +58,7 @@ export function comebackMailRoutes(options: ComebackMailRouteOptions): OpenAPIHo
       now,
       stripe: { offer: () => comebackOfferOrNothing(checkout, offers, options.logger), paidInvoices: (id) => plan.paidInvoiceCount(id, { fresh: true }) },
       subscribeLink: `${origin}/?billing=true&step=subscribe`,
+      optOut: { portalOrigin: origin, pepper: options.pepper },
       offers,
       dryRun,
     });

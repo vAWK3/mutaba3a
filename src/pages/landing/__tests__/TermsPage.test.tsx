@@ -3,8 +3,8 @@ import { render, screen } from '@testing-library/react';
 import { LanguageProvider } from '../../../lib/i18n';
 import { ThemeProvider } from '../../../lib/theme';
 import { LATEST_TERMS_VERSION } from '../../../content/legal/terms';
-import en from '../../../content/legal/terms/2026-10-26.en.json';
-import ar from '../../../content/legal/terms/2026-10-26.ar.json';
+import en from '../../../content/legal/terms/2026-11-25.en.json';
+import ar from '../../../content/legal/terms/2026-11-25.ar.json';
 import enFrozen from '../../../content/legal/terms/2026-10-19.en.json';
 import { TermsPage } from '../TermsPage';
 
@@ -35,7 +35,7 @@ describe('TermsPage (MUT-324)', () => {
     renderPage('en');
     await loaded(en);
     expect(screen.getByRole('heading', { level: 1, name: en.title })).toBeInTheDocument();
-    expect(LATEST_TERMS_VERSION).toBe('2026-10-26');
+    expect(LATEST_TERMS_VERSION).toBe('2026-11-25');
     for (const section of en.sections) expect(screen.getByRole('heading', { level: 2, name: section.title })).toBeInTheDocument();
     expect(screen.getByText(en.updated)).toBeInTheDocument();
     expect(screen.getByRole('contentinfo')).toBeInTheDocument();
@@ -60,20 +60,41 @@ describe('TermsPage (MUT-324)', () => {
     expect(screen.getByRole('link', { name: /current terms/i })).toHaveAttribute('href', '/terms');
   });
 
-  it('says the English text prevails and names the governing law', async () => {
+  it('names Narabnd Studio Ltd as the party, Israeli law and the courts in Jerusalem, and says the English text prevails', async () => {
     renderPage('en');
     await loaded(en);
     const text = document.querySelector('main')?.textContent ?? '';
     expect(text).toContain('English text prevails');
-    expect(text).toContain('England and Wales');
+    expect(text).toContain('Narabnd Studio Ltd (נאראבנד סטודיו בע"מ), company number 517108775');
+    expect(text).toContain('the law of the State of Israel, and the competent courts in Jerusalem');
+    expect(text).not.toContain('law of England and Wales');
   });
 
-  it('says the same in Arabic: the law of England and Wales, and the English text prevails', async () => {
+  it('says the same in Arabic: Narabnd, the law of Israel, and the English text prevails', async () => {
     renderPage('ar');
     await loaded(ar);
     const text = document.querySelector('main')?.textContent ?? '';
-    expect(text).toContain('قانون إنجلترا وويلز');
+    expect(text).toContain('517108775');
+    expect(text).toContain('قانون دولة إسرائيل');
     expect(text).toContain('يسود النص الإنجليزي');
+  });
+
+  it('covers what an Israeli invoicing service must: trial, cancellation, tax documents, clients\' data (2026-11-25 rewrite)', async () => {
+    renderPage('en');
+    await loaded(en);
+    const text = document.querySelector('main')?.textContent ?? '';
+    expect(text).toContain('Consumer Protection Law, 5741-1981');
+    // Basel, 2026-11-25: the 14-day right only before the service is used
+    expect(text).toMatch(/cancel a new subscription within 14 days of the transaction/);
+    expect(text).toMatch(/only if you have not used MTB3A since you subscribed/);
+    expect(text).toMatch(/You are responsible for every document you issue/);
+    expect(text).toMatch(/allocation numbers in your name/);
+    expect(text).toMatch(/An issued document can't be edited or deleted/);
+    expect(text).toMatch(/We hold them on your behalf/);
+    expect(text).toMatch(/for 7 years from each document's date/);
+    expect(text).toMatch(/at least 18 years old/);
+    expect(text).not.toContain('Mutaba3a');
+    expect(text).not.toMatch(/doesn't file tax returns or issue official e-invoices/);
   });
 
   it('is busy only while the text loads', async () => {

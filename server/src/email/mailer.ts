@@ -132,7 +132,7 @@ export function createMailer(options: MailerOptions): Mailer {
 
       let delivered: { id: string };
       try {
-        delivered = await transport.deliver({ ...rendered, to, from: `${BRAND_NAME.en} <${options.fromAddress}>`, replyTo: options.replyTo, template, locale, idempotencyKey: keyDigest });
+        delivered = await transport.deliver({ ...rendered, to, from: `${BRAND_NAME.en} <${options.fromAddress}>`, replyTo: options.replyTo, template, locale, idempotencyKey: keyDigest, ...(input.headers ? { headers: input.headers } : {}) });
       } catch (err) {
         const failure = err instanceof MailTransportError ? err : new MailTransportError('unavailable', err instanceof Error ? err.message : String(err));
         // A timeout or a dropped connection may still have been accepted: it keeps counting toward the caps.

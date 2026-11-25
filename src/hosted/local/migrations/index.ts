@@ -273,6 +273,12 @@ function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
   return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
 }
 
+/** ADR-279, 22 → 23: a person gains `offerMail`. Promotional mail is the hosted account's; a device keeps the default: null. */
+function addOfferMail(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'offerMail'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, offerMail: null }])) } };
+}
+
 /** MUT-642, 20 → 21: a customer gains a VAT/company number and an address, both unknown on a device: null. */
 function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
   const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'taxId' | 'address'>>;
@@ -329,6 +335,7 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 19, to: 20, migrate: addMonthlySummaryMail },
   { from: 20, to: 21, migrate: addCustomerTaxId },
   { from: 21, to: 22, migrate: addDocumentsFields },
+  { from: 22, to: 23, migrate: addOfferMail },
 ];
 
 /**

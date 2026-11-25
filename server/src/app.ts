@@ -226,7 +226,7 @@ export interface AppDependencies {
    * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
    */
   documentSigner?: DocumentSigner | null;
-  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, Barmajiyat). */
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, "MTB3A"). */
   uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
@@ -409,7 +409,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.139.0-mut644';
+export const API_VERSION = '1.140.0-adr279';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -813,6 +813,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       mailer,
       logger: deps.logger,
       portalOrigin: sessions.portalOrigin,
+      pepper: sessions.pepper,
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,

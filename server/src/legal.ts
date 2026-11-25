@@ -21,11 +21,13 @@ export interface CurrentTerms {
   sha256: Readonly<Record<TermsLocale, string>>;
 }
 
+// 2026-11-25, the legal pages rewrite: a DRAFT until Basel and the lawyer approve it. Its texts carry [TODO] notes,
+// which the web preflight refuses, so the server can't name it live before the site lists the approved text.
 export const CURRENT_TERMS: CurrentTerms = {
-  version: '2026-10-26',
+  version: '2026-11-25',
   sha256: {
-    en: 'c81b2eaa8d880f8a2742e6aa588de421fbb0491828f7b45fa142b74fe9663669',
-    ar: 'b5362228222b06304e81f3fe91d932b0c43a2e8360a368aab029753db15e8b88',
+    en: '74256cf445002506542584c6240cfe883ce456b17cd3169331cb01ff109b1e8a',
+    ar: '3204b990394ffb785f55a03fe8d5e08d550895b783e707f60949f6d2c99323fe',
   },
 };
 
