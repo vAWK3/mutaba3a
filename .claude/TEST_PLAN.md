@@ -4769,3 +4769,15 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Privacy | `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` | the deletion section names the 7 years and the copy on request; the new date (en, ar) |
 | Release-QA | `qa/specs/portal/account.spec.ts` `@portal.account.close-keeps-issued` | the line in English, then in Arabic right to left |
 | Phone | Flutter `test/presentation/screens/account_close_test.dart`, `integration_test/qa/account_close_scenario.dart` (`ios.account.closing`) | the line in English and Arabic |
+
+**Amended 2026-11-25 (per-document retention, erasure after hand-over; API 1.139.0-mut644):**
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/issuing/__tests__/retention.test.ts` | `retainedUntil` (the day after the 7th anniversary; 29 Feb → 1 Mar), `sweepCutoff` agrees with it on every day of 9 years, the UTC day is never early in Israel, `retentionDateOf` (the later of the date and a cancellation's Israel date), `handsOverArchive` (notice version, logged no later than the erasure) |
+| Pure | `prisma-purge-tables.test.ts` | per-document and per-profile tables partition the retained set; `issued_documents` deleted last |
+| Store contract (memory + Prisma) | `store-contract-issuing-retention.ts` | clock: a 2024 receipt (copy + original) and a 2026 payment request cancelled into 2027 → the receipt goes alone on 2031-03-11 (4 rows), the request and profile rows stay; the request goes on 2034-01-02 with the business details, logo and counters; two SWEPT entries with `remaining`/`profileRows`. Erase: `not_closed` when live; refused with no archive, with a pre-notice archive, with one logged after; erased after a notice archive, ERASED with `archiveEventId`; `nothing` after |
+| Runner | `issuing-retention-sweep.test.ts` | due the day after the anniversary; two documents years apart: the older on its day, the newer kept, the profile's rows with the last; `deleted`/`remaining`/`documentsDeleted` |
+| Routes | `routes-issuing-retention.test.ts` | listing's `nextSweepOn`/`retainedUntil`; README keep notice in en/ar/he and `noticeVersion` logged; per-document sweep through the route; erase 401/422/409 `ARCHIVE_NOT_HANDED_OVER` → archive → 200, ERASED logged, then 404; 409 `PROFILE_NOT_CLOSED`; 404 unknown |
+| CLI | `issuing-retained.test.ts` | list line, sweep (dry and real), erase with `--org`, refusal reason, required reference |
+| Portal / privacy / QA | `CloseAccountDrawer.test.tsx`, `PrivacyPolicyPage.test.tsx`, `qa/specs/portal/account.spec.ts` | "7 years from the date of each one"; the privacy policy's earlier-deletion clause |

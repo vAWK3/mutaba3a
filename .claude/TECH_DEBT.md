@@ -2912,7 +2912,7 @@ empty option and list the profiles only), with a drawer test for each.
 - **Fix:** if it bites, build the archive in a job (as the period downloads do, MUT-314) and give the operator a link.
 
 ### TD-332: The archive is handed over by the operator, by hand
-**Status**: Open (2026-11-25, MUT-644 D6; open question 3 for the lawyer)
+**Status**: Won't do (2026-11-25, Basel, MUT-644 comment 13504: the operator's handover after an identity check is enough; ADR-277 override log)
 - **What:** after checking who is asking, the operator downloads the zip and sends it over a channel of their choosing; nothing in the product delivers it.
 - **Fix:** if the lawyer or volume asks for it, a time-limited, single-use download link sent to an address the operator confirmed.
 

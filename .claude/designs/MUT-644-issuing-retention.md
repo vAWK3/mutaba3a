@@ -1,6 +1,18 @@
 # MUT-644 — Keep issued documents 7 years after an account closes: the retention sweep and the owner's copy
 
-Status: **Built 2026-11-25** under Basel's standing go-ahead (away; plan not separately approved). ADR-277. Server + portal copy + privacy copy + phone copy. Epic MUT-566.
+Status: **Built 2026-11-25** under Basel's standing go-ahead (away; plan not separately approved). ADR-277. Server + portal copy + privacy copy + phone copy. Epic MUT-566. **Amended 2026-11-25** by Basel's answers (MUT-644 comment 13504; branch `feature/mut-644-per-document`, API 1.139.0-mut644): see "Amendment" below, which replaces D1, D4 and D8 and closes the open questions.
+
+## Amendment (2026-11-25, Basel)
+
+| # | Decision | Replaces |
+|---|---|---|
+| A1 | **7 years from each document's own date.** A document's retention date is its `documentDate`, or a cancelled payment request's cancellation Israel date when later (`retentionDateOf`). It is kept through its 7th anniversary and due the next day (`retainedUntil`; 29 February → 28 February in a common year, as Postgres adds years). `sweepCutoff(now)` = seven years before today's UTC day, rolled forward when that day doesn't exist: due exactly when `retainedUntil` is reached (a unit test walks every day of 9 years), and never early in Israel (UTC midnight is 02:00/03:00 there). `ISSUING_RETENTION_YEARS = 7` stays the one constant. | D1 |
+| A2 | **Documents are swept one by one**, each with its lines, copies, kept original and cancellation (`RETAINED_ISSUING_DOCUMENT_TABLES`); the profile's own rows (business details, numbering, cancellation numbering, logos: `RETAINED_ISSUING_PROFILE_TABLES`) go with its last document. Still one transaction per profile under the bypass, still only closed profiles. `listClosed({ dueBefore })` lists profiles holding a due document (or none), oldest document first. SWEPT metadata: `documents, cancellations, rows, remaining, oldestDocumentDate, newestDocumentDate, profileRows`. | D4 |
+| A3 | **Erasure after hand-over.** The archive's README carries a 7-year keep notice in English, Arabic and Hebrew (`ARCHIVE_KEEP_NOTICE`), and each export logs `noticeVersion` (`ARCHIVE_KEEP_NOTICE_VERSION = 1`). `POST /admin/v1/issuing/retained/{organizationId}/erase { reference }` / `npm run issuing:retained -- erase --org <id> --reference <ref>`: in one transaction, refuses 409 `ARCHIVE_NOT_HANDED_OVER` unless an `ARCHIVE_EXPORTED` entry with a notice version was logged no later than now (`handsOverArchive`; archives from 1.138.0 never count), 409 `PROFILE_NOT_CLOSED` for a live profile, 404 with nothing kept; else deletes every retained row through the bypass and logs `ERASED { reference, documents, cancellations, rows, archiveEventId }`. No migration: `action` is a string. | D8 |
+| A4 | **The operator's hand-over after an identity check is enough.** TD-332 won't do. | Open question 3 |
+| A5 | **Copy:** portal Close my account says "kept for 7 years from the date of each one"; the privacy policy says each document is kept 7 years from its date, the business details until the last goes, and that a former owner with their copy can ask for earlier deletion. The phone's line is a Flutter follow-up. | D7 wording |
+
+Wire (1.139.0, additive): `RetainedIssuingProfile` + `oldestDocumentDate`, `nextSweepOn`; sweep rows + `deleted`, `remaining`, `oldestDocumentDate`, `nextSweepOn`; run + `documentsDeleted`; the erase route with `IssuingEraseRequest` / `IssuingErased`.
 
 ## Problem
 
@@ -33,18 +45,20 @@ When an account closes, the account purge (MUT-333, ADR-188) deletes the profile
 Cloud Scheduler (hourly) ──► POST /jobs/v1/accounts/purge ──► runAccountPurge
                                                                  ├─ drainStorage, share-link viewers
                                                                  ├─ runIssuingRetentionSweep(now)      ◄── POST /admin/v1/issuing/retention/sweep
-                                                                 │     store.issuingRetention.listClosed({ newestBefore })
-                                                                 │     store.issuingRetention.sweep(id, newestBefore, at)  [one tx, bypass, SWEPT row]
+                                                                 │     store.issuingRetention.listClosed({ dueBefore })
+                                                                 │     store.issuingRetention.sweep(id, dueBefore, at)  [one tx, bypass, due documents, profile rows with the last, SWEPT row]
                                                                  └─ the account purge itself (deletes profiles; issuing rows stay)
 
 operator ──► GET  /admin/v1/issuing/retained?query=        store.issuingRetention.listClosed / getClosed
          └─► POST /admin/v1/issuing/retained/{id}/archive   store.issuing.inRange + originals + signed copies + buildUniformFile
-                                                            store.issuingRetention.record(ARCHIVE_EXPORTED)
+                                                            store.issuingRetention.record(ARCHIVE_EXPORTED, noticeVersion)
+         └─► POST /admin/v1/issuing/retained/{id}/erase     store.issuingRetention.erase(id, reference, at)  [one tx: hand-over check, bypass, ERASED row]
 ```
 
 ## Error states
 
 - Archive: 404 `NOT_FOUND` (no issuing rows under that id), 409 `CONFLICT { reason: PROFILE_NOT_CLOSED }`, 503 `SIGNING_NOT_CONFIGURED` / `SIGNING_UNAVAILABLE` when a copy has to be signed and can't be, 422 for a missing reference.
+- Erase (A3): 409 `CONFLICT { reason: ARCHIVE_NOT_HANDED_OVER }` (no archive with the keep notice exported first), 409 `PROFILE_NOT_CLOSED`, 404 `NOT_FOUND`, 422 for a missing reference.
 - Sweep: a profile that fails is logged (`issuing retention sweep failed`) and the run goes on; the next run retries.
 
 ## Reuse
@@ -80,6 +94,8 @@ No new job or service. One small table. The sweep reads one aggregate query an h
 - Phone: `account_close_test.dart` shows the sentence.
 
 ## Open questions (lawyer, Basel)
+
+Answered by Basel on 2026-11-25 (comment 13504): 1 → 7 years from each document's own date (A1); 2 → an erasure may shorten them only after the archive with the keep notice was handed over (A3); 3 → the operator's hand-over is enough (A4).
 
 1. Is the start date right: 7 years after the end of the tax year of the newest document (not of each document, not of the account's closing)?
 2. Erasure requests vs the duty to keep records (D8).
