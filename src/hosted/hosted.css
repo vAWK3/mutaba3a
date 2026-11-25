@@ -696,7 +696,7 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
 .hp-ask-choice:disabled { opacity: 0.6; cursor: default; }
 .hp-ask-choice-name { font-weight: 600; }
 .hp-settle-issue { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-4); }
-.hp-settle-issue input { margin-block-start: 0.25rem; }
+.hp-settle-issue input { margin-block-start: var(--space-1); }
 .hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
 
 /* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */

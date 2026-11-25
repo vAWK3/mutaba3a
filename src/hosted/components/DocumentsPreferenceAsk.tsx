@@ -13,7 +13,7 @@ import { Drawer } from './Drawer';
  * income, the profile default meanwhile). Read-then-write: the client's version is read fresh, since the one the save
  * toast knew may be old. A failed save keeps the drawer open with the message, the choices still there.
  */
-export const ASK_CHOICES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
+const ASK_CHOICES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
 
 export interface PreferenceAsk {
   customerId: string;
