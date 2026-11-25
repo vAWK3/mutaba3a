@@ -140,6 +140,8 @@ const ready = () =>
   new FakeApi({
     profiles: [office(OFFICE_A, 'Nour Studio')],
     clients: 1,
+    // MUT-661: these flows are about the offer, so Client 1's preference is already answered.
+    clientPreference: 'TAX_INVOICE_FIRST',
     invoicing: 'ready',
   });
 
@@ -458,7 +460,7 @@ test('saving an Owed offers its tax invoice, which takes the Owed over; the sett
   });
 
   await step('AC2 With "offer to issue after saving" off, the toast offers nothing', async () => {
-    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', offerAfterSave: false });
+    const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'ready', offerAfterSave: false });
     await off.open(page, `/p/${OFFICE_A}/receivables`);
     await page.locator('[data-income-add]').click();
     await income.getByLabel('Amount').fill('590');
@@ -856,7 +858,7 @@ test('a number requested by hand is entered before issuing; the invoice number i
 
 /** MUT-722: a save on a profile where invoicing is available but the setup can't issue yet (details in, numbering not). */
 test('saving a shekel income while the setup is incomplete says Finish setting up invoicing, once a day; Receivables says Finish setup to issue', { tag: '@portal.invoicing.setup-hint' }, async ({ page, step }) => {
-  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
   const income = page.getByRole('dialog', { name: 'New income' });
   const toast = page.getByTestId('toast-live');
   const hintLine = 'Finish setting up invoicing to issue its invoice.';
@@ -920,7 +922,7 @@ test('saving a shekel income while the setup is incomplete says Finish setting u
   });
 
   await step('AC4 A dollar income on an incomplete setup shows no hint', async () => {
-    const usd = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+    const usd = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
     await usd.open(page, `/p/${OFFICE_A}/receivables`);
     await page.evaluate(() => localStorage.clear());
     await recordOwed('100', 'USD');
@@ -952,7 +954,7 @@ test('saving a shekel income while the setup is incomplete says Finish setting u
   });
 
   await step('In Arabic the toast reads أكمل إعداد الفوترة لتصدر فاتورته with إعداد, right to left', async () => {
-    const ar = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'details' });
+    const ar = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'TAX_INVOICE_FIRST', invoicing: 'details' });
     await ar.open(page, `/p/${OFFICE_A}/receivables`, 'ar');
     await page.evaluate(() => localStorage.clear());
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
@@ -965,5 +967,68 @@ test('saving a shekel income while the setup is incomplete says Finish setting u
     await expect(toast).toContainText('أكمل إعداد الفوترة لتصدر فاتورته.');
     await expect(toast.getByRole('button', { name: 'إعداد' })).toBeVisible();
     await expectNoHorizontalOverflow(page);
+  });
+});
+
+/** MUT-661: the first income for a client asks how documents are issued, once; a payment issues its document in the same step. */
+test('the first Owed for a client asks how documents are issued, once; a payment issues its document with it', { tag: '@portal.invoicing.issue-as-you-record' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready' });
+  const income = page.getByRole('dialog', { name: 'New income' });
+  const ask = page.getByRole('dialog', { name: /How do you issue documents to .*Client 1/ });
+  const toast = page.getByTestId('toast-live');
+  const recordOwed = async (amount: string) => {
+    await page.locator('[data-income-add]').click();
+    await income.getByLabel('Amount').fill(amount);
+    await income.getByLabel('Client').fill('Client 1');
+    await income.getByRole('listbox').getByRole('option', { name: 'Client 1', exact: true }).click();
+    await income.getByRole('button', { name: 'Save income' }).click();
+    await expect(income).toHaveCount(0);
+  };
+
+  await step('On Owed, record ₪3,400 owed by Client 1', async () => {
+    await api.open(page, `/p/${OFFICE_A}/receivables`);
+    await recordOwed('3400');
+  });
+
+  await step('AC1 The save asks how documents are issued to Client 1, with the four choices', async () => {
+    await expect(ask).toBeVisible();
+    for (const choice of ['Tax invoice first', 'Payment request first', 'On payment', 'No document']) await expect(ask.getByRole('button', { name: new RegExp(`^${choice}`) })).toBeVisible();
+  });
+
+  await step('AC2 Choose Tax invoice first: the toast offers Issue a tax invoice', async () => {
+    await ask.getByRole('button', { name: /^Tax invoice first/ }).click();
+    await expect(ask).toHaveCount(0);
+    await expect(toast.getByRole('button', { name: 'Issue a tax invoice' })).toBeVisible();
+  });
+
+  await step('AC1 A second Owed for Client 1 asks nothing', async () => {
+    await recordOwed('500');
+    await expect(toast).toContainText('Saved');
+    await expect(page.getByRole('dialog', { name: /How do you issue documents/ })).toHaveCount(0);
+  });
+
+  await step('Record a payment of ₪1,000 on an Owed of an On payment client, with its document control on', async () => {
+    const pay = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, clientPreference: 'ON_PAYMENT', invoicing: 'ready', receivables: [receivable(1, { customerId: customer(0).id, gross: '3400.00', dueDate: '2026-10-30' })] });
+    await pay.open(page, `/p/${OFFICE_A}/receivables`);
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await drawer.getByLabel('Amount (ILS)').fill('1000');
+    await expect(drawer.getByTestId('settle-issue')).toBeChecked();
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(drawer).toHaveCount(0);
+  });
+
+  await step('AC4 The toast says the payment is recorded and its document is issued', async () => {
+    await expect(toast).toContainText('Document 1 issued');
+  });
+
+  await step('AC5 With the control off, only the payment is recorded', async () => {
+    await page.getByRole('button', { name: /^Record payment for Client 1/ }).click();
+    const drawer = page.getByRole('dialog', { name: /Record payment/ });
+    await drawer.getByLabel('Amount (ILS)').fill('400');
+    await drawer.getByTestId('settle-issue').uncheck();
+    await drawer.getByRole('button', { name: 'Record payment' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(toast).not.toContainText('issued');
   });
 });

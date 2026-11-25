@@ -332,3 +332,23 @@ features:
       - The server refuses with "This invoice's number is now 2", the entered number is cleared and the panel now shows invoice number 2
       - Tax invoice 2 is issued with the number (manualAllocation for 2) and its page shows the allocation number
       - The panel reads right to left in formal Arabic
+  - id: issue-as-you-record
+    title: The first income for a client asks how documents are issued, once; a payment issues its document in the same step (MUT-661)
+    tier: secondary
+    tickets: [MUT-661]
+    paths:
+      - src/hosted/components/DocumentsPreferenceAsk.tsx
+      - src/hosted/components/IssueOffer.tsx
+      - src/hosted/components/issueOffers.ts
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/RecordPaymentDrawer.tsx
+      - src/hosted/data/incomeQueries.ts
+      - src/hosted/data/issuedQueries.ts
+      - server/src/routes/documents-due.ts
+    steps:
+      - On a business profile that can issue, record ₪3,400 owed by Client 1 on Owed
+      - Answer the question how documents are issued to Client 1 with Tax invoice first
+      - Record another Owed for Client 1 (no question)
+      - Open Record payment on an Owed, enter ₪1,000 with the document control on and record it
+      - Record another payment with the control off
+    expect: The first Owed for a client asks once and the toast then offers Issue a tax invoice; a second asks nothing; a payment with the control on says its document was issued; with it off the payment is recorded alone.
