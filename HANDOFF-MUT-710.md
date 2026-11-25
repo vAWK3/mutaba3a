@@ -9,16 +9,11 @@ Branch `claude/mut-710-2fa-336415`. Nothing merged or pushed. Server half is alr
 - `portal.two-factor.issuing-required` RECORDED AND PASSED (`release-qa run --attach`, run page qa/runs/after-web-v0.4.0_api-v0.21.0).
 - The 5 live flows (`portal-selfservice.two-factor.*`) have NOT been run yet: stopped at the disk gate (free space fell to 11 GB, other sessions).
 
-## Next
-1. When `df -g /` >= 20: start the private live stack and run the live flows:
-   `S=<scratch>/noocr` (a dir with a `tesseract` script that exits 1, so no OCR sidecar starts), then
-   `PATH=$S:$PATH QA_SELFSERVICE_API_PORT=8797 QA_SELFSERVICE_OCR_PORT=8798 MALAFAT_STUB_PORT=3951 node qa/support/selfservice-live.mjs &` (8795 was held by another session; it makes its own DB `mutaba3a_qa_selfservice_<pid>` on mutaba3a-test-pg and drops it on SIGTERM; kill by pid, not pkill).
-   Then `QA_SELFSERVICE_API_PORT=8797 MALAFAT_STUB_PORT=3951 heavy --light -l "MUT-710 qa" -- release-qa run --attach --only portal-selfservice.two-factor`. Fix specs from failures (the reset flow's post-setup second step and the recovery notice text are the guesses).
-2. Phone half: Flutter worktree in /Users/basel/Work/Barmajiyat/Mutaba3a/mutaba3a-flutter/mutaba3a (not created: disk gate). `domain/services/auth_service.dart` finish+resend, second step beside `email_code_step.dart`, Malafat repo, settings > two-step screen, issuing prompt, error codes in `core/errors.dart`; `ios.auth.two-factor-sign-in`, `ios.issuing.two-factor-required`.
-3. Full server suite + `test:db` (never run on this branch; server code is unchanged here, main has it), root `npm run lint` and `test:run`.
-4. Jira MUT-710 comment with the AC table and evidence (not yet posted); keep it In Progress.
+## Done (2026-11-25, second session)
+- Live flows `portal-selfservice.two-factor.{enrol-app,sign-in en+ar,recovery-code,email,reset}`: 6/6 pass on a private stack (:8797), run `qa/runs/after-web-v0.4.0_api-v0.21.0/runs/20261125-174035` (main checkout). Fixed on the way: two-step routes now `open` in the lapse gate (da6557f1), /setup passkey step after the sign-in second step (da6557f1), the QA helper's 201.
+- Full suite fixes (7b074660): issuing prompt without router/Me when not needed, QR Canvas, DIR_SITES.
+- Checks: server typecheck/lint/openapi:check/test green; root lint/typecheck/test:run/build green; `test:db` 8686/8687 (the 1 is TD-330, operator search contract, pre-existing).
+- Phone half: mutaba3a-flutter branch `claude/mut-710-2fa-phone` (worktree `.claude/worktrees/mut-710-2fa-phone`), commit bb3217ab+; `ios.auth.two-factor-sign-in` and `ios.issuing.two-factor-required` pass (run `qa/runs/after-iosv0.1.19_12/runs/20261125-175913` in the Flutter main checkout).
 
-## Outside git
-- Test DB `mutaba3a_test_mut710` (mutaba3a-test-pg, :54329): drop when finished.
-- Root `node_modules` symlink to main's (rm it), `server/node_modules` APFS clone (672 MB): delete when done.
-- Node 22: `$HOME/.nvm/versions/node/v22.23.1/bin` (homebrew node@22 is really 26).
+## Next
+- Basel: review and merge both branches (nothing merged or pushed). After the phone release, raise IOS_MIN_BUILD / ANDROID_MIN_BUILD (TD-335).
