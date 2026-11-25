@@ -690,6 +690,13 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
 .hp-settle-line-done { color: var(--success); }
 .hp-settle-line-owed { color: var(--muted); }
 .hp-settle-line-over { color: var(--error); }
+.hp-ask-choices { display: flex; flex-direction: column; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-ask-choice { display: flex; flex-direction: column; gap: var(--space-1); text-align: start; padding: var(--space-3) var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-md); background: var(--surface); color: inherit; cursor: pointer; min-height: 44px; }
+.hp-ask-choice:hover:not(:disabled) { background: var(--surface-2); }
+.hp-ask-choice:disabled { opacity: 0.6; cursor: default; }
+.hp-ask-choice-name { font-weight: 600; }
+.hp-settle-issue { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-settle-issue input { margin-block-start: var(--space-1); }
 .hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
 
 /* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */

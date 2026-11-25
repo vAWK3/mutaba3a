@@ -803,6 +803,14 @@
         "exceedsNow": "That's more than what's left now ({amount})",
         "changed": "This entry changed while you were recording. Showing the latest.",
         "gone": "This entry can't take a payment anymore."
+      },
+      "issue": {
+        "RECEIPT": "Issue a receipt for this payment",
+        "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt for this payment",
+        "issued": "Document {number} issued.",
+        "held": "The document wasn't issued: the Tax Authority is holding its allocation number. It is waiting in To issue.",
+        "failed": "The document couldn't be issued, so it is waiting in To issue.",
+        "required": "(the receipt records the payment)"
       }
     },
     "savedFlash": {
@@ -3123,7 +3131,8 @@
         "TAX_INVOICE": "Issue a tax invoice",
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt",
         "RECEIPT": "Issue a receipt",
-        "column": "Document"
+        "column": "Document",
+        "PAYMENT_REQUEST": "Issue a payment request"
       },
       "setupHint": {
         "line": "Finish setting up invoicing to issue its invoice.",
@@ -3168,6 +3177,18 @@
         "invalid": "An allocation number is 9 digits.",
         "orChange": "Or",
         "changeAmount": "change the amount"
+      },
+      "ask": {
+        "title": "How do you issue documents to {client}?",
+        "body": "Asked once for each client. You can change it later on the client's page.",
+        "later": "Not now",
+        "failed": "Couldn't save your choice. Try again.",
+        "hint": {
+          "TAX_INVOICE_FIRST": "A tax invoice when an amount is owed, then a receipt for each payment.",
+          "PAYMENT_REQUEST_FIRST": "A payment request when an amount is owed, then a tax invoice-receipt for each payment.",
+          "ON_PAYMENT": "A tax invoice-receipt for each payment.",
+          "NO_DOCUMENT": "No documents for this client."
+        }
       }
     },
     "home": {

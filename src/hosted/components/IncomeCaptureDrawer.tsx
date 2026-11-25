@@ -10,6 +10,8 @@ import type { Currency, HostedProfile } from '../api/client';
 import { useIssueAfterSave } from '../data/issuedQueries';
 import type { IssueStart } from './IssueDocumentDrawer';
 import { issueOffers } from './issueOffers';
+import { useAskDocumentsPreference } from './IssueOffer';
+import type { DocumentsPreference } from '../api/client';
 import { useSetupHint } from './setupHint';
 import type { SetupStep } from '../pages/invoicing/setupSteps';
 import { useAttemptKey } from '../data/attemptKey';
@@ -82,6 +84,7 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
   const issueAfterSave = useIssueAfterSave(profile);
   const offerIssue = issueAfterSave.offer && !!onOfferIssue;
   const setupHint = useSetupHint(profile);
+  const askPreference = useAskDocumentsPreference();
   const customers = useCustomerDirectory(profile.id);
   // MUT-361 (review): the host opens this only on a writable profile (`writable` from it); the gate still shapes Add client.
   const { kinds, customer: customerRule } = incomeAffordancesFor(profile, writable);
@@ -155,18 +158,30 @@ export function IncomeCaptureDrawer({ profile, initialKind, defaultCustomerId, o
       attempt.succeeded();
       // Opt-in usage counts (MUT-155): the kind and currency only, never the amount or client
       void trackPortal('income_recorded', { currency: values.currency, paid: values.kind === 'received' });
-      // MUT-648 (round 3, variant 1): the save toast offers the document this amount takes, linked to the entry.
-      const offers = offerIssue && saved.currency === 'ILS' ? issueOffers(saved, t('hosted.issue.offer.line'), issueAfterSave.exempt) : [];
-      const toAction = (offer: (typeof offers)[number]) => ({ label: t(`hosted.issue.offer.${offer.docType}`), onAction: () => onOfferIssue?.(offer) });
-      // MUT-722: where the setup can't issue yet, the same toast says so once a day, with Set up at the first missing step.
-      const hint = !offers.length && saved.currency === 'ILS' && !!onSetUpInvoicing && setupHint.due && setupHint.takeToday();
-      showToast(savedMessage(values, body.amount), {
-        tone: 'info',
-        icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} />,
-        ...(offers[0] ? { action: toAction(offers[0]) } : {}),
-        ...(offers[1] ? { secondaryAction: toAction(offers[1]) } : {}),
-        ...(hint ? { detail: t('hosted.issue.setupHint.line'), action: { label: t('hosted.issue.setupHint.setUp'), onAction: () => onSetUpInvoicing?.(setupHint.step) } } : {}),
-      });
+      // MUT-648 (round 3, variant 1) / MUT-661: the save toast offers the document the client's preference says this
+      // amount takes, linked to the entry. A client with no preference is asked once first; the offer follows the answer.
+      const client = saved.customerId ? customers.data?.get(saved.customerId) : undefined;
+      const message = savedMessage(values, body.amount);
+      const offerToast = (preference: DocumentsPreference) => {
+        const offers = offerIssue && saved.currency === 'ILS' ? issueOffers(saved, t('hosted.issue.offer.line'), issueAfterSave.exempt, preference) : [];
+        const toAction = (offer: (typeof offers)[number]) => ({ label: t(`hosted.issue.offer.${offer.docType}`), onAction: () => onOfferIssue?.(offer) });
+        // MUT-722: where the setup can't issue yet, the same toast says so once a day, with Set up at the first missing step.
+        const hint = !offers.length && saved.currency === 'ILS' && !!onSetUpInvoicing && setupHint.due && setupHint.takeToday();
+        showToast(message, {
+          tone: 'info',
+          icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} />,
+          ...(offers[0] ? { action: toAction(offers[0]) } : {}),
+          ...(offers[1] ? { secondaryAction: toAction(offers[1]) } : {}),
+          ...(hint ? { detail: t('hosted.issue.setupHint.line'), action: { label: t('hosted.issue.setupHint.setUp'), onAction: () => onSetUpInvoicing?.(setupHint.step) } } : {}),
+        });
+      };
+      const mustAsk = offerIssue && !!askPreference && saved.currency === 'ILS' && !!saved.customerId && !!client && !client.documentsPreference;
+      if (mustAsk && askPreference) {
+        showToast(message, { tone: 'info', icon: <SaveFeedbackIcon preset={saveFeedbackPreset(profile)} /> });
+        askPreference({ customerId: saved.customerId!, customerName: client!.name, onAnswered: offerToast });
+      } else {
+        offerToast(client?.documentsPreference ?? issueAfterSave.defaultPreference);
+      }
       onSaved?.();
       onClose();
     } catch (error) {

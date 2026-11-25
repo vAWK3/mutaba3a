@@ -3733,6 +3733,12 @@ export const SettleReceivableRequestSchema = z
 
 export const SettleReceivableResponseSchema = z.object({ receivable: ReceivableSchema, payment: PaymentSchema }).openapi('SettleReceivableResponse');
 
+/** MUT-661 (ADR-280): a payment against an Owed, and (on by default) the document that goes with it in the same step. */
+export const SettleAndIssueRequestSchema = SettleReceivableRequestSchema.extend({
+  issue: z.boolean().optional().openapi({ description: 'Issue the payment’s document in the same step (default true). false records the payment only; the document waits in To issue.' }),
+})
+  .strict()
+  .openapi('SettleAndIssueRequest');
 export const OperationKeyParamSchema = z.object({ idempotencyKey: z.string().min(8).max(128) });
 export const OperationSchema = z
   .object({
@@ -5611,6 +5617,18 @@ export const IssueDueResultSchema = z
     issued: z.number().int(),
   })
   .openapi('IssueDueResult');
+export const SettleAndIssueResponseSchema = z
+  .object({
+    receivable: ReceivableSchema,
+    payment: PaymentSchema,
+    issue: z.object({
+      status: z.enum(['issued', 'not_requested', 'not_due', 'held', 'failed']).openapi({ description: 'issued: the document was issued (or already was, on a retry). not_requested: issue was false. not_due: the payment is due no document (a No document client, marked not for invoice). held: the Tax Authority held the allocation number. failed: issuing was refused; the payment is recorded and its document waits in To issue.' }),
+      reason: z.string().nullable().openapi({ description: 'The refusal’s reason (ALLOCATION_NUMBER_REQUIRED, ALLOCATION_HELD, ISSUING_SETUP_INCOMPLETE, a DueReason, …) when status is held or failed' }),
+      document: IssuedDocumentSchema.nullable(),
+    }),
+  })
+  .openapi('SettleAndIssueResponse');
+
 export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefSchema).min(1).max(500), value: z.boolean() }).strict().openapi('NotForInvoiceRequest');
 export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
 export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');

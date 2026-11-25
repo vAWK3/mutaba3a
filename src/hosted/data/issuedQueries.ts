@@ -3,7 +3,7 @@ import { ApiError, api, type IssueDocumentRequest, type IssuedDocType, type Issu
 import { profileKey } from '../session/me';
 import { setupKey, useIssuer, useIssuingSetup } from './issuingQueries';
 import { useMeOrNull } from '../session/me';
-import type { HostedProfile } from '../api/client';
+import type { DocumentsPreference, HostedProfile } from '../api/client';
 
 /**
  * MUT-570: issued documents in the portal. The server owns every number and total: the drawer shows the preview's
@@ -91,11 +91,23 @@ export function openPdf(blob: Blob, filename: string) {
  * `invoicing` feature (so nobody else pays for a request), on a Business profile they own, with the setup done and the
  * business's "Offer to issue after saving" on.
  */
-export function useIssueAfterSave(profile: HostedProfile): { offer: boolean; exempt: boolean } {
+export function useIssueAfterSave(profile: HostedProfile): { offer: boolean; exempt: boolean; defaultPreference: DocumentsPreference } {
   const me = useMeOrNull();
   const eligible = !!me?.user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS';
   const setup = useIssuingSetup(profile.id, eligible);
   const issuer = useIssuer(profile.id, eligible && !!setup.data?.canIssue);
   // An exempt dealer issues receipts only (review fix).
-  return { offer: eligible && !!setup.data?.canIssue && issuer.data?.offerAfterSave === true, exempt: issuer.data?.dealerType === 'EXEMPT' };
+  return { offer: eligible && !!setup.data?.canIssue && issuer.data?.offerAfterSave === true, exempt: issuer.data?.dealerType === 'EXEMPT', defaultPreference: issuer.data?.defaultDocumentsPreference ?? 'ON_PAYMENT' };
+}
+
+/**
+ * MUT-661: what Record payment may do about a document: whether the setup can issue here (the control is hidden when it
+ * can't: the payment is recorded alone), and the profile default preference for a client with none of its own.
+ */
+export function useIssueWithPayment(profile: HostedProfile): { canIssue: boolean; defaultPreference: DocumentsPreference } {
+  const me = useMeOrNull();
+  const eligible = !!me?.user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS';
+  const setup = useIssuingSetup(profile.id, eligible);
+  const issuer = useIssuer(profile.id, eligible && !!setup.data?.canIssue);
+  return { canIssue: eligible && !!setup.data?.canIssue, defaultPreference: issuer.data?.defaultDocumentsPreference ?? 'ON_PAYMENT' };
 }

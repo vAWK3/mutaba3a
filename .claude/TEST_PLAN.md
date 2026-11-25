@@ -4787,3 +4787,10 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Routes | `routes-issuing-retention.test.ts` | listing's `nextSweepOn`/`retainedUntil`; README keep notice in en/ar/he and `noticeVersion` logged; per-document sweep through the route; erase 401/422/409 `ARCHIVE_NOT_HANDED_OVER` → archive → 200, ERASED logged, then 404; 409 `PROFILE_NOT_CLOSED`; 404 unknown |
 | CLI | `issuing-retained.test.ts` | list line, sweep (dry and real), erase with `--org`, refusal reason, required reference |
 | Portal / privacy / QA | `CloseAccountDrawer.test.tsx`, `PrivacyPolicyPage.test.tsx`, `qa/specs/portal/account.spec.ts` | "7 years from the date of each one"; the privacy policy's earlier-deletion clause |
+
+### MUT-661: issue as you record
+| Layer | File | Covers |
+|---|---|---|
+| Routes | `server/src/__tests__/routes-settle-and-issue.test.ts` | AC3 receipt on the tax invoice for 1,000 (2,400 stays owed), AC4 invoice-receipt, next payment its own document, AC5 `issue:false`, AC6 No document / marked, AC7 failed issue keeps the payment (allocation number required) and the document due, setup incomplete, retry with the same key (one payment, one document), 404 without invoicing, 422 over outstanding, payment-only refused on a tax invoice's Owed |
+| Portal | `DocumentsPreferenceAsk.test.tsx`, `RecordPaymentDrawerIssue.test.tsx`, `issueOffers.test.ts` | the ask (four choices, saved with the fresh version, Arabic, failure), the control (on by default, off, failed issue message, hidden for No document, locked on a tax invoice's Owed), offers by preference |
+| QA | `portal.invoicing.issue-as-you-record`, `ios.invoicing.issue-as-you-record` | see the brief |

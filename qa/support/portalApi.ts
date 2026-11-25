@@ -461,6 +461,8 @@ export interface FakeApiSeed {
   profiles: StubProfile[];
   /** How many customer(i) clients (Client 1, Client 2, …). */
   clients?: number;
+  /** MUT-661: every seeded client already has this documents preference (none: the ask-once question is asked). */
+  clientPreference?: string;
   projects?: ReturnType<typeof project>[];
   receivables?: StubReceivable[];
   payments?: StubPayment[];
@@ -861,7 +863,7 @@ export class FakeApi {
     this.billingStanding = seed.billingStanding ?? null;
     this.billingOverview = seed.billing ?? null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
-    this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => customer(i));
+    this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => ({ ...customer(i), ...(seed.clientPreference ? { documentsPreference: seed.clientPreference } : {}) }));
     this.projects = [...(seed.projects ?? [])];
     this.receivables = [...(seed.receivables ?? [])];
     this.payments = [...(seed.payments ?? [])];
@@ -1827,8 +1829,8 @@ export class FakeApi {
     if (e.method === 'GET' && !sub) return json(found);
     if (e.method === 'GET' && sub === 'credits') return json({ receivable: found, credits: this.credits.get(found.id) ?? [] });
     if (e.method === 'POST' && sub === 'credits') return this.credit(found, e.body as { amount: string; reason: string });
-    if (e.method === 'POST' && sub === 'settle') {
-      const body = e.body as { amount: string; paidAt: string; method: 'CASH' | 'BANK' };
+    if (e.method === 'POST' && (sub === 'settle' || sub === 'settle-and-issue')) {
+      const body = e.body as { amount: string; paidAt: string; method: 'CASH' | 'BANK'; issue?: boolean };
       const paid = toMinor(found.paid) + toMinor(body.amount);
       found.paid = toDecimal(paid);
       found.outstanding = toDecimal(toMinor(found.gross) - paid);
@@ -1844,6 +1846,11 @@ export class FakeApi {
         mine: true,
       });
       this.payments.unshift(made);
+      // MUT-661: settle-and-issue also answers what happened to the payment's document (the fake issues no real document).
+      if (sub === 'settle-and-issue') {
+        const issue = body.issue === false ? { status: 'not_requested', reason: null, document: null } : { status: 'issued', reason: null, document: { id: uid(0xd, this.serial++), number: 1, docType: 'TAX_INVOICE_RECEIPT', gross: body.amount } };
+        return json({ receivable: found, payment: made, issue }, 201);
+      }
       return json({ receivable: found, payment: made }, 201);
     }
     return undefined;

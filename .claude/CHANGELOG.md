@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Issue as you record: ask a client's documents preference once, issue each payment's document with the payment (MUT-661, ADR-280, API 1.141.0-mut661)
+
+### Added
+- `POST /v1/receivables/{id}/settle-and-issue`: a payment against an Owed and the document it is due (MUT-660's `documentsDue`), in one step under one Idempotency-Key. `issue: false` records the payment only; a refused issue (allocation number needed or held, setup incomplete) still answers 201 with `issue.status` failed/held and the reason, the document staying in To issue; a payment due nothing answers `not_due`.
+- Portal: the ask-once drawer (`DocumentsPreferenceAsk`, «كيف تُصدر المستندات لـ…؟») after the first income saved for a client with no preference; Record payment's one control (on by default) with the result in the toast.
+### Changed
+- MUT-648's save offer follows the client's preference (`issueOffers(…, preference)`): Tax invoice first -> tax invoice, Payment request first -> payment request, On payment / No document -> none.
+- An Owed a tax invoice posted (origin ISSUED_DOCUMENT) is paid in the portal: the receipt IS the payment (control locked on; `issue:false` is 422 PAYMENT_NEEDS_DOCUMENT).
+- `settleOwed` extracted from the settle route (both routes run it); a deleted Owed answers RECEIVABLE_NOT_OPEN instead of a 500.
+- Files: `server/src/routes/documents-due.ts`, `receivables.ts`, `schemas.ts`, `src/hosted/components/{DocumentsPreferenceAsk,IssueOffer,IncomeCaptureDrawer,RecordPaymentDrawer,issueOffers}`, `data/{incomeQueries,issuedQueries,incomeAffordances}`, i18n en/ar.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Privacy policy and terms rewritten for an Israeli invoicing service; Narabnd Studio Ltd; promotional-mail unsubscribe (ADR-279, API 1.140.0-adr279)
 
 **What:** the privacy policy and a new terms version (2026-11-25), en + ar, modelled on the topics Invoice4U's and iCount's cover, in MTB3A's own words (Basel, MUT-644 comment 13504, and his decisions of 2026-11-25). Narabnd Studio Ltd (517108775) is the party, owner and database owner; Israeli law, Jerusalem courts. New privacy sections: who is responsible, law and purposes, the portal without an account, tax documents and the Tax Authority, Malafat and connected apps, data outside Israel, security, cookies, retention, your rights. Terms: who may use (18+), trial, cancelling and refunds (14 days only before use), issuing tax documents, clients' data, our rights, 60 days' notice before MTB3A stops, general. The come-back offer gains an Unsubscribe link and List-Unsubscribe headers (the monthly summary the headers), backed by `users.offerMail` and two doors; the mail-off page reads `?mail=offers`. The web preflight refuses legal text with `[TODO` notes.

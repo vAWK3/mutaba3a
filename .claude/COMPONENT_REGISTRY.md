@@ -2526,3 +2526,6 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - `documentsDueQueries` — `src/hosted/data/documentsDueQueries.ts`: `useDocumentsDue`, `useDocumentsDueCount` (null on 404), `useIssueDue` (chunks of 25), `useMarkNotForInvoice`, `useSetEntryNotForInvoice`, `refreshAfterDue`, `markRefusal`.
 - Server: `documentsDue`/`olderThan`/`preferenceOf` (`issuing/documents-due.ts`), `splitPayment`/`splitIncome`/`invoiceStatusOf` (`income/invoice-class.ts`), `invoiceSplitOf`/`serializeInvoiceSplit` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`), `issuingProfileOf` (`routes/issuing.ts`), `registerDocumentsDueRoutes` (`routes/documents-due.ts`).
 
+- `DocumentsPreferenceAsk` — `src/hosted/components/DocumentsPreferenceAsk.tsx` (MUT-661): `profile`, `ask` ({customerId, customerName, onAnswered}). The ask-once drawer; opened through `useAskDocumentsPreference()` from `IssueOfferProvider`.
+- `useSettleAndIssue`, `useIssueWithPayment` — `data/incomeQueries.ts`, `data/issuedQueries.ts` (MUT-661): Record payment's one-step write and its control's conditions.
+- Server: `settleOwed` (`routes/receivables.ts`), the settle-and-issue route (`routes/documents-due.ts`).
