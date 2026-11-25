@@ -97,6 +97,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/operator/OperatorFirmsPage.tsx': { ltr: 2, auto: 2 }, // MUT-462: the asker's and each member's address; the profile's and a member's name
   'src/hosted/pages/operator/OperatorSignupsPage.tsx': { ltr: 4 }, // MUT-460: the signup's email (row and kept row), its domain, an unknown reason code
   'src/hosted/components/PasskeysDrawer.tsx': { ltr: 1, auto: 3 }, // the step-up password; passkey names in the list and the rename field (MUT-115 DR11)
+  'src/hosted/twoFactor/TwoFactorDrawer.tsx': { ltr: 4 }, // MUT-710: the password, the app's key, the code fields, the recovery codes
+  'src/hosted/twoFactor/TwoFactorFields.tsx': { ltr: 2 }, // MUT-710: the code and the recovery code
   'src/hosted/components/CloseAccountDrawer.tsx': { ltr: 2 }, // the password, and the address being closed inside the sentence (MUT-333)
   'src/hosted/components/FilterControls.tsx': { ltr: 1 }, // date input
   'src/pages/landing/components/HostedRequestForm.tsx': { ltr: 2 }, // email, phone

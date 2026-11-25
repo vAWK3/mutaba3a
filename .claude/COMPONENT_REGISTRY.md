@@ -2419,6 +2419,12 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 - Portal: `src/hosted/passkeys/webauthn.ts` (`passkeySupport`, `hostUnderRpId`, `createPasskey`, `assertPasskey`, `cancelPasskeyCeremony`), `usePasskeySignIn` (button + autofill), `addPasskeyFlow` / `PASSKEYS_KEY` (`addPasskey.ts`, MUT-370's seam), `PasskeysDrawer` (`src/hosted/components/`), `PasskeyIcon` (`Icons.tsx`), CSS `hp-divider`, `hp-passkey-*`.
 - QA: `qa/support/passkeys.ts` (`addVirtualAuthenticator`: Chromium's CDP WebAuthn authenticator).
 
+### Two-step sign-in — MUT-710 (ADR-274)
+- Server: `auth/totp.ts` (RFC 6238), `auth/two-factor.ts` (policy, recovery codes, digests, `requireTwoFactor` gate), `auth/two-factor-flow.ts` (`TwoFactorFlow`: challenge, verify, resend, enrolment, log), `auth/sign-in.ts` (`beginOrIssue`, `finishTwoFactor`), `routes/two-factor.ts` (`twoFactorRoutes`, `TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES`, all `open` in the lapse gate), `observability/auth-log.ts` (`authLog`).
+- Portal: `src/hosted/twoFactor/` — `TwoFactorStep` (the second step at sign-in, setup and Malafat return), `TwoFactorFields` (code / recovery code / resend), `TwoFactorDrawer` (You › Account: choose, app QR and key or email, recovery codes, manage), `TwoFactorIssuingPrompt` (on `403 TWO_FACTOR_SETUP_REQUIRED`), `twoFactor.ts` (`twoFactorChallengeOf`, `twoFactorFailure`, `answerOf`, `endsTheTry`).
+- QA: `qa/support/selfService.ts` `enableTwoFactor`, `appCode`, `codeFromMail`.
+- Phone (mutaba3a-flutter): `TwoFactorStep` (`lib/presentation/screens/auth/two_factor_step.dart`), `TwoFactorScreen` (Settings › Two-step sign-in), `TwoFactorIssuingPrompt` (`lib/presentation/widgets/`), `TwoFactorRepository`, `TwoFactorChallenge` / `ApiErrorKind.twoFactor*` (`core/errors.dart`), `AuthService.finishTwoFactor` / `resendTwoFactorCode`.
+
 ### OAuth for MCP agents — MUT-434 (ADR-197)
 - `server/src/oauth/protocol.ts`: `OAUTH_SCOPES`, `parseScopeParam`, `verifyS256`, `s256Challenge`, `canonicalResource`, `mcpResourceUrl`, `isAcceptableRedirectUri`, `redirectMatches` (any-port loopback), `validateDcrRequest`, `sanitizeClientName`, `authorizationServerMetadata`, `protectedResourceMetadata`.
 - `server/src/oauth/trust.ts`: `clientTrust` (by redirect host), `isCimdClientId`, `parseCimdUrl`, `isPublicUnicastAddress`, `validateClientMetadata`, `cimdCacheUntil`, `fetchClientMetadata` (SSRF-guarded).

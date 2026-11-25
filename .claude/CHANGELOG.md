@@ -28,6 +28,19 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Two-step sign-in: live QA fixes, and the phone half (MUT-710, ADR-274)
+
+### Fixed
+- The six `/v1/me/two-factor` routes were missing from the lapse gate's `PERSON_LEVEL_GATE` and fell through to `person`, so a read-only or locked person got 402 and could not turn two-step sign-in on. They are identity, like the password and passkeys: now `open`, and `TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES` joins the "every organization-independent endpoint is classified" test (`server/src/billing/gate.ts`, `server/src/__tests__/billing-gate-routes.test.ts`, `server/src/billing/__tests__/gate.test.ts`). No wire change.
+- `/setup`: a reset whose sign-in then asked for the second step stayed on that step after it passed (the step rendered before the passkey offer), and the sign-in removed the link's own challenge query, which asked the used link again (410). The passkey offer now renders first and the challenge query is kept (`SetupPage.tsx`, test in `SetupPage.test.tsx`).
+- `qa/support/selfService.ts` `enableTwoFactor` expected 200 from the enrolment confirm, which answers 201.
+
+### Added
+- The phone half (mutaba3a-flutter, branch `claude/mut-710-2fa-phone`): the second step at sign-in, Settings › Two-step sign-in, the issuing prompt; QA `ios.auth.two-factor-sign-in`, `ios.issuing.two-factor-required`.
+- Release-QA: `portal-selfservice.two-factor.{enrol-app,sign-in (en + ar),recovery-code,email,reset}` all pass on a private live stack (run 20261125-174035).
+
+---
+
 ## [Unreleased] - 2026-11-25 — A Hebrew receipt that names one currency on several rows gets it read from its clearest row (MUT-586)
 
 ### Fixed
@@ -158,6 +171,14 @@
 **Why:** epic MUT-701 sells Solo, Business and Firm. The seller and provider are open (MUT-700), so only the provider-neutral half is built; per-plan prices, Checkout per plan, plan change and the catalog script (Part B) are held.
 
 **Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261124130000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+## [Unreleased] - 2026-11-25 — Two-step sign-in, portal screens (MUT-710, ADR-274)
+
+### Added
+- Portal: the second step at sign-in (`TwoFactorStep`, app or emailed code, recovery code, resend), the same step on the setup/reset page and the Malafat return page, You › Account › Two-step sign-in row and `TwoFactorDrawer` (choose, app QR and key or email test code, ten recovery codes behind a tick, manage: switch, new codes, off, off refused while issuing), and the issuing prompt (`TwoFactorIssuingPrompt`) on `403 TWO_FACTOR_SETUP_REQUIRED` in the issue drawer, the Tax Authority step, the issuer-details save and Documents › To issue. ar and en.
+- Release-QA: `portal-selfservice.two-factor.{enrol-app,sign-in,recovery-code,email,reset}` (live API, outbox, computed TOTP codes) and `portal.two-factor.issuing-required` (stubbed refusal). `qa/support/selfService.ts`: `enableTwoFactor`, `appCode`, `codeFromMail`.
+
+**Why:** AC8 and the portal half of AC1-AC4 (SHAAM appendix §17). **Files:** `src/hosted/twoFactor/**`, `src/hosted/pages/auth/{SignInPage,SetupPage,malafat/MalafatReturnPage}.tsx`, `src/hosted/pages/you/YouAccount.tsx`, `src/hosted/shell/AccountDrawers.tsx`, `src/hosted/i18n/{ar,en}.json`, `qa/**`.
+
 ## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-274, API 1.135.0-mut710)
 
 ### Added

@@ -4706,6 +4706,18 @@ Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated f
 
 No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
 
+## MUT-710 — two-step sign-in, portal (2026-11-25)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `src/hosted/twoFactor/__tests__/twoFactor.test.ts` | answer and failure mapping, challenge and setup-required parsing |
+| Component | `src/hosted/twoFactor/__tests__/TwoFactorDrawer.test.tsx`, `src/hosted/pages/auth/__tests__/SignInTwoFactor.test.tsx` | turn on with the app (password, QR, code, ten codes, Done waits for the tick), wrong password, manage and turn off, off refused while issuing, the sign-in second step |
+| Release-QA (live API) | `qa/specs/portal-selfservice/two-factor.spec.ts` | enrol-app, sign-in (en + ar), recovery-code, email, reset |
+| Release-QA (stubbed) | `qa/specs/portal/two-factor.spec.ts` | issuing-required prompt opens the drawer over the issue drawer |
+| Component | `src/hosted/pages/auth/__tests__/SetupPage.test.tsx` "a link for an account with two-step sign-in" | after the link's step, the sign-in's own second step leads on to Home; the used link is asked once |
+| Integration | `server/src/__tests__/billing-gate-routes.test.ts` | a read-only or locked person can read two-step sign-in and start an enrolment; every two-step route is classified in the lapse gate |
+| Phone (mutaba3a-flutter) | `test/core/api_client_test.dart`, `test/domain/services/auth_service_two_factor_test.dart`, `test/presentation/screens/sign_in_two_factor_test.dart`, `test/presentation/screens/two_factor_screen_test.dart`, `test/presentation/widgets/two_factor_issuing_prompt_test.dart`; QA `ios.auth.two-factor-sign-in`, `ios.issuing.two-factor-required` | error mapping, finish and resend, the second step after password and emailed code, Settings › Two-step sign-in, the issuing prompt |
+
 ## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-274)
 
 | Layer | File | Covers |

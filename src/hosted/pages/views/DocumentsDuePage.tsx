@@ -19,6 +19,8 @@ import { formatDecimal } from '../../format/DecimalAmount';
 import { useWritableFor } from '../../session/me';
 import { documentTabs } from './issuedTabs';
 import { PageHeader, useBackTo } from './shared';
+import { isTwoFactorRefusal } from '../../twoFactor/twoFactor';
+import { useAccountDrawers } from '../../shell/AccountDrawers';
 
 /**
  * MUT-660 (ADR-270, wireframe screen 2): Documents › To issue. What each income entry is due, by client (No client
@@ -49,6 +51,7 @@ export function DocumentsDuePage({ profile }: { profile: HostedProfile }) {
   const due = useDocumentsDue(profile.id, view, olderThan, !!setup.data);
   const names = useCustomerDirectory(profile.id);
   const issueAll = useIssueDue(profile.id);
+  const accountDrawers = useAccountDrawers();
   const mark = useMarkNotForInvoice(profile.id);
   const writable = useWritableFor(profile) && profile.owned === true;
   const back = useBackTo('clients');
@@ -121,8 +124,10 @@ export function DocumentsDuePage({ profile }: { profile: HostedProfile }) {
           setGroupConfirm(null);
           toast(issueSummary(result, tp, nameOf(g.customerId)), { tone: result.issued === items.length ? 'info' : 'error' });
         },
-        onError: () => {
+        onError: (error) => {
           setGroupConfirm(null);
+          // MUT-710 (D10): issuing needs two-step sign-in; the toast says so and opens its setup.
+          if (isTwoFactorRefusal(error)) return toast(t('hosted.twoFactor.issuing.title'), { action: { label: t('hosted.twoFactor.issuing.setUp'), onAction: accountDrawers.openTwoFactor } });
           toast(t('hosted.documentsDue.issueFailed'));
         },
       },

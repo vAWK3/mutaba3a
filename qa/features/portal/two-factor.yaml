@@ -1,0 +1,21 @@
+app: portal
+area: two-factor
+title: Two-step sign-in before issuing
+tier: secondary
+# MUT-710 (AC4, D10): the API refuses issuing without two-step sign-in (403 TWO_FACTOR_SETUP_REQUIRED); the portal
+# says why and opens the setup over the issue drawer. The refusal is stubbed (the gate ships off on the dev API).
+paths:
+  - src/hosted/twoFactor/TwoFactorIssuingPrompt.tsx
+  - src/hosted/twoFactor/twoFactor.ts
+  - src/hosted/components/IssueDocumentDrawer.tsx
+features:
+  - id: issuing-required
+    title: Issuing without two-step sign-in shows why, and Set up opens the two-step drawer over the issue drawer
+    tier: secondary
+    tickets: [MUT-710]
+    steps:
+      - Open Documents › Issued, choose Issue a document, fill a client and a line and press Issue
+      - Press Set up two-step sign-in in the prompt
+    expect:
+      - The server's refusal shows as the two-step prompt, never the general failure
+      - The two-step drawer opens over the issue drawer, which keeps what was typed

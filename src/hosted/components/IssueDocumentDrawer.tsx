@@ -19,6 +19,8 @@ import { ManualAllocationPanel } from './ManualAllocationPanel';
 import { Drawer } from './Drawer';
 import { Skeleton } from './QueryView';
 import { useToast } from './Toast';
+import { TwoFactorIssuingPrompt } from '../twoFactor/TwoFactorIssuingPrompt';
+import { isTwoFactorRefusal } from '../twoFactor/twoFactor';
 
 /**
  * MUT-570 (direction B, P1/P2/P4): issue a tax invoice, invoice-receipt, receipt or credit note from a drawer over the
@@ -185,7 +187,8 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
     issue.reset();
   }
   const refusal = issue.error ?? preview.error;
-  const refusalText = refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
+  // MUT-710 (D10): the two-step refusal is the prompt at the top, never the general failure.
+  const refusalText = isTwoFactorRefusal(refusal) ? null : refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
   // MUT-711 (ADR-273): the preview says the invoice needs an allocation number MTB3A can't request. Issue waits for a
   // well-formed number, sent with the invoice number it was requested for (a preview, never a reservation).
@@ -280,6 +283,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
         </div>
       ) : (
         <form id={formId} className="hp-issue-form" onSubmit={submit} noValidate>
+          <TwoFactorIssuingPrompt error={issue.error} />
           {needsCustomer && (
             <div className="hp-issue-field">
               <label htmlFor={`${formId}-client`} className="hp-issue-label">

@@ -9,6 +9,8 @@ import { useTurnstile } from '../../components/turnstile/useTurnstile';
 import { reportBoundaryError } from '../../observability/errorReporting';
 import { SentenceWithEmail } from './CheckEmailNotice';
 import { CODE_LENGTH, codeDigits, codeFailure, refusalReason, type CodeFailure } from './signInCode';
+import { twoFactorChallengeOf } from '../../twoFactor/twoFactor';
+import type { TwoFactorChallenge } from '../../api/client';
 import { SEND_AGAIN_COOLDOWN_MS, selfServiceFailure, waitFor, type SelfServiceFailure } from './selfService';
 
 /**
@@ -29,6 +31,8 @@ interface SignInCodeStepProps {
   onSignedIn: (me: Me) => void;
   onUnderReview: () => void;
   onUsePassword: () => void;
+  /** MUT-710: the code was right and the account asks for its second step (an authenticator app's code). */
+  onTwoFactor: (challenge: TwoFactorChallenge) => void;
 }
 
 /** A failure worth a Sentry report: the server broke (5xx) or answered something unexpected. Offline is not a bug. */
@@ -37,7 +41,7 @@ function isUnexpected(error: unknown): boolean {
   return error.status >= 500;
 }
 
-export function SignInCodeStep({ email, onSignedIn, onUnderReview, onUsePassword }: SignInCodeStepProps) {
+export function SignInCodeStep({ email, onSignedIn, onUnderReview, onUsePassword, onTwoFactor }: SignInCodeStepProps) {
   const t = useT();
   const tp = useTp();
   const { language } = useLanguage();
@@ -135,6 +139,8 @@ export function SignInCodeStep({ email, onSignedIn, onUnderReview, onUsePassword
       countPublicPage({ event: 'sign_in_code_signed_in', properties: {} });
       onSignedIn(me);
     } catch (error) {
+      const challenge = twoFactorChallengeOf(error);
+      if (challenge) return onTwoFactor(challenge);
       const failure = codeFailure(error);
       const reason = refusalReason(failure);
       if (reason) countPublicPage({ event: 'sign_in_code_refused', properties: { reason } });
@@ -181,6 +187,7 @@ export function SignInCodeStep({ email, onSignedIn, onUnderReview, onUsePassword
             {refusal?.kind === 'expired' && t('hosted.signInCode.expired')}
             {refusal?.kind === 'tooMany' && t('hosted.signInCode.tooMany')}
             {refusal?.kind === 'wait' && tp('hosted.signInCode.wait', refusal.minutes)}
+            {refusal?.kind === 'usePassword' && t('hosted.twoFactor.usePassword')}
             {(refusal?.kind === 'unreachable' || askBanner?.kind === 'unreachable') && t('hosted.auth.unreachable')}
             {askBanner?.kind === 'checkFailed' && t('hosted.selfService.refused.checkFailed')}
             {askWait && tp(`hosted.selfService.wait.${askWait.unit}`, askWait.count)}

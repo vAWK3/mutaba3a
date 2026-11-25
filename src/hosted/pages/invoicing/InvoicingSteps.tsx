@@ -11,6 +11,8 @@ import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
 import { useIssuingStyles } from '../../data/issuedQueries';
 import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuerLogo } from '../../data/issuingQueries';
 import { DEFAULT_INK, INKS, endsSoon, wholeNumber, type PaperModel } from './setupSteps';
+import { TwoFactorIssuingPrompt } from '../../twoFactor/TwoFactorIssuingPrompt';
+import { isTwoFactorRefusal } from '../../twoFactor/twoFactor';
 
 /** MUT-660: the documents preference choices, in the order the client page offers them. */
 const DOCUMENTS_PREFERENCES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
@@ -37,6 +39,8 @@ export const LOGO_MAX_BYTES = 256 * 1024;
 function SaveError({ error }: { error: unknown }) {
   const t = useT();
   if (!error) return null;
+  // MUT-710 (D10): the business details sent to the Tax Authority need two-step sign-in first.
+  if (isTwoFactorRefusal(error)) return <TwoFactorIssuingPrompt error={error} />;
   const changed = error instanceof ApiError && apiErrorReason(error) === 'VERSION_MISMATCH';
   return (
     <p className="input-error-message" role="alert">
@@ -416,14 +420,18 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
   const status = useQuery({ queryKey: profileKey(profileId, 'issuing', 'tax-authority'), queryFn: ({ signal }) => api.taxAuthorityStatus(profileId, signal), retry: false });
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
+  /** MUT-710 (D10): connecting needs two-step sign-in; the refusal shows the prompt in the general failure's place. */
+  const [refusedForTwoFactor, setRefusedForTwoFactor] = useState<unknown>(null);
   const returned = new URLSearchParams(window.location.search).get('taxAuthority');
   const connect = async () => {
     setBusy(true);
     setFailed(false);
+    setRefusedForTwoFactor(null);
     try {
       window.location.assign((await api.taxAuthorityConnect(profileId)).authorizeUrl);
-    } catch {
-      setFailed(true);
+    } catch (error) {
+      if (isTwoFactorRefusal(error)) setRefusedForTwoFactor(error);
+      else setFailed(true);
       setBusy(false);
     }
   };
@@ -464,6 +472,7 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
           {t('hosted.invoicing.saveFailed')}
         </p>
       )}
+      {state !== 'connected' && <TwoFactorIssuingPrompt error={refusedForTwoFactor} />}
       <div className="hp-setup-actions">
         {status.data && (state !== 'connected' || ending) && (
           <Button type="button" onClick={() => void connect()} disabled={busy} data-testid="tax-authority-connect">

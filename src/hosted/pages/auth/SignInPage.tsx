@@ -19,7 +19,10 @@ import { SignInCodeStep } from './SignInCodeStep';
 import { AlertIcon, InfoIcon, PasskeyIcon } from '../../components/Icons';
 import { MalafatMark } from '../../components/MalafatMark';
 import { PasskeyCeremonyError, usePasskeySignIn } from '../../passkeys/usePasskeySignIn';
-import type { Me } from '../../api/client';
+import { useToast } from '../../components/Toast';
+import { TwoFactorStep } from '../../twoFactor/TwoFactorStep';
+import { twoFactorChallengeOf, type TwoFactorAnswer } from '../../twoFactor/twoFactor';
+import type { Me, TwoFactorChallenge } from '../../api/client';
 
 /**
  * `/sign-in` (hosted-portal.md §7.6, mut-43-auth-states.md S3–S10). Email and
@@ -32,6 +35,9 @@ import type { Me } from '../../api/client';
  * Since MUT-286 the page is also the session-expired choice (brief §2.6):
  * sign in again, or continue on this device without an account. Never a
  * silent switch.
+ *
+ * MUT-710: an account with two-step sign-in on answers the first step (password, passkey or emailed code) with
+ * TWO_FACTOR_REQUIRED; the second step then shows in the form's place, and only it signs in.
  */
 
 export type ArrivalReason = 'expired' | 'signed_out';
@@ -94,6 +100,9 @@ function SignInForm({ next, reason }: SignInPageProps) {
   const [underReview, setUnderReview] = useState(false);
   /** MUT-618: the emailed-code step, in place of the form, for the address typed here. */
   const [codeFor, setCodeFor] = useState<string | null>(null);
+  /** MUT-710: the first step passed; the second step's challenge, in the form's place. */
+  const [twoFactor, setTwoFactor] = useState<TwoFactorChallenge | null>(null);
+  const showToast = useToast();
   const doors = useSelfServiceDoors();
   const continueOnThisDevice = useContinueOnThisDevice();
 
@@ -108,7 +117,31 @@ function SignInForm({ next, reason }: SignInPageProps) {
     void navigate({ to: safeNext(next), replace: true });
   }
 
+  /** MUT-710: the first step passed and the account asks for its second. */
+  function askSecondStep(challenge: TwoFactorChallenge) {
+    setPassword('');
+    setCodeFor(null);
+    passkey.pause();
+    setTwoFactor(challenge);
+  }
+
+  /** MUT-710 (D2): the second step signs in; a recovery code says how many are left (wireframe "Recovery code"). */
+  async function finishSecondStep(answer: TwoFactorAnswer) {
+    if (!twoFactor) return;
+    const me = await api.finishTwoFactorSignIn({ challengeToken: twoFactor.challengeToken, ...answer });
+    if ('recoveryCode' in answer) showToast(tp('hosted.twoFactor.recoveryUsed', me.user.twoFactor?.recoveryCodesLeft ?? 0), { tone: 'info' });
+    onSignedIn(me);
+  }
+
+  /** Back to the first step, the email kept. */
+  function leaveSecondStep() {
+    setTwoFactor(null);
+    passkey.resume();
+  }
+
   function showRefusal(error: unknown, via: 'password' | 'passkey') {
+    const challenge = twoFactorChallengeOf(error);
+    if (challenge) return askSecondStep(challenge);
     const refusal = bannerFor(error, via);
     if (refusal === 'underReview') {
       setPassword('');
@@ -129,7 +162,8 @@ function SignInForm({ next, reason }: SignInPageProps) {
     onSuccess: onSignedIn,
     onError: (error) => {
       showRefusal(error, 'password');
-      passkey.resume();
+      // The second step keeps the passkey paused until the person goes back (MUT-710).
+      if (!twoFactorChallengeOf(error)) passkey.resume();
     },
   });
 
@@ -182,6 +216,13 @@ function SignInForm({ next, reason }: SignInPageProps) {
   }
 
   if (underReview) return <UnderReviewNotice onLeave={leaveReview} />;
+  if (twoFactor) {
+    return (
+      <AuthLayout>
+        <TwoFactorStep key={twoFactor.challengeToken} challenge={twoFactor} submit={finishSecondStep} onRestart={leaveSecondStep} restartLabel={t('hosted.twoFactor.backToSignIn')} />
+      </AuthLayout>
+    );
+  }
   if (codeFor !== null) {
     return (
       <AuthLayout>
@@ -193,6 +234,7 @@ function SignInForm({ next, reason }: SignInPageProps) {
             setUnderReview(true);
           }}
           onUsePassword={leaveCode}
+          onTwoFactor={askSecondStep}
         />
       </AuthLayout>
     );

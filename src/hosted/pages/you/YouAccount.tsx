@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import { CONNECTED_APPS_KEY } from '../../data/oauthQueries';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
-import type { HostedProfile } from '../../api/client';
+import type { HostedProfile, Schemas } from '../../api/client';
 import { RowButton, RowGroup, RowNavLink } from '../../components/YouRows';
 import { MonthlySummarySwitchRow } from '../../components/MonthlySummarySwitchRow';
 import { billingRowOf, type BillingRow } from '../../data/trialPrompt';
@@ -29,6 +29,7 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
   const agentAccess = useHasFeature('agent_access');
   const operator = useIsOperator();
   // MUT-596: the row shows only where the server has Malafat access on (the list answers 404 elsewhere).
+  const me = useMe();
   const connectedApps = useQuery({ queryKey: CONNECTED_APPS_KEY, queryFn: ({ signal }) => api.listConnectedApps(signal), enabled: !local, retry: false });
 
   if (local) {
@@ -50,6 +51,8 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         <RowButton label={t('hosted.auth.changePassword')} onClick={drawers.open} />
         {/* MUT-115 (DR2): directly after Change password, where passkeys work on this host */}
         {passkeySupport() && <RowButton label={t('hosted.account.passkeys.title')} sub={t('hosted.account.passkeys.rowSub')} onClick={drawers.openPasskeys} />}
+        {/* MUT-710: after the other ways in (wireframe "Turn on"); an API older than 1.135.0 sends no twoFactor */}
+        {me.user.twoFactor && <RowButton label={t('hosted.twoFactor.title')} sub={twoFactorRowSub(me.user.twoFactor, t)} onClick={drawers.openTwoFactor} />}
         {/* MUT-434: only for a person the operator gave agent_access */}
         {agentAccess && <RowButton label={t('hosted.connect.title')} sub={t('hosted.connect.rowSub')} onClick={drawers.openConnectClaude} />}
         {connectedApps.data && <RowButton label={t('hosted.connectedApps.title')} sub={t('hosted.connectedApps.rowSub')} onClick={drawers.openConnectedApps} />}
@@ -69,6 +72,14 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
       </RowGroup>
     </>
   );
+}
+
+type TwoFactorState = Schemas['TwoFactorState'];
+
+/** "Off" reads as what it is for; on, how the code comes. */
+function twoFactorRowSub(state: TwoFactorState, t: ReturnType<typeof useT>): string {
+  if (!state.enabled) return t('hosted.twoFactor.rowOff');
+  return t(state.method === 'email' ? 'hosted.twoFactor.rowOnEmail' : 'hosted.twoFactor.rowOnApp');
 }
 
 function BillingSub({ profile }: { profile: HostedProfile | null }) {

@@ -66,6 +66,14 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'DELETE /v1/passkeys/:passkeyId': 'open',
   // MUT-370: the person's answer to the passkey suggestion, identity like the trial prompt.
   'PATCH /v1/me/passkey-prompt': 'open',
+  // MUT-710: two-step sign-in is identity, like the password and passkeys: a read-only or locked person can still turn
+  // it on, change it and get new recovery codes (it writes no record).
+  'GET /v1/me/two-factor': 'open',
+  'POST /v1/me/two-factor/challenge': 'open',
+  'POST /v1/me/two-factor/enrolment': 'open',
+  'POST /v1/me/two-factor/enrolment/confirm': 'open',
+  'POST /v1/me/two-factor/recovery-codes': 'open',
+  'DELETE /v1/me/two-factor': 'open',
   // MUT-459 (D2): the operator console is the operator's role, not a paid feature: a lapse on their own account never
   // locks them out of approving anyone else.
   'GET /v1/operator/signup-reviews': 'open',

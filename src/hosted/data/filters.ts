@@ -338,6 +338,8 @@ export interface ProfileDrawerSearch {
   connectClaude?: true;
   /** MUT-596: You › Account › Connected apps (signed in, where Malafat access is on). */
   connectedApps?: true;
+  /** MUT-710: You › Account › Two-step sign-in (signed in); the issuing prompt opens it over the issue drawer. */
+  twoFactor?: true;
   /**
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
@@ -351,7 +353,7 @@ export interface ProfileDrawerSearch {
    */
   portal?: 'returned' | 'card';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'step', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'twoFactor', 'step', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -368,6 +370,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     review: raw.review === 'password' || raw.review === 'recovery' ? raw.review : undefined,
     connectClaude: flag(raw.connectClaude),
     connectedApps: flag(raw.connectedApps),
+    twoFactor: flag(raw.twoFactor),
     step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' ? raw.step : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' || raw.portal === 'card' ? raw.portal : undefined,

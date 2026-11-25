@@ -4,7 +4,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useLanguage, useT } from '../../../../lib/i18n/core';
 import { Select } from '../../../../components/ui/Input';
-import { api, ApiError, type MalafatSignInState, type Me } from '../../../api/client';
+import { api, ApiError, type MalafatSignInState, type Me, type TwoFactorChallenge } from '../../../api/client';
 import { AlertIcon } from '../../../components/Icons';
 import { MalafatMark } from '../../../components/MalafatMark';
 import { TimezoneChoice } from '../../../components/TimezoneChoice';
@@ -19,13 +19,23 @@ import { termsHref } from '../../../terms';
 import { AuthLayout } from '../AuthLayout';
 import { CheckingSession } from '../BootScreens';
 import { malafatReturnOf, type MalafatReturnError } from './malafatSignIn';
+import { TwoFactorStep } from '../../../twoFactor/TwoFactorStep';
+import { twoFactorChallengeOf, type TwoFactorAnswer } from '../../../twoFactor/twoFactor';
 
-type Failure = MalafatReturnError | 'identityElsewhere' | 'emailTaken' | 'unreachable';
-type Step = { kind: 'exchanging' } | { kind: 'failed'; failure: Failure } | { kind: 'link'; state: MalafatSignInState } | { kind: 'consent'; state: MalafatSignInState };
+type Failure = MalafatReturnError | 'identityElsewhere' | 'emailTaken' | 'twoFactorLink' | 'unreachable';
+type Step =
+  | { kind: 'exchanging' }
+  | { kind: 'failed'; failure: Failure }
+  | { kind: 'link'; state: MalafatSignInState }
+  | { kind: 'consent'; state: MalafatSignInState }
+  /** MUT-710 (D6): a linked person with two-step sign-in on; Malafat was the first step. */
+  | { kind: 'twoFactor'; challenge: TwoFactorChallenge };
 
 /** What a refusal at any step reads as. A used or expired code or ticket is the same "start again". */
 function failureOf(error: unknown): Failure {
   if (error instanceof ApiError && error.status === 404) return 'state_invalid';
+  // MUT-710 (D6): linking an account that has two-step sign-in on isn't available yet; its password still signs in.
+  if (error instanceof ApiError && error.code === 'TWO_FACTOR_LINK_UNAVAILABLE') return 'twoFactorLink';
   if (error instanceof ApiError && error.status === 409) {
     const reason = (error.details as { reason?: string } | undefined)?.reason;
     if (reason === 'IDENTITY_LINKED_ELSEWHERE') return 'identityElsewhere';
@@ -41,6 +51,7 @@ function failureOf(error: unknown): Failure {
  * new account. Nothing is saved before consent.
  */
 export function MalafatReturnPage() {
+  const t = useT();
   const location = useLocation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -71,12 +82,23 @@ export function MalafatReturnPage() {
   useEffect(() => {
     if (!('result' in incoming) || exchanged.current) return;
     exchanged.current = true;
-    api.malafatExchange(incoming.result).then(next, (error: unknown) => setStep({ kind: 'failed', failure: failureOf(error) }));
+    api.malafatExchange(incoming.result).then(next, (error: unknown) => {
+      const challenge = twoFactorChallengeOf(error);
+      setStep(challenge ? { kind: 'twoFactor', challenge } : { kind: 'failed', failure: failureOf(error) });
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps -- one exchange per return; the code is single use
   }, [incoming]);
 
   if (step.kind === 'exchanging') return <CheckingSession />;
   if (step.kind === 'failed') return <MalafatFailed failure={step.failure} />;
+  if (step.kind === 'twoFactor') {
+    const finish = async (answer: TwoFactorAnswer) => signedIn(await api.finishTwoFactorSignIn({ challengeToken: step.challenge.challengeToken, ...answer }));
+    return (
+      <AuthLayout>
+        <TwoFactorStep challenge={step.challenge} submit={finish} onRestart={() => void navigate({ to: '/sign-in', replace: true })} restartLabel={t('hosted.twoFactor.backToSignIn')} />
+      </AuthLayout>
+    );
+  }
   if (step.kind === 'link') return <MalafatLink state={step.state} onLinked={next} onFailed={(failure) => setStep({ kind: 'failed', failure })} />;
   return <MalafatConsent state={step.state} onDone={next} onFailed={(failure) => setStep({ kind: 'failed', failure })} />;
 }

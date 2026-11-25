@@ -1,0 +1,81 @@
+app: portal-selfservice
+area: two-factor
+title: Two-step sign-in
+tier: core
+# MUT-710 (ADR-274): two-step sign-in (an authenticator app or an emailed code) on the live dev API with the memory
+# mailer. The app's codes are computed from the secret the enrolment shows; emailed codes are read from the outbox.
+paths:
+  - src/hosted/twoFactor/**
+  - src/hosted/pages/auth/SignInPage.tsx
+  - src/hosted/pages/auth/SetupPage.tsx
+  - src/hosted/pages/auth/malafat/MalafatReturnPage.tsx
+  - src/hosted/pages/you/YouAccount.tsx
+  - src/hosted/shell/AccountDrawers.tsx
+  - server/src/auth/two-factor.ts
+  - server/src/auth/totp.ts
+  - server/src/auth/sign-in.ts
+  - server/src/routes/two-factor.ts
+  - server/src/routes/sessions.ts
+  - server/src/routes/account-setup.ts
+features:
+  - id: enrol-app
+    title: You › Account › Two-step sign-in turns it on with an authenticator app (QR and key, a code) and shows the ten recovery codes
+    tier: core
+    tickets: [MUT-710]
+    steps:
+      - Sign in, open You › Account and press Two-step sign-in
+      - Choose Authenticator app, type the current password and press Next
+      - Type the code the app shows and press Turn on
+      - Tick that you saved the recovery codes and press Done
+    expect:
+      - The row says Off, with what it does, before it is turned on
+      - A QR code and the key appear after the password
+      - Ten recovery codes appear after the right code; Done waits for the tick
+      - The row then reads On · authenticator app, and the session is still signed in
+  - id: sign-in
+    title: With two-step on, a password sign-in asks for the code before anyone is signed in, in English and Arabic (AC2)
+    tier: core
+    tickets: [MUT-710]
+    steps:
+      - Sign in with the email and password of an account that has two-step on
+      - Type a wrong code, then the app's code
+    expect:
+      - The second step opens in place of Home
+      - A wrong code says how many tries are left
+      - The right code lands on Home; in Arabic the page reads right to left
+  - id: recovery-code
+    title: A recovery code signs in once in place of the code, and the account then shows one fewer (AC2)
+    tier: secondary
+    tickets: [MUT-710]
+    steps:
+      - Sign in with the password, press Use a recovery code instead and type one
+      - Open You › Account › Two-step sign-in
+      - Sign in again and type the same recovery code
+    expect:
+      - You are in and told how many recovery codes are left
+      - The drawer shows 9 of 10 left
+      - The same code is refused the second time
+  - id: email
+    title: With the email method the code is mailed after the password, and signs in (AC1, AC5)
+    tier: secondary
+    tickets: [MUT-710]
+    steps:
+      - Sign in with the password of an account on the email method
+      - Open the mail and type its code
+    expect:
+      - The second step says a code was emailed
+      - The mail carries the 6-digit code, also in its subject
+      - The right code lands on Home
+  - id: reset
+    title: A password reset asks for the second step before the new password is set (AC3)
+    tier: secondary
+    tickets: [MUT-710]
+    paths:
+      - server/src/routes/account-setup.ts
+    steps:
+      - Forgot your password?, send the link and open it
+      - Confirm it is you with a recovery code, choose a new password and press Save and sign in
+      - Type the app's code at the sign-in's second step
+    expect:
+      - The setup page first asks to confirm it is you
+      - Signing in with the new password asks for the second step, then lands on Home

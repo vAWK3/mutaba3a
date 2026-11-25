@@ -225,6 +225,10 @@
 /* /setup (MUT-236): the password rule under its field, and the line under a card's heading */
 .hp-field-hint { font-size: var(--text-label); color: var(--muted); margin: var(--space-1-5) 0 0; }
 .hp-setup-lead { color: var(--text-secondary); margin: calc(-1 * var(--space-2)) 0 var(--space-4); }
+/* MUT-710 (D11): a link for a person with two-step sign-in on asks for the code first, set apart from the new password */
+.hp-setup-second-step { margin: 0 0 var(--space-4); padding: 0 0 var(--space-4); border-bottom: 1px solid var(--border); }
+.hp-setup-step-title { font-size: var(--text-body); font-weight: var(--weight-bold); margin: 0 0 var(--space-3); }
+.hp-setup-step-title + .hp-setup-lead { margin-top: 0; }
 
 /*
  * MUT-368: Cloudflare Turnstile on /signup and /recover. The box reserves the managed widget's height so the form
@@ -1885,6 +1889,20 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-chip-due { background: var(--warning-subtle); color: var(--warning); } /* the butter chip pair (.hp-billing-chip-butter): --on-warning-subtle does not exist */
 .hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
 @media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }
+
+/* MUT-710: You › Account › Two-step sign-in (TwoFactorDrawer) */
+.hp-two-factor-lead { margin: 0 0 var(--space-4); }
+.hp-two-factor-qr { display: flex; flex-wrap: wrap; gap: var(--space-4); align-items: flex-start; margin: 0 0 var(--space-4); }
+/* A QR code scans only dark on light, in dark mode too: the light scheme's own Canvas, never a theme token */
+.hp-two-factor-qr img { flex: none; color-scheme: light; background: Canvas; border-radius: var(--radius-md); padding: var(--space-2); }
+.hp-two-factor-key { display: grid; gap: var(--space-2); min-width: 0; flex: 1 1 12rem; }
+.hp-two-factor-key .hp-two-factor-lead { margin: 0; }
+.hp-two-factor-secret { font-family: var(--font-mono); font-size: var(--text-body); letter-spacing: 0.04em; overflow-wrap: anywhere; }
+.hp-two-factor-open { justify-self: start; text-decoration: underline; text-underline-offset: 0.15em; }
+.hp-two-factor-codes { list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2) var(--space-4); margin: 0 0 var(--space-4); padding: var(--space-3) var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-two-factor-codes code { font-family: var(--font-mono); font-size: var(--text-body); }
+.hp-two-factor-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); margin: 0 0 var(--space-4); }
+.hp-two-factor-prompt p { margin: 0 0 var(--space-2); }
 
 /* MUT-722: a save toast's second, quieter line (what its action is for: "Finish setting up invoicing…"). */
 .hp-toast-text { display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
