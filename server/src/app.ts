@@ -1,3 +1,5 @@
+import { routeKeyOf } from './usage/route-key.js';
+import type { RouteMeter } from './usage/route-meter.js';
 import { randomBytes } from 'node:crypto';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { MiddlewareHandler } from 'hono';
@@ -156,6 +158,8 @@ export interface AppDependencies {
   webauthn?: WebauthnConfig | null;
   /** MUT-115: told after a passkey is added. Absent = MUT-414's "a passkey was added" mail through `mailer`. */
   passkeyEvents?: PasskeyEvents;
+  /** MUT-735 (ADR-281): the route statistics' in-memory aggregate (index.ts flushes it on SIGTERM). Absent = not metered. */
+  routeMeter?: RouteMeter | null;
   /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
   portal?: { distDir: string } | null;
   /** iOS/Android app-association files (MUT-111). Null or absent = neither well-known path exists. */
@@ -365,6 +369,11 @@ function isPortalExcludedPath(path: string): boolean {
   return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
 }
 
+/** MUT-735 (ADR-281): the API's own paths are metered; health probes and the portal's files are not. */
+function isMeteredPath(path: string): boolean {
+  return path !== '/health' && path !== '/ready' && isPortalExcludedPath(path);
+}
+
 /**
  * MUT-326 (ADR-155 D5): a portal page visit the legacy-host redirect may move. Never
  * the API, admin, health or association paths, never a static file (an old cached
@@ -439,10 +448,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     const started = Date.now();
     await next();
-    deps.logger.info(
-      { requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
-      'request',
-    );
+    const durationMs = Date.now() - started;
+    deps.logger.info({ requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs }, 'request');
+    // MUT-735 (ADR-281): the route statistics, from the final status (after onError) and the same duration. An
+    // in-memory increment; the API surfaces only (never /health, /ready or the portal's static files).
+    if (deps.routeMeter && isMeteredPath(c.req.path)) deps.routeMeter.observe({ routeKey: routeKeyOf(c), plan: c.get('meterPlan') ?? 'unknown', status: c.res.status, durationMs });
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);

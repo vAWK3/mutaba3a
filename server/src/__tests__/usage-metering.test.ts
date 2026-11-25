@@ -4,7 +4,9 @@ import { createApp } from '../app.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
+import type { RouteUsageDelta } from '../repositories/ports.js';
 import { usageMonthOf } from '../usage/month.js';
+import { RouteMeter } from '../usage/route-meter.js';
 import { ADMIN, businessOf, idem, issuingHarness, json, person, read, type AccountantHarness, type Person } from './helpers/accountants.js';
 import { provisionUser } from './helpers/provision.js';
 
@@ -67,6 +69,18 @@ describe('issued documents are metered (MUT-735)', () => {
     expect(paid.status, await paid.clone().text()).toBe(201);
     expect(await documentsOf(h, w.owner.userId)).toBe(3);
     expect(usageOf(h).allEvents().map((e) => e.detail)).toEqual(['TAX_INVOICE', 'CREDIT_NOTE', 'RECEIPT']);
+  });
+
+  it('the access log counts the issue under the payer’s plan the meter resolved (route statistics)', async () => {
+    const flushed: RouteUsageDelta[] = [];
+    const routeMeter = new RouteMeter({ sink: async (d) => void flushed.push(...d), now: () => new Date('2026-11-06T09:00:00Z'), logError: () => {} });
+    const h = issuingHarness({ routeMeter });
+    const w = await invoicing(h);
+    expect((await h.app.request('/v1/issued-documents', json(invoice(w.customerId), { ...w.on, ...idem() }))).status).toBe(201);
+    await routeMeter.flush();
+    const issued = flushed.find((r) => r.routeKey === 'POST /v1/issued-documents');
+    expect(issued).toMatchObject({ plan: usageOf(h).allEvents()[0]!.plan, statusClass: '2xx', count: 1 });
+    expect(flushed.find((r) => r.routeKey === 'PUT /v1/issuer')?.plan).toBe('unknown');
   });
 
   it('a co-owner’s document counts to the creator’s meter; the event keeps the co-owner as the actor', async () => {
