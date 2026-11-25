@@ -24,7 +24,7 @@ from .merge import merge
 from .orientation import reorient, turn
 from .preprocess import prepare
 from .qr import read_qr
-from .text import pdf_text_to_logical, script_of
+from .text import layer_fixer, script_of
 
 log = logging.getLogger("receipt_ocr.pipeline")
 
@@ -117,8 +117,10 @@ class Reader:
         qr = read_qr(decoded.pages_for_qr)
         qr_stats = {"qr": len(qr), "qrMs": _ms(t)}
         if decoded.pdf_text is not None:
-            log.info("read", extra={"stats": {"engine": ENGINE_PDF_TEXT, "pages": decoded.page_count, "chars": len(decoded.pdf_text), "decodeMs": decode_ms, **qr_stats}})
-            return {"engine": ENGINE_PDF_TEXT, "lines": [], "pdfText": pdf_text_to_logical(decoded.pdf_text)[:MAX_PDF_TEXT], "pages": decoded.page_count, "qr": qr}
+            fix = layer_fixer(decoded.pdf_text)
+            placed = _placed(decoded.pdf_lines, fix)
+            log.info("read", extra={"stats": {"engine": ENGINE_PDF_TEXT, "pages": decoded.page_count, "chars": len(decoded.pdf_text), "runs": len(placed), "decodeMs": decode_ms, **qr_stats}})
+            return {"engine": ENGINE_PDF_TEXT, "lines": placed, "pdfText": fix(decoded.pdf_text)[:MAX_PDF_TEXT], "pages": decoded.page_count, "qr": qr}
 
         lines: list[dict[str, Any]] = []
         offset = 0.0
@@ -160,6 +162,21 @@ class Reader:
             extra={"stats": {"engine": ENGINE_OCR, "pages": decoded.page_count, "lines": len(lines), "scripts": scripts, "hint": hint, **turns, **timings, **qr_stats, "totalMs": _ms(started)}},
         )
         return {"engine": ENGINE_OCR, "lines": lines, "pages": decoded.page_count, "qr": qr}
+
+
+def _placed(runs: list[dict], fix) -> list[dict]:
+    """MUT-590: a text layer's runs in the OCR line contract: logical order (the layer's repair), capped, script-tagged."""
+    lines: list[dict[str, Any]] = []
+    for run in runs[:MAX_LINES]:
+        text = fix(run["text"])[:MAX_LINE_CHARS]
+        if not text:
+            continue
+        line: dict[str, Any] = {"text": text, "conf": run["conf"], "box": run["box"]}
+        run_script = script_of(text)
+        if run_script:
+            line["script"] = run_script
+        lines.append(line)
+    return lines
 
 
 def _ms(since: float) -> int:

@@ -185,3 +185,23 @@ test('the landing header and the public pages name the product MTB3A in English 
 
   await page.close();
 });
+
+test('the tab icon is the Brand v2 tile in light and dark, with its PNG fallbacks and apple-touch icon', { tag: '@web.brand.chrome-icons' }, async ({ page, request, step }) => {
+  for (const [scheme, tile] of [['light', '#FBF1D8'], ['dark', '#221B2D']] as const) {
+    await step(`${scheme} browser: /favicon.svg draws a ${tile} tile`, async () => {
+      await page.emulateMedia({ colorScheme: scheme });
+      await page.goto('/favicon.svg');
+      const fill = await page.locator('rect.t').evaluate((el) => getComputedStyle(el).fill);
+      expect(fill).toBe(hexToRgb(tile));
+      expect(fill).not.toBe('rgb(0, 0, 0)');
+    });
+  }
+  await step('The landing page head links the SVG, the PNG fallbacks and the apple-touch icon, and each answers 200', async () => {
+    await page.emulateMedia({ colorScheme: 'light' });
+    await page.goto('/');
+    await expect(page.locator('#hero-title')).toBeVisible();
+    const hrefs = await page.locator('head link[rel="icon"], head link[rel="apple-touch-icon"]').evaluateAll((links) => links.map((l) => l.getAttribute('href')));
+    expect(hrefs).toEqual(expect.arrayContaining(['/favicon.svg', '/favicon-32.png', '/favicon-16.png', '/apple-touch-icon.png']));
+    for (const href of hrefs) expect((await request.get(href!)).status(), href!).toBe(200);
+  });
+});

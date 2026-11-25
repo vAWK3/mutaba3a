@@ -27,13 +27,17 @@ export function localPersonOf(person: UserRecord): UserRecord {
   // Field by field, never a spread: a column the account gains later (a role, a plan) must not reach a device unasked.
   return {
     id: person.id, email: LOCAL_PERSON_EMAIL, displayName: person.displayName, passwordHash: null, locale: person.locale, status: 'ACTIVE', failedSignIns: 0,
-    lockedUntil: null, passwordChangedAt: person.passwordChangedAt, lastSignInAt: null, emailVerifiedAt: null, malafatSuggestions: person.malafatSuggestions,
+    lockedUntil: null, passwordChangedAt: person.passwordChangedAt, passwordChosen: true, lastSignInAt: null, emailVerifiedAt: null, malafatSuggestions: person.malafatSuggestions,
     // MUT-418: the trial's card prompt is the hosted account's; a device has no trial.
     trialPrompt: null,
     // MUT-333: closing is the hosted account's; a device's records file never carries it.
     closure: null,
     // MUT-459: operators are hosted accounts only.
-    operatorAt: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
+    operatorAt: null,
+    // MUT-535: the monthly summary mail is the hosted account's.
+    monthlySummaryMail: null,
+    // ADR-279: promotional mail is the hosted account's.
+    offerMail: null, createdAt: person.createdAt, updatedAt: person.updatedAt,
   };
 }
 
@@ -58,7 +62,7 @@ export function localProfileOf(organization: Organization, personId: string): Or
     personalOwnerUserId: own ? organization.personalOwnerUserId : null,
     ownerUserId: own ? organization.ownerUserId : personId,
     profileType: own ? organization.profileType : wasPersonal ? 'PERSONAL' : (organization.profileType ?? 'BUSINESS'),
-    firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null,
+    firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null,
     version: organization.version, createdAt: organization.createdAt,
   };
 }

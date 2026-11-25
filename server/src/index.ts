@@ -1,4 +1,9 @@
+import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
+import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
+import { TokenBox } from './israel/tax-authority/token-box.js';
+import { RegistryLookup } from './israel/registry.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
+import { documentSignerFrom, signerStatus } from './issuing/pdf/sign/index.js';
 import { loadConfig, readOidcAudience } from './config.js';
 import { HttpOcrClient } from './receipts/ocr-client.js';
 import { CloudTasksDispatcher } from './receipts/reading/cloud-tasks.js';
@@ -35,6 +40,7 @@ import { MemoryMailTransport } from './email/transports/memory.js';
 import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { SELF_SERVICE_POLICY } from './auth/self-service.js';
 import { createTurnstileVerifier, UNCONFIGURED_TURNSTILE } from './auth/turnstile.js';
+import { SIGN_IN_CODE_POLICY } from './auth/sign-in-code.js';
 import { defaultSelfServiceOptions } from './routes/self-service.js';
 import { CachedDomainChecker, createDomainScreen } from './email/domains/screen.js';
 import { createDnsDomainChecker, DOMAIN_CHECK_BUDGET_MS } from './email/domains/dns-checker.js';
@@ -145,6 +151,37 @@ const SIGNUP_LINK_RETENTION_MS = SELF_SERVICE_POLICY.pruneAfterExpiryDays * 24 *
 // MUT-115 (D2): config has already refused an origin outside the RP ID; null = no passkeys.
 const webauthn = webauthnConfigOf({ rpId: config.WEBAUTHN_RP_ID, origins: config.WEBAUTHN_ORIGINS, portalOrigin: config.PORTAL_ORIGIN });
 
+// MUT-642: the company/nonprofit lookup; answers are cached for a day.
+const registry = new RegistryLookup({
+  baseUrl: config.DATA_GOV_IL_URL,
+  companiesResource: config.DATA_GOV_IL_COMPANIES_RESOURCE,
+  nonprofitsResource: config.DATA_GOV_IL_NONPROFITS_RESOURCE,
+  timeoutMs: config.DATA_GOV_IL_TIMEOUT_MS,
+  ttlMs: 24 * 60 * 60 * 1000,
+});
+
+// MUT-571/572: the Tax Authority's Open API, only where configured (TAX_AUTHORITY_ENV). The token key is the configured
+// one, or (outside production and staging, which config refuses without it) one derived from the session pepper.
+const taxAuthority = config.TAX_AUTHORITY_ENV
+  ? {
+      client: new HttpTaxAuthorityClient({
+        environment: config.TAX_AUTHORITY_ENV,
+        baseUrl: config.TAX_AUTHORITY_BASE_URL ?? 'https://openapi.taxes.gov.il/shaam/tsandbox',
+        clientId: config.TAX_AUTHORITY_CLIENT_ID!,
+        clientSecret: config.TAX_AUTHORITY_CLIENT_SECRET!,
+        redirectUri: config.TAX_AUTHORITY_REDIRECT_URI!,
+        scope: config.TAX_AUTHORITY_SCOPE,
+        timeoutMs: config.TAX_AUTHORITY_TIMEOUT_MS,
+      }),
+      box: new TokenBox(config.TAX_AUTHORITY_TOKEN_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
+      // MUT-710 (D12): token issue, refresh and disconnects into the 12-month authentication log.
+      authLog: logger,
+      stateSecret: sessionDigest(config.SESSION_TOKEN_PEPPER, 'mut-571-tax-authority-state-v1'),
+      // The spec's test registration number until MUT-567 gives the real one.
+      accountingSoftwareNumber: config.TAX_AUTHORITY_SOFTWARE_NUMBER ?? 987654321,
+    }
+  : null;
+
 const fxRates = new CachedFxRates({
   source: new FrankfurterSource({ url: config.FX_RATES_URL, timeoutMs: config.FX_RATES_TIMEOUT_MS }),
   ttlMs: config.FX_RATES_TTL_MINUTES * 60_000,
@@ -178,10 +215,17 @@ const receiptReading =
 const readInvokers = [config.READ_INVOKER_SA, config.SWEEP_INVOKER_SA].filter((email): email is string => Boolean(email));
 const receiptReadVerifier = readAudience && readInvokers.length > 0 ? googleOidcVerifier({ audience: readAudience, allowedEmails: readInvokers }) : null;
 
+const documentSigner = documentSignerFrom(config);
 const app = createApp({
   store,
   logger,
   rateLimiter,
+  // MUT-710 (ADR-274 D4): its own key on production and staging (config refuses to start without it); elsewhere
+  // derived from the session pepper, as the Tax Authority's box is.
+  twoFactorKeys: new TwoFactorKeys(config.TWO_FACTOR_SEAL_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
+  // MUT-641 (ADR-265): null in production until ISSUING_SIGNER=kms is configured; while null, the PDF routes answer 503
+  // SIGNING_NOT_CONFIGURED. A kms signer whose chain is wrong stops the boot here (documentSignerFrom).
+  documentSigner,
   adminToken: config.MUTABA3A_ADMIN_TOKEN,
   keyEnvironment: config.API_KEY_ENVIRONMENT,
   version: config.SERVICE_VERSION,
@@ -193,6 +237,9 @@ const app = createApp({
   receiptReadVerifier,
   mcpInboxWrites: config.MCP_INBOX_WRITES,
   accountantAccess: config.ACCOUNTANT_ACCESS,
+  malafatDelegation: config.MALAFAT_DELEGATION,
+  oauthClientLocalHttp: config.OAUTH_CLIENT_LOCAL_HTTP,
+  malafatSignIn: config.MALAFAT_SIGN_IN ? { originTemplate: config.MALAFAT_ORIGIN_TEMPLATE, clientId: config.MALAFAT_SIGN_IN_CLIENT_ID } : null,
   accountantsPerProfileMax: config.ACCOUNTANTS_PER_PROFILE_MAX,
   accountantPlan: { on: config.ACCOUNTANT_PLAN, freeClients: config.ACCOUNTANT_FREE_CLIENTS, maxClients: config.ACCOUNTANT_PLAN_MAX_CLIENTS },
   shareLinks: config.SHARE_LINKS,
@@ -201,10 +248,12 @@ const app = createApp({
   periodPackLimits: { maxRows: config.PERIOD_PACK_MAX_ROWS, maxReceiptBytes: config.PERIOD_PACK_MAX_RECEIPT_BYTES },
   periodPackConcurrency: config.PERIOD_PACK_CONCURRENCY,
   billingGate: config.BILLING_GATE,
+  twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },
   retryWindowDays: config.BILLING_RETRY_WINDOW_DAYS,
+  monthlySummaryDailySends: config.MONTHLY_SUMMARY_DAILY_SENDS,
   passwordHasher: createArgon2Hasher({
     memoryKiB: config.ARGON2_MEMORY_KIB,
     timeCost: config.ARGON2_TIME_COST,
@@ -253,6 +302,10 @@ const app = createApp({
         }
       : null,
   fxRates,
+  registry,
+  taxAuthority,
+  uniformFileSoftware: { registrationNumber: config.UNIFORM_FILE_REGISTRATION_NUMBER, houseVatId: config.SOFTWARE_HOUSE_VAT_ID, houseName: config.SOFTWARE_HOUSE_NAME },
+  manualAllocationUrl: config.TAX_AUTHORITY_MANUAL_ALLOCATION_URL ?? null,
   reporter,
   minimumBuild: {
     ios: { min: config.IOS_MIN_BUILD, recommended: config.IOS_RECOMMENDED_BUILD },
@@ -265,9 +318,16 @@ if (localAttachments) logger.warn({ dir: config.ATTACHMENTS_DIR }, 'ATTACHMENTS_
 else if (!config.ATTACHMENTS_BUCKET) logger.warn('ATTACHMENTS_BUCKET is not set (nor ATTACHMENTS_DRIVER=local); attachments routes answer 503');
 if (!stripe) logger.warn('STRIPE_SECRET_KEY/STRIPE_WEBHOOK_SECRET are not set; the Stripe webhook, reconcile and billing sessions answer 503');
 if (!config.MUTABA3A_JOB_TOKEN) logger.warn('MUTABA3A_JOB_TOKEN is not set; /jobs/* answers 503');
-if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; receipts are read for uploaders granted receipt_reading');
+if (receiptReading) logger.info({ dispatch: config.READ_QUEUE ? 'cloud-tasks' : 'inline' }, 'SERVER_OCR is on; every uploader\'s receipts are read');
 if (!receiptReadVerifier) logger.info('READ_OIDC_AUDIENCE/API_ORIGIN or READ_INVOKER_SA/SWEEP_INVOKER_SA are not set; POST /jobs/v1/receipts/read answers 503');
 if (config.MAILER === 'noop') logger.warn('MAILER is noop; no mail is sent (password notices included)');
+if (!documentSigner) logger.info('ISSUING_SIGNER is off; issued-document PDFs answer 503 SIGNING_NOT_CONFIGURED (the draft preview still prints)');
+else if (documentSigner.kind === 'dev') logger.info('ISSUING_SIGNER is dev; issued-document PDFs are signed by a throwaway development authority, never a legal original');
+else {
+  // MUT-641 (review): who signs and until when; a certificate near or past its end is said at every start.
+  const status = signerStatus(documentSigner, new Date());
+  logger[status.level](status.details, status.message);
+}
 if (!config.SELF_SIGNUP_ENABLED) logger.info('SELF_SIGNUP_ENABLED is off; POST /v1/signups answers 404 (recovery still works)');
 if (!config.OPERATOR_ALERT_EMAIL) logger.warn('OPERATOR_ALERT_EMAIL is not set; no signup review digest is mailed');
 if (config.EMAIL_DOMAIN_CHECKER === 'fixture') logger.info('EMAIL_DOMAIN_CHECKER is fixture; signup domains are judged from the .example table, not DNS');
@@ -311,6 +371,10 @@ pruneTimer.unref();
 const mailPruneTimer = setInterval(() => {
   void store.email.pruneDeliveries(new Date(Date.now() - MAIL_LOG_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'mail send log prune failed'));
   void store.accountSetup.pruneSignupLinks(new Date(Date.now() - SIGNUP_LINK_RETENTION_MS)).catch((err: unknown) => logger.error({ err }, 'signup link prune failed'));
+  // MUT-618 (D3): sign-in codes live 10 minutes; rows go a day after they expire.
+  void store.signInCodes.prune(new Date(Date.now() - SIGN_IN_CODE_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'sign-in code prune failed'));
+  // MUT-710 (ADR-274 §3): two-step challenges live 10 minutes; rows go a day after they expire.
+  void store.twoFactor.pruneChallenges(new Date(Date.now() - TWO_FACTOR_POLICY.pruneAfterExpiryHours * 3_600_000)).catch((err: unknown) => logger.error({ err }, 'two-step challenge prune failed'));
   // MUT-115 (D5): challenges live 5 minutes; anything expired is dead weight.
   void store.passkeys.pruneChallenges(new Date()).catch((err: unknown) => logger.error({ err }, 'passkey challenge prune failed'));
 }, MAIL_PRUNE_EVERY_MS);

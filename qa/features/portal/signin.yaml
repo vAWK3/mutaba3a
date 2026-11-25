@@ -4,11 +4,8 @@ title: Portal sign-in
 tier: core
 paths:
   - src/hosted/pages/auth/**
-  - src/hosted/hosted.css
   - src/hosted/components/Brand.tsx
   - hosted.html
-  - src/styles/**
-  - src/assets/fonts/**
 features:
   - id: type
     title: Sign-in is Thmanyah Sans with a Serif Display 700 heading, in English and Arabic, and loads no font from another origin (MUT-102)
@@ -27,14 +24,14 @@ features:
     expect:
       - No axe violation, colour-contrast included
   - id: brand-chrome
-    title: Sign-in leads with the Brand v2 mark + name lockup, and the tab icons are the bundled hashed copies (MUT-104)
+    title: Sign-in leads with the Brand v2 mark + name lockup, and the tab icons load (MUT-104)
     tier: secondary
     legacy: [MUT-104]
     steps:
       - Stub /v1 to 401 and open /sign-in, under OS light then OS dark
     expect:
       - The Wordmark shows the mark (mark-dark.svg on the dark canvas) beside the product name
-      - Every icon link in the head points at /assets/*, and each returns 200
+      - The head links the SVG icon, the PNG fallbacks and the apple-touch icon, and each returns 200 with an image (the production build serves them hashed from /assets/)
   - id: request-link
     title: Sign-in offers one outward "No account? Request one" link to the landing's /hosted page, in English and Arabic (MUT-188)
     tier: core
@@ -90,3 +87,21 @@ features:
       - The splash's background is the token canvas for the scheme; the mark is loaded, 80 px and centred (±1 px)
       - Once React mounts, the mark (or the loader in its place) has the same centre and size (±1 px), then says "Checking your session"
       - No CSP violation, and no axe violation beyond the known landmark rule
+  - id: email-code
+    title: '"Email me a sign-in code" beside "Forgot your password?" opens the code step, takes the code from the one-time-code field and signs in, in English and Arabic (MUT-618)'
+    tier: core
+    tickets: [MUT-618]
+    paths:
+      - src/hosted/pages/auth/SignInCodeStep.tsx
+      - src/hosted/pages/auth/signInCode.ts
+      - src/hosted/api/client.ts
+      - src/hosted/session/selfServiceDoors.ts
+    steps:
+      - Open /sign-in, in English then Arabic, with a server that mails codes
+      - Type your email and press Email me a sign-in code, beside Forgot your password?
+      - Type a wrong code, then the right one
+    expect:
+      - The code step says a code went to the address if it has an account, and its field is a one-time-code field read left to right
+      - Resend code waits out its minute
+      - A wrong code says how many tries are left
+      - The right code lands on Home

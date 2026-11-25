@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, Me, UpdateProfileResponse } from '../api/client';
-import { atProfileCap, canCreateProfile, coOwnsOthersProfiles, profileEditability } from '../data/profileRules';
+import { atProfileCap, canCreateProfile, coOwnsOthersProfiles, opensInManage, profileEditability } from '../data/profileRules';
 import { profileKey, ME_KEY, useMe } from '../session/me';
 import { withProfileLeft } from '../data/profileQueries';
 import { useLostAccess } from '../session/lostAccess';
@@ -53,7 +53,7 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
   const navigate = useNavigate();
   const forgetOpen = useLostAccess((s) => s.forget);
 
-  const editing = me.profiles.find((profile) => profile.id === editId && profile.owned) ?? null;
+  const editing = me.profiles.find((profile) => profile.id === editId && opensInManage(profile)) ?? null;
   const canCreate = canCreateProfile(me);
 
   const leaveEdit = (next: Banner | null) => {
@@ -148,6 +148,7 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
 function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfile; viewerId: string; open: boolean; onEdit: (id: string) => void }) {
   const t = useT();
   const editability = profileEditability(profile);
+  const opens = opensInManage(profile);
   const body = (
     <>
       <span className="hp-profile-row-text">
@@ -169,14 +170,14 @@ function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfil
       <span className="hp-profile-row-currency" dir="ltr">
         {profile.defaultCurrency}
       </span>
-      {editability.editable && (
+      {opens && (
         <span className="hp-profile-row-chevron" aria-hidden="true">
           ›
         </span>
       )}
     </>
   );
-  if (!editability.editable) return <div className="hp-profile-row hp-profile-row-ro">{body}</div>;
+  if (!opens) return <div className="hp-profile-row hp-profile-row-ro">{body}</div>;
   return (
     <button type="button" className="hp-profile-row press" onClick={() => onEdit(profile.id)}>
       {body}

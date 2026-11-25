@@ -1,5 +1,6 @@
 import { randomBytes } from 'node:crypto';
 import type { OpenAPIHono } from '@hono/zod-openapi';
+import type { MiddlewareHandler } from 'hono';
 import { contextStorage } from 'hono/context-storage';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createApiShell } from './app-shell.js';
@@ -18,9 +19,14 @@ import type { Logger } from './logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
 import { SENTRY_INGEST_ORIGIN } from './observability/sentry-ingest.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from './rate-limit.js';
-import type { LedgerStore } from './repositories/ports.js';
+import type { LedgerStore, OAuthClientRecord } from './repositories/ports.js';
+import { remoteKeys } from './oauth/client-assertion.js';
+import type { JWTVerifyGetKey } from 'jose';
 import type { AttachmentStorage } from './attachments/storage.js';
-import { adminAuth, adminRoutes, jobAuth } from './routes/admin.js';
+import { adminAuth, adminRoutes, jobAuth, MALAFAT_DELEGATION_ADMIN_ENDPOINTS } from './routes/admin.js';
+import { adminOAuthClientRoutes } from './routes/admin-oauth-clients.js';
+import { MALAFAT_SIGN_IN_ENDPOINTS, malafatSignInRoutes } from './routes/malafat-sign-in.js';
+import type { MalafatSignInConfig } from './malafat/sign-in-client.js';
 import { adminBillingRoutes } from './routes/admin-billing.js';
 import { EMAIL_WEBHOOK_POLICY, emailWebhookRoutes } from './routes/email-webhook.js';
 import { devOutboxRoutes } from './routes/dev-outbox.js';
@@ -34,7 +40,9 @@ import { NOOP_TRANSPORT } from './email/transports/noop.js';
 import { STRIPE_WEBHOOK_POLICY, stripeBillingRoutes } from './routes/stripe-billing.js';
 import { trialMailRoutes } from './routes/trial-mail.js';
 import { cardFailedMailRoutes } from './routes/card-failed-mail.js';
+import { taxAuthorityReminderRoutes } from './routes/tax-authority-reminders.js';
 import { comebackMailRoutes } from './routes/comeback-mail.js';
+import { MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, monthlySummaryMailRoutes } from './routes/monthly-summary-mail.js';
 import { renewalMailRoutes } from './routes/renewal-mail.js';
 import type { OfferEntry } from './billing/offer.js';
 import type { StripeGateway } from './billing/stripe/gateway.js';
@@ -54,6 +62,7 @@ import { oauthCleanupRoutes } from './routes/oauth-cleanup.js';
 import { ORGANIZATION_INDEPENDENT_ROUTES, sessionRoutes } from './routes/sessions.js';
 import { CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, accountClosureRoutes } from './routes/account-closure.js';
 import { accountPurgeRoutes } from './routes/account-purge.js';
+import { issuingRetentionRoutes } from './routes/issuing-retention.js';
 import type { AccountStripeGateway } from './billing/stripe/account-gateway.js';
 import type { PlanGateway } from './billing/stripe/plan-gateway.js';
 import { ME_ORGANIZATION_INDEPENDENT_ROUTES } from './routes/me.js';
@@ -61,6 +70,9 @@ import { DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, deviceSessionRoutes } f
 import { PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, passkeyRoutes, type PasskeyEvents } from './routes/passkeys.js';
 import type { WebauthnConfig } from './auth/webauthn.js';
 import { accountSetupRoutes } from './routes/account-setup.js';
+import { TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES, twoFactorRoutes } from './routes/two-factor.js';
+import { TwoFactorFlow } from './auth/two-factor-flow.js';
+import { TwoFactorKeys } from './auth/two-factor.js';
 import { ACCOUNTANT_ENDPOINTS, ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, accountantRoutes } from './routes/accountants.js';
 import { ACCOUNTANT_INVITE_POLICY, ACCOUNTANTS_PER_PROFILE_DEFAULT } from './accountants/grants.js';
 import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
@@ -68,7 +80,8 @@ import { SHARE_LINK_ENDPOINTS, SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, share
 import { SHARE_LINK_CREATE_POLICY, SHARE_LINK_SUMMARY_POLICY, SHARE_LINK_VIEW_IP_POLICY, SHARE_LINK_VIEW_POLICY, SHARE_LINKS_PER_PROFILE_DEFAULT, shareLinkUnavailable } from './share-links/links.js';
 import { defaultSelfServiceOptions, selfServiceRoutes, type SelfServiceOptions } from './routes/self-service.js';
 import { adminSignupReviewRoutes } from './routes/admin-signup-reviews.js';
-import { OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
+import { MALAFAT_DELEGATION_OPERATOR_ENDPOINTS, OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, operatorRoutes } from './routes/operator.js';
+import { CONNECTED_APPS_ENDPOINTS, CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, connectedAppRoutes } from './routes/connected-apps.js';
 import { operatorGate } from './auth/operator-gate.js';
 import { createReviewDigest, type ReviewDigest } from './email/review-digest.js';
 import { auditRoutes } from './routes/audit.js';
@@ -85,6 +98,12 @@ import { feeProposalRoutes } from './routes/fee-proposals.js';
 import { installmentRoutes } from './routes/installments.js';
 import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
+import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
+import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
+import { UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFileHouse } from './issuing/uniform-file/export.js';
+import type { RegistryLookup } from './israel/registry.js';
+import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
+import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
 import { PERIOD_DOWNLOAD_POLICY, PERIOD_PACK_CONCURRENCY_DEFAULT, PERIOD_PACK_MAX_RECEIPT_BYTES_DEFAULT, PERIOD_PACK_MAX_ROWS_DEFAULT, StreamSlots, UsedTickets, type DownloadLimits } from './period-pack/index.js';
@@ -122,6 +141,13 @@ export interface AppDependencies {
   terms?: CurrentTerms;
   /** Browser sessions (MUT-38). Production passes the configured pepper and limits; tests get a random pepper and the defaults. */
   sessions?: SessionSettings;
+  /**
+   * MUT-710 (ADR-274 D4): seals TOTP secrets and keys recovery codes. Production builds it from TWO_FACTOR_SEAL_KEY;
+   * absent = derived from the session pepper (tests, local).
+   */
+  twoFactorKeys?: TwoFactorKeys;
+  /** MUT-710 (D5): the per-person budget for emailed two-step codes (10 an hour). Absent = that default, in process. */
+  twoFactorMailLimiter?: RateLimiter;
   /** Sign-in lockout state (in process, one instance until TD-017). */
   signInThrottle?: SignInThrottle;
   /** Per-IP sign-in attempt budget. */
@@ -136,6 +162,13 @@ export interface AppDependencies {
   appAssociation?: AppAssociationConfig | null;
   /** Reference exchange rates (MUT-228), cached per instance. Null or absent = GET /v1/fx-rates answers 503 FX_RATES_UNAVAILABLE. */
   fxRates?: CachedFxRates | null;
+  /** MUT-642: the company/nonprofit registry lookup; absent in tests unless given (the route then answers 502 REGISTRY_UNAVAILABLE). */
+  registry?: RegistryLookup | null;
+  /** MUT-571/572: the Tax Authority's Open API client and token box; absent = no connection on this server (the routes answer 404). */
+  taxAuthority?: Omit<TaxAuthorityDeps, 'store'> | null;
+  /** MUT-711: where an allocation number is requested by hand; absent = DEFAULT_MANUAL_ALLOCATION_URL. */
+  manualAllocationUrl?: string | null;
+  businessLookupLimiter?: RateLimiter;
   /** Per-IP budget for the anonymous GET /v1/public/fx-rates (MUT-287). Defaults to PUBLIC_FX_POLICY. */
   publicFxIpLimiter?: RateLimiter;
   /** MUT-293 minimum app version gate. Null or absent = no platform gated (every floor/recommended undefined, check not disabled). */
@@ -175,12 +208,26 @@ export interface AppDependencies {
    * the gate's own suites turn it on.
    */
   billingGate?: boolean;
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (TWO_FACTOR_SETUP_REQUIRED). Production passes
+   * TWO_FACTOR_ISSUING_GATE_ENABLED (off by default). Absent = off; issuingHarness and the gate's own suites turn it on.
+   */
+  twoFactorIssuingGate?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
   trialMail?: { refuseLoopbackLinks: boolean };
+  /** MUT-535 (D12): sends per monthly summary run (MONTHLY_SUMMARY_DAILY_SENDS). Absent = the default, 40. */
+  monthlySummaryDailySends?: number;
   /** MUT-533 (D3): BILLING_RETRY_WINDOW_DAYS, the Smart Retries window the failed-card reminder is timed in. Default 14. */
   retryWindowDays?: number;
+  /**
+   * MUT-641 (ADR-265): signs every issued-document PDF that leaves (documentSignerFrom(config)). Absent or null = no
+   * signer: the PDF routes answer 503 SIGNING_NOT_CONFIGURED; the draft preview, never signed, still prints.
+   */
+  documentSigner?: DocumentSigner | null;
+  /** MUT-569: the uniform file's software fields; absent = the placeholders (zeros, "MTB3A"). */
+  uniformFileSoftware?: UniformFileHouse | null;
   /** MUT-148 (ADR-091): where 5xx and unknown errors are reported. Absent = nowhere; /health says "off". */
   reporter?: ErrorReporter;
   /** MUT-359: the mailer (password notices; MUT-366's links). Absent = no mailer: every send answers `disabled`. */
@@ -211,7 +258,15 @@ export interface AppDependencies {
    * the /oauth endpoints, the OAuth discovery documents, /mcp and /v1/oauth/* answer 503 OAUTH_NOT_CONFIGURED.
    * `fetchMetadata` and the limiters are injected by tests; production uses the guarded CIMD fetch and OAUTH_POLICY.
    */
-  oauth?: { deriveKey: string; fetchMetadata?: (url: string) => Promise<CimdFetchResult>; limiters?: OAuthLimiters; agentLimiter?: RateLimiter; agentPersonLimiter?: RateLimiter } | null;
+  oauth?: {
+    deriveKey: string;
+    fetchMetadata?: (url: string) => Promise<CimdFetchResult>;
+    limiters?: OAuthLimiters;
+    agentLimiter?: RateLimiter;
+    agentPersonLimiter?: RateLimiter;
+    /** MUT-593: a confidential client's keys (tests); default fetches its JWKS URL. */
+    keysFor?: (client: OAuthClientRecord) => JWTVerifyGetKey;
+  } | null;
   /**
    * MUT-441 (SERVER_OCR): the server reads receipts, on the OCR service through `ocr`, scheduled by `dispatcher`
    * (Cloud Tasks; an InlineDispatcher is bound to the reader here). Needs `attachments`. Null or absent = no receipt is
@@ -225,6 +280,15 @@ export interface AppDependencies {
    * /v1/me has no `clients`, and selectProfile never reads a grant (the server deploys dark).
    */
   accountantAccess?: boolean;
+  /**
+   * MUT-593 (MALAFAT_DELEGATION, ADR-254): Malafat acting as each person. Absent or false = delegated tokens are
+   * refused, the token endpoint serves no confidential client, and Connected apps and the operator switch answer 404.
+   */
+  malafatDelegation?: boolean;
+  /** MUT-596 (OAUTH_CLIENT_LOCAL_HTTP): a confidential client may publish its keys over http on this machine (local QA). */
+  oauthClientLocalHttp?: boolean;
+  /** MUT-595 (MALAFAT_SIGN_IN): Sign in with Malafat; null or absent = its routes answer 404. */
+  malafatSignIn?: MalafatSignInConfig | null;
   /** MUT-559: ACCOUNTANTS_PER_PROFILE_MAX. Default ACCOUNTANTS_PER_PROFILE_DEFAULT (5). */
   accountantsPerProfileMax?: number;
   /** MUT-559: invites per owner per hour. Defaults to ACCOUNTANT_INVITE_POLICY. */
@@ -263,7 +327,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -345,7 +409,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.108.0-mut565';
+export const API_VERSION = '1.141.0-mut661';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -357,8 +421,9 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
 
   const reporter = deps.reporter ?? NOOP_REPORTER;
   const accountantAccess = deps.accountantAccess ?? false;
+  const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -391,6 +456,21 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Every route reaches the ledger through the guard authenticate() sets (ADR-037 decision 7); authenticate itself reads the base store.
   const store = requestScopedStore(deps.store);
   const sessions = deps.sessions ?? defaultSessionSettings();
+  // MUT-434 (ADR-197): the OAuth server. MUT-593: built before authenticate(), which verifies Malafat's delegated tokens with it.
+  const oauthService =
+    deps.oauth && sessions.portalOrigin
+      ? new OAuthService({
+          store: deps.store,
+          issuer: sessions.portalOrigin,
+          pepper: sessions.pepper,
+          deriveKey: deps.oauth.deriveKey,
+          fetchMetadata: deps.oauth.fetchMetadata ?? ((url) => fetchClientMetadata(url)),
+          captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
+          auditFor: agentAuditFor(deps.store),
+          delegation: malafatDelegation,
+          ...(deps.oauth.keysFor ? { keysFor: deps.oauth.keysFor } : deps.oauthClientLocalHttp ? { keysFor: (client: OAuthClientRecord) => remoteKeys(client.jwksUri ?? '', { localHttp: true }) } : {}),
+        })
+      : null;
   // Shared by the cookie and device-session sign-in routes (MUT-64): one throttle/IP-budget per email or address, whichever surface it comes from.
   const signInThrottle = deps.signInThrottle ?? new SignInThrottle();
   const signInIpLimiter = deps.signInIpLimiter ?? new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
@@ -421,13 +501,20 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     { endpoints: ACCOUNTANT_ENDPOINTS, on: accountantAccess, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
     { endpoints: SHARE_LINK_ENDPOINTS, on: deps.shareLinks ?? false, refusal: shareLinkUnavailable },
     { endpoints: PERIOD_DOWNLOAD_ENDPOINTS, on: periodDownloads, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    // MUT-593 (ADR-254 D10): Connected apps and the operator's per-firm switch.
+    { endpoints: new Set([...CONNECTED_APPS_ENDPOINTS, ...MALAFAT_DELEGATION_OPERATOR_ENDPOINTS, ...MALAFAT_DELEGATION_ADMIN_ENDPOINTS]), on: malafatDelegation, refusal: () => new ApiError('NOT_FOUND', 'Not found') },
+    // MUT-595: Sign in with Malafat.
+    { endpoints: MALAFAT_SIGN_IN_ENDPOINTS, on: Boolean(deps.malafatSignIn), refusal: () => new ApiError('NOT_FOUND', 'Not found') },
   ];
-  app.use('/v1/*', async (c, next) => {
+  const darkLaunchGate: MiddlewareHandler<AppEnv> = async (c, next) => {
     const endpoint = endpointKey(c);
     const off = endpoint ? darkLaunches.find((d) => !d.on && d.endpoints.has(endpoint)) : undefined;
     if (off) throw off.refusal();
     await next();
-  });
+  };
+  app.use('/v1/*', darkLaunchGate);
+  // MUT-596: the admin twin of a switched-off feature's operator route is dark too.
+  app.use('/admin/v1/*', darkLaunchGate);
   app.use(
     '/v1/*',
     authenticate({
@@ -439,6 +526,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       organizationIndependent: SESSION_ORGANIZATION_INDEPENDENT_ROUTES,
       accountantAccess,
       accountantPlan,
+      delegation: { service: oauthService, on: malafatDelegation },
     }),
   );
   // MUT-459 (ADR-212): after authenticate(), so a signed-out caller has its 401; a signed-in non-operator gets 404.
@@ -455,6 +543,15 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-324 review: the same for TermsStatus. Me.terms is nullable; the accept route's 200 is not.
   app.openAPIRegistry.register('TermsStatus', TermsStatusSchema);
   app.route('/', healthRoutes(store, deps.version, reporter.enabled));
+  // MUT-710 (ADR-274): the second step, shared by every sign-in route and setup links.
+  const twoFactor = new TwoFactorFlow({
+    keys: deps.twoFactorKeys ?? new TwoFactorKeys(`pepper:${sessions.pepper}`),
+    pepper: sessions.pepper,
+    mailer,
+    logger: deps.logger,
+    mailLimiter: deps.twoFactorMailLimiter ?? new SlidingWindowRateLimiter(10, 3_600_000),
+    settings: sessions,
+  });
   app.route(
     '/',
     sessionRoutes({
@@ -468,6 +565,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       logger: deps.logger,
       webauthn: deps.webauthn ?? null,
       reporter,
+      twoFactor,
     }),
   );
   app.route(
@@ -480,8 +578,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ipLimiter: signInIpLimiter,
       terms,
       webauthn: deps.webauthn ?? null,
+      twoFactor,
     }),
   );
+  app.route('/', twoFactorRoutes({ store, settings: sessions, ipLimiter: signInIpLimiter, twoFactor, passwordHasher, throttle: signInThrottle, mailer, logger: deps.logger }));
   // MUT-115: a person's passkeys, and the public sign-in challenge (the sign-in IP limiter, under its own key).
   app.route(
     '/',
@@ -499,10 +599,15 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-333: Close my account / Keep my account, signed in only (the signed-out portal has no account to close).
   app.route('/', accountClosureRoutes({ store, passwordHasher, throttle: signInThrottle, settings: sessions, mailer, logger: deps.logger, stripe: deps.stripe?.accountGateway ?? null }));
   // MUT-235: the setup-link routes share the sign-in IP limiter, under their own key.
-  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest }));
+  app.route('/', accountSetupRoutes({ store, passwordHasher, settings: sessions, ipLimiter: signInIpLimiter, throttle: signInThrottle, terms, mailer, logger: deps.logger, reviewDigest: signupReview.digest, twoFactor }));
   // MUT-366: the routes that mail those links. Public, like sign-in; the switch closes signup, never recovery.
-  const selfService = deps.selfService ?? defaultSelfServiceOptions();
+  const selfService = { ...(deps.selfService ?? defaultSelfServiceOptions()), malafatSignIn: Boolean(deps.malafatSignIn) };
   app.route('/', selfServiceRoutes({ store, settings: sessions, mailer, logger: deps.logger, options: selfService, now }));
+  // MUT-595: Sign in with Malafat, on the raw store like sign-in, sharing its throttle and IP limiter.
+  app.route(
+    '/',
+    malafatSignInRoutes({ store: deps.store, passwordHasher, settings: sessions, throttle: signInThrottle, ipLimiter: signInIpLimiter, terms, webauthn: deps.webauthn ?? null, config: deps.malafatSignIn ?? null, twoFactor }),
+  );
   // MUT-559 (ADR-245): an owner's accountants, and the invite an accountant accepts or signs up from. The public pair
   // shares the sign-in IP limiter under its own key, and signup's Turnstile check.
   app.route(
@@ -543,6 +648,22 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     billing: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
+    // MUT-571/572: hosted only, like the PDF.
+    taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
+    manualAllocationUrl: deps.manualAllocationUrl ?? null,
+    portalOrigin: sessions.portalOrigin ?? null,
+    servesPortal: Boolean(deps.portal),
+    // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.
+    ocr: deps.receiptReading?.ocr ?? null,
+    uniformFileSoftware: deps.uniformFileSoftware ?? null,
+    // MUT-640: hosted only; the signed-out portal's local app passes none.
+    issuedPdf: {
+      render: renderIssuedDocumentPdf,
+      sign: deps.documentSigner ? (doc, pdf, signedAt) => deps.documentSigner!.sign(pdf, signatureDetailsOf(doc, signedAt)) : null,
+      signingFailed: ({ organizationId, documentId, error }) => deps.logger.error({ organizationId, documentId, err: error, signer: deps.documentSigner?.kind }, 'issued document could not be signed; nothing was sent'),
+      logoPrints,
+      logoFailed: ({ organizationId, documentId, error }) => deps.logger.warn({ organizationId, documentId, err: error }, 'issued document printed without its logo'),
+    },
   };
   for (const route of PORTAL_ROUTES) app.route('/', route(portalRouteDeps));
   // MUT-325: signed in only, so outside PORTAL_ROUTES; signed out, Your data writes the same file from this device.
@@ -598,14 +719,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       : null;
   if (receiptReader && deps.receiptReading?.dispatcher instanceof InlineDispatcher) deps.receiptReading.dispatcher.bind((id) => receiptReader.readOne(id));
   app.route('/', receiptReadingRoutes({ reader: receiptReader, verifier: deps.receiptReadVerifier ?? null }));
-  // R5: granting receipt_reading queues the person's To-review receipts that were never read.
-  const onGranted = receiptReader
-    ? async (userId: string, feature: string) => {
-        if (feature === 'receipt_reading') await receiptReader.backlog(userId);
-      }
-    : undefined;
   // MUT-436: one budget for starting receipt uploads, whether a person's session or their agent starts them.
   const receiptUploadLimiter = deps.receiptUploadLimiter ?? new SlidingWindowRateLimiter(RECEIPT_UPLOAD_POLICY.perMinute);
+  // MUT-642: the registry lookup calls data.gov.il, so it's hosted only, outside PORTAL_ROUTES.
+  app.route('/', businessLookupRoutes({ registry: deps.registry ?? null, limiter: deps.businessLookupLimiter ?? new SlidingWindowRateLimiter(30) }));
   // MUT-255 (decision P1): the receipts library is hosted only, so outside PORTAL_ROUTES; signed-out local mode has none.
   // MUT-389: and only where RECEIPTS_LIBRARY turns it on.
   if (deps.receiptsLibrary) {
@@ -622,12 +739,13 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // Outside PORTAL_ROUTES on purpose: the signed-out portal's backend fetches it over the network, and must never serve it itself.
   app.route('/', publicFxRateRoutes({ rates: deps.fxRates ?? null, ipLimiter: deps.publicFxIpLimiter ?? new SlidingWindowRateLimiter(PUBLIC_FX_POLICY.ipPerMinute), trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) }));
   app.route('/', adminRoutes({ store, adminToken: deps.adminToken, keyEnvironment: deps.keyEnvironment }));
-  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', adminOAuthClientRoutes({ store, logger: deps.logger, issuer: sessions.portalOrigin ?? null, localHttp: deps.oauthClientLocalHttp ?? false }));
+  app.route('/', adminUserRoutes({ store, logger: deps.logger, sessions, terms, reporter, mailer }));
   // MUT-367: the signup review queue (operator; the store guard refuses every principal, as for accountSetup).
   app.route('/', adminSignupReviewRoutes({ store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress }));
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
-  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter, ...(onGranted ? { onGranted } : {}) }));
+  app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe
@@ -695,14 +813,46 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       mailer,
       logger: deps.logger,
       portalOrigin: sessions.portalOrigin,
+      pepper: sessions.pepper,
       checkout: deps.stripe?.checkoutGateway ?? null,
       plan: deps.stripe?.planGateway ?? null,
       refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
       ...(deps.offers ? { offers: deps.offers } : {}),
     }),
   );
+  // MUT-535: the monthly summary mails (job + operator) and their switch (You › Account, the opt-out page). The job and
+  // the token door on the unguarded store like the trial mails; the session switch on the guarded one.
+  app.route(
+    '/',
+    monthlySummaryMailRoutes({
+      store: deps.store,
+      sessionStore: store,
+      mailer,
+      logger: deps.logger,
+      settings: sessions,
+      ipLimiter: signInIpLimiter,
+      checkout: deps.stripe?.checkoutGateway ?? null,
+      plan: deps.stripe?.planGateway ?? null,
+      ...(deps.monthlySummaryDailySends ? { sendBudget: deps.monthlySummaryDailySends } : {}),
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+    }),
+  );
+  // MUT-571 AC3: the daily Tax Authority re-consent reminders (job + operator), on the unguarded store like the trial mails.
+  app.route(
+    '/',
+    taxAuthorityReminderRoutes({
+      store: deps.store,
+      mailer,
+      logger: deps.logger,
+      portalOrigin: sessions.portalOrigin,
+      environment: deps.taxAuthority?.client.environment ?? null,
+      refuseLoopbackLinks: deps.trialMail?.refuseLoopbackLinks ?? false,
+    }),
+  );
   // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.
   app.route('/', accountPurgeRoutes({ store: deps.store, stripe: deps.stripe?.accountGateway ?? null, storage: deps.attachments ?? null, logger: deps.logger }));
+  // MUT-644 (ADR-277): closed profiles' issued documents: the operator's search, archive and sweep (admin token only).
+  app.route('/', issuingRetentionRoutes({ store: deps.store, logger: deps.logger, issuedPdf: portalRouteDeps.issuedPdf ?? null, uniformFileHouse: deps.uniformFileSoftware ?? UNIFORM_FILE_HOUSE_PLACEHOLDER }));
   // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.
   app.route(
     '/',
@@ -719,21 +869,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   if (deps.localAttachments) app.route('/', devAttachmentRoutes(deps.localAttachments));
   if (deps.appAssociation) app.route('/', wellKnownRoutes(deps.appAssociation));
   // MUT-434 (ADR-197): the OAuth server and the MCP endpoint, always mounted so an unconfigured server answers 503, not the SPA.
-  const oauthService =
-    deps.oauth && sessions.portalOrigin
-      ? new OAuthService({
-          store: deps.store,
-          issuer: sessions.portalOrigin,
-          pepper: sessions.pepper,
-          deriveKey: deps.oauth.deriveKey,
-          fetchMetadata: deps.oauth.fetchMetadata ?? ((url) => fetchClientMetadata(url)),
-          captureMessage: (level, message, tags) => reporter.captureMessage(level, message, tags),
-          auditFor: agentAuditFor(deps.store),
-        })
-      : null;
   const requestPaths = { trustedProxyHops: sessions.trustedProxyHops, ...(sessions.frontDoorToken ? { frontDoorToken: sessions.frontDoorToken } : {}), ...(sessions.forwarderToken ? { forwarderToken: sessions.forwarderToken } : {}) };
   app.route('/', oauthRoutes({ service: oauthService, limiters: deps.oauth?.limiters ?? defaultOAuthLimiters(), paths: requestPaths }));
   app.route('/', oauthConsentRoutes({ store, service: oauthService }));
+  app.route('/', connectedAppRoutes({ store }));
   app.route('/', oauthCleanupRoutes(deps.store));
   app.route('/', mcpRoutes({ service: oauthService, store: deps.store, guardedStore: store, reporter, rateLimiter: deps.oauth?.agentLimiter ?? new SlidingWindowRateLimiter(AGENT_REQUESTS_PER_MINUTE), personRateLimiter: deps.oauth?.agentPersonLimiter ?? new SlidingWindowRateLimiter(AGENT_PERSON_REQUESTS_PER_MINUTE), version: deps.version,
     tools: { inboxWrites: deps.mcpInboxWrites ?? false, storage: deps.attachments ?? null, urlTtlSeconds: deps.attachmentUrlTtlSeconds ?? 900, receiptsLibrary: deps.receiptsLibrary ?? false, uploadLimiter: receiptUploadLimiter, reading: receiptReader } }));
@@ -776,6 +915,14 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       'Native-app device session (MUT-64): `Authorization: Bearer mds_<secret>`. ' +
       'Set by POST /v1/device-sessions. Same session principal and writability as the portal cookie session — ' +
       'organization-scoped calls add X-Mutaba3a-Profile: <organizationId> naming one of the user\'s memberships.',
+  });
+  app.openAPIRegistry.registerComponent('securitySchemes', 'delegated', {
+    type: 'http',
+    scheme: 'bearer',
+    description:
+      'Malafat acting as one person (MUT-593, ADR-254): `Authorization: Bearer mat_…`, an OAuth access token issued to Malafat\'s confidential ' +
+      'client for resource <origin>/v1 and bound to one Malafat tenant. The person\'s own permissions apply unchanged, on the tenant\'s profile ' +
+      'only (X-Mutaba3a-Profile must name it; any other profile is 404 PROFILE_NOT_FOUND). Only routes that list this scheme accept it.',
   });
   app.openAPIRegistry.registerComponent('securitySchemes', 'jobToken', {
     type: 'apiKey',

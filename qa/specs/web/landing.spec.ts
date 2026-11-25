@@ -278,6 +278,8 @@ test('chapter visuals rise in once on scroll, and are simply there under reduced
   const figure = (p: Page) => p.locator('[data-part="chapter-clients"] .landing-chapter-visual');
 
   await step('Motion allowed: held back below the fold, then fully shown once scrolled to', async () => {
+    // A 1280 × 720 window keeps the clients chapter below the fold; the desktop target's 1440 × 900 shows it at load
+    await page.setViewportSize({ width: 1280, height: 720 });
     await openLanding(page);
     await expect(figure(page)).toHaveAttribute('data-reveal', 'pending');
     await figure(page).scrollIntoViewIfNeeded();

@@ -59,6 +59,41 @@ describe('Manage profiles list (MUT-183)', () => {
   });
 });
 
+describe('A Malafat-synced firm the person owns (MUT-594 partners)', () => {
+  const SYNCED = 'd3333333-3333-4333-8333-333333333333';
+  const synced = profile({ id: SYNCED, name: 'Sader Law Firm', writerOfRecord: 'MALAFAT', owned: true, managedInMalafat: true, type: 'BUSINESS', version: 1 });
+  /** Accountant access on for this server (`clients`) and this person (MUT-577's feature). */
+  const sharingOn = () => {
+    const base = me([synced, studio, builtIn]);
+    return { ...base, user: { ...base.user, features: ['accountant_access'] }, clients: [] };
+  };
+
+  it('its row opens, still saying Malafat manages it', async () => {
+    portal(`/p/${STUDIO}?manageProfiles=true`, { 'GET /v1/me': () => ok(sharingOn()) });
+    const dialog = await screen.findByRole('dialog', { name: 'Profiles' });
+    const row = within(dialog).getByRole('button', { name: /^Sader Law Firm/ });
+    expect(row.textContent).toBe('Sader Law FirmManaged in Malafat. Change it there.ILS›');
+  });
+
+  it('opens read-only, with the Sharing row and nothing to save', async () => {
+    const { user, api, router } = portal(`/p/${STUDIO}?manageProfiles=true`, { 'GET /v1/me': () => ok(sharingOn()) });
+    await user.click(await screen.findByRole('button', { name: /^Sader Law Firm/ }));
+    expect(locationOf(router)).toBe(`/p/${STUDIO}?editProfile=${SYNCED}`);
+    const dialog = screen.getByRole('dialog', { name: 'Sader Law Firm' });
+    expect(within(dialog).getByRole('note')).toHaveTextContent('Managed in Malafat. Change it there.');
+    expect(within(dialog).getByLabelText('Name')).toBeDisabled();
+    expect(within(dialog).queryByRole('button', { name: 'Save' })).toBeNull();
+    expect(within(dialog).getByRole('link', { name: /Sharing/ })).toHaveAttribute('href', `/p/${SYNCED}/you/sharing`);
+    expect(patches(api.calls)).toHaveLength(0);
+  });
+
+  it('a Malafat firm the person does not own stays locked', async () => {
+    portal(`/p/${STUDIO}?editProfile=${ORG_A}`, { 'GET /v1/me': () => ok({ ...sharingOn(), profiles: [{ ...synced, id: ORG_A, owned: false }, studio, builtIn] }) });
+    expect(await screen.findByRole('dialog', { name: 'Profiles' })).toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).toBeNull();
+  });
+});
+
 describe('Edit pane (MUT-183)', () => {
   it('MG3: renaming sends only the name, with the version read when the pane opened', async () => {
     const { user, api, router } = portal(`/p/${STUDIO}?manageProfiles=true`, { [`PATCH /v1/profiles/${STUDIO}`]: () => saved({ ...studio, name: 'Studio' }) });

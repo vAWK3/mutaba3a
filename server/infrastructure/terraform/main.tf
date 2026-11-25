@@ -57,6 +57,10 @@ locals {
   card_failed_mail_enabled = var.mailer == "resend" && var.stripe_enabled
   # MUT-534: the daily come-back mails need mail and Stripe, and the operator's go-ahead after a reviewed dry run.
   comeback_mail_enabled = var.mailer == "resend" && var.stripe_enabled && var.comeback_mail_enabled
+  # MUT-535: the monthly summary needs mail and the operator's go-ahead; without Stripe it mails without the yearly line.
+  monthly_summary_mail_enabled = var.mailer == "resend" && var.monthly_summary_mail_enabled
+  # MUT-571 AC3: the Tax Authority re-consent reminders need mail and the operator's go-ahead (the connection is configured).
+  tax_authority_reminders_enabled = var.mailer == "resend" && var.tax_authority_reminders_enabled
 
   # MUT-111: empty (default) = no env vars below, feature off — matches
   # config.ts treating all four as absent. Set together in production.tfvars.
@@ -91,6 +95,14 @@ locals {
     var.accountant_plan_enabled ? { ACCOUNTANT_PLAN = "true" } : {},
   )
 
+  # MUT-569 (ADR-272): the uniform file's software fields (A000 1006/1009/1010), only those set. Unset, the API writes
+  # its placeholders (zeros, "MTB3A"). The software house is the registering owner: Narabnd Studio Ltd (MUT-700).
+  uniform_file_env = merge(
+    var.uniform_file_registration_number == null ? {} : { UNIFORM_FILE_REGISTRATION_NUMBER = var.uniform_file_registration_number },
+    var.software_house_vat_id == null ? {} : { SOFTWARE_HOUSE_VAT_ID = var.software_house_vat_id },
+    var.software_house_name == null ? {} : { SOFTWARE_HOUSE_NAME = var.software_house_name },
+  )
+
   # MUT-487 (R2): the new project keeps its jobs paused until the cutover; behind the forwarder the old ones would
   # reach the new service a second time, so they stay paused whatever scheduler_paused says.
   scheduler_paused = var.scheduler_paused || var.legacy_forwarder
@@ -121,6 +133,8 @@ resource "google_project_service" "apis" {
     local.ocr_enabled ? ["cloudtasks.googleapis.com", "compute.googleapis.com"] : [],
     # MUT-511: the budget (budget.tf) takes its quota from this project.
     var.billing_account_id == null ? [] : ["billingbudgets.googleapis.com"],
+    # MUT-641: the issued-document signing key (signing.tf).
+    var.issuing_signing_key ? ["cloudkms.googleapis.com"] : [],
   ))
   project            = var.project_id
   service            = each.key
@@ -602,6 +616,17 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-710: seals two-step sign-in secrets; required on production (config.ts), generated in two_factor.tf.
+        env {
+          name = "TWO_FACTOR_SEAL_KEY"
+          value_source {
+            secret_key_ref {
+              secret  = google_secret_manager_secret.two_factor_seal_key.secret_id
+              version = "latest"
+            }
+          }
+        }
+
         # MUT-434: OAuth for MCP agents stays off (503) until oauth_enabled; the key always holds a version.
         dynamic "env" {
           for_each = var.oauth_enabled ? toset(["OAUTH_DERIVE_KEY"]) : toset([])
@@ -676,9 +701,28 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-641 (ADR-265): issued-document PDFs are signed with the KMS key once its certificate is set (signing.tf).
+        # Without it ISSUING_SIGNER stays unset, which the API reads as off in production (the PDF routes answer 503).
+        dynamic "env" {
+          for_each = local.issuing_signing_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-361: the lapse gate is on unless billing_gate_enabled = false (the kill switch).
         dynamic "env" {
           for_each = var.billing_gate_enabled ? {} : { BILLING_GATE = "false" }
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-535 (D12): the monthly summary's sends per run; 40 (the API's default) stays unset.
+        dynamic "env" {
+          for_each = var.monthly_summary_daily_sends == 40 ? {} : { MONTHLY_SUMMARY_DAILY_SENDS = tostring(var.monthly_summary_daily_sends) }
           content {
             name  = env.key
             value = env.value
@@ -694,9 +738,9 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
-        # MUT-389: the receipts library, once receipts_library_enabled (on with MUT-260 or MUT-258).
+        # MUT-389/659: the receipts library. Always set: the API defaults to on, so "false" must be said to turn it off.
         dynamic "env" {
-          for_each = var.receipts_library_enabled ? { RECEIPTS_LIBRARY = "true" } : {}
+          for_each = { RECEIPTS_LIBRARY = var.receipts_library_enabled ? "true" : "false" }
           content {
             name  = env.key
             value = env.value
@@ -715,6 +759,24 @@ resource "google_cloud_run_v2_service" "api" {
         # MUT-558: accountant access, share links, period downloads and the (dormant) Accountant plan.
         dynamic "env" {
           for_each = local.accountant_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-569: the uniform file's software house and registration number (locals.uniform_file_env).
+        dynamic "env" {
+          for_each = local.uniform_file_env
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
+        # MUT-710 (ADR-274 D10): issuing needs two-step sign-in only once the screens that turn it on have shipped.
+        dynamic "env" {
+          for_each = var.two_factor_issuing_gate_enabled ? { TWO_FACTOR_ISSUING_GATE_ENABLED = "true" } : {}
           content {
             name  = env.key
             value = env.value
@@ -888,6 +950,12 @@ resource "google_cloud_run_v2_service" "api" {
     }
 
     precondition {
+      # MUT-641: the certificate is for the KMS key; without the key there is nothing to sign with.
+      condition     = var.issuing_signing_cert_chain == null || var.issuing_signing_key
+      error_message = "issuing_signing_cert_chain needs issuing_signing_key = true: the certificate is for that KMS key (signing.tf)."
+    }
+
+    precondition {
       # MUT-558/565: the plan sells through Stripe; without it an accountant at the 4th client has no way to pay.
       condition     = !var.accountant_plan_enabled || var.stripe_enabled
       error_message = "accountant_plan_enabled needs stripe_enabled: the Accountant plan is sold through Stripe (MUT-565, pilot runbook §1.12)."
@@ -923,6 +991,8 @@ resource "google_cloud_run_v2_service" "api" {
     google_secret_manager_secret_version.job_token,
     google_secret_manager_secret_version.oauth_derive_key,
     google_secret_manager_secret_iam_member.api_reads_oauth_derive_key,
+    google_secret_manager_secret_version.two_factor_seal_key,
+    google_secret_manager_secret_iam_member.api_reads_two_factor_seal_key,
     google_secret_manager_secret_iam_member.api_reads_database_url,
     google_secret_manager_secret_iam_member.api_reads_admin_token,
     google_secret_manager_secret_iam_member.api_reads_session_pepper,
@@ -1120,6 +1190,70 @@ resource "google_cloud_scheduler_job" "comeback_mail" {
   http_target {
     http_method = "POST"
     uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/comeback-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-535 (ADR-259, D12, D13): the monthly summary mails, on days 1-7 of each month at 14:00 Jerusalem (12:00 UTC, when
+# the 1st has begun in every zone down to UTC-12). Each run sends at most monthly_summary_daily_sends and stops at the
+# first mail the daily cap refuses; the next day continues, and each person is mailed once a month (the send log).
+# Only with mail on and once monthly_summary_mail_enabled says the operator read a dry run. Retries are safe.
+resource "google_cloud_scheduler_job" "monthly_summary_mail" {
+  count = local.monthly_summary_mail_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-monthly-summary-mail${local.suffix}"
+  region           = var.region
+  description      = "Monthly summary mails, days 1-7 (MUT-535)."
+  schedule         = "0 14 1-7 * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/billing/monthly-summary-mail"
+    headers = {
+      "X-Job-Token"  = random_password.job_token.result
+      "Content-Type" = "application/json"
+    }
+  }
+
+  depends_on = [google_project_service.apis]
+}
+
+# MUT-571 AC3: the Tax Authority re-consent reminders, daily at 09:00 Jerusalem. The owner of each connected profile is
+# mailed once ten days before the 90-day consent ends and once when it has ended; each stage once per consent (the send
+# log), so a retry or a second run sends nothing new. Only with mail on and once tax_authority_reminders_enabled says the
+# Tax Authority connection is configured here and the operator read a dry run.
+resource "google_cloud_scheduler_job" "tax_authority_reminders" {
+  count = local.tax_authority_reminders_enabled ? 1 : 0
+
+  project          = var.project_id
+  name             = "mutaba3a-tax-authority-reminders${local.suffix}"
+  region           = var.region
+  description      = "Tax Authority re-consent reminders, daily (MUT-571)."
+  schedule         = "0 9 * * *"
+  time_zone        = "Asia/Jerusalem"
+  attempt_deadline = "280s"
+  paused           = local.scheduler_paused
+
+  retry_config {
+    retry_count = 3
+  }
+
+  http_target {
+    http_method = "POST"
+    uri         = "${google_cloud_run_v2_service.api.uri}/jobs/v1/issuing/tax-authority-reminders"
     headers = {
       "X-Job-Token"  = random_password.job_token.result
       "Content-Type" = "application/json"

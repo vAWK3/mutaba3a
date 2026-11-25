@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, ownerActions, ownersSectionVisible, profileEditability, profileKindKey, sharedWith } from '../profileRules';
+import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, mayMoveExpensesFrom, ownerActions, ownersSectionVisible, ownsItsRecords, profileEditability, profileKindKey, sharedWith } from '../profileRules';
+import { canAddClient, incomeAffordancesFor } from '../incomeAffordances';
 import { me, profile } from '../../__tests__/harness';
 
 const firm = profile();
@@ -132,5 +133,40 @@ describe('co-owners (MUT-373)', () => {
     expect(createdBy(iCoOwn, ME)).toBe(false);
     expect(createdBy({ ...ownedBusiness, owners: null }, ME)).toBe(true);
     expect(createdBy(firm, ME)).toBe(false);
+  });
+});
+
+describe('mayMoveExpensesFrom (MUT-589, ADR-255)', () => {
+  it('offers Move only to an owner of a profile Malafat does not feed', () => {
+    expect(mayMoveExpensesFrom(builtIn)).toBe(true);
+    expect(mayMoveExpensesFrom(ownedPersonal)).toBe(true);
+    expect(mayMoveExpensesFrom(writerNullFirm)).toBe(false);
+    expect(mayMoveExpensesFrom(firm)).toBe(false);
+    expect(mayMoveExpensesFrom(profile({ writerOfRecord: 'MALAFAT', owned: true }))).toBe(false);
+  });
+});
+
+describe('a firm Malafat feeds, owned by a partner (MUT-594, MUT-596)', () => {
+  const firm = profile({ owned: true, managedInMalafat: true, writerOfRecord: 'MALAFAT', type: 'BUSINESS', firm: true, isPersonalDefault: false, access: { payments: 'read', capture: 'read-write', expenses: 'read-write' } });
+
+  it('is owned for sharing, but its name, owners and records are Malafat’s', () => {
+    expect(ownsItsRecords(firm)).toBe(false);
+    expect(profileEditability(firm)).toEqual({ editable: false, reason: 'MALAFAT' });
+    expect(ownersSectionVisible(firm)).toBe(false);
+    expect(ownerActions(firm, 'anyone')).toEqual({ canRemove: false, canLeave: false });
+    expect(mayMoveExpensesFrom(firm)).toBe(false);
+  });
+
+  it('offers no income and no new client, and says Malafat records it', () => {
+    expect(incomeAffordancesFor(firm).kinds).toEqual([]);
+    expect(canAddClient(firm)).toBe(false);
+  });
+});
+
+describe("a person's own profile they connected to Malafat (MUT-61, MUT-596)", () => {
+  it('stays theirs: its captures are offered', () => {
+    const own = profile({ owned: true, managedInMalafat: false, writerOfRecord: 'MALAFAT', type: 'BUSINESS', isPersonalDefault: false });
+    expect(ownsItsRecords(own)).toBe(true);
+    expect(mayMoveExpensesFrom(own)).toBe(false);
   });
 });

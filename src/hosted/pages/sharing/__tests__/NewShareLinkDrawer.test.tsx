@@ -183,7 +183,7 @@ describe('the done pane (B4)', () => {
     await user.click(screen.getByRole('button', { name: 'إنشاء الرابط' }));
     await user.click(await within(dialog).findByRole('button', { name: 'نسخ الرسالة' }));
     const message = await navigator.clipboard.readText();
-    expect(message).toMatch(/^مرحباً، شاركتُ معك دفاتر «Studio» لفترة أغسطس – أكتوبر 2026 على متابعة: https:\/\/portal\.test\/share#\S+ — يعمل الرابط حتى 13 نوفمبر\. سأرسل لك الرمز بشكل منفصل\.$/);
+    expect(message).toMatch(/^مرحباً، شاركتُ معك دفاتر «Studio» لفترة آب – تشرين الأول 2026 على متابعة: https:\/\/portal\.test\/share#\S+ — يعمل الرابط حتى 13 تشرين الثاني\. سأرسل لك الرمز بشكل منفصل\.$/);
   });
 
   it('review 1: neither the PIN nor the URL ever enters the mutation cache', async () => {

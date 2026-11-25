@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue } from './keyed-queue.js';
+import { handsOverArchive, retentionDateOf, retentionSweepMetadata } from '../issuing/retention.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
 import { fillAbsent, isCompleteSuggestion } from '../receipts/extract/merge.js';
 import { applyMalafatChange } from '../malafat-suggestions.js';
@@ -15,6 +16,28 @@ import { isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate } from '../accounts/purge-plan.js';
 import { isLiveGrant } from '../accountants/grants.js';
 import type {
+  IncomeContextRecord,
+  IssueDocumentInput,
+  IssueResult,
+  IssuedDocumentCounterRecord,
+  IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
+  IssuerDetailsRecord,
+  IssuingRepository,
+  JsonObject,
+  IssuingRetentionAction,
+  IssuingRetentionEventRecord,
+  IssuingRetentionRepository,
+  RetainedIssuingProfile,
+  LedgerRefundRow,
+  RefundRecord,
+  RefundRepository,
+  IssuerLogoRecord,
+  ExternalInvoiceRecord,
+  IssuedOriginalPdfRecord,
+  IssuingSetupRecord,
+  TaxAuthorityConnectionRecord,
   AccountClosureRecord,
   AccountPurgeRepository,
   BillingAccountRecord,
@@ -87,6 +110,7 @@ import type {
   CreateUserInput,
   CreateSessionInput,
   MembershipRecord,
+  MembershipRole,
   MembershipRepository,
   SessionRecord,
   PersonSetupLinkPurpose,
@@ -99,6 +123,16 @@ import type {
   PasskeyRepository,
   FeaturesRepository,
   OAuthAuthorizationRequestRecord,
+  ExternalIdentityRecord,
+  MalafatSignInRecord,
+  MalafatSignInRepository,
+  SignInCodeRecord,
+  SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorRecord,
+  TwoFactorRepository,
+  ExternalIdentityRepository,
+  MemberSyncResult,
   OAuthClientRecord,
   OAuthCodeRecord,
   OAuthGrantRecord,
@@ -193,7 +227,7 @@ import type {
   PeriodReceiptRecord,
 } from './ports.js';
 import { isGroupMember } from '../expenses/groups.js';
-import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { isFeature } from '../features.js';
 import { isAutomaticOtherCategory, registrationKey, scoreVendorName, vendorNameKey } from '../vendors/keys.js';
 import { todayIn, type IsoDate } from '../dates.js';
@@ -202,11 +236,19 @@ import { allocationStateOf } from '../payments/allocation-state.js';
 import { ownedProfileCreatedAudit, ownedProfileUpdatedAudit, ownsProfile, profileOwnerOf, profileTypeOf, type TypeChangeDetail } from '../personal-profile.js';
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNewMembership } from '../firm.js';
+import { membershipRoleOf } from '../malafat-members.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
 import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
+import { COPY_REPLAY_MS } from '../issuing/copies.js';
+import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';
+import { planRelease, splitCredit } from '../issuing/credit-split.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
+import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
+import { numberGaps } from '../issuing/gaps.js';
+import { DOC_TYPE_CODES } from '../issuing/types.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -226,8 +268,16 @@ import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } fro
  * 14 (MUT-302): `exps` gained `vatTreatment`, `vatRateBasisPoints`, `netMinor` and `vatMinor`.
  * 15 (MUT-303): `vendors` gained `lastCurrency`, `lastVatTreatment` and `lastVatRateBasisPoints`.
  * 16 (MUT-557): `exps` gained `allocationNumber`.
+ * 17 (MUT-593): `ints` gained `delegationEnabledAt` and `delegationEnabledBy`.
+ * 18 (MUT-594): `orgs` gained `memberSyncAt`.
+ * 19 (MUT-596): `people` gained `passwordChosen`.
+ * 20 (MUT-535): `people` gained `monthlySummaryMail`.
+ * 21 (MUT-642): `custs` gained `taxId` and `address`.
+ * 22 (MUT-660): `custs` gained `documentsPreference`; `recs` and `pays` gained `notForInvoice`.
+ *    MUT-643 (same unreleased version): a new `refunds` map.
+ * 23 (ADR-279): `people` gained `offerMail`.
  */
-export const CURRENT_STORE_SNAPSHOT_VERSION = 16;
+export const CURRENT_STORE_SNAPSHOT_VERSION = 23;
 
 /**
  * The business-data half of a `MemoryLedgerStore`'s fields (MUT-286) — every
@@ -268,6 +318,8 @@ export interface LocalSnapshotMaps {
   inbox: Map<string, InboxEntryRecord>;
   vendors: Map<string, VendorRecord>;
   vendorNames: Map<string, VendorNameRecord>;
+  /** MUT-643 (format 22): refunds credit notes wrote; a device never writes one (no issuing signed out). */
+  refunds: Map<string, RefundRecord>;
 }
 
 export interface LocalSnapshot {
@@ -307,6 +359,15 @@ export class MemoryLedgerStore implements LedgerStore {
   private readonly props = new Map<string, FeeProposalRecord>();
   private readonly people = new Map<string, UserRecord>();
   private readonly members = new Map<string, MembershipRecord>();
+  /** MUT-594/595: Malafat seats, outside the snapshot (a device never has Malafat). Keyed `provider NUL tenant NUL subject`. */
+  private readonly seats = new Map<string, ExternalIdentityRecord>();
+  /** MUT-618: emailed sign-in codes, with their digest and use. */
+  private readonly twoFactorRows = new Map<string, TwoFactorRecord>();
+  private readonly twoFactorCodeRows = new Map<string, { id: string; userId: string; codeDigest: string; createdAt: Date; usedAt: Date | null }>();
+  private readonly twoFactorChallengeRows = new Map<string, TwoFactorChallengeRecord>();
+  private readonly signInCodeRows = new Map<string, SignInCodeRecord & { codeDigest: string; usedAt: Date | null; cancelledAt: Date | null }>();
+  /** MUT-595: Sign in with Malafat round trips, with their digests (state, result, ticket). Outside the snapshot. */
+  private readonly malafatFlows = new Map<string, MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }>();
   private readonly sessionsById = new Map<string, SessionRecord>();
   private readonly setupLinks = new Map<string, AccountSetupTokenRecord>();
   /**
@@ -347,12 +408,38 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-560 (ADR-247): share links and their viewers by id, outside the snapshot too (local mode shares nothing). */
   private readonly shareLinkMap = new Map<string, ShareLinkRecord>();
   private readonly shareLinkViewerMap = new Map<string, ShareLinkViewerRecord>();
+  /**
+   * MUT-568 (ADR-260): the issuing core, outside the snapshot too: the signed-out portal can't issue (its profiles are
+   * personal and have no feature grants), and a new snapshot map would change the shipped local format.
+   */
+  private readonly issuerMap = new Map<string, IssuerDetailsRecord>();
+  private readonly issuedCounterMap = new Map<string, IssuedDocumentCounterRecord>();
+  /** MUT-646 */
+  private readonly issuingSetupMap = new Map<string, IssuingSetupRecord>();
+  private readonly issuerLogoMap = new Map<string, IssuerLogoRecord>();
+  /** MUT-647 */
+  private readonly externalInvoiceMap = new Map<string, ExternalInvoiceRecord>();
+  private readonly issuedOriginals = new Map<string, IssuedOriginalPdfRecord>();
+  /** MUT-571 */
+  private readonly taxConnectionMap = new Map<string, TaxAuthorityConnectionRecord>();
+  private readonly taxConnectionLocks = new Map<string, Promise<unknown>>();
+  private readonly issuedDocMap = new Map<string, IssuedDocumentRecord>();
+  /** MUT-643: refunds written by credit notes, with their sources. */
+  private readonly refundMap = new Map<string, RefundRecord>();
+  /** MUT-662: payment request cancellations by documentId, and each profile's next CX number. */
+  private readonly issuedCancellations = new Map<string, IssuedDocumentCancellationRecord>();
+  private readonly cancellationCounters = new Map<string, number>();
+  private readonly issuedCopies = new Map<string, { copyIndex: number; producedByUserId: string; channel: string; producedAt: Date; requestKey: string | null }[]>();
+  /** MUT-644: the retention log (no profile foreign key, as in Postgres). */
+  private readonly issuingRetentionLog: IssuingRetentionEventRecord[] = [];
   /** MUT-434: the OAuth server's rows, outside the snapshot too (local mode has no agents). Codes and tokens by digest. */
   private readonly oauthClients = new Map<string, OAuthClientRecord>();
   private readonly oauthRequests = new Map<string, OAuthAuthorizationRequestRecord>();
   private readonly oauthGrants = new Map<string, OAuthGrantRecord>();
   private readonly oauthCodes = new Map<string, OAuthCodeRecord>();
   private readonly oauthTokens = new Map<string, OAuthTokenRecord & { digest: string }>();
+  /** MUT-593: confidential clients' assertion ids, keyed `clientId NUL jti`. */
+  private readonly oauthAssertions = new Map<string, { expiresAt: Date; createdAt: Date }>();
   private readonly trialStarts = new Map<string, Date>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
@@ -378,7 +465,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.personalOwnerUserId && !this.people.has(input.personalOwnerUserId)) {
         throw new ForeignKeyViolation('organizations.personalOwnerUserId');
       }
-      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
+      const org: Organization = { id: randomUUID(), ...input, personalOwnerUserId: input.personalOwnerUserId ?? null, ownerUserId: null, profileType: null, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: new Date() };
       this.orgs.set(org.id, org);
       return { ...org };
     },
@@ -391,7 +478,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const count = this.ownedCount(ownerUserId);
       if (count >= cap) return { kind: 'limit', count };
       const { at, ...fields } = input;
-      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: at };
+      const organization: Organization = { id: randomUUID(), ...fields, personalOwnerUserId: null, ownerUserId, version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: at };
       const membership: MembershipRecord = { userId: ownerUserId, organizationId: organization.id, role: 'OWNER', createdAt: at };
       this.orgs.set(organization.id, organization);
       this.members.set(membershipKey(ownerUserId, organization.id), membership);
@@ -561,7 +648,7 @@ export class MemoryLedgerStore implements LedgerStore {
     setPassword: async (id, passwordHash, at) => {
       const u = this.people.get(id);
       if (!u) return null;
-      Object.assign(u, { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at });
+      Object.assign(u, { passwordHash, passwordChangedAt: at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: at });
       return { ...u };
     },
     setStatus: async (id, status, at) => {
@@ -597,6 +684,18 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!u) return null;
       Object.assign(u, { malafatSuggestions: applyMalafatChange(u.malafatSuggestions, change), updatedAt: at });
       return { ...u, malafatSuggestions: u.malafatSuggestions && { ...u.malafatSuggestions, dismissed: [...u.malafatSuggestions.dismissed] } };
+    },
+    setMonthlySummaryMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { monthlySummaryMail: choice, updatedAt: at });
+      return { ...u };
+    },
+    setOfferMail: async (id, choice, at) => {
+      const u = this.people.get(id);
+      if (!u) return null;
+      Object.assign(u, { offerMail: choice, updatedAt: at });
+      return { ...u };
     },
     updateTrialPrompt: async (id, action, at) => {
       const u = this.people.get(id);
@@ -645,7 +744,7 @@ export class MemoryLedgerStore implements LedgerStore {
       // MUT-262: built and checked before anything changes, so a duplicate digest leaves the store untouched (AC5).
       const rotated = input.rotation ? rotatedSession(kept, input.rotation, input.at) : null;
       if (rotated && [...this.sessionsById.values()].some((s) => s.tokenDigest === rotated.tokenDigest)) throw new UniqueViolation('sessions.tokenDigest');
-      Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      Object.assign(u, { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       this.revokeSessionsOf(u.id, 'password_changed', input.at, input.exceptSessionId);
       if (rotated) {
         Object.assign(kept, { revokedAt: input.at, revokedReason: 'password_rotated' });
@@ -710,6 +809,7 @@ export class MemoryLedgerStore implements LedgerStore {
         passkeyId: input.passkeyId ?? null,
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         stepUpAt: input.passkeyId ? input.at : null,
+        twoFactorAt: input.twoFactorAt ?? null,
       };
       this.sessionsById.set(record.id, record);
       return { ...record };
@@ -867,12 +967,610 @@ export class MemoryLedgerStore implements LedgerStore {
     return [...this.accountantGrantMap.values()].some((g) => g.status === 'ACTIVE' && g.accountantUserId === accountantUserId && g.organizationId === organizationId);
   }
 
+  /**
+   * MUT-568 (ADR-260): the issuing core. `issue` checks everything before it writes anything, so a refusal leaves no
+   * trace and takes no number (the Prisma store gets the same by rolling its transaction back).
+   */
+  private setupRow(organizationId: string): IssuingSetupRecord {
+    let r = this.issuingSetupMap.get(organizationId);
+    if (!r) {
+      r = { organizationId, logoId: null, numberingAnsweredAt: null, introSeenAt: null, defaultsSavedAt: null };
+      this.issuingSetupMap.set(organizationId, r);
+    }
+    return r;
+  }
+
+  readonly issuing: IssuingRepository = {
+    getIssuer: async (organizationId) => {
+      const r = this.issuerMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    putIssuer: async (organizationId, input, expectedVersion, at) => {
+      const existing = this.issuerMap.get(organizationId);
+      if (expectedVersion === null) {
+        if (existing) return { kind: 'stale', record: { ...existing } };
+        const record: IssuerDetailsRecord = { organizationId, ...input, version: 1, createdAt: at, updatedAt: at };
+        this.issuerMap.set(organizationId, record);
+        return { kind: 'created', record: { ...record } };
+      }
+      if (!existing) return { kind: 'not_found' };
+      if (existing.version !== expectedVersion) return { kind: 'stale', record: { ...existing } };
+      Object.assign(existing, input, { version: existing.version + 1, updatedAt: at });
+      return { kind: 'updated', record: { ...existing } };
+    },
+    getSetup: async (organizationId) => {
+      const r = this.issuingSetupMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    markSetup: async (organizationId, mark, at) => {
+      const r = this.setupRow(organizationId);
+      r[mark] ??= at;
+      return { ...r };
+    },
+    addLogo: async (organizationId, logo, at) => {
+      const record: IssuerLogoRecord = { id: randomUUID(), organizationId, ...logo, bytes: new Uint8Array(logo.bytes), createdAt: at };
+      this.issuerLogoMap.set(record.id, record);
+      this.setupRow(organizationId).logoId = record.id;
+      return { ...record };
+    },
+    clearLogo: async (organizationId) => {
+      const r = this.issuingSetupMap.get(organizationId);
+      if (r) r.logoId = null;
+    },
+    getLogo: async (organizationId, logoId) => {
+      const r = this.issuerLogoMap.get(logoId);
+      return r && r.organizationId === organizationId ? { ...r } : null;
+    },
+    getTaxConnection: async (organizationId) => {
+      const r = this.taxConnectionMap.get(organizationId);
+      return r ? { ...r } : null;
+    },
+    putTaxConnection: async (record) => {
+      const next = { ...record, version: (this.taxConnectionMap.get(record.organizationId)?.version ?? 0) + 1 };
+      this.taxConnectionMap.set(record.organizationId, next);
+      return { ...next };
+    },
+    deleteTaxConnection: async (organizationId) => this.taxConnectionMap.delete(organizationId),
+    taxConnectionsEndingBetween: async (from, to) =>
+      [...this.taxConnectionMap.values()]
+        .filter((r) => r.refreshExpiresAt !== null && r.refreshExpiresAt >= from && r.refreshExpiresAt < to)
+        .sort((a, b) => a.refreshExpiresAt!.getTime() - b.refreshExpiresAt!.getTime())
+        .map((r) => ({ ...r })),
+    withTaxConnectionLock: async (organizationId, fn) => {
+      // One caller at a time per profile, as the Prisma store's row lock.
+      const before = this.taxConnectionLocks.get(organizationId) ?? Promise.resolve();
+      const run = before.then(async () => {
+        const current = this.taxConnectionMap.get(organizationId);
+        const { update, result } = await fn(current ? { ...current } : null);
+        if (update && current) this.taxConnectionMap.set(organizationId, { ...update, version: current.version + 1 });
+        return result;
+      });
+      this.taxConnectionLocks.set(organizationId, run.catch(() => undefined));
+      return run;
+    },
+    counters: async (organizationId) =>
+      [...this.issuedCounterMap.values()].filter((c) => c.organizationId === organizationId).sort((a, b) => (a.docType < b.docType ? -1 : 1)).map((c) => ({ ...c })),
+    setStartingNumber: async (organizationId, docType, start) => {
+      if ([...this.issuedDocMap.values()].some((d) => d.organizationId === organizationId && d.docType === docType)) return { kind: 'has_documents' };
+      const counter: IssuedDocumentCounterRecord = { organizationId, docType, start, next: start };
+      this.issuedCounterMap.set(`${organizationId}:${docType}`, counter);
+      return { kind: 'set', counter: { ...counter } };
+    },
+    issue: async (input, at) => {
+      // MUT-572 (ADR-264): every check first, then the number is known and the Tax Authority asked, then the write.
+      if (input.allocate) {
+        const refusal = this.issueRefusal(input);
+        if (refusal) return refusal;
+        const counter = this.issuedCounterMap.get(`${input.organizationId}:${input.docType}`);
+        const outcome = await input.allocate(counter?.next ?? 1);
+        if (outcome.kind !== 'allocated') return { kind: 'allocation_failed', outcome };
+        const allocated: IssueDocumentInput = { ...input, allocationNumber: outcome.number, allocationSource: outcome.source };
+        delete allocated.allocate;
+        return this.issueNow(allocated, at);
+      }
+      return this.issueNow(input, at);
+    },
+    getById: async (organizationId, id) => {
+      const d = this.issuedDocMap.get(id);
+      return d && d.organizationId === organizationId ? cloneIssued(d) : null;
+    },
+    moneyDocumentOn: async (organizationId, paymentId) => {
+      const d = [...this.issuedDocMap.values()]
+        .filter((x) => x.organizationId === organizationId && x.paymentId === paymentId && (x.docType === 'RECEIPT' || x.docType === 'TAX_INVOICE_RECEIPT'))
+        .sort((a, b) => a.issuedAt.getTime() - b.issuedAt.getTime())[0];
+      return d ? { id: d.id, docType: d.docType, number: d.number } : null;
+    },
+    list: async (organizationId, filter, page) => {
+      const rows = [...this.issuedDocMap.values()]
+        .filter((d) => d.organizationId === organizationId && (!filter.docType || d.docType === filter.docType) && (!filter.customerId || d.customerId === filter.customerId))
+        .filter((d) => (!filter.currency || d.currency === filter.currency) && (!filter.from || d.documentDate >= filter.from) && (!filter.to || d.documentDate <= filter.to))
+        .sort((a, b) => b.issuedAt.getTime() - a.issuedAt.getTime() || (a.id < b.id ? 1 : -1))
+        .filter((d) => !page.cursor || d.issuedAt < page.cursor.createdAt || (d.issuedAt.getTime() === page.cursor.createdAt.getTime() && d.id < page.cursor.id));
+      const items = rows.slice(0, page.limit);
+      const last = items[items.length - 1];
+      return { items: items.map(cloneIssued), nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
+    },
+    recordCopy: async (organizationId, documentId, copy, at) => {
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return null;
+      const copies = this.issuedCopies.get(documentId) ?? [];
+      const again = copy.requestKey ? copies.find((c) => c.requestKey === copy.requestKey) : undefined;
+      if (again && again.producedByUserId === copy.producedByUserId && at.getTime() - again.producedAt.getTime() <= COPY_REPLAY_MS) return { copyIndex: again.copyIndex };
+      copies.push({ copyIndex: copies.length, producedByUserId: copy.producedByUserId, channel: copy.channel, producedAt: at, requestKey: again ? null : (copy.requestKey ?? null) });
+      this.issuedCopies.set(documentId, copies);
+      return { copyIndex: copies.length - 1 };
+    },
+    attachExternal: async (input, file) => {
+      const live = [...this.externalInvoiceMap.values()].find((x) => x.organizationId === input.organizationId && x.entryKind === input.entryKind && x.entryId === input.entryId && !x.removedAt);
+      if (live) return { kind: 'exists', record: { ...live } };
+      this.files.set(input.attachmentId, { id: input.attachmentId, organizationId: input.organizationId, kind: 'INVOICE', ...file, projectId: null, invoiceNumber: input.number, invoiceDate: input.documentDate, uploadedByKeyId: null, status: 'READY', createdAt: input.createdAt, completedAt: input.createdAt, deletedAt: null });
+      const record: ExternalInvoiceRecord = { ...input, id: randomUUID(), removedAt: null };
+      this.externalInvoiceMap.set(record.id, record);
+      return { kind: 'attached', record: { ...record } };
+    },
+    liveExternal: async (organizationId, entryKind, entryIds) =>
+      [...this.externalInvoiceMap.values()].filter((x) => x.organizationId === organizationId && x.entryKind === entryKind && entryIds.includes(x.entryId) && !x.removedAt).map((x) => ({ ...x })),
+    getExternal: async (organizationId, id) => {
+      const x = this.externalInvoiceMap.get(id);
+      return x && x.organizationId === organizationId ? { ...x } : null;
+    },
+    removeExternal: async (organizationId, id, at) => {
+      const x = this.externalInvoiceMap.get(id);
+      if (!x || x.organizationId !== organizationId || x.removedAt) return null;
+      x.removedAt = at;
+      const file = this.files.get(x.attachmentId);
+      if (file && !file.deletedAt) file.deletedAt = at;
+      return { ...x };
+    },
+    dueInputs: async (organizationId) => {
+      const issuer = this.issuerMap.get(organizationId);
+      const receivables = [...this.recs.values()].filter((r) => r.organizationId === organizationId && !r.deletedAt).map((r) => this.dueReceivable(r));
+      const payments = [...this.pays.values()]
+        .filter((p) => p.organizationId === organizationId && p.status === 'POSTED' && p.origin !== 'ISSUED_DOCUMENT' && !this.paymentDocumented(p))
+        .map((p) => ({
+          id: p.id,
+          number: p.number,
+          customerId: p.customerId,
+          origin: p.origin,
+          status: p.status,
+          currency: p.currency,
+          amountMinor: p.amountMinor,
+          receivedOn: p.receivedOn,
+          notForInvoice: p.notForInvoice,
+          receiptNumber: p.receiptNumber,
+          documented: false,
+          externalInvoice: this.hasLiveExternal(organizationId, 'RECEIVED', p.id),
+          allocations: this.liveAllocations(p.id),
+        }));
+      return { dealerType: issuer?.dealerType ?? null, defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE, preferences: this.preferencesOf(organizationId), receivables, payments };
+    },
+    incomeContext: async (organizationId, paymentIds) => {
+      const payments: IncomeContextRecord['payments'] = new Map();
+      const receivables: IncomeContextRecord['receivables'] = new Map();
+      for (const id of paymentIds) {
+        const p = this.pays.get(id);
+        if (!p || p.organizationId !== organizationId) continue;
+        const allocations = this.liveAllocations(p.id);
+        payments.set(p.id, { documented: this.paymentDocumented(p), externalInvoice: this.hasLiveExternal(organizationId, 'RECEIVED', p.id), allocations });
+        for (const a of allocations) {
+          const r = this.recs.get(a.receivableId);
+          if (r) receivables.set(r.id, { customerId: r.customerId, notForInvoice: r.notForInvoice });
+        }
+      }
+      const issuer = this.issuerMap.get(organizationId);
+      return { defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE, preferences: this.preferencesOf(organizationId), receivables, payments };
+    },
+    setNotForInvoice: async (organizationId, items, value, at) => {
+      const found: Array<ReceivableRecord | PaymentRecord> = [];
+      for (const item of items) {
+        const record = item.kind === 'receivable' ? this.recs.get(item.id) : this.pays.get(item.id);
+        const live = record && record.organizationId === organizationId && (item.kind === 'receivable' ? !(record as ReceivableRecord).deletedAt : (record as PaymentRecord).status === 'POSTED');
+        if (!record || !live) return { kind: 'not_found', item };
+        // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+        if (item.expectedVersion !== undefined && record.version !== item.expectedVersion && record.notForInvoice !== value) return { kind: 'stale', item, version: record.version };
+        if (value && this.hasTaxDocument(organizationId, item.kind, item.id)) return { kind: 'has_tax_document', item };
+        found.push(record);
+      }
+      let changed = 0;
+      for (const record of found) {
+        if (record.notForInvoice === value) continue;
+        record.notForInvoice = value;
+        record.version += 1;
+        if ('updatedAt' in record) record.updatedAt = at;
+        changed += 1;
+      }
+      return {
+        kind: 'done',
+        changed,
+        receivables: found.filter((r): r is ReceivableRecord => 'grossMinor' in r).map((r) => ({ ...r })),
+        payments: found.filter((r): r is PaymentRecord => 'amountMinor' in r).map((r) => ({ ...r })),
+      };
+    },
+    getOriginalPdf: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? { ...r, bytes: new Uint8Array(r.bytes) } : null;
+    },
+    originalCopyIndex: async (organizationId, documentId) => {
+      const r = this.issuedOriginals.get(documentId);
+      return r && r.organizationId === organizationId ? r.copyIndex : null;
+    },
+    keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return null;
+      const kept = this.issuedOriginals.get(documentId) ?? { documentId, organizationId, copyIndex: pdf.copyIndex, bytes: new Uint8Array(pdf.bytes), sha256: pdf.sha256, createdAt: at };
+      this.issuedOriginals.set(documentId, kept);
+      return { ...kept, bytes: new Uint8Array(kept.bytes) };
+    },
+    inRange: async (organizationId, from, to) =>
+      [...this.issuedDocMap.values()]
+        .filter((d) => d.organizationId === organizationId && d.documentDate >= from && d.documentDate <= to)
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number)
+        .map(cloneIssued),
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at): Promise<CancelPaymentRequestResult> => {
+      const replay = [...this.issuedCancellations.values()].find((c) => c.organizationId === organizationId && c.requestKey === cancel.requestKey);
+      if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: { ...replay }, created: false } : { kind: 'not_found' };
+      const d = this.issuedDocMap.get(documentId);
+      if (!d || d.organizationId !== organizationId) return { kind: 'not_found' };
+      if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+      const existing = this.issuedCancellations.get(documentId);
+      if (existing) return { kind: 'already_cancelled', cancellation: { ...existing } };
+      if (blocksCancel(this.referringDocuments(organizationId, documentId))) return { kind: 'has_documents' };
+      const number = this.cancellationCounters.get(organizationId) ?? 1;
+      this.cancellationCounters.set(organizationId, number + 1);
+      const cancellation: IssuedDocumentCancellationRecord = { id: randomUUID(), organizationId, documentId, number, cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey };
+      this.issuedCancellations.set(documentId, cancellation);
+      return { kind: 'cancelled', cancellation: { ...cancellation }, created: true };
+    },
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      for (const id of documentIds) {
+        const d = this.issuedDocMap.get(id);
+        if (!d || d.organizationId !== organizationId || d.docType !== 'PAYMENT_REQUEST') continue;
+        const c = this.issuedCancellations.get(id);
+        out.set(id, paymentRequestFacts(d.grossMinor, this.referringDocuments(organizationId, id), c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
+    },
+    gaps: async (organizationId) => {
+      const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+      return (await this.issuing.counters(organizationId)).map((c) => numberGaps(c, docs.filter((d) => d.docType === c.docType).map((d) => d.number)));
+    },
+  };
+
+  /** MUT-662: the 320s and 400s that refer to a payment request, each with its credit notes. */
+  private referringDocuments(organizationId: string, requestId: string): ReferringDocument[] {
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    return docs
+      .filter((d) => d.originalId === requestId && referringToRequest(d.docType))
+      .sort((a, b) => a.number - b.number)
+      .map((d) => ({ id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n) }));
+  }
+
+  /** MUT-660: the documents linked to an entry, credit notes aside. */
+  private linkedDocuments(organizationId: string, kind: 'receivable' | 'payment', id: string): IssuedDocumentRecord[] {
+    // MUT-662: a cancelled payment request no longer counts (its Owed goes back to To issue).
+    return [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId && d.docType !== 'CREDIT_NOTE' && !(d.docType === 'PAYMENT_REQUEST' && this.issuedCancellations.has(d.id)) && (kind === 'receivable' ? d.receivableId === id : d.paymentId === id));
+  }
+
+  /** MUT-660: a document is linked to the payment, or to the payment it corrected. */
+  private paymentDocumented(p: PaymentRecord): boolean {
+    if (this.linkedDocuments(p.organizationId, 'payment', p.id).length > 0) return true;
+    return !!p.replacesPaymentId && this.linkedDocuments(p.organizationId, 'payment', p.replacesPaymentId).length > 0;
+  }
+
+  /** MUT-660: a live 305 or 320 (MUT-643: not fully cancelled by credit notes) is linked; a receipt doesn't count. */
+  private hasTaxDocument(organizationId: string, kind: 'receivable' | 'payment', id: string): boolean {
+    return this.linkedDocuments(organizationId, kind, id).some((d) => {
+      if (d.docType !== 'TAX_INVOICE' && d.docType !== 'TAX_INVOICE_RECEIPT') return false;
+      const credited = [...this.issuedDocMap.values()].filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === d.id).reduce((sum, c) => sum + c.grossMinor, 0n);
+      return credited < d.grossMinor;
+    });
+  }
+
+  private hasLiveExternal(organizationId: string, entryKind: 'OWED' | 'RECEIVED', entryId: string): boolean {
+    return [...this.externalInvoiceMap.values()].some((x) => x.organizationId === organizationId && x.entryKind === entryKind && x.entryId === entryId && !x.removedAt);
+  }
+
+  private liveAllocations(paymentId: string): Array<{ receivableId: string; amountMinor: bigint }> {
+    return [...this.allocs.values()].filter((a) => a.paymentId === paymentId && !a.releasedAt).map((a) => ({ receivableId: a.receivableId, amountMinor: a.amountMinor }));
+  }
+
+  private preferencesOf(organizationId: string): Map<string, DocumentsPreference | null> {
+    return new Map([...this.custs.values()].filter((c) => c.organizationId === organizationId).map((c) => [c.id, c.documentsPreference]));
+  }
+
+  private dueReceivable(r: ReceivableRecord): DueReceivableInput {
+    const docs = this.linkedDocuments(r.organizationId, 'receivable', r.id).filter((d) => d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT');
+    return {
+      id: r.id,
+      number: r.number,
+      customerId: r.customerId,
+      origin: r.origin,
+      currency: r.currency,
+      grossMinor: r.grossMinor,
+      paidMinor: r.paidMinor,
+      creditedMinor: r.creditedMinor,
+      postingDate: r.postingDate,
+      notForInvoice: r.notForInvoice,
+      deleted: !!r.deletedAt,
+      documented: docs.length > 0,
+      taxInvoiceId: docs.find((d) => d.docType === 'TAX_INVOICE')?.id ?? null,
+      paymentRequestId: this.linkedDocuments(r.organizationId, 'receivable', r.id).find((d) => d.docType === 'PAYMENT_REQUEST')?.id ?? null,
+      externalInvoice: this.hasLiveExternal(r.organizationId, 'OWED', r.id),
+    };
+  }
+
+  /** MUT-660: what fromEntryMode reads of an entry, or null when it isn't this profile's. */
+  private entryState(organizationId: string, fromEntry: NonNullable<IssueDocumentInput['fromEntry']>): EntryState | null {
+    if (fromEntry.kind === 'receivable') {
+      const r = this.recs.get(fromEntry.id);
+      if (!r || r.organizationId !== organizationId) return null;
+      return { kind: 'receivable', origin: r.origin, deleted: !!r.deletedAt, posted: true, customerId: r.customerId, currency: r.currency, grossMinor: r.grossMinor, creditedMinor: r.creditedMinor, allocatedMinor: 0n, documented: this.linkedDocuments(organizationId, 'receivable', r.id).length > 0 };
+    }
+    const p = this.pays.get(fromEntry.id);
+    if (!p || p.organizationId !== organizationId) return null;
+    return { kind: 'payment', origin: p.origin, deleted: false, posted: p.status === 'POSTED', customerId: p.customerId, currency: p.currency, grossMinor: p.amountMinor, creditedMinor: 0n, allocatedMinor: p.allocatedMinor, documented: this.linkedDocuments(organizationId, 'payment', p.id).length > 0 };
+  }
+
+  /** MUT-572: the issue's refusals (a replay included), without writing anything; null when it would issue. */
+  private issueRefusal(input: IssueDocumentInput): IssueResult | null {
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === input.organizationId);
+    const replay = docs.find((d) => d.requestKey === input.requestKey);
+    if (replay) return { kind: 'issued', document: cloneIssued(replay), created: false };
+    const lastDate = docs.filter((d) => d.docType === input.docType).reduce<string | null>((max, d) => (max === null || d.documentDate > max ? d.documentDate : max), null);
+    if (lastDate !== null && lastDate > input.documentDate) return { kind: 'date_before_last', lastDate };
+    if (input.customerId && this.custs.get(input.customerId)?.organizationId !== input.organizationId) return { kind: 'customer_not_found' };
+    return null;
+  }
+
+  /**
+   * MUT-660: a linked document: numbered and written like any other, linked to its entry, posting nothing. The entry's
+   * version moves so a stale edit of it is caught.
+   */
+  private issueLinked(input: IssueDocumentInput, at: Date, entry: EntryState): IssueResult {
+    const refusal = fromEntryRefusal({ ok: true, customerId: entry.customerId, currency: entry.currency, amountMinor: entryAmount(entry) }, input);
+    if (refusal) return refusal;
+    const from = input.fromEntry!;
+    const record = from.kind === 'receivable' ? this.recs.get(from.id)! : this.pays.get(from.id)!;
+    record.version += 1;
+    if ('updatedAt' in record) record.updatedAt = at;
+    const number = this.takeIssuedNumber(input);
+    return { kind: 'issued', document: this.writeIssued(input, at, randomUUID(), number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null }), created: true };
+  }
+
+  private takeIssuedNumber(input: IssueDocumentInput): number {
+    const counterKey = `${input.organizationId}:${input.docType}`;
+    const counter = this.issuedCounterMap.get(counterKey) ?? { organizationId: input.organizationId, docType: input.docType, start: 1, next: 1 };
+    this.issuedCounterMap.set(counterKey, { ...counter, next: counter.next + 1 });
+    return counter.next;
+  }
+
+  private issueNow(input: IssueDocumentInput, at: Date): IssueResult {
+    const { organizationId } = input;
+    const docs = [...this.issuedDocMap.values()].filter((d) => d.organizationId === organizationId);
+    const replay = docs.find((d) => d.requestKey === input.requestKey);
+    if (replay) return { kind: 'issued', document: cloneIssued(replay), created: false };
+    const lastDate = docs.filter((d) => d.docType === input.docType).reduce<string | null>((max, d) => (max === null || d.documentDate > max ? d.documentDate : max), null);
+    if (lastDate !== null && lastDate > input.documentDate) return { kind: 'date_before_last', lastDate };
+    if (input.customerId && this.custs.get(input.customerId)?.organizationId !== organizationId) return { kind: 'customer_not_found' };
+    const entry = input.fromEntry ? this.entryState(organizationId, input.fromEntry) : null;
+    const mode = input.fromEntry ? fromEntryMode(entry, input.docType) : null;
+    const linked = mode === 'link';
+    const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
+    let originalReceivable: ReceivableRecord | null = null;
+    if (originalId) {
+      // MUT-662: a 320 or 400 may apply a live payment request; a credit note credits a tax invoice or (MUT-643) an
+      // invoice-receipt.
+      const credits = (d: IssuedDocumentRecord) => d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT';
+      const original = docs.find((d) => d.id === originalId && (input.docType === 'CREDIT_NOTE' ? credits(d) : d.docType === 'TAX_INVOICE' || (d.docType === 'PAYMENT_REQUEST' && !this.issuedCancellations.has(d.id))));
+      const r = original?.receivableId ? this.recs.get(original.receivableId) : undefined;
+      if (!original || !r || original.customerId !== input.customerId) return { kind: 'original_not_found' };
+      // MUT-660: a linked receipt names the invoice its payment already paid; nothing is allocated, so no outstanding check.
+      if (linked) return this.issueLinked(input, at, entry!);
+      const outstandingMinor = r.status === 'OPEN' ? outstanding(r) : 0n;
+      if (input.docType === 'CREDIT_NOTE') {
+        const noted = docs.filter((c) => c.docType === 'CREDIT_NOTE' && c.originalId === original.id).reduce((sum, c) => sum + c.grossMinor, 0n);
+        const refusal = creditNoteRefusal({ original, owed: r, creditedByNotesMinor: noted, outstandingMinor }, input);
+        if (refusal) return refusal;
+      } else if (input.composed.grossMinor > outstandingMinor) {
+        return { kind: 'exceeds_outstanding', outstandingMinor };
+      }
+      originalReceivable = r;
+    }
+    const fromReceivable = input.fromEntry?.kind === 'receivable' ? this.recs.get(input.fromEntry.id) : undefined;
+    const fromPayment = input.fromEntry?.kind === 'payment' ? this.pays.get(input.fromEntry.id) : undefined;
+    if (input.fromEntry) {
+      const refusal = fromEntryRefusal({ ok: mode !== null, customerId: entry?.customerId ?? null, currency: entry?.currency ?? '', amountMinor: entry ? entryAmount(entry) : 0n }, input);
+      if (refusal) return refusal;
+      if (linked) return this.issueLinked(input, at, entry!);
+    }
+    // Every check passed: from here on nothing refuses, so the number is never wasted.
+    const number = this.takeIssuedNumber(input);
+    const plan = ledgerPlan(input, number);
+    const id = randomUUID();
+    let receivableId: string | null = null;
+    let paymentId: string | null = null;
+    let creditId: string | null = null;
+    if (plan.receivable && fromReceivable) {
+      // I1-a: the recorded Owed becomes the document's, with the document's VAT split.
+      const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate } = plan.receivable;
+      Object.assign(fromReceivable, { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate, origin: 'ISSUED_DOCUMENT', originId: id, version: fromReceivable.version + 1 });
+      receivableId = fromReceivable.id;
+    } else if (plan.receivable) {
+      const { title, ...rest } = plan.receivable;
+      // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+      receivableId = this.newReceivable({ ...rest, title, organizationId, projectId: null, agreementId: null, originId: rest.origin === 'ISSUED_DOCUMENT' ? id : null, postedAt: at, createdByUserId: input.createdByUserId }).id;
+    }
+    if (plan.payment && fromPayment) {
+      // I1-a: the captured Received becomes the document's and pays its Owed (320) or the invoice it names (400).
+      const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
+      Object.assign(fromPayment, { origin: 'ISSUED_DOCUMENT', version: fromPayment.version + 1, updatedAt: at });
+      if (target) this.applyAllocations(fromPayment, [{ receivableId: target, amountMinor: fromPayment.amountMinor }], at, true);
+      paymentId = fromPayment.id;
+    } else if (plan.payment) {
+      const { allocate, ...p } = plan.payment;
+      const target = allocate === 'own' ? receivableId : allocate === 'applies' ? (originalReceivable?.id ?? null) : null;
+      paymentId = this.insertPayment(
+        {
+          ...p,
+          organizationId,
+          projectId: null,
+          receiptNumber: null,
+          notes: null,
+          replacesPaymentId: null,
+          requestId: input.requestId,
+          createdByUserId: input.createdByUserId,
+          origin: 'ISSUED_DOCUMENT',
+          captureSource: null,
+          allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
+        },
+        at,
+        true,
+      ).payment.id;
+    }
+    let refundId: string | null = null;
+    if (plan.credit && originalReceivable) {
+      // MUT-643 (D2, D3): what the credit reaches past what is still owed comes back off the newest allocations first.
+      const { paidPartMinor } = splitCredit(originalReceivable, plan.credit.amountMinor);
+      if (paidPartMinor > 0n) refundId = this.releasePaidPart(input, originalReceivable, paidPartMinor, id, at);
+      const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId: originalReceivable.id, ...plan.credit, reasonCode: plan.credit.reasonCode ?? null, requestId: input.requestId, createdAt: at };
+      this.credits.set(credit.id, credit);
+      originalReceivable.creditedMinor += plan.credit.amountMinor;
+      settle(originalReceivable);
+      creditId = credit.id;
+    }
+    return { kind: 'issued', document: this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId }), created: true };
+  }
+
+  /**
+   * MUT-643 (D3, D5): releases the paid part off the Owed's live allocations (newest first; a partial release leaves a
+   * smaller live row with the released row's own createdAt, as MUT-444 does), then either leaves it on the payments
+   * (KEEP) or records it going back to the client (REFUND), which counts in the payments' allocatedMinor again.
+   */
+  private releasePaidPart(input: IssueDocumentInput, owed: ReceivableRecord, paidPartMinor: bigint, documentId: string, at: Date): string | null {
+    const live = [...this.allocs.values()].filter((a) => a.receivableId === owed.id && !a.releasedAt && this.pays.get(a.paymentId)?.status === 'POSTED');
+    const given = new Map<string, bigint>();
+    for (const { allocation, releaseMinor } of planRelease(live, paidPartMinor)) {
+      const row = this.allocs.get(allocation.id)!;
+      row.releasedAt = at;
+      if (releaseMinor < row.amountMinor) {
+        const kept: AllocationRecord = { id: randomUUID(), organizationId: row.organizationId, paymentId: row.paymentId, receivableId: row.receivableId, amountMinor: row.amountMinor - releaseMinor, createdAt: row.createdAt };
+        this.allocs.set(kept.id, kept);
+      }
+      given.set(row.paymentId, (given.get(row.paymentId) ?? 0n) + releaseMinor);
+    }
+    owed.paidMinor -= paidPartMinor;
+    const choice = input.paidPart!;
+    for (const [paymentId, releasedMinor] of given) {
+      const p = this.pays.get(paymentId)!;
+      const back = choice.mode === 'REFUND' ? releasedMinor : 0n;
+      Object.assign(p, { allocatedMinor: p.allocatedMinor - releasedMinor + back, version: p.version + 1, updatedAt: at });
+    }
+    if (choice.mode !== 'REFUND') return null;
+    const refund: RefundRecord = {
+      id: randomUUID(),
+      organizationId: input.organizationId,
+      customerId: owed.customerId,
+      currency: owed.currency,
+      amountMinor: paidPartMinor,
+      refundedOn: choice.refundedOn,
+      method: choice.method,
+      reference: choice.reference,
+      issuedDocumentId: documentId,
+      requestId: input.requestId,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+      sources: [...given].map(([paymentId, amountMinor]) => ({ paymentId, amountMinor })),
+    };
+    this.refundMap.set(refund.id, refund);
+    return refund.id;
+  }
+
+  /** MUT-643 (D8): a payment a refund drew on. */
+  private hasRefundSource(paymentId: string): boolean {
+    return [...this.refundMap.values()].some((f) => f.sources.some((x) => x.paymentId === paymentId));
+  }
+
+  readonly refunds: RefundRepository = {
+    list: async (organizationId, filter) =>
+      [...this.refundMap.values()]
+        .filter(
+          (f) =>
+            f.organizationId === organizationId &&
+            (filter.customerId === undefined || f.customerId === filter.customerId) &&
+            (filter.currency === undefined || f.currency === filter.currency) &&
+            (filter.paymentIds === undefined || f.sources.some((x) => filter.paymentIds!.includes(x.paymentId))) &&
+            (filter.from === undefined || f.refundedOn >= filter.from) &&
+            (filter.to === undefined || f.refundedOn <= filter.to),
+        )
+        .sort((x, y) => x.refundedOn.localeCompare(y.refundedOn) || x.createdAt.getTime() - y.createdAt.getTime() || x.id.localeCompare(y.id))
+        .map((f) => ({ ...f, sources: f.sources.map((x) => ({ ...x })) })),
+  };
+
+  private writeIssued(input: IssueDocumentInput, at: Date, id: string, number: number, links: Pick<IssuedDocumentRecord, 'receivableId' | 'paymentId' | 'creditId'> & { refundId?: string | null }): IssuedDocumentRecord {
+    const { organizationId } = input;
+    const { receivableId, paymentId, creditId } = links;
+    const { composed } = input;
+    const document: IssuedDocumentRecord = {
+      id,
+      organizationId,
+      docType: input.docType,
+      number,
+      documentDate: input.documentDate,
+      issuedAt: at,
+      currency: input.currency,
+      subtotalMinor: composed.subtotalMinor,
+      discountMinor: composed.discountMinor,
+      netMinor: composed.netMinor,
+      vatRateBasisPoints: composed.vatRateBasisPoints,
+      vatMinor: composed.vatMinor,
+      grossMinor: composed.grossMinor,
+      pricesIncludeVat: composed.pricesIncludeVat,
+      issuer: input.issuer,
+      customerId: input.customerId,
+      customer: input.customer,
+      language: input.language,
+      style: input.style,
+      ink: input.ink,
+      notes: input.notes,
+      originalId: input.originalId ?? input.appliesToDocumentId,
+      paymentDetails: input.payment ? { ...input.payment } : null,
+      allocationNumber: input.allocationNumber,
+      allocationSource: input.allocationNumber ? (input.allocationSource ?? 'API') : null,
+      receivableId,
+      paymentId,
+      creditId,
+      refundId: links.refundId ?? null,
+      coreVersion: input.coreVersion,
+      createdByUserId: input.createdByUserId,
+      requestKey: input.requestKey,
+      lines: composed.lines.map((l) => ({
+        index: l.index,
+        description: l.description.trim(),
+        kind: l.kind,
+        quantityMilli: l.quantityMilli,
+        unitPriceMinor: l.unitPriceMinor,
+        discountMinor: l.discountMinor,
+        netMinor: l.netMinor,
+        pricesIncludeVat: l.pricesIncludeVat,
+        vatRateBasisPoints: l.vatRateBasisPoints,
+        vatMinor: l.vatMinor,
+      })),
+    };
+    this.issuedDocMap.set(id, cloneIssued(document));
+    return document;
+  }
+
   /** MUT-314 (ADR-248): the same rules as the entries feed and `listReadyByExpenseIds`, counted. */
   readonly periodPack: PeriodPackRepository = {
     estimate: async (organizationId, bounds, asOf) => {
       const inBounds = (day: string) => (bounds.occurredFrom === undefined || day >= bounds.occurredFrom) && day < bounds.occurredBefore;
       const logged = (at: Date) => at.getTime() <= asOf.getTime();
-      const expenses = new Set([...this.exps.values()].filter((e) => e.organizationId === organizationId && !e.deletedAt && inBounds(e.occurredOn) && logged(e.createdAt)).map((e) => e.id));
+      const expenses = new Set(
+        [...this.exps.values()]
+          .filter((e) => e.organizationId === organizationId && !e.deletedAt && inBounds(e.occurredOn) && logged(e.createdAt) && (!bounds.expensesWithReceipt || this.hasReadyReceipt(e.id)))
+          .map((e) => e.id),
+      );
       const income = [...this.pays.values()].filter((p) => p.organizationId === organizationId && p.status === 'POSTED' && inBounds(p.receivedOn) && logged(p.createdAt)).length;
       const receipts = [...this.expReceipts.values()].filter((r) => r.expenseId !== null && expenses.has(r.expenseId) && r.status === 'READY' && !r.deletedAt && logged(r.createdAt));
       return { expenses: expenses.size, income, receipts: receipts.length, receiptBytes: receipts.reduce((sum, r) => sum + r.sizeBytes, 0) };
@@ -1009,7 +1707,7 @@ export class MemoryLedgerStore implements LedgerStore {
         this.pushEvents(audit, at);
       }
       // MUT-434 AC7 (OV10): the grants go in the same step, even if the flag was already off.
-      const agentGrantsRevoked = agentGrants ? this.revokeOAuthGrantsOf(userId, 'feature_revoked', at) : 0;
+      const agentGrantsRevoked = agentGrants ? this.revokeOAuthGrantsWhere((g) => g.userId === userId && this.isAgentGrant(g), 'feature_revoked', at) : 0;
       if (agentGrantsRevoked > 0) this.pushEvents(agentGrants?.audit ?? [], at);
       return { revoked, agentGrantsRevoked };
     },
@@ -1020,6 +1718,181 @@ export class MemoryLedgerStore implements LedgerStore {
         .sort((a, b) => a.grantedAt.getTime() - b.grantedAt.getTime() || a.userId.localeCompare(b.userId))
         .map((g) => ({ userId: g.userId, email: this.people.get(g.userId)?.email ?? '', grantedAt: g.grantedAt })),
   };
+
+  readonly signInCodes: SignInCodeRepository = {
+    issue: async (input) => {
+      for (const row of this.signInCodeRows.values()) {
+        if (row.email === input.email && row.usedAt === null && row.cancelledAt === null) row.cancelledAt = input.at;
+      }
+      const row = { id: randomUUID(), email: input.email, userId: input.userId, codeDigest: input.codeDigest, createdAt: input.at, expiresAt: input.expiresAt, attempts: 0, usedAt: null, cancelledAt: null };
+      this.signInCodeRows.set(row.id, row);
+      return signInCodeOf(row);
+    },
+    attempt: async ({ email, codeDigest, at, maxAttempts }) => {
+      const live = [...this.signInCodeRows.values()]
+        .filter((r) => r.email === email && r.usedAt === null && r.cancelledAt === null && r.expiresAt.getTime() > at.getTime())
+        .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime())[0];
+      if (!live) return { kind: 'none' };
+      if (live.codeDigest === codeDigest) {
+        live.usedAt = at;
+        return { kind: 'matched', userId: live.userId };
+      }
+      live.attempts += 1;
+      if (live.attempts < maxAttempts) return { kind: 'wrong', triesLeft: maxAttempts - live.attempts };
+      live.cancelledAt = at;
+      return { kind: 'exhausted' };
+    },
+    prune: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.signInCodeRows) {
+        if (row.expiresAt.getTime() < before.getTime()) {
+          this.signInCodeRows.delete(id);
+          count += 1;
+        }
+      }
+      return count;
+    },
+  };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => cloneTwoFactor(this.twoFactorRows.get(userId)),
+    enable: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor.userId');
+      const existing = this.twoFactorRows.get(input.userId);
+      this.twoFactorRows.set(input.userId, {
+        userId: input.userId,
+        method: input.method,
+        totpSecretSealed: input.totpSecretSealed,
+        lastUsedStep: input.lastUsedStep,
+        failures: 0,
+        failuresSince: null,
+        lockedUntil: null,
+        enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+        updatedAt: input.at,
+      });
+      this.replaceTwoFactorCodes(input.userId, input.recoveryDigests, input.at);
+      const revokedSessions = this.revokeSessionsOf(input.userId, 'two_factor_enabled', input.at, input.keepSessionId ?? undefined);
+      const kept = input.keepSessionId ? this.sessionsById.get(input.keepSessionId) : undefined;
+      if (kept && !kept.revokedAt) kept.twoFactorAt = input.at;
+      this.pushEvents(input.audit, input.at);
+      return { revokedSessions };
+    },
+    disable: async (userId, at, audit) => {
+      if (!this.twoFactorRows.delete(userId)) return false;
+      for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+      for (const [id, row] of this.twoFactorChallengeRows) if (row.userId === userId) this.twoFactorChallengeRows.delete(id);
+      for (const session of this.sessionsById.values()) if (session.userId === userId) session.twoFactorAt = null;
+      this.pushEvents(audit, at);
+      return true;
+    },
+    recordStep: async (userId, step, at) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row || (row.lastUsedStep !== null && row.lastUsedStep >= step)) return false;
+      Object.assign(row, { lastUsedStep: step, updatedAt: at });
+      return true;
+    },
+    reserveTry: async (userId, at, policy) => {
+      const row = this.twoFactorRows.get(userId);
+      if (!row) return { allowed: false, lockedUntil: null };
+      if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+      const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+      row.failures = fresh ? 1 : row.failures + 1;
+      row.failuresSince = fresh ? at : row.failuresSince;
+      if (row.failures < policy.lockAfter) return { allowed: true, lockedUntil: null };
+      const lockedUntil = new Date(at.getTime() + policy.lockMs);
+      Object.assign(row, { lockedUntil, failures: 0, failuresSince: null });
+      return { allowed: true, lockedUntil };
+    },
+    clearFailures: async (userId) => {
+      const row = this.twoFactorRows.get(userId);
+      if (row) Object.assign(row, { failures: 0, failuresSince: null, lockedUntil: null });
+    },
+    replaceRecoveryCodes: async (userId, digests, at, audit) => {
+      this.replaceTwoFactorCodes(userId, digests, at);
+      this.pushEvents(audit, at);
+    },
+    useRecoveryCode: async (userId, digest, at) => {
+      const row = [...this.twoFactorCodeRows.values()].find((r) => r.userId === userId && r.codeDigest === digest && r.usedAt === null);
+      if (row) row.usedAt = at;
+      return { used: row !== undefined, left: this.twoFactorCodesLeft(userId) };
+    },
+    recoveryCodesLeft: async (userId) => this.twoFactorCodesLeft(userId),
+    createChallenge: async (input) => {
+      if (!this.people.has(input.userId)) throw new ForeignKeyViolation('two_factor_challenges.userId');
+      for (const row of this.twoFactorChallengeRows.values()) if (row.tokenDigest === input.tokenDigest) throw new UniqueViolation('two_factor_challenges.tokenDigest');
+      const row: TwoFactorChallengeRecord = {
+        id: randomUUID(),
+        userId: input.userId,
+        tokenDigest: input.tokenDigest,
+        purpose: input.purpose,
+        method: input.method,
+        sessionKind: input.sessionKind ?? null,
+        firstStep: input.firstStep ? { ...input.firstStep } : null,
+        passwordChangedAt: input.passwordChangedAt ?? null,
+        linkId: input.linkId ?? null,
+        pendingSecretSealed: input.pendingSecretSealed ?? null,
+        codeDigest: null,
+        codeSentAt: null,
+        codesSent: 0,
+        attempts: 0,
+        createdAt: input.at,
+        expiresAt: input.expiresAt,
+        consumedAt: null,
+      };
+      this.twoFactorChallengeRows.set(row.id, row);
+      return cloneChallenge(row)!;
+    },
+    findChallenge: async (tokenDigest, at) =>
+      cloneChallenge([...this.twoFactorChallengeRows.values()].find((r) => r.tokenDigest === tokenDigest && r.consumedAt === null && r.expiresAt.getTime() > at.getTime())),
+    spendAttempt: async (id, at, maxAttempts) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.attempts >= maxAttempts) return { spent: false, triesLeft: 0 };
+      row.attempts += 1;
+      return { spent: true, triesLeft: maxAttempts - row.attempts };
+    },
+    consumeChallenge: async (id, at) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime()) return false;
+      row.consumedAt = at;
+      return true;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const row = this.twoFactorChallengeRows.get(id);
+      if (!row || row.consumedAt !== null || row.expiresAt.getTime() <= at.getTime() || row.codesSent >= limits.maxCodes) return false;
+      if (row.codeSentAt && at.getTime() - row.codeSentAt.getTime() < limits.minGapMs) return false;
+      Object.assign(row, { codeDigest, codeSentAt: at, codesSent: row.codesSent + 1 });
+      return true;
+    },
+    pruneChallenges: async (before) => {
+      let count = 0;
+      for (const [id, row] of this.twoFactorChallengeRows) {
+        if (row.expiresAt.getTime() < before.getTime()) {
+          this.twoFactorChallengeRows.delete(id);
+          count += 1;
+        }
+      }
+      return count;
+    },
+    ownsIssuingProfile: async (userId) => {
+      for (const org of this.orgs.values()) {
+        if (!this.issuerMap.has(org.id) && !this.taxConnectionMap.has(org.id)) continue;
+        if (ownsProfile(org, userId, this.members.get(membershipKey(userId, org.id))?.role ?? null)) return true;
+      }
+      return false;
+    },
+  };
+
+  private replaceTwoFactorCodes(userId: string, digests: readonly string[], at: Date): void {
+    for (const [id, row] of this.twoFactorCodeRows) if (row.userId === userId) this.twoFactorCodeRows.delete(id);
+    for (const codeDigest of digests) {
+      const id = randomUUID();
+      this.twoFactorCodeRows.set(id, { id, userId, codeDigest, createdAt: at, usedAt: null });
+    }
+  }
+
+  private twoFactorCodesLeft(userId: string): number {
+    return [...this.twoFactorCodeRows.values()].filter((r) => r.userId === userId && r.usedAt === null).length;
+  }
 
   readonly passkeys: PasskeyRepository = {
     listByUser: async (userId) =>
@@ -1125,14 +1998,24 @@ export class MemoryLedgerStore implements LedgerStore {
 
   /** MUT-434: every live grant of the person, in one step (the Prisma store's single UPDATE). */
   private revokeOAuthGrantsOf(userId: string, reason: OAuthGrantRevokedReason, at: Date): number {
+    return this.revokeOAuthGrantsWhere((g) => g.userId === userId, reason, at);
+  }
+
+  /** MUT-593: every live grant matching `match`, in one step. */
+  private revokeOAuthGrantsWhere(match: (g: OAuthGrantRecord) => boolean, reason: OAuthGrantRevokedReason, at: Date): number {
     let count = 0;
     for (const g of this.oauthGrants.values()) {
-      if (g.userId === userId && g.revokedAt === null) {
+      if (g.revokedAt === null && match(g)) {
         Object.assign(g, { revokedAt: at, revokedReason: reason });
         count++;
       }
     }
     return count;
+  }
+
+  /** MUT-593: an agent's grant, not a confidential client's (the `agent_access` feature governs only agents). */
+  private isAgentGrant(g: OAuthGrantRecord): boolean {
+    return this.oauthClients.get(g.clientId)?.kind !== 'CONFIDENTIAL';
   }
 
   /** Review finding 1: the Prisma store's revokeOAuthGrantsAuditedInTx — audited by SYSTEM on each of the person's profiles. */
@@ -1154,21 +2037,40 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly oauth: OAuthRepository = {
     createClient: async ({ id, clientName, redirectUris, at }) => {
       if (this.oauthClients.has(id)) throw new UniqueViolation('oauth_clients.id');
-      const client: OAuthClientRecord = { id, kind: 'DCR', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null };
+      const client: OAuthClientRecord = { id, kind: 'DCR', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null, ...publicClientColumns() };
       this.oauthClients.set(id, client);
-      return { ...client, redirectUris: [...client.redirectUris] };
+      return cloneOAuthClient(client);
+    },
+    createConfidentialClient: async ({ id, clientName, redirectUris, jwksUri, allowedResources, at }) => {
+      if (this.oauthClients.has(id)) throw new UniqueViolation('oauth_clients.id');
+      const client: OAuthClientRecord = { id, kind: 'CONFIDENTIAL', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt: null, jwksUri, allowedResources: [...allowedResources], disabledAt: null };
+      this.oauthClients.set(id, client);
+      return cloneOAuthClient(client);
+    },
+    disableClient: async ({ clientId, at }) => {
+      const client = this.oauthClients.get(clientId);
+      if (!client) return null;
+      client.disabledAt ??= at;
+      const grantsRevoked = this.revokeOAuthGrantsWhere((g) => g.clientId === clientId, 'client_disabled', at);
+      return { client: cloneOAuthClient(client), grantsRevoked };
+    },
+    claimAssertion: async ({ clientId, jti, expiresAt, at }) => {
+      const key = `${clientId}\u0000${jti}`;
+      if (this.oauthAssertions.has(key)) return false;
+      this.oauthAssertions.set(key, { expiresAt, createdAt: at });
+      return true;
     },
     upsertCimdClient: async ({ id, clientName, redirectUris, at, metadataExpiresAt }) => {
       const existing = this.oauthClients.get(id);
       const client: OAuthClientRecord = existing
         ? { ...existing, clientName, redirectUris: [...redirectUris], metadataExpiresAt }
-        : { id, kind: 'CIMD', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt };
+        : { id, kind: 'CIMD', clientName, redirectUris: [...redirectUris], createdAt: at, lastUsedAt: null, metadataExpiresAt, ...publicClientColumns() };
       this.oauthClients.set(id, client);
-      return { ...client, redirectUris: [...client.redirectUris] };
+      return cloneOAuthClient(client);
     },
     findClient: async (id) => {
       const c = this.oauthClients.get(id);
-      return c ? { ...c, redirectUris: [...c.redirectUris] } : null;
+      return c ? cloneOAuthClient(c) : null;
     },
     createAuthorizationRequest: async (input) => {
       if (!this.oauthClients.has(input.clientId)) throw new ForeignKeyViolation('oauth_authorization_requests.clientId');
@@ -1188,7 +2090,7 @@ export class MemoryLedgerStore implements LedgerStore {
       Object.assign(r, { decidedAt: at, userId });
       let grant: OAuthGrantRecord | null = null;
       if (approve) {
-        grant = { id: randomUUID(), userId, clientId: r.clientId, redirectUri: r.redirectUri, scopes: [...r.scopes], resource: r.resource, createdAt: at, expiresAt: approve.grantExpiresAt, lastUsedAt: null, revokedAt: null, revokedReason: null };
+        grant = { id: randomUUID(), userId, clientId: r.clientId, redirectUri: r.redirectUri, scopes: [...r.scopes], resource: r.resource, tenantId: r.tenantId, createdAt: at, expiresAt: approve.grantExpiresAt, lastUsedAt: null, revokedAt: null, revokedReason: null };
         this.oauthGrants.set(grant.id, grant);
         this.oauthCodes.set(approve.code.digest, { id: randomUUID(), grantId: grant.id, codeChallenge: r.codeChallenge, redirectUri: r.redirectUri, resource: r.resource, expiresAt: approve.code.expiresAt, consumedAt: null });
         const client = this.oauthClients.get(r.clientId);
@@ -1247,6 +2149,11 @@ export class MemoryLedgerStore implements LedgerStore {
       if (count > 0) this.pushEvents(audit, at);
       return count;
     },
+    revokeForUserTenant: async ({ userId, clientId, tenantId, reason, at, audit }) => {
+      const count = this.revokeOAuthGrantsWhere((g) => g.userId === userId && g.clientId === clientId && g.tenantId === tenantId, reason, at);
+      if (count > 0) this.pushEvents(audit, at);
+      return count;
+    },
     listLiveGrants: async (userId, at) =>
       [...this.oauthGrants.values()]
         .filter((g) => g.userId === userId && g.revokedAt === null && g.expiresAt.getTime() > at.getTime())
@@ -1287,12 +2194,18 @@ export class MemoryLedgerStore implements LedgerStore {
         ...[...this.oauthRequests.values()].filter((r) => r.createdAt.getTime() > clientsBefore.getTime()).map((r) => r.clientId),
       ]);
       for (const [id, c] of this.oauthClients) {
-        if (kept.has(id) || c.createdAt.getTime() > clientsBefore.getTime()) continue;
+        if (kept.has(id) || c.kind === 'CONFIDENTIAL' || c.createdAt.getTime() > clientsBefore.getTime()) continue;
         for (const [rid, r] of this.oauthRequests) if (r.clientId === id) this.oauthRequests.delete(rid);
         this.oauthClients.delete(id);
         clients++;
       }
-      return { requests, codes, tokens, clients };
+      let assertions = 0;
+      for (const [key, a] of this.oauthAssertions) {
+        if (a.expiresAt.getTime() > at.getTime()) continue;
+        this.oauthAssertions.delete(key);
+        assertions++;
+      }
+      return { requests, codes, tokens, clients, assertions };
     },
   };
 
@@ -1331,16 +2244,19 @@ export class MemoryLedgerStore implements LedgerStore {
       failedSignIns: 0,
       lockedUntil: null,
       passwordChangedAt: input.at,
+      passwordChosen: input.passwordChosen ?? true,
       lastSignInAt: null,
       emailVerifiedAt: input.emailVerifiedAt,
       malafatSuggestions: null,
       trialPrompt: null,
       closure: null,
       operatorAt: null,
+      monthlySummaryMail: null,
+      offerMail: null,
       createdAt: input.at,
       updatedAt: input.at,
     };
-    const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, createdAt: new Date() };
+    const personalOrganization: Organization = { id: randomUUID(), ...input.personal, personalOwnerUserId: user.id, ownerUserId: user.id, profileType: 'PERSONAL', version: 1, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, createdAt: new Date() };
     const memberships: MembershipRecord[] = [personalOrganization.id, ...(input.organizationId ? [input.organizationId] : [])].map((organizationId) => ({
       userId: user.id,
       organizationId,
@@ -1402,7 +2318,7 @@ export class MemoryLedgerStore implements LedgerStore {
       link.usedAt = input.at;
       // MUT-366 (review #2): the password is set; any other open link (operator or mailed) is spent with it.
       this.cancelOpenSetupLinks(person.id, input.at, { except: link.id });
-      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
+      Object.assign(person, { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at });
       // MUT-366 (D18): a mailed link reached the person through their mailbox.
       if (link.mailed && person.emailVerifiedAt === null) person.emailVerifiedAt = input.at;
       this.revokeSessionsOf(person.id, 'password_set', input.at);
@@ -1549,6 +2465,9 @@ export class MemoryLedgerStore implements LedgerStore {
       );
       if (tenantTaken) throw new UniqueViolation('integrations.provider_externalTenantId');
       if (existing) {
+        // MUT-593 (ADR-254 D10): the operator approved one tenant on a live connection; another tenant, or coming back
+        // after a disconnect, starts with Malafat access off until the operator turns it on again.
+        if (existing.externalTenantId !== input.externalTenantId || existing.status === 'DISCONNECTED') Object.assign(existing, { delegationEnabledAt: null, delegationEnabledBy: null });
         existing.externalTenantId = input.externalTenantId;
         existing.displayName = input.displayName;
         existing.status = 'CONNECTED';
@@ -1567,6 +2486,8 @@ export class MemoryLedgerStore implements LedgerStore {
         connectedByApiKeyId: input.connectedByApiKeyId,
         connectedAt: input.at,
         disconnectedAt: null,
+        delegationEnabledAt: null,
+        delegationEnabledBy: null,
       };
       this.ints.set(record.id, record);
       return { ...record };
@@ -1576,9 +2497,137 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!i) return null;
       i.status = 'DISCONNECTED';
       i.disconnectedAt = at;
+      this.revokeOAuthGrantsWhere((g) => g.tenantId === i.externalTenantId, 'integration_disconnected', at);
       return { ...i };
     },
+    setDelegation: async ({ id, enabled, by, at, audit }) => {
+      const i = this.ints.get(id);
+      if (!i) return null;
+      Object.assign(i, enabled ? { delegationEnabledAt: i.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null });
+      // MUT-594 (ADR-254 §4.4): turning Malafat access on turns firm features on, so the synced roles mean something.
+      const org = this.orgs.get(i.organizationId);
+      if (enabled && org && !org.firmEnabledAt) Object.assign(org, { firmEnabledAt: at, version: org.version + 1 });
+      const grantsRevoked = enabled ? 0 : this.revokeOAuthGrantsWhere((g) => g.tenantId === i.externalTenantId, 'delegation_disabled', at);
+      this.pushEvents(audit, at);
+      return { integration: { ...i }, grantsRevoked };
+    },
   };
+
+  readonly externalIdentities: ExternalIdentityRepository = {
+    syncMembers: async ({ organizationId, tenantId, members, at, audit }) => {
+      const org = this.orgs.get(organizationId);
+      if (!org) throw new ForeignKeyViolation('external_identities.organizationId');
+      const listed = new Map(members.map((m) => [m.subject, m]));
+      const result: MemberSyncResult = { added: 0, changed: 0, removed: 0, pending: 0 };
+      for (const m of listed.values()) {
+        const key = seatKey('MALAFAT', tenantId, m.subject);
+        const seat = this.seats.get(key);
+        if (!seat) {
+          this.seats.set(key, { id: randomUUID(), provider: 'MALAFAT', tenantId, subject: m.subject, organizationId, email: m.email, malafatRole: m.role, userId: null, linkedAt: null, removedAt: null, createdAt: at, updatedAt: at });
+          result.added++;
+        } else {
+          if (seat.removedAt) result.added++;
+          else if (seat.malafatRole !== m.role) result.changed++;
+          Object.assign(seat, { email: m.email, malafatRole: m.role, organizationId, removedAt: null, updatedAt: at });
+        }
+        const current = this.seats.get(key)!;
+        if (current.userId) this.seatMembership(current.userId, organizationId, membershipRoleOf(m.role), at);
+        else result.pending++;
+      }
+      for (const seat of this.seats.values()) {
+        if (seat.tenantId !== tenantId || seat.removedAt || listed.has(seat.subject)) continue;
+        Object.assign(seat, { removedAt: at, updatedAt: at });
+        result.removed++;
+        if (seat.userId) {
+          this.members.delete(membershipKey(seat.userId, organizationId));
+          const userId = seat.userId;
+          this.revokeOAuthGrantsWhere((g) => g.userId === userId && g.tenantId === tenantId, 'member_removed', at);
+        }
+      }
+      if (!org.memberSyncAt) org.memberSyncAt = at;
+      this.pushEvents(audit, at);
+      return result;
+    },
+    findBySubject: async (provider, tenantId, subject) => cloneSeat(this.seats.get(seatKey(provider, tenantId, subject))),
+    listByUser: async (userId) => [...this.seats.values()].filter((s) => s.userId === userId).map((s) => ({ ...s })),
+    listByOrganization: async (organizationId) =>
+      [...this.seats.values()].filter((s) => s.organizationId === organizationId && !s.removedAt).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id)).map((s) => ({ ...s })),
+    claim: async ({ provider, tenantId, subject, userId, at, audit }) => {
+      const seat = this.seats.get(seatKey(provider, tenantId, subject));
+      if (!seat || seat.userId !== null || seat.removedAt) return { claimed: false, identity: cloneSeat(seat) };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('external_identities.userId');
+      Object.assign(seat, { userId, linkedAt: at, updatedAt: at });
+      // A link with no firm (the tenant isn't bound to MTB3A) makes no membership.
+      if (seat.organizationId) this.seatMembership(userId, seat.organizationId, membershipRoleOf(seat.malafatRole), at);
+      this.pushEvents(audit, at);
+      return { claimed: true, identity: { ...seat } };
+    },
+    link: async ({ provider, tenantId, subject, userId, email, malafatRole, organizationId, at, audit }) => {
+      const key = seatKey(provider, tenantId, subject);
+      const seat = this.seats.get(key);
+      if (seat?.userId && seat.userId !== userId) return { kind: 'elsewhere' };
+      if (seat?.userId === userId) return { kind: 'linked', identity: { ...seat } };
+      if (!this.people.has(userId)) throw new ForeignKeyViolation('external_identities.userId');
+      const linked: ExternalIdentityRecord = seat
+        ? Object.assign(seat, { userId, linkedAt: at, updatedAt: at })
+        : { id: randomUUID(), provider, tenantId, subject, organizationId, email, malafatRole, userId, linkedAt: at, removedAt: null, createdAt: at, updatedAt: at };
+      this.seats.set(key, linked);
+      // A pending seat's membership comes with the link (D7); a removed seat or a bare link makes none.
+      if (linked.organizationId && !linked.removedAt && seat) this.seatMembership(userId, linked.organizationId, membershipRoleOf(linked.malafatRole), at);
+      this.pushEvents(audit, at);
+      return { kind: 'linked', identity: { ...linked } };
+    },
+  };
+
+  readonly malafatSignIns: MalafatSignInRepository = {
+    create: async ({ stateDigest, codeVerifier, tenantSlug, client, appChallenge, at, expiresAt }) => {
+      const row = { id: randomUUID(), stateDigest, codeVerifier, tenantSlug, client, appChallenge, createdAt: at, expiresAt, callbackAt: null, facts: null, outcome: null, userId: null, resultDigest: null, resultExpiresAt: null, resultUsedAt: null, ticketDigest: null, ticketExpiresAt: null, linkProvenAt: null, completedAt: null };
+      this.malafatFlows.set(row.id, row);
+      return flowRecordOf(row);
+    },
+    claimCallback: async (stateDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.stateDigest === stateDigest);
+      if (!row || row.callbackAt || row.expiresAt <= at) return null;
+      row.callbackAt = at;
+      return flowRecordOf(row);
+    },
+    recordResult: async ({ id, facts, outcome, userId, resultDigest, resultExpiresAt }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { facts: { ...facts }, outcome, userId, resultDigest, resultExpiresAt });
+    },
+    claimResult: async (resultDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.resultDigest === resultDigest);
+      if (!row || row.resultUsedAt || !row.resultExpiresAt || row.resultExpiresAt <= at) return null;
+      row.resultUsedAt = at;
+      return flowRecordOf(row);
+    },
+    issueTicket: async ({ id, ticketDigest, ticketExpiresAt }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { ticketDigest, ticketExpiresAt });
+    },
+    findByTicket: async (ticketDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.ticketDigest === ticketDigest);
+      return row && !row.completedAt && row.ticketExpiresAt && row.ticketExpiresAt > at ? flowRecordOf(row) : null;
+    },
+    proveLink: async ({ id, userId, at }) => {
+      const row = this.malafatFlows.get(id);
+      if (row) Object.assign(row, { userId, linkProvenAt: at });
+    },
+    claimCompletion: async (ticketDigest, at) => {
+      const row = [...this.malafatFlows.values()].find((f) => f.ticketDigest === ticketDigest);
+      if (!row || row.completedAt || !row.ticketExpiresAt || row.ticketExpiresAt <= at) return null;
+      row.completedAt = at;
+      return flowRecordOf(row);
+    },
+  };
+
+  /** MUT-594: a seat's membership, created or re-roled (the Prisma store's upsert). */
+  private seatMembership(userId: string, organizationId: string, role: MembershipRole, at: Date): void {
+    const key = membershipKey(userId, organizationId);
+    const existing = this.members.get(key);
+    if (existing) existing.role = role;
+    else this.members.set(key, { userId, organizationId, role, createdAt: at });
+  }
 
   readonly audit: AuditRepository = {
     append: async (event: AuditEventInput) => {
@@ -1741,7 +2790,7 @@ export class MemoryLedgerStore implements LedgerStore {
   readonly customers: CustomerRepository = {
     create: async (input: CreateCustomerInput, at, reference?: ExternalReferenceInput) => {
       if (!this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('customers.organizationId');
-      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
+      const record: CustomerRecord = { id: randomUUID(), ...input, vatTreatment: input.vatTreatment ?? null, taxId: input.taxId ?? null, address: input.address ?? null, documentsPreference: null, status: 'ACTIVE', archivedAt: null, version: 1, createdAt: at, updatedAt: at };
       if (reference) {
         // "atomic": the reference is checked before the customer is stored
         await this.externalReferences.link({ organizationId: input.organizationId, entityType: 'CUSTOMER', entityId: record.id, ...reference }, at);
@@ -1769,6 +2818,9 @@ export class MemoryLedgerStore implements LedgerStore {
       if (patch.phone !== undefined) c.phone = patch.phone;
       if (patch.notes !== undefined) c.notes = patch.notes;
       if (patch.vatTreatment !== undefined) c.vatTreatment = patch.vatTreatment;
+      if (patch.taxId !== undefined) c.taxId = patch.taxId;
+      if (patch.address !== undefined) c.address = patch.address;
+      if (patch.documentsPreference !== undefined) c.documentsPreference = patch.documentsPreference;
       c.version += 1;
       c.updatedAt = at;
       return { kind: 'updated', record: { ...c } };
@@ -2314,7 +3366,8 @@ export class MemoryLedgerStore implements LedgerStore {
         .map((r) => ({ ...r })),
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
       const r = this.recs.get(receivableId);
-      if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
+      // MUT-568 (review fix 2): a document's Owed is corrected only by a credit note.
+      if (!r || r.organizationId !== organizationId || r.deletedAt || r.origin === 'ISSUED_DOCUMENT') return null;
       if (r.status !== 'OPEN' || input.amountMinor > outstanding(r)) throw new InsufficientCapacity(receivableId);
       const credit: CreditRecord = { id: randomUUID(), organizationId, receivableId, ...input, reasonCode: input.reasonCode ?? null, createdAt: at };
       this.credits.set(credit.id, credit);
@@ -2337,6 +3390,7 @@ export class MemoryLedgerStore implements LedgerStore {
         allocations: [...this.allocs.values()].filter((a) => paymentIds.has(a.paymentId) && !a.releasedAt).map((a) => ({ ...a })),
         installments: [...this.insts.values()].filter((i) => agreementIds.has(i.agreementId)).map((i) => ({ ...i })),
         charges: [...this.charges.values()].filter((c) => agreementIds.has(c.agreementId)).map((c) => ({ ...c })),
+        refunds: [...this.refundMap.values()].filter((f) => f.organizationId === organizationId && f.customerId === customerId && f.currency === currency).map(refundRow),
       };
     },
     // MUT-483: the same rows and fields as Prisma's narrow select, so nothing downstream can lean on a field it won't get there.
@@ -2350,6 +3404,7 @@ export class MemoryLedgerStore implements LedgerStore {
         payments: [...this.pays.values()]
           .filter(inCurrency)
           .map((p) => ({ id: p.id, customerId: p.customerId, currency: p.currency, amountMinor: p.amountMinor, receivedOn: p.receivedOn, status: p.status, reversalReason: p.reversalReason, reversedAt: p.reversedAt, updatedAt: p.updatedAt, createdAt: p.createdAt })),
+        refunds: [...this.refundMap.values()].filter(inCurrency).map(refundRow),
       };
     },
     list: async (organizationId, filter: ReceivableFilter, page) =>
@@ -2398,7 +3453,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.recs.get(id);
       if (!r || r.organizationId !== organizationId) return null;
       // Mirrors the Prisma WHERE clause: money on the row refuses the void, and the undeleted record says so.
-      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n) r.deletedAt = at;
+      if (!r.deletedAt && r.paidMinor === 0n && r.creditedMinor === 0n && r.origin !== 'ISSUED_DOCUMENT') r.deletedAt = at;
       return { ...r };
     },
     redateAdjustment: async (organizationId, id, userId, expectedVersion, postingDate, dueDate) => {
@@ -2472,6 +3527,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const payment = this.pays.get(paymentId);
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status === 'REVERSED') return { payment: { ...payment }, changed: false };
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       this.reverseNow(payment, reason, null, at);
       return { payment: { ...payment }, changed: true };
     },
@@ -2482,6 +3538,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (!payment || payment.organizationId !== organizationId) return null;
       if (payment.status !== 'POSTED') throw new StateConflict('payment', 'PAYMENT_NOT_POSTED');
       if (payment.version !== expectedVersion) throw new StateConflict('payment', 'PREVIEW_STALE');
+      if (this.hasRefundSource(paymentId)) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
       const input: CreatePaymentInput = { ...replacement, replacesPaymentId: paymentId };
       this.assertPaymentRefs(input);
       this.assertCapacity(organizationId, input.allocations, this.releasedBy(paymentId));
@@ -2489,6 +3546,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const created = this.insertPayment(input, new Date(at.getTime() + 1));
       return { reversed: { ...payment }, ...created };
     },
+    findByClientRequestKey: async (organizationId, clientRequestKey) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.clientRequestKey === clientRequestKey)),
     findReplacedBy: async (organizationId, paymentId) => clone([...this.pays.values()].find((p) => p.organizationId === organizationId && p.replacesPaymentId === paymentId && p.status === 'POSTED')),
     capture: async (input, at) => {
       const { payment } = await this.payments.create({ ...input, reference: null, receiptNumber: null, replacesPaymentId: null, origin: 'CAPTURE', allocations: [] }, at);
@@ -2554,15 +3612,17 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   /** Numbers, stores and allocates a payment whose checks have passed. */
-  private insertPayment(input: CreatePaymentInput, at: Date): { payment: PaymentRecord; allocations: AllocationRecord[] } {
+  private insertPayment(input: CreatePaymentInput, at: Date, allowDocumentOwned = false): { payment: PaymentRecord; allocations: AllocationRecord[] } {
     const year = Number(input.receivedOn.slice(0, 4));
     const counterKey = `${input.organizationId}:${year}`;
     const seq = (this.counters.get(counterKey) ?? 0) + 1;
     this.counters.set(counterKey, seq);
     const { allocations: requested, ...rest } = input;
-    const payment: PaymentRecord = { id: randomUUID(), ...rest, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, version: 1, createdAt: at, updatedAt: at };
+    // MUT-709: Postgres's (organizationId, clientRequestKey) unique index.
+    if (rest.clientRequestKey && [...this.pays.values()].some((p) => p.organizationId === input.organizationId && p.clientRequestKey === rest.clientRequestKey)) throw new UniqueViolation('payments.clientRequestKey');
+    const payment: PaymentRecord = { id: randomUUID(), ...rest, clientRequestKey: rest.clientRequestKey ?? null, number: paymentNumber(year, seq), allocatedMinor: 0n, status: 'POSTED', reversedAt: null, reversalReason: null, reversalReasonCode: null, notForInvoice: false, version: 1, createdAt: at, updatedAt: at };
     this.pays.set(payment.id, payment);
-    const allocations = this.applyAllocations(payment, requested, at);
+    const allocations = this.applyAllocations(payment, requested, at, allowDocumentOwned);
     return { payment: { ...payment }, allocations };
   }
 
@@ -2585,7 +3645,9 @@ export class MemoryLedgerStore implements LedgerStore {
     Object.assign(payment, { allocatedMinor: 0n, status: 'REVERSED', reversedAt: at, reversalReason: reason, reversalReasonCode: reasonCode, version: payment.version + 1, updatedAt: at });
   }
 
-  private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): AllocationRecord[] {
+  private applyAllocations(payment: PaymentRecord, requested: readonly AllocationInput[], at: Date, allowDocumentOwned = false): AllocationRecord[] {
+    // MUT-568 (review fix 2): only issuing pays a document's Owed.
+    if (!allowDocumentOwned && requested.some((a) => this.recs.get(a.receivableId)?.origin === 'ISSUED_DOCUMENT')) throw new ForeignKeyViolation('payment_allocations.receivableId');
     const created: AllocationRecord[] = [];
     for (const a of requested) {
       const r = this.recs.get(a.receivableId)!;
@@ -2604,7 +3666,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   private newReceivable(
-    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number'> & {
+    input: Omit<ReceivableRecord, 'id' | 'paidMinor' | 'creditedMinor' | 'status' | 'version' | 'createdAt' | 'deletedAt' | 'title' | 'createdByUserId' | 'number' | 'notForInvoice'> & {
       title?: string | null;
       createdByUserId?: string | null;
     },
@@ -2624,6 +3686,7 @@ export class MemoryLedgerStore implements LedgerStore {
       creditedMinor: 0n,
       status: 'OPEN',
       deletedAt: null,
+      notForInvoice: false,
       version: 1,
       createdAt: input.postedAt,
     };
@@ -2653,13 +3716,13 @@ export class MemoryLedgerStore implements LedgerStore {
       this.exps.set(record.id, record);
       return { ...record };
     },
-    getById: async (organizationId, id) => {
+    getById: async (organizationId, id, options) => {
       const e = this.exps.get(id);
-      return e && e.organizationId === organizationId && !e.deletedAt ? { ...e } : null;
+      return e && e.organizationId === organizationId && !e.deletedAt && (!options?.withReceipt || this.hasReadyReceipt(e.id)) ? { ...e } : null;
     },
     list: async (organizationId, filter: ExpenseFilter, page) => {
       const rows = [...this.exps.values()]
-        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && this.inGroupFilter(e, filter.group) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
+        .filter((e) => e.organizationId === organizationId && !e.deletedAt && matchesExpense(e, filter) && this.inGroupFilter(e, filter.group) && this.inReceiptFilter(e, filter) && (!page.cursor || isBeforeExpenseCursor(e, page.cursor)))
         .sort(newestFirst)
         .slice(0, page.limit + 1);
       const items = rows.slice(0, page.limit).map((e) => ({ ...e }));
@@ -2699,10 +3762,40 @@ export class MemoryLedgerStore implements LedgerStore {
       }
       return { record: { ...e }, changed: true, removedReceipts };
     },
+    moveToProfile: async (params) => {
+      // No await between the checks and the writes: the memory store's stand-in for the expense and receipt locks.
+      const e = this.exps.get(params.expenseId);
+      if (!e || e.organizationId !== params.organizationId || e.deletedAt) return { kind: 'not_found' };
+      if (e.version !== params.expectedVersion) return { kind: 'stale', currentVersion: e.version };
+      const live = [...this.expReceipts.values()].filter((r) => r.organizationId === params.organizationId && r.expenseId === e.id && !r.deletedAt);
+      const abandoned = live.filter((r) => r.status === 'PENDING_UPLOAD' && r.createdAt < params.abandonedBefore);
+      const onExpense = live.filter((r) => !abandoned.includes(r));
+      if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' };
+      const wanted = Object.keys(params.receiptKeys).sort();
+      if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed', currentVersion: e.version };
+      if (params.patch.categoryId && !this.expCats.has(params.patch.categoryId)) throw new ForeignKeyViolation('expenses_categoryId_fkey');
+      if (params.patch.vendorId && !this.vendorMap.has(params.patch.vendorId)) throw new ForeignKeyViolation('expenses_vendorId_fkey');
+      assertExpenseVatColumns({ ...e, ...definedOnly(params.patch) });
+      Object.assign(e, definedOnly(params.patch), { organizationId: params.targetOrganizationId, updatedAt: params.at });
+      e.version += 1;
+      const previousStorageKeys: string[] = [];
+      for (const r of onExpense) {
+        previousStorageKeys.push(r.storageKey);
+        r.organizationId = params.targetOrganizationId;
+        r.storageKey = params.receiptKeys[r.id]!;
+        if (r.approved) r.approved = { ...r.approved, categoryId: params.approvedCategoryId };
+        r.version += 1;
+      }
+      for (const r of abandoned) Object.assign(r, { deletedAt: params.at, version: r.version + 1 });
+      for (const [key, mark] of this.groupMarks) if (mark.expenseId === e.id) this.groupMarks.delete(key);
+      for (const event of params.audit) await this.audit.append(event);
+      const abandonedStorageKeys = abandoned.map((r) => r.storageKey).filter((k) => k !== '');
+      return { kind: 'moved', expense: { ...e }, receipts: onExpense.map((r) => ({ ...r })), previousStorageKeys, abandonedStorageKeys };
+    },
     totalsByCurrency: async (organizationId, filter: ExpenseFilter) => {
       const totals = new Map<string, ExpenseCurrencyTotal>();
       for (const e of this.exps.values()) {
-        if (e.organizationId !== organizationId || e.deletedAt || !matchesExpense(e, filter) || !this.inGroupFilter(e, filter.group)) continue;
+        if (e.organizationId !== organizationId || e.deletedAt || !matchesExpense(e, filter) || !this.inGroupFilter(e, filter.group) || !this.inReceiptFilter(e, filter)) continue;
         const t = totals.get(e.currency) ?? { currency: e.currency, totalMinor: 0n, count: 0 };
         totals.set(e.currency, { ...t, totalMinor: t.totalMinor + e.amountMinor, count: t.count + 1 });
       }
@@ -2948,6 +4041,14 @@ export class MemoryLedgerStore implements LedgerStore {
       const v = owner ? this.vendorMap.get(owner.vendorId) : undefined;
       return v ? { ...v } : null;
     },
+    removeIfUnused: async (organizationId, id) => {
+      const v = this.vendorMap.get(id);
+      if (!v || v.organizationId !== organizationId) return false;
+      if ([...this.exps.values()].some((e) => e.vendorId === id)) return false;
+      this.vendorMap.delete(id);
+      for (const [key, n] of this.vendorNames) if (n.vendorId === id) this.vendorNames.delete(key);
+      return true;
+    },
   };
 
   private addVendorName(v: VendorRecord, name: string, nameKey: string, at: Date): void {
@@ -3038,7 +4139,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const end = (status: ReceiptReadStatus, failReason: string | null) => Object.assign(r, { readStatus: status, readLeaseUntil: null, readFailReason: failReason });
       if (r.deletedAt || r.filingStatus === 'FILED') {
         end('SKIPPED', null);
-        return { kind: 'skipped' };
+        return { kind: 'skipped', reason: r.deletedAt ? 'deleted' : 'filed' };
       }
       if (outcome.status === 'DONE' && outcome.suggested) {
         if (r.version !== expectedVersion) return { kind: 'stale', record: { ...r } };
@@ -3069,7 +4170,7 @@ export class MemoryLedgerStore implements LedgerStore {
     markBacklogPending: async (scope, now) => {
       const moved: string[] = [];
       for (const r of this.expReceipts.values()) {
-        if (r.uploadedByUserId !== scope.userId || (scope.organizationId && r.organizationId !== scope.organizationId)) continue;
+        if (r.uploadedByUserId === null || (scope.userId && r.uploadedByUserId !== scope.userId) || (scope.organizationId && r.organizationId !== scope.organizationId)) continue;
         if (r.status !== 'READY' || r.filingStatus !== 'TO_REVIEW' || r.deletedAt || (r.readStatus ?? 'NONE') !== 'NONE' || isCompleteSuggestion(r.suggested)) continue;
         Object.assign(r, { readStatus: 'PENDING', readRequestedAt: now, readLeaseUntil: null });
         moved.push(r.id);
@@ -3310,6 +4411,122 @@ export class MemoryLedgerStore implements LedgerStore {
     },
   };
 
+  /**
+   * MUT-644 (ADR-277): closed profiles' issuing rows. The issuing maps sit outside dropProfiles (the purge leaves them,
+   * ADR-260), so a profile id found there with no profile is a closed one.
+   */
+  readonly issuingRetention: IssuingRetentionRepository = {
+    listClosed: async (filter, limit) => {
+      const ids = new Set<string>();
+      for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations] as Array<Map<string, { organizationId: string }>>) {
+        for (const row of map.values()) if (!this.orgs.has(row.organizationId)) ids.add(row.organizationId);
+      }
+      for (const id of this.cancellationCounters.keys()) if (!this.orgs.has(id)) ids.add(id);
+      const query = filter.query?.trim().toLowerCase();
+      return [...ids]
+        .map((id) => this.retainedProfile(id))
+        .filter((p) => (filter.dueBefore === undefined ? true : p.oldestDocumentDate === null || p.oldestDocumentDate < filter.dueBefore))
+        .filter((p) => (query ? (p.legalName ?? '').toLowerCase().includes(query) || (p.vatId ?? '').startsWith(query) : true))
+        .sort((a, b) => (a.oldestDocumentDate ?? '').localeCompare(b.oldestDocumentDate ?? '') || a.organizationId.localeCompare(b.organizationId))
+        .slice(0, limit);
+    },
+    getClosed: async (organizationId) => (this.orgs.has(organizationId) || !this.holdsIssuing(organizationId) ? null : this.retainedProfile(organizationId)),
+    sweep: async (organizationId, dueBefore, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const all = this.retainedDocuments(organizationId);
+      const due = all.filter((d) => d.retainedFrom < dueBefore);
+      if (due.length === 0 && all.length > 0) return { kind: 'not_due', oldestDocumentDate: all[0]!.retainedFrom };
+      let rows = 0;
+      for (const { doc } of due) rows += this.dropRetainedDocument(doc);
+      const remaining = all.length - due.length;
+      const profileRows = remaining === 0;
+      if (profileRows) rows += this.dropRetainedProfileRows(organizationId);
+      const swept = { documents: due.length, cancellations: due.filter((d) => d.cancelled).length, oldest: due[0]?.retainedFrom ?? null, newest: due.at(-1)?.retainedFrom ?? null };
+      const event = this.appendRetentionEvent(organizationId, 'SWEPT', retentionSweepMetadata(swept, rows, remaining, profileRows), at);
+      return { kind: 'swept', documents: swept.documents, cancellations: swept.cancellations, rows, remaining, profileRows, event };
+    },
+    erase: async (organizationId, reference, at) => {
+      if (this.orgs.has(organizationId)) return { kind: 'not_closed' };
+      if (!this.holdsIssuing(organizationId)) return { kind: 'nothing' };
+      const handed = this.issuingRetentionLog.filter((e) => e.organizationId === organizationId && handsOverArchive(e, at)).sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime()).at(-1);
+      if (!handed) return { kind: 'archive_not_handed_over' };
+      const all = this.retainedDocuments(organizationId);
+      let rows = 0;
+      for (const { doc } of all) rows += this.dropRetainedDocument(doc);
+      rows += this.dropRetainedProfileRows(organizationId);
+      const documents = all.length;
+      const cancellations = all.filter((d) => d.cancelled).length;
+      const event = this.appendRetentionEvent(organizationId, 'ERASED', { reference, documents, cancellations, rows, archiveEventId: handed.id }, at);
+      return { kind: 'erased', documents, cancellations, rows, event };
+    },
+    record: async (organizationId, action, metadata, at) => this.appendRetentionEvent(organizationId, action, metadata, at),
+    events: async (organizationId) =>
+      this.issuingRetentionLog
+        .filter((e) => e.organizationId === organizationId)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime())
+        .map((e) => ({ ...e, metadata: structuredClone(e.metadata) })),
+  };
+
+  private holdsIssuing(organizationId: string): boolean {
+    const mine = (row: { organizationId: string }) => row.organizationId === organizationId;
+    return (
+      this.cancellationCounters.has(organizationId) ||
+      [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap, this.issuedDocMap, this.issuedOriginals, this.issuedCancellations].some((map) => [...(map as Map<string, { organizationId: string }>).values()].some(mine))
+    );
+  }
+
+  /** A closed profile's documents with the date each one's 7 years count from, oldest first. */
+  private retainedDocuments(organizationId: string): Array<{ doc: IssuedDocumentRecord; retainedFrom: string; cancelled: boolean }> {
+    return [...this.issuedDocMap.values()]
+      .filter((d) => d.organizationId === organizationId)
+      .map((doc) => {
+        const cancellation = this.issuedCancellations.get(doc.id);
+        return { doc, retainedFrom: retentionDateOf(doc.documentDate, cancellation?.cancelledAt ?? null), cancelled: cancellation !== undefined };
+      })
+      .sort((a, b) => a.retainedFrom.localeCompare(b.retainedFrom) || a.doc.id.localeCompare(b.doc.id));
+  }
+
+  /** One document with its lines, copies, kept original and cancellation; the rows Postgres would count. */
+  private dropRetainedDocument(doc: IssuedDocumentRecord): number {
+    let rows = 1 + doc.lines.length + (this.issuedCopies.get(doc.id)?.length ?? 0);
+    this.issuedCopies.delete(doc.id);
+    if (this.issuedOriginals.delete(doc.id)) rows++;
+    if (this.issuedCancellations.delete(doc.id)) rows++;
+    this.issuedDocMap.delete(doc.id);
+    return rows;
+  }
+
+  /** The profile's own rows: business details, counters, logos, the cancellation counter. */
+  private dropRetainedProfileRows(organizationId: string): number {
+    let rows = 0;
+    for (const map of [this.issuerMap, this.issuedCounterMap, this.issuerLogoMap] as Array<Map<string, { organizationId: string }>>) {
+      for (const [key, row] of map) if (row.organizationId === organizationId) { map.delete(key); rows++; }
+    }
+    if (this.cancellationCounters.delete(organizationId)) rows++;
+    return rows;
+  }
+
+  private retainedProfile(organizationId: string): RetainedIssuingProfile {
+    const issuer = this.issuerMap.get(organizationId);
+    const documents = this.retainedDocuments(organizationId);
+    return {
+      organizationId,
+      legalName: issuer?.legalName ?? null,
+      vatId: issuer?.vatId ?? null,
+      documents: documents.length,
+      cancellations: documents.filter((d) => d.cancelled).length,
+      oldestDocumentDate: documents[0]?.retainedFrom ?? null,
+      newestDocumentDate: documents.at(-1)?.retainedFrom ?? null,
+    };
+  }
+
+  private appendRetentionEvent(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): IssuingRetentionEventRecord {
+    const event: IssuingRetentionEventRecord = { id: randomUUID(), organizationId, action, metadata: structuredClone(metadata), createdAt: at };
+    this.issuingRetentionLog.push(event);
+    return { ...event, metadata: structuredClone(metadata) };
+  }
+
   /** MUT-333: the shared rule (accounts/purge-plan.ts) over this store's own rows. */
   private purgeDecisionFor(userId: string) {
     const ids = new Set([...this.members.values()].filter((m) => m.userId === userId).map((m) => m.organizationId));
@@ -3335,7 +4552,7 @@ export class MemoryLedgerStore implements LedgerStore {
     const maps: Array<Map<string, { organizationId: string }>> = [
       this.keys, this.ints, this.idem, this.custs, this.projs, this.refs, this.rates, this.agrs, this.insts, this.charges, this.recs, this.supps,
       this.versions, this.files, this.pays, this.allocs, this.credits, this.props, this.members, this.exps, this.expCats, this.expReceipts,
-      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames,
+      this.convs, this.expGroups, this.groupMarks, this.vendorMap, this.vendorNames, this.refundMap,
     ];
     for (const map of maps) for (const [key, row] of map) if (inDeleted(row)) map.delete(key);
     for (const [key, grant] of this.grants) if (grant.organizationId !== null && deleted.has(grant.organizationId)) this.grants.delete(key);
@@ -3551,6 +4768,21 @@ export class MemoryLedgerStore implements LedgerStore {
             ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, endedAt: sub.endedAt!, tier: sub.tier, currency: account.currency as 'ILS' | 'USD', userId: account.userId!, email: person.email, locale: person.locale }]
             : [];
         }),
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+      const covering = new Set(['active', 'trialing', 'past_due']);
+      const payers = new Set(
+        [...this.billingSubs.values()].filter((s) => s.tier !== 'ACCOUNTANT' && covering.has(s.status)).flatMap((s) => this.billingAccounts.get(s.billingAccountId)?.userId ?? []),
+      );
+      const granted = new Set([...this.grants.values()].filter((g) => g.userId && g.tier !== 'ACCOUNTANT' && !g.revokedAt && (!g.expiresAt || g.expiresAt > now)).map((g) => g.userId!));
+      const malafatOrgs = new Set([...this.ints.values()].filter((i) => i.provider === 'MALAFAT' && i.status === 'CONNECTED').map((i) => i.organizationId));
+      const malafatOwners = new Set([...this.members.values()].filter((m) => m.role === 'OWNER' && malafatOrgs.has(m.organizationId)).map((m) => m.userId));
+      return [...this.people.values()]
+        .filter((p) => p.status === 'ACTIVE' && !p.closure && (after === null || p.id > after))
+        .filter((p) => payers.has(p.id) || granted.has(p.id) || malafatOwners.has(p.id) || (this.trialStarts.get(p.id) ?? new Date(0)) > trialStartedAfter)
+        .sort((a, b) => a.id.localeCompare(b.id))
+        .slice(0, limit)
+        .map((p) => ({ userId: p.id, email: p.email, locale: p.locale, choice: p.monthlySummaryMail }));
+    },
     pastDueCandidates: async () =>
       [...this.billingSubs.values()]
         .filter((sub) => sub.status === 'past_due')
@@ -3728,14 +4960,14 @@ export class MemoryLedgerStore implements LedgerStore {
     return {
       custs: m.custs, projs: m.projs, refs: m.refs, rates: m.rates, agrs: m.agrs, insts: m.insts, charges: m.charges, recs: m.recs, supps: m.supps, versions: m.versions,
       pays: m.pays, allocs: liveAllocations(m.allocs), credits: m.credits, counters: m.counters, props: m.props, exps: m.exps, expCats: m.expCats, expReceipts: m.expReceipts,
-      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames,
+      convs: m.convs, expGroups: m.expGroups, groupMarks: m.groupMarks, vendors: m.vendors, vendorNames: m.vendorNames, refunds: m.refunds,
     };
   }
 
   readonly entries: EntriesRepository = {
     list: async (organizationIds, page) => {
       const rows: EntryRow[] = [
-        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e): EntryRow => ({ kind: 'expense', record: { ...e } })),
+        ...[...this.exps.values()].filter((e) => !e.deletedAt && (!page.expensesWithReceipt || this.hasReadyReceipt(e.id))).map((e): EntryRow => ({ kind: 'expense', record: { ...e } })),
         ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p): EntryRow => ({ kind: 'payment', record: { ...p } })),
         ...[...this.recs.values()].filter((r) => r.origin === 'ADJUSTMENT' && !r.deletedAt).map((r): EntryRow => ({ kind: 'receivable', record: { ...r } })),
         ...[...this.convs.values()].filter((c) => !c.deletedAt).map((c): EntryRow => ({ kind: 'conversion', record: { ...c } })),
@@ -3781,7 +5013,8 @@ export class MemoryLedgerStore implements LedgerStore {
     },
     clientActivity: async (windows) => {
       const live = [
-        ...[...this.exps.values()].filter((e) => !e.deletedAt).map((e) => ({ org: e.organizationId, day: e.occurredOn, createdAt: e.createdAt })),
+        // An expense counts only with a READY, live receipt: what the accountant sees of the profile.
+        ...[...this.exps.values()].filter((e) => !e.deletedAt && this.hasReadyReceipt(e.id)).map((e) => ({ org: e.organizationId, day: e.occurredOn, createdAt: e.createdAt })),
         ...[...this.pays.values()].filter((p) => p.reversalReason !== CAPTURE_UNDO_REASON).map((p) => ({ org: p.organizationId, day: p.receivedOn, createdAt: p.createdAt })),
       ];
       return new Map(
@@ -3793,6 +5026,16 @@ export class MemoryLedgerStore implements LedgerStore {
       );
     },
   };
+
+  /** ExpenseFilter `withReceipt` (Prisma: `receipts: { some: READY_RECEIPT }`): a READY receipt on the expense, not deleted. */
+  private hasReadyReceipt(expenseId: string): boolean {
+    for (const r of this.expReceipts.values()) if (r.expenseId === expenseId && r.status === READY_RECEIPT.status && r.deletedAt === READY_RECEIPT.deletedAt) return true;
+    return false;
+  }
+
+  private inReceiptFilter(e: ExpenseRecord, filter: ExpenseFilter): boolean {
+    return !filter.withReceipt || this.hasReadyReceipt(e.id);
+  }
 
   /** MUT-464: another category that is the same preset entry as `name`, in either language (Prisma's refusePresetTwin). */
   private presetTwin(organizationId: string, name: string, renamed: ExpenseCategoryRecord | null): boolean {
@@ -3961,6 +5204,7 @@ export class MemoryLedgerStore implements LedgerStore {
         inbox: this.inbox,
         vendors: this.vendorMap,
         vendorNames: this.vendorNames,
+        refunds: this.refundMap,
       },
     };
   }
@@ -4005,6 +5249,7 @@ export class MemoryLedgerStore implements LedgerStore {
     replaceMap(this.inbox, maps.inbox);
     replaceMap(this.vendorMap, maps.vendors);
     replaceMap(this.vendorNames, maps.vendorNames);
+    replaceMap(this.refundMap, maps.refunds);
   }
 }
 
@@ -4046,6 +5291,14 @@ export function bestVendorSuggestions(names: readonly VendorNameRecord[], vendor
 function replaceMap<K, V>(target: Map<K, V>, source: Map<K, V>): void {
   target.clear();
   for (const [key, value] of source) target.set(key, value);
+}
+
+function cloneTwoFactor(row: TwoFactorRecord | undefined): TwoFactorRecord | null {
+  return row ? { ...row } : null;
+}
+
+function cloneChallenge(row: TwoFactorChallengeRecord | undefined): TwoFactorChallengeRecord | null {
+  return row ? { ...row, firstStep: row.firstStep ? { ...row.firstStep } : null } : null;
 }
 
 function membershipKey(userId: string, organizationId: string): string {
@@ -4111,6 +5364,11 @@ export class InsufficientCapacity extends Error {
   }
 }
 
+/** MUT-643: the ledger-line fields of a refund, as Prisma's select reads them. */
+function refundRow(f: RefundRecord): LedgerRefundRow {
+  return { id: f.id, customerId: f.customerId, currency: f.currency, amountMinor: f.amountMinor, refundedOn: f.refundedOn, createdAt: f.createdAt, issuedDocumentId: f.issuedDocumentId, method: f.method, reference: f.reference };
+}
+
 function outstanding(r: ReceivableRecord): bigint {
   return r.grossMinor - r.paidMinor - r.creditedMinor;
 }
@@ -4126,6 +5384,11 @@ function liveAllocations(rows: ReadonlyMap<string, AllocationRecord>): Map<strin
   const live = new Map<string, Omit<AllocationRecord, 'releasedAt'>>();
   for (const [key, { releasedAt, ...row }] of rows) if (!releasedAt) live.set(key, row);
   return live;
+}
+
+/** Issued documents are immutable: every read hands out a copy, so no caller can change the stored one. */
+function cloneIssued(d: IssuedDocumentRecord): IssuedDocumentRecord {
+  return { ...d, issuer: structuredClone(d.issuer), customer: structuredClone(d.customer), paymentDetails: d.paymentDetails ? { ...d.paymentDetails } : null, lines: d.lines.map((l) => ({ ...l })) };
 }
 
 function settle(r: ReceivableRecord): void {
@@ -4223,6 +5486,30 @@ function toReviewRefusal(r: ExpenseReceiptRecord | undefined, organizationId: st
 }
 
 /** MUT-434: a stored token without its digest, which never leaves the store. */
+function flowRecordOf(row: MalafatSignInRecord & { stateDigest: string; resultDigest: string | null; ticketDigest: string | null }): MalafatSignInRecord {
+  const { resultDigest: _r, ticketDigest: _t, ...record } = row;
+  void _r;
+  void _t;
+  return { ...record, facts: record.facts ? { ...record.facts } : null };
+}
+
+function seatKey(provider: string, tenantId: string, subject: string): string {
+  return `${provider}\u0000${tenantId}\u0000${subject}`;
+}
+
+function cloneSeat(seat: ExternalIdentityRecord | undefined): ExternalIdentityRecord | null {
+  return seat ? { ...seat } : null;
+}
+
+/** MUT-593: what a public (DCR or CIMD) client carries of the confidential-client columns. */
+function publicClientColumns(): Pick<OAuthClientRecord, 'jwksUri' | 'allowedResources' | 'disabledAt'> {
+  return { jwksUri: null, allowedResources: [], disabledAt: null };
+}
+
+function cloneOAuthClient(c: OAuthClientRecord): OAuthClientRecord {
+  return { ...c, redirectUris: [...c.redirectUris], allowedResources: [...c.allowedResources] };
+}
+
 function oauthTokenRecordOf(t: OAuthTokenRecord & { digest: string }): OAuthTokenRecord {
   return { id: t.id, grantId: t.grantId, kind: t.kind, createdAt: t.createdAt, expiresAt: t.expiresAt, rotatedAt: t.rotatedAt, successorId: t.successorId };
 }
@@ -4244,4 +5531,8 @@ function cloneReview(review: SignupReviewRecord): SignupReviewRecord {
 function mentions(value: unknown, id: string): boolean {
   if (value === null || value === undefined) return false;
   return JSON.stringify(value, (_key, v: unknown) => (typeof v === 'bigint' ? v.toString() : v)).includes(id);
+}
+
+function signInCodeOf(row: SignInCodeRecord): SignInCodeRecord {
+  return { id: row.id, email: row.email, userId: row.userId, createdAt: row.createdAt, expiresAt: row.expiresAt, attempts: row.attempts };
 }

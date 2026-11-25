@@ -160,18 +160,18 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       expect((await store.expenseReceipts.listPendingForSweep(at(100), 100)).map((x) => x.id)).toContain(r.id);
     });
 
-    it('F8: a deleted or FILED receipt becomes SKIPPED and is given no suggestion', async () => {
+    it('F8: a deleted or FILED receipt becomes SKIPPED and is given no suggestion, and says which (MUT-590)', async () => {
       const store = await makeStore();
       const w = await world(store);
       const deleted = await w.pending();
       await store.expenseReceipts.softDelete(w.a.id, deleted.id, at(3));
-      expect(await store.expenseReceipts.finishRead(deleted.id, deleted.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped' });
+      expect(await store.expenseReceipts.finishRead(deleted.id, deleted.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped', reason: 'deleted' });
       const e = await store.expenses.create({ organizationId: w.a.id, occurredOn: '2026-10-28', amountMinor: 100n, currency: 'ILS', title: null, vendor: 'Cafe', categoryId: null, customerId: null, projectId: null, notes: null, vatTreatment: null, vatRateBasisPoints: null, netMinor: null, vatMinor: null, allocationNumber: null, createdByUserId: w.user.id }, at(4));
       const filed = await w.pending();
       const result = await store.expenseReceipts.fileOntoExpense({ organizationId: w.a.id, receiptId: filed.id, expenseId: e.id, maxReceipts: 10 });
       expect(result.kind).toBe('filed');
       const before = (await store.expenseReceipts.getById(w.a.id, filed.id))!;
-      expect(await store.expenseReceipts.finishRead(filed.id, before.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped' });
+      expect(await store.expenseReceipts.finishRead(filed.id, before.version, { status: 'DONE', suggested: read })).toEqual({ kind: 'skipped', reason: 'filed' });
       expect(await store.expenseReceipts.getById(w.a.id, filed.id)).toMatchObject({ readStatus: 'SKIPPED', suggested: null, version: before.version });
     });
 
@@ -216,6 +216,13 @@ export function describeLedgerStoreReceiptReadingContract(name: string, makeStor
       expect(await store.expenseReceipts.getById(w.a.id, waiting.id)).toMatchObject({ readStatus: 'PENDING', readRequestedAt: at(50) });
       for (const id of [unfinished.id, notMine.id, complete.id]) expect((await store.expenseReceipts.getById(w.a.id, id))?.readStatus ?? 'NONE').toBe('NONE');
       expect((await store.expenseReceipts.getById(w.a.id, already.id))?.readRequestedAt).toEqual(at(1));
+      // MUT-659: with no userId, everyone's never-asked receipts (here: the other person's) move too.
+      // The Postgres contract shares one database across tests, so other tests' never-asked receipts can move here too:
+      // assert on this world's receipts only.
+      const mine = new Set([waiting.id, otherProfile.id, unfinished.id, notMine.id, already.id, complete.id]);
+      const everyone = await store.expenseReceipts.markBacklogPending({}, at(80));
+      expect(everyone.filter((id) => mine.has(id))).toEqual([notMine.id]);
+      expect((await store.expenseReceipts.markBacklogPending({}, at(90))).filter((id) => mine.has(id))).toEqual([]);
     });
 
     it('MUT-557 (A2): a never-read receipt with every field that reads as a big ILS invoice without an allocation number is picked once', async () => {

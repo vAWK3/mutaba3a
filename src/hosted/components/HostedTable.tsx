@@ -1,4 +1,4 @@
-import { Fragment, type ReactNode } from 'react';
+import { Fragment, useState, type DragEvent, type ReactNode } from 'react';
 import '../../components/ui/Table.css';
 
 /**
@@ -44,10 +44,20 @@ interface HostedTableProps<Row> {
   canOpen?: (row: Row) => boolean;
   /** Extra classes for a row, e.g. the after-save `row-flash` tint (MUT-91). */
   rowClassName?: (row: Row) => string | undefined;
+  /**
+   * MUT-647 (round 3, path B): a file dropped on a row is handed to the caller with that row (an invoice issued
+   * elsewhere, attached to the entry). Rows refused by `canDropFile` take no drop. Mouse-only by nature: every row
+   * that takes a drop has the same action in its own cell, reachable by keyboard.
+   */
+  onRowFileDrop?: (row: Row, file: File) => void;
+  canDropFile?: (row: Row) => boolean;
 }
 
-export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick, linkColumn, canOpen, rowClassName }: HostedTableProps<Row>) {
+const carriesFiles = (event: DragEvent) => Array.from(event.dataTransfer.types).includes('Files');
+
+export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowClick, linkColumn, canOpen, rowClassName, onRowFileDrop, canDropFile }: HostedTableProps<Row>) {
   const linkKey = linkColumn ?? columns[0]?.key;
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   return (
     <div className="table-wrapper hp-table-wrapper">
       <table className="table" aria-label={label}>
@@ -64,10 +74,30 @@ export function HostedTable<Row>({ columns, rows, rowKey, label, detail, onRowCl
           {rows.map((row) => {
             const extra = detail?.(row);
             const open = onRowClick && (canOpen?.(row) ?? true) ? onRowClick : undefined;
-            const className = [open ? 'clickable' : undefined, rowClassName?.(row)].filter(Boolean).join(' ') || undefined;
+            const key = rowKey(row);
+            const drop = onRowFileDrop && (canDropFile?.(row) ?? true) ? onRowFileDrop : undefined;
+            const className = [open ? 'clickable' : undefined, dropTarget === key ? 'hp-drop-target' : undefined, rowClassName?.(row)].filter(Boolean).join(' ') || undefined;
+            const dropProps = drop
+              ? {
+                  onDragOver: (event: DragEvent) => {
+                    if (!carriesFiles(event)) return;
+                    event.preventDefault();
+                    setDropTarget(key);
+                  },
+                  onDragLeave: () => setDropTarget((current) => (current === key ? null : current)),
+                  onDrop: (event: DragEvent) => {
+                    const file = event.dataTransfer.files[0];
+                    setDropTarget(null);
+                    if (!file) return;
+                    event.preventDefault();
+                    drop(row, file);
+                  },
+                  'data-drop-row': key,
+                }
+              : {};
             return (
-              <Fragment key={rowKey(row)}>
-                <tr className={className} onClick={open ? () => open(row) : undefined}>
+              <Fragment key={key}>
+                <tr className={className} onClick={open ? () => open(row) : undefined} {...dropProps}>
                   {columns.map((column) => (
                     <td key={column.key} className={cellClass(column)}>
                       {open && column.key === linkKey ? <RowLink onActivate={() => open(row)}>{column.cell(row)}</RowLink> : column.cell(row)}

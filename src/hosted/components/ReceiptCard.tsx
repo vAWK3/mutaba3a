@@ -20,6 +20,8 @@ export interface ReceiptCardProps {
   actions?: readonly MoreAction[];
   /** MUT-503 (DR4): moved away; the card fades out before the list drops it. */
   leaving?: boolean;
+  /** MUT-657: home shows no totals, so its cards keep the vendor and leave out a filed receipt's amount. */
+  showAmount?: boolean;
 }
 
 /** True once the element has been in view (IntersectionObserver); at once where there is none to ask. */
@@ -63,7 +65,7 @@ function ImageThumb({ profileId, item }: { profileId: string; item: ReceiptListI
   );
 }
 
-export function ReceiptCard({ profileId, item, to, actions, leaving = false }: ReceiptCardProps) {
+export function ReceiptCard({ profileId, item, to, actions, leaving = false, showAmount = true }: ReceiptCardProps) {
   const { t, language } = useLanguage();
   const isPdf = item.mimeType === 'application/pdf';
   const status = item.filingStatus === 'FILED' ? 'filed' : 'to_review';
@@ -90,7 +92,7 @@ export function ReceiptCard({ profileId, item, to, actions, leaving = false }: R
         {item.expense && (
           <span className="hp-receipt-card-expense">
             {item.expense.vendor || item.expense.title ? <bdi>{item.expense.vendor ?? item.expense.title}</bdi> : null}
-            <DecimalAmount value={item.expense.amount} currency={item.expense.currency} />
+            {showAmount && <DecimalAmount value={item.expense.amount} currency={item.expense.currency} />}
           </span>
         )}
       </Link>

@@ -1,8 +1,9 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
+import { invoiceSplitOf, serializeInvoiceSplit } from '../income/invoice-split.js';
 import { lazyPostingOf, requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { crossRates, type CachedFxRates, type FxRate } from '../fx-rates.js';
 import { verdictProfilesOf } from '../personal-profile.js';
-import { baseProfileOf, composeVerdict, owedOf, type VerdictProfileInput } from '../summaries/verdict.js';
+import { baseProfileOf, composeVerdict, type VerdictProfileInput } from '../summaries/verdict.js';
 import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import type { VerdictUnavailableCode } from '../schemas.js';
 import { assertIsoDate, DAYS_IN_FUTURE_LIMIT, DAYS_IN_PAST_LIMIT, todayFor, validationError, type DateBound } from '../agreements/compose.js';
@@ -11,17 +12,20 @@ import { addDays, addMonths, compareIsoDates, daysBetween, endOfMonth, monthOf, 
 import { ApiError } from '../errors.js';
 import { formatMoney, type Currency } from '../money.js';
 import { currentProposal } from '../proposals/transitions.js';
-import type { AgreementRecord, ExpenseCursor, ExpenseRecord, FeeProposalRecord, PageCursor, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
+import type { AgreementRecord, FeeProposalRecord, InstallmentRecord, LedgerStore, Organization, ProjectRecord, ReceivableRecord } from '../repositories/ports.js';
 import { latestTerms, termsTimeline } from '../retainers/terms.js';
 import { ACTIVITY_RANGE_MAX_MONTHS, ActivitySummaryQuerySchema, ActivitySummarySchema, VerdictQuerySchema, VerdictSchema, CustomerIdParamSchema, CustomerSummarySchema, OrganizationSummarySchema, PeriodSummaryQuerySchema, PeriodSummarySchema, ProjectIdParamSchema, ProjectSummaryResponseSchema, SummaryCurrencyQuerySchema } from '../schemas.js';
 import type { Logger } from '../logger.js';
 import { ledgerEntries } from '../statements/lines.js';
 import { summarizePeriod } from '../statements/period.js';
+import { listAll } from '../repositories/list-all.js';
+import { readActivityWindow, readProfileFigures } from '../summaries/profile-figures.js';
 import { serializePeriodSummary } from '../statements/serialize.js';
 import { serializeFeeProposalSummary } from '../serializers.js';
-import { historyEnd, historyStart, summarizeActivity } from '../summaries/activity.js';
+import { summarizeActivity } from '../summaries/activity.js';
 import { addBuckets, bucketize, countsOn, customerStatus, emptyBuckets, lastPaymentOn, oldestOverdueDueDate, projectFigures, unallocatedOf, type Buckets, type ProjectFigures } from '../summaries/compute.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /** MUT-175: Reports reads a hosted profile's expenses too, so like /v1/summaries/expenses it is session-only. */
 const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
@@ -30,6 +34,9 @@ const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
  * MUT-447: the verdict reads across the person's profiles, so it carries no `X-Mutaba3a-Profile`, like
  * `GET /v1/entries`. Merged into `app.ts`'s and the local app's organization-independent sets.
  */
+/** MUT-535: moved to repositories/list-all.ts; re-exported for the statement tests that import it from here. */
+export { listAll };
+
 export const SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set(['GET /v1/summaries/verdict']);
 
 /**
@@ -38,7 +45,7 @@ export const SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new 
  */
 const PERIOD_DESCRIPTION =
   'MUT-483 (ADR-227). Per currency, the customer statement\'s lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. ' +
-  'billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal\'s day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person\'s own undone capture counts nowhere; a payment with no client counts. ' +
+  'billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal\'s day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person\'s own undone capture counts nowhere; a payment with no client counts. ' +
   'openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. ' +
   '`to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. ' +
   'Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. ' +
@@ -55,7 +62,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'Outstanding, overdue, due today, not yet due, unallocated and proposed per currency, with a row, a status and the open proposals per customer',
       description: 'outstanding = overdue + dueToday + notYetDue over OPEN receivables, where an Owed dated ahead counts from its own date and until then adds no customer row or currency block (MUT-392); unallocated over POSTED payments; proposed over PROPOSED fee proposals (M8) except retainer (RECURRING) ones, whose monthly amount is left out of the sum (MUT-479); every open proposal also appears on its customer\'s row and in counts.openProposals. Due items are posted before the figures are read. ?currency= narrows to one block. Each customer row\'s oldestOverdueDueDate is the earliest due date among the receivables counted in its `overdue`, null exactly when that is 0, and daysOverdue counts from it to `asOf` (MUT-482).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: SummaryCurrencyQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: OrganizationSummarySchema } } }, ...validationResponse, ...errorResponses },
@@ -115,7 +122,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'Billed, received and credited over a period per currency, with the balance at its start and end',
       description: PERIOD_DESCRIPTION,
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { query: PeriodSummaryQuerySchema },
       responses: { 200: { description: 'Period figures', content: { 'application/json': { schema: PeriodSummarySchema } } }, ...validationResponse, ...errorResponses },
@@ -152,7 +159,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'One customer: buckets, unallocated and status per currency, with a summary per project',
       description: 'Each currency block totals only receivables and payments in that currency (ADR-004). A project row lists under its own currency and counts only its receivables in that currency; an Owed on the project in another currency counts in that currency\'s block, as an Owed with no project does, with no project row there (MUT-488). An Owed dated ahead opens no block until its day (MUT-392). A block\'s oldestOverdueDueDate and daysOverdue come from the same receivables as its `overdue` (MUT-482).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: CustomerIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: CustomerSummarySchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -204,7 +211,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       tags: ['Summaries'],
       summary: 'One project: agreed / monthly, posted, paid, credited, buckets, pending installments and status',
       description: 'In the project\'s currency only: an Owed on the project in another currency is left out here and counts in that currency\'s block of GET /v1/summaries/customers/{customerId} (MUT-488).',
-      security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
+      security: [{ apiKey: [] }, ...PERSON_OR_MALAFAT],
       middleware: [requireScope('summaries:read')] as const,
       request: { params: ProjectIdParamSchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ProjectSummaryResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -231,7 +238,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       summary: 'Received and spent per day or month over a range, per currency, with a 12-month history and days to get paid (portal Reports)',
       description:
         'MUT-175. Received = POSTED payments by receivedOn; spent = expenses by occurredOn. One block per currency — never summed across currencies. The read window runs from `from` (or the first of the 12 calendar months ending with `to`’s month, if earlier) through the last day of `to`’s month, so `history` holds whole months and `dataSince` comes from the same rows; the period figures and buckets cover `from`–`to` only. `daysToPaid` is over Owed entries paid in full, measured to their last payment read in the window; null below 3.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('summaries:read'), requireScope('expenses:read')] as const,
       request: { query: ActivitySummaryQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ActivitySummarySchema } } }, ...validationResponse, ...errorResponses },
@@ -242,11 +249,13 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const today = todayFor(organization, c.get('now')());
       const { from, to } = reportRange(q, today);
       const bucket = q.bucket;
-      const { payments, expenses, earlierData } = await readActivityWindow(organization.id, from, to);
+      const { payments, expenses, refunds, earlierData } = await readActivityWindow(store, organization.id, from, to);
       const allocations = await store.payments.listAllocationsFor(organization.id, payments.map((p) => p.id));
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
-      const summary = summarizeActivity({ payments, expenses, allocations, receivables, from, to, bucket });
-      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary }, 200);
+      const summary = summarizeActivity({ payments, expenses, allocations, receivables, refunds, from, to, bucket });
+      // MUT-660: invoicing profiles only; every other profile's answer is unchanged.
+      const split = await invoiceSplitOf(store, organization, payments, refunds, { from, to });
+      return c.json({ from, to, bucket, asOf: today, earlierData, ...summary, ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
 
@@ -286,12 +295,8 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       // LOCKED profiles are dropped above, before any posting (eng review A1); posting is SYSTEM through the one door (D3/D7).
       const posting = lazyPostingOf(c, store);
       const read = await settledWithLimit(held, VERDICT_PROFILE_CONCURRENCY, async ({ organization, kind, shared }): Promise<VerdictProfileInput> => {
-        const today = todayFor(organization, now);
-        await postDueItems(posting.store, organization, today, now, posting.actor);
-        const [window, receivables] = await Promise.all([
-          readActivityWindow(organization.id, from, to),
-          listAll((cursor) => store.receivables.list(organization.id, { status: 'OPEN' }, { limit: 200, cursor })),
-        ]);
+        // MUT-535 (D5): the monthly summary mail reads each profile through this same function.
+        const figures = await readProfileFigures(store, organization, { from, to }, now, posting);
         return {
           profileId: organization.id,
           name: organization.name,
@@ -300,9 +305,9 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
           createdAt: organization.createdAt,
           defaultCurrency: organization.defaultCurrency as Currency,
           timezone: organization.timezone,
-          earlierData: window.earlierData,
-          activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], from, to, bucket: 'month' }),
-          owed: owedOf(receivables, today),
+          earlierData: figures.earlierData,
+          activity: figures.activity,
+          owed: figures.owed,
         };
       });
       const profiles: VerdictProfileInput[] = [];
@@ -333,23 +338,6 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       if (!(err instanceof ApiError && err.code === 'FX_RATES_UNAVAILABLE')) reportError(err);
       return { rates: null, meta: null };
     }
-  }
-
-  /**
-   * MUT-175 (shared with MUT-447): one profile's POSTED payments and expenses over the read window — from (or the 12
-   * months ending with to's month, if earlier) through the end of to's month — and whether records exist before it.
-   */
-  async function readActivityWindow(organizationId: string, from: IsoDate, to: IsoDate) {
-    const start = compareIsoDates(from, historyStart(to)) < 0 ? from : historyStart(to);
-    const end = historyEnd(to);
-    const before = addDays(start, -1);
-    const [payments, expenses, paidEarlier, spentEarlier] = await Promise.all([
-      listAll((cursor) => store.payments.list(organizationId, { status: 'POSTED', receivedAfter: start, receivedBefore: end }, { limit: 200, cursor })),
-      listAll<ExpenseRecord, ExpenseCursor>((cursor) => store.expenses.list(organizationId, { from: start, to: end }, { limit: 200, cursor })),
-      store.payments.list(organizationId, { status: 'POSTED', receivedBefore: before }, { limit: 1, cursor: null }),
-      store.expenses.list(organizationId, { to: before }, { limit: 1, cursor: null }),
-    ]);
-    return { payments, expenses, earlierData: paidEarlier.items.length > 0 || spentEarlier.items.length > 0 };
   }
 
   async function projectSummary(organization: Organization, project: ProjectRecord, receivables: ReceivableRecord[], today: string): Promise<ProjectView> {
@@ -455,16 +443,4 @@ function reportRange(q: { from?: string | undefined; to?: string | undefined }, 
   return { from, to };
 }
 
-/** Walks every page of a keyset-paginated list, whatever its cursor's shape. */
-export async function listAll<T, C = PageCursor>(fetchPage: (cursor: C | null) => Promise<{ items: T[]; nextCursor: C | null }>): Promise<T[]> {
-  const all: T[] = [];
-  let cursor: C | null = null;
-  for (let i = 0; i < 1000; i += 1) {
-    const page = await fetchPage(cursor);
-    all.push(...page.items);
-    if (!page.nextCursor) break;
-    cursor = page.nextCursor;
-  }
-  return all;
-}
 

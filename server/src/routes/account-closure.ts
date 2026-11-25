@@ -1,7 +1,7 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import { closingRefusal, closureDeadline, deletionDayOf, subscriptionActionsAtClose } from '../accounts/closure.js';
 import { verifyCurrentPassword } from '../auth/current-password.js';
-import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import type { SignInThrottle } from '../auth/sessions.js';
 import type { PasswordHasher } from '../auth/users.js';
 import type { AccountStripeGateway } from '../billing/stripe/account-gateway.js';
@@ -68,7 +68,7 @@ export function accountClosureRoutes(options: AccountClosureRouteOptions): OpenA
       },
     }),
     async (c) => {
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const { password } = c.req.valid('json');
       const now = c.get('now')();
       await verifyCurrentPassword(options, user, password, now, c.get('requestId'));

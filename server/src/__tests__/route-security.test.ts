@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import pino from 'pino';
-import { createApp } from '../app.js';
+import { createApp, SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
+import { DELEGATED_PERSON_ROUTES, DELEGATED_PROFILE_PATH_ROUTES } from '../auth/delegation.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { domainOfScope, matrixRow } from '../auth/writability.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
@@ -37,6 +38,9 @@ const EXPENSE_OPERATIONS = [
   'POST /v1/expenses',
   'POST /v1/expenses/{expenseId}/receipts',
   'POST /v1/expenses/{expenseId}/receipts/{receiptId}/complete',
+  // MUT-589 (ADR-255): a saved expense, with its receipts, to another of the person's profiles.
+  'GET /v1/expenses/{expenseId}/move-preview',
+  'POST /v1/expenses/{expenseId}/move',
   // MUT-267 (ADR-094): expense groups belong to the expenses domain.
   'GET /v1/expense-groups',
   'POST /v1/expense-groups',
@@ -74,6 +78,58 @@ const CORRECTION_OPERATIONS = ['POST /v1/payments/{paymentId}/reverse', 'POST /v
 
 /** MUT-161: logged currency conversions — session-only. MUT-194 (ADR-075) adds PATCH and DELETE. */
 const CONVERSION_OPERATIONS = ['POST /v1/conversions', 'GET /v1/conversions', 'GET /v1/conversions/{conversionId}', 'PATCH /v1/conversions/{conversionId}', 'DELETE /v1/conversions/{conversionId}'];
+/** MUT-642: the company/nonprofit lookup — session-only, hosted only. */
+const BUSINESS_LOOKUP_OPERATIONS = ['GET /v1/business-lookup'];
+/** MUT-568 (ADR-260): issuing — session-only. */
+const ISSUING_OPERATIONS = [
+  'GET /v1/issuer',
+  'PUT /v1/issuer',
+  // MUT-646: the setup.
+  'PUT /v1/issuer/defaults',
+  'PUT /v1/issuer/logo',
+  'GET /v1/issuer/logo',
+  'DELETE /v1/issuer/logo',
+  'PUT /v1/issuing/numbering',
+  'GET /v1/issuing/setup',
+  // MUT-647: invoices issued elsewhere.
+  'POST /v1/issuing/external-invoices/read',
+  'POST /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices/{externalInvoiceId}/file',
+  'DELETE /v1/issuing/external-invoices/{externalInvoiceId}',
+  // MUT-570: the styles list.
+  'GET /v1/issuing/styles',
+  'POST /v1/issuing/setup/intro-seen',
+  // MUT-571/572: the Tax Authority connection and a held allocation's choice.
+  'GET /v1/issuing/tax-authority',
+  'POST /v1/issuing/tax-authority/connect',
+  'DELETE /v1/issuing/tax-authority',
+  'POST /v1/issuing/allocation-decisions',
+  'GET /v1/issuing/settings',
+  'PUT /v1/issuing/starting-numbers/{docType}',
+  'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
+  'POST /v1/issued-documents/preview',
+  'POST /v1/issued-documents',
+  'GET /v1/issued-documents',
+  'GET /v1/issued-documents/{documentId}',
+  // MUT-640: the PDF.
+  'GET /v1/issued-documents/{documentId}/pdf',
+  'POST /v1/issued-documents/{documentId}/pdf',
+  'POST /v1/issued-documents/preview/pdf',
+  // MUT-662: cancelling a payment request (owner only).
+  'POST /v1/issued-documents/{documentId}/cancel',
+  // MUT-660: documents due, Issue all and the not-for-invoice marks.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
+  'POST /v1/documents-due/issue',
+  'POST /v1/documents-due/not-for-invoice',
+  // MUT-661: a payment and its document in one step.
+  'POST /v1/receivables/{receivableId}/settle-and-issue',
+  'PUT /v1/receivables/{receivableId}/not-for-invoice',
+  'PUT /v1/payments/{paymentId}/not-for-invoice',
+];
 
 /**
  * MUT-66: the unsorted inbox — session-only throughout. The four CRUD
@@ -169,6 +225,40 @@ const OPERATOR_OPERATIONS = [
   'GET /v1/operator/firm-requests/{organizationId}',
   'POST /v1/operator/firm-requests/{organizationId}/enable',
   'POST /v1/operator/firm-requests/{organizationId}/decline',
+  // MUT-593: the per-firm Malafat switch.
+  'POST /v1/operator/organizations/{organizationId}/malafat-delegation',
+];
+
+/** MUT-593 (ADR-254): You › Connected apps, from the portal or the phone; never a delegated token. */
+const CONNECTED_APP_OPERATIONS = ['GET /v1/me/connected-apps', 'DELETE /v1/me/connected-apps/{grantId}'];
+/** MUT-596: who is on the selected profile, read-only (a Malafat firm's seats); a person's, never a key's. */
+const MEMBER_OPERATIONS = ['GET /v1/members'];
+
+/**
+ * MUT-593 (ADR-254 §4.2): what Malafat's delegated token may never reach, by path prefix — the person's own
+ * credentials, sessions, account, billing, agents and connected apps, the operator console, the records export, and
+ * every person-level read across profiles. Matched by prefix, so a new route under one of these is covered at once.
+ */
+const NEVER_DELEGATED_PREFIXES = [
+  '/v1/me/password',
+  '/v1/me/closure',
+  '/v1/me/connected-apps',
+  '/v1/me/passkey-prompt',
+  '/v1/me/terms-acceptance',
+  '/v1/me/malafat-suggestions',
+  '/v1/me/trial-prompt',
+  '/v1/passkeys',
+  '/v1/sessions',
+  '/v1/device-sessions',
+  '/v1/billing',
+  '/v1/oauth',
+  '/v1/operator',
+  '/v1/records-export',
+  '/v1/inbox',
+  '/v1/entries',
+  '/v1/summaries/verdict',
+  '/v1/accountant-invites',
+  '/v1/clients',
 ];
 
 /** The portal's read surface (hosted-portal.md §5–§6), the two identity routes, and the expense operations. */
@@ -181,6 +271,7 @@ const SESSION_OPERATIONS = [
   ...INCOME_OPERATIONS,
   ...CORRECTION_OPERATIONS,
   ...CONVERSION_OPERATIONS,
+  ...ISSUING_OPERATIONS,
   ...INBOX_OPERATIONS,
   ...PROFILE_OPERATIONS,
   ...ACCOUNTANT_OPERATIONS,
@@ -188,21 +279,32 @@ const SESSION_OPERATIONS = [
   ...FX_OPERATIONS,
   ...ENTRIES_OPERATIONS,
   ...RECORDS_EXPORT_OPERATIONS,
+  ...CONNECTED_APP_OPERATIONS,
   'DELETE /v1/sessions/current',
   'GET /v1/agreements',
   'GET /v1/agreements/{agreementId}',
   'GET /v1/attachments',
   'GET /v1/attachments/{attachmentId}/download',
+  // MUT-664: every client's balance, the client page's ledger figures
+  'GET /v1/customer-balances',
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   // MUT-478: the statement is a read like the customer summary, so the portal (and its local mode) can show it later
   'GET /v1/customers/{customerId}/statement',
   'GET /v1/fee-proposals',
   'GET /v1/fee-proposals/{proposalId}',
+  ...MEMBER_OPERATIONS,
   'GET /v1/me',
   // MUT-191: the person's Malafat suggestion preferences (organization-independent, like GET /v1/me)
   'PATCH /v1/me/malafat-suggestions',
   // MUT-237: a person changes their own password (organization-independent, like GET /v1/me)
+  // MUT-710 (ADR-274 D8)
+  'GET /v1/me/two-factor',
+  'POST /v1/me/two-factor/challenge',
+  'POST /v1/me/two-factor/enrolment',
+  'POST /v1/me/two-factor/enrolment/confirm',
+  'POST /v1/me/two-factor/recovery-codes',
+  'DELETE /v1/me/two-factor',
   'POST /v1/me/password',
   // MUT-324: a person accepts the current terms (organization-independent, like GET /v1/me)
   'POST /v1/me/terms-acceptance',
@@ -219,6 +321,9 @@ const SESSION_OPERATIONS = [
   'DELETE /v1/passkeys/{passkeyId}',
   // MUT-370: the person's answer to the passkey suggestion
   'PATCH /v1/me/passkey-prompt',
+  // MUT-535: the person's monthly summary switch (organization-independent, like GET /v1/me)
+  'GET /v1/me/monthly-summary-mail',
+  'PATCH /v1/me/monthly-summary-mail',
   'GET /v1/payments',
   'GET /v1/payments/{paymentId}',
   'GET /v1/projects',
@@ -236,6 +341,10 @@ const SESSION_OPERATIONS = [
   // MUT-65: a session may now create a customer or a project on its own personal profile.
   'POST /v1/customers',
   'POST /v1/projects',
+  // MUT-642: and update a customer on a profile it writes (the VAT number and address issuing needs).
+  'PATCH /v1/customers/{customerId}',
+  // MUT-642: the company/nonprofit lookup (hosted only).
+  'GET /v1/business-lookup',
 ].sort();
 /** MUT-64: the same surface, minus cookie-only sign-out, plus the device-only sign-out. A device token gets exactly a cookie session's reach. */
 // MUT-434: connecting an agent is the portal's (cookie) alone; the phone has no consent page.
@@ -244,17 +353,31 @@ const DEVICE_SESSION_OPERATIONS = [...SESSION_OPERATIONS.filter((k) => k !== 'DE
 const PUBLIC_OPERATIONS = ['POST /v1/sessions', 'POST /v1/device-sessions', 'POST /v1/account-setup/check', 'POST /v1/account-setup', 'GET /v1/public/fx-rates', 'POST /v1/billing/stripe/webhook', 'POST /v1/email/resend/webhook', 'POST /v1/signups', 'POST /v1/account-recovery', 'GET /v1/self-service',
   // MUT-115: passkey sign-in and its challenge, public like the password sign-in.
   'POST /v1/passkey-challenges', 'POST /v1/sessions/passkey', 'POST /v1/device-sessions/passkey',
+  // MUT-571: the Tax Authority sends the browser back here; it trusts only its signed state.
+  'GET /v1/issuing/tax-authority/callback',
+  // MUT-618 (ADR-256): the emailed sign-in code, asked for and used while signed out.
+  'POST /v1/sign-in-codes', 'POST /v1/device-sign-in-codes', 'POST /v1/sessions/code', 'POST /v1/device-sessions/code',
+  // MUT-710 (ADR-274): finishing a two-step sign-in, a fresh emailed code, and a setup link's second step: signed out, the challenge or link token in the body.
+  'POST /v1/sessions/two-factor', 'POST /v1/device-sessions/two-factor', 'POST /v1/two-factor/email-code', 'POST /v1/account-setup/two-factor',
   // MUT-559: an accountant invite's check, and signing up from it (the token in the body, D3).
   'POST /v1/accountant-invites/check', 'POST /v1/accountant-invites/signup',
   // MUT-560: a share link's visitor has no account; the token and the viewer token travel in the body.
   'POST /v1/share-links/check', 'POST /v1/share-links/unlock', 'POST /v1/share-links/entries', 'POST /v1/share-links/summary', 'POST /v1/share-links/expense-receipts',
   // MUT-314: the period download's stream (the ticket is its credential) and a share link's mint.
-  'POST /v1/period-downloads/stream', 'POST /v1/share-links/download-ticket'];
+  'POST /v1/period-downloads/stream', 'POST /v1/share-links/download-ticket',
+  // MUT-595: Sign in with Malafat; the person is not signed in yet.
+  'GET /v1/auth/malafat/office', 'GET /v1/auth/malafat/start', 'GET /v1/auth/malafat/callback', 'POST /v1/auth/malafat/exchange', 'POST /v1/auth/malafat/link', 'POST /v1/auth/malafat/consent',
+  // MUT-535 (D8): the monthly summary's opt-out page; the signed token in the body is its credential and it changes one switch.
+  'POST /v1/mail-preferences/monthly-summary',
+  // ADR-279: promotional mail's opt-out page, and a mail client's one-click unsubscribe (its own one-mail token).
+  'POST /v1/mail-preferences/offers', 'POST /v1/mail-preferences/unsubscribe'];
 /** MUT-115: a person's own passkeys, from either transport. */
 const PASSKEY_OPERATIONS = ['GET /v1/passkeys', 'POST /v1/passkeys/creation-options', 'POST /v1/passkeys', 'PATCH /v1/passkeys/{passkeyId}', 'DELETE /v1/passkeys/{passkeyId}', 'PATCH /v1/me/passkey-prompt'];
-const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+// MUT-710 (ADR-274 D8): the person's own two-step sign-in, cookie or device.
+const TWO_FACTOR_OPERATIONS = ['GET /v1/me/two-factor', 'POST /v1/me/two-factor/challenge', 'POST /v1/me/two-factor/enrolment', 'POST /v1/me/two-factor/enrolment/confirm', 'POST /v1/me/two-factor/recovery-codes', 'DELETE /v1/me/two-factor'];
+const IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 /** MUT-64: the device-session equivalent of IDENTITY_OPERATIONS — GET /v1/me is shared, sign-out is its own route. */
-const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS];
+const DEVICE_IDENTITY_OPERATIONS = ['GET /v1/me', 'PATCH /v1/me/malafat-suggestions', 'GET /v1/me/monthly-summary-mail', 'PATCH /v1/me/monthly-summary-mail', 'PATCH /v1/me/trial-prompt', 'POST /v1/me/password', 'POST /v1/me/terms-acceptance', 'DELETE /v1/device-sessions/current', 'POST /v1/me/closure', 'DELETE /v1/me/closure', ...PASSKEY_OPERATIONS, ...TWO_FACTOR_OPERATIONS];
 
 interface Operation {
   key: string;
@@ -271,6 +394,8 @@ const json = (body: unknown, headers: Record<string, string> = {}) => ({
 
 let app: ReturnType<typeof createApp>;
 let operations: Operation[];
+/** MUT-593: the published document, for the delegated routes' request shapes. */
+let openapiDoc: Loose;
 let routeAccess: RouteAccessIndex;
 let sessionCookie: string;
 let deviceToken: string;
@@ -290,12 +415,14 @@ beforeAll(async () => {
     receiptsLibrary: true,
     // MUT-559: and accountant access (ACCOUNTANT_ACCESS), whose routes otherwise answer 404 first.
     accountantAccess: true,
+    malafatDelegation: true,
     // MUT-560: and share links (SHARE_LINKS).
     shareLinks: true,
     // MUT-314: and period downloads (PERIOD_DOWNLOADS).
     periodDownloads: true,
   });
   const doc = (await (await app.request('/openapi.json')).json()) as { paths: Record<string, Record<string, Loose>> };
+  openapiDoc = doc;
   operations = Object.entries(doc.paths)
     .filter(([path]) => path.startsWith('/v1/'))
     .flatMap(([path, item]) =>
@@ -354,6 +481,43 @@ describe('route security declarations', () => {
   });
 });
 
+describe('Malafat’s delegated token (MUT-593, ADR-254)', () => {
+  const delegated = () => operations.filter((op) => (op.security ?? []).some((req) => 'delegated' in req));
+
+  it('is opted into the brief’s person features, and only where a person may already go', () => {
+    expect(delegated().length).toBeGreaterThan(40);
+    const withoutPerson = delegated().filter((op) => !accepts(op, 'session') || !accepts(op, 'deviceSession')).map((op) => op.key);
+    expect(withoutPerson).toEqual([]);
+  });
+
+  it('never reaches a credential, session, account, billing, agent, operator or cross-profile route', () => {
+    const leaked = delegated().filter((op) => NEVER_DELEGATED_PREFIXES.some((prefix) => op.path.startsWith(prefix))).map((op) => op.key);
+    expect(leaked).toEqual([]);
+  });
+
+  it('takes no profile id in a body or query, so the tenant check in the header is the only door (review finding 1)', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const resolve = (schema: any): any => (schema?.$ref ? openapiDoc.components.schemas[schema.$ref.split('/').pop()] : schema);
+    const PROFILE_FIELDS = ['profileId', 'organizationId', 'profileIds'];
+    const offenders = delegated().filter((op) => {
+      const spec = openapiDoc.paths[op.path][op.method.toLowerCase()];
+      const query = (spec.parameters ?? []).some((p: Loose) => p.in === 'query' && PROFILE_FIELDS.includes(p.name));
+      const body = resolve(spec.requestBody?.content?.['application/json']?.schema);
+      return query || PROFILE_FIELDS.some((f) => f in (body?.properties ?? {}));
+    });
+    expect(offenders.map((op) => op.key)).toEqual([]);
+  });
+
+  it('reaches a route that names no profile in the header only when the tenant check covers it', () => {
+    const honoKey = (op: Operation) => `${op.method} ${op.path.replace(/\{([^}]+)\}/g, ':$1')}`;
+    const covered = new Set([...DELEGATED_PERSON_ROUTES, ...DELEGATED_PROFILE_PATH_ROUTES]);
+    const uncovered = delegated()
+      .filter((op) => SESSION_ORGANIZATION_INDEPENDENT_ROUTES.has(honoKey(op)) && !covered.has(honoKey(op)))
+      .map((op) => op.key);
+    expect(uncovered).toEqual([]);
+  });
+});
+
 describe('authenticate() enforces each declaration', () => {
   it('reads every key-reachable operation’s scopes from its middleware', () => {
     const unscoped = operations.filter((o) => accepts(o, 'apiKey') && scopesOf(o).length === 0).map((o) => o.key);
@@ -393,7 +557,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every session-only operation', async () => {
     const sessionOnly = operations.filter((o) => accepts(o, 'session') && !accepts(o, 'apiKey'));
-    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(sessionOnly.map((o) => o.key).sort()).toEqual([...AGENT_CONSENT_OPERATIONS, ...OPERATOR_OPERATIONS, ...IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...BUSINESS_LOOKUP_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of sessionOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -403,7 +567,7 @@ describe('authenticate() enforces each declaration', () => {
 
   it('an API key is refused on every device-session-only operation (MUT-64)', async () => {
     const deviceOnly = operations.filter((o) => accepts(o, 'deviceSession') && !accepts(o, 'apiKey'));
-    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS].sort());
+    expect(deviceOnly.map((o) => o.key).sort()).toEqual([...DEVICE_IDENTITY_OPERATIONS, ...EXPENSE_OPERATIONS, ...INCOME_OPERATIONS, ...CONVERSION_OPERATIONS, ...ISSUING_OPERATIONS, ...BUSINESS_LOOKUP_OPERATIONS, ...INBOX_OPERATIONS, ...PROFILE_OPERATIONS, ...ACCOUNTANT_OPERATIONS, ...SHARE_LINK_OPERATIONS, ...FX_OPERATIONS, ...ENTRIES_OPERATIONS, ...RECORDS_EXPORT_OPERATIONS, ...BILLING_OPERATIONS, ...REPORTS_OPERATIONS, ...CONNECTED_APP_OPERATIONS, ...MEMBER_OPERATIONS].sort());
     for (const op of deviceOnly) {
       const res = await request(op, { authorization: `Bearer ${fullKey}` });
       expect(res.status, op.key).toBe(403);
@@ -416,7 +580,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared session mid-loop; routes-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'session') && o.key !== 'DELETE /v1/sessions/current')) {
       const res = await request(op, { cookie: sessionCookie, 'x-mutaba3a-profile': orgId, origin: 'http://localhost' });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });
@@ -426,7 +592,9 @@ describe('authenticate() enforces each declaration', () => {
     // Sign-out would end the shared device session mid-loop; routes-device-sessions.test.ts covers it.
     for (const op of operations.filter((o) => accepts(o, 'deviceSession') && o.key !== 'DELETE /v1/device-sessions/current')) {
       const res = await request(op, { authorization: `Bearer ${deviceToken}`, 'x-mutaba3a-profile': orgId });
-      if (res.status === 401 || res.status === 403) refused.push(`${op.key} → ${res.status} ${((await res.json()) as Loose).error?.code}`);
+      const code = res.status === 401 || res.status === 403 ? ((await res.json()) as Loose).error?.code : null;
+      // MUT-710 (D10): the issuing gate lets the principal through and asks for the second step; routes-two-factor-gate.test.ts covers it.
+      if (code && code !== 'TWO_FACTOR_SETUP_REQUIRED') refused.push(`${op.key} → ${res.status} ${code}`);
     }
     expect(refused).toEqual([]);
   });

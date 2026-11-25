@@ -147,7 +147,7 @@ Every `Button` presses already. Add `press` to any other control that acts (a ro
 - **Layout:** use logical properties only (`margin-inline-start`, `inset-inline-end`, `text-align: start`). Every `hp-` class is written this way, so Arabic mirrors without overrides. A physical rule needs a `[dir="rtl"]` twin and a reason (the drawer edge, the row-flash rail).
 - **Amounts** are a plain `<bdi>` (`DecimalAmount`, `src/hosted/format/DecimalAmount.tsx`). Never put `dir="ltr"` on an amount: it flips the sign and symbol.
 - **Values that are always left-to-right** take `dir="ltr"` and keep their place: email addresses, timezone ids, codes, a `CopyField` value. **People's text** (names, notes) takes `dir="auto"`.
-- **Dates and numbers** go through `Intl` in the reader's language (`format/dates.ts`, `formatDecimal`), with Western digits.
+- **Dates and numbers** go through `Intl` in the reader's language (`format/dates.ts`, `formatDecimal`), with Western digits. Arabic months are the Levantine names (كانون الثاني, not يناير): always `getLocale(language)`, never a hand-written `'ar'` (MUT-587, ADR-253).
 - **375 px:** the portal must work at 375 px wide with no horizontal scroll:
   - the drawer fills the screen (`max-width: 100%`, MUT-357; `drawerFit.test.ts`, `@portal.direction.drawer-phone-*`);
   - row actions wrap under their text;

@@ -8,8 +8,6 @@ paths:
   - src/hosted/pages/auth/WelcomePage.tsx
   - src/hosted/session/continueOnThisDevice.ts
   - src/hosted/session/AuthGate.tsx
-  - src/hosted/router.tsx
-  - src/hosted/hosted.css
   - src/hosted/analytics/portalAnalytics.ts
   - src/lib/analytics/guard.ts
   - src/lib/analytics/posthogConfig.ts

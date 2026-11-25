@@ -15,6 +15,7 @@ const view = { asOf: '2026-10-27', timezone: 'Asia/Jerusalem' };
 
 function receivable(o: Partial<ReceivableRecord> = {}): ReceivableRecord {
   return {
+    notForInvoice: false,
     id: '00000000-0000-4000-8000-0000000000b1',
     organizationId: ORG,
     customerId: CUST,
@@ -124,14 +125,14 @@ describe('ledgerEntries: ids, dates, atMs and ranks (R10)', () => {
     const r = receivable();
     const c = credit();
     const p = payment({ status: 'REVERSED', reversalReason: 'Bounced', reversedAt: new Date('2026-10-27T22:30:00Z'), updatedAt: new Date('2026-10-27T22:30:00Z') });
-    const entries = ledgerEntries({ receivables: [r], credits: [c], payments: [p] }, view);
+    const entries = ledgerEntries({ receivables: [r], credits: [c], payments: [p], refunds: [] }, view);
     expect(entries.map((e) => ({ id: e.id, kind: e.kind, date: e.date, atMs: e.atMs, rank: e.rank, currency: e.currency, customerId: e.customerId, debit: e.debitMinor, credit: e.creditMinor }))).toEqual([
       { id: r.id, kind: 'CHARGE', date: '2026-10-01', atMs: r.createdAt.getTime(), rank: 0, currency: 'ILS', customerId: CUST, debit: 10_000n, credit: 0n },
       { id: c.id, kind: 'CREDIT', date: '2026-10-03', atMs: c.createdAt.getTime(), rank: 1, currency: 'ILS', customerId: CUST, debit: 0n, credit: 1_000n },
       { id: p.id, kind: 'PAYMENT', date: '2026-10-05', atMs: p.createdAt.getTime(), rank: 2, currency: 'ILS', customerId: CUST, debit: 0n, credit: 4_000n },
       { id: `${p.id}:reversal`, kind: 'PAYMENT_REVERSAL', date: '2026-10-28', atMs: Date.parse('2026-10-27T22:30:00Z'), rank: 3, currency: 'ILS', customerId: CUST, debit: 4_000n, credit: 0n },
     ]);
-    expect(LINE_RANK).toEqual({ CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3 });
+    expect(LINE_RANK).toEqual({ CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3, REFUND: 4 });
     // Each entry carries the row it came from, so the statement decorates it without a lookup.
     expect(entries[0]!.source).toBe(r);
     expect(entries[1]!.kind === 'CREDIT' && entries[1]!.receivable).toBe(r);
@@ -142,11 +143,11 @@ describe('ledgerEntries: ids, dates, atMs and ranks (R10)', () => {
     const deleted = receivable({ id: '00000000-0000-4000-8000-0000000000b3', origin: 'ADJUSTMENT', deletedAt: new Date('2026-10-02T00:00:00Z') });
     const undone = payment({ status: 'REVERSED', reversalReason: CAPTURE_UNDO_REASON, reversedAt: new Date('2026-10-06T00:00:00Z'), origin: 'CAPTURE' });
     const orphan = credit({ receivableId: '00000000-0000-4000-8000-0000000000ff' });
-    expect(ledgerEntries({ receivables: [ahead, deleted], credits: [orphan], payments: [undone] }, view)).toEqual([]);
+    expect(ledgerEntries({ receivables: [ahead, deleted], credits: [orphan], payments: [undone], refunds: [] }, view)).toEqual([]);
   });
 
   it('a payment with no client is a line with a null customer (MUT-483 D4)', () => {
-    const [entry] = ledgerEntries({ receivables: [], credits: [], payments: [payment({ customerId: null })] }, view);
+    const [entry] = ledgerEntries({ receivables: [], credits: [], payments: [payment({ customerId: null })], refunds: [] }, view);
     expect(entry).toMatchObject({ kind: 'PAYMENT', customerId: null, creditMinor: 4_000n });
   });
 });
@@ -156,7 +157,7 @@ describe('statement line identity (R10)', () => {
     const r = receivable({ paidMinor: 0n });
     const p = payment({ status: 'REVERSED', reversalReason: 'Bounced', reversedAt: new Date('2026-10-10T08:00:00Z'), allocatedMinor: 0n });
     const a: AllocationRecord = { id: '00000000-0000-4000-8000-0000000000e1', organizationId: ORG, paymentId: p.id, receivableId: r.id, amountMinor: 3_000n, createdAt: p.createdAt };
-    const sources = { receivables: [r], credits: [], payments: [p], allocations: [a], installments: [], charges: [] };
+    const sources = { receivables: [r], credits: [], payments: [p], allocations: [a], installments: [], charges: [], refunds: [] };
     const all = { limit: 50, cursor: null };
     const onProject = buildStatement(sources, { ...view, from: null, to: null, projectId: P1 }, all).lines;
     expect(onProject.filter((l) => l.paymentId === p.id).map((l) => [l.kind, l.id, l.creditMinor, l.debitMinor])).toEqual([

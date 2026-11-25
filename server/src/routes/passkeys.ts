@@ -2,7 +2,7 @@ import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { RegistrationResponseJSON } from '@simplewebauthn/server';
 import { verifyCurrentPassword } from '../auth/current-password.js';
-import type { AppEnv, SessionSettings } from '../auth/middleware.js';
+import { personSession, type AppEnv, type SessionSettings } from '../auth/middleware.js';
 import { passkeyNameFor } from '../auth/passkey-names.js';
 import { passkeyPromptView } from '../auth/passkey-prompt.js';
 import { requestClientIp, type SignInThrottle } from '../auth/sessions.js';
@@ -105,7 +105,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
    * step-up as an operator action. A password alone must not be able to strip them (and lock the operator out).
    */
   function guardOperatorPasskeys(c: Context<AppEnv>): void {
-    const { user, session } = c.get('identity');
+    const { user, session } = personSession(c);
     if (user.operatorAt) assertOperatorStepUp(session, c.get('now')());
   }
 
@@ -182,7 +182,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
     }),
     async (c) => {
       const config = configured();
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const body = (await c.req.json().catch(() => ({}))) as unknown;
       const parsed = PasskeyCreationOptionsRequestSchema.safeParse(body ?? {});
       if (!parsed.success) throw new ApiError('VALIDATION_FAILED', 'Invalid body', parsed.error.issues);
@@ -217,7 +217,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
     }),
     async (c) => {
       const config = configured();
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const { challengeId, response, currentPassword } = c.req.valid('json');
       await stepUp(c, user, session, currentPassword);
       const now = c.get('now')();
@@ -285,7 +285,7 @@ export function passkeyRoutes(options: PasskeyRouteOptions): OpenAPIHono<AppEnv>
     }),
     async (c) => {
       configured();
-      const { user, session } = c.get('identity');
+      const { user, session } = personSession(c);
       const { passkeyId } = c.req.valid('param');
       guardOperatorPasskeys(c);
       const audit = await passkeyAudit(store, c, user, 'user.passkey_removed', { passkeyId });

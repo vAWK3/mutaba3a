@@ -60,8 +60,21 @@ const vars = {
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: false, updateLink: 'https://portal.example.test/?billing=true' },
-  'comeback-offer': { stage: 'day-30', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
+  'comeback-offer': { stage: 'day-30', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', offLink: 'https://portal.example.test/mail-off?mail=offers#tok' },
+  'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
+  // MUT-618: a sign-in code, typed, never a link.
+  'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://portal.example.test/' },
+  // MUT-535: one profile, no yearly line.
+  'monthly-summary': {
+    month: { year: 2026, month: 11 },
+    asOf: { year: 2026, month: 12, day: 1 },
+    profiles: [{ name: 'Sader Studio', link: 'https://portal.example.test/p/p1', cameIn: [{ currency: 'ILS', amount: '400.00' }], owed: [], overdue: [], overdueCount: 0 }],
+    yearly: null,
+    offLink: 'https://portal.example.test/mail-off#tok_ABC123def',
+  },
 } as const;
 let seq = 0;
 const signup = (to: string) => ({ to, template: 'finish-signup' as const, locale: 'en' as const, vars: vars['finish-signup'], idempotencyKey: `signup-${++seq}` });

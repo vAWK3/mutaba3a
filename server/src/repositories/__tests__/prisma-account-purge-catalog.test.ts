@@ -29,6 +29,14 @@ if (!url) {
     // MUT-434: a person's grants and decided requests cascade with them (PURGE_USER_COLUMNS), codes and tokens with the
     // grant; clients are anonymous registrations naming no one.
     'oauth_clients', 'oauth_authorization_requests', 'oauth_grants', 'oauth_codes', 'oauth_tokens',
+    // MUT-593: a confidential client's used assertion ids name only the client; they cascade with it.
+    'oauth_client_assertions',
+    // MUT-595: a Sign in with Malafat attempt; the person's own go with them (PURGE_USER_COLUMNS), the rest name no one.
+    'malafat_sign_ins',
+    // MUT-618: emailed sign-in codes; the person's own go with them (PURGE_USER_COLUMNS), the rest name an address for a day.
+    'sign_in_codes',
+    // MUT-710: a person's two-step sign-in, recovery codes and challenges go with them (PURGE_USER_COLUMNS).
+    'two_factor', 'two_factor_recovery_codes', 'two_factor_challenges',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
     'billing_retention_events',
     // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).

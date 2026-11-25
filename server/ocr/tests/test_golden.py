@@ -54,8 +54,12 @@ def test_a_text_layer_pdf_is_read_from_its_text_not_ocr(client, manifest):
     assert res.status_code == 200
     body = res.json()
     assert_contract(body)
-    assert body["engine"] == "pdf-text" and body["lines"] == [] and body["pages"] == 1
+    assert body["engine"] == "pdf-text" and body["pages"] == 1
     assert "302.97" in body["pdfText"] and "28.01.25" in body["pdfText"]
+    # MUT-590: the text layer also comes placed on the page, so a label and its amount meet on one row.
+    texts = [line["text"] for line in body["lines"]]
+    assert any("302.97" in t for t in texts) and any("28.01.25" in t for t in texts)
+    assert all(line["conf"] == 1.0 and len(line["box"]) == 4 for line in body["lines"])
     assert manifest["syn-039-he-pdf-text.pdf"]["truth"]["totalMinor"] == 30297
 
 

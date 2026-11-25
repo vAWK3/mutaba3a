@@ -38,6 +38,13 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.7.0': '0e17eb9dd8191519e1a168a7c7d1812a314b2e3e23b2f82a06493c6cfe779667',
   // MUT-565: accountant_plan_offer_shown (place: invite | client_books | billing) and billing_checkout_started gains plan.
   '2.8.0': '02646797f8cacab52b6000e1912bbaad2b4a4801b62fbe843bc76b61cab5c996',
+  // MUT-619: the setup page's passkey step (setup_passkey_offered, _created, _not_now, _not_created; link, reason).
+  '2.9.0': 'f3fd4d202c3777e717c37f50f3f31086c281adef52a2d12d9ada4d02b0a4b71c',
+  // MUT-618: the union with MUT-619's 2.9.0: sign_in_code_requested (resend), sign_in_code_signed_in and
+  // sign_in_code_refused (reason), portal, ios, android.
+  '2.10.0': '1d80cbd6d894887dc9297358a7a16beba84f65a8f62ea5b3220e1644d212b77d',
+  // MUT-627: save_moment_closed (kind, outcome, entry_point), ios and android: the phone's full-screen save moment.
+  '2.11.0': '49edf9ea7495dabe5e05a73da23cc4a17ccfb754b1e726d5f0dbeb0e56dd1b61',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -225,6 +232,11 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       trial_card_prompt_accepted: ['portal'],
       trial_card_prompt_skipped: ['portal'],
       report_viewed: ['portal'],
+      // MUT-619: the setup page's passkey step.
+      setup_passkey_offered: ['portal'],
+      setup_passkey_created: ['portal'],
+      setup_passkey_not_now: ['portal'],
+      setup_passkey_not_created: ['portal'],
       portal_welcome_choice: ['portal'],
       billing_offer_shown: ['portal'],
       billing_checkout_started: ['portal'],
@@ -234,6 +246,12 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       accountant_left: ['ios', 'android'],
       share_link_created: ['portal', 'ios', 'android'],
       share_link_revoked: ['portal', 'ios', 'android'],
+      // MUT-618: the emailed sign-in code.
+      sign_in_code_refused: ['portal', 'ios', 'android'],
+      // MUT-627: the phone's full-screen save moment.
+      save_moment_closed: ['ios', 'android'],
+      sign_in_code_requested: ['portal', 'ios', 'android'],
+      sign_in_code_signed_in: ['portal', 'ios', 'android'],
       share_link_opened: ['portal'],
       period_downloaded: ['portal', 'ios', 'android'],
       accountant_plan_offer_shown: ['portal', 'ios', 'android'],

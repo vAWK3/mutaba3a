@@ -31,6 +31,7 @@ import {
 import type { RateLimiter } from '../rate-limit.js';
 import type { LedgerStore, Organization } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, PeriodDownloadStreamRequestSchema, PeriodDownloadTicketQuerySchema, PeriodDownloadTicketSchema } from '../schemas.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /**
  * MUT-314 (ADR-248): download a period of one profile, in two steps (D3).
@@ -75,7 +76,6 @@ export interface PeriodDownloadRouteOptions {
   logger: Pick<Logger, 'error' | 'info'>;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
 export function rateLimited(c: Context<AppEnv>, retryAfterSeconds: number, message: string): ApiError {
@@ -100,7 +100,7 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
       tags: ['Your data'],
       summary: 'Start a period download: its size, and a ticket for the stream',
       description: `MUT-314 (ADR-248). Whole calendar months (\`from\`…\`to\`, YYYY-MM, at most 24, never past the profile's current month) of the profile named by X-Mutaba3a-Profile. \`type=report\` is the Excel report (Expenses, Income and a per-currency Summary, always both sheets); \`type=receipts\` the receipt files, named by Ref, with index.csv. Over ${PERIOD_DOWNLOAD_POLICY.mintsPerSubjectPerHour} starts an hour: 429. Over the report's row cap or the zip's byte cap: 422 VALIDATION_FAILED, details.reason PERIOD_TOO_LARGE with { type, limit, estimate }: pick a shorter period. Owners, members and accountants alike; a lapsed profile still downloads.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read'), requireScope('payments:read'), requireScope('attachments:read')] as const,
       request: { query: PeriodDownloadTicketQuerySchema },
       responses: {
@@ -123,7 +123,8 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
         kind: auth.access === 'accountant' ? 'accountant' : 'member',
         organization: auth.organization,
         sub: auth.user.id,
-        sid: auth.session.id,
+        sid: auth.session?.id ?? null,
+        gid: auth.via?.grantId ?? null,
         range,
         asOf,
         lang: query.lang ?? auth.user.locale,

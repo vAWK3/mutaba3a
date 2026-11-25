@@ -16,6 +16,13 @@ function isHttpsOrLocalHttp(value: string): boolean {
   return url.protocol === 'https:' || (url.protocol === 'http:' && (url.hostname === 'localhost' || url.hostname === '127.0.0.1'));
 }
 
+/** MUT-595: a firm's Malafat origin, http(s); production and staging must be https (checked with the environment below). */
+function isMalafatOrigin(value: string): boolean {
+  if (!URL.canParse(value)) return false;
+  const url = new URL(value);
+  return url.protocol === 'https:' || url.protocol === 'http:';
+}
+
 /** ADR-091 D5: the same EU-region rule as the Sentry module's sentry_key postcondition. */
 export const SENTRY_EU_DSN =/^https:\/\/[A-Za-z0-9]+@[A-Za-z0-9.-]+\.ingest\.de\.sentry\.io\/\d+$/;
 
@@ -73,6 +80,53 @@ const envSchema = z.object({
     .default('https://api.frankfurter.dev/v1/latest'),
   FX_RATES_TTL_MINUTES: z.coerce.number().int().min(15).max(1440).default(240),
   FX_RATES_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(3000),
+  /** MUT-642: Israel's open-data CKAN `datastore_search` (data.gov.il) and the two registries' resource ids. */
+  DATA_GOV_IL_URL: z.string().url().refine(isHttpsOrLocalHttp, 'must be https (plain http only for localhost or 127.0.0.1)').default('https://data.gov.il/api/3/action/datastore_search'),
+  DATA_GOV_IL_COMPANIES_RESOURCE: z.string().min(1).default('f004176c-b85f-4542-8901-7b3176f9a054'),
+  DATA_GOV_IL_NONPROFITS_RESOURCE: z.string().min(1).default('be5b7935-3922-45d4-9638-08871b17ec95'),
+  DATA_GOV_IL_TIMEOUT_MS: z.coerce.number().int().min(500).max(10_000).default(2500),
+  /**
+   * MUT-571/572 (ADR-264): the Tax Authority's Open API (SHAAM). Off unless TAX_AUTHORITY_ENV is set; `production` also
+   * needs every value set explicitly (no sandbox defaults reach it). The client secret and the token key are secrets.
+   */
+  TAX_AUTHORITY_ENV: z.enum(['sandbox', 'production']).optional(),
+  TAX_AUTHORITY_BASE_URL: z.string().url().refine(isHttpsOrLocalHttp, 'must be https (plain http only for localhost or 127.0.0.1)').optional(),
+  TAX_AUTHORITY_CLIENT_ID: z.string().min(1).optional(),
+  TAX_AUTHORITY_CLIENT_SECRET: z.string().min(1).optional(),
+  TAX_AUTHORITY_REDIRECT_URI: z.string().url().optional(),
+  TAX_AUTHORITY_SCOPE: z.string().min(1).default('invoices_scope'),
+  /** The software's registration number (MUT-567); the sandbox accepts the spec's test value 987654321. */
+  TAX_AUTHORITY_SOFTWARE_NUMBER: z.coerce.number().int().positive().optional(),
+  TAX_AUTHORITY_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
+  /**
+   * MUT-569 (ADR-272): the uniform file's software fields (A000 1006, 1009, 1010). The registration certificate number
+   * is zeros until MUT-567 issues it; the software house is the registering owner, Narabnd Studio Ltd (MUT-700), set in
+   * Terraform (software_house_*). The defaults are placeholders, never a real company.
+   */
+  UNIFORM_FILE_REGISTRATION_NUMBER: z.string().regex(/^\d{8}$/, 'must be the 8-digit registration certificate number').default('00000000'),
+  SOFTWARE_HOUSE_VAT_ID: z.string().regex(/^\d{9}$/, 'must be a 9-digit company number').default('000000000'),
+  SOFTWARE_HOUSE_NAME: z.string().min(1).max(20).default('MTB3A'),
+  /** Seals the stored tokens (AES-256-GCM). Outside production and staging, derived from the session pepper when unset. */
+  TAX_AUTHORITY_TOKEN_KEY: secret('TAX_AUTHORITY_TOKEN_KEY').optional(),
+  /**
+   * MUT-710 (ADR-274 D4): seals two-step sign-in's authenticator secrets (AES-256-GCM) and keys its recovery-code digests.
+   * Required on production and staging with no fallback (Terraform generates it, two_factor.tf); elsewhere derived
+   * from the session pepper when unset.
+   */
+  TWO_FACTOR_SEAL_KEY: secret('TWO_FACTOR_SEAL_KEY').optional(),
+  /**
+   * MUT-710 (ADR-274 D10): enforce the issuing gate (403 TWO_FACTOR_SETUP_REQUIRED on PUT /v1/issuer, issuing, the Tax
+   * Authority connect and allocation decisions) only when exactly "true". Off by default until the portal and phone
+   * screens that turn two-step sign-in on have shipped, so nobody already issuing is locked out. The second step at
+   * sign-in, for people who turned it on, does not depend on it.
+   */
+  TWO_FACTOR_ISSUING_GATE_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
+   * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
+   * confirmed (open item on MUT-711).
+   */
+  TAX_AUTHORITY_MANUAL_ALLOCATION_URL: z.string().url().refine((u) => u.startsWith('https://'), 'must be https').optional(),
   /** argon2id cost for user passwords (MUT-37). Never below OWASP profile 1. */
   ARGON2_MEMORY_KIB: z.coerce.number().int().min(ARGON2_MINIMUMS.memoryKiB).default(ARGON2_MINIMUMS.memoryKiB),
   ARGON2_TIME_COST: z.coerce.number().int().min(ARGON2_MINIMUMS.timeCost).default(ARGON2_MINIMUMS.timeCost),
@@ -146,14 +200,13 @@ const envSchema = z.object({
    */
   PORTAL_LEGACY_REDIRECT: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
-   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). Off,
-   * the server behaves as before MUT-255, so main can deploy before any screen shows the library (decision P4: on
-   * when MUT-260 or MUT-258 ships, Terraform receipts_library_enabled). Only "true" turns it on, as above.
+   * MUT-255/389: the receipts library (/v1/receipts*, and deleting an expense keeps its receipts To review). MUT-659:
+   * on by default for everyone (dev, QA and every deploy); only "false" turns it off, the way back to before MUT-255.
    */
-  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  RECEIPTS_LIBRARY: z.enum(['true', 'false']).default('true').transform((v) => v === 'true'),
   /**
-   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, a receipt reads only for an
-   * uploader granted `receipt_reading`. Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
+   * MUT-441 (D3): the deploy-level kill switch for the server reading receipts. On, every uploader's receipts are
+   * read (MUT-659 dropped the per-person grant). Needs OCR_URL, and outside development and tests READ_QUEUE (Terraform
    * server_ocr_enabled). Only "true" turns it on, as above.
    */
   SERVER_OCR: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
@@ -174,6 +227,29 @@ const envSchema = z.object({
    * turns it on, as above.
    */
   ACCOUNTANT_ACCESS: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-593 (ADR-254 D10): Malafat acting as each person with a delegated token. Off, the token endpoint refuses a
+   * confidential client, every delegated token answers 401, and Connected apps and the operator's per-firm switch
+   * answer 404, so the server deploys dark. Only "true" turns it on; dev and the QA live API do.
+   */
+  MALAFAT_DELEGATION: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-596 (local QA): a confidential client's JWKS and redirect URIs may be plain http on a loopback or *.lvh.me
+   * host, so the Malafat QA stub can stand in for Malafat. Refused on production and staging.
+   */
+  OAUTH_CLIENT_LOCAL_HTTP: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-595 (ADR-254 D1): Sign in with Malafat. Off, its routes answer 404 and the doors say so. Only "true" turns it
+   * on; Malafat's side must list this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS (MAL-1539).
+   */
+  MALAFAT_SIGN_IN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /** MUT-595: a firm's own Malafat origin, `{slug}` for its address. A local tenant host in dev. */
+  MALAFAT_ORIGIN_TEMPLATE: z
+    .string()
+    .default('https://{slug}.malafat.app')
+    .refine((v) => v.includes('{slug}') && isMalafatOrigin(v.replace('{slug}', 'x')), 'must be an http(s) origin containing {slug}'),
+  /** MUT-595 (MAL-1539): MTB3A's client id at every Malafat firm. */
+  MALAFAT_SIGN_IN_CLIENT_ID: z.string().min(1).max(64).default('mtb3a'),
   /** MUT-559: the most pending and active accountants one profile may have (stops invite spam). */
   ACCOUNTANTS_PER_PROFILE_MAX: z.coerce.number().int().min(1).max(50).default(5),
   /**
@@ -235,6 +311,8 @@ const envSchema = z.object({
    * The failed-card reminder goes at its midpoint; 28 keeps every mail key inside the 30-day send log.
    */
   BILLING_RETRY_WINDOW_DAYS: z.enum(['7', '14', '21', '28']).default('14').transform((v) => Number(v)),
+  /** MUT-535 (D12): monthly summary mails per run; keep it well under MAIL_DAILY_CAP, which every other mail shares. */
+  MONTHLY_SUMMARY_DAILY_SENDS: z.coerce.number().int().min(1).max(10_000).default(40),
   /** MUT-360 D2: the nightly Scheduler job's X-Job-Token (Terraform-generated). Unset = /jobs/* answers 503. */
   MUTABA3A_JOB_TOKEN: secret('MUTABA3A_JOB_TOKEN').optional(),
   /**
@@ -304,6 +382,34 @@ const envSchema = z.object({
    * and a cold start, so the release-QA spec can see the portal's "Reading…" state. Refused in production and staging.
    */
   QA_READ_DELAY_MS: z.coerce.number().int().min(0).max(60_000).optional(),
+  /**
+   * MUT-641 (ADR-265): who signs issued-document PDFs. Unset = `dev` outside production (a throwaway authority made in
+   * the process, nothing on disk) and `off` in production, where the PDF routes answer 503 SIGNING_NOT_CONFIGURED
+   * until the certificate is in place: a document is never handed out unsigned. `dev` is refused in production.
+   * `kms` signs with a Cloud KMS key and needs its key version, its certificate chain and a time-stamp authority.
+   */
+  ISSUING_SIGNER: z.enum(['dev', 'kms', 'off']).optional(),
+  ISSUING_SIGNING_KMS_KEY: z
+    .string()
+    .regex(/^projects\/[^/]+\/locations\/[^/]+\/keyRings\/[^/]+\/cryptoKeys\/[^/]+\/cryptoKeyVersions\/\d+$/, 'must be a Cloud KMS key version: projects/…/cryptoKeyVersions/N')
+    .optional(),
+  /** The certificate the certifying authority issued for the KMS key, then its issuers (PEM). Public: never a key. */
+  ISSUING_SIGNING_CERT_CHAIN: z
+    .string()
+    .refine((pem) => pem.includes('-----BEGIN CERTIFICATE-----'), 'must hold PEM certificates')
+    .refine((pem) => !/PRIVATE KEY/.test(pem), 'holds a private key: the signing key stays in Cloud KMS and never travels in configuration')
+    .optional(),
+  /**
+   * An RFC 3161 time-stamp authority: the certifying authority's, or a public one (Sectigo over https) until then.
+   * Unset outside `kms` = the development authority's. https on production and staging; plain http only elsewhere
+   * (a test against DigiCert's http-only service).
+   */
+  ISSUING_TSA_URL: z
+    .string()
+    .url()
+    .refine((value) => /^https?:\/\//.test(value), 'must be an http(s) URL')
+    .optional(),
+  ISSUING_SIGNING_TIMEOUT_MS: z.coerce.number().int().min(1000).max(30_000).default(10_000),
 });
 
 const APP_ASSOCIATION_KEYS = ['APPLE_TEAM_ID', 'APPLE_BUNDLE_ID', 'ANDROID_PACKAGE_NAME', 'ANDROID_SHA256_FINGERPRINTS'] as const;
@@ -391,6 +497,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new ConfigError('Invalid configuration:\n  BILLING_STAY_COUPON_ID: the QA coupon override is never set on a live server; the live offers are offers.json');
   }
   receiptReadingConfig(config);
+  issuingSignerConfig(config);
   if (config.QA_MAX_OWNED_PROFILES !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     throw new ConfigError(`Invalid configuration:\n  QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only, never ${config.NODE_ENV}`);
   }
@@ -404,6 +511,25 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
   return { ...config, ...attachments, SENTRY_ENVIRONMENT: config.SENTRY_ENVIRONMENT ?? config.NODE_ENV, ...mailConfig(config), TURNSTILE_SECRET: turnstileSecret(config), EMAIL_DOMAIN_CHECKER: domainChecker(config) };
 }
 
+/** MUT-641 (ADR-265): production signs only with a real certificate, and a KMS signer has everything it needs. */
+function issuingSignerConfig(config: z.infer<typeof envSchema>): void {
+  const refuse = (name: string, why: string): never => {
+    throw new ConfigError(`Invalid configuration:\n  ${name}: ${why}`);
+  };
+  if (config.ISSUING_SIGNER === 'dev' && config.NODE_ENV === 'production') {
+    refuse('ISSUING_SIGNER', 'the development authority signs for development, tests and QA only; production signs with the certificate in Cloud KMS (kms) or not at all (off)');
+  }
+  if (config.ISSUING_SIGNER === 'kms') {
+    for (const name of ['ISSUING_SIGNING_KMS_KEY', 'ISSUING_SIGNING_CERT_CHAIN', 'ISSUING_TSA_URL'] as const) {
+      if (!config[name]) refuse(name, 'ISSUING_SIGNER=kms needs the key version, its certificate chain and a time-stamp authority');
+    }
+  }
+  // MUT-641 (review): over plain http anyone on the path could answer with a token signed by a certificate of their own.
+  if (config.ISSUING_TSA_URL && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !isHttpsOrLocalHttp(config.ISSUING_TSA_URL)) {
+    refuse('ISSUING_TSA_URL', `a time-stamp authority is reached over https on ${config.NODE_ENV} (e.g. https://timestamp.sectigo.com)`);
+  }
+}
+
 /** MUT-441: the refusals for the server's receipt reader (the kill switch, the queue and the job's OIDC check). */
 function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   const refuse = (name: string, why: string): never => {
@@ -412,6 +538,23 @@ function receiptReadingConfig(config: z.infer<typeof envSchema>): void {
   if (config.SERVER_OCR && !config.OCR_URL) refuse('OCR_URL', 'SERVER_OCR needs the OCR service\'s URL');
   if (config.SERVER_OCR && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.READ_QUEUE) {
     refuse('READ_QUEUE', `SERVER_OCR on ${config.NODE_ENV} reads through Cloud Tasks; in-process reads are for the dev server and local QA only`);
+  }
+  // MUT-595: a stub Malafat at http://{slug}.lvh.me for local QA (it resolves to 127.0.0.1); never plain http beyond.
+  if (!config.MALAFAT_ORIGIN_TEMPLATE.startsWith('https://') && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('MALAFAT_ORIGIN_TEMPLATE', `Malafat is reached over https on ${config.NODE_ENV}`);
+  }
+  if (config.OAUTH_CLIENT_LOCAL_HTTP && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
+    refuse('OAUTH_CLIENT_LOCAL_HTTP', `a client's keys are fetched over https on ${config.NODE_ENV}`);
+  }
+  if (config.TAX_AUTHORITY_ENV) {
+    for (const name of ['TAX_AUTHORITY_CLIENT_ID', 'TAX_AUTHORITY_CLIENT_SECRET', 'TAX_AUTHORITY_REDIRECT_URI'] as const) if (!config[name]) refuse(name, 'TAX_AUTHORITY_ENV needs it');
+    if (config.TAX_AUTHORITY_ENV === 'production') {
+      for (const name of ['TAX_AUTHORITY_BASE_URL', 'TAX_AUTHORITY_SOFTWARE_NUMBER', 'TAX_AUTHORITY_TOKEN_KEY'] as const) if (!config[name]) refuse(name, 'the production Tax Authority takes no sandbox defaults: set it');
+    }
+    if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TAX_AUTHORITY_TOKEN_KEY) refuse('TAX_AUTHORITY_TOKEN_KEY', `stored tokens need their own key on ${config.NODE_ENV}`);
+  }
+  if ((config.NODE_ENV === 'production' || config.NODE_ENV === 'staging') && !config.TWO_FACTOR_SEAL_KEY) {
+    refuse('TWO_FACTOR_SEAL_KEY', `two-step sign-in secrets need their own key on ${config.NODE_ENV}`);
   }
   if (config.QA_READ_DELAY_MS !== undefined && (config.NODE_ENV === 'production' || config.NODE_ENV === 'staging')) {
     refuse('QA_READ_DELAY_MS', `the read delay is for the dev server and local QA only, never ${config.NODE_ENV}`);

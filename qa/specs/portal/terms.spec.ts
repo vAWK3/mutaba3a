@@ -32,11 +32,11 @@ test('a setup link can’t be finished without agreeing to the terms, and the sa
     expect(api.calls('POST', /^\/v1\/account-setup$/)).toHaveLength(0);
   });
 
-  await step('Tick and save: the version, language and web release go with the password, and Overview opens', async () => {
+  await step('Tick and save: the version, language and web release go with the password, and home opens', async () => {
     await terms(page).check();
     await page.getByRole('button', { name: 'Save and sign in' }).click();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}$`));
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     expect(api.last('POST', /^\/v1\/account-setup$/)?.body).toMatchObject({ acceptedTermsVersion: QA_TERMS_VERSION, termsLocale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 });
@@ -77,15 +77,15 @@ test('someone behind on the terms agrees once on the Updated-terms step, then wo
     await expect(page.getByRole('navigation')).toHaveCount(0);
   });
 
-  await step('I agree: the version is recorded in English, the language the link opened, with the web release, and Overview opens', async () => {
+  await step('I agree: the version is recorded in English, the language the link opened, with the web release, and home opens', async () => {
     await page.getByRole('button', { name: 'I agree' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: QA_TERMS_VERSION, locale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 
   await step('Reload: the step doesn’t come back', async () => {
     await page.reload();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 1, name: "We've updated our terms" })).toHaveCount(0);
   });
 });
@@ -106,9 +106,9 @@ test('when the terms change again while the step is open, the step says so and t
     await expect(page.getByRole('link', { name: 'Read the terms' })).toHaveAttribute('href', new RegExp(`/terms/${NEWER}\\?lang=en$`));
   });
 
-  await step('I agree again: the new version is recorded and Overview opens', async () => {
+  await step('I agree again: the new version is recorded and home opens', async () => {
     await page.getByRole('button', { name: 'I agree' }).click();
-    await expect(page.getByRole('heading', { level: 1, name: 'Owed' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 1, name: 'Home' })).toBeVisible();
     expect(api.last('POST', /^\/v1\/me\/terms-acceptance$/)?.body).toEqual({ version: NEWER, locale: 'en', clientRelease: expect.stringMatching(QA_CLIENT_RELEASE) });
   });
 });

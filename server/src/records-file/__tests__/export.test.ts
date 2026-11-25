@@ -105,7 +105,7 @@ describe('profile export pages', () => {
 });
 
 describe('localProfileOf', () => {
-  const base: Organization = { id: 'org', name: 'X', slug: 'x', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', personalOwnerUserId: null, ownerUserId: null, profileType: null, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, version: 1, createdAt: AT };
+  const base: Organization = { id: 'org', name: 'X', slug: 'x', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem', personalOwnerUserId: null, ownerUserId: null, profileType: null, firmEnabledAt: null, firmRequestedAt: null, firmRequestedByUserId: null, memberSyncAt: null, version: 1, createdAt: AT };
 
   it("keeps the exporter's own profiles as they are", () => {
     const personal = { ...base, personalOwnerUserId: 'me', ownerUserId: 'me', profileType: 'PERSONAL' as const };

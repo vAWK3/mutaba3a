@@ -5,10 +5,12 @@ import type { Logger } from '../logger.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { SHARE_LINK_VIEWER_RETENTION_MS } from '../share-links/links.js';
+import { runIssuingRetentionSweep } from './issuing-retention-sweep.js';
 
 /**
  * MUT-333 (ADR-188, D11, D12 as revised by R1): the hard delete of closed accounts, run hourly by Cloud Scheduler and
- * on demand by the operator (`npm run accounts:purge [-- --dry-run]`). One person at a time:
+ * on demand by the operator (`npm run accounts:purge [-- --dry-run]`). First the bucket queue, ended share links'
+ * viewers (MUT-382) and closed profiles' issued documents past their 7 years (MUT-644); then one person at a time:
  *
  *   claim (user-row lock; no cancel can win after it)
  *     └─► Stripe: delete every customer naming the person (a failure skips them until the next run)
@@ -48,6 +50,8 @@ export interface PurgeRunSummary {
   storagePrefixesEmptied: number;
   storagePending: number;
   incomplete: boolean;
+  /** MUT-644: closed profiles whose issued documents this run deleted after their 7 years (never in a dry run). */
+  issuingProfilesSwept: number;
 }
 
 export interface PurgeRunOptions {
@@ -72,9 +76,10 @@ export async function runAccountPurge(options: PurgeRunOptions): Promise<{ summa
   const budget = options.budgetMs ?? PURGE_BUDGET_MS;
   const max = options.maxPeople ?? MAX_PURGES_PER_RUN;
 
-  const summary: PurgeRunSummary = { dryRun, closing: 0, due: 0, purged: 0, skipped: 0, failed: 0, storagePrefixesEmptied: 0, storagePending: 0, incomplete: false };
+  const summary: PurgeRunSummary = { dryRun, closing: 0, due: 0, purged: 0, skipped: 0, failed: 0, storagePrefixesEmptied: 0, storagePending: 0, incomplete: false, issuingProfilesSwept: 0 };
   if (!dryRun) summary.storagePrefixesEmptied += await drainStorage(options);
   if (!dryRun) await sweepEndedShareLinkViewers(options);
+  if (!dryRun) summary.issuingProfilesSwept = await sweepRetainedIssuing(options);
 
   const counts = await store.accountPurge.countClosing(now);
   summary.closing = counts.closing;
@@ -110,6 +115,19 @@ async function sweepEndedShareLinkViewers({ store, logger, now }: PurgeRunOption
     logger.info({ deleted }, 'share link viewers swept');
   } catch (err) {
     logger.error({ err }, 'share link viewer sweep failed');
+  }
+}
+
+/**
+ * MUT-644 (ADR-277 D3): closed profiles' issued documents past their 7 years, here rather than in a scheduler job of
+ * their own. A failure is logged and never stops the purge.
+ */
+async function sweepRetainedIssuing({ store, logger, now }: PurgeRunOptions): Promise<number> {
+  try {
+    return (await runIssuingRetentionSweep({ store, logger, now, dryRun: false })).swept;
+  } catch (err) {
+    logger.error({ err }, 'issuing retention sweep failed');
+    return 0;
   }
 }
 

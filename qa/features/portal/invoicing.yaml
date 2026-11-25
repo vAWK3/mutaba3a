@@ -1,0 +1,354 @@
+app: portal
+area: invoicing
+title: Issuing documents — the invoicing setup (You › Profiles › Invoicing)
+tier: secondary
+# MUT-646 (epic MUT-566, round 3 variant 2): the letterhead is the map of the setup. Its five numbered regions are the
+# steps (details, logo, defaults, numbering, Tax Authority); each saves on its own; issuing waits for the details and
+# the numbering answer (the server's 409 ISSUING_SETUP_INCOMPLETE). Issuing itself is MUT-570's.
+paths:
+  - src/hosted/pages/invoicing/**
+  - src/hosted/data/issuingQueries.ts
+  - src/hosted/components/InvoicingEntryRow.tsx
+  - src/hosted/components/IssueDocumentDrawer.tsx
+  - src/hosted/data/issuedQueries.ts
+  - src/hosted/pages/views/IssuedDocuments.tsx
+  - src/hosted/pages/views/issuedTabs.ts
+  - src/hosted/pages/views/docTypeIcons.tsx
+  - src/hosted/components/AttachExternalInvoiceDrawer.tsx
+  - src/hosted/components/ExternalInvoiceColumn.tsx
+  - src/hosted/data/externalInvoiceQueries.ts
+  - src/hosted/components/art/invoicing-*
+  - src/hosted/pages/views/art/**
+features:
+  - id: setup
+    title: Set up issuing from the three introduction cards to a ready letterhead, each step saved on its own
+    tier: secondary
+    tickets: [MUT-646]
+    paths:
+      - src/hosted/pages/you/YouProfiles.tsx
+    steps:
+      - Open You › Profiles on Nour Studio and choose Invoicing
+      - Read the three cards and choose Begin setup
+      - Type the company number; the registry fills the legal name and address; choose Next
+      - Choose a PNG logo, then Next
+      - Choose Modern, blue ink and English; choose Next
+      - Answer that numbering continues from another system at tax invoice 1043; choose Next
+      - Open it in Arabic
+    expect:
+      - The introduction says what can be issued, that issued documents are final (corrected by a credit note), and what allocation numbers are
+      - Until the details and numbering are saved, the page says issuing opens once Business details and Numbering are complete
+      - The letterhead shows the registry's name, ח.פ. and the number, and the address as they fill, before saving; Next saves PUT /v1/issuer and region 1 is ticked
+      - The logo appears in the letterhead's logo region and PUT /v1/issuer/logo carries the image
+      - Style, ink and language change the letterhead at once (Modern, blue, left to right with "Tax invoice"); Next saves PUT /v1/issuer/defaults with If-Match
+      - Typing 1043 shows "Tax invoice 1043" on the paper; Next saves PUT /v1/issuing/numbering and the page says the letterhead is ready, 4 of 5 complete
+      - In Arabic the page reads right to left and the regions are named الخطوة 1 … 5
+  - id: setup-hidden
+    title: Only a business profile whose owner issues documents has the way in
+    tier: secondary
+    tickets: [MUT-646]
+    paths:
+      - src/hosted/pages/you/YouProfiles.tsx
+    steps:
+      - Open You › Profiles on a server where issuing is off for the person
+      - Open the invoicing page's address directly
+    expect:
+      - There is no Invoicing row, and the page's address sends the person back to You › Profiles
+  - id: issue-invoice
+    title: Issue a tax invoice, then a receipt for part of it and a credit note, each final and numbered (MUT-570)
+    tier: core
+    tickets: [MUT-570]
+    paths:
+      - src/hosted/pages/views/DocumentsList.tsx
+    steps:
+      - Open Documents › Issued on Nour Studio (setup done) and choose Issue a document
+      - Choose Client 1, describe two lines (40 × 450, 1 × 1,300)
+      - Issue the tax invoice
+      - On its page, Record a payment and issue a receipt for 10,000
+      - Back on the tax invoice, Issue a credit note and lower it to 1,000
+      - Open the list, then in Arabic
+    expect:
+      - The totals come from the server's preview as the lines are typed (19,300.00 before VAT, 22,774.00 with it), and the drawer says an issued document is corrected only by a credit note
+      - The tax invoice takes number 1 (POST with an Idempotency-Key); its page shows the issued moment and 22,774.00 still owed
+      - The receipt pays the tax invoice (appliesToDocumentId, payment) and what is still owed drops to 12,774.00
+      - After the part payment, the credit note starts as one line for what is still owed (12,774.00, prices include VAT) and names its tax invoice (originalId)
+      - The list shows the three documents; in Arabic it reads right to left
+  - id: payment-request
+    title: A payment request — issued as PR-0001, settled by invoice-receipts, cancelled by record (MUT-662)
+    tier: secondary
+    tickets: [MUT-662]
+    steps:
+      - Open Documents › Issued, choose Issue a document, Client 1 and the Payment request type, one line of 1,000
+      - Issue it
+      - Record a payment of 400 from its page
+      - Try to cancel it
+      - Record the rest
+      - Issue another payment request of 500 and cancel it with a reason
+      - Open the list in Arabic
+    expect:
+      - The type says it is not a tax document (no allocation number, not counted in VAT) and the totals show 1,180.00
+      - It takes PR-0001 and reads Unpaid
+      - The payment is an invoice-receipt that refers to the request (appliesToDocumentId) and the request reads Partly paid, listing it
+      - Cancel is not offered while an invoice-receipt refers to it; the panel says to credit the invoice-receipt first
+      - The request reads Paid in full and offers no further payment
+      - The second request reads Cancelled with CX-0001, and the list shows Cancelled
+      - In Arabic the list reads right to left with "طلب دفع PR-0001"
+  - id: issue-gate
+    title: Issuing waits for the setup; a client page issues for that client; no issuing, no Issued tab (MUT-570)
+    tier: secondary
+    tickets: [MUT-570]
+    paths:
+      - src/hosted/pages/views/ClientDetailPage.tsx
+    steps:
+      - Open Documents › Issued with the setup not done, and choose Issue a document
+      - On a ready profile, open Client 1 and choose Issue a document for this client
+      - Open Documents on a profile without issuing
+    expect:
+      - The drawer says issuing opens once Business details and Numbering are complete, with a link to the setup
+      - The drawer opens with Client 1 already chosen
+      - There is no Issued tab
+  - id: attach-external
+    title: Attach an invoice issued elsewhere to an Owed or a Received; read, confirmed, never numbered by MTB3A (MUT-647)
+    tier: secondary
+    tickets: [MUT-647]
+    paths:
+      - src/hosted/components/HostedTable.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Open Owed on Nour Studio (issuing on) and choose Attach on Client 1's entry
+      - Choose the invoice's PDF, correct the number to 3382 and the total to 1,450
+      - Attach, then open it from the entry's "Issued elsewhere" badge and open its file
+      - On Paid, drop a PDF on the Received row and attach it
+      - Remove that one; open Owed in Arabic
+    expect:
+      - The Document column offers Attach on an entry the person recorded, and nothing on an Owed MTB3A issued the document for
+      - The reader fills the number (3381), date (2026-10-12) and total (1,500.00); every field can be corrected; the drawer says MTB3A neither numbers it nor puts it in the uniform file
+      - A total that differs from the entry's is said, and Attach still works
+      - The entry shows "Issued elsewhere"; it opens with "Invoice 3382" and its date, its file opens, and it says MTB3A issues no document for the entry while it is attached
+      - A file dropped on a Received row is read and attached the same way (entryKind RECEIVED)
+      - After Remove the row offers Attach again; in Arabic the badge reads صادرة من جهة أخرى, right to left, with no sideways scroll
+  - id: offer-after-save
+    title: Saving an Owed offers its tax invoice, linked to the entry; the setting turns it off; no invoicing, no change (MUT-648)
+    tier: secondary
+    tickets: [MUT-648]
+    paths:
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/issueOffers.ts
+      - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/IssueOffer.tsx
+      - src/hosted/components/Toast.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+    steps:
+      - On Owed, record 1,180 from Client 1
+      - Choose Issue a tax invoice on the save toast, then Issue
+      - Record another Owed, open Paid before the toast fades, and choose Issue a tax invoice there
+      - Reopen Owed
+      - With "offer to issue after saving" off, record another Owed
+      - On a profile without invoicing, record an Owed
+    expect:
+      - The toast offers Issue a tax invoice; the drawer opens with Client 1, one line of 1,180.00 with prices including VAT, and a total of 1,180.00
+      - The tax invoice names the Owed it takes over (fromEntry), so no second Owed is posted
+      - Leaving Owed inside the toast's six seconds keeps its button working: on Paid it opens the drawer for the Owed just saved
+      - An Owed with no document offers Issue a tax invoice on its row
+      - With the setting off the toast offers nothing
+      - Without invoicing the toast has no action and nothing asks for the setup
+  - id: setup-hint
+    title: Saving a shekel income while the setup can't issue says "Finish setting up invoicing", once a day, with Set up at the first missing step; Receivables says "Finish setup to issue" (MUT-722)
+    tier: secondary
+    tickets: [MUT-722]
+    paths:
+      - src/hosted/components/setupHint.ts
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/IncomeDrawerHost.tsx
+      - src/hosted/components/Toast.tsx
+      - src/hosted/pages/views/ReceivablesList.tsx
+      - src/hosted/pages/invoicing/InvoicingSetupPage.tsx
+      - src/hosted/router.tsx
+    steps:
+      - On a business profile with invoicing whose business details are in but numbering isn't, record ₪590 owed by Client 1 on Owed
+      - Look at Owed's row for it
+      - Choose Set up on the save toast
+      - Back on Owed, record another Owed the same day
+      - Choose Finish setup to issue on the row, answer Numbering (start from 1)
+      - Record another Owed
+      - Record a dollar Owed on an incomplete setup; record an Owed on a personal profile, a Malafat firm, and without the invoicing feature
+      - In Arabic, record ₪590 owed
+    expect:
+      - The save toast says "Finish setting up invoicing to issue its invoice." with Set up, and offers no Issue
+      - The row shows "Finish setup to issue" where Issue would be
+      - Set up opens You › Invoicing at the first missing step, Numbering (?step=numbering)
+      - The second save the same day shows no hint (once a day per profile; showing it counts)
+      - With the setup complete, the toast offers Issue a tax invoice as before (MUT-648)
+      - No hint for a dollar income, a personal profile, a Malafat firm or without the feature (and nothing asks for the setup there)
+      - In Arabic the toast reads «أكمِل إعداد الفوترة لإصدار فاتورته.» with إعداد, right to left, with no sideways scroll
+  - id: uniform-file
+    title: Download the uniform file (מבנה אחיד 1.31) for a date range from You › Invoicing; a bad range is refused in place (MUT-569)
+    tier: secondary
+    tickets: [MUT-569]
+    paths:
+      - src/hosted/pages/invoicing/UniformFileExport.tsx
+      - src/hosted/pages/invoicing/uniform-file.css
+    steps:
+      - Issue a tax invoice for Client 1
+      - Open You › Invoicing
+      - Choose Other dates with To before From
+      - Choose This year and Download the file
+      - Open it in Arabic
+    expect:
+      - The card offers Last year by default, with the dates shown and locked
+      - To before From says so under the field and Download stays disabled; nothing is requested
+      - The download is OPENFRMT-<VAT number>-<from>_<to>.zip, asked for in the person's language, and the card says Documents 1 · Records 4
+      - In Arabic the card reads right to left with no sideways scroll
+  - id: uniform-file-empty
+    title: A range with no documents downloads a valid uniform file and says there were none (MUT-569, AC3)
+    tier: secondary
+    tickets: [MUT-569]
+    paths:
+      - src/hosted/pages/invoicing/UniformFileExport.tsx
+    steps:
+      - On a profile with no documents, open You › Invoicing and Download the file for last year
+    expect:
+      - The file downloads, and the card says there are no documents in these dates and the file is still valid (opening and closing records only)
+  - id: to-issue-issue-all
+    title: Home's To issue count opens the documents due by client; Issue all issues one client's documents
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/pages/home/ToIssueGroup.tsx
+      - src/hosted/pages/home/HomeTodo.tsx
+      - src/hosted/data/documentsDueQueries.ts
+      - src/hosted/router.tsx
+    steps:
+      - Open Nour Studio's home
+      - Choose See all in the To issue group
+      - In Client 1's group choose Issue all, then confirm
+    expect:
+      - Home shows "To issue" with 3 documents and links to Documents › To issue
+      - The list groups the items by client (No client last); a payment request says it can't be issued here yet and offers Attach and Not for invoice
+      - Issue all confirms in place with the count and the client, sends one POST /v1/documents-due/issue for the client's items, and says 2 documents were issued; the group leaves the list
+  - id: to-issue-bulk-not-for-invoice
+    title: Select old items with "Older than 6 months", mark them not for invoice in one action, and bring them back
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+      - src/hosted/data/documentsDueQueries.ts
+    steps:
+      - Open Documents › To issue
+      - Choose Older than 6 months, then Select all shown
+      - Choose Not for invoice and confirm
+      - Open Not for invoice, select all shown, choose Back to invoice and confirm
+    expect:
+      - Older than offers 1, 3, 6 and 12 months; 6 months lists only the two items older than six months
+      - One confirmation names the count ("Mark 2 entries not for invoice?"); the items leave To issue and the toast offers Undo
+      - Not for invoice lists them, and Back to invoice returns both in one action
+  - id: not-for-invoice-refused
+    title: An entry with a tax document can't be marked not for invoice; the app says a credit note comes first
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/NotForInvoiceAction.tsx
+      - src/hosted/pages/views/DocumentsDuePage.tsx
+    steps:
+      - Open Documents › To issue
+      - Choose Not for invoice on an item whose entry has a tax invoice
+    expect:
+      - The server refuses (409 HAS_TAX_DOCUMENT) and the page says to issue a credit note first; the item stays in To issue
+  - id: client-documents-preference
+    title: Set a client's documents preference on the client page
+    tier: secondary
+    tickets: [MUT-660]
+    paths:
+      - src/hosted/components/DocumentsPreferenceField.tsx
+      - src/hosted/components/ClientBusinessDetails.tsx
+      - src/hosted/data/customerQueries.ts
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+    steps:
+      - Open Client 1's page on Nour Studio
+      - Set Documents to Tax invoice first
+    expect:
+      - The field starts on "Profile default (On payment)" and says an invoice-receipt is due for each payment
+      - Choosing Tax invoice first saves PATCH /v1/customers with If-Match and says a tax invoice is due when an amount is owed, then a receipt for each payment
+  - id: credit-note-paid-refund
+    title: A paid invoice-receipt credited in full is refunded; the client's statement shows the refund and ends at 0 (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+      - src/hosted/pages/views/IssuedDocuments.tsx
+    steps:
+      - Issue an invoice-receipt of 1,000 to Client 1
+      - On its page choose Credit note
+      - Choose Refunded to the client, bank transfer, reference RF-7, and issue
+      - Open Client 1's ledger
+      - Open the ledger in Arabic
+    expect:
+      - The drawer says the client already paid 1,180.00 of this and Issue waits for a choice
+      - The credit note is issued with paidPart REFUND (bank, RF-7)
+      - The ledger lists the invoice-receipt's charge and payment, the credit note's credit and a Refund line, ending at 0.00
+      - In Arabic the ledger reads right to left and names the refund line
+  - id: credit-note-paid-keep
+    title: A paid tax invoice credited in part keeps the paid part as the client's credit (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - Issue a tax invoice of 1,000 to Client 1 and a receipt that pays all of it
+      - From the tax invoice choose Credit note and set the amount to 400
+      - Choose Kept as their credit and issue
+    expect:
+      - The drawer says the client already paid 472.00 of this (400 before VAT) and explains the credit stays on their account
+      - The credit note is issued with paidPart KEEP and no refund
+  - id: credit-note-cap
+    title: Credit notes on one document can't add up to more than it; the refusal says how much is left (MUT-643)
+    tier: secondary
+    tickets: [MUT-643]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - Issue an invoice-receipt of 1,000 to Client 1 and credit 600 of it (708.00 with VAT), refunded
+      - Start another credit note from it and set the amount to 1,000 (VAT included)
+      - Choose Refunded and issue
+    expect:
+      - The new credit note starts at 472.00, what is left to credit
+      - The issue is refused with "At most 472.00 is left to credit" and nothing is issued
+  - id: manual-allocation
+    title: When MTB3A can't request the allocation number, enter one requested by hand before issuing; the number is a preview, never held (MUT-711)
+    tier: secondary
+    tickets: [MUT-711]
+    paths:
+      - src/hosted/components/ManualAllocationPanel.tsx
+    steps:
+      - On a profile MTB3A can't request allocation numbers for, open Issue a document, choose Client 1 and a line of 6,000
+      - Type 12345 as the allocation number, then 123-456-789
+      - Another document takes number 1 before Issue
+      - Enter the number requested for invoice 2 and issue
+      - Open the drawer again in Arabic with the same line
+    expect:
+      - The panel says the invoice needs an allocation number and lists invoice number 1, the date, 6,000.00 before VAT and the client's VAT number, each with Copy, plus Copy all, the Tax Authority link, the 9-digit input and "change the amount"; Issue is disabled
+      - 12345 is refused as not 9 digits and Issue stays disabled; 123-456-789 enables it
+      - The server refuses with "This invoice's number is now 2", the entered number is cleared and the panel now shows invoice number 2
+      - Tax invoice 2 is issued with the number (manualAllocation for 2) and its page shows the allocation number
+      - The panel reads right to left in formal Arabic
+  - id: issue-as-you-record
+    title: The first income for a client asks how documents are issued, once; a payment issues its document in the same step (MUT-661)
+    tier: secondary
+    tickets: [MUT-661]
+    paths:
+      - src/hosted/components/DocumentsPreferenceAsk.tsx
+      - src/hosted/components/IssueOffer.tsx
+      - src/hosted/components/issueOffers.ts
+      - src/hosted/components/IncomeCaptureDrawer.tsx
+      - src/hosted/components/RecordPaymentDrawer.tsx
+      - src/hosted/data/incomeQueries.ts
+      - src/hosted/data/issuedQueries.ts
+      - server/src/routes/documents-due.ts
+    steps:
+      - On a business profile that can issue, record ₪3,400 owed by Client 1 on Owed
+      - Answer the question how documents are issued to Client 1 with Tax invoice first
+      - Record another Owed for Client 1 (no question)
+      - Open Record payment on an Owed, enter ₪1,000 with the document control on and record it
+      - Record another payment with the control off
+    expect: The first Owed for a client asks once and the toast then offers Issue a tax invoice; a second asks nothing; a payment with the control on says its document was issued; with it off the payment is recorded alone.

@@ -17,7 +17,8 @@ import type { Logger } from '../logger.js';
 import { SlidingWindowRateLimiter, type RateLimiter } from '../rate-limit.js';
 import { StateConflict } from '../repositories/memory.js';
 import type { LedgerStore, UserLocale, UserRecord } from '../repositories/ports.js';
-import { AccountRecoveryRequestSchema, ErrorEnvelopeSchema, SelfServiceAcceptedSchema, SelfServiceDoorsSchema, SignupRequestSchema } from '../schemas.js';
+import { AccountRecoveryRequestSchema, DeviceSignInCodeRequestSchema, ErrorEnvelopeSchema, SelfServiceAcceptedSchema, SelfServiceDoorsSchema, SignInCodeRequestSchema, SignupRequestSchema } from '../schemas.js';
+import { generateSignInCode, mailsSignInCode, SIGN_IN_CODE_POLICY, signInCodeDigest } from '../auth/sign-in-code.js';
 import { signInLinkOf } from './account-setup.js';
 
 /**
@@ -34,6 +35,8 @@ import { signInLinkOf } from './account-setup.js';
 export interface SelfServiceOptions {
   /** SELF_SIGNUP_ENABLED. Off: POST /v1/signups answers 404 (recovery is never behind it). */
   signupEnabled: boolean;
+  /** MUT-595: MALAFAT_SIGN_IN, published on the doors. */
+  malafatSignIn?: boolean;
   /**
    * MUT-368 (D1): this server really mails links: a mailer other than noop and a Turnstile secret. GET /v1/self-service
    * reports it, so the portal shows no door that can only fail. Absent = false. Recovery itself stays on either way.
@@ -91,6 +94,10 @@ export interface SelfServiceRouteDependencies {
 const SIGNUPS_PATH = '/v1/signups';
 const RECOVERY_PATH = '/v1/account-recovery';
 const DOORS_PATH = '/v1/self-service';
+/** MUT-618 (ADR-256 D2): the portal's ask (Turnstile) and the phone's (budgets only, D1). */
+const SIGN_IN_CODE_PATH = '/v1/sign-in-codes';
+const DEVICE_SIGN_IN_CODE_PATH = '/v1/device-sign-in-codes';
+const MINUTE_MS = 60_000;
 
 const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 
@@ -122,7 +129,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     (c) => {
       const mails = options.mailsLinks ?? false;
       c.header('Access-Control-Allow-Origin', '*');
-      return c.json({ signup: mails && options.signupEnabled, recovery: mails }, 200);
+      return c.json({ signup: mails && options.signupEnabled, recovery: mails, malafatSignIn: options.malafatSignIn ?? false, signInCode: mails }, 200);
     },
   );
 
@@ -133,11 +140,22 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
   });
 
   /** Same origin, then the client address's budget. */
-  async function guard(c: Context<AppEnv>, now: Date): Promise<string> {
+  async function guard(c: Context<AppEnv>, now: Date, purpose = 'self-service'): Promise<string> {
     if (!isSamePortalOrigin(c.req, settings)) throw new ApiError('CROSS_SITE_REQUEST', 'Use the MTB3A portal itself');
+    return ipBudget(c, now, purpose);
+  }
+
+  /** The client address's budget; MUT-618's asks keep their own, so asking for codes never spends /recover's. */
+  async function ipBudget(c: Context<AppEnv>, now: Date, purpose: string): Promise<string> {
     const ip = requestClientIp((name) => c.req.header(name), settings);
-    refuseIfLimited(c, await options.ipLimiter.check(`self-service:${ip}`, now));
+    refuseIfLimited(c, await options.ipLimiter.check(`${purpose}:${ip}`, now));
     return ip;
+  }
+
+  /** The address's budgets (D6), under the caller's key. */
+  async function addressBudget(c: Context<AppEnv>, key: string, now: Date): Promise<void> {
+    refuseIfLimited(c, await options.addressMinuteLimiter.check(key, now));
+    refuseIfLimited(c, await options.addressDayLimiter.check(key, now));
   }
 
   /** The bot check, then the address's budgets: a request without a passing token never spends a person's budget. */
@@ -146,9 +164,7 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
     // (token, key) pair with the first verdict, so a client-chosen key would let one solved token pass again and again.
     const passed = await options.turnstile.verify(input.token, { ip: input.ip === 'unknown' ? null : input.ip, action: input.action, idempotencyKey: randomUUID() });
     if (!passed) throw new ApiError('CHECK_FAILED', 'The check didn’t pass; try again');
-    const key = `self-service:${input.email}`;
-    refuseIfLimited(c, await options.addressMinuteLimiter.check(key, input.now));
-    refuseIfLimited(c, await options.addressDayLimiter.check(key, input.now));
+    await addressBudget(c, `${input.action === 'sign-in-code' ? 'sign-in-code' : 'self-service'}:${input.email}`, input.now);
   }
 
   /** A mail outcome never changes the answer; a throw is a bug, logged, and still the same answer. */
@@ -318,6 +334,87 @@ export function selfServiceRoutes(deps: SelfServiceRouteDependencies): OpenAPIHo
         locale: input.locale ?? person.locale,
         vars: { link: setupUrl(origin(c), token), validHours: hours },
         idempotencyKey: `recovery:${linkId}`,
+      }),
+    };
+  }
+
+  // MUT-618 (ADR-256): "Email me a sign-in code". Every address gets a code row and the same 202 no earlier than the
+  // recovery floor (D3, AC2); only an account that could sign in gets the mail (D4). The portal's ask is same-origin and
+  // Turnstile-checked like /recover; the phone's has neither (D1: the address and IP budgets are the control).
+  const signInCodeResponses = {
+    202: accepted,
+    403: errorResponse('CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "sign-in-code")'),
+    422: errorResponse('Validation failed'),
+    429: errorResponse('RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds'),
+  };
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: SIGN_IN_CODE_PATH,
+      tags: ['Sessions'],
+      summary: 'Email me a sign-in code: mails a 6-digit code that works once for 10 minutes (same answer for every address) (MUT-618)',
+      description: 'Sign in with it through POST /v1/sessions/code. A new code cancels the older one. Budgets: 10 an hour per client address, 1 a minute and 5 a day per email address.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: SignInCodeRequestSchema } } } },
+      responses: signInCodeResponses,
+    }),
+    async (c) => {
+      const startedMs = clock.now();
+      const now = c.get('now')();
+      const ip = await guard(c, now, 'sign-in-code');
+      const body = c.req.valid('json');
+      const email = normalizeEmail(body.email);
+      await checkAndBudget(c, { ip, email, token: body.turnstileToken, action: 'sign-in-code', now });
+      return runBranch(c, startedMs, options.floors.recoveryMs, () => signInCodeBranch({ email, locale: body.locale, now, client: 'portal' }));
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: DEVICE_SIGN_IN_CODE_PATH,
+      tags: ['Device sessions'],
+      summary: 'Email me a sign-in code, from the phone app (same answer for every address) (MUT-618)',
+      description: 'As POST /v1/sign-in-codes without the Turnstile token or the origin check; the same address and IP budgets, shared with it. Sign in through POST /v1/device-sessions/code.',
+      security: [],
+      request: { body: { required: true, content: { 'application/json': { schema: DeviceSignInCodeRequestSchema } } } },
+      responses: { 202: accepted, 422: signInCodeResponses[422], 429: signInCodeResponses[429] },
+    }),
+    async (c) => {
+      const startedMs = clock.now();
+      const now = c.get('now')();
+      await ipBudget(c, now, 'sign-in-code');
+      const body = c.req.valid('json');
+      const email = normalizeEmail(body.email);
+      await addressBudget(c, `sign-in-code:${email}`, now);
+      return runBranch(c, startedMs, options.floors.recoveryMs, () => signInCodeBranch({ email, locale: body.locale, now, client: 'app' }));
+    },
+  );
+
+  /** Issues the address's code (cancelling the older one), and mails it only to an account that could sign in. */
+  async function signInCodeBranch(input: { email: string; locale: UserLocale | undefined; now: Date; client: 'portal' | 'app' }): Promise<PendingMail | null> {
+    const person = await store.users.findByEmail(input.email);
+    const mails = mailsSignInCode(person, input.now) && !(await store.email.isSuppressed(input.email));
+    const code = generateSignInCode();
+    const issued = await store.signInCodes.issue({
+      email: input.email,
+      userId: mails && person ? person.id : null,
+      codeDigest: signInCodeDigest(settings.pepper, input.email, code),
+      at: input.now,
+      expiresAt: new Date(input.now.getTime() + SIGN_IN_CODE_POLICY.validMinutes * MINUTE_MS),
+    });
+    // D1: the evidence to revisit the phone's bot check on. Never the address or the code.
+    logger.info({ client: input.client, mailed: mails }, 'sign_in_code.requested');
+    if (!mails || !person) return null;
+    return {
+      sending: send({
+        to: person.email,
+        template: 'sign-in-code',
+        locale: input.locale ?? person.locale,
+        vars: { code, validMinutes: SIGN_IN_CODE_POLICY.validMinutes },
+        // One mail per code (a resend is a new row). The key is logged, so it names the row, never the code.
+        idempotencyKey: `sign-in-code:${issued.id}`,
       }),
     };
   }

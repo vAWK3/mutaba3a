@@ -1,3 +1,6 @@
+import type { UniformFileHouse } from '../issuing/uniform-file/export.js';
+import type { OcrClient } from '../receipts/ocr-client.js';
+import type { TaxAuthorityDeps } from '../israel/tax-authority/service.js';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
@@ -6,6 +9,7 @@ import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { attachmentRoutes } from './attachments.js';
 import { conversionRoutes } from './conversions.js';
+import { issuingRoutes, type IssuedPdf } from './issuing.js';
 import { expenseCategoryRoutes } from './expense-categories.js';
 import { expenseGroupRoutes } from './expense-groups.js';
 import { expenseRoutes } from './expenses.js';
@@ -16,6 +20,7 @@ import { meRoutes } from './me.js';
 import { customerRoutes } from './customers.js';
 import { paymentRoutes } from './payments.js';
 import { profileRoutes } from './profiles.js';
+import { memberRoutes } from './members.js';
 import { projectRoutes } from './projects.js';
 import { receivableRoutes } from './receivables.js';
 import { summaryRoutes } from './summaries.js';
@@ -34,6 +39,19 @@ import { vendorRoutes } from './vendors.js';
  */
 export interface PortalRouteDependencies {
   store: LedgerStore;
+  /** MUT-640: the issued-document PDF renderer; the hosted server's only (the signed-out portal has none). */
+  issuedPdf?: IssuedPdf | null;
+  /** MUT-571/572: the Tax Authority, hosted only and only where configured; the portal origin its callback returns to. */
+  taxAuthority?: TaxAuthorityDeps | null;
+  portalOrigin?: string | null;
+  /** MUT-571: this server serves the portal (PORTAL_DIST_DIR); the Tax Authority callback may return to its pages. */
+  servesPortal?: boolean;
+  /** MUT-711: where an allocation number is requested by hand (null = the default). */
+  manualAllocationUrl?: string | null;
+  /** MUT-647: the reader that fills an invoice issued elsewhere (the receipts OCR); hosted only, where configured. */
+  ocr?: OcrClient | null;
+  /** MUT-569: the uniform file's software fields (config); absent = the placeholders. */
+  uniformFileSoftware?: UniformFileHouse | null;
   attachments: { storage: AttachmentStorage | null; urlTtlSeconds: number };
   fxRates: CachedFxRates | null;
   /** MUT-324: the terms /v1/me reports; null where none apply (the portal's signed-out mode). */
@@ -63,7 +81,12 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => incomeRoutes(deps.store),
   (deps) => expenseGroupRoutes(deps.store),
   (deps) => conversionRoutes(deps.store),
+  // MUT-568 (ADR-260): issued documents.
+  (deps) =>
+    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null, servesPortal: deps.servesPortal ?? false, manualAllocationUrl: deps.manualAllocationUrl ?? null }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }, deps.uniformFileSoftware ?? undefined),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
+  // MUT-596: who is on the profile, read-only (a Malafat firm's seats).
+  (deps) => memberRoutes(deps.store),
   (deps) => meRoutes(deps.store, deps.terms, deps.billing),
 ];

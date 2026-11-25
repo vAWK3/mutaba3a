@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { MemoryAttachmentStorage } from '../../attachments/storage.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
 import { receipt, REG_VALID_COMPANY, REG_VALID_DEALER } from '../extract/__tests__/fixtures.js';
@@ -34,7 +34,6 @@ const noDispatch: ReadDispatcher = { enqueue: async () => {} };
 
 function harness() {
   const store = new MemoryLedgerStore();
-  vi.spyOn(store.features, 'activeFor').mockResolvedValue(['receipt_reading']);
   const storage = new MemoryAttachmentStorage();
   const ocr = new QueueOcr();
   const reader = createReceiptReader({ store, storage, ocr, dispatcher: noDispatch, logger: pino({ level: 'silent' }), now: () => AT });
@@ -58,7 +57,7 @@ describe('receipt reader buyer memory (MUT-514)', () => {
     const r = await h.get(id);
     expect(r.readIdentifiers).toEqual({ buyer: expect.arrayContaining([REG_VALID_COMPANY, '0529876543']), vendor: [REG_VALID_DEALER] });
     expect(r.suggested?.readerVersion).toBe(serverReaderVersion('rapid-tess'));
-    expect(serverReaderVersion('rapid-tess')).toBe('server-ocr-rapid-tess-3');
+    expect(serverReaderVersion('rapid-tess')).toBe('server-ocr-rapid-tess-5');
     expect(r.suggested?.registrationNo?.value).toBe(REG_VALID_DEALER);
     expect(r.suggested?.phone).toBeUndefined();
   });
@@ -99,5 +98,23 @@ describe('receipt reader buyer memory (MUT-514)', () => {
     const id = await h.upload(receipt(['לכבוד', `טל.: ${BUYER_PHONE}`]));
     expect(await h.reader.readOne(id)).toBe('done');
     expect((await h.get(id)).readIdentifiers).toEqual({ buyer: ['0529876543'], vendor: [] });
+  });
+
+  it("MUT-630: a bill-to email is learned and never filled as a vendor's on a later receipt", async () => {
+    const h = harness();
+    const first = await h.upload(receipt(['חברת הסלולר', 'לכבוד: דנה', 'dana@example.com', 'סה"כ ₪59.90']));
+    await h.reader.readOne(first);
+    expect((await h.get(first)).readIdentifiers?.buyer).toEqual(['dana@example.com']);
+    const id = await h.upload(receipt(['חברת הסלולר', 'Dana@Example.com', 'סה"כ ₪59.90']));
+    await h.reader.readOne(id);
+    expect((await h.get(id)).suggested?.email).toBeUndefined();
+  });
+
+  it("MUT-631: a registration no. that names a saved vendor gives that vendor's name, not the OCR line (pins withVendor)", async () => {
+    const h = harness();
+    await h.store.vendors.resolve({ organizationId: ORG, name: 'אלדור חברת נפט', registrationNo: REG_VALID_COMPANY }, AT);
+    const id = await h.upload(receipt(['תחנת הגליל', `ח.פ ${REG_VALID_COMPANY}`, 'סה"כ ₪176.37']));
+    await h.reader.readOne(id);
+    expect((await h.get(id)).suggested?.vendorName).toEqual({ value: 'אלדור חברת נפט', source: 'vendor', confidence: 1 });
   });
 });

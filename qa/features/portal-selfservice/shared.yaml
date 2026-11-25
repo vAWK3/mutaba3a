@@ -1,0 +1,8 @@
+# The portal's API client, which every live flow goes through. A change here is an indirect impact
+# on every recorded flow of this app: read the diff and re-record or carry with a reason.
+app: portal-selfservice
+area: shared
+title: The portal's API client
+shared: true
+paths:
+  - src/hosted/api/client.ts

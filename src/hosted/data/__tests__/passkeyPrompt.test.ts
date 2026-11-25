@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Me } from '../../api/client';
-import { optimisticPasskeyPrompt, passkeySuggestionShows } from '../passkeyPrompt';
+import { optimisticPasskeyPrompt, passkeyOfferable, passkeySuggestionShows } from '../passkeyPrompt';
 
 /**
  * MUT-370: whether Home shows the "Add a passkey" card. The server decides `due` (D3); the portal adds its own device
@@ -14,7 +14,7 @@ const DUE = { due: true, notNowCount: 0, hiddenUntil: null };
 const ANSWERED_TRIAL = { welcomedAt: inDays(-1), welcomeAnswer: 'skipped', bannerSnoozedUntil: null } as const;
 const OPEN_TRIAL = { welcomedAt: null, welcomeAnswer: null, bannerSnoozedUntil: null } as const;
 
-function me({ prompt = DUE, trialPrompt = ANSWERED_TRIAL, closing = false }: { prompt?: Me['user']['passkeyPrompt']; trialPrompt?: Me['user']['trialPrompt']; closing?: boolean } = {}): Me {
+function me({ prompt = DUE, trialPrompt = ANSWERED_TRIAL, closing = false, ownSignIn = true }: { prompt?: Me['user']['passkeyPrompt']; trialPrompt?: Me['user']['trialPrompt']; closing?: boolean; ownSignIn?: boolean } = {}): Me {
   return {
     user: {
       id: 'u',
@@ -22,6 +22,8 @@ function me({ prompt = DUE, trialPrompt = ANSWERED_TRIAL, closing = false }: { p
       displayName: 'Rana',
       locale: 'en',
       malafatSuggestions: { off: false, dismissed: [] },
+      ownSignIn,
+      ownPassword: true,
       trialPrompt,
       passkeyPrompt: prompt,
       status: 'ACTIVE',
@@ -72,5 +74,24 @@ describe('optimisticPasskeyPrompt', () => {
   it('never counts past three, and leaves a missing prompt missing', () => {
     expect(optimisticPasskeyPrompt({ due: true, notNowCount: 3, hiddenUntil: null }, NOW).notNowCount).toBe(3);
     expect(optimisticPasskeyPrompt(null, NOW)).toBeNull();
+  });
+});
+
+/** MUT-619: the setup page's passkey step asks the same question, without MUT-418's first-run order (it comes before Home). */
+describe('passkeyOfferable', () => {
+  const offerable = (person: Me, { supported = true, local = false } = {}) => passkeyOfferable(person, { supported, local });
+
+  it('offers when the server says due, on a device that can make a passkey, even while the trial step is still open', () => {
+    expect(offerable(me())).toBe(true);
+    expect(offerable(me({ trialPrompt: OPEN_TRIAL }))).toBe(true);
+  });
+
+  it('never on a device that cannot make one, in local mode, when not due, closing, or with no sign-in of its own', () => {
+    expect(offerable(me(), { supported: false })).toBe(false);
+    expect(offerable(me(), { local: true })).toBe(false);
+    expect(offerable(me({ prompt: { due: false, notNowCount: 1, hiddenUntil: inDays(30) } }))).toBe(false);
+    expect(offerable(me({ prompt: null }))).toBe(false);
+    expect(offerable(me({ closing: true }))).toBe(false);
+    expect(offerable(me({ ownSignIn: false }))).toBe(false);
   });
 });

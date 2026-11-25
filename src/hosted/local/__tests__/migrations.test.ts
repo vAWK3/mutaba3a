@@ -286,9 +286,121 @@ describe('local snapshot migrations', () => {
 
     const after = migrate(before);
 
-    expect(after.formatVersion).toBe(16);
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
     expect([...after.maps.exps.values()]).toEqual([...maps.exps.values()]);
     expect([...after.maps.exps.values()][0]).toMatchObject({ amountMinor: 708_000n, allocationNumber: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('16 → 17 (MUT-593): a Malafat integration gains the delegation switch, off, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'nour@studio.ps', displayName: 'Nour', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.integrations.connect({ organizationId: org.id, provider: 'MALAFAT', externalTenantId: 'tenant-1', displayName: 'Haddad Law', connectedByApiKeyId: 'key-1', at: AT });
+    const { maps } = store.snapshot();
+    const ints = new Map([...maps.ints].map(([id, i]) => [id, Object.fromEntries(Object.entries(i).filter(([field]) => !field.startsWith('delegationEnabled')))]));
+    const before: StoredSnapshot = { formatVersion: 16, stateVersion: 4, savedAt: AT, maps: { ...maps, ints } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.ints.values()]).toEqual([...maps.ints.values()]);
+    expect([...after.maps.ints.values()][0]).toMatchObject({ externalTenantId: 'tenant-1', delegationEnabledAt: null, delegationEnabledBy: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('17 → 18 (MUT-594): a profile gains a null memberSyncAt, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const orgs = new Map([...maps.orgs].map(([id, o]) => [id, Object.fromEntries(Object.entries(o).filter(([field]) => field !== 'memberSyncAt'))]));
+    const before: StoredSnapshot = { formatVersion: 17, stateVersion: 4, savedAt: AT, maps: { ...maps, orgs } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.orgs.values()]).toEqual([...maps.orgs.values()]);
+    expect([...after.maps.orgs.values()][0]).toMatchObject({ memberSyncAt: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('18 → 19 (MUT-596): a person gains passwordChosen, true on a device, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'hadi@studio.ps', displayName: 'Hadi', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-hadi', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'passwordChosen'))]));
+    const before: StoredSnapshot = { formatVersion: 18, stateVersion: 4, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.people.values()]).toEqual([...maps.people.values()]);
+    expect([...after.maps.people.values()][0]).toMatchObject({ passwordChosen: true });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('19 → 20 (MUT-535): a person gains monthlySummaryMail, the default (null) on a device, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'hadi@studio.ps', displayName: 'Hadi', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-hadi', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'monthlySummaryMail'))]));
+    const before: StoredSnapshot = { formatVersion: 19, stateVersion: 4, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.people.values()]).toEqual([...maps.people.values()]);
+    expect([...after.maps.people.values()][0]).toMatchObject({ monthlySummaryMail: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('20 → 21 (MUT-642): a client gains a null VAT number and address, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org } = await store.users.create({ email: 'maya@studio.ps', displayName: 'Maya', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-maya', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    await store.customers.create({ organizationId: org.id, name: 'Acme', email: null, phone: null, notes: null }, AT);
+    const { maps } = store.snapshot();
+    const custs = new Map([...maps.custs].map(([id, c]) => [id, Object.fromEntries(Object.entries(c).filter(([field]) => field !== 'taxId' && field !== 'address'))]));
+    const before: StoredSnapshot = { formatVersion: 20, stateVersion: 4, savedAt: AT, maps: { ...maps, custs } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.custs.values()]).toEqual([...maps.custs.values()]);
+    expect([...after.maps.custs.values()][0]).toMatchObject({ name: 'Acme', taxId: null, address: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('21 → 22 (MUT-660, MUT-709): a client gains a null documents preference, Owed and Received an unset not-for-invoice mark, Received a null client request key', async () => {
+    const store = new MemoryLedgerStore();
+    const { personalOrganization: org, user } = await store.users.create({ email: 'nour@studio.ps', displayName: 'Nour', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-nour', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const client = await store.customers.create({ organizationId: org.id, name: 'Acme', email: null, phone: null, notes: null }, AT);
+    await store.receivables.createAdjustment({ organizationId: org.id, customerId: client.id, projectId: null, currency: 'ILS', netMinor: 100n, vatMinor: 0n, grossMinor: 100n, vatTreatment: 'OUT_OF_SCOPE', vatRateBasisPoints: 0, title: null, dueDate: '2026-12-01', postingDate: '2026-11-20', postedAt: AT, createdByUserId: user.id, requestId: null }, AT);
+    await store.payments.capture({ organizationId: org.id, customerId: client.id, projectId: null, currency: 'ILS', amountMinor: 50n, receivedOn: '2026-11-21', method: 'BANK', notes: null, createdByUserId: user.id, requestId: null, captureSource: null }, AT);
+    const { maps } = store.snapshot();
+    const without = <T extends object>(m: Map<string, T>, field: string) => new Map([...m].map(([id, v]) => [id, Object.fromEntries(Object.entries(v).filter(([f]) => f !== field))]));
+    const before: StoredSnapshot = { formatVersion: 21, stateVersion: 4, savedAt: AT, maps: { ...maps, custs: without(maps.custs, 'documentsPreference'), recs: without(maps.recs, 'notForInvoice'), pays: without(without(maps.pays, 'notForInvoice'), 'clientRequestKey') } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.custs.values()]).toEqual([...maps.custs.values()]);
+    expect([...after.maps.recs.values()]).toEqual([...maps.recs.values()]);
+    expect([...after.maps.pays.values()]).toEqual([...maps.pays.values()]);
+    expect([...after.maps.pays.values()][0]).toMatchObject({ notForInvoice: false, clientRequestKey: null });
+    expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
+  });
+
+  it('22 → 23 (ADR-279): a person gains offerMail, the default (null) on a device, and the store restores', async () => {
+    const store = new MemoryLedgerStore();
+    await store.users.create({ email: 'lina@studio.ps', displayName: 'Lina', passwordHash: null, locale: 'ar', personal: { name: 'Personal', slug: 'p-lina', defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' }, at: AT });
+    const { maps } = store.snapshot();
+    const people = new Map([...maps.people].map(([id, p]) => [id, Object.fromEntries(Object.entries(p).filter(([field]) => field !== 'offerMail'))]));
+    const before: StoredSnapshot = { formatVersion: 22, stateVersion: 4, savedAt: AT, maps: { ...maps, people } as unknown as StoredSnapshot['maps'] };
+
+    const after = migrate(before);
+
+    expect(after.formatVersion).toBe(LOCAL_FORMAT_VERSION);
+    expect([...after.maps.people.values()]).toEqual([...maps.people.values()]);
+    expect([...after.maps.people.values()][0]).toMatchObject({ offerMail: null });
     expect(() => new MemoryLedgerStore().restore(after)).not.toThrow();
   });
 

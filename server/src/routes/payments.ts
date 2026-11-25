@@ -5,7 +5,7 @@ import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, today
 import { postDueItems } from '../agreements/posting.js';
 import { compareIsoDates, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
-import { idempotent } from '../idempotency.js';
+import { idempotent, paymentRequestKey } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { isOwnCapture, isOwnProfile, redateTo } from '../income/compose.js';
 import { notOwner } from '../personal-profile.js';
@@ -13,6 +13,7 @@ import { formatMoney, type Currency } from '../money.js';
 import { eligibleFor, resultingBalances, suggestAllocations, validateAllocations, type AllocationRequest, type AllocationStrategy } from '../payments/allocate.js';
 import { allocationFailure } from '../payments/allocation-error.js';
 import { assertCorrectable, composeCorrection, paymentNotPosted, type CorrectionBody } from '../payments/correct.js';
+import { assertNoMoneyDocument } from '../payments/document-guard.js';
 import { allocationSnapshot, paymentPreviewToken } from '../payments/preview-token.js';
 import { carriedReceiptNumber, normalizeReceiptNumber } from '../payments/receipt-number.js';
 import { verifyPreviewToken } from '../preview-token.js';
@@ -69,11 +70,15 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const allocations = await store.payments.listAllocations(organizationId, payment.id);
     const receivables = new Map((await store.receivables.getByIds(organizationId, allocations.map((a) => a.receivableId))).map((r) => [r.id, r]));
     const replacedBy = await store.payments.findReplacedBy(organizationId, payment.id);
+    // MUT-643: only a document's money can be refunded (a credit note releases what issuing allocated).
+    const refunds = payment.origin === 'ISSUED_DOCUMENT' ? await store.refunds.list(organizationId, { paymentIds: [payment.id] }) : [];
+    const refundedMinor = refunds.flatMap((f) => f.sources).filter((x) => x.paymentId === payment.id).reduce((sum, x) => sum + x.amountMinor, 0n);
     return serializePayment(
       payment,
       allocations.map((a) => serializeAllocation(a, receivables.get(a.receivableId) ?? null, payment.currency, today)),
       replacedBy?.id ?? null,
       (payment.createdByUserId && people.get(payment.createdByUserId)) || null,
+      refundedMinor,
     );
   }
 
@@ -86,6 +91,9 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     const users = await Promise.all(ids.map((id) => store.users.getById(id)));
     return new Map(users.filter((u) => u !== null).map((u) => [u.id, { userId: u.id, displayName: u.displayName }]));
   }
+
+  /** MUT-643 (D8): money a credit note refunded from this payment went back to the client; it can't be undone here. */
+  const paymentHasRefund = () => new ApiError('CONFLICT', 'A credit note refunded money from this payment; it can\'t be reversed or corrected', { reason: 'PAYMENT_HAS_REFUND' });
 
   const viewOf = async (organizationId: string, payment: PaymentRecord, today: IsoDate) => paymentView(organizationId, payment, today, await capturersOf([payment]));
 
@@ -209,7 +217,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments',
       tags: ['Payments'],
       summary: 'Record a payment with its allocations, from a preview',
-      description: 'One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment.',
+      description: 'One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment. MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.',
       security: [{ apiKey: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'payments.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreatePaymentRequestSchema) },
@@ -221,6 +229,11 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const body = c.req.valid('json');
       const now = c.get('now')();
       const today = todayFor(organization, now);
+      // MUT-709: an earlier attempt of this request recorded the payment and then failed (a 5xx releases the key): answer
+      // with that payment, before the preview token it would now fail, and record nothing.
+      const clientRequestKey = paymentRequestKey(c);
+      const earlier = clientRequestKey ? await store.payments.findByClientRequestKey(organization.id, clientRequestKey) : null;
+      if (earlier) return c.json(await viewOf(organization.id, earlier, today), 201);
       assertIsoDate(body.receivedOn, 'receivedOn');
       assertNotAbsurdDate(body.receivedOn, today, 'receivedOn');
       const givenReceiptNumber = body.receiptNumber === undefined ? undefined : receiptNumberOf(body.receiptNumber);
@@ -251,7 +264,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       let created;
       try {
         created = await store.payments.create(
-          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, receiptNumber: receipt.value, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations },
+          { organizationId: organization.id, customerId: src.customerId, projectId: null, currency: src.currency, amountMinor: src.amountMinor, receivedOn: body.receivedOn, method: body.method, reference: body.reference ?? null, receiptNumber: receipt.value, notes: body.notes ?? null, replacesPaymentId: body.replacesPaymentId ?? null, requestId: actor.requestId, createdByUserId: null, origin: 'INTEGRATION', captureSource: null, allocations: value.allocations, clientRequestKey },
           now,
         );
       } catch (err) {
@@ -295,7 +308,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
           ...(q.status ? { status: q.status } : {}),
           ...(q.receivedBefore ? { receivedBefore: q.receivedBefore } : {}),
           ...(q.receivedAfter ? { receivedAfter: q.receivedAfter } : {}),
-          ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : ('INTEGRATION' as const) } : {}),
+          ...(q.origin ? { origin: q.origin === 'capture' ? ('CAPTURE' as const) : q.origin === 'issued_document' ? ('ISSUED_DOCUMENT' as const) : ('INTEGRATION' as const) } : {}),
           ...(q.allocationState ? { allocationState: q.allocationState } : {}),
           ...(q.receiptNumber?.trim() ? { receiptNumber: q.receiptNumber.trim() } : {}),
         },
@@ -436,7 +449,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/payments/{paymentId}/reverse',
       tags: ['Payments'],
       summary: 'Reverse a payment: every allocation undone, status REVERSED',
-      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.',
+      description: 'Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-709: a payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT (details documentId, docType, number); issue a credit note instead. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.',
       security: [{ apiKey: [] }, { session: [] }, { deviceSession: [] }],
       middleware: [requireScope('payments:write'), idempotent(store, 'payments.reverse')] as const,
       request: { params: PaymentIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(ReversePaymentRequestSchema) },
@@ -460,6 +473,8 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       // own payments stay its to reverse. 404, not 403, as settle answers for a receivable it may not touch.
       if (actor.actorType === 'USER' && payment.origin !== 'CAPTURE') throw new ApiError('NOT_FOUND', 'No such payment');
       if (payment.status === 'REVERSED') throw alreadyReversed(payment);
+      // MUT-709: never the money an issued receipt or invoice-receipt stands on.
+      await assertNoMoneyDocument(store, organization.id, payment.id);
       const allocations = await store.payments.listAllocations(organization.id, payment.id);
       // MUT-453 (review fix): a person's reversal never reopens an entry Malafat posted (an installment or retainer
       // charge its key once applied this capture to); like undo's ALREADY_ALLOCATED, only what a person put on the books.
@@ -469,6 +484,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       }
       const result = await store.payments.reverse(organization.id, payment.id, c.req.valid('json').reason, now).catch((err: unknown) => {
         if (err instanceof LockConflict) throw new ApiError('CONFLICT', 'A receivable was being changed at the same moment; nothing was reversed, send the request again', { reason: 'VERSION_MISMATCH' });
+        if (err instanceof StateConflict && err.reason === 'PAYMENT_HAS_REFUND') throw paymentHasRefund();
         throw err;
       });
       if (!result) throw new ApiError('NOT_FOUND', 'No such payment');
@@ -575,6 +591,7 @@ export function paymentRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       } catch (err) {
         // R4: reversed in between → PAYMENT_NOT_POSTED; still POSTED at another version → PREVIEW_STALE.
         if (err instanceof StateConflict && err.reason === 'PAYMENT_NOT_POSTED') throw await paymentNotPosted(store, organization.id, await mustGetPayment(organization.id, payment.id));
+        if (err instanceof StateConflict && err.reason === 'PAYMENT_HAS_REFUND') throw paymentHasRefund();
         if (err instanceof StateConflict) throw stale('The payment changed since the preview; preview again');
         if (err instanceof InsufficientCapacity) throw new ApiError('CONFLICT', 'A receivable changed while the correction was being recorded; nothing was written, preview again', { reason: 'PREVIEW_STALE', entityId: err.entityId });
         if (err instanceof LockConflict) throw stale('A receivable was being changed at the same moment; nothing was written, preview again');

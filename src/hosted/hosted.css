@@ -238,6 +238,9 @@
 /* Addresses and passwords are left-to-right strings, aligned with the label's side. */
 .hp-ltr-input { text-align: left; }
 [dir="rtl"] .hp-ltr-input { text-align: right; }
+/* MUT-618: the emailed code, six digits read left to right in either language, spaced so a slip is easy to see. */
+.hp-code-input,
+[dir="rtl"] .hp-code-input { text-align: center; font-family: var(--font-mono); font-variant-numeric: tabular-nums; letter-spacing: var(--tracking-wide); font-size: var(--text-headline); }
 
 .hp-password { position: relative; }
 .hp-password .input { padding-right: var(--space-16); }
@@ -264,6 +267,25 @@
 /* MUT-115 (DR1): the "or" rule between the password form and the passkey button */
 .hp-divider { display: flex; align-items: center; gap: var(--space-3); margin-top: var(--space-2); color: var(--muted); font-size: var(--text-label); }
 .hp-divider::before, .hp-divider::after { content: ""; flex: 1; border-top: 1px solid var(--border); }
+
+/* MUT-596: Malafat's mark (MalafatMark.tsx), light or dark by the same rule as the tokens above */
+.hp-malafat-mark { display: inline-flex; flex: none; }
+.hp-malafat-mark .hp-malafat-mark-light { display: block; }
+.hp-malafat-mark .hp-malafat-mark-dark { display: none; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .hp-malafat-mark .hp-malafat-mark-light { display: none; }
+  :root:not([data-theme="light"]) .hp-malafat-mark .hp-malafat-mark-dark { display: block; }
+}
+:root[data-theme="dark"] .hp-malafat-mark .hp-malafat-mark-light { display: none; }
+:root[data-theme="dark"] .hp-malafat-mark .hp-malafat-mark-dark { display: block; }
+/* The office address field: the slug typed, Malafat's domain fixed after it (always left to right) */
+.hp-office-field { display: flex; align-items: center; direction: ltr; }
+.hp-office-field:focus-within { box-shadow: var(--focus-ring); }
+.hp-office-field input { flex: 1; min-width: 0; height: 100%; border: 0; background: transparent; color: inherit; font: inherit; outline: none; }
+.hp-office-suffix { padding-inline: var(--space-2); color: var(--muted); white-space: nowrap; }
+.hp-title-with-mark { display: flex; align-items: center; gap: var(--space-2); }
+/* MUT-596: a row's status with who recorded it (via Malafat), side by side, wrapping on a phone. */
+.hp-badges { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
 /* DR9: decorative, never mirrored in RTL */
 .hp-passkey-icon { flex: none; }
 .hp-help { max-width: var(--hp-card-width); text-align: center; font-size: var(--text-label); color: var(--muted); margin: 0; }
@@ -340,6 +362,8 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 }
 .hp-pill a:hover { color: var(--text); }
 .hp-pill a.hp-tab-on { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+/* MUT-657 (E-2): home is a word on a desktop and its icon on a phone, where five items and the island share 375px */
+.hp-tab-icon { display: none; }
 .hp-island {
   position: absolute;
   top: var(--hp-chrome-gap);
@@ -356,9 +380,10 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
   transition: background-color var(--duration-toggle) var(--ease-spring), color var(--duration-toggle) var(--ease-spring);
 }
 .hp-island-named { padding-inline-start: var(--space-3); }
-/* A tablet's desktop layout: the island gives way to the centred pill (about 360px wide in Arabic), cutting the name sooner */
+/* A tablet's desktop layout: the island gives way to the centred pill (about 440px wide in Arabic since MUT-657 put
+   Home in it), cutting the name sooner: half the pill, the edge gap and a little air */
 @media (min-width: 761px) and (max-width: 959px) {
-  .hp-island { max-width: min(240px, calc(50vw - 216px)); }
+  .hp-island { max-width: min(240px, calc(50vw - 252px)); }
 }
 .hp-island-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: var(--weight-medium); }
 /* D2: the profile's ring token comes inline (YouIsland ringColorOf); no profile, a neutral ring */
@@ -539,6 +564,15 @@ html:has(.hp-chrome) { scroll-padding-block: var(--hp-chrome-top) var(--hp-chrom
 .hp-move-receipt-lead { margin: 0 0 var(--space-3); color: var(--muted); font-size: var(--text-label); }
 .hp-move-receipt .hp-banner { margin-block-end: var(--space-3); }
 .hp-move-receipt-profiles .hp-profile-row + .hp-profile-row { border-block-start: 1px solid var(--divider); }
+/* MUT-589: what moving an expense changes on the chosen profile, under its rows. */
+.hp-move-changes { margin-block-start: var(--space-4); }
+.hp-move-changes-title { margin: 0 0 var(--space-2); font-size: var(--text-label); font-weight: 600; }
+.hp-move-changes-list { margin: 0; padding: 0; list-style: none; border: 1px solid var(--divider); border-radius: var(--radius-md); }
+.hp-move-change { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); justify-content: space-between; padding: var(--space-2) var(--space-3); min-height: 44px; align-items: center; }
+.hp-move-change + .hp-move-change { border-block-start: 1px solid var(--divider); }
+.hp-move-change-field { color: var(--muted); font-size: var(--text-label); }
+.hp-move-change-value { text-align: end; overflow-wrap: anywhere; }
+.hp-move-changes-none { margin: var(--space-2) 0 0; color: var(--muted); font-size: var(--text-label); display: flex; gap: var(--space-2); align-items: flex-start; }
 .hp-profile-row-on, button.hp-profile-row-on:hover { background: var(--accent-subtle); color: var(--on-accent-subtle); }
 .hp-profile-row-on .hp-option-sub { color: var(--on-accent-subtle); }
 button.hp-profile-row[aria-disabled="true"] { cursor: default; }
@@ -629,6 +663,9 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
   }
   .hp-pill { position: static; translate: none; min-width: 0; }
   .hp-pill a { padding: 0 var(--space-2-5); font-size: var(--text-label); }
+  .hp-pill a.hp-tab-home { padding: 0 var(--space-2); }
+  .hp-tab-home .hp-tab-icon { display: grid; place-items: center; }
+  .hp-tab-home .hp-tab-label { display: none; }
   /* D5: ring only; the name stays in the island's label */
   .hp-island { position: static; flex: none; padding: var(--space-1); }
   .hp-island-name { display: none; }
@@ -653,6 +690,13 @@ button.hp-profile-row[aria-disabled="true"] .hp-profile-row-name { color: var(--
 .hp-settle-line-done { color: var(--success); }
 .hp-settle-line-owed { color: var(--muted); }
 .hp-settle-line-over { color: var(--error); }
+.hp-ask-choices { display: flex; flex-direction: column; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-ask-choice { display: flex; flex-direction: column; gap: var(--space-1); text-align: start; padding: var(--space-3) var(--space-4); border: 1px solid var(--divider); border-radius: var(--radius-md); background: var(--surface); color: inherit; cursor: pointer; min-height: 44px; }
+.hp-ask-choice:hover:not(:disabled) { background: var(--surface-2); }
+.hp-ask-choice:disabled { opacity: 0.6; cursor: default; }
+.hp-ask-choice-name { font-weight: 600; }
+.hp-settle-issue { display: flex; align-items: flex-start; gap: var(--space-2); margin-block-start: var(--space-4); }
+.hp-settle-issue input { margin-block-start: var(--space-1); }
 .hp-settle-note { color: var(--muted); font-size: var(--text-label); margin: var(--space-4) 0 0; }
 
 /* Design 8A: the row action column stays pinned at the inline end (left in RTL) while the table scrolls. */
@@ -1081,6 +1125,8 @@ a.hp-glance-row:focus-visible { outline: none; box-shadow: var(--focus-ring); }
 /* MUT-373 (ADR-163): the Owners section, between the profile form and firm features (design review DR1, DR9). */
 .hp-owners { border-top: 1px solid var(--divider); padding-top: var(--space-4); margin-top: var(--space-4); display: grid; gap: var(--space-2); justify-items: stretch; }
 .hp-owners > h3, .hp-owners > p { margin: 0; }
+/* MUT-596: the same list on You › Profiles, where it is its own block rather than a section of a pane. */
+.hp-you-members { border-top: 0; margin-top: var(--space-2); padding: 0 var(--space-4); }
 .hp-owners > h3:focus { outline: none; }
 .hp-owner-list { margin: 0; }
 /* The row collapses after the server answers (DR6). Under reduced motion it doesn't move: it fades (150ms) in place. */
@@ -1610,3 +1656,236 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-two-panel-scene { display: block; margin-bottom: var(--space-4); }
 .hp-two-panel-ended .hp-scene, .hp-client-gone .hp-scene, .hp-client-books-empty .hp-scene { display: block; margin-inline: auto; }
 .hp-client-books-empty { text-align: center; }
+
+/* ---------- Client business details (MUT-642) ---------- */
+
+.hp-business { padding: var(--space-4); margin-bottom: var(--space-4); max-width: 560px; }
+.hp-business-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); }
+.hp-business-title { font-size: var(--text-label); font-weight: var(--weight-medium); margin: 0; }
+.hp-business-list { display: grid; grid-template-columns: max-content 1fr; gap: var(--space-1-5) var(--space-4); margin: 0; font-size: var(--text-label); }
+.hp-business-list dt { color: var(--muted); }
+.hp-business-list dd { margin: 0; }
+.hp-business-form { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-business-form p { margin: 0; font-size: var(--text-label); }
+.hp-business-warning { color: var(--warning); background: var(--warning-subtle); padding: var(--space-2) var(--space-3); border-radius: var(--radius-card); }
+.hp-business-rename { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-label); }
+.hp-business-actions { display: flex; gap: var(--space-2); }
+@media (max-width: 480px) { .hp-business-list { grid-template-columns: 1fr; } }
+
+/* MUT-646: You › Profiles › Invoicing — the letterhead as the map of the setup (round 3, variant 2). */
+.hp-setup { max-width: 1120px; margin-inline: auto; }
+.hp-setup-intro { max-width: 760px; }
+.hp-setup-intro h2 { margin: 0 0 var(--space-4); font-size: var(--text-headline); }
+.hp-setup-cards { margin: 0 0 var(--space-6); padding: 0; list-style: none; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-4); counter-reset: setup-card; }
+.hp-setup-card { padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); counter-increment: setup-card; }
+.hp-setup-card h3 { margin: 0 0 var(--space-2); font-size: var(--text-label); font-weight: var(--weight-medium); }
+.hp-setup-card h3::before { content: counter(setup-card) ". "; color: var(--muted); }
+.hp-setup-card p { margin: 0; color: var(--muted); font-size: var(--text-label); }
+.hp-setup-columns { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); gap: var(--space-6); align-items: start; }
+.hp-setup-panel { min-width: 0; }
+.hp-setup-panel h2 { margin: 0 0 var(--space-4); font-size: var(--text-headline); }
+.hp-setup-progress { margin: 0 0 var(--space-2); font-size: var(--text-label); color: var(--muted); }
+.hp-setup-eyebrow { margin: var(--space-4) 0 var(--space-1); font-size: var(--text-label); color: var(--accent-text); }
+.hp-setup-blocked { margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); border: 1px solid var(--border); font-size: var(--text-label); }
+.hp-setup-ready { display: grid; gap: var(--space-1); padding: var(--space-3); border-radius: var(--radius-md); background: var(--accent-subtle); font-size: var(--text-label); }
+.hp-setup-form { display: grid; gap: var(--space-3); }
+.hp-setup-label { font-size: var(--text-label); font-weight: var(--weight-medium); }
+.hp-setup-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.hp-setup-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.hp-setup-failed { display: grid; gap: var(--space-3); justify-items: start; }
+.hp-setup-card-art { display: block; margin-block-end: var(--space-3); }
+.hp-setup-ready-art { display: block; justify-self: center; }
+
+@media (max-width: 760px) {
+  .hp-setup-columns, .hp-setup-cards, .hp-setup-pair { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* MUT-570: issued documents and the issue drawer (direction B). */
+.hp-issued { display: grid; gap: var(--space-4); }
+.hp-issued-head { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; justify-content: space-between; }
+.hp-issued-head h2 { margin: 0; font-size: var(--text-headline); }
+.hp-issued-table { width: 100%; border-collapse: collapse; font-size: var(--text-label); }
+.hp-issued-table th, .hp-issued-table td { padding: var(--space-2) var(--space-3); border-block-end: 1px solid var(--divider); text-align: start; }
+.hp-issued-table .hp-num { text-align: end; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.hp-issued-doc { display: inline-flex; gap: var(--space-2); align-items: center; }
+.hp-doc-icon { flex: none; }
+[dir="rtl"] .hp-doc-icon--mirror { transform: scaleX(-1); }
+.hp-issued-doc-page { max-width: 760px; display: grid; gap: var(--space-4); }
+.hp-issued-moment { display: grid; justify-items: center; gap: var(--space-1); padding: var(--space-4); border-radius: var(--radius-md); background: var(--accent-subtle); text-align: center; }
+.hp-issued-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: var(--space-3); margin: 0; }
+.hp-issued-facts dt { font-size: var(--text-label); color: var(--muted); }
+.hp-issued-facts dd { margin: 0; }
+.hp-issued-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.hp-issue-form { display: grid; gap: var(--space-4); }
+.hp-issue-field { display: grid; gap: var(--space-1); }
+.hp-issue-label { font-size: var(--text-label); font-weight: var(--weight-medium); }
+.hp-issue-lines { display: grid; gap: var(--space-3); }
+.hp-issue-lines-head { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; justify-content: space-between; }
+.hp-issue-lines-head h3, .hp-issue-payment h3 { margin: 0; font-size: var(--text-body); }
+.hp-issue-line { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-issue-line-numbers { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); align-items: end; }
+.hp-issue-line-net { text-align: end; font-family: var(--font-mono); font-variant-numeric: tabular-nums; padding-block-end: var(--space-2); }
+.hp-issue-line-actions { display: flex; gap: var(--space-2); }
+.hp-issue-line-options { display: grid; gap: var(--space-2); }
+.hp-issue-switch { display: inline-flex; gap: var(--space-2); align-items: center; font-size: var(--text-label); }
+.hp-issue-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.hp-issue-payment { display: grid; gap: var(--space-2); }
+.hp-issue-totals { display: grid; gap: var(--space-1); margin: 0; padding: var(--space-3); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); }
+.hp-issue-totals div { display: flex; justify-content: space-between; gap: var(--space-3); }
+.hp-issue-totals dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.hp-issue-gross { font-weight: var(--weight-medium); }
+.hp-issue-footer { display: grid; gap: var(--space-2); width: 100%; }
+.hp-issue-final { margin: 0; font-size: var(--text-label); color: var(--muted); }
+.hp-issue-blocked { display: grid; gap: var(--space-2); }
+/* MUT-711 (wireframe A): the manual allocation number panel above the totals. */
+.hp-issue-allocation { display: grid; gap: var(--space-2); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface-muted, var(--surface)); }
+.hp-issue-allocation h3 { margin: 0; font-size: var(--text-body); }
+.hp-issue-allocation p { margin: 0; }
+.hp-issue-allocation-why { color: var(--text-secondary, var(--muted)); }
+.hp-issue-allocation-label { font-size: var(--text-label); color: var(--muted); }
+.hp-issue-allocation-details { display: grid; gap: 0; margin: 0; }
+.hp-issue-allocation-details div { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: var(--space-2); align-items: center; border-block-end: 1px solid var(--border); min-height: 44px; }
+.hp-issue-allocation-details div:last-child { border-block-end: 0; }
+.hp-issue-allocation-details dd { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.hp-issue-allocation-actions { display: flex; flex-wrap: wrap; gap: var(--space-3); align-items: center; }
+.hp-issue-allocation-actions .hp-link { display: inline-flex; align-items: center; min-height: 44px; }
+.hp-issue-allocation-input { font-family: var(--font-mono); letter-spacing: 0.15em; }
+.hp-issue-allocation-way-out { font-size: var(--text-label); color: var(--muted); }
+.hp-issue-allocation-way-out .hp-link-button { min-height: 44px; }
+@media (max-width: 760px) {
+  .hp-issue-line-numbers, .hp-issue-dates { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* MUT-647: an invoice issued elsewhere, attached to an Owed or a Received (round 3, A+B). */
+.hp-external-drop { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6) var(--space-4); border: 1.5px dashed var(--border); border-radius: var(--radius-md); text-align: center; }
+.hp-external-drop p { margin: 0; }
+.hp-external-drop[data-dragging] { border-color: var(--accent); background: var(--accent-subtle); }
+.hp-external-reading { display: grid; justify-items: center; gap: var(--space-2); padding: var(--space-6) 0; text-align: center; }
+.hp-external-card { display: grid; gap: var(--space-2); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-external-card h3, .hp-external-card p { margin: 0; }
+.hp-external-badge { font-size: var(--text-label); color: var(--accent-text); }
+.hp-external-mismatch { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md); background: var(--warning-subtle); font-size: var(--text-label); }
+.hp-external-chip { display: inline-flex; gap: var(--space-1); align-items: center; padding: var(--space-1) var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-md); background: transparent; color: inherit; font: inherit; font-size: var(--text-label); white-space: nowrap; cursor: pointer; }
+.hp-external-glyph { flex: none; }
+:is(.data-table, .table) tr.hp-drop-target > td { background: var(--accent-subtle); }
+
+/* MUT-648: the save toast's second document choice, quieter than the first. */
+.hp-toast-action--quiet { margin-inline-start: 0; color: var(--muted); }
+
+/* ---------- Home (MUT-657, "Two lanes"): an Add lane beside a Waiting lane of groups; one column at 760px ---------- */
+.hp-home-lanes { display: grid; grid-template-columns: 280px minmax(0, 1fr); gap: var(--space-5); align-items: start; }
+.hp-home-lanes > * { min-width: 0; }
+.hp-home-add, .hp-home-group, .hp-home-calm { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); }
+.hp-home-add { display: flex; flex-direction: column; gap: var(--space-2-5); }
+.hp-home-drop { display: flex; flex-direction: column; gap: var(--space-0-5); align-items: center; text-align: center; padding: var(--space-4) var(--space-3); border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md); color: var(--muted); font-size: var(--text-label); }
+.hp-home-drop strong { color: var(--text); font-size: var(--text-body); font-weight: var(--weight-medium); }
+.hp-home-drop-over { border-color: var(--accent); background: var(--accent-subtle); }
+.hp-home-add-row { display: flex; gap: var(--space-2); }
+.hp-home-add-row > * { flex: 1; }
+/* Take a photo only where there is a camera to hand: a coarse pointer (a phone, a tablet). Scoped to the row so it
+   outranks `.btn`'s display, which loads after this file */
+.hp-home-add-row .hp-home-photo { display: none; }
+@media (pointer: coarse) { .hp-home-add-row .hp-home-photo { display: inline-flex; } }
+.hp-home-waiting { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-home-group-head { display: flex; align-items: baseline; gap: var(--space-2); margin-bottom: var(--space-2-5); }
+.hp-home-group-head h2 { margin: 0; font-size: var(--text-body); font-family: inherit; font-weight: var(--weight-semibold); }
+.hp-home-count { color: var(--muted); font-family: var(--font-mono); font-size: var(--text-label); font-variant-numeric: tabular-nums; }
+.hp-home-see-all { margin-inline-start: auto; color: var(--link); font-size: var(--text-label); font-weight: var(--weight-semibold); text-decoration: none; white-space: nowrap; min-height: 44px; display: inline-flex; align-items: center; }
+.hp-home-strip { list-style: none; margin: 0; padding: 0; display: grid; grid-auto-flow: column; grid-auto-columns: 112px; gap: var(--space-2-5); overflow-x: auto; overscroll-behavior-inline: contain; }
+.hp-home-strip .hp-receipt-thumb { aspect-ratio: 4 / 3; }
+.hp-home-people { list-style: none; margin: 0; padding: 0; }
+.hp-home-people li { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2-5); min-height: 44px; }
+.hp-home-people li + li { border-top: 1px solid var(--divider); }
+.hp-home-people a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); text-decoration: none; }
+.hp-home-late { flex: none; color: var(--error); font-size: var(--text-label); }
+/* MUT-660: a count in a Home row that isn't a problem (To issue): secondary text, not rose. */
+.hp-home-late-neutral { flex: none; color: var(--muted); font-size: var(--text-label); }
+.hp-home-calm { text-align: center; padding: var(--space-8) var(--space-4); color: var(--muted); }
+.hp-home-calm p { margin: 0; }
+.hp-home-calm-title { color: var(--text); font-weight: var(--weight-semibold); }
+.hp-home-calm p.hp-home-calm-title { margin-bottom: var(--space-1); }
+.hp-page-header:has(.hp-home-switch) h1 { flex-basis: auto; }
+.hp-home-switch { display: inline-flex; gap: var(--space-0-5); padding: var(--space-0-5); border-radius: var(--radius-pill); background: var(--surface-2); border: 1px solid var(--border); }
+.hp-home-switch button { min-height: 36px; padding: 0 var(--space-4); border: 0; border-radius: var(--radius-pill); background: none; color: var(--text-secondary); font: inherit; font-size: var(--text-label); cursor: pointer; }
+.hp-home-switch button[aria-pressed='true'] { background: var(--surface); color: var(--text); font-weight: var(--weight-semibold); box-shadow: var(--shadow-1); }
+.hp-home-switch button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.hp-home-currency { margin-bottom: var(--space-3); }
+.hp-home-io { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-3); }
+.hp-home-io-col { border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface); padding: var(--space-4); min-width: 0; }
+.hp-home-io-col h2 { margin: 0 0 var(--space-1-5); font-size: var(--text-body); font-family: inherit; font-weight: var(--weight-semibold); }
+.hp-home-io-figure { margin: 0; font-family: var(--font-mono); font-size: var(--text-figure-fluid, var(--text-headline)); font-weight: var(--weight-medium); line-height: 1.1; }
+.hp-home-io-in { color: var(--success); }
+.hp-home-io-caption { margin: var(--space-1) 0 var(--space-2-5); color: var(--muted); font-size: var(--text-label); }
+.hp-home-io-kv { margin: 0; }
+.hp-home-io-kv > div, .hp-home-io-bars li { display: flex; justify-content: space-between; gap: var(--space-2); padding: var(--space-1-5) 0; border-top: 1px solid var(--divider); }
+.hp-home-io-kv dt { color: var(--text); }
+.hp-home-io-kv dd { margin: 0; }
+.hp-home-io-bars { list-style: none; margin: 0; padding: 0; }
+.hp-home-io-bars li { flex-wrap: wrap; }
+.hp-home-io-track { flex-basis: 100%; height: 5px; border-radius: var(--radius-pill); background: var(--surface-2); overflow: hidden; }
+.hp-home-io-track span { display: block; height: 100%; border-radius: var(--radius-pill); background: var(--muted); }
+.hp-home-io-link { display: inline-flex; align-items: center; min-height: 44px; color: var(--link); font-size: var(--text-label); font-weight: var(--weight-semibold); text-decoration: none; }
+.hp-home-io-more { margin: var(--space-2) 0 0; }
+@media (max-width: 760px) {
+  .hp-home-switch { display: flex; width: 100%; }
+  .hp-home-switch button { flex: 1; min-height: 44px; }
+  .hp-home-io { grid-template-columns: minmax(0, 1fr); }
+  .hp-home-lanes { grid-template-columns: minmax(0, 1fr); gap: var(--space-3); }
+  /* Nothing is dragged on a phone: the zone gives way to the buttons */
+  .hp-home-drop { display: none; }
+  .hp-home-strip { grid-auto-columns: 96px; }
+}
+/* MUT-647 + MUT-648: Issue a tax invoice and Attach share the Owed row's Document cell. */
+.hp-row-actions { display: inline-flex; gap: var(--space-2); align-items: center; }
+
+/* ---- MUT-660: documents due (To issue), the not-for-invoice mark, a client's documents preference, Reports' split ---- */
+.hp-due-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-3); margin-block: var(--space-4); }
+.hp-due-filters { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-2); }
+.hp-due-filters select { min-width: 10rem; }
+.hp-due-group { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); margin-block-end: var(--space-3); overflow: hidden; }
+.hp-due-group-head { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); min-height: 52px; border-block-end: 1px solid var(--divider); }
+.hp-due-group-head h3 { margin: 0; flex: 1; min-width: 0; font-size: var(--text-body); font-weight: var(--weight-semibold); overflow-wrap: anywhere; }
+.hp-due-group .hp-confirm { margin: var(--space-3) var(--space-4); }
+.hp-due-rows { list-style: none; margin: 0; padding: 0; }
+.hp-due-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); padding: var(--space-2) var(--space-4); min-height: 56px; }
+.hp-due-row + .hp-due-row { border-block-start: 1px solid var(--divider); }
+.hp-due-check { width: 18px; height: 18px; flex: none; accent-color: var(--accent-solid); }
+.hp-due-what { flex: 1; min-width: 12rem; display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-1); }
+.hp-due-meta { color: var(--muted); font-size: var(--text-label); }
+.hp-due-why { color: var(--warning); font-size: var(--text-label); }
+.hp-due-amount { min-width: 6rem; text-align: end; font-family: var(--font-mono); }
+.hp-due-actions { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.hp-due-bulk { position: sticky; inset-block-end: var(--space-4); z-index: 2; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-3); max-width: 40rem; margin: var(--space-3) auto 0; padding: var(--space-3) var(--space-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); box-shadow: var(--shadow-3); }
+.hp-due-bulk-count { flex: 1; font-weight: var(--weight-semibold); }
+.hp-due-bulk .hp-confirm { margin: 0; flex: 1; }
+.hp-due-empty { text-align: center; padding: var(--space-10) var(--space-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-due-empty-title { margin: 0 0 var(--space-1); font-size: var(--text-headline); }
+.hp-business-docs { display: flex; flex-direction: column; gap: var(--space-1-5); margin-block-start: var(--space-4); padding-block-start: var(--space-4); border-block-start: 1px solid var(--divider); }
+.hp-business-docs label { font-size: var(--text-label); color: var(--muted); }
+.hp-business-docs select { max-width: 22rem; }
+.hp-business-docs-help { margin: 0; font-size: var(--text-label); }
+.hp-business-docs-due { margin: 0; padding: var(--space-2) var(--space-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--text-label); }
+.hp-split-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr)); gap: var(--space-3); }
+.hp-split-currency { margin: 0; padding: var(--space-3) var(--space-4); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md); }
+.hp-split-currency > div { display: flex; justify-content: space-between; gap: var(--space-3); padding-block: var(--space-2); }
+.hp-split-currency > div + div { border-block-start: 1px solid var(--divider); }
+.hp-split-currency dt { display: flex; flex-direction: column; }
+.hp-split-currency dt .hp-muted { font-size: var(--text-label); }
+.hp-split-currency dd { margin: 0; font-family: var(--font-mono); }
+.hp-split-sum { font-weight: var(--weight-semibold); }
+
+/* MUT-664: the client's ledger card (layout A) */
+.hp-ledger { display: grid; gap: var(--space-3); }
+.hp-ledger-controls { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.hp-ledger-period { display: inline-flex; gap: var(--space-2); align-items: center; font-size: var(--text-label); color: var(--muted); }
+.hp-ledger-closing { margin: 0; font-size: var(--text-body); }
+.hp-ledger-table thead th { position: sticky; top: 0; background: var(--surface); z-index: 1; }
+.hp-ledger-month th, .hp-ledger-month td { background: var(--surface-subtle, var(--bg)); font-weight: var(--weight-medium); color: var(--muted); }
+.hp-ledger-tags { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.hp-chip-due { background: var(--warning-subtle); color: var(--warning); } /* the butter chip pair (.hp-billing-chip-butter): --on-warning-subtle does not exist */
+.hp-ledger-credit { color: var(--success-text, var(--accent-text)); }
+@media (max-width: 720px) { .hp-ledger-table { display: block; overflow-x: auto; } }
+
+/* MUT-722: a save toast's second, quieter line (what its action is for: "Finish setting up invoicing…"). */
+.hp-toast-text { display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
+.hp-toast-detail { color: var(--muted); font-size: var(--text-label); }

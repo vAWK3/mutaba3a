@@ -54,6 +54,8 @@ export const INCOME_COLUMNS: readonly Column[] = [
   col('method', 'Method', 'طريقة الدفع', 14),
   col('reference', 'Reference', 'المرجع', 18),
   col('receiptNumber', 'Receipt number', 'رقم الإيصال', 16),
+  // MUT-660: invoicing profiles only (report.ts drops it elsewhere).
+  col('invoiceStatus', 'invoice_status', 'invoice_status', 16),
   col('notes', 'Notes', 'ملاحظات', 30),
   col('source', 'Source', 'المصدر', 11),
   col('loggedBy', 'Logged by', 'سجّله', 20),
@@ -104,9 +106,13 @@ export const PAYMENT_METHOD_LABELS: Readonly<Record<string, Words>> = {
   BANK: { en: 'Bank', ar: 'تحويل بنكي' },
 };
 
+/** MUT-643: the note on a refund's Income row. */
+export const REFUND_NOTE = { en: 'Refund with a credit note', ar: 'مبلغ مُعاد مع إشعار دائن' } as const satisfies Words;
+
 export const SOURCE_LABELS = {
   CAPTURE: { en: 'MTB3A', ar: 'متابعة' },
   INTEGRATION: { en: 'Malafat', ar: 'ملفات' },
+  ISSUED_DOCUMENT: { en: 'Issued document', ar: 'مستند صادر' },
 } as const satisfies Record<string, Words>;
 
 export const headersOf = (columns: readonly Column[], lang: Lang): string[] => columns.map((c) => c.label[lang]);

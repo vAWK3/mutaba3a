@@ -42,8 +42,24 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'passkey-added': { passkeyName: 'iCloud Keychain', signInLink: SAMPLE_SIGN_IN },
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
   'card-failed': { updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
-  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=subscribe` },
+  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=subscribe`, offLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/mail-off?mail=offers#sample-token` },
+  'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile/you/invoicing` },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/accountant-invite#sample-token`, expiresOn: { year: 2026, month: 11, day: 20 } },
+  // MUT-618
+  'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://portal.example.test/' },
+  // MUT-535: two profiles, two currencies, the yearly line.
+  'monthly-summary': {
+    month: { year: 2026, month: 11 },
+    asOf: { year: 2026, month: 12, day: 1 },
+    profiles: [
+      { name: 'Sader Studio', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-profile?view=in-out`, cameIn: [{ currency: 'ILS', amount: '12400.00' }, { currency: 'USD', amount: '900.00' }], owed: [{ currency: 'ILS', amount: '3200.00' }], overdue: [{ currency: 'ILS', amount: '1100.00' }], overdueCount: 2 },
+      { name: 'Personal', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/p/sample-personal?view=in-out`, cameIn: [{ currency: 'ILS', amount: '850.00' }], owed: [], overdue: [], overdueCount: 0 },
+    ],
+    yearly: { savings: 5800, currency: 'ILS', link: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true&step=switch` },
+    offLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/mail-off#sample-token`,
+  },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: `${SAMPLE_SIGN_IN.replace(/\/sign-in$/, '')}/?billing=true` },
 };
 const SAMPLE_RECIPIENT = 'rana@example.com';

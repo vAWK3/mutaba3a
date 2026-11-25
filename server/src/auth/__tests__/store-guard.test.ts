@@ -114,6 +114,8 @@ describe('STORE_ACCESS', () => {
       'billing.linkAccount',
       'billing.listAccounts',
       'billing.listGrants',
+      // MUT-535: the monthly summary run, on the unguarded store.
+      'billing.monthlySummaryCandidates',
       'billing.offerRenewalCandidates',
       'billing.pastDueCandidates',
       'billing.pruneStripeEvents',
@@ -140,18 +142,46 @@ describe('STORE_ACCESS', () => {
       'expenseReceipts.releaseMovedRead',
       'expenseReceipts.releaseRead',
       'expenseReceipts.resetForReread',
+      // MUT-594/595: a seat's claim and lookup run in Sign in with Malafat, unguarded.
+      'externalIdentities.claim',
+      'externalIdentities.findBySubject',
+      'externalIdentities.link',
       // MUT-433: per-user feature flags are written and listed by the operator only; /v1/me reads them sessionOnly.
       'features.grant',
       'features.holders',
       'features.revoke',
+      // MUT-593: the operator's per-firm Malafat switch.
+      'integrations.setDelegation',
+      // MUT-571 AC3: the re-consent reminder job reads every profile's connection end, on the unguarded store.
+      'issuing.taxConnectionsEndingBetween',
+      // MUT-644: closed profiles' issued documents: the hourly purge job and /admin only.
+      'issuingRetention.erase',
+      'issuingRetention.events',
+      'issuingRetention.getClosed',
+      'issuingRetention.listClosed',
+      'issuingRetention.record',
+      'issuingRetention.sweep',
+      // MUT-595: Sign in with Malafat runs on public routes, unguarded.
+      'malafatSignIns.claimCallback',
+      'malafatSignIns.claimCompletion',
+      'malafatSignIns.claimResult',
+      'malafatSignIns.create',
+      'malafatSignIns.findByTicket',
+      'malafatSignIns.issueTicket',
+      'malafatSignIns.proveLink',
+      'malafatSignIns.recordResult',
       'memberships.grant',
       // MUT-373: co-owners are added by the operator only (the pilot path; invites are MUT-306).
       'memberships.grantOwner',
       'memberships.revoke',
       // MUT-434: the OAuth protocol endpoints and agent authentication run unguarded, like sign-in; no credential calls these.
+      'oauth.claimAssertion',
       'oauth.cleanup',
       'oauth.createAuthorizationRequest',
       'oauth.createClient',
+      // MUT-593: the confidential client (admin routes and the token endpoint, unguarded).
+      'oauth.createConfidentialClient',
+      'oauth.disableClient',
       'oauth.exchangeCode',
       'oauth.findCode',
       'oauth.findGrant',
@@ -184,6 +214,10 @@ describe('STORE_ACCESS', () => {
       'shareLinks.recordFailedPin',
       'shareLinks.touchOpened',
       'shareLinks.touchViewer',
+      // MUT-618: emailed sign-in codes, issued and tried on the public routes (unguarded); pruned by the server's timer.
+      'signInCodes.attempt',
+      'signInCodes.issue',
+      'signInCodes.prune',
       // MUT-367: the signup review queue, the operator's alone (/admin and the CLI); the digest reads it unguarded.
       'signupReviews.approve',
       'signupReviews.decline',
@@ -191,6 +225,8 @@ describe('STORE_ACCESS', () => {
       'signupReviews.findByUser',
       'signupReviews.list',
       'signupReviews.markNotified',
+      // MUT-710: expired two-step challenges, pruned by the server's timer.
+      'twoFactor.pruneChallenges',
       'users.create',
       // MUT-527: the operator console's account list.
       'users.listForOperator',
@@ -372,8 +408,8 @@ describe('the inbox (MUT-66)', () => {
 
   it('mints no new matrix domain for the inbox', () => {
     expect(WRITABILITY_MATRIX.map((r) => r.domain)).not.toContain('inbox');
-    // MUT-61 minted `capture` on purpose; anything else appearing here is a new row nobody decided on.
-    expect(WRITABILITY_MATRIX.map((r) => r.domain)).toEqual(['integration', 'customers', 'projects', 'agreements', 'payments', 'attachments', 'summaries', 'audit', 'expenses', 'capture', 'identity', 'conversions']);
+    // MUT-61 minted `capture` and MUT-568 (ADR-260) `issuing` on purpose; anything else appearing here is a new row nobody decided on.
+    expect(WRITABILITY_MATRIX.map((r) => r.domain)).toEqual(['integration', 'customers', 'projects', 'agreements', 'payments', 'attachments', 'summaries', 'audit', 'expenses', 'capture', 'identity', 'conversions', 'issuing']);
   });
 });
 

@@ -1,5 +1,5 @@
 import { CURRENT_STORE_SNAPSHOT_VERSION, type LocalSnapshotMaps } from '../../../../server/src/repositories/memory.js';
-import type { CreditRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
+import type { CreditRecord, CustomerRecord, ExpenseReceiptRecord, ExpenseRecord, FeeProposalRecord, IntegrationRecord, MembershipRecord, Organization, PaymentRecord, ReceivableRecord, SupplementRecord, UserRecord, VendorRecord } from '../../../../server/src/repositories/ports.js';
 import { backfillReceivableNumbers } from '../../../../server/src/payments/numbering.js';
 
 /**
@@ -241,6 +241,73 @@ function addAllocationNumber(snapshot: StoredSnapshot): StoredSnapshot {
 }
 
 /**
+ * MUT-593, 16 → 17: a Malafat integration gains the operator's per-firm delegation switch (ADR-254). A device has no
+ * operator and no Malafat: off.
+ */
+function addDelegationSwitch(snapshot: StoredSnapshot): StoredSnapshot {
+  const ints = snapshot.maps.ints as Map<string, Omit<IntegrationRecord, 'delegationEnabledAt' | 'delegationEnabledBy'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, ints: new Map([...ints].map(([id, i]) => [id, { ...i, delegationEnabledAt: null, delegationEnabledBy: null }])) } };
+}
+
+/**
+ * MUT-594, 17 → 18: a profile gains `memberSyncAt`, set when Malafat starts syncing its members (ADR-254 D2). A
+ * device has no Malafat: null.
+ */
+function addMemberSyncAt(snapshot: StoredSnapshot): StoredSnapshot {
+  const orgs = snapshot.maps.orgs as Map<string, Omit<Organization, 'memberSyncAt'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, orgs: new Map([...orgs].map(([id, o]) => [id, { ...o, memberSyncAt: null }])) } };
+}
+
+/**
+ * MUT-596, 18 → 19: a person gains `passwordChosen`, false only for an account Sign in with Malafat created. A device
+ * has no Malafat: true.
+ */
+function addPasswordChosen(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'passwordChosen'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, passwordChosen: true }])) } };
+}
+
+/** MUT-535, 19 → 20: a person gains `monthlySummaryMail`. The mail is the hosted account's; a device keeps the default: null. */
+function addMonthlySummaryMail(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'monthlySummaryMail'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, monthlySummaryMail: null }])) } };
+}
+
+/** ADR-279, 22 → 23: a person gains `offerMail`. Promotional mail is the hosted account's; a device keeps the default: null. */
+function addOfferMail(snapshot: StoredSnapshot): StoredSnapshot {
+  const people = snapshot.maps.people as Map<string, Omit<UserRecord, 'offerMail'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, people: new Map([...people].map(([id, p]) => [id, { ...p, offerMail: null }])) } };
+}
+
+/** MUT-642, 20 → 21: a customer gains a VAT/company number and an address, both unknown on a device: null. */
+function addCustomerTaxId(snapshot: StoredSnapshot): StoredSnapshot {
+  const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'taxId' | 'address'>>;
+  return { ...snapshot, maps: { ...snapshot.maps, custs: new Map([...custs].map(([id, c]) => [id, { ...c, taxId: null, address: null }])) } };
+}
+
+/**
+ * MUT-660, 21 → 22: a customer gains a documents preference (null: the profile default), and every Owed and Received a
+ * "not for invoice" mark (false). Invoicing is off on a device, so they are kept and round-trip but change nothing here.
+ * MUT-709 (same unreleased version): a Received also carries its client request key, null when none was sent.
+ * MUT-643 (same unreleased version): an empty `refunds` map; a device never writes a refund (no issuing signed out).
+ */
+function addDocumentsFields(snapshot: StoredSnapshot): StoredSnapshot {
+  const custs = snapshot.maps.custs as Map<string, Omit<CustomerRecord, 'documentsPreference'>>;
+  const recs = snapshot.maps.recs as Map<string, Omit<ReceivableRecord, 'notForInvoice'>>;
+  const pays = snapshot.maps.pays as Map<string, Omit<PaymentRecord, 'notForInvoice' | 'clientRequestKey'> & { clientRequestKey?: string | null }>;
+  return {
+    ...snapshot,
+    maps: {
+      ...snapshot.maps,
+      custs: new Map([...custs].map(([id, c]) => [id, { ...c, documentsPreference: null }])),
+      recs: new Map([...recs].map(([id, r]) => [id, { ...r, notForInvoice: false }])),
+      pays: new Map([...pays].map(([id, p]) => [id, { ...p, notForInvoice: false, clientRequestKey: p.clientRequestKey ?? null }])),
+      refunds: new Map(),
+    },
+  };
+}
+
+/**
  * Ordered `(from → to)` migrations run in sequence when a loaded snapshot's
  * `formatVersion` is older than `LOCAL_FORMAT_VERSION` (D1, brief §2.5). A
  * shape change adds a function here; the fingerprint test catches a
@@ -262,6 +329,13 @@ export const MIGRATIONS: readonly Migration[] = [
   { from: 13, to: 14, migrate: addExpenseVat },
   { from: 14, to: 15, migrate: addVendorDefaults },
   { from: 15, to: 16, migrate: addAllocationNumber },
+  { from: 16, to: 17, migrate: addDelegationSwitch },
+  { from: 17, to: 18, migrate: addMemberSyncAt },
+  { from: 18, to: 19, migrate: addPasswordChosen },
+  { from: 19, to: 20, migrate: addMonthlySummaryMail },
+  { from: 20, to: 21, migrate: addCustomerTaxId },
+  { from: 21, to: 22, migrate: addDocumentsFields },
+  { from: 22, to: 23, migrate: addOfferMail },
 ];
 
 /**

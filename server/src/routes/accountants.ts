@@ -45,6 +45,7 @@ import {
   ProfileIdParamSchema,
 } from '../schemas.js';
 import { staleTerms, termsAcceptanceOf } from '../terms-acceptance.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /**
  * MUT-559 (ADR-245): accountant access to one profile.
@@ -215,7 +216,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       tags: ['Profiles'],
       summary: 'Invite an accountant to read this profile',
       description: `MUT-559 (ADR-245). Mails the address a link to accept within 14 days; the accountant then reads this profile's expenses, income, receipts and summaries, and changes nothing. At most ${maxPerProfile} pending and active accountants per profile (409 CONFLICT, details.reason ACCOUNTANT_LIMIT); one invite per address (409 ALREADY_INVITED; an expired one is replaced); never your own address (422 VALIDATION_FAILED, details.reason SELF_INVITE). Any profile you own, your personal one included.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema, body: jsonBody(InviteAccountantRequestSchema) },
       responses: {
         201: { description: 'Invited (pending)', content: { 'application/json': { schema: AccountantGrantSchema } } },
@@ -270,7 +271,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       tags: ['Profiles'],
       summary: 'The accountants invited to this profile: pending, expired and active',
       description: 'MUT-559 (ADR-245). Revoked and left grants are not listed. Oldest first.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema },
       responses: {
         200: { description: 'The accountants', content: { 'application/json': { schema: AccountantGrantListSchema } } },
@@ -294,7 +295,7 @@ export function accountantRoutes(options: AccountantRouteOptions): OpenAPIHono<A
       tags: ['Profiles'],
       summary: 'Revoke an accountant’s access, or withdraw their invite',
       description: 'MUT-559 (ADR-245). Their next request to the profile answers 404, as if it had never been shared.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: AccountantGrantParamSchema },
       responses: {
         204: { description: 'Revoked' },

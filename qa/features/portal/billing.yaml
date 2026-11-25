@@ -10,7 +10,6 @@ paths:
   - src/hosted/data/billingQueries.ts
   - src/hosted/data/countries.ts
   - src/hosted/components/RadioCards.tsx
-  - src/hosted/shell/AccountDrawers.tsx
   # MUT-531: the drawer's shared parts and its switch step (the switch itself runs in portal-live).
   - src/hosted/components/billingParts.tsx
   - src/hosted/components/billingText.tsx
@@ -117,7 +116,7 @@ features:
     tier: secondary
     paths:
       - src/hosted/components/TrialBanner.tsx
-      - src/hosted/pages/views/OverviewPage.tsx
+      - src/hosted/components/LandingNotices.tsx
       - src/hosted/data/trialPrompt.ts
     steps:
       - Sign in during the free trial on a server that can take a card, and open Owed

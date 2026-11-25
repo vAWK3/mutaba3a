@@ -27,6 +27,12 @@ export const ERROR_CODES = {
   /** MUT-360 D2: /jobs/* without the Scheduler's X-Job-Token. */
   JOB_UNAUTHORIZED: 401,
   INVALID_CREDENTIALS: 401,
+  /** MUT-618 (ADR-256 D6): the emailed code is wrong; `details.triesLeft`. The same for every address. */
+  SIGN_IN_CODE_WRONG: 401,
+  /** MUT-618: no live code for the address: expired, used, replaced by a newer one, killed, or never sent. */
+  SIGN_IN_CODE_EXPIRED: 401,
+  /** MUT-618: that was the code's last allowed wrong try; it no longer works. */
+  SIGN_IN_CODE_TOO_MANY_TRIES: 401,
   SESSION_EXPIRED: 401,
   INSUFFICIENT_SCOPE: 403,
   PRINCIPAL_NOT_ACCEPTED: 403,
@@ -56,6 +62,29 @@ export const ERROR_CODES = {
    * challenge, a bad signature). Not 401: the session is still valid.
    */
   PASSKEY_NOT_ACCEPTED: 403,
+  /**
+   * MUT-710 (ADR-274 D1): the first step verified and the person has two-step sign-in on; no session exists yet.
+   * `details`: { challengeToken, method totp|email, expiresAt, emailHint? }. Also a setup link's redeem without the
+   * second step (D11). 403, not 401, so an old client shows the message instead of "signed out".
+   */
+  TWO_FACTOR_REQUIRED: 403,
+  /** MUT-710 (D3): the second-step code (or recovery code) is wrong; `details.triesLeft` on this challenge. */
+  TWO_FACTOR_CODE_WRONG: 403,
+  /** MUT-710: the challenge is unknown, expired, already used, or for another purpose; start again. */
+  TWO_FACTOR_CHALLENGE_EXPIRED: 403,
+  /** MUT-710 (D3): the challenge's fifth wrong code; it no longer works. */
+  TWO_FACTOR_TOO_MANY_TRIES: 403,
+  /**
+   * MUT-710 (D10): issuing needs two-step sign-in on and this session to have passed it. `details.enrolled`: true when
+   * it is on but this session predates it (sign in again), false when it needs turning on.
+   */
+  TWO_FACTOR_SETUP_REQUIRED: 403,
+  /** MUT-710 (D6): with the email method an emailed sign-in code is one factor twice: sign in with the password. */
+  TWO_FACTOR_USE_PASSWORD: 403,
+  /** MUT-710 (D6, review 8): linking a Malafat identity to an account with two-step sign-in on waits for a follow-up. */
+  TWO_FACTOR_LINK_UNAVAILABLE: 403,
+  /** MUT-710 (D8): two-step sign-in can't be turned off while the person owns a profile that issues documents. */
+  TWO_FACTOR_REQUIRED_FOR_ISSUING: 409,
   /** MUT-115 (D12): the person already holds the most passkeys allowed (10); remove one to add another. */
   PASSKEY_LIMIT: 409,
   /**
@@ -108,6 +137,10 @@ export const ERROR_CODES = {
   RECONCILE_FAILED: 502,
   /** MUT-362: Stripe didn't answer a Checkout, Customer Portal or customer call in time; trying again shortly may work. */
   STRIPE_UNAVAILABLE: 502,
+  /** MUT-642: the public company/nonprofit registry (data.gov.il) didn't answer in time; the person types the details. */
+  REGISTRY_UNAVAILABLE: 502,
+  /** MUT-571/572: the Tax Authority's Open API did not answer, or failed; nothing was issued. */
+  TAX_AUTHORITY_UNAVAILABLE: 502,
   ATTACHMENTS_NOT_CONFIGURED: 503,
   /** MUT-360: no Stripe keys on this server, so neither the webhook nor reconcile can run. */
   BILLING_NOT_CONFIGURED: 503,
@@ -119,6 +152,10 @@ export const ERROR_CODES = {
   OAUTH_NOT_CONFIGURED: 503,
   /** MUT-228: no reference rates to serve (provider down or unusable, and nothing servable cached on this instance; or not configured). */
   FX_RATES_UNAVAILABLE: 503,
+  /** MUT-641 (ADR-265): this server has no document signer (production until the certificate is in place); nothing was sent. */
+  SIGNING_NOT_CONFIGURED: 503,
+  /** MUT-641: the signing key or the time-stamp authority failed; nothing was sent, a retry with the same key may work. */
+  SIGNING_UNAVAILABLE: 503,
   /** MUT-293: the calling phone build is below the configured floor for its platform; details carry { platform, minimumBuild }. */
   APP_UPDATE_REQUIRED: 426,
   /** MUT-551 (release gate RF-2): MAINTENANCE_MODE is on; every phone request (X-App-Platform) answers this until it's off. */

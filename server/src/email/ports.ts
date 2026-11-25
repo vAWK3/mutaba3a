@@ -11,7 +11,9 @@ import type { UserLocale } from '../repositories/ports.js';
  * mails may name the launch offer's percent and last day, and `offer-renewing-soon` names the subscription's own
  * yearly price and renewal day, because a renewal notice must state them. MUT-534 (ADR-243 override log):
  * `comeback-offer` names the come-back prices. MUT-559 (ADR-245 override log): `accountant-invite` names the last day
- * its link works, a calendar day and never a money date. Money records still never appear.
+ * its link works, a calendar day and never a money date. MUT-535 (ADR-259 override log): `monthly-summary` names the
+ * person's own amounts, per profile and per currency (what came in last month, what is still owed and overdue) and the
+ * yearly saving; never a client's name or a single entry. Money records still never appear in any other mail.
  */
 export const TEMPLATE_IDS = [
   'finish-signup',
@@ -33,6 +35,11 @@ export const TEMPLATE_IDS = [
   'card-failed-reminder',
   'comeback-offer',
   'accountant-invite',
+  'sign-in-code',
+  'monthly-summary',
+  'two-factor-code',
+  'two-factor-changed',
+  'tax-authority-reconnect',
 ] as const;
 export type MailTemplateId = (typeof TEMPLATE_IDS)[number];
 
@@ -50,6 +57,9 @@ export const RECOVERY_TEMPLATES: ReadonlySet<MailTemplateId> = new Set<MailTempl
  */
 export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTemplateId>([
   'password-changed',
+  // MUT-710 (D8): the takeover notice is gated by the password and the second step (or the operator); never capped
+  // away. The two-step code itself is not exempt (D5).
+  'two-factor-changed',
   'account-ready',
   'account-declined',
   'review-digest',
@@ -71,6 +81,10 @@ export const RECIPIENT_CAP_EXEMPT: ReadonlySet<MailTemplateId> = new Set<MailTem
   'card-failed-reminder',
   // MUT-534: the daily run sends each stage once per person, ever.
   'comeback-offer',
+  // MUT-535: only the monthly run sends it, once a month per person.
+  'monthly-summary',
+  // MUT-571 AC3: only the daily run sends it, twice per consent at most (ten days before its end, then on it).
+  'tax-authority-reconnect',
 ]);
 
 export interface TemplateVars {
@@ -107,6 +121,15 @@ export interface TemplateVars {
    * the passkey is added and says so (ADR-159 §5, no dates in mail).
    */
   'passkey-added': { passkeyName: string; signInLink: string };
+  /** MUT-618: an emailed sign-in code (six digits) and how long it works. A code, never a link (no magic links). */
+  'sign-in-code': { code: string; validMinutes: number };
+  /** MUT-710 (ADR-274 D5): the second step's emailed code (six digits) and how long it works. */
+  'two-factor-code': { code: string; validMinutes: number };
+  /**
+   * MUT-710 (D8, D9): two-step sign-in changed on the account, so a takeover by enrolment is seen by the mailbox owner.
+   * `method` is the method now on (enabled, switched) or the one that was on (disabled, reset).
+   */
+  'two-factor-changed': { change: 'enabled' | 'switched' | 'disabled' | 'recovery_codes' | 'reset'; method: 'totp' | 'email'; signInLink: string };
   /**
    * MUT-525 (DD8): ~30 days before a launch-offer subscription's first renewal. `listAmount` is the subscription's own
    * price in minor units of `currency` (not the current catalog's); `manageLink` opens Billing.
@@ -127,13 +150,43 @@ export interface TemplateVars {
    * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;
    * `subscribeLink` opens Billing's Subscribe step.
    */
-  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string };
+  'comeback-offer': { stage: 'day-30' | 'day-90'; firstMonth: number; listMonth: number; firstYear: number; listYear: number; currency: string; subscribeLink: string; /** ADR-279: the mail-off page for promotional mail, `{portal}/mail-off?mail=offers#{token}`. */ offLink: string };
   /**
    * MUT-559 (ADR-245): an owner invites an accountant to read one profile. `link` is `{portal}/accountant-invite#{token}`
    * (the token in the fragment, D3); `expiresOn` is the last day it works (14 days, in the profile's zone). Not exempt
    * from the per-recipient cap: anyone with a profile can send it to any address.
    */
   'accountant-invite': { ownerName: string; profileName: string; link: string; expiresOn: CalendarDay };
+  /**
+   * MUT-535 (ADR-259): the monthly summary. `month` is the month reported; `asOf` the day owed and overdue are read on;
+   * one panel per profile (never empty); `yearly` (MUT-531's line) the saving in minor units of the subscription's
+   * currency and the Switch link, or null; `offLink` the opt-out page, `{portal}/mail-off#{token}`.
+   */
+  'monthly-summary': { month: { year: number; month: number }; asOf: CalendarDay; profiles: MailSummaryProfile[]; yearly: { savings: number; currency: string; link: string } | null; offLink: string };
+  /**
+   * MUT-571 AC3: a profile's Tax Authority consent (90 days) ends `soon` (within `daysLeft`, 1-10, rounded up) or has
+   * `ended`. `link` opens the profile's invoicing setup, whose Tax Authority step connects again. No date (ADR-159 §5).
+   */
+  'tax-authority-reconnect': { stage: 'soon' | 'ended'; daysLeft: number; profileName: string; link: string };
+}
+
+/** MUT-535: an amount in one currency, as the API writes it (a canonical decimal); the template formats it. */
+export interface MailMoney {
+  currency: string;
+  amount: string;
+}
+
+/** MUT-535: one profile's panel in the monthly summary. */
+export interface MailSummaryProfile {
+  name: string;
+  /** The profile's overview, `{portal}/p/{id}`. */
+  link: string;
+  cameIn: MailMoney[];
+  /** MUT-660: invoicing profiles only: what came in, split into Invoice income and Not for invoice. */
+  invoiceSplit?: { invoiceIncome: MailMoney[]; notForInvoice: MailMoney[] };
+  owed: MailMoney[];
+  overdue: MailMoney[];
+  overdueCount: number;
 }
 
 /** MUT-525 (D8, DD12d): the launch offer a trial mail names while it runs: its percent and last day, never an amount. */
@@ -167,6 +220,8 @@ export interface OutgoingMail extends RenderedMail {
   locale: UserLocale;
   /** sha256 of the caller's idempotency key, hex. Resend's Idempotency-Key. */
   idempotencyKey: string;
+  /** ADR-279: the one-click unsubscribe headers of a mail a person can opt out of (unsubscribe.ts); absent otherwise. */
+  headers?: Record<string, string>;
 }
 
 export interface MailTransport {
@@ -195,6 +250,8 @@ export interface SendInput<T extends MailTemplateId> {
   vars: TemplateVars[T];
   /** Stable per logical mail (e.g. `password-notice:<user>:<instant>`); the same key never sends twice. */
   idempotencyKey: string;
+  /** ADR-279: List-Unsubscribe headers for a mail a person can opt out of (unsubscribeHeaders). */
+  headers?: Record<string, string>;
 }
 
 export type SendResult =

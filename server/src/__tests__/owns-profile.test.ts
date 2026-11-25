@@ -6,15 +6,17 @@ import type { MembershipRole, Organization } from '../repositories/ports.js';
  * MUT-373 (eng review R1, outside voice OV1): the one ownership rule. A co-owner is an OWNER member of an owned
  * BUSINESS profile; every membership defaults to OWNER, so the rule must never read the role anywhere else.
  */
-type Org = Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType'>;
+type Org = Pick<Organization, 'ownerUserId' | 'personalOwnerUserId' | 'profileType' | 'memberSyncAt'>;
 
 const CREATOR = 'creator';
 const PARTNER = 'partner';
-const business: Org = { ownerUserId: CREATOR, personalOwnerUserId: null, profileType: 'BUSINESS' };
-const ownedPersonal: Org = { ownerUserId: CREATOR, personalOwnerUserId: null, profileType: 'PERSONAL' };
-const builtIn: Org = { ownerUserId: CREATOR, personalOwnerUserId: CREATOR, profileType: 'PERSONAL' };
-const unstampedBuiltIn: Org = { ownerUserId: null, personalOwnerUserId: CREATOR, profileType: null };
-const operatorFirm: Org = { ownerUserId: null, personalOwnerUserId: null, profileType: null };
+const business: Org = { ownerUserId: CREATOR, personalOwnerUserId: null, profileType: 'BUSINESS', memberSyncAt: null };
+const ownedPersonal: Org = { ownerUserId: CREATOR, personalOwnerUserId: null, profileType: 'PERSONAL', memberSyncAt: null };
+const builtIn: Org = { ownerUserId: CREATOR, personalOwnerUserId: CREATOR, profileType: 'PERSONAL', memberSyncAt: null };
+const unstampedBuiltIn: Org = { ownerUserId: null, personalOwnerUserId: CREATOR, profileType: null, memberSyncAt: null };
+const operatorFirm: Org = { ownerUserId: null, personalOwnerUserId: null, profileType: null, memberSyncAt: null };
+/** MUT-594: a firm whose members Malafat syncs. */
+const malafatFirm: Org = { ownerUserId: null, personalOwnerUserId: null, profileType: null, memberSyncAt: new Date('2026-11-12T10:00:00Z') };
 
 describe('canCoOwn', () => {
   it.each([
@@ -23,6 +25,7 @@ describe('canCoOwn', () => {
     ['the built-in personal profile', builtIn, false],
     ['an unstamped built-in personal profile', unstampedBuiltIn, false],
     ['an operator firm (Malafat-fed or not)', operatorFirm, false],
+    ['a firm whose members Malafat syncs (owned by its partners, never co-owned)', malafatFirm, false],
   ] as const)('%s → %s', (_label, org, expected) => {
     expect(canCoOwn(org)).toBe(expected);
   });
@@ -38,7 +41,10 @@ describe('ownsProfile', () => {
     ['an OWNER-role member of someone’s built-in personal profile', builtIn, PARTNER, 'OWNER', false],
     ['the person whose built-in profile it is', builtIn, CREATOR, 'OWNER', true],
     ['the person whose unstamped built-in profile it is', unstampedBuiltIn, CREATOR, 'OWNER', true],
-    ['an OWNER-role member of an operator or Malafat firm', operatorFirm, PARTNER, 'OWNER', false],
+    ['an OWNER-role member of an operator firm, or a Malafat-fed one not yet synced', operatorFirm, PARTNER, 'OWNER', false],
+    // MUT-594 (ADR-254 decision 7): Malafat's sync gives OWNER to partners only.
+    ['a partner (OWNER) of a firm whose members Malafat syncs', malafatFirm, PARTNER, 'OWNER', true],
+    ['a BOOKKEEPER or SUBMITTER of a firm whose members Malafat syncs', malafatFirm, PARTNER, 'SUBMITTER', false],
     ['someone with no membership at all', business, PARTNER, null, false],
   ];
   it.each(rows)('%s', (_label, org, userId, role, expected) => {

@@ -6,6 +6,8 @@ import { idempotent } from '../idempotency.js';
 import { UniqueViolation } from '../repositories/memory.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import {
+  SyncMembersRequestSchema,
+  SyncMembersResponseSchema,
   ApiKeySummarySchema,
   BindIntegrationRequestSchema,
   BindIntegrationResponseSchema,
@@ -56,6 +58,56 @@ export function integrationRoutes(store: LedgerStore, version: string): OpenAPIH
         },
         200,
       );
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'put',
+      path: '/v1/integration/members',
+      tags: ['Integration'],
+      summary: 'Sync the firm’s members and roles from Malafat (MUT-594)',
+      description:
+        'The full list, every time: the server adds, re-roles and removes. PARTNER → OWNER (owns the firm: accountants, share links), OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER. ' +
+        'A person with no MTB3A account waits as a pending seat until their first Sign in with Malafat; nobody is matched by email. A removal ends that person’s membership and Malafat connections for this firm at once. ' +
+        'Members made in MTB3A before the first sync are left alone until they sign in with Malafat. After the first sync the firm’s members are read-only in MTB3A.',
+      security: [{ apiKey: [] }],
+      middleware: [requireScope('integration:write'), idempotent(store, 'integration.members')] as const,
+      request: {
+        headers: z.object({ 'idempotency-key': z.string().min(8).max(128).openapi({ description: 'Client-generated key, unique per operation attempt (plan §14.2).' }) }),
+        body: { required: true, content: { 'application/json': { schema: SyncMembersRequestSchema } } },
+      },
+      responses: {
+        200: { description: 'Synced', content: { 'application/json': { schema: SyncMembersResponseSchema } } },
+        409: { description: 'CONFLICT with details.reason NOT_CONNECTED: bind the tenant first', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        422: { description: 'Validation or idempotency-key failure', content: { 'application/json': { schema: ErrorEnvelopeSchema } } },
+        ...errorResponses,
+      },
+    }),
+    async (c) => {
+      const { organization, apiKey } = keyAuth(c);
+      const { members } = c.req.valid('json');
+      const integration = await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT');
+      if (!integration || integration.status !== 'CONNECTED') throw new ApiError('CONFLICT', 'Bind this organization to its Malafat tenant first', { reason: 'NOT_CONNECTED' });
+      const result = await store.externalIdentities.syncMembers({
+        organizationId: organization.id,
+        tenantId: integration.externalTenantId,
+        members,
+        at: c.get('now')(),
+        audit: [
+          {
+            organizationId: organization.id,
+            actorType: 'API_KEY',
+            actorId: apiKey.id,
+            action: 'integration.members_synced',
+            entityType: 'integration',
+            entityId: integration.id,
+            metadata: { listed: members.length },
+            requestId: c.get('requestId'),
+          },
+        ],
+      });
+      return c.json(result, 200);
     },
   );
 

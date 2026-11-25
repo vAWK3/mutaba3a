@@ -1,6 +1,7 @@
 import { tryGetContext } from 'hono/context-storage';
 import { ApiError } from '../errors.js';
-import type { LedgerStore } from '../repositories/ports.js';
+import type { AuditEventInput, LedgerStore } from '../repositories/ports.js';
+import { DELEGATED_AUDIT_VIA } from './delegation.js';
 import type { AppEnv } from './middleware.js';
 import { accountantReadOnly, shareLinkReadOnly, mayRead, mayWriteFor, writeRefusal, type Domain, type Principal, type ProfileWriter } from './writability.js';
 
@@ -75,6 +76,11 @@ export const STORE_ACCESS: StoreAccess = {
     updateMalafatSuggestions: { write: 'identity' },
     // MUT-418: the person's answers to the trial's card prompt, the same identity-row write.
     updateTrialPrompt: { write: 'identity' },
+    // MUT-535: the person's monthly summary choice from You › Account (identity row); the signed opt-out link writes
+    // through the unguarded store, its token standing in for the session.
+    setMonthlySummaryMail: { write: 'identity' },
+    // ADR-279: the promotional-mail opt-out; only the signed links write it (unguarded store), listed for completeness.
+    setOfferMail: { write: 'identity' },
     // MUT-237: a person's own password, same identity-row write as updateMalafatSuggestions above.
     changePassword: { write: 'identity' },
     // MUT-324: a person's own acceptance of the terms, the same identity-row write.
@@ -123,6 +129,8 @@ export const STORE_ACCESS: StoreAccess = {
     listStoragePurges: 'operator',
     finishStoragePurge: 'operator',
   },
+  // MUT-644 (ADR-277): closed profiles' issued documents, swept by the hourly purge job and exported from /admin only.
+  issuingRetention: { listClosed: 'operator', getClosed: 'operator', sweep: 'operator', erase: 'operator', record: 'operator', events: 'operator' },
   // MUT-433: /v1/me reads the person's own flags on the session-scoped store; only the operator (admin routes) writes or
   // lists them. MUT-434's agent principal reads activeFor on the raw store, as authenticate() reads sessions (C4).
   features: { activeFor: 'sessionOnly', grant: 'operator', revoke: 'operator', holders: 'operator' },
@@ -134,7 +142,12 @@ export const STORE_ACCESS: StoreAccess = {
     decide: 'sessionOnly',
     listLiveGrants: 'sessionOnly',
     revokeGrant: 'sessionOnly',
+    // MUT-593: Connected apps' revoke of Malafat for one firm.
+    revokeForUserTenant: 'sessionOnly',
     createClient: 'operator',
+    createConfidentialClient: 'operator',
+    disableClient: 'operator',
+    claimAssertion: 'operator',
     upsertCimdClient: 'operator',
     createAuthorizationRequest: 'operator',
     findCode: 'operator',
@@ -148,12 +161,42 @@ export const STORE_ACCESS: StoreAccess = {
     cleanup: 'operator',
   },
   signupReviews: { list: 'operator', findByUser: 'operator', digestFacts: 'operator', markNotified: 'operator', approve: 'operator', decline: 'operator' },
+  // MUT-594/595: Malafat seats. The sync is Malafat's key writing the integration; a claim and the lookups run in
+  // Sign in with Malafat (MUT-595), outside /v1's guard; a person's own seats list in a session.
+  externalIdentities: { syncMembers: { write: 'integration' }, findBySubject: 'operator', claim: 'operator', listByUser: 'sessionOnly', listByOrganization: 'sessionOnly', link: 'operator' },
+  // MUT-618: emailed sign-in codes, on public routes, unguarded, like sign-in.
+  signInCodes: { issue: 'operator', attempt: 'operator', prune: 'operator' },
+  // MUT-710 (ADR-274): the second step runs on the public sign-in routes (no guard) and on the person's own /v1/me
+  // routes. Turning it on or off and new recovery codes are identity writes; the challenge bookkeeping is the person's
+  // own; pruning is the server's timer.
+  twoFactor: {
+    get: 'sessionOnly',
+    enable: { write: 'identity' },
+    disable: { write: 'identity' },
+    recordStep: 'sessionOnly',
+    reserveTry: 'sessionOnly',
+    clearFailures: 'sessionOnly',
+    replaceRecoveryCodes: { write: 'identity' },
+    useRecoveryCode: 'sessionOnly',
+    recoveryCodesLeft: 'sessionOnly',
+    createChallenge: 'sessionOnly',
+    findChallenge: 'sessionOnly',
+    spendAttempt: 'sessionOnly',
+    consumeChallenge: 'sessionOnly',
+    recordCodeSent: 'sessionOnly',
+    pruneChallenges: 'operator',
+    ownsIssuingProfile: 'sessionOnly',
+  },
+  // MUT-595: Sign in with Malafat runs on public routes, unguarded, like sign-in.
+  malafatSignIns: { create: 'operator', claimCallback: 'operator', recordResult: 'operator', claimResult: 'operator', issueTicket: 'operator', findByTicket: 'operator', proveLink: 'operator', claimCompletion: 'operator' },
   integrations: {
     findByOrganizationAndProvider: 'read',
     findByProviderAndTenant: 'read',
     listByOrganization: 'read',
     connect: { write: 'integration' },
     disconnect: { write: 'integration' },
+    // MUT-593: the operator's per-firm switch (operator console, on the raw store).
+    setDelegation: 'operator',
   },
   audit: { append: 'control', listByOrganization: 'read', list: 'read' },
   idempotency: { claim: 'control', get: 'read', complete: 'control', fail: 'control' },
@@ -226,6 +269,7 @@ export const STORE_ACCESS: StoreAccess = {
     // MUT-443: a reversal and its replacement in one write; the same domain as each half.
     correct: { write: 'payments' },
     findReplacedBy: 'read',
+    findByClientRequestKey: 'read',
     // MUT-61: the capture row's entire write surface — a person's own unallocated Received and its undo.
     capture: { write: 'capture' },
     undoCapture: { write: 'capture' },
@@ -250,6 +294,8 @@ export const STORE_ACCESS: StoreAccess = {
     update: { write: 'expenses' },
     softDelete: { write: 'expenses' },
     totalsByCurrency: { read: 'expenses' },
+    // MUT-589: to another of the person's profiles (the route checks they may write it).
+    moveToProfile: { write: 'expenses' },
   },
   // MUT-267 (ADR-094): groups are part of the expenses domain — same session-only scopes, nothing an API key may read.
   expenseGroups: {
@@ -277,6 +323,8 @@ export const STORE_ACCESS: StoreAccess = {
     search: { read: 'expenses' },
     // MUT-441: the read job fills a receipt's vendor by registration no. (it runs unguarded; a session may read it too).
     findByRegistration: { read: 'expenses' }, findByName: { read: 'expenses' },
+    // MUT-589 TD-308: a failed move takes back the vendor it just made.
+    removeIfUnused: { write: 'expenses' },
   },
   expenseReceipts: {
     create: { write: 'expenses' },
@@ -345,6 +393,49 @@ export const STORE_ACCESS: StoreAccess = {
     run: 'sessionOnly',
   },
   // MUT-161; MUT-194 (ADR-075) adds the optimistic update and the soft delete.
+  // MUT-568 (ADR-260): the issuing core. `issue` posts its own Owed/Received/credit inside the issuing domain's write.
+  issuing: {
+    getIssuer: { read: 'issuing' },
+    putIssuer: { write: 'issuing' },
+    // MUT-646: the invoicing setup.
+    getSetup: { read: 'issuing' },
+    markSetup: { write: 'issuing' },
+    addLogo: { write: 'issuing' },
+    clearLogo: { write: 'issuing' },
+    getLogo: { read: 'issuing' },
+    // MUT-660: documents due (reads), the books split (reads) and the not-for-invoice mark (an issuing write).
+    dueInputs: { read: 'issuing' },
+    incomeContext: { read: 'issuing' },
+    setNotForInvoice: { write: 'issuing' },
+    cancelPaymentRequest: { write: 'issuing' },
+    paymentRequestFacts: { read: 'issuing' },
+    // MUT-571: the Tax Authority connection (owner writes; the issue path refreshes under the lock).
+    getTaxConnection: { read: 'issuing' },
+    putTaxConnection: { write: 'issuing' },
+    deleteTaxConnection: { write: 'issuing' },
+    withTaxConnectionLock: { write: 'issuing' },
+    // MUT-571 AC3: across profiles, for the reminder job only (the unguarded store).
+    taxConnectionsEndingBetween: 'operator',
+    counters: { read: 'issuing' },
+    setStartingNumber: { write: 'issuing' },
+    issue: { write: 'issuing' },
+    getById: { read: 'issuing' },
+    // MUT-709: whether a receipt stands on a payment; asked by every route that may reverse one, whoever calls it.
+    moneyDocumentOn: 'read',
+    list: { read: 'issuing' },
+    inRange: { read: 'issuing' },
+    recordCopy: { write: 'issuing' },
+    // MUT-641: the signed original, kept once.
+    getOriginalPdf: { read: 'issuing' },
+    originalCopyIndex: { read: 'issuing' },
+    keepOriginalPdf: { write: 'issuing' },
+    gaps: { read: 'issuing' },
+    // MUT-647: invoices issued elsewhere.
+    attachExternal: { write: 'issuing' },
+    liveExternal: { read: 'issuing' },
+    getExternal: { read: 'issuing' },
+    removeExternal: { write: 'issuing' },
+  },
   conversions: {
     create: { write: 'conversions' },
     getById: { read: 'conversions' },
@@ -381,6 +472,8 @@ export const STORE_ACCESS: StoreAccess = {
     pastDueCandidates: 'operator',
     // MUT-534: the daily come-back run.
     comebackCandidates: 'operator',
+    // MUT-535: the monthly summary run only (a job on the unguarded store).
+    monthlySummaryCandidates: 'operator',
     createGrant: 'operator',
     revokeGrant: 'operator',
     getGrant: 'operator',
@@ -446,6 +539,8 @@ export const STORE_ACCESS: StoreAccess = {
    * never reaches them; every read-only guard (accountant, share link, the download stream) lets them through.
    */
   periodPack: { estimate: { read: 'expenses' }, names: { read: 'expenses' } },
+  // MUT-643: refunds read like credits and allocations (statements, Received figures); only issuing writes them.
+  refunds: { list: 'read' },
   // MUT-325: a person downloading their own profile's records; an API key has no person to download for.
   recordsExport: { profilePage: 'sessionOnly', inboxPage: 'sessionOnly', findExportableReceipt: 'sessionOnly' },
 };
@@ -453,6 +548,32 @@ export const STORE_ACCESS: StoreAccess = {
 export interface StoreGuard {
   /** Throws the matrix's refusal when this request may not call `repo.method`. */
   assertCanCall(repo: string, method: string): void;
+  /** The arguments `repo.method` is called with on this request, when the guard narrows what it reads (absent: as given). */
+  narrow?(repo: string, method: string, args: readonly unknown[]): unknown[];
+}
+
+/**
+ * An accountant sees only the expenses with a READY receipt on them: an expense with no document behind it is not a
+ * book entry they can work from. Every expense read the accountant's request reaches is narrowed here, in the store,
+ * so the list, a single expense (404), the totals and summaries, a group, the profile feed and a period download agree
+ * on one set of expenses, whatever route asks. The owner's own reads are untouched. (The client list's activity counts,
+ * read from the accountant's own session, apply the same rule in the store: `entries.clientActivity`.)
+ */
+export function accountantExpenseView(repo: string, method: string, args: readonly unknown[]): unknown[] {
+  const withArg = (index: number, extra: Record<string, unknown>) => args.map((arg, i) => (i === index ? { ...(arg as object | undefined), ...extra } : arg));
+  switch (`${repo}.${method}`) {
+    case 'expenses.list':
+    case 'expenses.totalsByCurrency':
+      return withArg(1, { withReceipt: true });
+    case 'expenses.getById':
+      return [args[0], args[1], { ...(args[2] as object | undefined), withReceipt: true }];
+    case 'entries.list':
+      return withArg(1, { expensesWithReceipt: true });
+    case 'periodPack.estimate':
+      return withArg(1, { expensesWithReceipt: true });
+    default:
+      return [...args];
+  }
 }
 
 /** The decision for one classified method, for a principal on a profile whose writer of record is `profileWriter`. */
@@ -556,8 +677,14 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * (ACCOUNTANT_READ_ONLY). The last-viewed stamp and SYSTEM catch-up posting run on the store beneath the guard
  * (`unguarded`), as for every session.
  */
+/**
+ * MUT-568 (ADR-260): an accountant reads a shared profile's issued documents when its owner holds `invoicing`, so the
+ * issuing routes read the owner's flags under the accountant's guard. A read of flags only; listed, never derived.
+ */
+export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
+
 export function accountantStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(PROFILE_FEED_READS, accountantReadOnly);
+  return { ...readOnlyStoreGuard(ACCOUNTANT_EXTRA_READS, accountantReadOnly), narrow: accountantExpenseView };
 }
 
 /**
@@ -566,18 +693,24 @@ export function accountantStoreGuard(): StoreGuard {
  * link's own lookups and "last viewed" stamps run on the base store the routes are handed, as authenticate() does.
  */
 export function shareLinkStoreGuard(): StoreGuard {
-  return readOnlyStoreGuard(PROFILE_FEED_READS, shareLinkReadOnly);
+  return readOnlyStoreGuard(SHARE_LINK_EXTRA_READS, shareLinkReadOnly);
 }
+
+/** MUT-660 (ADR-270): a link's summary and download split income when the owner holds `invoicing`, so they read the owner's flags. A read of flags only. */
+export const SHARE_LINK_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor']);
 
 /**
  * MUT-314 (ADR-248): the guard a period download's stream runs under, whoever asked, so nothing it reaches can write.
  * A share link's stream keeps the link's own guard; an owner's or an accountant's reads like an accountant's, plus the
  * entries feed (sessionOnly: it reads across a person's profiles; the download reads it for its one profile).
  */
-export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list']);
+export const PERIOD_DOWNLOAD_SESSION_READS: ReadonlySet<string> = new Set(['entries.list', 'features.activeFor']);
 
 export function periodDownloadStoreGuard(kind: 'member' | 'accountant' | 'link'): StoreGuard {
-  return kind === 'link' ? shareLinkStoreGuard() : readOnlyStoreGuard(PERIOD_DOWNLOAD_SESSION_READS, accountantReadOnly);
+  if (kind === 'link') return shareLinkStoreGuard();
+  const guard = readOnlyStoreGuard(PERIOD_DOWNLOAD_SESSION_READS, accountantReadOnly);
+  // An accountant's download holds what they see: only the expenses with a receipt (accountantExpenseView).
+  return kind === 'accountant' ? { ...guard, narrow: accountantExpenseView } : guard;
 }
 
 function readOnlyStoreGuard(alsoReads: ReadonlySet<string>, refusal: () => ApiError): StoreGuard {
@@ -631,13 +764,42 @@ function guardRepository(name: string, repository: Record<string, unknown>): Rec
       const value: unknown = Reflect.get(target, method, target);
       if (typeof method !== 'string' || typeof value !== 'function') return value;
       return (...args: unknown[]) => {
+        const vars = tryGetContext<AppEnv>()?.var;
         try {
-          tryGetContext<AppEnv>()?.var.storeGuard?.assertCanCall(name, method);
+          vars?.storeGuard?.assertCanCall(name, method);
         } catch (err) {
           return Promise.reject(err);
         }
+        const narrow = vars?.storeGuard?.narrow;
+        if (narrow) args = narrow(name, method, args);
+        // MUT-593/598: a delegated call, on /v1 (identity) or Malafat's connector on /mcp (agent).
+        const delegatedUser = vars?.identity?.via ? vars.identity.user : vars?.agent?.via ? vars.agent.user : null;
+        if (delegatedUser) stampDelegatedAudit(args, delegatedUser.id);
         return (value as (...a: unknown[]) => unknown).apply(target, args);
       };
     },
   });
+}
+
+/** How deep stampDelegatedAudit looks for audit rows in a store call's arguments (`input.agentGrants.audit` is 3). */
+const AUDIT_SEARCH_DEPTH = 3;
+
+/**
+ * MUT-593 (ADR-254 AC9): every audit row a delegated request writes as the person is marked `via: malafat`, here
+ * where every write passes, so no route has to remember it. A row reaches the store either as `audit.append`'s
+ * argument or inside a transactional write's input (`audit: [...]`, sometimes one level deeper). Rows credited to
+ * anyone else (SYSTEM catch-up, ADMIN) are left as they are.
+ */
+function stampDelegatedAudit(args: readonly unknown[], userId: string): void {
+  const visit = (value: unknown, depth: number): void => {
+    if (depth > AUDIT_SEARCH_DEPTH || value === null || typeof value !== 'object' || value instanceof Date || ArrayBuffer.isView(value)) return;
+    if (Array.isArray(value)) return value.forEach((item) => visit(item, depth + 1));
+    const row = value as Partial<AuditEventInput>;
+    if (typeof row.action === 'string' && typeof row.entityType === 'string' && 'actorType' in row) {
+      if (row.actorType === 'USER' && row.actorId === userId) row.metadata = { ...(row.metadata ?? {}), via: DELEGATED_AUDIT_VIA };
+      return;
+    }
+    for (const nested of Object.values(value)) visit(nested, depth + 1);
+  };
+  for (const arg of args) visit(arg, 0);
 }

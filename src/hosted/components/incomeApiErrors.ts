@@ -143,6 +143,8 @@ export function mapCorrectionError(error: unknown): MappedError {
     }
     if (reason === 'RECEIVABLE_NOT_OPEN') return { fields: [], toast: 'hosted.correct.errors.nothingLeft', reread: true };
   }
+  // MUT-709: an issued receipt or invoice-receipt stands on this payment; nothing changed, so no re-read.
+  if (apiError.code === 'CONFLICT' && reason === 'HAS_DOCUMENT') return { fields: [], toast: 'hosted.correct.errors.hasDocument' };
   if (apiError.code === 'CONFLICT') return { fields: [], toast: reason === 'ALREADY_REVERSED' ? 'hosted.correct.errors.alreadyReversed' : 'hosted.correct.errors.changed', reread: true };
   if (apiError.code === 'NOT_FOUND') return { fields: [], toast: 'hosted.redate.gone', reread: true };
   return { fields: [], toast: 'hosted.income.errors.saveFailed' };

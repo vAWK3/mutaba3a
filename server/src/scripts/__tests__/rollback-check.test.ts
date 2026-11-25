@@ -41,7 +41,7 @@ describe('hazardsRolledPast', () => {
   });
 
   it('includes the rows MUT-347 added: MUT-333, MUT-115 and MUT-367', () => {
-    expect(ROLLBACK_HAZARDS.map((h) => h.ticket)).toEqual(expect.arrayContaining(['MUT-100', 'MUT-235', 'MUT-255', 'MUT-182', 'MUT-333', 'MUT-115', 'MUT-367']));
+    expect(ROLLBACK_HAZARDS.map((h) => h.ticket)).toEqual(expect.arrayContaining(['MUT-100', 'MUT-235', 'MUT-255', 'MUT-182', 'MUT-333', 'MUT-115', 'MUT-367', 'MUT-568']));
   });
 
   it('MUT-480 and MUT-444 (R1): rolling back past their migrations runs their counts', () => {

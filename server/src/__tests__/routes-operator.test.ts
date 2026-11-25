@@ -110,7 +110,7 @@ const requestOn = (h: Harness, [method, path]: [string, string], headers: Record
 describe('MUT-459 the /v1/operator gate', () => {
 
   it('answers 404 to a signed-in non-operator on every operator route, and 401 signed out', async () => {
-    const h = harness();
+    const h = harness({ malafatDelegation: true });
     const p = await person(h);
     const token = await passwordSignIn(h, p.email, p.password);
     for (const [method, path] of ROUTES) {

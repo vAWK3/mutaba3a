@@ -7,6 +7,8 @@
  * and the desktop apps are retired (MUT-445).
  */
 /** Valid in shape, never a real project key: QA builds run the analytics code, and qa/support/posthog.ts answers it. */
+/** support/selfservice-live.mjs's API port; QA_SELFSERVICE_API_PORT moves both off another session's 8791. */
+const SELFSERVICE_API_PORT = Number(process.env.QA_SELFSERVICE_API_PORT ?? 8791);
 export const QA_POSTHOG_KEY = 'phc_releaseQaDummyKeyNeverSent000000';
 /**
  * MUT-149: a dummy key on the org's real ingest host (the build refuses any other host): the portal's crash
@@ -36,6 +38,8 @@ export default {
     web: {
       label: 'Website',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // `make release web` tags web-v<version> (scripts/tag-release.sh). The plain v* tags
       // belong to the retired desktop app and stopped at v0.0.67.
       release: { strategy: 'tag', pattern: 'web-v*', version: 'web-v(.+)' },
@@ -58,6 +62,8 @@ export default {
         'netlify.toml',
         // MUT-387: Malafat's OAuth client document; `make release web` checks the live copy (release:oauth-client)
         '!public/.well-known/**',
+        // MUT-596: Malafat's mark is the portal's (Sign in with Malafat, Connected apps): portal-selfservice's.
+        '!public/brand/malafat-mark*.svg',
         '!src/**/__tests__/**',
         '!src/**/*.test.{ts,tsx}',
       ],
@@ -73,6 +79,8 @@ export default {
     portal: {
       label: 'Hosted portal',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // The portal ships inside the API image (server/scripts/deploy.sh builds dist-hosted),
       // so its last release is the last `make release server`: api-v<version>.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
@@ -96,10 +104,16 @@ export default {
         '!src/hosted/passkeys/**', '!src/hosted/components/PasskeysDrawer.tsx',
         // MUT-370: the passkey suggestion is the portal-selfservice app's too.
         '!src/hosted/components/PasskeySuggestion.tsx', '!src/hosted/data/{passkeyPrompt,passkeyPromptQueries}.ts',
+        // MUT-619: the setup page's passkey step too (the rest of /setup stays here: portal.setup is the no-passkey device).
+        '!src/hosted/pages/auth/SetupPasskeyStep.tsx',
         // MUT-434: connecting an agent needs the live API's OAuth server and /mcp: the portal-selfservice app's.
         '!src/hosted/pages/connect/**', '!src/hosted/components/{ConnectClaudeDrawer,CopyField}.tsx', '!src/hosted/data/oauthQueries.ts', '!src/hosted/session/features.ts',
         // MUT-460: the operator console needs the live API's operator gate and a real passkey step-up.
-        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts'],
+        '!src/hosted/pages/operator/**', '!src/hosted/operator/**', '!src/hosted/data/{operatorQueries,signupReviews}.ts',
+        // MUT-596: Sign in with Malafat and its account screens need the live API and the Malafat stub: portal-selfservice's.
+        '!src/hosted/pages/auth/malafat/**', '!src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
+        // MUT-535: the monthly summary's switch and turn-it-off page are read through the live API's job and outbox: portal-live's.
+        '!src/hosted/components/MonthlySummarySwitchRow.tsx', '!src/hosted/pages/mail-off/**'],
       // `vite --mode hosted` (MUT-43). Specs stub every /v1 call with page.route, so no API runs:
       // a 401 from /v1/me is the signed-out portal, which is all the sign-in specs need.
       baseURL: 'http://127.0.0.1:5175',
@@ -111,6 +125,8 @@ export default {
     'portal-live': {
       label: 'Hosted portal on a live API (Stripe sandbox)',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // MUT-362 (eng review D8 B): Settings › Billing against a real dev API and Stripe's real hosted pages. Ships
       // with the portal and the API, so it follows the same release tag.
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
@@ -134,6 +150,15 @@ export default {
         'src/hosted/data/trialPromptQueries.ts',
         'src/hosted/shell/TrialWelcomeOpener.tsx',
         'src/hosted/session/trialWelcomeOffer.ts',
+        // MUT-535: the monthly summary mail (the job, its figures, the template) and its switch and turn-it-off page.
+        'server/src/billing/monthly-summary.ts',
+        'server/src/billing/monthly-summary-mail.ts',
+        'server/src/billing/yearly-switch-line.ts',
+        'server/src/summaries/profile-figures.ts',
+        'server/src/routes/monthly-summary-mail.ts',
+        'server/src/email/mail-off-token.ts',
+        'src/hosted/components/MonthlySummarySwitchRow.tsx',
+        'src/hosted/pages/mail-off/**',
         'server/src/billing/trial-prompt.ts',
         // MUT-361: the lapse gate, enforced by the API and shown by the portal.
         'server/src/billing/gate.ts',
@@ -170,6 +195,8 @@ export default {
     'portal-selfservice': {
       label: 'Hosted portal: signup, recovery and the review queue on a live API',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // MUT-368 (D11): Create an account, Forgot your password and the under-review screen against a real dev API on
       // the memory mailer (read through its dev outbox) and the fixture domain checker, serving the BUILT portal so
       // the real PORTAL_CSP applies. Turnstile is a page-routed stand-in (support/turnstile.ts): QA never contacts
@@ -206,6 +233,9 @@ export default {
         'src/hosted/data/passkeyPrompt.ts',
         'src/hosted/data/passkeyPromptQueries.ts',
         'server/src/auth/passkey-prompt.ts',
+        // MUT-619: the passkey step at the end of /setup, offered on the same relying party.
+        'src/hosted/pages/auth/SetupPage.tsx',
+        'src/hosted/pages/auth/SetupPasskeyStep.tsx',
         // MUT-434: OAuth for MCP agents needs the live API (its issuer, tokens and /mcp).
         'server/src/oauth/**',
         'server/src/routes/oauth.ts',
@@ -240,6 +270,14 @@ export default {
         'server/src/routes/summaries.ts',
         // MUT-441: the server reads receipts on its own receipt-ocr sidecar (selfservice-live.mjs starts it).
         'server/src/receipts/**',
+        // MUT-596: Sign in with Malafat, Connected apps, a Malafat firm's members and the second way in, against the
+        // live API and the Malafat stub office (qa/stubs/malafat-oauth.mjs, selfservice-live.mjs starts it).
+        'src/hosted/pages/auth/malafat/**',
+        'public/brand/malafat-mark*.svg',
+        'src/hosted/components/{ConnectedAppsDrawer,MalafatMembersSection,MalafatMark,SecondWayIn}.tsx',
+        'server/src/routes/{malafat-sign-in,connected-apps,members}.ts',
+        'server/src/malafat/**',
+        'qa/stubs/**',
         'server/src/routes/receipt-reading.ts',
         'server/ocr/app/**',
         '!src/hosted/**/__tests__/**',
@@ -249,16 +287,18 @@ export default {
       // support/selfservice-live.mjs: a per-launch QA database, the built portal, and the API on :8791 serving both,
       // reading receipts on the receipt-ocr sidecar on :8792 (MUT-441; server/ocr/run_local.sh, needs Tesseract).
       // `localhost`, not 127.0.0.1: the passkey flows (MUT-115) need it as their WebAuthn RP ID.
-      baseURL: 'http://localhost:8791',
-      attachURL: 'http://localhost:8791',
+      baseURL: `http://localhost:${SELFSERVICE_API_PORT}`,
+      attachURL: `http://localhost:${SELFSERVICE_API_PORT}`,
       start: { cmd: `${HEAP_CAPPED} node qa/support/selfservice-live.mjs` },
       // Answers only once the API is up with signup open (not just once something listens).
-      ready: 'http://localhost:8791/v1/self-service',
+      ready: `http://localhost:${SELFSERVICE_API_PORT}/v1/self-service`,
       personas: {},
     },
     'carry-over': {
       label: 'Carry-over: the old address, or a file from the old web app, to the new address',
       platform: 'web',
+      formFactors: ['desktop'], // QA-STANDARD.md rule 3 (Basel, 2026-11-09): desktop only
+      primary: 'desktop',
       // The receiver and both portals ship with the API (api-v*).
       release: { strategy: 'tag', pattern: 'api-v*', version: 'api-v(.+)' },
       watch: ['src/lib/carryOver/**', 'src/hosted/pages/carry-over/**', 'src/hosted/local/carryOver/**', '!**/__tests__/**', '!src/**/*.test.{ts,tsx}'],

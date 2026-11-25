@@ -1,4 +1,6 @@
-import { useMemo, type ReactNode } from 'react';
+import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { NotForInvoiceAction } from '../../components/NotForInvoiceAction';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -7,9 +9,13 @@ import { ClientFilter, CurrencyFilter, DateFilter, FilterBar, MatterFilter } fro
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
+import { useExternalInvoiceColumn } from '../../components/ExternalInvoiceColumn';
 import { DEFAULT_RECEIVABLE_STATUS, isNarrowed, splitIncomeDrawer, type ReceivableFilters, type ReceivablesPageSearch, type ReceivableStatusFilter } from '../../data/filters';
 import { canOpenOwed, incomeAffordancesFor, isCancelledOwed, isSettleable, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost, SETTLE_BUTTON_ATTR } from '../../components/IncomeDrawerHost';
+import { IssueDocumentDrawer, type IssueStart } from '../../components/IssueDocumentDrawer';
+import { useSetupHint } from '../../components/setupHint';
+import { useIssuer, useIssuingSetup } from '../../data/issuingQueries';
 import { useCustomerDirectory, useProjectDirectory, useReceivables } from '../../data/queries';
 import { DecimalAmount, formatDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
@@ -38,7 +44,19 @@ interface ReceivableRow {
   status: string;
   settleable: boolean;
   redatable: boolean;
+  /** MUT-647: MTB3A issued this entry's document, so no invoice issued elsewhere is attached to it. */
+  issuedHere: boolean;
+  /** MUT-648 (E4): an Owed recorded here, in shekels, with no document yet: it can take a tax invoice. */
+  issuable: boolean;
+  customerId: string;
+  title: string | null;
+  /** MUT-660: marked not for invoice, and the version a mark sends (If-Match). */
+  notForInvoice: boolean;
+  version: number;
 }
+
+const takesExternal = (r: ReceivableRow) => !r.issuedHere;
+const grossOf = (r: ReceivableRow) => r.gross;
 
 function shape(items: Receivable[], customers: Map<string, Customer>, projects: Map<string, Project>, language: 'en' | 'ar', profile: HostedProfile, userId: string, writable: boolean): ReceivableRow[] {
   return items.map((r) => ({
@@ -56,6 +74,13 @@ function shape(items: Receivable[], customers: Map<string, Customer>, projects: 
     settleable: isSettleable(r),
     // MUT-453: opens to change its date, to correct it, or to show its payments and credits.
     redatable: canOpenOwed(profile, r, userId, writable),
+    issuedHere: r.origin === 'ISSUED_DOCUMENT',
+    // The server takes over only an Owed recorded by hand, with nothing paid or credited (review fix).
+    issuable: r.origin === 'ADJUSTMENT' && r.currency === 'ILS' && r.paid === '0.00' && r.credited === '0.00',
+    customerId: r.customerId,
+    title: r.title,
+    notForInvoice: r.notForInvoice,
+    version: r.version,
   }));
 }
 
@@ -86,6 +111,57 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
     [list.data, customers.data, projects.data, language, profile, userId, writable],
   );
 
+  // MUT-648 (E4): where issuing is open, an Owed with no document yet offers its tax invoice.
+  const setup = useIssuingSetup(profile.id, useMe().user.features.includes('invoicing') && profile.owned === true && profile.type === 'BUSINESS');
+  const issuer = useIssuer(profile.id, !!setup.data?.canIssue);
+  const canIssue = writable && !!setup.data?.canIssue && issuer.data != null && issuer.data.dealerType !== 'EXEMPT';
+  // MUT-722: while the setup can't issue yet, Issue's spot says "Finish setup to issue" and opens the setup there.
+  const setupHint = useSetupHint(profile);
+  const finishSetup = writable && setupHint.due;
+  const [issueStart, setIssueStart] = useState<IssueStart | null>(null);
+  const navigate = useNavigate();
+  // MUT-648 (E4): an Owed with no document yet offers its tax invoice, in the Document column beside Attach (MUT-647);
+  // an entry with an invoice issued elsewhere attached offers neither.
+  const issueOffer = useCallback(
+    (r: ReceivableRow) => (
+      <>
+      {canIssue && r.issuable && !r.notForInvoice ? (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="hp-row-action"
+          data-testid={`issue-from-${r.id}`}
+          onClick={(event) => {
+            event.stopPropagation();
+            setIssueStart({
+              docType: 'TAX_INVOICE',
+              customerId: r.customerId,
+              fromEntry: { kind: 'owed', id: r.id },
+              pricesIncludeVat: true,
+              lines: [{ description: r.title?.trim() || t('hosted.issue.offer.line'), kind: 'SERVICE', quantity: '1', unitPrice: r.gross, discount: '', pricesIncludeVat: true }],
+            });
+          }}
+        >
+          {t('hosted.issue.offer.TAX_INVOICE')}
+        </Button>
+      ) : finishSetup && r.issuable && !r.notForInvoice ? (
+        <Link
+          className="hp-link hp-row-action"
+          data-testid={`finish-setup-${r.id}`}
+          to={`/p/${profile.id}/you/invoicing` as never}
+          search={{ step: setupHint.step } as never}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {t('hosted.issue.setupHint.finish')}
+        </Link>
+      ) : null}
+      {/* MUT-660: an Owed recorded here, with no document of MTB3A's, can be marked not for invoice. */}
+      {canIssue && !r.issuedHere && <NotForInvoiceAction kind="owed" id={r.id} version={r.version} marked={r.notForInvoice} client={r.client} />}
+      </>
+    ),
+    [canIssue, finishSetup, profile.id, setupHint.step, t],
+  );
+  const external = useExternalInvoiceColumn('OWED', rows, grossOf, takesExternal, issueOffer);
   const columns = useMemo<Column<ReceivableRow>[]>(
     () => [
       ...(fixedCustomerId ? [] : [{ key: 'client', header: t('hosted.receivables.columns.client'), cell: (r: ReceivableRow) => r.client }]),
@@ -96,6 +172,7 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
       { key: 'paid', header: t('hosted.receivables.columns.paid'), numeric: true, cell: (r) => <DecimalAmount value={r.paid} currency={r.currency} /> },
       { key: 'outstanding', header: t('hosted.receivables.columns.outstanding'), numeric: true, cell: (r) => <DecimalAmount value={r.outstanding} currency={r.currency} /> },
       { key: 'status', header: t('hosted.receivables.columns.status'), cell: (r) => <StatusBadge family="item" status={r.status} /> },
+      ...(external.column ? [external.column] : []),
       ...(onRecordPayment
         ? [
             {
@@ -123,7 +200,7 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
           ]
         : []),
     ],
-    [t, fixedCustomerId, onRecordPayment, language],
+    [t, fixedCustomerId, onRecordPayment, language, external.column],
   );
 
   const status = filters.status ?? DEFAULT_RECEIVABLE_STATUS;
@@ -137,6 +214,17 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
   return (
     <>
       <ReadOnlyNotice profile={profile} />
+      {issueStart && (
+        <IssueDocumentDrawer
+          profile={profile}
+          start={issueStart}
+          onClose={() => setIssueStart(null)}
+          onIssued={(doc) => {
+            setIssueStart(null);
+            void navigate({ to: `/p/${profile.id}/documents/issued/${doc.id}`, search: { issued: true } } as never);
+          }}
+        />
+      )}
       <FilterBar>
         <SegmentedTabs<ReceivableStatusFilter>
           options={[
@@ -174,11 +262,14 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
               rowKey={(row) => row.id}
               onRowClick={onRedate ? (row) => onRedate(row.id) : undefined}
               canOpen={(row) => row.redatable}
+              onRowFileDrop={external.onRowFileDrop}
+              canDropFile={external.canDropFile}
             />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      {external.drawer}
     </>
   );
 }

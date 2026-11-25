@@ -98,7 +98,8 @@ describe('MemoryLedgerStore snapshot/restore (MUT-286)', () => {
         vatTreatment: 'EXEMPT',
         vatRateBasisPoints: 0,
         title: 'Consulting',
-        dueDate: '2026-11-15',
+        // Far ahead: the status is read against today, and once this date passed the partly paid row read OVERDUE
+        dueDate: '2099-11-15',
         postingDate: '2026-10-18',
         postedAt: at(2),
         createdByUserId: user.id,

@@ -137,13 +137,17 @@ describe('/mcp authentication', () => {
     expect((await h.app.request('/mcp', { method: 'DELETE', headers: bearer })).status).toBe(405);
   });
 
-  it('an agent token opens nothing on /v1 (PRINCIPAL_NOT_ACCEPTED)', async () => {
+  it('an agent token opens nothing on /v1: refused where Malafat isn’t accepted, unauthenticated where it is (MUT-593)', async () => {
     const h = harness();
     const p = await person(h);
     const { bearer, refresh_token: refreshToken } = await connect(h, p);
     for (const authorization of [bearer.authorization, `Bearer ${refreshToken}`]) {
-      const res = await h.app.request('/v1/me', { headers: { authorization } });
+      const res = await h.app.request('/v1/passkeys', { headers: { authorization } });
       expect((await read(res)).error.code).toBe('PRINCIPAL_NOT_ACCEPTED');
+      // /v1/me accepts Malafat's delegated token; an agent's /mcp token is not one.
+      const me = await h.app.request('/v1/me', { headers: { authorization } });
+      expect(me.status).toBe(401);
+      expect((await read(me)).error).toMatchObject({ code: 'UNAUTHENTICATED', details: { reason: 'delegation_ended' } });
     }
   });
 
@@ -295,7 +299,7 @@ describe('nightly cleanup job', () => {
     expect(res.status).toBe(200);
     // Both requests (the decided one and the orphan's), the used code, and the 1-hour access token expired over a week
     // ago go; the refresh token (45 days) stays.
-    expect(await read(res)).toEqual({ requests: 2, codes: 1, tokens: 1, clients: 1 });
+    expect(await read(res)).toEqual({ requests: 2, codes: 1, tokens: 1, clients: 1, assertions: 0 });
     expect(await h.store.oauth.findClient(orphan)).toBeNull();
     expect(await h.store.oauth.findClient(clientId)).not.toBeNull();
   });

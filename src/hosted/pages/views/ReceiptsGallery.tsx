@@ -4,18 +4,19 @@ import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { Button } from '../../../components/ui/Button';
 import { BrandLoader } from '../../../components/brand/BrandLoader';
 import { useLanguage } from '../../../lib/i18n/core';
-import { useTp } from '../../../lib/i18n/plural';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReceiptCard } from '../../components/ReceiptCard';
 import { SectionTabs } from '../../components/SectionTabs';
-import { useToast } from '../../components/Toast';
 import { DEFAULT_RECEIPT_STATUS, type ReceiptStatusFilter, type ReceiptsPageSearch } from '../../data/filters';
-import { RECEIPT_MIME_TYPES, checkReceiptFile } from '../../data/receiptFileRules';
-import { uploadErrorOf, useReceiptCounts, useReceipts, useReceiptsAvailability, useUploadReceipts, type PendingUpload } from '../../data/receiptQueries';
+import { mayMoveExpensesFrom } from '../../data/profileRules';
+import { RECEIPT_MIME_TYPES } from '../../data/receiptFileRules';
+import { useReceiptCounts, useReceipts, useReceiptsAvailability, type PendingUpload } from '../../data/receiptQueries';
+import { useReceiptFiles } from '../../data/useReceiptFiles';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import type { HostedProfile } from '../../api/client';
+import { MoveExpenseDrawer } from '../../components/MoveExpenseDrawer';
 import { MoveReceiptDrawerHost } from '../../components/MoveReceiptDrawer';
-import { hasOtherProfiles, useMovedToast } from '../../components/useMovedToast';
+import { hasOtherProfiles, useExpenseMovedToast, useMovedToast } from '../../components/useMovedToast';
 import { useExpensesTabs } from './ExpenseGroupsList';
 import { PageHeader, ShowMore } from './shared';
 
@@ -60,13 +61,10 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   const profile = useProfile();
   const { writable } = useWriteGate();
   const { t } = useLanguage();
-  const tp = useTp();
-  const showToast = useToast();
   const inputRef = useRef<HTMLInputElement>(null);
   const status: ReceiptStatusFilter = search.status ?? DEFAULT_RECEIPT_STATUS;
   const list = useReceipts(profile.id, status);
   const counts = useReceiptCounts(profile.id);
-  const uploads = useUploadReceipts(profile.id);
   const me = useMe();
   const navigate = useNavigate();
   const movedToast = useMovedToast();
@@ -75,6 +73,16 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   const [leavingId, setLeavingId] = useState<string | null>(null);
   const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
   const closeMove = () => setSearch({ ...search, move: undefined });
+  // MUT-589: a filed receipt moves with its expense (the expense's own move drawer), offered only to an owner of a
+  // profile Malafat doesn't feed; anyone else sees no such item.
+  const canMoveExpense = canMove && mayMoveExpensesFrom(profile);
+  const expenseMovedToast = useExpenseMovedToast();
+  const closeExpenseMove = () => setSearch({ ...search, moveExpense: undefined });
+  const onExpenseMoved = (target: HostedProfile) => {
+    const id = search.moveExpense;
+    closeExpenseMove();
+    if (id) expenseMovedToast(target, id);
+  };
   /** DR4: the card leaves, focus goes to its neighbour (or the tabs when it was the last), the toast names where it went. */
   const onMoved = (target: HostedProfile) => {
     const id = search.move;
@@ -96,27 +104,13 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
     latestSearch.current = search;
   });
 
-  const onFiles = async (files: File[]) => {
-    const problems: string[] = [];
-    const accepted = files.filter((file) => {
-      const problem = checkReceiptFile(file);
-      if (problem) problems.push(t(`hosted.receipts.errors.${problem}`, { name: file.name }));
-      return !problem;
-    });
-    if (problems.length > 0) showToast(problems[0]);
-    if (accepted.length === 0) return;
-    const outcomes = await uploads.upload(accepted);
-    const failed = outcomes.find((o) => o.error !== null);
-    const landed = outcomes.filter((o) => o.error === null).length;
-    if (failed) {
-      const { key, seconds } = uploadErrorOf(failed.error);
-      showToast(t(`hosted.receipts.errors.${key}`, { name: failed.file.name, seconds: seconds ?? 0 }));
-    } else if (problems.length === 0 && landed > 0) {
-      showToast(tp('hosted.receipts.uploaded', landed), { tone: 'info' });
-    }
-    // AC2: an upload lands in To review, so show that list (unless the person moved to All meanwhile).
-    if (landed > 0 && latestSearch.current.status === 'filed') setSearch({ ...latestSearch.current, status: undefined });
-  };
+  // AC2: an upload lands in To review, so show that list (unless the person moved to All meanwhile).
+  const uploads = useReceiptFiles(profile.id, {
+    onLanded: () => {
+      if (latestSearch.current.status === 'filed') setSearch({ ...latestSearch.current, status: undefined });
+    },
+  });
+  const onFiles = uploads.onFiles;
 
   // One file input for the page; the toolbar's and the empty state's buttons both open it.
   const fileInput = writable ? (
@@ -181,7 +175,12 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
                           { label: t('hosted.receipts.move.open'), onSelect: () => void navigate({ to: reviewPath(item.id) }) },
                           { label: t('hosted.receipts.move.action'), onSelect: () => setSearch({ ...search, move: item.id }) },
                         ]
-                      : undefined
+                      : canMoveExpense && item.filingStatus === 'FILED' && item.expenseId
+                        ? [
+                            { label: t('hosted.receipts.move.open'), onSelect: () => void navigate({ to: reviewPath(item.id) }) },
+                            { label: t('hosted.expenses.move.withExpense'), onSelect: () => setSearch({ ...search, moveExpense: item.expenseId! }) },
+                          ]
+                        : undefined
                   }
                 />
               ))}
@@ -191,6 +190,7 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
         )}
       </QueryView>
       {search.move && canMove && <MoveReceiptDrawerHost profile={profile} receiptId={search.move} onClose={closeMove} onMoved={onMoved} />}
+      {search.moveExpense && canMoveExpense && <MoveExpenseDrawer profile={profile} expenseId={search.moveExpense} onClose={closeExpenseMove} onMoved={onExpenseMoved} />}
     </>
   );
 }

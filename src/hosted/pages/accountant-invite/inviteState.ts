@@ -1,4 +1,6 @@
 import { ApiError, apiErrorReason, retryMinutes, type AccountantInviteCheck } from '../../api/client';
+import { getLocale } from '../../../lib/i18n/core';
+import type { Language } from '../../../lib/i18n/types';
 
 /**
  * MUT-562: the accept-invite page's states (layout B), from three answers: the invite's check, whether someone is
@@ -99,8 +101,8 @@ export function signupFailure(error: unknown): SignupFailure {
 }
 
 /** "17 Nov": when the invite ends, in the person's language with Western digits. */
-export function inviteEnds(iso: string, locale: string): string {
-  return new Intl.DateTimeFormat(`${locale}-u-nu-latn`, { day: 'numeric', month: 'short' }).format(new Date(iso));
+export function inviteEnds(iso: string, language: Language): string {
+  return new Intl.DateTimeFormat(getLocale(language), { day: 'numeric', month: 'short' }).format(new Date(iso));
 }
 
 // ---- The token ---------------------------------------------------------------------------------------------------

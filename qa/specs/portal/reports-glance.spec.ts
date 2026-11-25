@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { FIRM, NEW_PROFILE, OFFICE_A, OFFICE_B, malafatFirm, office } from '../../support/portal';
+import { FIRM, MODE_KEY, NEW_PROFILE, OFFICE_A, OFFICE_B, malafatFirm, office } from '../../support/portal';
 import { FakeApi, todayInJerusalem, verdictBody, type FakeApiSeed, type StubVerdictLine } from '../../support/portalApi';
 
 /**
@@ -116,6 +116,8 @@ test('Signed out on this device, the Glance runs on the records kept in the brow
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  // A device that has used the portal signed out says so; a first visit would get the welcome (MUT-513) instead.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MODE_KEY, 'local'] as const);
 
   await step('Signed out, record income, then press the Reports icon', async () => {
     await page.goto('/');

@@ -3,27 +3,27 @@ import { Link } from '@tanstack/react-router';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
-import type { CustomerSummary, Project, ProjectSummary } from '../../api/client';
+import type { Currency, CustomerSummary, Project, ProjectSummary } from '../../api/client';
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView, Skeleton } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
 import { splitIncomeDrawer, type ClientDetailSearch, type ClientTab } from '../../data/filters';
-import { incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
+import { canAddClient, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
+import { ClientBusinessDetails } from '../../components/ClientBusinessDetails';
+import { IssuedDocumentsPage } from './IssuedDocuments';
 import { useCustomer, useCustomerSummary, useProjectDirectory } from '../../data/queries';
-import { DecimalAmount } from '../../format/DecimalAmount';
+import { DecimalAmount, isZeroDecimal } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
 import { useProfile, useWriteGate } from '../../session/me';
 import { DocumentsList } from './DocumentsList';
-import { PaymentsList } from './PaymentsList';
-import { ReceivablesList } from './ReceivablesList';
+import { LedgerCard } from '../../components/ledger/LedgerCard';
 import { PageHeader, StatusBadge } from './shared';
 
 /**
- * Client detail (hosted-portal.md §7.3): the per-currency summary and its
- * matters, then the client's receivables, payments and documents as the same
- * read-only lists, fixed to this client. The tab and the tab's filters live in
- * one search object.
+ * Client detail (hosted-portal.md §7.3, MUT-664): Ledger card (the default: every movement with its document and the
+ * running balance), Documents (what was issued to the client, then its files) and Details (business details, the
+ * per-currency summary and its matters). The tab and the tab's filters live in one search object.
  */
 
 interface ClientDetailPageProps {
@@ -32,11 +32,15 @@ interface ClientDetailPageProps {
   setSearch: (next: ClientDetailSearch) => void;
 }
 
+const CLIENT_TAB_ORDER: readonly ClientTab[] = ['ledger', 'documents', 'details'];
+
 export function ClientDetailPage({ customerId, search, setSearch }: ClientDetailPageProps) {
   const profile = useProfile();
   const { t } = useLanguage();
   const customer = useCustomer(profile.id, customerId);
-  const tab: ClientTab = search.tab ?? 'summary';
+  const tab: ClientTab = search.tab ?? 'ledger';
+  const summary = useCustomerSummary(profile.id, customerId);
+  const currencies = (summary.data?.currencies ?? []).map((b) => b.currency as Currency);
   // MUT-133: drawer state lives beside the tab's filters, never in them (eng review R1).
   const { filters: rest, drawer } = splitIncomeDrawer(search);
   // MUT-361: nothing to add, settle or re-date on a read-only profile.
@@ -69,32 +73,44 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
           </PageHeader>
           <SegmentedTabs<ClientTab>
             className="hp-tabs"
-            options={(['summary', 'receivables', 'payments', 'documents'] as const).map((value) => ({ value, label: t(`hosted.client.tabs.${value}`) }))}
+            options={CLIENT_TAB_ORDER.map((value) => ({ value, label: t(`hosted.client.tabs.${value}`) }))}
             value={tab}
-            onChange={(next) => setSearch({ tab: next === 'summary' ? undefined : next })}
+            onChange={(next) => setSearch({ tab: next === 'ledger' ? undefined : next })}
           />
-          {tab === 'summary' && <ClientSummary customerId={customerId} notFound={notFound} />}
-          {tab === 'receivables' && (
-            <ReceivablesList
-              fixedCustomerId={customerId}
-              filters={{ projectId: search.projectId, currency: search.currency, status: search.status, dueFrom: search.dueFrom, dueTo: search.dueTo }}
-              setFilters={(f) => setSearch({ tab, projectId: f.projectId, currency: f.currency, status: f.status, dueFrom: f.dueFrom, dueTo: f.dueTo })}
-              addAction={addButton(false)}
-              onRecordPayment={canSettle ? (receivableId) => setSearch({ ...rest, settle: receivableId }) : undefined}
-              onRedate={redate.owed ? (receivableId) => setSearch({ ...rest, income: receivableId }) : undefined}
-            />
-          )}
-          {tab === 'payments' && (
-            <PaymentsList
-              fixedCustomerId={customerId}
-              filters={{ status: search.paymentStatus, receivedFrom: search.receivedFrom, receivedTo: search.receivedTo }}
-              setFilters={(f) => setSearch({ tab, paymentStatus: f.status, receivedFrom: f.receivedFrom, receivedTo: f.receivedTo })}
-              addAction={addButton(false)}
-              onRedate={redate.payments ? (paymentId) => setSearch({ ...rest, payment: paymentId }) : undefined}
-            />
+          {tab === 'ledger' && (
+            <QueryView queries={[summary]} data={summary.data} loading={<Skeleton strip />}>
+              {() => (
+                <LedgerCard
+                  profileId={profile.id}
+                  customerId={customerId}
+                  currencies={currencies}
+                  currency={search.currency as Currency | undefined}
+                  period={search.period ?? 'all'}
+                  writable={writable}
+                  onChange={(next) => setSearch({ ...rest, currency: next.currency, period: next.period === 'all' ? undefined : next.period })}
+                  openLine={(line) => {
+                    // A row opens what can be done with it here: record a payment on what is still owed, else re-date it.
+                    if (line.kind === 'CHARGE' && canSettle && !isZeroDecimal(line.outstanding)) return () => setSearch({ ...rest, settle: line.receivableId });
+                    if (line.kind === 'CHARGE' && redate.owed) return () => setSearch({ ...rest, income: line.receivableId });
+                    if (line.kind === 'PAYMENT' && redate.payments) return () => setSearch({ ...rest, payment: line.paymentId });
+                    return null;
+                  }}
+                />
+              )}
+            </QueryView>
           )}
           {tab === 'documents' && (
-            <DocumentsList fixedCustomerId={customerId} filters={{ kind: search.kind }} setFilters={(f) => setSearch({ tab, kind: f.kind })} />
+            <>
+              {/* MUT-570 / MUT-664: what was issued to the client (with what is settled), then the client's files */}
+              {profile.type !== 'PERSONAL' && <IssuedDocumentsPage profile={profile} customerId={client.id} />}
+              <DocumentsList fixedCustomerId={customerId} filters={{ kind: search.kind }} setFilters={(f) => setSearch({ tab, kind: f.kind })} />
+            </>
+          )}
+          {tab === 'details' && (
+            <>
+              <ClientBusinessDetails profileId={profile.id} client={client} writable={canAddClient(profile, writable)} />
+              <ClientSummary customerId={customerId} notFound={notFound} />
+            </>
           )}
           <IncomeDrawerHost
             profile={profile}
@@ -103,7 +119,7 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
             onClose={() => setSearch(rest)}
             onOpen={(next) => setSearch({ ...rest, ...next })}
             // Already on this client: "See this client's payments" is its own Payments tab.
-            onSeePayments={() => setSearch({ tab: 'payments' })}
+            onSeePayments={() => setSearch({})}
           />
         </>
       )}

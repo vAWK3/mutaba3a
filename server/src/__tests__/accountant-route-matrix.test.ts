@@ -1,9 +1,11 @@
+import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
+import { TokenBox } from '../israel/tax-authority/token-box.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';
 import { ACCOUNTANT_EXCLUDED_ROUTES, accountantMayRead } from '../auth/writability.js';
 import { MemoryAttachmentStorage } from '../attachments/storage.js';
-import { accountantHarness, businessOf, expenseOn, idem, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
+import { issuingHarness, businessOf, expenseOn, idem, receiptedExpenseOn, json, person, read, shared, type AccountantHarness, type Loose, type Person } from './helpers/accountants.js';
 
 /**
  * MUT-559 (ADR-245): every profile-scoped route a session can call, enumerated from the published contract and the
@@ -19,6 +21,7 @@ const ALLOWED_GETS = [
   'GET /v1/attachments/{attachmentId}/download',
   'GET /v1/conversions',
   'GET /v1/conversions/{conversionId}',
+  'GET /v1/customer-balances', // MUT-664: the balances the statement already shows, every client at once
   'GET /v1/customers',
   'GET /v1/customers/{customerId}',
   'GET /v1/customers/{customerId}/statement',
@@ -30,6 +33,27 @@ const ALLOWED_GETS = [
   'GET /v1/expenses/streak',
   'GET /v1/expenses/{expenseId}',
   'GET /v1/expenses/{expenseId}/receipts/{receiptId}/download',
+  // MUT-660: documents due, read under the grant when the owner holds `invoicing`.
+  'GET /v1/documents-due',
+  'GET /v1/documents-due/count',
+  // MUT-568: issued documents, read under the grant when the owner holds `invoicing`.
+  'GET /v1/issued-documents',
+  'GET /v1/issued-documents/{documentId}',
+  'GET /v1/issued-documents/{documentId}/pdf',
+  'GET /v1/issuer',
+  // MUT-646: the setup and the logo.
+  'GET /v1/issuer/logo',
+  'GET /v1/issuing/setup',
+  // MUT-647: invoices issued elsewhere, and their files.
+  'GET /v1/issuing/external-invoices',
+  'GET /v1/issuing/external-invoices/{externalInvoiceId}/file',
+  // MUT-571: whether the profile is connected to the Tax Authority.
+  'GET /v1/issuing/tax-authority',
+  'GET /v1/issuing/styles',
+  'GET /v1/issuing/gaps',
+  // MUT-569: the uniform file.
+  'GET /v1/issuing/uniform-file',
+  'GET /v1/issuing/settings',
   'GET /v1/payments',
   // MUT-314: the period download's mint, tagged expenses/payments/attachments:read (no list edit: D7).
   'GET /v1/period-downloads/ticket',
@@ -59,6 +83,7 @@ const QUERIES: Record<string, string> = {
   'GET /v1/summaries/period': '?from=2026-11-01&to=2026-11-30&currency=ILS',
   'GET /v1/customers/{customerId}/statement': '?currency=ILS',
   'GET /v1/period-downloads/ticket': '?type=report&from=2026-10&to=2026-10',
+  'GET /v1/issuing/uniform-file': '?from=2026-11-01&to=2026-11-05',
 };
 const PLACEHOLDER = '00000000-0000-4000-8000-0000000000aa';
 const METHODS = ['get', 'post', 'put', 'patch', 'delete'] as const;
@@ -95,11 +120,11 @@ const call = (op: Operation, query = '') =>
 
 beforeAll(async () => {
   storage = new MemoryAttachmentStorage();
-  h = accountantHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true });
+  h = issuingHarness({ receiptsLibrary: true, attachments: storage, periodDownloads: true, taxAuthority: { client: new FakeTaxAuthority(), box: new TokenBox('matrix-secret-with-at-least-32-characters'), stateSecret: 'matrix-state', accountingSoftwareNumber: 987654321 } });
   owner = await person(h, { displayName: 'Basel Sader' });
   profileId = await businessOf(h, owner, 'Sader Studio');
   const other = await businessOf(h, owner, 'Other Studio');
-  await expenseOn(h, owner, profileId, 'Shared paper');
+  await receiptedExpenseOn(h, owner, profileId, 'Shared paper');
   await expenseOn(h, owner, other, 'Private rent');
   const customer = await read(await h.app.request('/v1/customers', json({ name: 'Haddad Trading' }, { ...owner.on(profileId), ...idem() })));
   await h.app.request('/v1/customers', json({ name: 'Hidden Client' }, { ...owner.on(other), ...idem() }));
@@ -132,6 +157,21 @@ beforeAll(async () => {
   storage.put(attachmentKey, { sizeBytes: 2048, contentType: 'application/pdf' });
   await h.store.attachments.complete(profileId, attachment.id, h.now());
   ids.attachmentId = attachment.id;
+  // MUT-568: the owner issues one tax invoice, so every issuing GET reads a real document.
+  await h.store.features.grant({ userId: owner.userId, feature: 'invoicing', grantedBy: 'test', at: h.now(), audit: [] });
+  await h.app.request('/v1/issuer', json({ legalName: 'Sader Studio', vatId: '123456789', dealerType: 'COMPANY' }, owner.on(profileId), 'PUT'));
+  await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, owner.on(profileId), 'PUT'));
+  await h.store.issuing.addLogo(profileId, { contentType: 'image/png', bytes: new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')), sha256: '0'.repeat(64) }, h.now());
+  ids.documentId = (await seed('/v1/issued-documents', { docType: 'TAX_INVOICE', documentDate: '2026-11-01', currency: 'ILS', language: 'en', customerId: customer.id, lines: [{ description: 'Logo', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] })).id;
+  // MUT-647: an invoice issued elsewhere on the Owed, so its list and its file read a real one.
+  const externalKey = `attachments/${profileId}/00000000-0000-4000-8000-0000000000e7`;
+  storage.put(externalKey, { sizeBytes: 64, contentType: 'application/pdf' });
+  const external = await h.store.issuing.attachExternal(
+    { organizationId: profileId, entryKind: 'OWED', entryId: ids.receivableId!, attachmentId: '00000000-0000-4000-8000-0000000000e7', number: '3381', documentDate: '2026-11-01', createdByUserId: owner.userId, createdAt: h.now() },
+    { filename: 'invoice-3381.pdf', mimeType: 'application/pdf', sizeBytes: 64, storageKey: externalKey, customerId: customer.id, paymentId: null, requestId: null },
+  );
+  ids.externalInvoiceId = external.record.id;
+  QUERIES['GET /v1/issuing/external-invoices'] = `?entryKind=OWED&entryIds=${ids.receivableId}`;
   accountant = await shared(h, owner, profileId);
   await expenseOn(h, accountant, accountant.personalId, 'My own lunch');
 

@@ -163,6 +163,28 @@ describe('releasing the terms web first (MUT-324)', () => {
   });
 });
 
+/**
+ * The legal pages rewrite (2026-11-25): a draft legal text, one with [TODO] notes for the lawyer, never ships. The drafts
+ * live in docs/legal/drafts/, which neither the site nor the server loads and the guard does not scan.
+ */
+describe('the web preflight refuses draft legal text', () => {
+  const preflight = readFileSync(join(__dirname, '../preflight.sh'), 'utf8');
+  const webStart = preflight.indexOf('head_ "Web deploy');
+  const web = preflight.slice(webStart, preflight.indexOf('if [[ "$MODE" == "server" ]]; then', webStart));
+
+  it('greps the terms and the privacy policy for [TODO] in the web release, with no override', () => {
+    expect(web).toContain("grep -l '\\[TODO' src/content/legal/terms/*.json src/lib/i18n/translations/*/landing.json");
+    const guard = web.slice(web.indexOf('LEGAL_TODOS='), web.indexOf('no draft notes'));
+    expect(guard).toContain('bad "');
+    expect(guard).not.toMatch(/SKIP_|fail_or_/);
+  });
+
+  it('keeps the unpublished 2026-11-25 drafts out of the published set', () => {
+    expect(readdirSync(DIR).some((name) => name.startsWith('2026-11-25'))).toBe(false);
+    expect(readdirSync(join(__dirname, '../../docs/legal/drafts')).filter((n) => n.startsWith('terms-2026-11-25'))).toHaveLength(2);
+  });
+});
+
 /** Review fix 5: the privacy policy promises only the recovery the database is configured for. */
 describe('the privacy policy’s backup promise (MUT-324)', () => {
   const ROOT = join(__dirname, '../..');

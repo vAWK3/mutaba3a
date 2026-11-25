@@ -126,7 +126,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no session — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -205,7 +205,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST, or ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -233,6 +233,164 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in with an emailed code (sets the session cookie) (MUT-618)
+         * @description Send the address and the 6-digit code from POST /v1/sign-in-codes. The same same-origin check, IP budget, throttle and lockout as the password sign-in: a wrong code counts toward the address's lockout. The session is not step-up stamped and can't change the password or close the account without it.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CodeSignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in), or TWO_FACTOR_USE_PASSWORD — the second step is a code by email, so sign in with the password (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in (sets the session cookie) (MUT-710)
+         * @description After a sign-in answered 403 TWO_FACTOR_REQUIRED: send its `challengeToken` with the 6-digit code (authenticator app or email), or one recovery code instead. The challenge works once, for 10 minutes and 5 tries; 5 wrong second steps in 15 minutes lock the second step for 15 minutes (429). Answers what the first step would have: the signed-in person, and the cookie.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the session cookie is set */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Me"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step (disabled, closed) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -562,7 +720,7 @@ export interface paths {
                     };
                     content?: never;
                 };
-                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
+                /** @description CURRENT_PASSWORD_WRONG (the current password is wrong, the account is locked, or another change landed first), RECENT_SIGN_IN_REQUIRED (a first password, MUT-596, needs a sign-in under 10 minutes old), CROSS_SITE_REQUEST or PRINCIPAL_NOT_ACCEPTED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -629,7 +787,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token */
+                /** @description ACCOUNT_UNDER_REVIEW — the right password for a self-service account the operator has not approved yet (MUT-367); no token — or TWO_FACTOR_REQUIRED (MUT-710): finish with POST /v1/device-sessions/two-factor */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -708,7 +866,7 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
-                /** @description ACCOUNT_UNDER_REVIEW (as the password sign-in) */
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -736,6 +894,164 @@ export interface paths {
                     };
                 };
                 /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sessions/code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Sign in from a native app with an emailed code (returns a bearer token) (MUT-618)
+         * @description Send the address and the 6-digit code from POST /v1/device-sign-in-codes. The same IP budget, throttle and lockout as the password sign-in; the session is not step-up stamped.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CodeSignInRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description SIGN_IN_CODE_WRONG (details.triesLeft), SIGN_IN_CODE_EXPIRED, SIGN_IN_CODE_TOO_MANY_TRIES — the same for every address — or INVALID_CREDENTIALS */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ACCOUNT_UNDER_REVIEW or TWO_FACTOR_REQUIRED (as the password sign-in); TWO_FACTOR_USE_PASSWORD on the code sign-in (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the email is locked out for now */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sessions/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Finish a two-step sign-in from a native app (returns a bearer token) (MUT-710)
+         * @description As POST /v1/sessions/two-factor, for a challenge a device sign-in started; answers what the first step would have: the person and the token.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorFinishRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in; the token is shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DeviceSession"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS — the account changed since the first step */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or the second step is locked for now (Retry-After) */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -799,6 +1115,525 @@ export interface paths {
                 };
             };
         };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Your two-step sign-in (MUT-710) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The state */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorState"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Turn off two-step sign-in (MUT-710)
+         * @description Needs the current password (when you have your own) and the current second step. Refused while you own a profile that issues documents or is connected to the Tax Authority.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description Off */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_REQUIRED_FOR_ISSUING, or CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/challenge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a second step to change your two-step sign-in (MUT-710)
+         * @description While it is on, switching method, new recovery codes and turning it off each need the current second step. With the email method the code is mailed now.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The challenge (the TWO_FACTOR_REQUIRED details) */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": {
+                            /** @enum {string} */
+                            method: "totp" | "email";
+                            /** Format: date-time */
+                            expiresAt: string;
+                            emailHint?: string;
+                            challengeToken: string;
+                        };
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start turning on (or switching) two-step sign-in (MUT-710)
+         * @description Proof (D8): the current password when you have your own; while it is already on, the current second step too (POST /v1/me/two-factor/challenge). The app method answers a new secret, its otpauth:// address and a QR code; the email method mails a code. Without a password of your own, the app method also mails a code (`emailCodeRequired`). Confirm within 10 minutes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEnrolmentRequest"];
+                };
+            };
+            responses: {
+                /** @description What to confirm */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEnrolment"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED (send the current second step), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/enrolment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn on two-step sign-in with a code from the new method (MUT-710)
+         * @description Turns it on (or switches it), answers the 10 recovery codes once, stamps this session as having passed it, signs out your other sessions, and mails a notice. Runs under your row lock, so two confirmations can’t leave two sets of codes.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorConfirmRequest"];
+                };
+            };
+            responses: {
+                /** @description On; the recovery codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_CODE_WRONG (details.triesLeft), TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/two-factor/recovery-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Make new recovery codes (the old ones stop working) (MUT-710) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorManageRequest"];
+                };
+            };
+            responses: {
+                /** @description The new codes, shown once */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorRecoveryCodes"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CURRENT_PASSWORD_WRONG, TWO_FACTOR_REQUIRED, TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES, TWO_FACTOR_CHALLENGE_EXPIRED, PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/two-factor/email-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email a fresh second-step code (MUT-710)
+         * @description For a challenge whose method is email (sign-in or a setup link). At most once every 30 seconds and 5 times per challenge, and 10 codes an hour per person; the newest code replaces the last. A browser call must come from the portal itself.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TwoFactorEmailCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description A new code is on its way */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorEmailCodeResponse"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or TWO_FACTOR_CHALLENGE_EXPIRED (unknown, used, expired, or not an email challenge) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED — too soon after the last code, too many codes, or too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1487,6 +2322,94 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/account-setup/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start the second step a setup link needs (MUT-710)
+         * @description For a valid person link (setup, reset, an operator link) whose person has two-step sign-in on, whatever the link is for. Creates a challenge bound to this link (10 minutes, 5 tries) and, with the email method, mails the code. Send its `challengeToken` with the code (or a recovery code) to POST /v1/account-setup.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetupLinkCheckRequest"];
+                };
+            };
+            responses: {
+                /** @description The challenge */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SetupLinkTwoFactor"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF — this link needs no second step */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SETUP_LINK_UNUSABLE — details.state is expired, used, superseded or invalid */
+                410: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address, or a code was mailed a moment ago */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/account-setup": {
         parameters: {
             query?: never;
@@ -1519,7 +2442,7 @@ export interface paths {
                         "application/json": components["schemas"]["SetupLinkRedeemResponse"];
                     };
                 };
-                /** @description CROSS_SITE_REQUEST */
+                /** @description CROSS_SITE_REQUEST; TWO_FACTOR_REQUIRED (MUT-710 D11: the person has two-step sign-in on and sent no challenge; details carry a new one), TWO_FACTOR_CODE_WRONG, TWO_FACTOR_TOO_MANY_TRIES or TWO_FACTOR_CHALLENGE_EXPIRED */
                 403: {
                     headers: {
                         [name: string]: unknown;
@@ -1744,6 +2667,524 @@ export interface paths {
                     };
                 };
                 /** @description RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/sign-in-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email me a sign-in code: mails a 6-digit code that works once for 10 minutes (same answer for every address) (MUT-618)
+         * @description Sign in with it through POST /v1/sessions/code. A new code cancels the older one. Budgets: 10 an hour per client address, 1 a minute and 5 a day per email address.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SignInCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted. The same answer for every address, whether or not it has an account */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfServiceAccepted"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or CHECK_FAILED (the Turnstile check, action "sign-in-code") */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/device-sign-in-codes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Email me a sign-in code, from the phone app (same answer for every address) (MUT-618)
+         * @description As POST /v1/sign-in-codes without the Turnstile token or the origin check; the same address and IP budgets, shared with it. Sign in through POST /v1/device-sessions/code.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["DeviceSignInCodeRequest"];
+                };
+            };
+            responses: {
+                /** @description Accepted. The same answer for every address, whether or not it has an account */
+                202: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SelfServiceAccepted"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED: this client or this address asked too often; details.retryAfterSeconds */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/office": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Whether an address is a Malafat office (MUT-595) */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The firm’s Malafat address, e.g. sader for sader.malafat.app */
+                    tenant: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description It is */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatOffice"];
+                    };
+                };
+                /** @description No such office, or Sign in with Malafat is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Start Sign in with Malafat: redirects to the firm’s Malafat (MUT-595)
+         * @description Open in the browser (the phone: an in-app browser). 302 to Malafat; a refusal 302s to the client’s return with #error= (R7).
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The firm’s Malafat address, e.g. sader for sader.malafat.app */
+                    tenant: string;
+                    client?: "web" | "app";
+                    /** @description client=app: the S256 challenge of a verifier the app keeps; /exchange must present it (R3) */
+                    app_challenge?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description To Malafat, or back with #error= */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Sign in with Malafat is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Malafat sends the person back here (MUT-595)
+         * @description Malafat’s redirect target. 302 to the client’s return with #result=<code> (2 minutes, single use) or #error=.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    code?: string;
+                    state?: string;
+                    error?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description To the client’s return */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/exchange": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange the result code (MUT-595)
+         * @description Single use: the code burns on the first attempt, right or wrong. client=app must send app_verifier (R3); client=web must come from the browser that called /start (its flow cookie, MUT-596).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatExchangeRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in, or the next step */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS: the linked account can no longer sign in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_REQUIRED — the account has two-step sign-in on: finish with POST /v1/sessions/two-factor (web) or /v1/device-sessions/two-factor (app) (MUT-710) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_RESULT_INVALID: used, expired, unknown, or the verifier does not match */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Prove the MTB3A account that has this email, to link it (MUT-595, D4)
+         * @description With its password, or a passkey assertion from POST /v1/passkey-challenges. Writes nothing (R8): consent links.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatLinkRequest"];
+                };
+            };
+            responses: {
+                /** @description Proven: consent next */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description INVALID_CREDENTIALS (counts toward the account’s lockout) */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account has two-step sign-in on (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/auth/malafat/consent": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Consent: create or link the account, claim the firm seat, sign in (MUT-595, D8)
+         * @description Everything is written here and nowhere before (R8). A new account (creates) needs defaultCurrency and timezone; it is ACTIVE with no review (DF1) and starts the normal trial (D5). acceptedTermsVersion records the terms now; without it, GET /v1/me asks as for anyone.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MalafatConsentRequest"];
+                };
+            };
+            responses: {
+                /** @description Signed in */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MalafatSignInState"];
+                    };
+                };
+                /** @description TWO_FACTOR_LINK_UNAVAILABLE — the account turned on two-step sign-in after /link (MUT-710 D6) */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND reason MALAFAT_TICKET_INVALID: used, expired, unknown, or the link was not proven */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason IDENTITY_LINKED_ELSEWHERE (this Malafat person is another account’s) or EMAIL_TAKEN; TERMS_VERSION_STALE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED: a new account without defaultCurrency or timezone */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description RATE_LIMITED */
                 429: {
                     headers: {
                         [name: string]: unknown;
@@ -2349,6 +3790,97 @@ export interface paths {
             };
         };
         put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/integration/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Sync the firm’s members and roles from Malafat (MUT-594)
+         * @description The full list, every time: the server adds, re-roles and removes. PARTNER → OWNER (owns the firm: accountants, share links), OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER. A person with no MTB3A account waits as a pending seat until their first Sign in with Malafat; nobody is matched by email. A removal ends that person’s membership and Malafat connections for this firm at once. Members made in MTB3A before the first sync are left alone until they sign in with Malafat. After the first sync the firm’s members are read-only in MTB3A.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SyncMembersRequest"];
+                };
+            };
+            responses: {
+                /** @description Synced */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SyncMembersResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_CONNECTED: bind the tenant first */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         post?: never;
         delete?: never;
         options?: never;
@@ -6824,7 +8356,10 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Update a customer (optimistic, If-Match) */
+        /**
+         * Update a customer (optimistic, If-Match)
+         * @description MUT-642: a session may update a customer on a profile it writes (its own, not a Malafat-fed one), e.g. to add the VAT number and address an issued document needs.
+         */
         patch: {
             parameters: {
                 query?: never;
@@ -7008,6 +8543,72 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/customer-balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Every client's balance per currency
+         * @description MUT-664: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals). Negative: the client is in credit. Clients with no movement are absent; money with no client is not here. Dated installments whose date has arrived are posted first, as on the statement.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The balances */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["CustomerBalances"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/customers/{customerId}/statement": {
         parameters: {
             query?: never;
@@ -7034,6 +8635,8 @@ export interface paths {
                     limit?: number;
                     /** @description Opaque `nextCursor` from the previous page. */
                     cursor?: string;
+                    /** @description MUT-664: asc (oldest first, the default) or desc (newest first). The running balance, opening, totals and closing are the same either way. */
+                    order?: "asc" | "desc";
                 };
                 header?: never;
                 path: {
@@ -7891,7 +9494,7 @@ export interface paths {
         put?: never;
         /**
          * Settle a receivable directly, with one payment and one allocation
-         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves).
+         * @description For a session's own captures, not Malafat's multi-receivable allocation UI: amount defaults to the full outstanding amount; paidAt defaults to today and may not be later than today and not more than ten years before it (MUT-227), matching the rule ADR-038 ports to the server for this new surface — paidAt is never set directly, it comes from the payment this creates. Only an entry captured through POST /v1/income (origin ADJUSTMENT) can be settled here; any other receivable answers 404. An Owed an issued tax invoice owns is paid by issuing a receipt (POST /v1/receivables/{id}/settle-and-issue, MUT-661). An entry dated after today (MUT-392) may be settled: from that payment it counts in every figure (D2, counts once money moves). MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -8156,7 +9759,7 @@ export interface paths {
         put?: never;
         /**
          * Record a payment with its allocations, from a preview
-         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment.
+         * @description One transaction: the payment, its allocations, every allocated receivable’s paid amount and status, and the payment number PAY-YYYY-NNNN. The previewToken must match the allocation set and the current receivable balances (409 PREVIEW_STALE otherwise). Unallocated funds stay on the payment. MUT-709: a retry with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded, never a second one.
          */
         post: {
             parameters: {
@@ -8626,7 +10229,7 @@ export interface paths {
         put?: never;
         /**
          * Reverse a payment: every allocation undone, status REVERSED
-         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
+         * @description Whole and final (brief decision 4). A replay with the same Idempotency-Key returns the same result; any other request on an already reversed payment is refused with 409 ALREADY_REVERSED. A reversal that collides with another write on the same receivables is refused with 409 VERSION_MISMATCH and changes nothing; send it again with a new Idempotency-Key. Record a corrected payment with replacesPaymentId afterwards. MUT-709: a payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT (details documentId, docType, number); issue a credit note instead. MUT-453: a session or device session may reverse on a profile the person owns (its creator or a co-owner; otherwise 403 READ_ONLY_PROFILE, reason NOT_OWNER), and only a payment a person recorded (origin CAPTURE) that paid only entries a person recorded; any other is 404.
          */
         post: {
             parameters: {
@@ -9004,7 +10607,7 @@ export interface paths {
         };
         /**
          * Billed, received and credited over a period per currency, with the balance at its start and end
-         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; received = payments − reversals. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
+         * @description MUT-483 (ADR-227). Per currency, the customer statement's lines (GET /v1/customers/{customerId}/statement) summed across every client, plus payments with no client. billed = gross of the CHARGE lines dated in the period (postingDate); credited = CREDIT lines by effectiveDate; payments = PAYMENT lines by receivedOn; reversals = PAYMENT_REVERSAL lines by the reversal's day in the organization timezone, including the original of a corrected payment; refunds = REFUND lines by refundedOn (MUT-643); received = payments − reversals − refunds. A person's own undone capture counts nowhere; a payment with no client counts. openingBalance / closingBalance = what clients owe net of money received and not yet applied, at the start of `from` and the end of `to`: the statement balance summed across clients, plus payments with no client. change = closingBalance − openingBalance = billed − received − credited. `to` defaults to the last day of this month, not today, so closingBalance then includes lines dated later this month. With `to` on or after the last line, closingBalance equals GET /v1/summaries/organization outstanding − unallocated. Due items are posted before the figures are read. Figures are the ledger as it stands at asOf: anything dated into a period — a back-dated entry, a correction, a redate, a credit — changes that period. A corrected period matches the books in net, not line for line: a corrected fee shows the replaced charge, a credit for it and the repost, all on the original posting date. With ?currency= one block, all zeros if nothing exists; without it, a block per currency with a line in the period or a balance at either end, sorted by code. Never summed across currencies.
          */
         get: {
             parameters: {
@@ -10355,6 +11958,206 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/expenses/{expenseId}/move-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * What moving an expense to another of your profiles would change (MUT-589)
+         * @description The move's own gates, in its order, so a refusal shows before the person confirms. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. Changes are listed in the request's language (Accept-Language, else the user's). Creates nothing.
+         */
+        get: {
+            parameters: {
+                query: {
+                    /** @description The profile to move to */
+                    profileId: string;
+                };
+                header?: never;
+                path: {
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The preview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExpenseMovePreview"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/expenses/{expenseId}/move": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Move an expense, with its receipts, to another of your profiles (MUT-589)
+         * @description The expense keeps its id, amount, currency, date, title, notes and typed vendor (ADR-004). Its category is matched by name on the target, then by the same preset in either language, then the target's Other, else none; its vendor is found or created on the target; its client and matter are cleared; its VAT and allocation number are kept only on a firm; its group marks are dropped (membership on the target follows its date). Every receipt on it moves too: same id, its file copied inside the bucket and removed from this profile. 422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked. 409 CONFLICT VERSION_MISMATCH (details.currentVersion) when expectedVersion is stale or a receipt was filed onto it meanwhile: load the preview again. 409 CONFLICT RECEIPT_NOT_READY while an upload on it is unfinished (one left unfinished for over 24 hours is abandoned: the move deletes it). Answers the changes applied. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    expenseId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MoveExpenseRequest"];
+                };
+            };
+            responses: {
+                /** @description Moved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MoveExpenseResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No attachments bucket is configured for this deployment */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/expenses/{expenseId}/receipts": {
         parameters: {
             query?: never;
@@ -11165,7 +12968,7 @@ export interface paths {
         put?: never;
         /**
          * Capture money received or owed, directly — no agreement, no allocation dance
-         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future.
+         * @description What a profile allows is published per profile as `income` on GET /v1/me. On a personal profile Received can stand alone with no client; Owed requires one (explicit or resolved from projectId), else 422 CUSTOMER_REQUIRED_FOR_OWED. On a Malafat-fed profile (MUT-61) Received needs a client Malafat has linked — 422 CUSTOMER_REQUIRED / CUSTOMER_NOT_LINKED otherwise — and is stored unallocated (origin CAPTURE) for Malafat to allocate; Owed is 403 READ_ONLY_PROFILE there. Owed is written as a Receivable (origin ADJUSTMENT), always OUT_OF_SCOPE VAT; its dueDate defaults to EOM_15 of occurredOn; an explicit one may not be before occurredOn nor more than ten years ahead (422 DATE_INVALID, field dueDate). occurredOn is not more than ten years before today (MUT-227); a Received one may not be later than today, an Owed one may be up to ten years after it (MUT-392), 422 DATE_INVALID with details.bound past or future. MUT-709: a Received capture retried with the same Idempotency-Key after a 5xx answers with the payment the earlier attempt recorded (without receivedCount), never a second one.
          */
         post: {
             parameters: {
@@ -11248,7 +13051,7 @@ export interface paths {
         post?: never;
         /**
          * Undo an income entry this session created
-         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
+         * @description 204 again for an id already undone; 404 for an id this profile never had, that belongs to another user, or that is not this session’s to touch. A settled Owed entry or a Received payment with any allocation (MUT-61: Malafat allocates phone payments) is refused with 409, since undoing one with real money applied is an edit, not an undo. MUT-709: a Received payment an issued receipt or invoice-receipt stands on is refused with 409 HAS_DOCUMENT; issue a credit note instead. The Received check and the reversal are one write, so an allocation landing at the same moment is never unwound.
          */
         delete: {
             parameters: {
@@ -12439,6 +14242,3316 @@ export interface paths {
         };
         trace?: never;
     };
+    "/v1/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The business details printed on this profile’s documents */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The details */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Set the business details printed on documents
+         * @description Without If-Match the details are created (409 VERSION_MISMATCH if they exist); with it they are replaced. Issued documents keep the details they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuerDetailsRequest"];
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuer/defaults": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the defaults new documents start with
+         * @description MUT-646: the style, ink, language, VAT pricing, payment terms, bank details and footer. Needs the business details first (422 ISSUER_DETAILS_REQUIRED) and their version in If-Match. Issued documents keep what they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuerDefaultsRequest"];
+                };
+            };
+            responses: {
+                /** @description Saved */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuerDetails"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuer/logo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The logo printed on new documents */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The image */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "image/png": string;
+                        "image/jpeg": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        /**
+         * Set the logo printed on documents
+         * @description MUT-646: the raw PNG or JPEG file, at most 256 KB (413 beyond). The type is read from the file itself (422 LOGO_NOT_AN_IMAGE). Each upload is kept unchanged, so documents already issued go on printing the logo they were issued with.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "image/png": string;
+                    "image/jpeg": string;
+                };
+            };
+            responses: {
+                /** @description Saved */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PAYLOAD_TOO_LARGE */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        /**
+         * Print new documents without a logo
+         * @description MUT-646: issued documents keep theirs.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/numbering": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Answer “already issuing documents elsewhere?”
+         * @description MUT-646: one answer, needed before the first document. `alreadyIssuing: false` starts every type without documents at 1 (undoing an earlier answer); `true` sets the next number of each type in `starts` (at least one), under the D3 rule: 409 HAS_DOCUMENTS, with nothing changed, when one of them has a document. Sending the same answer again is harmless.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingNumberingRequest"];
+                };
+            };
+            responses: {
+                /** @description Answered */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/styles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The document styles a business can pick
+         * @description MUT-570 (Basel, 2026-11-22): the portal and the app list these, so a new style appears without a client release.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The styles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingStyles"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where this profile stands in the invoicing setup
+         * @description MUT-646: the five steps; `canIssue` once the business details and the numbering answer are in (`missing` says which is not). The Tax Authority step stays `later` until the connection exists (MUT-571).
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The setup */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/setup/intro-seen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** The introduction to issuing was read */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The setup */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSetup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Numbering per document type */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The counters */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingSettings"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/starting-numbers/{docType}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set the first number of a document type
+         * @description D3: for a business moving from another tool. Refused with 409 (reason HAS_DOCUMENTS) once a document of that type exists.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
+                    docType: components["schemas"]["IssuedDocType"];
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["StartingNumberRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingCounter"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * What a document would say, without issuing it
+         * @description D7: stateless. The same rules and math as issuing; nothing is written and no number is taken.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDocumentRequest"];
+                };
+            };
+            responses: {
+                /** @description The totals */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocumentPreview"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issued documents, newest first */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know. */
+                    docType?: components["schemas"]["IssuedDocType"];
+                    customerId?: string;
+                    /** @description MUT-664 */
+                    currency?: components["schemas"]["Currency"] & unknown;
+                    /** @description MUT-664: documentDate on or after */
+                    from?: string;
+                    /** @description MUT-664: documentDate on or before */
+                    to?: string;
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocumentPage"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Issue a tax invoice, invoice-receipt, receipt or credit note
+         * @description Irreversible: the document takes the next number of its type and is never changed or removed (a credit note corrects a tax invoice). It posts its money: a tax invoice an Owed, an invoice-receipt an Owed paid in full, a receipt a Received (paying appliesToDocumentId when given), a credit note a credit on its tax invoice up to what is still owed (422 ORIGINAL_PAID beyond). The date may not be in the future nor before the last document of its type (422 DATE_BEFORE_LAST_DOCUMENT). Sending the same Idempotency-Key again returns the same document. MUT-646: 409 ISSUING_SETUP_INCOMPLETE (`details.missing`) until the business details and the numbering answer are in.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDocumentRequest"];
+                };
+            };
+            responses: {
+                /** @description Issued */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One issued document */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The document */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel a payment request (MUT-662)
+         * @description D18: a payment request is cancelled by a record of its own (CX series); the document and its Owed never change, and the Owed goes back to documents due. Refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while an invoice-receipt or receipt refers to it (cancel that with a credit note first), 409 ALREADY_CANCELLED, 422 NOT_A_PAYMENT_REQUEST. Owner only. The same Idempotency-Key returns the same cancellation.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CancelPaymentRequest"];
+                };
+            };
+            responses: {
+                /** @description Cancelled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuedDocument"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/preview/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The PDF a document would be, marked as a draft
+         * @description D7: stateless, like the preview. Watermarked "draft" in the document's language; shows the number the next document of its type would take.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDocumentRequest"];
+                };
+            };
+            responses: {
+                /** @description The PDF */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issued-documents/{documentId}/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * View a document as a PDF (a copy, not counted)
+         * @description D-PDF2: prints "copy" and records nothing. Downloading, emailing or sharing is POST, which counts the copy (the first is the original). MUT-641: digitally signed.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The PDF */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE). */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Produce a copy of a document as a PDF (download, email, share)
+         * @description Records the copy and prints its mark: the first copy ever produced is the original ("מקור"), every later one a copy ("העתק"). A retry with the same Idempotency-Key gets the same copy. MUT-641: digitally signed; the signed original is kept and every later request for it gets the same bytes. Until the original has been signed and kept (a signing outage), every produced copy is the original.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    documentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuedCopyRequest"];
+                };
+            };
+            responses: {
+                /** @description The PDF */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/pdf": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description MUT-641: nothing was sent. SIGNING_UNAVAILABLE: signing failed for now (KMS or the time-stamp authority); try again shortly (a produced original stays owed). SIGNING_NOT_CONFIGURED: this server has no signer, or its certificate needs fixing (details.reason: CERTIFICATE_NOT_VALID, KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE). */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/external-invoices/read": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Read an invoice issued elsewhere before attaching it
+         * @description MUT-647: the raw PDF or photo (at most 10 MB). Answers what the reader found (number, date, total); nothing is stored. With no reader configured, or a file it can’t read, `read` is false and the person types the fields.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/pdf": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            responses: {
+                /** @description What the invoice says */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalInvoiceReading"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PAYLOAD_TOO_LARGE */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/external-invoices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * The invoices issued elsewhere attached to these entries
+         * @description MUT-647: one request for the page of Owed or Received on screen (at most 100 ids); entries without one are left out.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description OWED or RECEIVED; without it (or without ids) the list is empty */
+                    entryKind?: components["schemas"]["ExternalEntryKind"] & unknown;
+                    /** @description Comma-separated entry ids (at most 100): the page of Owed or Received on screen */
+                    entryIds?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The attached invoices */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalInvoiceList"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /**
+         * Attach an invoice issued elsewhere to an Owed or a Received
+         * @description MUT-647: the raw PDF or photo (at most 10 MB) with its confirmed number and date in the query. Kept as an INVOICE attachment of the entry; never numbered by MTB3A. 409 EXTERNAL_INVOICE_EXISTS when the entry already has one (remove it first); 409 ISSUED_HERE for an Owed MTB3A issued the document for.
+         */
+        post: {
+            parameters: {
+                query: {
+                    entryKind: components["schemas"]["ExternalEntryKind"];
+                    entryId: string;
+                    number: string;
+                    documentDate: string;
+                    filename: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/pdf": string;
+                    "image/jpeg": string;
+                    "image/png": string;
+                };
+            };
+            responses: {
+                /** @description Attached */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalInvoice"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PAYLOAD_TOO_LARGE */
+                413: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ATTACHMENTS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/external-invoices/{externalInvoiceId}/file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Open an attached invoice’s file
+         * @description MUT-647: a short-lived signed URL that shows the file inline.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    externalInvoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The signed URL */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ExternalInvoiceFile"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description ATTACHMENTS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/external-invoices/{externalInvoiceId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove an attached invoice issued elsewhere
+         * @description MUT-647: the entry then has no document, so MTB3A can issue one for it again. The row is kept (removed), and its file leaves the entry’s files.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    externalInvoiceId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Removed */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/tax-authority": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether this profile is connected to the Tax Authority
+         * @description MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. 404 when this server has no Tax Authority connection configured.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The connection */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityStatus"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        /**
+         * Disconnect this profile from the Tax Authority
+         * @description MUT-571: the stored tokens are deleted. Issuing above the allocation threshold then waits for a new connection. Owner only.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disconnected */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/tax-authority/connect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start connecting this profile to the Tax Authority
+         * @description MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Where to sign in */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityConnect"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/tax-authority/callback": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Where the Tax Authority sends the browser back after sign-in
+         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    code?: string;
+                    state?: string;
+                    error?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Done (no portal configured) */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/html": string;
+                    };
+                };
+                /** @description Back to the portal */
+                302: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/allocation-decisions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report the choice for a held allocation number
+         * @description MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["AllocationDecisionRequest"];
+                };
+            };
+            responses: {
+                /** @description Reported */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/uniform-file": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Download the uniform file (מבנה אחיד 1.31) for a date range
+         * @description MUT-569 (ADR-272): every document dated `from`…`to` (inclusive; `to` no later than today) as the Tax Authority’s uniform file: a zip with `OPENFRMT/<vat>.<YY>/<MMDDhhmm>/INI.TXT` and `BKMVDATA.zip`, and `report.html` (the printable summary, in `lang`). Documents only (C100, D110, D120); no journal records. `X-Uniform-File-Documents` and `X-Uniform-File-Records` carry the counts.
+         */
+        get: {
+            parameters: {
+                query: {
+                    from: string;
+                    to: string;
+                    lang?: "ar" | "en";
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The zip */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/issuing/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Missing document numbers, per type
+         * @description AC5: every number from a type’s first to its last taken that has no document. Empty in normal use.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Gaps per type */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingGaps"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Documents due, grouped by client
+         * @description MUT-660: what each income entry is due, derived from the client’s documents preference (else the profile default) and what is issued or attached; never stored. view=not-for-invoice lists the entries marked not for invoice instead (kind null). olderThanMonths keeps items dated before today minus N months. Groups are by customerId (null: no client), in the order the items sort; the client’s name is the caller’s. 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    view?: "to-issue" | "not-for-invoice";
+                    /** @description Only items dated before today minus N months (0 = all) */
+                    olderThanMonths?: number | null;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The documents due */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDue"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * How many documents are due (Home’s To issue)
+         * @description MUT-660: every listed item counts (N2), including those that can’t be issued in MTB3A yet (they can be attached or marked). 404 unless invoicing is on.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The count */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["DocumentsDueCount"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue all: one client’s due documents, each with its type and amount
+         * @description MUT-660: issues each item (at most 25, one client per call) in turn, through the same single issue as POST /v1/issued-documents: a tax invoice, receipt or invoice-receipt linked to its entry, dated today, one line for its amount with VAT included. Each item answers issued, held (the Tax Authority held its allocation number: issue it on its own to choose) or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue’s own reason). Irreversible per item. The same Idempotency-Key returns the same answer, and an item is never issued twice. 409 ISSUING_SETUP_INCOMPLETE before the setup is done.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssueDueRequest"];
+                };
+            };
+            responses: {
+                /** @description What happened to each item */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssueDueResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receivables/{receivableId}/settle-and-issue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Record a payment against an Owed and issue its document in the same step
+         * @description MUT-661 (ADR-280): the payment is recorded exactly as POST /v1/receivables/{id}/settle records it (the amount defaults to what is outstanding, paidAt to today). Then, unless issue is false, the document that payment is due (MUT-660, derived from the client’s documents preference: a receipt on the Owed’s tax invoice, or an invoice-receipt for the amount paid; a payment request first client’s payment gets the document that refers to its request) is issued through the same single issue as POST /v1/issued-documents, linked to the payment. The payment is the commitment: if issuing is refused (no allocation number, the Tax Authority held it, the setup incomplete) the answer is still 201, issue.status says held or failed and why, and the document stays in To issue. A payment due no document (a No document client, marked not for invoice) answers issue.status not_due. The Idempotency-Key covers both: a retry returns the payment recorded before and the document issued before, never a second of either. 404 unless invoicing is on for the profile; 403 for a profile the person doesn’t own.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SettleAndIssueRequest"];
+                };
+            };
+            responses: {
+                /** @description Recorded, and issued where it could be */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SettleAndIssueResponse"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/documents-due/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Mark entries not for invoice, or bring them back (bulk)
+         * @description MUT-660: all or nothing, in one transaction. A marked entry is due no document and counts outside Invoice income (it stays in All income, the accountant’s view and exports). An entry already at `value` is left alone, so a replay changes nothing (`changed` counts what changed). Marking an entry with a tax document (a live tax invoice or an invoice-receipt; a receipt doesn’t count) is 409 HAS_TAX_DOCUMENT and changes nothing: a credit note comes first.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description Client-generated key, unique per operation attempt (plan §14.2). */
+                    "idempotency-key": string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["NotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Done */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceResult"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/receivables/{receivableId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark an Owed entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    receivableId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/payments/{paymentId}/not-for-invoice": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Mark a Received entry not for invoice, or bring it back
+         * @description MUT-660: the single-entry form of POST /v1/documents-due/not-for-invoice, with the version you read in If-Match (409 VERSION_MISMATCH otherwise). Setting the value it already has answers 200 unchanged. 409 HAS_TAX_DOCUMENT as there.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header: {
+                    /** @description The `version` you read. A stale version is refused with 409 CONFLICT / VERSION_MISMATCH. */
+                    "if-match": string;
+                };
+                path: {
+                    paymentId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SetNotForInvoiceRequest"];
+                };
+            };
+            responses: {
+                /** @description Set */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["NotForInvoiceEntry"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/fx-rates": {
         parameters: {
             query?: never;
@@ -12995,6 +18108,69 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/members": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Who is on this profile, read-only (MUT-596) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Members */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ProfileMembers"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v1/me": {
         parameters: {
             query?: never;
@@ -13002,7 +18178,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The signed-in person and the hosted profiles they may open */
+        /**
+         * The signed-in person and the hosted profiles they may open
+         * @description MUT-593: under a delegated token (Malafat acting as the person), only the profile its Malafat tenant names, and nothing of the person’s own (no client books, billing standing or operator flag).
+         */
         get: {
             parameters: {
                 query?: never;
@@ -13386,7 +18565,7 @@ export interface paths {
         };
         /**
          * The signed-in person's subscription, trial, prices and country rules
-         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.
+         * @description One read for Settings › Billing. `catalog` holds the GA list prices from Stripe (lookup keys `freelancer_list_{monthly|yearly}_{ils|usd}`), cached for 10 minutes; a currency without both sellable prices is null, and a Stripe failure here makes both null rather than failing the read. `coveredProfileIds`: the profiles a payment would cover (the ones the person created). Person-level: no X-Mutaba3a-Profile. `offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it (never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. `comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. `currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, a subscription, or the running trial, which is business); null when nothing covers them.
          */
         get: {
             parameters: {
@@ -14596,6 +19775,92 @@ export interface paths {
                 };
             };
         };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/business-lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Look a company or nonprofit up by its number
+         * @description Validates the check digit (422 TAX_ID_INVALID), then asks the Registrar of Companies or the nonprofits registry (open data). 404 NOT_IN_REGISTRY for a number neither holds (a sole dealer, a person); 502 REGISTRY_UNAVAILABLE when the registry doesn't answer in time.
+         */
+        get: {
+            parameters: {
+                query: {
+                    number: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Found */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["BusinessLookup"];
+                    };
+                };
+                /** @description Missing, malformed, unknown, revoked, expired or wrong-environment key */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Key lacks the required scope */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description No such entity in this organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation or idempotency-key failure */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Rate limited */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -16380,6 +21645,204 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/admin/v1/organizations/{organizationId}/malafat-delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+         * @description The operator console’s switch (POST /v1/operator/organizations/{organizationId}/malafat-delegation), for scripts and local QA (MUT-596). Off ends every member’s Malafat connection for this firm at once. Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OperatorMalafatDelegationRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMalafatDelegation"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown organization, or Malafat delegation is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_MALAFAT_FED */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/oauth/confidential-clients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Register a confidential client that acts as each person (Malafat, MUT-593) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["RegisterConfidentialClientRequest"];
+                };
+            };
+            responses: {
+                /** @description Registered; give clientId to the client */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConfidentialClient"];
+                    };
+                };
+                /** @description Missing or wrong admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description OAUTH_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/oauth/confidential-clients/{clientId}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Disable a confidential client: every token it holds ends on its next call (MUT-593)
+         * @description For a compromised key. Not needed for a routine key rotation, which the client does at its JWKS URL.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    clientId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disabled */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConfidentialClient"];
+                    };
+                };
+                /** @description Missing or wrong admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such confidential client */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/users": {
         parameters: {
             query?: never;
@@ -17295,6 +22758,74 @@ export interface paths {
             };
         };
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/users/{userId}/two-factor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Reset a person's two-step sign-in after checking who they are (MUT-710 D9)
+         * @description For a person who lost their authenticator and recovery codes. Turns two-step sign-in off, signs them out everywhere, audits it on each of their profiles (ADMIN) and mails them a notice. A suspected takeover is `rotate --lock` plus this (the attacker may have enrolled their own factor).
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Reset */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TwoFactorResetResponse"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Unknown user or organization */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT reason TWO_FACTOR_OFF */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
         options?: never;
         head?: never;
         patch?: never;
@@ -19056,6 +24587,87 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operator/organizations/{organizationId}/malafat-delegation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Let Malafat act for each member of a firm it feeds, or stop it (MUT-593)
+         * @description Off ends every member’s Malafat connection for this firm at once; turning it on again revives none (each person reconnects from Malafat). Audited.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["OperatorMalafatDelegationRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch as it now stands */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorMalafatDelegation"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST; or, on a write, RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator (or, on a decision, no review for this user) */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT with details.reason NOT_MALAFAT_FED: no CONNECTED Malafat integration on this profile */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/grants": {
         parameters: {
             query?: never;
@@ -20251,6 +25863,598 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/jobs/v1/billing/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Monthly summary mails (Cloud Scheduler, days 1–7)
+         * @description MUT-535 (ADR-259). Mails each person who pays or trials, in their language, one summary of the month before: per profile their plan covers and per currency, what came in, what is still owed and what is overdue, read as Reports reads them. Sends at most `MONTHLY_SUMMARY_DAILY_SENDS` per run and stops at the first mail the daily cap refuses; each person is mailed once a month. Answers counts only. Always 200 once it ran; `incomplete` means the next run continues.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMailSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/billing/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the monthly summary mails now, or see who they would mail
+         * @description The same run as the job, for the operator, with one row per person looked at: how many panels it mails, or why not. `dryRun` mails and writes nothing (it doesn’t post due installments, so owed can lag by them). In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMailRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/monthly-summary-mail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Whether the monthly summary mail reaches you (MUT-535)
+         * @description `on` is true when next month’s run would mail you, given a month with something to show: you haven’t turned it off and your plan covers a profile (Malafat-covered profiles only if you turned it on yourself). Person-level: no X-Mutaba3a-Profile.
+         */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The switch */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Turn the monthly summary mail on or off (MUT-535)
+         * @description Off stops it. On returns to the default (every profile your plan covers except Malafat-covered ones), or includes Malafat-covered profiles when they are all you have. Idempotent, so no Idempotency-Key; writes no audit row (a preference, not an event a firm sees).
+         */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MonthlySummaryMailChange"];
+                };
+            };
+            responses: {
+                /** @description The switch now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED or CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Invalid body */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/v1/mail-preferences/monthly-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn the monthly summary mail off (or back on) from its link (MUT-535)
+         * @description D8: the token from the mail link’s fragment, in the body; it names one person and does nothing but this switch. The page asks for a press first, so a link scanner opening the mail changes nothing. An unknown or voided token (the session pepper rotated) answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailOffRequest"];
+                };
+            };
+            responses: {
+                /** @description The switch now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MonthlySummaryMail"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail-preferences/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Turn promotional mail off (or back on) from its link (ADR-279)
+         * @description Since 1.140.0. The come-back offer’s unsubscribe page: the token from the link’s fragment, as the monthly summary’s. It switches only promotional mail; mail about the account keeps coming. An unknown or voided token answers 404.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["MailOffRequest"];
+                };
+            };
+            responses: {
+                /** @description Promotional mail now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OfferMail"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/mail-preferences/unsubscribe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * One-click unsubscribe from a mail client (RFC 8058, ADR-279)
+         * @description Since 1.140.0. The List-Unsubscribe URL of the come-back offer (`mail=offers`) and the monthly summary (`mail=monthly-summary`). A mail client posts `List-Unsubscribe=One-Click` with no page and no origin, so there is no same-origin check. RFC 8058 puts the recipient in the URL, so its token is its own: signed for one person and one mail, it can only turn that mail off (never the mail-off page’s token). The client address’s budget applies.
+         */
+        post: {
+            parameters: {
+                query: {
+                    mail: "offers" | "monthly-summary";
+                    token: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Unsubscribed */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["Unsubscribed"];
+                    };
+                };
+                /** @description NOT_FOUND: the link no longer works */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Too many attempts from this address */
+                429: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/jobs/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Daily Tax Authority re-consent reminders (Cloud Scheduler)
+         * @description MUT-571 AC3. The Tax Authority consent lasts 90 days. Mails the owner of each connected profile, in their language: once when it ends within 10 days, and once when it has ended (for 7 days after), each with a link to connect again. Each stage is sent once per consent (the send log), so a retry or a second run sends nothing new. Answers counts only; an empty run where the Tax Authority connection is not configured.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The run’s counts */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderSummary"];
+                    };
+                };
+                /** @description JOB_UNAUTHORIZED */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description JOBS_NOT_CONFIGURED */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/tax-authority-reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Run the Tax Authority re-consent reminders now, or see who they would mail
+         * @description The same run as the daily job, for the operator, with one row per profile looked at: the stage it mails or why not. `dryRun` mails nothing. In production a real run whose links would point at a local address is refused (409 LINK_ORIGIN_LOOPBACK).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["TrialMailRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["TaxAuthorityReminderRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description LINK_ORIGIN_LOOPBACK */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/jobs/v1/accounts/purge": {
         parameters: {
             query?: never;
@@ -20345,6 +26549,299 @@ export interface paths {
                 };
                 /** @description Missing or invalid admin token */
                 401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Closed profiles whose issued documents are still kept
+         * @description MUT-644 (ADR-277): profiles deleted with their account whose issued documents and business details are still kept: each document 7 years from its own date (since 1.139.0), the business details until the last document goes. Oldest document first; `query` matches the business name (any part) or the start of a VAT number.
+         */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description A business name (any part, any case) or the start of a VAT number */
+                    query?: string;
+                    limit?: number;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The profiles */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RetainedIssuingList"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retention/sweep": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Delete closed profiles’ issued documents whose 7 years have passed, or see which are due
+         * @description MUT-644 (ADR-277 D3): what the hourly account purge also runs. Since 1.139.0 each document goes 7 years after its own date, with its lines, copies, kept original and cancellation; the business details, logos and numbering go with the last. At most 25 profiles a run; `incomplete` means the next run continues. Each profile in its own transaction; one failure never stops the run. `dryRun` deletes nothing.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingRetentionSweepRequest"];
+                };
+            };
+            responses: {
+                /** @description The run */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingRetentionSweepRun"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * A closed profile’s archive of issued documents, for its former owner
+         * @description MUT-644 (ADR-277 D6): a zip of `originals/` (each document’s signed original as kept), `copies/` (a freshly signed copy of every document whose original was never produced) and `uniform-file/` (the uniform file of all its documents, MUT-569). Only for a profile deleted with its account: a live profile’s owners download their own (409 PROFILE_NOT_CLOSED). The operator checks who is asking and hands it over. Its README tells the owner to keep it 7 years (in English, Arabic and Hebrew); the export is written to the retention log with `reference` and, since 1.139.0, the notice’s version, which an erasure needs. `X-Archive-Documents` carries the count.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingArchiveRequest"];
+                };
+            };
+            responses: {
+                /** @description The zip */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/zip": string;
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED: the profile still exists */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description SIGNING_NOT_CONFIGURED or SIGNING_UNAVAILABLE: a copy had to be signed and could not be; nothing was exported */
+                503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/admin/v1/issuing/retained/{organizationId}/erase": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Erase a closed profile’s issued documents before their 7 years, at its former owner’s request
+         * @description Since 1.139.0. MUT-644 (ADR-277 D7): an erasure request may shorten the 7 years only once the former owner was given everything first: an archive exported (`…/archive`) and logged no later than now, whose README told them to keep it 7 years. Then every retained row of the profile is deleted (documents, lines, copies, originals, cancellations, business details, logos, numbering) and an ERASED entry with `reference` is written to the retention log. Only for a profile deleted with its account (409 PROFILE_NOT_CLOSED).
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    organizationId: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["IssuingEraseRequest"];
+                };
+            };
+            responses: {
+                /** @description Erased */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["IssuingErased"];
+                    };
+                };
+                /** @description Missing or invalid admin token */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND: no issued documents or business details are kept under this id */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason PROFILE_NOT_CLOSED (the profile still exists) or ARCHIVE_NOT_HANDED_OVER (export the archive for the former owner first) */
+                409: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -20735,6 +27232,135 @@ export interface paths {
                 };
                 /** @description OAUTH_NOT_CONFIGURED */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/connected-apps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Apps that act for you in a firm: Malafat (MUT-593) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Live connections, newest first */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ConnectedAppList"];
+                    };
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — Malafat access is switched off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/me/connected-apps/{grantId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Stop an app acting for you in a firm (MUT-593)
+         * @description Ends every connection of that app in that firm; its next call fails. Malafat asks you to reconnect if you use it again.
+         */
+        delete: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    grantId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Disconnected */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description No valid session */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description PRINCIPAL_NOT_ACCEPTED, CROSS_SITE_REQUEST or ACCOUNT_CLOSING */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description NOT_FOUND — no such live connection of yours, or Malafat access is switched off on this server */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -21571,6 +28197,10 @@ export interface components {
                 displayName: string;
                 locale: components["schemas"]["UserLocale"];
                 malafatSuggestions: components["schemas"]["MalafatSuggestions"];
+                /** @description MUT-596: whether the person has a way in of their own (a password they chose, or a passkey). False only for an account Sign in with Malafat created, until they add one; the portal and app suggest it. */
+                ownSignIn: boolean;
+                /** @description MUT-596: whether the account has a password the person chose. False for an account Sign in with Malafat created until they set one: Change password then asks for no current password. */
+                ownPassword: boolean;
                 trialPrompt: components["schemas"]["TrialPrompt"];
                 passkeyPrompt: components["schemas"]["PasskeyPrompt"];
                 status: components["schemas"]["UserStatus"];
@@ -21578,6 +28208,7 @@ export interface components {
                 features: string[];
                 /** @enum {boolean} */
                 operator?: true;
+                twoFactor: components["schemas"]["TwoFactorState"];
             };
             profiles: components["schemas"]["HostedProfile"][];
             limits: components["schemas"]["ProfileLimits"];
@@ -21633,6 +28264,13 @@ export interface components {
              */
             deleteAfter: string;
         } | null;
+        TwoFactorState: {
+            enabled: boolean;
+            /** @enum {string|null} */
+            method: "totp" | "email" | null;
+            recoveryCodesLeft: number;
+            requiredForIssuing: boolean;
+        };
         HostedProfile: {
             /** Format: uuid */
             id: string;
@@ -21654,6 +28292,7 @@ export interface components {
             type: "PERSONAL" | "BUSINESS" | null;
             version: number;
             firm: boolean;
+            managedInMalafat: boolean;
             role: components["schemas"]["MembershipRole"];
             /** Format: date-time */
             firmRequestedAt: string | null;
@@ -21668,7 +28307,7 @@ export interface components {
                 /** @enum {string} */
                 source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
                 /** @enum {string|null} */
-                tier: "FREELANCER" | "FIRM" | null;
+                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
                 /** Format: date-time */
                 until: string | null;
                 paused?: boolean;
@@ -21730,8 +28369,8 @@ export interface components {
         };
         ErrorEnvelope: {
             error: {
-                /** @enum {string} */
-                code: "INVALID_SIGNATURE" | "EMAIL_NOT_ACCEPTED" | "UNAUTHENTICATED" | "INVALID_API_KEY" | "API_KEY_REVOKED" | "API_KEY_EXPIRED" | "API_KEY_ENVIRONMENT_MISMATCH" | "ADMIN_UNAUTHORIZED" | "INVALID_WEBHOOK_SIGNATURE" | "JOB_UNAUTHORIZED" | "INVALID_CREDENTIALS" | "SESSION_EXPIRED" | "INSUFFICIENT_SCOPE" | "PRINCIPAL_NOT_ACCEPTED" | "READ_ONLY_PROFILE" | "CROSS_SITE_REQUEST" | "CHECK_FAILED" | "ACCOUNT_UNDER_REVIEW" | "CURRENT_PASSWORD_WRONG" | "ACCOUNT_CLOSING" | "ACCOUNT_CLOSE_BLOCKED" | "RECENT_SIGN_IN_REQUIRED" | "PASSKEY_NOT_ACCEPTED" | "PASSKEY_LIMIT" | "SUBSCRIPTION_LAPSED" | "ACCOUNTANT_PLAN_REQUIRED" | "INVITE_EMAIL_MISMATCH" | "SHARE_LINK_REFUSED" | "FEATURE_NOT_ENABLED" | "NOT_FOUND" | "ORGANIZATION_MISMATCH" | "CONFLICT" | "OPERATION_IN_PROGRESS" | "RECONCILE_RUNNING" | "LINK_ORIGIN_LOOPBACK" | "TERMS_VERSION_STALE" | "SETUP_LINK_UNUSABLE" | "VALIDATION_FAILED" | "IDEMPOTENCY_KEY_REUSED" | "IDEMPOTENCY_KEY_REQUIRED" | "PAYLOAD_TOO_LARGE" | "RATE_LIMITED" | "INTERNAL" | "RECONCILE_FAILED" | "STRIPE_UNAVAILABLE" | "ATTACHMENTS_NOT_CONFIGURED" | "BILLING_NOT_CONFIGURED" | "MAILER_NOT_CONFIGURED" | "JOBS_NOT_CONFIGURED" | "OAUTH_NOT_CONFIGURED" | "FX_RATES_UNAVAILABLE" | "APP_UPDATE_REQUIRED" | "MAINTENANCE";
+                /** @description One of x-extensible-enum. New codes are added without notice; treat an unknown code as a generic error for its HTTP status. */
+                code: string;
                 message: string;
                 details?: unknown;
                 requestId: string;
@@ -21766,6 +28405,17 @@ export interface components {
         } & {
             [key: string]: unknown;
         };
+        CodeSignInRequest: {
+            email: string;
+            code: string;
+        };
+        TwoFactorFinishRequest: {
+            challengeToken: string;
+            /** @description The authenticator app's code, or the emailed one */
+            code?: string;
+            /** @description One of the ten recovery codes (xxxx-xxxx), in place of `code`; works once */
+            recoveryCode?: string;
+        };
         MalafatSuggestionsChange: {
             off?: boolean;
             dismiss?: components["schemas"]["MalafatMoment"][];
@@ -21788,7 +28438,8 @@ export interface components {
             token: string;
         };
         ChangePasswordRequest: {
-            currentPassword: string;
+            /** @description Required, except for an account Sign in with Malafat created that has no password of its own yet (Me.user.ownSignIn false, MUT-596): it sets its first one. */
+            currentPassword?: string;
             newPassword: components["schemas"]["NewPassword"];
             /**
              * @description MUT-262: a device session sends true to be signed in under a new token, returned in a 200 body; the old one stops working. Without it a device session keeps its token (204). A cookie session always rotates, whatever this says.
@@ -21800,6 +28451,51 @@ export interface components {
         NewPassword: string;
         DeviceSession: components["schemas"]["Me"] & {
             token: string;
+        };
+        TwoFactorEnrolment: {
+            enrolmentToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            secret?: string;
+            otpauthUri?: string;
+            qrSvg?: string;
+            emailHint?: string;
+            emailCodeRequired: boolean;
+        };
+        TwoFactorEnrolmentRequest: {
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorRecoveryCodes: {
+            recoveryCodes: string[];
+        };
+        TwoFactorConfirmRequest: {
+            enrolmentToken: string;
+            code: string;
+            emailCode?: string;
+        };
+        TwoFactorManageRequest: {
+            /** @description Required when the person has a password of their own (Me ownPassword) */
+            currentPassword?: string;
+            /** @description From POST /v1/me/two-factor/challenge; required while two-step sign-in is on */
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
+        };
+        TwoFactorEmailCodeResponse: {
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        TwoFactorEmailCodeRequest: {
+            challengeToken: string;
         };
         PasskeyList: {
             items: components["schemas"]["Passkey"][];
@@ -21937,6 +28633,10 @@ export interface components {
             /** Format: date-time */
             expiresAt: string;
             termsVersion: components["schemas"]["TermsVersion"];
+            twoFactor?: {
+                /** @enum {string} */
+                method: "totp" | "email";
+            } | null;
         } | {
             /** @enum {string} */
             state: "expired" | "used" | "superseded" | "invalid";
@@ -21946,6 +28646,14 @@ export interface components {
         SetupLinkPurpose: "SETUP" | "RESET" | "SIGNUP";
         SetupLinkCheckRequest: {
             token: string;
+        };
+        SetupLinkTwoFactor: {
+            challengeToken: string;
+            /** @enum {string} */
+            method: "totp" | "email";
+            /** Format: date-time */
+            expiresAt: string;
+            emailHint?: string;
         };
         SetupLinkRedeemResponse: {
             email: string;
@@ -21965,10 +28673,15 @@ export interface components {
             displayName?: string;
             defaultCurrency?: components["schemas"]["Currency"];
             timezone?: string;
+            challengeToken?: string;
+            code?: string;
+            recoveryCode?: string;
         };
         SelfServiceDoors: {
             signup: boolean;
             recovery: boolean;
+            malafatSignIn: boolean;
+            signInCode: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */
@@ -21985,6 +28698,59 @@ export interface components {
             email: string;
             locale?: components["schemas"]["UserLocale"];
             turnstileToken: string;
+        };
+        SignInCodeRequest: {
+            /** @description Normalised (trim, NFKC, lower-case) before use. */
+            email: string;
+            locale?: components["schemas"]["UserLocale"];
+            turnstileToken: string;
+        };
+        DeviceSignInCodeRequest: {
+            /** @description Normalised (trim, NFKC, lower-case) before use. */
+            email: string;
+            locale?: components["schemas"]["UserLocale"];
+        };
+        MalafatOffice: {
+            host: string;
+        };
+        MalafatSignInState: {
+            /** @enum {string} */
+            state: "signed_in" | "needs_consent" | "needs_link";
+            me?: components["schemas"]["Me"] & unknown;
+            /** @description signed_in with client=app: a device session token, as POST /v1/device-sessions */
+            token?: string;
+            /** @description needs_link / needs_consent: for /link and /consent, 15 minutes */
+            ticket?: string;
+            /** @description needs_consent: true when consent creates a new account (send defaultCurrency and timezone) */
+            creates?: boolean;
+            office?: {
+                name: string;
+            };
+            /** @description The Malafat account’s verified email */
+            email?: string;
+            /** @description needs_link / needs_consent: the current terms version; a new account agrees to it on consent (acceptedTermsVersion), so it isn’t asked again after (MUT-596) */
+            termsVersion?: string;
+        };
+        MalafatExchangeRequest: {
+            result: string;
+            app_verifier?: string;
+        };
+        MalafatLinkRequest: {
+            ticket: string;
+            password?: string;
+            passkey?: {
+                /** Format: uuid */
+                challengeId: string;
+                response: {
+                    [key: string]: unknown;
+                };
+            };
+        };
+        MalafatConsentRequest: {
+            ticket: string;
+            acceptedTermsVersion?: string;
+            defaultCurrency?: components["schemas"]["Currency"];
+            timezone?: string;
         };
         AccountantGrant: {
             /** Format: uuid */
@@ -22120,6 +28886,27 @@ export interface components {
             /** Format: date-time */
             disconnectedAt: string | null;
         } | null;
+        SyncMembersResponse: {
+            added: number;
+            changed: number;
+            /** @description Their memberships and Malafat connections for this firm ended with the sync */
+            removed: number;
+            /** @description Listed people who have not signed in to MTB3A with Malafat yet */
+            pending: number;
+        };
+        SyncMembersRequest: {
+            members: {
+                /** @description The Malafat user id: stable, never the email */
+                subject: string;
+                /** Format: email */
+                email: string;
+                /**
+                 * @description PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER
+                 * @enum {string}
+                 */
+                role: "PARTNER" | "OFFICE_ADMIN" | "ASSOCIATE" | "INTERN";
+            }[];
+        };
         BindIntegrationResponse: {
             integration: components["schemas"]["Integration"];
             created: boolean;
@@ -22968,7 +29755,7 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** Format: uuid */
             originId: string | null;
             currency: components["schemas"]["Currency"];
@@ -22986,6 +29773,7 @@ export interface components {
             outstanding: string;
             vatTreatment: components["schemas"]["VatTreatment"];
             vatRateBasisPoints: number;
+            notForInvoice: boolean;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -23311,7 +30099,7 @@ export interface components {
         /** @enum {string} */
         InboxEntryKind: "income" | "expense";
         /** @enum {string|null} */
-        StoredCaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | null;
+        StoredCaptureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | "malafat" | null;
         InboxCount: {
             count: number;
         };
@@ -23473,7 +30261,7 @@ export interface components {
             /** Format: uuid */
             createdByUserId: string | null;
             /** @enum {string} */
-            origin: "capture" | "integration";
+            origin: "capture" | "integration" | "issued_document";
             /** Format: uuid */
             settlesOwedId: string | null;
             /** Format: uuid */
@@ -23534,6 +30322,9 @@ export interface components {
             phone: string | null;
             notes: string | null;
             vatTreatment: components["schemas"]["VatTreatment"] & unknown;
+            taxId: string | null;
+            address: string | null;
+            documentsPreference: components["schemas"]["DocumentsPreference"];
             status: components["schemas"]["EntityStatus"];
             /** Format: date-time */
             archivedAt: string | null;
@@ -23544,6 +30335,11 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description TAX_INVOICE_FIRST: a tax invoice when owed, then a receipt per payment. PAYMENT_REQUEST_FIRST: a payment request when owed, then an invoice-receipt per payment. ON_PAYMENT: an invoice-receipt per payment. NO_DOCUMENT: nothing is due (the income still counts, as Not for invoice).
+         * @enum {string|null}
+         */
+        DocumentsPreference: "TAX_INVOICE_FIRST" | "PAYMENT_REQUEST_FIRST" | "ON_PAYMENT" | "NO_DOCUMENT" | null;
         /** @enum {string} */
         EntityStatus: "ACTIVE" | "ARCHIVED";
         ExternalReference: {
@@ -23557,6 +30353,8 @@ export interface components {
             phone?: string;
             notes?: string;
             vatTreatment?: components["schemas"]["VatTreatment"];
+            taxId?: string;
+            address?: string;
             externalReference?: components["schemas"]["ExternalReference"];
         };
         CustomerPage: {
@@ -23570,6 +30368,20 @@ export interface components {
             phone?: string | null;
             notes?: string | null;
             vatTreatment?: components["schemas"]["VatTreatment"] & unknown;
+            taxId?: string | null;
+            address?: string | null;
+            documentsPreference?: components["schemas"]["DocumentsPreference"];
+        };
+        CustomerBalances: {
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            asOf: string;
+            balances: {
+                /** Format: uuid */
+                customerId: string;
+                currency: components["schemas"]["Currency"];
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                balance: string;
+            }[];
         };
         CustomerStatement: {
             /** Format: uuid */
@@ -23609,6 +30421,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CHARGE";
             /** Format: uuid */
@@ -23639,6 +30454,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "CREDIT";
             /** Format: uuid */
@@ -23659,6 +30477,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT";
             /** Format: uuid */
@@ -23683,6 +30504,9 @@ export interface components {
             credit: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
             /** @enum {string} */
             kind: "PAYMENT_REVERSAL";
             /** Format: uuid */
@@ -23690,6 +30514,42 @@ export interface components {
             receiptNumber: string | null;
             reason: string | null;
             reasonCode: components["schemas"]["CreditReasonCode"];
+        } | {
+            id: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            date: string;
+            number: string | null;
+            /** Format: uuid */
+            projectId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            debit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            credit: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            runningBalance: string;
+            documents: components["schemas"]["StatementDocumentTag"][];
+            /** @enum {string|null} */
+            due: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+            /** @enum {string} */
+            kind: "REFUND";
+            /** Format: uuid */
+            refundId: string;
+            /** Format: uuid */
+            creditNoteId: string;
+            method: components["schemas"]["PaymentMethod"];
+            reference: string | null;
+        };
+        StatementDocumentTag: {
+            /**
+             * Format: uuid
+             * @description The issued document; null for one issued elsewhere
+             */
+            id: string | null;
+            /** @enum {string} */
+            source: "ISSUED" | "EXTERNAL";
+            /** @enum {string} */
+            docType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
+            number: string;
         };
         StatementChargeOrigin: {
             /** @enum {string} */
@@ -23786,7 +30646,11 @@ export interface components {
              */
             projectId: string | null;
             origin: components["schemas"]["PaymentOrigin"];
-            captureSource: components["schemas"]["CaptureSource"] & unknown;
+            /**
+             * @description The capture surface; 'malafat' = recorded by Malafat acting as the person (MUT-596). Null for `integration`.
+             * @enum {string|null}
+             */
+            captureSource: "app" | "siri" | "widget" | "quick_action" | "share" | "mcp" | "malafat" | null;
             /** @description Who captured it: null for payments recorded through the API key, and once that person's account is gone. */
             capturedBy: {
                 /** Format: uuid */
@@ -23796,8 +30660,10 @@ export interface components {
             currency: components["schemas"]["Currency"];
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
-            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            /** @description Applied to receivables, plus (MUT-643) what credit notes refunded from it */
             allocated: string;
+            /** @description MUT-643: what credit notes gave back to the client from this payment (counted in allocated). Since 1.137.0-mut643. */
+            refunded: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             unallocated: string;
             allocationState: components["schemas"]["AllocationState"];
@@ -23806,6 +30672,7 @@ export interface components {
             method: components["schemas"]["PaymentMethod"];
             reference: string | null;
             receiptNumber: string | null;
+            notForInvoice: boolean;
             notes: string | null;
             status: components["schemas"]["PaymentStatus"];
             /** Format: date-time */
@@ -23824,7 +30691,7 @@ export interface components {
             updatedAt: string;
         };
         /** @enum {string} */
-        PaymentOrigin: "integration" | "capture";
+        PaymentOrigin: "integration" | "capture" | "issued_document";
         /** @enum {string} */
         AllocationState: "unallocated" | "partial" | "allocated";
         /** @enum {string} */
@@ -23837,7 +30704,7 @@ export interface components {
             /** Format: uuid */
             projectId: string;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
             amount: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -23907,7 +30774,7 @@ export interface components {
             /** Format: uuid */
             agreementId: string | null;
             /** @enum {string} */
-            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT";
+            origin: "INSTALLMENT" | "RETAINER_CHARGE" | "ADJUSTMENT" | "ISSUED_DOCUMENT";
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
             dueDate: string;
             /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
@@ -24106,12 +30973,14 @@ export interface components {
             billed: string;
             /** @description CREDIT lines dated in the period (effectiveDate). */
             credited: string;
-            /** @description payments − reversals; may be negative when an earlier payment was reversed in the period. */
+            /** @description payments − reversals − refunds; may be negative when an earlier payment was reversed or refunded in the period. */
             received: string;
             /** @description PAYMENT lines dated in the period (receivedOn). */
             payments: string;
             /** @description PAYMENT_REVERSAL lines dated in the period (the reversal's day in the organization timezone): a bounce, an owner's reversal, the original of a corrected payment. */
             reversals: string;
+            /** @description MUT-643 (since 1.137.0-mut643): REFUND lines dated in the period (refundedOn): money credit notes gave back. Never in reversals. */
+            refunds: string;
             /** @description closingBalance − openingBalance = billed − received − credited. */
             change: string;
             /** @description What clients owed at the end of `to`, on the same terms as openingBalance. */
@@ -24298,6 +31167,17 @@ export interface components {
                 /** @description Each counted entry’s days, ascending; no ids or amounts. Lets a caller combine profiles into one median */
                 samples: number[];
             };
+            /** @description MUT-660: invoicing profiles only. The period’s received money split into Invoice income and Not for invoice, per currency; all = their sum = received */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
+        };
+        InvoiceSplitRow: {
+            currency: components["schemas"]["Currency"];
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            invoiceIncome: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            notForInvoice: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            all: string;
         };
         Verdict: {
             /** @description Calendar date in the organization timezone, YYYY-MM-DD */
@@ -24679,6 +31559,39 @@ export interface components {
             /** @description MUT-557: the invoice's allocation number; spaces and dashes are dropped, then it must be nine digits (422 ALLOCATION_NUMBER_INVALID). Absent keeps it; null clears it. Since 1.106.0-mut557. */
             allocationNumber?: string | null;
         };
+        ExpenseMovePreview: {
+            changes: components["schemas"]["ExpenseMoveChange"][];
+            /** @description READY receipts that move with it */
+            receiptCount: number;
+            /** @description Send as expectedVersion to the move */
+            expenseVersion: number;
+        };
+        /** @description One field a move changes. Listed in this order: category, client, matter, vat, allocationNumber, groups. Never the amount, currency, date, title, notes or typed vendor. */
+        ExpenseMoveChange: {
+            /** @enum {string} */
+            field: "category" | "client" | "matter" | "vat" | "allocationNumber" | "groups";
+            /** @description As the viewer reads it: a seeded category in their language, VAT as an amount in the expense's currency, groups joined with ", " */
+            from: string | null;
+            /** @description null = cleared (or no category, no group) */
+            to: string | null;
+        };
+        /** @description The expense on its new profile (same id) with its receipts, the profile it left, and what changed */
+        MoveExpenseResponse: {
+            expense: components["schemas"]["ExpenseDetail"];
+            /** Format: uuid */
+            fromProfileId: string;
+            /** @description The changes applied (they can differ from the preview's if the target changed in between) */
+            changes: components["schemas"]["ExpenseMoveChange"][];
+        };
+        MoveExpenseRequest: {
+            /**
+             * Format: uuid
+             * @description Another profile of the person's, which they may write now
+             */
+            profileId: string;
+            /** @description The preview's expenseVersion */
+            expectedVersion: number;
+        };
         CreateReceiptUploadResponse: {
             receipt: components["schemas"]["ExpenseReceipt"];
             upload: components["schemas"]["SignedUpload"];
@@ -24932,6 +31845,573 @@ export interface components {
             toCurrency?: components["schemas"]["Currency"] & unknown;
             notes?: string | null;
         };
+        IssuerDetails: {
+            legalName: string;
+            vatId: string;
+            dealerType: components["schemas"]["DealerType"];
+            address: string | null;
+            city: string | null;
+            phone: string | null;
+            email: string | null;
+            website: string | null;
+            ink: string;
+            documentStyle: string;
+            pricesIncludeVat: boolean;
+            defaultLanguage: string;
+            paymentTermsDays: number | null;
+            bankDetails: string | null;
+            footerNote: string | null;
+            /** @description MUT-648: offer to issue a document after saving income */
+            offerAfterSave: boolean;
+            defaultDocumentsPreference: components["schemas"]["DocumentsPreference"] & unknown;
+            version: number;
+        };
+        /**
+         * @description עוסק מורשה, עוסק פטור (receipts only), חברה, עמותה
+         * @enum {string}
+         */
+        DealerType: "LICENSED" | "EXEMPT" | "COMPANY" | "NONPROFIT";
+        IssuerDetailsRequest: {
+            legalName: string;
+            /** @description VAT file number or company number (ח.פ./ע.מ.), 9 digits */
+            vatId: string;
+            dealerType: components["schemas"]["DealerType"];
+            address?: string | null;
+            city?: string | null;
+            phone?: string | null;
+            /** Format: email */
+            email?: string | null;
+            website?: string | null;
+            /** @description V1-a: the default for new documents (default false) */
+            pricesIncludeVat?: boolean;
+        };
+        IssuerDefaultsRequest: {
+            /**
+             * @description The layout new documents print in
+             * @enum {string}
+             */
+            documentStyle: "PROFESSIONAL" | "MODERN" | "MINIMAL";
+            /**
+             * @description Black or blue ink on white paper
+             * @enum {string}
+             */
+            ink: "BLACK" | "BLUE";
+            defaultLanguage: components["schemas"]["DocumentLanguage"];
+            pricesIncludeVat: boolean;
+            /** @description A tax invoice’s default due date, in days after its date */
+            paymentTermsDays?: number | null;
+            /** @description Printed for paying by transfer */
+            bankDetails?: string | null;
+            /** @description Printed at the foot of every document */
+            footerNote?: string | null;
+            /** @description MUT-648: after saving an Owed or a Received, offer to issue its document (unchanged when omitted) */
+            offerAfterSave?: boolean;
+            defaultDocumentsPreference?: components["schemas"]["DocumentsPreference"] & unknown;
+        };
+        /** @enum {string} */
+        DocumentLanguage: "ar" | "he" | "en";
+        IssuingSetup: {
+            steps: {
+                /** @enum {string} */
+                details: "done" | "todo" | "later";
+                /** @enum {string} */
+                logo: "done" | "todo" | "later";
+                /** @enum {string} */
+                defaults: "done" | "todo" | "later";
+                /** @enum {string} */
+                numbering: "done" | "todo" | "later";
+                /** @enum {string} */
+                taxAuthority: "done" | "todo" | "later";
+            };
+            canIssue: boolean;
+            /** @description What blocks issuing (empty when canIssue) */
+            missing: ("DETAILS" | "NUMBERING")[];
+            introSeen: boolean;
+            hasLogo: boolean;
+        };
+        IssuingNumberingRequest: {
+            alreadyIssuing: boolean;
+            /** @description The next number per document type, when moving from another tool */
+            starts?: {
+                TAX_INVOICE?: number;
+                TAX_INVOICE_RECEIPT?: number;
+                CREDIT_NOTE?: number;
+                RECEIPT?: number;
+                PAYMENT_REQUEST?: number;
+            };
+        };
+        IssuingStyles: {
+            styles: {
+                /** @description The value PUT /v1/issuer/defaults takes as documentStyle */
+                key: string;
+            }[];
+        };
+        IssuingSettings: {
+            counters: components["schemas"]["IssuingCounter"][];
+        };
+        IssuingCounter: {
+            docType: components["schemas"]["IssuedDocType"];
+            start: number;
+            next: number;
+            hasDocuments: boolean;
+        };
+        /**
+         * @description 305, 320, 330, 400 and 300 (MUT-662: payment request, חשבון עסקה, not a tax document) in the Tax Authority's codes. Clients skip types they don't know.
+         * @enum {string}
+         */
+        IssuedDocType: "TAX_INVOICE" | "TAX_INVOICE_RECEIPT" | "CREDIT_NOTE" | "RECEIPT" | "PAYMENT_REQUEST";
+        StartingNumberRequest: {
+            start: number;
+        };
+        IssuedDocumentPreview: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            subtotal: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            discount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            vatRateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            pricesIncludeVat: boolean;
+            lines: {
+                index: number;
+                description: string;
+                kind: string;
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                pricesIncludeVat: boolean;
+                vatRateBasisPoints: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
+            allocation: components["schemas"]["IssueAllocation"];
+            creditNote: components["schemas"]["CreditNoteFacts"];
+        };
+        /** @description MUT-711: null when the document needs no allocation number. Since 1.133.0-mut711. */
+        IssueAllocation: {
+            /**
+             * @description AUTOMATIC: MTB3A requests the number when issuing. MANUAL: it cannot (no connection, or the Tax Authority is off here); the business requests it by hand and sends it as `manualAllocation`.
+             * @enum {string}
+             */
+            mode: "AUTOMATIC" | "MANUAL";
+            /** @description The number this document would take if issued now. A preview, never a reservation. */
+            nextNumber: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /** @description The amount before VAT the Tax Authority asks for */
+            net: string;
+            /** @description The client’s VAT number */
+            customerTaxId: string;
+            /**
+             * Format: uri
+             * @description Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)
+             */
+            requestUrl: string;
+        } | null;
+        /** @description MUT-643: a credit note's facts against its original; null for other types. Since 1.137.0-mut643. */
+        CreditNoteFacts: {
+            /** @description Still owed on the original: credited first */
+            outstanding: string;
+            /** @description The part of this credit note the client already paid: when above 0, the issue needs `paidPart` */
+            paid: string;
+            /** @description The most a credit note may credit now: the original less the credit notes on it (only what is still owed when the original does not own its Owed) */
+            maximum: string;
+        } | null;
+        IssueDocumentRequest: {
+            docType: components["schemas"]["IssuedDocType"];
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /**
+             * @description Shekels only in v1 (D4)
+             * @enum {string}
+             */
+            currency: "ILS";
+            language: components["schemas"]["DocumentLanguage"];
+            /**
+             * Format: uuid
+             * @description Required except for a receipt
+             */
+            customerId?: string | null;
+            /** @description A tax invoice: when its Owed falls due (default: the document date) */
+            dueDate?: string;
+            /**
+             * Format: uuid
+             * @description A credit note: the tax invoice or (MUT-643) invoice-receipt it credits
+             */
+            originalId?: string;
+            /** @description MUT-643 (ADR-276): a credit note reaching past what is still owed into what the client already paid says what happens to that part (the preview's `creditNote.paid`). KEEP leaves it with the client as unallocated money; REFUND records it going back (not before the credit note's date). Without it such a credit note is 422 ORIGINAL_PAID with `details.paid`. Only on a credit note. Since 1.137.0-mut643. */
+            paidPart?: {
+                /** @enum {string} */
+                mode: "KEEP";
+            } | {
+                /** @enum {string} */
+                mode: "REFUND";
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                refundedOn: string;
+                /** @enum {string} */
+                method: "CASH" | "BANK";
+                reference?: string | null;
+            };
+            /**
+             * Format: uuid
+             * @description A receipt: the open tax invoice or payment request it pays. An invoice-receipt (MUT-662): the payment request it settles (no Owed of its own is posted).
+             */
+            appliesToDocumentId?: string;
+            /** @description An invoice-receipt or a receipt: how the money came in */
+            payment?: {
+                /** @enum {string} */
+                method: "CASH" | "BANK";
+                reference?: string | null;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+            };
+            /** @description A discount on the whole document, in the document's terms (VAT included or not) */
+            discount?: string;
+            /** @description V1-a: whether the prices typed include VAT; default from the business details */
+            pricesIncludeVat?: boolean;
+            /** @description I1-a: the recorded Owed (tax invoice) or Received (invoice-receipt or receipt) this document is for. The document takes it over; no new Owed or Received is posted. Same customer, currency and amount (422 ENTRY_MISMATCH). */
+            fromEntry?: {
+                /** @enum {string} */
+                kind: "owed" | "received";
+                /** Format: uuid */
+                id: string;
+            };
+            notes?: string | null;
+            /** @description MUT-572: issue without an allocation number after the Tax Authority held one. Names the held request by its Idempotency-Key; the server reports CONTINUE first. */
+            withoutAllocation?: {
+                heldKey: string;
+            };
+            /** @description MUT-711 (ADR-273): an allocation number the business requested by hand on the Tax Authority site, for a document that needs one when MTB3A cannot request it. Saved with source MANUAL. The number is never reserved: if another document took `forNumber` first, 409 ALLOCATION_NUMBER_MOVED (`details.next`) and nothing is issued. 422 ALLOCATION_NOT_NEEDED for a document that needs none. Since 1.133.0-mut711. */
+            manualAllocation?: {
+                /** @description The allocation number, nine digits; spaces and dashes are dropped (422 ALLOCATION_NUMBER_INVALID otherwise). */
+                number: string;
+                /** @description The document number it was requested for: the preview's `allocation.nextNumber` at the time. */
+                forNumber: number;
+            };
+            lines: {
+                description: string;
+                /** @enum {string} */
+                kind: "GOODS" | "SERVICE";
+                /** @description Positive, up to 3 decimals, e.g. "40" or "1.5" */
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount?: string;
+                /** @description V1-a: overrides the document for this line */
+                pricesIncludeVat?: boolean;
+                /** @description No VAT on this line */
+                vatExempt?: boolean;
+            }[];
+        };
+        IssuedDocument: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            subtotal: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            discount: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            net: string;
+            vatRateBasisPoints: number;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            vat: string;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            gross: string;
+            pricesIncludeVat: boolean;
+            lines: {
+                index: number;
+                description: string;
+                kind: string;
+                quantity: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                unitPrice: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                discount: string;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                net: string;
+                pricesIncludeVat: boolean;
+                vatRateBasisPoints: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                vat: string;
+            }[];
+            /** Format: uuid */
+            id: string;
+            docType: components["schemas"]["IssuedDocType"];
+            number: number;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+            documentDate: string;
+            /** Format: date-time */
+            issuedAt: string;
+            currency: string;
+            language: string;
+            style: string;
+            ink: string;
+            /** Format: uuid */
+            customerId: string | null;
+            customer: {
+                [key: string]: unknown;
+            };
+            issuer: {
+                [key: string]: unknown;
+            };
+            notes: string | null;
+            /** Format: uuid */
+            originalId: string | null;
+            paymentDetails: {
+                method: string;
+                reference: string | null;
+                /** @description Calendar date in the organization timezone, YYYY-MM-DD */
+                receivedOn: string;
+            } | null;
+            allocationNumber: string | null;
+            /**
+             * @description MUT-711: where the allocation number came from: requested by MTB3A (API) or entered by the business (MANUAL). Null when there is none. Since 1.133.0-mut711.
+             * @enum {string|null}
+             */
+            allocationSource: "API" | "MANUAL" | null;
+            /** Format: uuid */
+            receivableId: string | null;
+            /** Format: uuid */
+            paymentId: string | null;
+            /**
+             * Format: uuid
+             * @description MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643.
+             */
+            refundId: string | null;
+            coreVersion: string;
+            /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
+            displayNumber: string;
+            paymentRequest: components["schemas"]["PaymentRequestFacts"];
+        };
+        /** @description MUT-662: a payment request's derived status; null for other types */
+        PaymentRequestFacts: {
+            /** @enum {string} */
+            status: "UNPAID" | "PARTLY_PAID" | "PAID" | "CANCELLED";
+            /** @description What the referring invoice-receipts and receipts cover, after their credit notes */
+            covered: string;
+            linked: {
+                /** Format: uuid */
+                id: string;
+                docType: components["schemas"]["IssuedDocType"];
+                number: number;
+                /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+                gross: string;
+            }[];
+            cancellation: {
+                number: number;
+                displayNumber: string;
+                /** Format: date-time */
+                cancelledAt: string;
+                reason: string | null;
+            } | null;
+        } | null;
+        IssuedDocumentPage: {
+            items: components["schemas"]["IssuedDocumentListItem"][];
+            nextCursor: string | null;
+        };
+        IssuedDocumentListItem: components["schemas"]["IssuedDocument"] & {
+            /** @description Paid + credited on its Owed, at most its gross; null on a credit note */
+            settled: string | null;
+            /**
+             * @description CANCELLED: credit notes cover its gross. Null on a credit note
+             * @enum {string|null}
+             */
+            settlement: "OPEN" | "PARTLY_PAID" | "PAID" | "CANCELLED" | null;
+        };
+        CancelPaymentRequest: {
+            reason?: string | null;
+        };
+        IssuedCopyRequest: {
+            /** @enum {string} */
+            channel: "DOWNLOAD" | "EMAIL" | "SHARE";
+        };
+        ExternalInvoiceReading: {
+            /** @description false when no reader is configured or it could not read the file: the person types the fields */
+            read: boolean;
+            number: string | null;
+            documentDate: string | null;
+            /** @description The total printed on the invoice, a decimal string */
+            amount: string | null;
+        };
+        ExternalInvoice: {
+            /** Format: uuid */
+            id: string;
+            entryKind: components["schemas"]["ExternalEntryKind"];
+            /** Format: uuid */
+            entryId: string;
+            number: string;
+            /** @description YYYY-MM-DD, as printed on the invoice */
+            documentDate: string;
+            /** Format: uuid */
+            attachmentId: string;
+            filename: string;
+            mimeType: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        ExternalEntryKind: "OWED" | "RECEIVED";
+        ExternalInvoiceList: {
+            items: components["schemas"]["ExternalInvoice"][];
+        };
+        ExternalInvoiceFile: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        TaxAuthorityStatus: {
+            /** @enum {string} */
+            state: "none" | "connected" | "expired";
+            /** Format: date-time */
+            connectedAt: string | null;
+            /**
+             * Format: date-time
+             * @description When the consent ends (90 days after it was given); connect again before it
+             */
+            until: string | null;
+            /** @description sandbox or production */
+            environment: string | null;
+        };
+        TaxAuthorityConnect: {
+            /**
+             * Format: uri
+             * @description Open it in the browser: the Tax Authority sign-in
+             */
+            authorizeUrl: string;
+        };
+        AllocationDecisionRequest: {
+            /** @description The Idempotency-Key of the issue request that was held */
+            heldKey: string;
+            /** @enum {string} */
+            choice: "CANCEL" | "FURTHER_OBJECTION";
+        };
+        IssuingGaps: {
+            types: {
+                docType: components["schemas"]["IssuedDocType"];
+                start: number;
+                last: number;
+                missing: number[];
+            }[];
+        };
+        DocumentsDue: {
+            /** @enum {string} */
+            view: "to-issue" | "not-for-invoice";
+            groups: {
+                /** Format: uuid */
+                customerId: string | null;
+                items: components["schemas"]["DueItem"][];
+            }[];
+            counts: {
+                total: number;
+                byKind: {
+                    [key: string]: number;
+                };
+            };
+        };
+        DueItem: {
+            kind: components["schemas"]["DueKind"];
+            entry: components["schemas"]["DueEntryRef"] & {
+                number: string;
+            };
+            /** Format: uuid */
+            customerId: string | null;
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount: string;
+            currency: components["schemas"]["Currency"];
+            /** @description The Owed’s posting date or the Received’s date */
+            date: string;
+            issuable: boolean;
+            reason: components["schemas"]["DueReason"];
+            /**
+             * Format: uuid
+             * @description A receipt: the tax invoice it pays
+             */
+            appliesToDocumentId: string | null;
+        };
+        /**
+         * @description The document due; null in the not-for-invoice view
+         * @enum {string|null}
+         */
+        DueKind: "TAX_INVOICE" | "PAYMENT_REQUEST" | "RECEIPT" | "TAX_INVOICE_RECEIPT" | null;
+        DueEntryRef: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+        };
+        /**
+         * @description Why it can’t be issued in MTB3A; it can still be attached (an invoice issued elsewhere) or marked not for invoice
+         * @enum {string|null}
+         */
+        DueReason: "PAYMENT_REQUEST_PENDING" | "CURRENCY_NOT_ILS" | "MIXED_ALLOCATION" | "RECORDED_ELSEWHERE" | null;
+        DocumentsDueCount: {
+            total: number;
+        };
+        IssueDueResult: {
+            results: {
+                entry: components["schemas"]["DueEntryRef"];
+                /** @enum {string} */
+                status: "issued" | "held" | "refused";
+                /** @description Why it was held or refused (NOT_DUE, OTHER_CLIENT, a DueReason, or the issue error’s reason) */
+                reason: string | null;
+                document: components["schemas"]["IssuedDocument"] & unknown;
+            }[];
+            issued: number;
+        };
+        IssueDueRequest: {
+            /** Format: uuid */
+            customerId: string | null;
+            items: components["schemas"]["DueEntryRef"][];
+        };
+        SettleAndIssueResponse: {
+            receivable: components["schemas"]["Receivable"];
+            payment: components["schemas"]["Payment"];
+            issue: {
+                /**
+                 * @description issued: the document was issued (or already was, on a retry). not_requested: issue was false. not_due: the payment is due no document (a No document client, marked not for invoice). held: the Tax Authority held the allocation number. failed: issuing was refused; the payment is recorded and its document waits in To issue.
+                 * @enum {string}
+                 */
+                status: "issued" | "not_requested" | "not_due" | "held" | "failed";
+                /** @description The refusal’s reason (ALLOCATION_NUMBER_REQUIRED, ALLOCATION_HELD, ISSUING_SETUP_INCOMPLETE, a DueReason, …) when status is held or failed */
+                reason: string | null;
+                document: components["schemas"]["IssuedDocument"] & unknown;
+            };
+        };
+        SettleAndIssueRequest: {
+            /** @description Canonical decimal string; exactly the currency's fractional digits; at most 999999999999999 minor units either sign (9999999999999.99 in a 2-decimal currency), else 422 AMOUNT_INVALID */
+            amount?: string;
+            /** @description Calendar date in the organization timezone, YYYY-MM-DD. Not later than the organization's today and not more than ten years (3660 days) before it: 422 DATE_INVALID with details.bound future or past. */
+            paidAt?: string;
+            method?: components["schemas"]["PaymentMethod"];
+            captureSource?: components["schemas"]["CaptureSource"];
+            /** @description Issue the payment’s document in the same step (default true). false records the payment only; the document waits in To issue. */
+            issue?: boolean;
+        };
+        NotForInvoiceResult: {
+            changed: number;
+        };
+        NotForInvoiceRequest: {
+            items: components["schemas"]["DueEntryRef"][];
+            value: boolean;
+        };
+        NotForInvoiceEntry: {
+            /** @enum {string} */
+            kind: "owed" | "received";
+            /** Format: uuid */
+            id: string;
+            notForInvoice: boolean;
+            version: number;
+        };
+        SetNotForInvoiceRequest: {
+            value: boolean;
+        };
         FxRatesResponse: {
             base: components["schemas"]["Currency"];
             /**
@@ -25000,6 +32480,24 @@ export interface components {
             /** @enum {string} */
             result: "left" | "removed";
         };
+        ProfileMembers: {
+            managedInMalafat: boolean;
+            items: components["schemas"]["ProfileMember"][];
+        };
+        ProfileMember: {
+            /** @description The person’s display name, or a pending seat’s email */
+            name: string;
+            /**
+             * @description The MTB3A role; null for a seat nobody has claimed yet
+             * @enum {string|null}
+             */
+            role: "OWNER" | "BOOKKEEPER" | "SUBMITTER" | null;
+            /** @enum {string|null} */
+            malafatRole: "PARTNER" | "OFFICE_ADMIN" | "ASSOCIATE" | "INTERN" | null;
+            /** @description Malafat lists them, but they have not signed in to MTB3A yet */
+            pending: boolean;
+            you: boolean;
+        };
         RecordsFile: {
             /** @enum {string} */
             kind: "mutaba3a-local-records";
@@ -25042,7 +32540,7 @@ export interface components {
             configured: boolean;
             subscription: {
                 /** @enum {string} */
-                tier: "FREELANCER" | "FIRM";
+                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM";
                 status: string;
                 /** @enum {string|null} */
                 interval: "month" | "year" | null;
@@ -25097,6 +32595,8 @@ export interface components {
             yearlySwitch: components["schemas"]["BillingYearlySwitch"] | unknown;
             comeback: components["schemas"]["BillingComeback"] | unknown;
             accountantPlan: components["schemas"]["BillingAccountantPlan"] | unknown;
+            /** @enum {string|null} */
+            currentPlan: "solo" | "business" | "firm" | "freelancer" | null;
         };
         BillingOffer: {
             id: string;
@@ -25284,6 +32784,18 @@ export interface components {
         ReceiptReadJobRequest: {
             /** Format: uuid */
             receiptId: string;
+        };
+        BusinessLookup: {
+            taxId: string;
+            /** @enum {string} */
+            kind: "company" | "nonprofit";
+            name: string;
+            nameEn: string | null;
+            /** @description As the registry says it (Hebrew), e.g. פעילה, מחוקה, רשומה */
+            status: string;
+            /** @description False for a dissolved, struck-off or deleted body: warn before invoicing it */
+            active: boolean;
+            address: string | null;
         };
         CreateLibraryReceiptUploadRequest: {
             filename: string;
@@ -25517,6 +33029,37 @@ export interface components {
             requestedByEmail: string | null;
             owned: boolean;
         };
+        OperatorMalafatDelegation: {
+            /** Format: uuid */
+            organizationId: string;
+            tenantId: string;
+            /**
+             * Format: date-time
+             * @description Null = off: Malafat can’t act for anyone in this firm
+             */
+            delegationEnabledAt: string | null;
+            /** @description Members’ Malafat connections this change ended (0 when turning it on) */
+            grantsRevoked: number;
+        };
+        OperatorMalafatDelegationRequest: {
+            enabled: boolean;
+        };
+        ConfidentialClient: {
+            clientId: string;
+            name: string;
+            redirectUris: string[];
+            jwksUri: string | null;
+            allowedResources: string[];
+            /** Format: date-time */
+            disabledAt: string | null;
+            grantsRevoked?: number;
+        };
+        RegisterConfidentialClientRequest: {
+            name: string;
+            redirectUris: string[];
+            /** Format: uri */
+            jwksUri: string;
+        };
         CreateUserResponse: {
             user: components["schemas"]["UserSummary"];
             memberships: components["schemas"]["Membership"][];
@@ -25645,6 +33188,11 @@ export interface components {
             /** @description MUT-434 (D12): connected agents disconnected too */
             agentGrantsRevoked: number;
         };
+        TwoFactorResetResponse: {
+            /** @enum {boolean} */
+            reset: true;
+            revoked: number;
+        };
         SignupReviewList: {
             data: components["schemas"]["SignupReview"][];
             nextCursor: string | null;
@@ -25750,7 +33298,7 @@ export interface components {
             /** @enum {string} */
             source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
             /** @enum {string|null} */
-            tier: "FREELANCER" | "FIRM" | null;
+            tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
             /** Format: date-time */
             until: string | null;
             paused: boolean;
@@ -25782,7 +33330,7 @@ export interface components {
             revokedAt: string | null;
         };
         /** @enum {string} */
-        BillingTier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
+        BillingTier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | "ACCOUNTANT";
         OperatorCreateBillingGrantRequest: {
             tier: components["schemas"]["BillingTier"];
             reason: string;
@@ -25865,8 +33413,7 @@ export interface components {
             accounts: components["schemas"]["BillingAccount"][];
             subscriptions: {
                 stripeSubscriptionId: string;
-                /** @enum {string} */
-                tier: "FREELANCER" | "FIRM" | "ACCOUNTANT";
+                tier: components["schemas"]["BillingTier"];
                 status: string;
                 /** Format: date-time */
                 currentPeriodEnd: string;
@@ -26089,6 +33636,8 @@ export interface components {
                 noOffer: number;
                 noPrice: number;
                 suppressed: number;
+                /** @description Since 1.140.0 (ADR-279). The person turned promotional mail off */
+                optedOut: number;
             };
             /** @description The time budget ran out; the next run continues */
             incomplete: boolean;
@@ -26109,12 +33658,107 @@ export interface components {
             /** @enum {string} */
             action: "send" | "skip";
             /** @enum {string|null} */
-            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | null;
+            skip: "paying" | "no-lapse" | "too-soon" | "firm" | "already-had" | "stay-offer-recent" | "covered" | "no-profile" | "no-stage" | "already-mailed" | "never-paid" | "no-offer" | "no-price" | "suppressed" | "opted-out" | null;
             /**
              * @description The mailer's answer, or failed; null on a skip or a dry run
              * @enum {string|null}
              */
             outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        MonthlySummaryMailSummary: {
+            dryRun: boolean;
+            /** @description The month reported (YYYY-MM): the one before the run’s month in Jerusalem */
+            month: string;
+            /** @description People whose own billing facts may cover a profile, looked at in this run */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description Already mailed this month (an earlier run) */
+            duplicate: number;
+            /** @description Due but the mailer did not send it: mail off, capped, refused or suppressed */
+            notSent: number;
+            /** @description A read or the mailer threw; the next run tries again */
+            failed: number;
+            skipped: {
+                optedOut: number;
+                suppressed: number;
+                /** @description No profile their plan covers today, or only Malafat-covered ones by default */
+                nothingCovered: number;
+                /** @description A profile whose own today is still in the month (west of UTC); the next run mails */
+                monthNotOver: number;
+                /** @description No profile had an entry dated in the month with something to show */
+                nothingToShow: number;
+            };
+            /** @description The time or send budget ran out, or the mail cap was met; the next run continues */
+            incomplete: boolean;
+        };
+        MonthlySummaryMailRun: {
+            summary: components["schemas"]["MonthlySummaryMailSummary"];
+            rows: components["schemas"]["MonthlySummaryMailRow"][];
+        };
+        MonthlySummaryMailRow: {
+            /** Format: uuid */
+            userId: string;
+            email: string;
+            /** @enum {string} */
+            locale: "en" | "ar";
+            /** @description Panels in the mail */
+            profiles: number;
+            /** @enum {string} */
+            action: "send" | "skip";
+            /** @enum {string|null} */
+            skip: "opted-out" | "suppressed" | "nothing-covered" | "month-not-over" | "nothing-to-show" | null;
+            /**
+             * @description The mailer's answer, or failed; null on a skip or a dry run
+             * @enum {string|null}
+             */
+            outcome: "sent" | "duplicate" | "suppressed" | "refused" | "capped" | "disabled" | "failed" | null;
+        };
+        MonthlySummaryMail: {
+            on: boolean;
+        };
+        MonthlySummaryMailChange: {
+            on: boolean;
+        };
+        MailOffRequest: {
+            token: string;
+            on: boolean;
+        };
+        OfferMail: {
+            on: boolean;
+        };
+        Unsubscribed: {
+            /** @enum {boolean} */
+            unsubscribed: true;
+        };
+        TaxAuthorityReminderSummary: {
+            dryRun: boolean;
+            /** @description Connections whose consent ends within 10 days or ended within 7 */
+            checked: number;
+            /** @description Mailed, or in a dry run would be */
+            due: number;
+            sent: number;
+            /** @description This stage of this consent was already mailed */
+            duplicate: number;
+            /** @description Due but not sent: a read or the mailer failed, mail off, capped or refused */
+            notSent: number;
+            /** @description Another environment, no refresh token, the profile or its owner gone or inactive, or the address suppressed */
+            skipped: number;
+        };
+        TaxAuthorityReminderRun: {
+            summary: components["schemas"]["TaxAuthorityReminderSummary"];
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string|null} */
+                stage: "soon" | "ended" | null;
+                /** @enum {string} */
+                action: "send" | "skip";
+                /** @enum {string|null} */
+                skip: "other-environment" | "no-refresh" | "profile-gone" | "owner-gone" | "owner-inactive" | "suppressed" | null;
+                outcome: string | null;
+            }[];
         };
         AccountPurgeSummary: {
             dryRun: boolean;
@@ -26133,6 +33777,8 @@ export interface components {
             storagePending: number;
             /** @description The time budget or the per-run cap ran out; the next run continues */
             incomplete: boolean;
+            /** @description Since 1.138.0 (MUT-644). Closed profiles some of whose issued documents this run deleted, each 7 years after its own date (since 1.139.0); 0 in a dry run */
+            issuingProfilesSwept: number;
         };
         AccountPurgeRun: {
             summary: components["schemas"]["AccountPurgeSummary"];
@@ -26161,6 +33807,87 @@ export interface components {
         AccountPurgeRequest: {
             dryRun: boolean;
         };
+        RetainedIssuingList: {
+            data: components["schemas"]["RetainedIssuingProfile"][];
+        };
+        RetainedIssuingProfile: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description From the business details kept with the documents */
+            legalName: string | null;
+            vatId: string | null;
+            documents: number;
+            cancellations: number;
+            /** @description Since 1.140.0. The earliest date a kept document’s 7 years count from (its own date, or a cancelled payment request’s cancellation date if later) */
+            oldestDocumentDate: string | null;
+            /** @description The latest such date */
+            newestDocumentDate: string | null;
+            /** @description Since 1.140.0. The first day the sweep may delete the oldest document (each document is kept 7 years from its own date); null when the profile issued nothing */
+            nextSweepOn: string | null;
+            /** @description The first day the sweep may delete the last document, and with it the business details, logos and numbering; null when the profile issued nothing (deleted on the next run) */
+            retainedUntil: string | null;
+        };
+        IssuingRetentionSweepRun: {
+            dryRun: boolean;
+            due: number;
+            /** @description Profiles some of whose documents this run deleted (in a dry run, would) */
+            swept: number;
+            /** @description Since 1.140.0. Documents this run deleted; 0 in a dry run */
+            documentsDeleted: number;
+            failed: number;
+            /** @description More were due than the per-run cap (25); the next run continues */
+            incomplete: boolean;
+            rows: {
+                /** Format: uuid */
+                organizationId: string;
+                /** @enum {string} */
+                outcome: "swept" | "would-sweep" | "skipped" | "failed";
+                /** @description Documents the profile held before this run */
+                documents: number;
+                /** @description Since 1.140.0. Documents this run deleted; null in a dry run, or when skipped or failed */
+                deleted: number | null;
+                /** @description Since 1.140.0. Documents still kept after this run; null as for `deleted` */
+                remaining: number | null;
+                oldestDocumentDate: string | null;
+                newestDocumentDate: string | null;
+                nextSweepOn: string | null;
+                retainedUntil: string | null;
+            }[];
+        };
+        IssuingRetentionSweepRequest: {
+            dryRun: boolean;
+        };
+        IssuingArchiveRequest: {
+            /**
+             * @description The support request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1042
+             */
+            reference: string;
+            /**
+             * @description The uniform file report’s language
+             * @default ar
+             * @enum {string}
+             */
+            lang: "ar" | "en";
+        };
+        IssuingErased: {
+            /** Format: uuid */
+            organizationId: string;
+            /** @description Documents deleted */
+            documents: number;
+            cancellations: number;
+            /** @description Rows deleted in all, the business details, logos and numbering included */
+            rows: number;
+            /** Format: date-time */
+            erasedAt: string;
+        };
+        IssuingEraseRequest: {
+            /**
+             * @description The erasure request this answers (a ticket number, never an address); kept in the retention log
+             * @example SUP-1043
+             */
+            reference: string;
+        };
         EmailWebhookResponse: {
             /** @enum {boolean} */
             received: true;
@@ -26173,8 +33900,11 @@ export interface components {
             client: {
                 /** @description The client’s self-declared name; show it with dir="auto" and never as proof of who it is */
                 name: string;
-                /** @enum {string} */
-                kind: "DCR" | "CIMD";
+                /**
+                 * @description CONFIDENTIAL = an app MTB3A registered itself (Malafat, MUT-593), acting in one firm
+                 * @enum {string}
+                 */
+                kind: "DCR" | "CIMD" | "CONFIDENTIAL";
                 /**
                  * @description From the redirect the code goes to, never the client’s own name: VERIFIED = Claude (claude.ai/claude.com), LOOPBACK = an app on this computer (e.g. Claude Code), UNVERIFIED = anyone else
                  * @enum {string}
@@ -26186,7 +33916,7 @@ export interface components {
             scopes: ("read" | "write")[];
             /** Format: date-time */
             expiresAt: string;
-            /** @description Whether this person may approve it (the agent_access feature); false = show the refusal */
+            /** @description Whether this person may approve it: the agent_access feature for an agent; for Malafat (MUT-593), membership of the firm it names with Malafat access turned on. False = show the refusal */
             agentAccess: boolean;
         };
         OAuthDecision: {
@@ -26226,6 +33956,22 @@ export interface components {
             lastUsedAt: string | null;
             /** Format: date-time */
             expiresAt: string;
+        };
+        ConnectedAppList: {
+            items: components["schemas"]["ConnectedApp"][];
+        };
+        ConnectedApp: {
+            /** Format: uuid */
+            grantId: string;
+            clientName: string;
+            tenantId: string;
+            /** @description The firm the connection acts in, as Malafat names it; null once disconnected */
+            firmName: string | null;
+            scopes: ("read" | "write")[];
+            /** Format: date-time */
+            connectedAt: string;
+            /** Format: date-time */
+            lastUsedAt: string | null;
         };
         OAuthCleanupSummary: {
             requests: number;
@@ -26353,7 +34099,7 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             /** @enum {string} */
-            origin: "capture" | "integration";
+            origin: "capture" | "integration" | "issued_document";
             /** @description It paid toward one Owed entry (a settle). */
             settlesOwed: boolean;
             /** @description It replaced a payment Malafat reversed. */
@@ -26454,6 +34200,8 @@ export interface components {
                 total: string;
                 count: number;
             }[];
+            /** @description MUT-660: invoicing profiles only. The received money split into Invoice income and Not for invoice, per currency */
+            invoiceSplit?: components["schemas"]["InvoiceSplitRow"][];
         };
         ShareLinkViewRequest: {
             /** @description From POST /v1/share-links/unlock. Keep it for this link only; it opens nothing else. */

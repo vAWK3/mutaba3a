@@ -12,6 +12,8 @@ import type { OcrLine } from './extract/types.js';
  *
  *   200  { engine, lines: [{ text, conf 0..1, box [x0, y0, x1, y1], script? }], pdfText?, pages, qr? }
  *        qr: MUT-557, the QR payloads it decoded (at most 8, each at most 4,096 chars); absent from an older sidecar = []
+ *        engine pdf-text: pdfText is the text layer, and lines (MUT-590) the same layer placed on the page at conf 1;
+ *        lines are [] past the run cap, on a pdfium error, or from an older sidecar (the API then reads pdfText by line)
  *   422  { error: 'unreadable' }   undecodable, or over the pixel or page caps (terminal, R3)
  *   413  { error: 'too_large' }    (terminal)
  *   504  { error: 'timeout' }      the sidecar's own deadline (worth retrying)

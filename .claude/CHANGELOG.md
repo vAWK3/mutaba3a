@@ -28,6 +28,640 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Legal notes answered; the rewritten legal texts held back; the come-back mail is labelled «פרסומת» (Communications Law s.30A)
+
+### Added
+- The come-back offer mail (ar, en) opens its subject with `פרסומת: ` and carries the sender's details (Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, contact info@mtb3a.com) in its footer and text part, beside the existing Unsubscribe link and List-Unsubscribe headers (`MailBody.sender`, `ADVERTISEMENT_LABEL`; no wire change, no API version bump). Tests: `server/src/email/__tests__/templates.test.ts`, `server/src/billing/__tests__/comeback-mail.test.ts`; QA specs `portal-live.billing.comeback-*` expect the new subject.
+- The live privacy page's "Emails we send" says the come-back offer is the only promotional email, labelled «פרסומת», names the sender and has an Unsubscribe link that works with the mail app's own button (en + ar).
+
+### Changed
+- Basel's answers (2026-11-25) applied to the 2026-11-25 drafts: notes resolved (14-day right plus "nothing is charged during the free trial", no-resale clause with the accountant case, registration number text, clients'-data clause, liability wording, PPO thresholds, s.30A, Narabnd–Barmajiyat, basic security level); kept open: terms VAT/payment provider (MUT-700 D1) and IP assignment (ע2), privacy data abroad / copy in Israel.
+- HELD BACK from publication (Basel): the terms 2026-11-25 and the rewritten privacy policy moved to `docs/legal/drafts/` (`terms-2026-11-25.{en,ar}.json`, `privacy-policy-2026-11-25.{en,ar}.json`, `[TODO]` notes intact). `CURRENT_TERMS` is 2026-10-26 again (nobody re-accepts); the live privacy page and `PrivacyPolicyPage` are as at ac0daf7c plus the sentence above; the frozen-hash list covers published versions only; the web release `[TODO` guard is unchanged and does not scan the drafts. The `web.legal.terms-rewrite` / `privacy-rewrite` QA flows and the 2026-11-25 TermsPage tests were removed with the publication (restore from commits fdb3463a..83eace15 when the drafts are published).
+- `docs/operations/before-release.md`: the legal approval / re-acceptance blockers are replaced by a held-back note pointing at the legal publication ticket. Jira MUT-731: replace the free trial with a free Starter plan.
+
+---
+
+## [Unreleased] - 2026-11-25 — Issue as you record: ask a client's documents preference once, issue each payment's document with the payment (MUT-661, ADR-280, API 1.141.0-mut661)
+
+### Added
+- `POST /v1/receivables/{id}/settle-and-issue`: a payment against an Owed and the document it is due (MUT-660's `documentsDue`), in one step under one Idempotency-Key. `issue: false` records the payment only; a refused issue (allocation number needed or held, setup incomplete) still answers 201 with `issue.status` failed/held and the reason, the document staying in To issue; a payment due nothing answers `not_due`.
+- Portal: the ask-once drawer (`DocumentsPreferenceAsk`, «كيف تُصدر المستندات لـ…؟») after the first income saved for a client with no preference; Record payment's one control (on by default) with the result in the toast.
+### Changed
+- MUT-648's save offer follows the client's preference (`issueOffers(…, preference)`): Tax invoice first -> tax invoice, Payment request first -> payment request, On payment / No document -> none.
+- An Owed a tax invoice posted (origin ISSUED_DOCUMENT) is paid in the portal: the receipt IS the payment (control locked on; `issue:false` is 422 PAYMENT_NEEDS_DOCUMENT).
+- `settleOwed` extracted from the settle route (both routes run it); a deleted Owed answers RECEIVABLE_NOT_OPEN instead of a 500.
+- Files: `server/src/routes/documents-due.ts`, `receivables.ts`, `schemas.ts`, `src/hosted/components/{DocumentsPreferenceAsk,IssueOffer,IncomeCaptureDrawer,RecordPaymentDrawer,issueOffers}`, `data/{incomeQueries,issuedQueries,incomeAffordances}`, i18n en/ar.
+
+---
+
+## [Unreleased] - 2026-11-25 — Privacy policy and terms rewritten for an Israeli invoicing service; Narabnd Studio Ltd; promotional-mail unsubscribe (ADR-279, API 1.140.0-adr279)
+
+**What:** the privacy policy and a new terms version (2026-11-25), en + ar, modelled on the topics Invoice4U's and iCount's cover, in MTB3A's own words (Basel, MUT-644 comment 13504, and his decisions of 2026-11-25). Narabnd Studio Ltd (517108775) is the party, owner and database owner; Israeli law, Jerusalem courts. New privacy sections: who is responsible, law and purposes, the portal without an account, tax documents and the Tax Authority, Malafat and connected apps, data outside Israel, security, cookies, retention, your rights. Terms: who may use (18+), trial, cancelling and refunds (14 days only before use), issuing tax documents, clients' data, our rights, 60 days' notice before MTB3A stops, general. The come-back offer gains an Unsubscribe link and List-Unsubscribe headers (the monthly summary the headers), backed by `users.offerMail` and two doors; the mail-off page reads `?mail=offers`. The web preflight refuses legal text with `[TODO` notes.
+**Why:** Basel asked for terms and a policy that cover what Israeli invoicing services' do, and for a working opt-out on every promotional mail.
+**Files:** `src/content/legal/terms/2026-11-25.{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `src/pages/landing/PrivacyPolicyPage.tsx`, `server/src/legal.ts`, `scripts/preflight.sh`, `server/src/email/unsubscribe.ts`, `server/src/email/{ports,mailer}.ts`, `server/src/email/transports/resend.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/{comeback-mail,monthly-summary-mail}.ts`, `server/src/routes/{comeback-mail,monthly-summary-mail}.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/prisma/migrations/20261125160000_offer_mail_opt_out`, `src/hosted/local/migrations/index.ts` (snapshot 22 → 23), `src/hosted/pages/mail-off/MailOffPage.tsx`, `src/hosted/api/client.ts`, tests and `qa/` (web.legal.terms-rewrite, web.legal.privacy-rewrite).
+
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents kept 7 years from each one's date; erasure after the archive (MUT-644 amended, ADR-277 override log, API 1.139.0-mut644)
+
+### Changed
+- Retention is per document (Basel, MUT-644 comment 13504): each issued document of a closed profile is due the day after its 7th anniversary (its `documentDate`; a cancelled payment request from its cancellation's Israel date when later), read on the UTC day. `retention.ts`: `retainedUntil`, `sweepCutoff`, `retentionDateOf` replace `retentionEndsOn`.
+- The sweep deletes due documents one by one with their lines, copies, kept originals and cancellations; the business details, numbering and logos go with the last (`RETAINED_ISSUING_DOCUMENT_TABLES`, `RETAINED_ISSUING_PROFILE_TABLES`). `listClosed({ dueBefore })`; SWEPT records `remaining` and `profileRows`.
+- Admin listing and sweep rows: `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run: `documentsDeleted`.
+- The archive's README carries a 7-year keep notice (en, ar, he); each export logs `noticeVersion`.
+- Portal Close my account and the privacy policy: "7 years from the date of each one"; the privacy policy adds that a former owner who has their copy can ask for earlier deletion.
+
+### Added
+- `POST /admin/v1/issuing/retained/{organizationId}/erase { reference }` and `npm run issuing:retained -- erase --org <id> --reference <ref>` (`--org` also works for `archive`): refused 409 `ARCHIVE_NOT_HANDED_OVER` until an archive with the keep notice was exported, 409 `PROFILE_NOT_CLOSED` for a live profile; deletes every retained row through the bypass and logs `ERASED`. Store `issuingRetention.erase` (memory + Prisma, contract), operator-only.
+
+### Resolved
+- TD-332 won't do: the operator's hand-over after an identity check is enough.
+
+**Why:** Basel's answers to MUT-644's open questions (2026-11-25).
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/routes/issuing-retention.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/issuing-retained.ts`, `server/prisma/schema.prisma` (comment), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, docs, tests. No migration.
+
+## [Unreleased] - 2026-11-25 — "Finish setting up invoicing" after a save (MUT-722, ADR-278)
+
+### Added
+- The save toast says "Finish setting up invoicing to issue its invoice." with Set up, once a day per person and profile, after a shekel income on a profile where invoicing is available but the setup can't issue; Set up opens the setup at the first missing step (`?step=`).
+- Receivables: "Finish setup to issue" where Issue would be while the setup can't issue.
+- `Toast` `detail` option: a quieter second line under the message.
+- Release-QA `portal.invoicing.setup-hint` (spec passing); FakeApi `invoicing: 'details'`.
+
+**Why:** MUT-648's offer was silent while the setup was incomplete, so nobody learned why no invoice was offered (Basel, phone 0.2.0).
+
+**Files:** `src/hosted/components/setupHint.ts` (+ test), `src/hosted/components/{IncomeCaptureDrawer,IncomeDrawerHost,Toast}.tsx` (+ Toast test), `src/hosted/pages/views/ReceivablesList.tsx`, `src/hosted/pages/invoicing/InvoicingSetupPage.tsx`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/invoicing.yaml`, `qa/specs/portal/invoicing.spec.ts`, `qa/support/portalApi.ts`.
+
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents: the 7-year sweep and the owner's archive (MUT-644, ADR-277, API 1.138.0-mut644)
+
+### Added
+- `server/src/issuing/retention.ts`: `ISSUING_RETENTION_YEARS = 7`, `retentionEndsOn`, `sweepCutoff`: kept until 1 January of the 8th year after the year of the newest document.
+- Store `issuingRetention` (memory + Prisma, shared contract): `listClosed`, `getClosed`, `sweep` (one transaction, re-checks closed + due, `SET LOCAL mutaba3a.issuing_bypass = 'on'`, the nine retained tables), `record`, `events`. Operator-only in the store guard.
+- Table `issuing_retention_events` (migration `20261125120000_mut644_issuing_retention_events`), exempt from the purge.
+- `runIssuingRetentionSweep` (`server/src/accounts/issuing-retention-sweep.ts`), run by the hourly account purge (summary `issuingProfilesSwept`), at most 25 a run.
+- Admin: `GET /admin/v1/issuing/retained`, `POST /admin/v1/issuing/retained/{organizationId}/archive` (signed originals, signed copies of the rest, the uniform file; 409 `PROFILE_NOT_CLOSED` for a live profile), `POST /admin/v1/issuing/retention/sweep`. `npm run issuing:retained -- list|archive|sweep`.
+- Close my account's Kept section always says issued invoices and receipts are kept 7 years (portal en + ar; phone on `feature/mut-644-phone`). The privacy policy's deletion section says the same (Last updated November 25, 2026; wording awaits Basel, before-release.md).
+- Release-QA `portal.account.close-keeps-issued`.
+
+### Changed
+- `issuing.ts` exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf` (moved out of the route closure, shared with the archive). No behaviour change.
+
+**Why:** ADR-260 kept issued documents after an account closes but nothing deleted them after the 7 years, and a former owner had no way to get a copy.
+
+**Open (lawyer):** the start date; erasure requests vs the duty to keep records; whether a hand-delivered archive is enough.
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/accounts/purge-run.ts`, `server/src/routes/issuing-retention.ts`, `server/src/routes/issuing.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/{issuing-retained,users}.ts`, `server/package.json`, `server/prisma/schema.prisma`, the migration, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/CloseAccountDrawer.tsx`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `docs/operations/before-release.md`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, `qa/specs/web/legal.spec.ts`, tests.
+## [Unreleased] - 2026-11-24 — A credit note against a paid invoice: refunded or kept as credit (MUT-643, ADR-276, API 1.137.0-mut643)
+
+### Added
+- Credit notes reach a paid 305 or a 320: the paid part is released off the newest allocations and either kept as the client's unallocated money (`paidPart: KEEP`) or refunded (`paidPart: REFUND`, date, method, reference). `server/src/issuing/credit-split.ts` (cap, split, newest-first release, pure) and `creditNoteRefusal` in `ledger-plan.ts`, shared by both stores.
+- Tables `refunds` and `refund_sources` (migration `20261124200000_mut643_refunds`), `issued_documents.refundId`; `store.refunds.list`.
+- Wire: issue `paidPart`; preview `creditNote { outstanding, paid, maximum }`; document `refundId`; payment `refunded`; statement line `REFUND`; period summary `refunds`.
+- Errors: 422 `CREDIT_EXCEEDS_ORIGINAL`, 422 `ORIGINAL_PAID` now with `details.paid` and `field: paidPart`, 422 `DATE_BEFORE_CREDIT_NOTE`, 422 `PAID_PART_NOT_ALLOWED`, 409 `ORIGINAL_CHANGED`, 409 `PAYMENT_HAS_REFUND`.
+
+### Changed
+- Received nets out refunds everywhere it is shown: activity (Reports, verdict, monthly mail), the period summary, client balances, the books split, the accountant's shared summary and the period pack (refunds as negative Income rows).
+- A 320 fully covered by credit notes reads CANCELLED and no longer counts as a tax document.
+- The Prisma issue of a credit note locks the paying payments before the Owed (D4) and maps lock conflicts to 409.
+- The records file carries `refunds` (unreleased format 22).
+
+**Why:** MUT-643: a business refunding a client needs the credit note and the money going back, with a statement that balances.
+
+**Files:** `server/src/issuing/{credit-split,ledger-plan,settlement}.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables,prisma-records-export}.ts`, `server/src/routes/{issuing,payments,summaries,share-links}.ts`, `server/src/statements/*`, `server/src/summaries/{activity,profile-figures}.ts`, `server/src/income/invoice-split.ts`, `server/src/period-pack/*`, `server/src/records-file/codec.ts`, `src/hosted/local/migrations/index.ts`, the schema and migration, tests beside each.
+
+## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
+
+- Arabic plan names (Basel, 2026-11-23): مستقل / تجاري / مؤسسة, legacy Freelancer الخطة السابقة (`src/hosted/i18n/ar.json`).
+
+### Added
+- `server/src/billing/plans.ts`: the one source for the plans (solo, business, firm; legacy freelancer): `TIER_OF`, `RANK` (Solo = Freelancer < Business < Firm), `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` (enforced by MUT-704) and `currentPlanOf`. No provider, price or lookup key.
+- Prisma `BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, ADD VALUE only).
+- `GET /v1/billing` `currentPlan`: the best plan covering any profile the person created (grant, subscription or trial); null when nothing covers them.
+- Operator grants of Solo and Business (admin route, console route, `users billing-grant`); the console lists Solo, Business, Firm and Freelancer (legacy), Solo first (en + ar; Arabic names await Basel).
+- Release-QA feature `portal-selfservice.operator.billing-grant-business` and its spec (not yet run).
+
+### Changed
+- A trial (running, read-only or locked) resolves to tier `BUSINESS`, not `FREELANCER`. Nothing reads the tier yet.
+- `entitlement.ts` ranks grants and subscriptions by `plans.ts` `RANK` (was: Firm 1, everything else 0).
+- Schemas: one inline `ProfilePlanTierSchema` for the profile tier enums; `BillingTier` gains SOLO and BUSINESS. Additive.
+
+**Why:** epic MUT-701 sells Solo, Business and Firm. The seller and provider are open (MUT-700), so only the provider-neutral half is built; per-plan prices, Checkout per plan, plan change and the catalog script (Part B) are held.
+
+**Files:** `server/src/billing/plans.ts` (+ test), `server/src/billing/entitlement.ts`, `server/prisma/schema.prisma`, `server/prisma/migrations/20261124130000_mut702_plan_tiers/`, `server/src/repositories/ports.ts`, `server/src/schemas.ts`, `server/src/routes/billing.ts`, `server/src/scripts/users.ts`, `server/src/app.ts` (version), `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/pages/operator/OperatorBillingSection.tsx`, `src/hosted/i18n/{en,ar}.json`, tests (`entitlement`, `gate`, `checkout`, `billing-core`, `billing-routes`, `routes-operator-billing-firms`, `OperatorAccountPage`, version pins), `qa/features/portal-selfservice/operator.yaml`, `qa/specs/portal-selfservice/operator.spec.ts`, `qa/support/portalApi.ts`.
+## [Unreleased] - 2026-11-22 — Two-step sign-in and the 12-month authentication log, server (MUT-710, ADR-274, API 1.135.0-mut710)
+
+### Added
+- Two-step sign-in, authenticator app (RFC 6238 TOTP, QR drawn on the server) or an emailed code, the person's choice, with 10 one-time recovery codes. Every first step (password, passkey, emailed sign-in code, Malafat `/exchange`; cookie and device) answers 403 `TWO_FACTOR_REQUIRED { challengeToken, method, expiresAt, emailHint? }` when it is on; `POST /v1/sessions/two-factor` and `/v1/device-sessions/two-factor` finish it; `POST /v1/two-factor/email-code` re-sends.
+- Every person setup link (reset, setup, operator links, after `--lock` too) asks for the second step: `POST /v1/account-setup/two-factor`, `/check` reports `twoFactor`, the redeem takes `challengeToken` + `code | recoveryCode`.
+- `/v1/me/two-factor` (GET, `challenge`, `enrolment`, `enrolment/confirm`, `recovery-codes`, DELETE); Me `user.twoFactor`; mails `two-factor-code` and `two-factor-changed` (ar/en).
+- The issuing gate: `PUT /v1/issuer`, `POST /v1/issued-documents`, `POST /v1/issuing/tax-authority/connect`, `POST /v1/issuing/allocation-decisions` answer 403 `TWO_FACTOR_SETUP_REQUIRED { enrolled }` unless it is on and this session passed it. Disconnecting stays open. Enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false; `tests/two_factor_issuing_gate.tftest.hcl`): the gate ships dark.
+- Operator reset: `DELETE /admin/v1/users/{id}/two-factor`, `npm run users -- two-factor-reset --email …`.
+- `auth_event` log lines (sign-in success/failure/lockout, every two-step event, password change/reset, Tax Authority connect/disconnect/token refresh) and the Terraform bucket kept 365 days (`auth_log.tf`).
+- Error codes `TWO_FACTOR_REQUIRED`, `TWO_FACTOR_CODE_WRONG`, `TWO_FACTOR_CHALLENGE_EXPIRED`, `TWO_FACTOR_TOO_MANY_TRIES`, `TWO_FACTOR_SETUP_REQUIRED`, `TWO_FACTOR_USE_PASSWORD`, `TWO_FACTOR_LINK_UNAVAILABLE`, `TWO_FACTOR_REQUIRED_FOR_ISSUING`.
+
+### Security
+- Review 4: the setup-link gate covers every person link whatever its purpose (an operator SETUP link after `--lock` no longer skips it).
+- Review 2: parallel requests can't race the second step. Each try is reserved on the person under their `two_factor` row lock before the code is read (`reserveTry`, replacing `recordFailure`), so no more than 5 guesses pass before the lock; the challenge's tries are one `UPDATE … RETURNING`; the TOTP step, a recovery code and the challenge are each claimed by one conditional update.
+- With two-step on the first step no longer clears the email key's throttle; finish rechecks status, closure and `passwordChangedAt`.
+
+### Technical
+- Migration `20261124120000_mut710_two_factor`; `TWO_FACTOR_SEAL_KEY` (required on production and staging); `issueSession` is no longer exported (`beginOrIssue`, `finishTwoFactor`).
+- Tests: `routes-two-factor-sign-in`, `routes-two-factor-enrolment`, `routes-two-factor-gate`, the two-step store contract on memory and Postgres. Issuing tests use `issuingHarness` (people with two-step on). `no-self-registration` lists the four second-step routes as public (their credential is the challenge token); `config.test` and `two_factor_issuing_gate.tftest.hcl` cover the gate switch on and off.
+
+---
+
+## [Unreleased] - 2026-11-22 — Manual allocation number before issuing (MUT-711, ADR-273, API 1.133.0-mut711)
+
+### Added
+- The issue preview answers `allocation` (null, or `{ mode: AUTOMATIC|MANUAL, nextNumber, documentDate, net, customerTaxId, requestUrl }`) so the review step knows a number is needed and whether MTB3A can request it.
+- `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`: a number requested by hand, saved with source MANUAL. Refusals: 409 ALLOCATION_NUMBER_REQUIRED, 409 ALLOCATION_NUMBER_MOVED (the previewed number was taken; nothing is reserved), 422 ALLOCATION_NUMBER_INVALID, 422 ALLOCATION_NOT_NEEDED.
+- `IssuedDocument.allocationSource` (API | MANUAL | null); migration `20261123000400_mut711_manual_allocation` adds the column with a CHECK; earlier rows are not touched (immutable) and read as API.
+- `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https; default the Tax Authority's site until the page is confirmed).
+- Portal: `ManualAllocationPanel` in the issue drawer (details with Copy and Copy all, the link, the 9-digit input, "change the amount"); Issue disabled until the number is well formed. QA feature `portal.invoicing.manual-allocation`.
+
+### Changed
+- With the Tax Authority off on a server, a tax invoice that needs an allocation number is refused until one is entered (it used to issue without one).
+
+
+---
+
+## [Unreleased] - 2026-11-22 — The uniform file (מבנה אחיד 1.31) for the Tax Authority and auditors (MUT-569, ADR-272, API 1.134.0-mut569)
+
+### Added
+- `GET /v1/issuing/uniform-file?from&to&lang`: every document dated in the range (inclusive, `to` ≤ today) as the OPENFRMT zip: `OPENFRMT/<VAT 8>.<YY>/<MMDDhhmm>/INI.TXT`, `…/BKMVDATA.zip` (holding `BKMVDATA.TXT`) and `report.html` (the printable production summary and documents report, ar | en).
+  - Owner, or an accountant with a grant, on the `invoicing` gate.
+  - `X-Uniform-File-Documents` / `X-Uniform-File-Records` carry the counts.
+  - A member's export is audited (`issuing.uniform_file_exported`, `issuer_details`).
+- `server/src/issuing/uniform-file/` (pure):
+  - `layout.ts`: the spec's record tables: A000 466, summary 19, A100 95, C100 444, D110 339, D120 222, Z900 110.
+  - `format.ts`: field formats, and `toFileText`/`encodeLine` for ISO-8859-8, with Arabic in Hebrew letters.
+  - `export.ts`: documents → C100/D110/D120 and the counts; no B100/B110 (A000 1013 = 0).
+  - `report.ts`, `zip.ts`.
+- `IssuingRepository.inRange` (memory + Prisma, the existing `(organizationId, documentDate)` index; lines fetched in chunks of 5,000).
+- Config: `UNIFORM_FILE_REGISTRATION_NUMBER` (default `00000000` until MUT-567), `SOFTWARE_HOUSE_VAT_ID`, `SOFTWARE_HOUSE_NAME`. The defaults are placeholders; Terraform's `software_house_*` and `uniform_file_registration_number` set the registering owner, Narabnd Studio Ltd, 517108775 (MUT-700). The operator step is in before-release.md.
+- Portal: You › Invoicing's "Uniform file (מבנה אחיד)" card (`UniformFileExport`). Last year, This year or Other dates; download; the counts or "no documents"; failure toast with Try again. The phone has none (D6).
+- `docs/operations/tax-authority/uniform-file/`: the simulator fixture (2,345 records, every type, Hebrew and Arabic) and Basel's run steps.
+
+### Technical
+- QA: `portal.invoicing.uniform-file`, `portal.invoicing.uniform-file-empty`; the FakeApi answers the route.
+- Route lists (`route-security`, `accountant-route-matrix`) name the route; no migration.
+- Pre-landing review fixes:
+  - The uniform-file code uses no Node `Buffer` or `randomInt`, because these routes also run in the signed-out portal's shims. `build:hosted` passes.
+  - A document too large for the file answers 422 `UNIFORM_FILE_AMOUNT_TOO_LARGE`, naming the document.
+  - VAT-inclusive unit prices round up, so every D110 line adds up to the agora.
+  - The documents report lists every type, with zero where none.
+  - `from`/`to` must be real calendar days from 2000.
+- Merged after MUT-662: a payment request is written as record type 300 (C100 and its D110 lines), and the documents report lists it; ADR-271's "wired by whichever merges second" is this.
+
+---
+## [Unreleased] - 2026-11-22 — Client ledger: Ledger card | Documents | Details (MUT-664a, API 1.131.0-mut664)
+
+### Added
+- `GET /v1/customer-balances`: per client and currency, the closing balance of the whole statement with no period (charges − credits − payments + reversals; negative = the client is in credit). Clients with no movement are absent; money with no client is not listed. Dated installments that have come due are posted first, as on the statement.
+- The client statement takes `order=desc` (newest first, for the ledger card); each line carries its document tags and due date (`server/src/statements/tags.ts`).
+- Issued-document list items carry `settled` and `settlement` (OPEN / PARTLY_PAID / PAID / CANCELLED; null on a credit note): receipts and invoice-receipts are paid when issued; a tax invoice is paid + credited on its Owed, at most its gross, CANCELLED when credit notes cover it (`server/src/issuing/settlement.ts`).
+- Portal client page (`/p/$profileId/clients/$customerId`): three tabs, Ledger card | Documents | Details. The ledger card (`components/ledger/LedgerCard.tsx`) is newest first with tags, due and "Client in credit"; the Documents tab has type and status filters and shows settled amounts. A legacy `?tab=payments` lands on the ledger.
+
+### Changed
+- A payment request settles by what is issued against it: the 320s/400s that apply it (MUT-662's status, UNPAID shown as OPEN), not PAID on issue.
+
+### Technical
+- Files: `server/src/routes/{customers,issuing}.ts`, `server/src/statements/{balances,build,serialize,tags}.ts`, `server/src/issuing/settlement.ts`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/schemas.ts`, `src/hosted/components/ledger/LedgerCard.tsx`, `src/hosted/data/{statementQueries,filters,issuedQueries}.ts`, `src/hosted/format/ledger.ts`, i18n en + ar. Tests: `customer-statement.test.ts`, `routes-issuing.test.ts`, `settlement.test.ts`, `statements/__tests__/{balances,build,tags}.test.ts`, `LedgerCard.test.tsx`. QA: `portal.shell.client-detail` reads the ledger card, then Documents and Details.
+
+---
+
+## [Unreleased] - 2026-11-22 — Invoicing follow-ups: the Tax Authority callback's landing, the re-consent reminder, the after-save Issue offer (MUT-571, MUT-648, ADR-264 amendment, API 1.130.0-followups)
+
+### Added
+- **Re-consent reminder (MUT-571 AC3).** `POST /jobs/v1/issuing/tax-authority-reminders` (job token, daily) and `POST /admin/v1/issuing/tax-authority-reminders` (operator, `dryRun`): the owner of each connected profile is mailed ten days before the 90-day consent ends and once when it has ended (for 7 days), in their language. Each stage once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`); retries and later runs answer `duplicate`. New mail template `tax-authority-reconnect` (en + formal ar), exempt from the per-recipient cap like the other job mails. Store: `issuing.taxConnectionsEndingBetween` (operator-only in the guard).
+- Terraform: `tax_authority_reminders_enabled` (default false) creates the `tax_authority_reminders` Scheduler job (09:00 Jerusalem); `tests/tax_authority_reminders.tftest.hcl`. Operator steps in `docs/operations/before-release.md`.
+- Portal: the setup's Tax Authority step says when the connection ends within 10 days and offers Connect again (`endsSoon`, `RECONNECT_NOTICE_DAYS`); a declined consent (`?taxAuthority=refused`) has its own words.
+
+### Fixed
+- **Where the browser lands after the Tax Authority (MUT-571).** The callback redirected to `PORTAL_ORIGIN/p/<id>/you/invoicing` even where no portal is served there (a local API with PORTAL_ORIGIN set to itself: "No route for GET …"). The connect state now signs the portal the person pressed Connect on (its Origin, when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server); the callback returns there, else to this server's own portal when it serves one (PORTAL_DIST_DIR), else answers its own page in Arabic and English. `error=access_denied` → `taxAuthority=refused`.
+- **The after-save Issue offer (MUT-648).** Leaving Owed (or Payments, or a client) inside the save toast's six seconds unmounted IncomeDrawerHost and its issue state, so the toast's Issue button did nothing. The issue drawer now belongs to the profile's layout (`IssueOfferProvider` / `useOfferIssue`, keyed by profile).
+
+### Technical
+- Files: `server/src/routes/tax-authority.ts`, `server/src/israel/tax-authority/{service,reconnect-reminder}.ts`, `server/src/routes/tax-authority-reminders.ts`, `server/src/email/{ports.ts,templates/copy.ts,templates/look.ts}`, `server/src/repositories/{ports,memory,prisma}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/infrastructure/terraform/{main,variables}.tf`, `src/hosted/components/IssueOffer.tsx`, `src/hosted/components/IncomeDrawerHost.tsx`, `src/hosted/session/AuthGate.tsx`, `src/hosted/pages/invoicing/{InvoicingSteps.tsx,setupSteps.ts}`, i18n en + ar. Tests: `routes-tax-authority.test.ts` (landing cases), `routes-tax-authority-reminders.test.ts`, `service.test.ts`, `IssueOffer.test.tsx`, `InvoicingSteps.test.tsx`, the mail template samples.
+
+---
+## [Unreleased] - 2026-11-23 — Payment request (MUT-662, ADR-271, API 1.129.0-mut662)
+
+### Added
+- Issued document type PAYMENT_REQUEST (חשבון עסקה, code 300): own series, shows VAT so the invoice-receipts that follow match, never allocated and never in VAT or tax totals. From an Owed it is linked (posts nothing); with no entry it posts an ordinary ADJUSTMENT Owed.
+- A 320 (or an exempt dealer's 400) with `appliesToDocumentId` = a payment request pays that request's Owed and posts no Owed of its own.
+- Derived `paymentRequest` facts (UNPAID / PARTLY_PAID / PAID / CANCELLED, covered, linked documents, cancellation) and `displayNumber` (PR-0007) on issued documents.
+- `POST /v1/issued-documents/{documentId}/cancel`: a cancellation record (CX series, insert-only table `issued_document_cancellations`), refused with 409 PAYMENT_REQUEST_HAS_DOCUMENTS while a live 320/400 refers to it (D18).
+- PDF: the framed "not a tax invoice" notice (D16), "Total requested", the cancelled mark on later copies.
+- Portal: the drawer's Payment request type, a Status column, the request's page (progress, linked documents, record a payment, cancel panel), numbering step and exempt offer.
+
+### Changed
+- Documents due: PAYMENT_REQUEST items are issuable (PAYMENT_REQUEST_PENDING no longer produced); an Owed with a live request is settled; a payment on it is due a linked 320 (400 for exempt) applying the request.
+- An exempt dealer may issue payment requests (EXEMPT_DEALER_TAX_INVOICE still refuses tax invoices).
+
+### Technical
+- Migrations 20261123000200_mut662_doc_type (enum value alone) and 20261123000300_mut662_cancellations. A 320 applying a request locks the request's Owed before reading its cancellation; cancelling takes the same lock (R4).
+## [Unreleased] - 2026-11-22 — Payments: one per request, and never the money behind a receipt (MUT-709, API 1.128.0-mut709)
+
+### Fixed
+- A retry after a 5xx could record a payment twice: the 5xx releases the Idempotency-Key, so the handler ran again. `POST /v1/receivables/{id}/settle`, `POST /v1/income` (Received) and `POST /v1/payments` now store `sha256(claim key + "payment")` as `Payment.clientRequestKey` (unique per organization, migration `20261123000000_mut709_payment_client_request_key`) and answer a retry with the payment the first attempt committed, before checks it would now fail (nothing outstanding, a stale preview token). Why: found planning MUT-661 (R1). Files: `idempotency.ts` `paymentRequestKey`, the three routes, both stores, `payments.findByClientRequestKey`.
+- Reversing (`POST /v1/payments/{id}/reverse`), correcting (`/correct` and its preview) or undoing (`DELETE /v1/income/{id}`) a payment an issued receipt or invoice-receipt stands on is refused with 409 CONFLICT `HAS_DOCUMENT` (details `documentId`, `docType`, `number`); the way out is a credit note. Why: an issued document is final, so its money must stay (MUT-661 R2). Files: `payments/document-guard.ts`, `issuing.moneyDocumentOn` (store-guard `read`, so a key can be refused too). The portal's correction pane says so (`hosted.correct.errors.hasDocument`).
+
+---
+
+## [Unreleased] - 2026-11-22 — Documents due per client, To issue, "not for invoice", invoice income in the books (MUT-660, ADR-270, API 1.127.0-mut660)
+
+### Added
+- Server: `documentsDue` (`server/src/issuing/documents-due.ts`), `splitIncome`/`invoiceStatusOf` (`server/src/income/invoice-class.ts`), `invoiceSplitOf` (`income/invoice-split.ts`), `invoicingOn` (`issuing/invoicing-on.ts`), `fromEntryMode`/`entryAmount` (`issuing/ledger-plan.ts`). Routes in `routes/documents-due.ts`: GET /v1/documents-due (by client; view=not-for-invoice; olderThanMonths), GET /v1/documents-due/count, POST /v1/documents-due/issue, POST /v1/documents-due/not-for-invoice, PUT /v1/{receivables,payments}/{id}/not-for-invoice. Store: `issuing.dueInputs`, `incomeContext`, `setNotForInvoice` (memory + Prisma, contract-tested).
+- Migration `20261122230000_mut660_documents_due`: `DocumentsPreference` enum, `customers.documentsPreference`, `issuer_details.defaultDocumentsPreference`, `receivables/payments.notForInvoice`, `issued_documents (organizationId, receivableId|paymentId)` indexes.
+- Portal: Documents › To issue (`DocumentsDuePage`), Home's `ToIssueGroup`, `NotForInvoiceAction` on Owed and Paid rows, `DocumentsPreferenceField` on the client page, the profile default in the invoicing defaults step, Reports' `InvoiceSplitCard`; `documentsDueQueries`. i18n ar+en.
+- Books: `invoiceSplit` on GET /v1/summaries/activity and the share-link summary; two lines in the monthly summary; `invoice_status` in the Excel Income sheet.
+- Release-QA: `portal.invoicing.to-issue-issue-all`, `to-issue-bulk-not-for-invoice`, `not-for-invoice-refused`, `client-documents-preference`, `portal.reports.invoice-split`.
+
+### Changed
+- Issuing for an entry decides take vs link (`fromEntryMode`): agreements' charges, credited Owed, allocated payments and no-client invoice-receipts are issued linked only (nothing posted). A no-client 320 is accepted for a Received entry.
+- `issueOne` extracted from POST /v1/issued-documents and reused by Issue all. Receivables and payments carry `notForInvoice`; customers `documentsPreference`; issuer details `defaultDocumentsPreference`.
+- This device's snapshot 21 → 22 (`addDocumentsFields`).
+
+### Why
+- Home's To issue box, MUT-661 and the books all need to know what each income entry is due, per client, without a stored flag that can drift.
+
+## [Unreleased] - 2026-11-22 — Receipts on for everyone (MUT-659, ADR-220 amendment, API 1.126.0-mut659)
+
+### Changed
+- Server receipt reading is for every uploader while `SERVER_OCR` is on: no per-person grant (`reader.ts` `decide` and the claim-time check; a receipt whose uploader left is still skipped, code `uploader_gone`).
+- `RECEIPTS_LIBRARY` defaults to on (only `"false"` turns it off); Terraform `receipts_library_enabled` defaults to true.
+- `receipts:reread`: no grant filter (`noGrant` → `noUploader`); `--buyer-contacts` looks at every profile; new `--backlog --apply` asks once for every never-read To-review receipt (`markBacklogPending({})`).
+
+### Removed
+- `receipt_reading` from `FEATURES`, the operator console's words for it, and the grant-time backlog hook. Migration `20261122220000_mut659_receipt_reading_for_everyone` revokes its open grants.
+
+### Technical
+- Operator tests and the `portal-selfservice` operator specs use `accountant_access` as their named-feature example; the receipts specs no longer grant reading.
+
+---
+## [Unreleased] - 2026-11-22 — Portal home: receipts and what is waiting first, In & out behind a switch (MUT-657, ADR-269)
+
+### Added
+- **Home** at the bare `/p/:id`, first in the pill (an icon on a phone). Receipts & to-dos, "Two lanes":
+  - an **Add** lane: drop zone, Add receipt, Take a photo (coarse pointers), Add income (the income drawer over home);
+  - a **Waiting** lane: To review (a strip of up to 8 cards, See all → Expenses › Receipts) and Clients overdue (up to 3 names, most days late first, "N days late", See all → Owed). Each group hides at 0; nothing waiting is one calm sentence. No totals.
+  - With the receipts library off (signed out, or the flag off) the receipt parts give way to the unavailable copy; Clients overdue still shows.
+- **In & out** (`?view=in-out`): this month's money in (received; owed and overdue now) and out (spent, top categories), one currency at a time, with Open Owed, Open Spent and Compare months in Reports.
+
+### Changed
+- Owed's overview moved to `/p/:id/owed`; a bare `/p/:id?currency=X` redirects there with the shell's keys.
+- Switching profile always lands on the profile's home.
+- The one-time notices moved from Owed to home (`LandingNotices`).
+- The monthly summary mail links to `/p/:id?view=in-out` (server, no API change).
+
+### Technical
+- `useReceiptFiles` (the gallery's upload, shared with home), `useReceipts(…, limit)` with the limit in the key, `ReceiptCard showAmount`, `overdueClientCount` / `overdueClients`, `parseHome` / `legacyOwedSearch`. Files: `src/hosted/pages/home/**`, `src/hosted/pages/views/HomePage.tsx`, `src/hosted/router.tsx`, `src/hosted/shell/{destinations,youRoutes,HostedShell,YouIsland}.ts(x)`, `server/src/billing/monthly-summary-mail.ts`.
+- QA: `qa/features/portal/home.yaml` (`waiting` core, `clear`, `upload`, `in-out`), `qa/specs/portal/home.spec.ts`; shell, terms, setup, session, profiles and the self-service/live specs that landed on Owed now land on home.
+
+---
+
+## [Unreleased] - 2026-11-22 — Attach an invoice issued elsewhere (MUT-647, ADR-267, API 1.125.0-mut647)
+
+### Added
+- `POST /v1/issuing/external-invoices/read` (number, date, total; nothing stored), `POST /v1/issuing/external-invoices` (raw PDF/JPEG/PNG body, the confirmed number and date in the query), `GET /v1/issuing/external-invoices?entryKind&entryIds`, `GET …/{id}/file`, `DELETE …/{id}`.
+- Issuing from an entry with an attached invoice is refused: 409 `EXTERNAL_INVOICE_ATTACHED`.
+- Portal: a Document column on Owed and Paid (Attach, or drop a file on the row; "Issued elsewhere" opens it), the attach drawer (read → confirm → attach; an amount mismatch is said, never blocking).
+- `HostedTable` takes `onRowFileDrop` / `canDropFile`.
+
+### Technical
+- Table `external_invoices` (migration `20261122210000_mut647_external_invoices`), one live per entry; the file is the entry's INVOICE attachment, written by the issuing store. `AttachmentStorage.write`.
+- QA: `portal.invoicing.attach-external`.
+
+## [Unreleased] - 2026-11-22 — Issued-document PDFs leave signed: PAdES with a time-stamp, the original kept once (MUT-641, ADR-265, API 1.124.0-mut641)
+
+### Added
+- Every issued-document PDF that leaves is digitally signed (PAdES B-T: CAdES-detached + RFC 3161 time-stamp): `GET` and `POST /v1/issued-documents/{id}/pdf`. The draft preview stays unsigned.
+- The signed original is kept once (`issued_document_originals`, INSERT-only) and every later request for it gets the same bytes.
+- Config `ISSUING_SIGNER` (dev | kms | off), `ISSUING_SIGNING_KMS_KEY`, `ISSUING_SIGNING_CERT_CHAIN`, `ISSUING_TSA_URL`, `ISSUING_SIGNING_TIMEOUT_MS`. Dev and QA sign with a throwaway in-process authority; production signs only with a Cloud KMS key and a certifying authority's certificate, otherwise refuses.
+- Errors 503 `SIGNING_NOT_CONFIGURED` and 503 `SIGNING_UNAVAILABLE`: never an unsigned file.
+- Terraform `signing.tf`: `issuing_signing_key` (HSM KMS key, the API may only sign), `issuing_signing_cert_chain` + `issuing_tsa_url` turn signing on; output `issuing_signing_key_version`; `tests/issuing_signing.tftest.hcl`.
+- Pre-landing review fixes:
+  - An outage never spends the original, and the original goes out on exactly one copy (kept with its copyIndex).
+  - Certificate validity is checked at signing time, and the kms chain at boot, with a boot log and an expiry warning.
+  - The time-stamp token is verified, with a clock-skew bound and a streaming size cap; the default TSA is Sectigo over https, and production refuses plain http.
+  - One retry each for KMS and the time-stamp authority.
+  - SIGNING_NOT_CONFIGURED carries `details.reason` for setup errors.
+  - A 10-minute view-copy cache.
+  - Terraform `prevent_destroy` and a precondition in place of the cross-variable validation.
+- `npm run signing:interim-cert -- --csr`: the certificate request (PKCS #10) for the certifying authority, signed by the KMS key, with the company number as the subject's serialNumber.
+- Interim v1: `npm run signing:interim-cert` has the production KMS key certify itself in Barmajiyat's name, so production can sign before a certifying authority does; the authority later certifies the same key. `ISSUING_TSA_URL` accepts the public http time-stamp services.
+
+### Technical
+- `server/src/issuing/pdf/sign/` (cms, pdf, timestamp, keys, verify). Dependencies `pkijs` 3.4.3, `asn1js` 3.1.0; `pdf-lib` moved to runtime. Migration `20261122200000_mut641_issued_document_originals` (additive). Purge catalog: originals kept with the documents (MUT-644). The MUT-640 gate also runs on the signed files.
+
+## [Unreleased] - 2026-11-22 — Offer to issue after saving income (MUT-648, ADR-268, API 1.123.0-mut648)
+
+### Added
+- After saving income on an invoicing profile (the person holds `invoicing`, the setup is done), the save toast offers the document it takes:
+  - an Owed: **Issue a tax invoice**;
+  - a Received: **Issue a tax invoice-receipt** (with a client) and **Issue a receipt**.
+
+  The issue drawer opens prefilled (client, one line for the amount with VAT included) and linked to the entry (`fromEntry`, I1-a), so the document takes it over: no second Owed or Received. The toast gained a quieter second action for the other document.
+- An Owed with no document yet offers **Issue a tax invoice** on its row (E4).
+- `issuer_details.offerAfterSave` (on by default), set in the setup's defaults step ("After saving income, offer to issue its document").
+
+### Out (stated)
+- The phone half waits for MUT-573's wizard.
+- A receipt applied to the client's open invoice of the same amount (the wireframe's first choice for a Received) is a follow-up: it combines `fromEntry` with `appliesToDocumentId`.
+- The same row action on Received is a follow-up too.
+
+## [Unreleased] - 2026-11-22 — Connect to the Tax Authority; allocation numbers on issued invoices (MUT-571, MUT-572, ADR-264, API 1.120.0-mut571)
+
+### Added
+- `GET/DELETE /v1/issuing/tax-authority`, `POST /v1/issuing/tax-authority/connect`, the public `GET /v1/issuing/tax-authority/callback` (OAuth 2.0 code flow, signed state), `POST /v1/issuing/allocation-decisions`.
+- Issuing a 305/320 to a customer with a VAT number at or over the threshold asks the Tax Authority's Approval service for the allocation number inside the issue. Refusals: 409 `TAX_AUTHORITY_NOT_CONNECTED`, 409 `ALLOCATION_HELD`, 422 `ALLOCATION_REFUSED`, 502 `TAX_AUTHORITY_UNAVAILABLE`. `withoutAllocation.heldKey` continues a held invoice without a number.
+- The setup's Tax Authority step is done while connected.
+
+### Technical
+- Table `tax_authority_connections` (migration `20261122170000_mut571_tax_authority_connection`); tokens sealed with AES-256-GCM (`israel/tax-authority/token-box.ts`); config `TAX_AUTHORITY_*` (off unless `TAX_AUTHORITY_ENV`).
+## [Unreleased] - 2026-11-22 — Issue documents in the portal (MUT-570, ADR-266, API 1.119.0-mut570)
+
+### Added
+- Documents › **Issued** (where issuing is on): the list of issued documents and **Issue a document**.
+  - A drawer: client (recent and search, or add), type, lines with one "prices include VAT" switch and per-line options, payment for an invoice-receipt or receipt, live totals from the server's preview, a draft PDF, and Issue (final; corrected by a credit note).
+  - Until the setup is done, the drawer says what's missing and links to it.
+- The document page (`/p/:id/documents/issued/:documentId`):
+  - the issued moment (Claude Design batch 2);
+  - what's still owed;
+  - the original PDF to download (a produced, counted copy) or view;
+  - Record a payment and issue a receipt, Issue a credit note (prefilled from its lines), Issue a similar document.
+- A client's page lists the client's issued documents, with **Issue a document for this client**.
+- `GET /v1/issuing/styles`: the style picker reads the server's list.
+- Document-type icons in the M family (tax invoice, invoice-receipt, receipt, credit note, allocation badge).
+- QA `portal.invoicing.issue-invoice`, `portal.invoicing.issue-gate`.
+
+### Out (stated)
+- Send by email waits for MUT-641 (signed PDFs).
+- Allocation-number states are MUT-572/574.
+- Documents as its own top-level nav item is flagged to Basel.
+
+## [Unreleased] - 2026-11-22 — Invoicing setup: details, logo, defaults, numbering, and nothing issued before them (MUT-646, ADR-263, API 1.118.0-mut646)
+
+### Added
+- `GET /v1/issuing/setup` (five steps, `canIssue`, `missing`), `POST /v1/issuing/setup/intro-seen`, `PUT /v1/issuing/numbering` ("already issuing elsewhere?", the D3 starting numbers in one answer).
+- `PUT /v1/issuer/defaults`: style, ink, document language, VAT pricing, payment terms, bank details, footer (If-Match the details' version).
+- `PUT/GET/DELETE /v1/issuer/logo`: a PNG or JPEG up to 256 KB, checked by its bytes and a trial print; every upload kept (`issuer_logos`), so each issued document prints the logo it was issued with (its issuer snapshot's `logoId`).
+- Portal: You › Profiles › Invoicing (`/p/:id/you/invoicing`): three introduction cards, then the letterhead with its five numbered regions and each step's form beside it; the paper follows the typing. QA `portal.invoicing.setup`, `portal.invoicing.setup-hidden`.
+
+### Changed
+- `POST /v1/issued-documents` answers 409 `ISSUING_SETUP_INCOMPLETE` (`details.missing`) until the business details and the numbering answer are in (S1-a).
+- `PUT /v1/issuer` keeps the defaults it doesn't carry (and `pricesIncludeVat` when omitted on an update).
+- Issued documents' PDFs print the logo (MUT-640 passed none).
+
+### Technical
+- Migration `20261122160000_mut646_issuer_setup` (drops the unused `issuer_details.logoAttachmentId`; adds the defaults, `issuing_setup`, `issuer_logos`). `DOCUMENT_STYLES` moved to `issuing/types.ts`. Purge catalog: `issuing_setup` deleted with the profile, `issuer_logos` kept with the documents (MUT-644).
+
+## [Unreleased] - 2026-11-22 — A client's VAT or company number and address, from the registry (MUT-642, ADR-262, API 1.117.0-mut642)
+
+### Added
+- `Customer.taxId` (Israeli check digit, stored as 9 digits) and `address`; 422 `TAX_ID_INVALID`. Issued documents snapshot both.
+- `GET /v1/business-lookup?number=`: the Registrar of Companies and the nonprofits registry on data.gov.il (24 h cache, 30/min per person, 404 `NOT_IN_REGISTRY`, 502 `REGISTRY_UNAVAILABLE`). Hosted only.
+- Portal: a Business details card on the client page (`ClientBusinessDetails`): the number fills the registry name and an empty address, warns about a dissolved company. QA `portal.shell.client-business`.
+
+### Changed
+- `PATCH /v1/customers/{id}` accepts session and device-session auth (it was API-key only).
+
+### Technical
+- Migration `20261122150000_mut642_customer_tax_id`; signed-out format v21 (`addCustomerTaxId`); config `DATA_GOV_IL_*`.
+
+## [Unreleased] - 2026-11-22 — Issued documents as PDFs in Hebrew, Arabic and English, three styles (MUT-640, ADR-261, API 1.116.0-mut640)
+
+### Added
+- `GET /v1/issued-documents/{id}/pdf` (a view copy), `POST /v1/issued-documents/{id}/pdf` (a produced, counted copy: the first is the original), `POST /v1/issued-documents/preview/pdf` (a draft with the next number).
+- Three styles (Professional, Modern, Minimal), black or blue ink, the document's own style and ink.
+
+### Technical
+- Port of Malafat's PDF engine (`server/src/pdf/`), `@digicole/pdfmake-rtl` patched via `patch-package` (`server/patches/`), fonts in `server/assets/fonts/pdf` (Dockerfile copies both). Migration `20261122140000_mut640_copy_request_key`.
+- Gate test (`server/src/issuing/pdf/__tests__/gate.test.ts`): 3 styles × he/ar/en, zero `.notdef`, every word extractable, RTL order, ink-only colours; PDFs written to `server/.pdf-e2e/` for a human look.
+
+## [Unreleased] - 2026-11-22 — The monthly summary mail: last month per profile and per currency, ar + en (MUT-535, ADR-259)
+
+### Added
+- **The monthly summary job** (`server/src/billing/monthly-summary-mail.ts`, rules in `monthly-summary.ts`): on days 1-7 at 14:00 Jerusalem (`POST /jobs/v1/billing/monthly-summary-mail`; operator `POST /admin/v1/billing/monthly-summary-mail`, `npm --prefix server run billing:monthly-summary-mail [-- --dry-run]`) each person whose own subscription, trial, grant or Malafat link covers a profile gets one mail for last month: a panel per covered profile with what came in, what is still owed and what is overdue, per currency, linking to its overview. Skips suppressed, opted-out and closing addresses (operator-made accounts whose address no mailed link confirmed are mailed too: Basel, 2026-11-22, TD-315), profiles with no entry in the month, and profiles still inside the month west of UTC. At most `MONTHLY_SUMMARY_DAILY_SENDS` (40) per run, stopping at the first capped mail; the send log keeps one per person per month.
+- **Mail `monthly-summary`** (en, ar; ADR-259 overrides ADR-159 §5 for it): Levantine months, amounts and names isolated in Arabic, MUT-531's "Switch to yearly and save ₪58 a year" after a monthly payer's 2nd payment, and a footer opt-out line. Layout gains `sections` (one titled panel per profile) and `optOut`.
+- **The switch:** `User.monthlySummaryMail` (`OFF` | `ON_ALL`, NULL = default without Malafat-covered profiles; migration `20261121120000_mut535_monthly_summary_mail`, local snapshot 19 → 20); `GET|PATCH /v1/me/monthly-summary-mail`; You › Account's "Monthly summary email" switch (`MonthlySummarySwitchRow`).
+- **One link off:** `/mail-off#<token>` (public portal page; asks for a press first) and `POST /v1/mail-preferences/monthly-summary` (same origin, IP budget); the token is HMAC-SHA256 keyed from `SESSION_TOKEN_PEPPER` (`email/mail-off-token.ts`).
+- **Terraform:** `monthly_summary_mail_enabled` (default false) creates the Scheduler job; `monthly_summary_daily_sends` sets `MONTHLY_SUMMARY_DAILY_SENDS` when it isn't 40. tftest `monthly_summary_mail.tftest.hcl`.
+
+### Changed
+- **The privacy policy names the monthly summary** (en + ar, "Emails we send"; Last updated November 21, 2026).
+- `summaries/profile-figures.ts › readProfileFigures` is the verdict route's per-profile read, now shared with the mail; `listAll` moved to `repositories/list-all.ts`. `billing/yearly-switch-line.ts` holds MUT-531's line and the catalog read, moved from `routes/billing.ts`. No behaviour change in either route.
+
+### Technical
+- Tests: parity of `readProfileFigures` with the verdict route; rules, job (memory store, memory mailer), routes, token, templates (ADR-159 pin), route-security and public-route pins, portal switch and page, local migration and fingerprint, privacy page. Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link`, `monthly-summary-account-switch`, `monthly-summary-yearly-line`.
+- Operator steps in `docs/operations/before-release.md` (server and web).
+
+## [Unreleased] - 2026-11-22 — The issuing core: issued invoices, receipts and credit notes (MUT-568, ADR-260, API 1.115.0-mut568)
+
+### Added
+- **Issuing (server only):** `/v1/issuer`, `/v1/issuing/settings`, `/v1/issuing/starting-numbers/{docType}`, `/v1/issued-documents/preview`, `/v1/issued-documents` (issue, list, one), `/v1/issued-documents/{id}/copies`, `/v1/issuing/gaps`. Tax invoice (305), invoice-receipt (320), receipt (400) and credit note (330), gap-free numbers per type, the matching Owed/Received/credit posted in the same transaction, "מקור" for the first copy and "העתק" after. Behind the operator feature `invoicing` on business profiles.
+- Feature `invoicing`; session-only scopes `issuing:read`/`issuing:write`; matrix domain `issuing`.
+- Note: an Owed a document takes over (issue from a recorded entry) leaves the Income feed until MUT-570 shows documents there; its Received counterpart stays, as `issued_document`.
+- **Issue from a recorded entry** (`fromEntry`: an Owed for a tax invoice, a Received for an invoice-receipt or receipt): the document takes the entry over, no second Owed/Received. **Prices including VAT** per document and per line, and VAT-exempt lines (MUT-566 decisions I1-a, V1-a).
+
+### Fixed (pre-landing review)
+- A credit note credits at its tax invoice's VAT rate and can't be dated before it; the store refuses to credit, delete or pay a document-owned Owed outside issuing; a taken-over Owed takes the document's dates; an all-exempt document posts an EXEMPT Owed; a receipt keeps the invoice it pays; the document discount is checked in the document's terms and never capped; year counters are taken before receivable locks; issue transactions use explicit limits; setting a starting number locks its counter first.
+
+### Technical
+- Migrations `20261122120000_mut568_issued_document_origin` (`ISSUED_DOCUMENT` on `ReceivableOrigin`/`PaymentOrigin`) and `20261122120100_mut568_issuing_core` (tables, immutability triggers, counter guard). Purge leaves the issuing tables (kept 7 years, MUT-644). Rollback hazard MUT-568 and DEPLOYMENT §6 row.
+- `server/src/issuing/` (compose, ledger plan, labels, gaps, copies, VAT table, core version), `IssuingRepository` in both stores, `routes/issuing.ts`. Payment origin on the wire gains `issued_document` (`paymentOriginWire`); period-pack source label "Issued document".
+- Files: `server/prisma/*`, `server/src/{issuing,routes/issuing.ts,repositories/{ports,prisma,memory,prisma-purge-tables}.ts,auth/{writability,scopes,store-guard}.ts,schemas.ts,serializers.ts,features.ts,app.ts,scripts/rollback-check.ts}`, `src/hosted/api/schema.d.ts`, `.claude/designs/{MUT-568-issuing-core,hosted-portal}.md`.
+
+## [Unreleased] - 2026-11-21 — Receipt reading: no buyer email, billed line, item line or garbled name as the vendor's (MUT-630, MUT-631, reader generation 5)
+
+### Fixed
+- **MUT-630:** on a bill with a text layer (a Partner mobile bill), the account holder's own email and the billed line `055-…` were offered as the vendor's. A bill-to block now keeps up to 2 contact rows past its 5-row cap (an email, a phone, or a labelled `דוא"ל:`/`טל:` row); they exclude on this receipt only and are never learned. A customer-number row (`מספר לקוח`, new `CUSTOMER_NUMBER` set) is never money and never the vendor's phone. Emails inside a block are learned into the buyer memory (lower-cased) and never unlearned; `readEmail(rows, buyer)` skips bill-to rows and the buyer's emails. No phone, labelled or not, is taken from the item body (a money row, or between an item table's header and the total); header and footer phones are read as before.
+- **MUT-631:** `readVendor` stops at the receipt body (`startsBody`: a money row or an item table's header), so a scan whose header was cut off gives no vendor instead of an item line; and a garbled name (a lowercase or ≤3-letter Latin run between two Hebrew/Arabic words, `hasEmbeddedLatin`) ends the search with no name. A saved vendor's name by registration no. (`withVendor`) is pinned by a reader test.
+
+### Added
+- `npm run receipts:reread -- --buyer-contacts`: a report (ids and field names only, writes nothing) of vendors on reading-granted profiles, and their To-review receipts, whose phone or email is a learned buyer identifier. `--apply` is refused with it.
+
+### Technical
+- `SERVER_READER_GENERATION` 5 (`receipts:reread --reader-below 5` re-reads the To-review receipts after the release). `organizationBuyerIds` (reader.ts) is shared by the read job and the report. `EMAIL` moved to buyer.ts (no import cycle). `ReadIdentifiers.buyer` may hold emails (JSON column, no migration).
+- Bench (main vs branch over the saved reads, 78 real receipts with `prod-8285ca9d.pdf` added): 0 fields lost; confidently wrong vendor 8 → 5, phone 10 → 7, email 6 → 3.
+- Files: `server/src/receipts/extract/{buyer,fields,extract,keywords,normalize}.ts`, `server/src/receipts/reading/reader.ts`, `server/src/scripts/receipts-reread.ts`, `server/src/repositories/ports.ts` (comment), tests `extract/__tests__/{buyer,extract}.test.ts`, `receipts/__tests__/reader-buyer-memory.test.ts`, `scripts/__tests__/receipts-reread.test.ts`; plan `.claude/designs/mut-630-631-vendor-contact.md`.
+
+## [Unreleased] - 2026-11-20 — Moving an expense: an abandoned upload no longer blocks it, a failed move takes its vendor back (MUT-589, TD-308, TD-309)
+
+### Fixed
+- **TD-309:** `POST /v1/expenses/{id}/move` no longer answers 409 `RECEIPT_NOT_READY` for an upload left PENDING_UPLOAD on the expense past the pending window (24 h, `PENDING_WINDOW_MS`): the move soft-deletes it in its transaction (`MoveExpenseParams.abandonedBefore`) and removes its object, if any, after the commit. A newer unfinished upload still refuses.
+- **TD-308:** a vendor the move created on the target is deleted again when the move then fails, unless an expense took it up meanwhile (`VendorRepository.removeIfUnused`, one guarded statement). A vendor the target already had is never touched.
+
+### Technical
+- Tests: route (memory) for both, Prisma store for the abandoned upload and `removeIfUnused`.
+
+## [Unreleased] - 2026-11-19 — Analytics contract 2.11.0: the phone's save moment (MUT-627)
+
+### Added
+- **Analytics contract 2.11.0**: `save_moment_closed` (`kind`: expense | income | conversion; `outcome`: confirmed | auto_confirmed | undone | backgrounded; `entry_point`: keypad | details | quick_action | convert | share | receipt_review), ios and android only. The phone's full-screen save moment (Flutter MUT-627) sends it once per save; an undone entry is no longer counted as `expense_recorded`/`income_recorded`. Pinned in `scripts/__tests__/analytics-taxonomy.test.ts`.
+
+## [Unreleased] - 2026-11-14 — "Email me a sign-in code" (MUT-618, ADR-256)
+
+### Added
+- **Sign in with a code sent by email** (`server/src/auth/sign-in-code.ts`, `auth/sign-in.ts` `signInWithCode`): `POST /v1/sign-in-codes` (portal: same origin + Turnstile action `sign-in-code`) and `POST /v1/device-sign-in-codes` (phone: budgets only, ADR-256 D1) answer 202 for every address no earlier than the recovery floor, and mail a 6-digit code (10 minutes, single use, 5 tries) only to an account that could sign in. `POST /v1/sessions/code` and `POST /v1/device-sessions/code` sign in through the password's throttle, lockout, review and closure checks; audit `method: 'email-code'`; the session is never step-up stamped.
+- **Table `sign_in_codes`** (migration `20261114120000_mut618_sign_in_codes`): one row per ask for every address, real or not (D3), HMAC digest only, a new code cancels the live one, deleted a day after expiry (hourly prune). `SignInCodeRepository` in memory and Prisma, store contract `store-contract-sign-in-codes.ts`; purge catalog entry.
+- **Mail `sign-in-code`** (en, ar): the code in the subject and in a large left-to-right block (new `MailBody.code` slot in the layout), "If you didn't ask for this, ignore it; your password hasn't changed."
+- **Portal** (`SignInCodeStep.tsx`, `signInCode.ts`): "Email me a sign-in code" beside "Forgot your password?" on /sign-in; the code step with `autocomplete="one-time-code"`, Arabic-Indic digits accepted, Resend after 60 s, Use my password instead; wrong / expired / too many tries / wait / offline / under review.
+- `GET /v1/self-service` gains `signInCode`. Errors `SIGN_IN_CODE_WRONG` (`details.triesLeft`), `SIGN_IN_CODE_EXPIRED`, `SIGN_IN_CODE_TOO_MANY_TRIES` (all 401). API 1.114.0-mut618.
+- **Analytics contract 2.10.0** (the union with MUT-619's 2.9.0): `sign_in_code_requested` (resend), `sign_in_code_signed_in`, `sign_in_code_refused` (reason); cookieless on the portal (they come before sign-in).
+
+### Technical
+- Release-QA: `portal.signin.email-code` (stubbed API, en + ar) and `portal-selfservice.signin.email-code` (live API and outbox, en + ar).
+- Files: `server/src/{auth/sign-in-code.ts,auth/sign-in.ts,routes/self-service.ts,routes/sessions.ts,routes/device-sessions.ts,email/**,repositories/**,schemas.ts,errors.ts,index.ts}`, `src/hosted/pages/auth/{SignInPage,SignInCodeStep}.tsx`, `signInCode.ts`, `api/client.ts`, `i18n/{en,ar}.json`, `docs/analytics/events.json`.
+## [Unreleased] - 2026-11-14 — /setup offers a passkey right after the password is set (MUT-619, ADR-257)
+
+### Added
+- **The passkey step** (`src/hosted/pages/auth/SetupPasskeyStep.tsx`): once a setup, reset or signup link has set the password and signed the person in, `/setup` shows "Create a passkey" ("Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.") with **Create a passkey** (MUT-115's ceremony, no password: the sign-in is seconds old; past 10 minutes it sends the password just set once) and **Not now** (spends one of MUT-370's three offers through `PATCH /v1/me/passkey-prompt`, waited for at most 15 s). A cancelled or failed ceremony says so and keeps both buttons. Shown only when `passkeyOfferable` (a device that can make one, `passkeyPrompt.due`, not closing, a sign-in of its own); a recovery on an account with passkeys still lands on the MUT-415 review. en/ar.
+- **Analytics 2.9.0:** `setup_passkey_offered`, `_created`, `_not_now`, `_not_created` (`link`: setup | reset | signup; `reason`: cancelled | offline | other). Opt-in, release-only.
+
+### Changed
+- `data/passkeyPrompt.ts`: `passkeyOfferable` holds the rules the Home card and the setup step share; `passkeySuggestionShows` adds MUT-418's first-run order on top (unchanged behaviour).
+- Release-QA: new `portal-selfservice.setup.passkey-create` (core), `-not-now`, `-cancelled`, `-arabic-phone`; `passkeys.suggest-first-sign-in` now proves a setup Not now keeps Home from asking again for 30 days; signup and recover flows answer the step with Not now (`skipSetupPasskey`).
+- Files: `SetupPage.tsx`, `SetupPasskeyStep.tsx`, `data/passkeyPrompt.ts`, `analytics/portalAnalytics.ts`, `docs/analytics/events.json`, hosted `en.json`/`ar.json`, `qa/qa.config.mjs`, `qa/features/portal-selfservice/{setup,passkeys}.yaml`, `qa/specs/portal-selfservice/{setup,passkeys,signup,recover}.spec.ts`, `qa/support/selfService.ts`.
+
+## [Unreleased] - 2026-11-13 — The landing bar fits a 375px phone in English (release QA web.landing.375)
+
+### Fixed
+- **The wordmark is no longer clipped at 375px in English** (`LandingHeader.tsx`, `LandingPage.css`): the bar's button kept its full label ("Create an account" / "Request an account") up to 360px, and beside the wordmark and the EN|AR switch it squeezed the wordmark (105px in 90px). Up to 400px the button now says a short label (`landing.header.ctaCreateShort` / `ctaRequestShort`: "Sign up" / "Request"; Arabic keeps its full label, which fits).
+- **320px no longer shows an empty button**: the old rule hid the label for an icon the button no longer has. The full label is now visually hidden, not `display: none`, so it stays the button's accessible name.
+- Tests: `LandingHeader.test.tsx` (short label, accessible name), `landingCss.test.ts` (the 400px rule); the QA flow `web.landing.375` asserts the fit at 375 and 320, both languages.
+
+## [Unreleased] - 2026-11-12 — The portal's Malafat screens (MUT-596, ADR-254 D2, D5, D8, D9)
+
+### Added
+- **Sign in with Malafat on the portal** (`src/hosted/pages/auth/malafat/`): a button with Malafat's mark on sign-in (when the server opens the door), `/malafat` (the office address, checked before leaving and remembered on this device) and `/malafat/return` (reads and strips the fragment, exchanges the code once, then the link step: the existing account's own password or passkey, never email alone; or the one consent, which names the office and, for a new account, asks its currency and time zone).
+- **You › Account › Connected apps** (`ConnectedAppsDrawer`, `?connectedApps=true`): Malafat per firm, with its mark, disconnected after an in-row confirm. The row shows only where the server has Malafat access on.
+- **A Malafat firm's members** on You › Profiles (`MalafatMembersSection`): read-only, each with their Malafat role and what it lets them do, pending seats included, "managed in Malafat". `GET /v1/members` (session-only, any member of the profile; a fixed order: in MTB3A first, then pending, each by name).
+- **"via Malafat"** on expenses and payments Malafat recorded for the person (`captureSource: 'malafat'`); one `CaptureSourceBadge` with the "Added by Claude" mark.
+- **A second way in** (`SecondWayIn`, Home): an account Sign in with Malafat created is offered a passkey or a password beside Malafat (Basel's copy: a backup way in, never "if Malafat stops"), in the passkey card's place; Not now hides it on the device. Change password then sets a first password with no current one.
+- Malafat's mark vendored to `public/brand/malafat-mark.svg` and `-on-dark.svg` (C2PA metadata stripped; never hotlinked).
+
+### Changed
+- `Me.user.ownSignIn` (a way in of the person's own) and `Me.user.ownPassword` (a password they chose); `users.passwordChosen` (migration `20261112180000_mut596_password_chosen`; snapshot format 19). `POST /v1/me/password` needs no current password while none was chosen.
+- `POST /v1/expenses` and income received under Malafat's delegated token record `captureSource: 'malafat'`; `Payment.captureSource` publishes as a nullable inline enum (the generator dropped `nullable` beside a `$ref`).
+- Contract `1.113.0-mut596`.
+- Review: a web Sign in with Malafat is bound to the browser that started it (`mtb3a_malafat_flow` cookie, login CSRF); a first password needs a recent sign-in (`RECENT_SIGN_IN_REQUIRED`); the portal reads `ownSignIn`/`ownPassword` as `=== false` so an older API can't hide the passkey suggestion or break Change password; a deep link can't open a Malafat firm's edit form; members show for every firm Malafat manages (`managedInMalafat`, not `firm`); a refused passkey on the link step says so. MUT-191's `MalafatPortal.test.tsx` restored (the new screens' tests are `MalafatAccountScreens.test.tsx`).
+
+### Technical
+- QA: `qa/stubs/malafat-oauth.mjs` stands in for a Malafat firm (discovery, authorize as a chosen person, PKCE token, userinfo, revoke; and as MTB3A's confidential client, a JWKS and signed assertions); `malafat-seed.mjs` makes a firm, its seats, an existing and a linked account and a live grant through the API. The portal-selfservice env starts the stub (`MALAFAT_STUB_PORT`, default 3939). `qa/features/portal-selfservice/malafat-delegation.yaml` (brief §12, nine flows) with `support/malafat.ts`.
+- `OAUTH_CLIENT_LOCAL_HTTP` (off; refused on production and staging) lets a confidential client's JWKS and redirects be http on loopback or `*.lvh.me`; `POST /admin/v1/organizations/{id}/malafat-delegation` is the operator switch's admin twin, dark while `MALAFAT_DELEGATION` is off (the dark-launch gate now covers `/admin/v1/*`).
+- Tests: `MalafatPages.test.tsx`, `MalafatAccountScreens.test.tsx`, `malafatSignIn.test.ts`, `routes-malafat-portal-support.test.ts`, `routes-malafat-qa-plumbing.test.ts`; route-security knows `GET /v1/members`.
+
+## [Unreleased] - 2026-11-12 — Sign in with Malafat (MUT-595, ADR-254 D1, D4, D5, D8, DF1)
+
+### Added
+- **Sign in with Malafat** (`server/src/routes/malafat-sign-in.ts`, `server/src/malafat/sign-in-client.ts`): MTB3A as a public OAuth client of the person's own Malafat firm (MAL-1539: PKCE S256, `state`, the firm's own origin built from its slug, never a caller's host). Malafat's token is used once for userinfo and revoked straight after.
+  - `GET /v1/auth/malafat/start?tenant=&client=web|app[&app_challenge=]` → Malafat → `GET /v1/auth/malafat/callback` → the client's return with `#result=` (2 minutes, single use) or `#error=office_not_found|access_denied|malafat_unavailable|state_invalid`. The phone's return is the fixed `mutaba3a://auth/malafat` (R1); the portal's is `/malafat/return` (MUT-596).
+  - `POST /v1/auth/malafat/exchange {result, app_verifier?}` → `signed_in` (a cookie, or a device token for the phone) | `needs_link` | `needs_consent {creates}`. The phone must present the verifier of the S256 challenge it sent (R3), so another app catching the scheme can't use the code; the code burns on the first try.
+  - `POST /v1/auth/malafat/link {ticket, password | passkey}` proves the account that has the email (D4: never by email alone), through the same checks, throttle and lockout as sign-in (`verifyPassword`, `verifyPasskey`).
+  - `POST /v1/auth/malafat/consent {ticket, acceptedTermsVersion?, defaultCurrency?, timezone?}` writes everything (R8): a new account (ACTIVE, no review DF1, the normal trial D5, a random password nobody holds so every session rule holds), the link (`externalIdentities.link`, claiming a synced seat and its membership), and the session. 409 `IDENTITY_LINKED_ELSEWHERE` when the Malafat person is another account's.
+  - `GET /v1/auth/malafat/office?tenant=` (preflight) and `GET /v1/self-service` `malafatSignIn`.
+- Works with the firm's Malafat access switch off, and for a firm not bound to MTB3A (a link with no seat).
+
+### Technical
+- Migration `20261112160000_mut595_malafat_sign_in` (`malafat_sign_ins`: digests only; additive). Config `MALAFAT_SIGN_IN` (off), `MALAFAT_ORIGIN_TEMPLATE` (`https://{slug}.malafat.app`; `http://{slug}.localhost` in dev), `MALAFAT_SIGN_IN_CLIENT_ID` (`mtb3a`). Contract `1.112.0-mut595`. Sign-in method `malafat` in audits; `user.malafat_linked`.
+- `signIn` / `signInWithPasskey` now share `verifyPassword` / `verifyPasskey` with the link step.
+- Tests: `routes-malafat-sign-in.test.ts` (a fake Malafat: the three first sign-ins, the phone's verifier and single use, refusals, the switch), sign-in and link store contract.
+
+## [Unreleased] - 2026-11-12 — Malafat syncs a firm's members; partners own the firm (MUT-594, ADR-254 D2, D3, D7, decision 7)
+
+### Added
+- **`PUT /v1/integration/members`** (organization key, `integration:write`, idempotent): Malafat's full member list `{subject, email, role}` for its firm. The server adds, re-roles and removes (`server/src/routes/integration.ts`). Roles map by D3 (`server/src/malafat-members.ts`): PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER.
+- **Seats** (`external_identities`, `ExternalIdentityRepository`): a person with no MTB3A account waits as a pending seat (D7); `externalIdentities.claim` links it to an account and makes the membership in one conditional write, so two first sign-ins claim it once (MUT-595 calls it). Never matched by email (D4). A removal keeps the link, so a member listed again comes back without a new sign-in.
+- **A removal ends access at once (DF3):** the membership and the person's delegated grants for that tenant end in the sync's transaction (reason `member_removed`).
+- **Partners own the Malafat firm** (`ownsProfile`, decision 7, overrides part of ADR-245): on a firm with `memberSyncAt` set, an OWNER member owns it, so a partner invites accountants and makes share links; an associate gets 403 NOT_OWNER. The firm's name, type, firm request and members stay Malafat's: 403 READ_ONLY_PROFILE `MANAGED_IN_MALAFAT` (`server/src/routes/profiles.ts`). A partner's own Claude connector never sees the firm (§4.6).
+- **Turning Malafat access on turns firm features on** (`firmEnabledAt`, ADR-254 §4.4).
+
+### Technical
+- Migration `20261112140000_mut594_member_sync` (additive: `organizations.memberSyncAt`, `external_identities`); local snapshot format 17 → 18 (`orgs.memberSyncAt`, null on a device). Purge catalog knows the seats. Contract `1.111.0-mut594`.
+- Members made in MTB3A before a firm's first sync are left alone until they sign in with Malafat: they can't be matched to a Malafat person by email.
+- Firm roles are stored but not enforced yet (MUT-305); ownership is what this ticket gates.
+- Tests: `routes-member-sync.test.ts`, the seat contract in `store-contract-oauth.ts`, `owns-profile.test.ts` rows, local migration 17 → 18. Test helpers seat lawyers through the sync and a claim.
+
+## [Unreleased] - 2026-11-12 — The allocation number is read in more places on real tax invoices (MUT-557 follow-up, ADR-246 amendment)
+
+### Fixed
+- **The reader finds the allocation number where real invoices print it** (`server/src/receipts/extract/keywords.ts`, `fields.ts`): the label in either word order (`הקצאה מספר`, as the Tax Authority's own form prints it) and shortened (`מ.הקצאה`), and inside the customer box under "לכבוד", which the bill-to guard used to skip. The label is still required, so a buyer's ח.פ is never taken. Why: Basel's six scanned tax invoices (receipt-bench `allocation-2026-11-12-*`, the first real samples that carry one) read 2/6; now 3/6, 0 wrong, and no field lost on all 77 real receipts.
+
+## [Unreleased] - 2026-11-12 — Malafat's connector forwards MTB3A's tools to /mcp as the person (MUT-598, ADR-254 D11)
+
+### Added
+- **`/mcp` accepts Malafat's delegated grant** (`server/src/auth/agent-auth.ts`, `server/src/oauth/service.ts`): one consent covers every resource the operator registered the confidential client for (`/v1` and `/mcp`; `npm run oauth:client` now registers both), so Malafat's connector forwards MTB3A's tools with the token the person gave. An agent's own grant stays bound to its resource. The same checks as `/v1` run on every call (delegation on, client not disabled, the tenant's firm CONNECTED with its switch on), and the person's `agent_access` still applies.
+- **The tools see the tenant's firm only** (`server/src/mcp/context.ts`): `agentProfile` and the new `agentProfiles` admit, under Malafat, only the tenant's firm and only for a partner (the OWNER role Malafat's sync gives, D3; MUT-594 makes `ownsProfile` say so too). The person's inbox is closed (`personalInboxRefusal`: list_inbox, inbox writes, filing, look-alike search). Writes are audited `via: malafat` as on `/v1`.
+
+### Technical
+- Tests: `mcp-delegated.test.ts` (firm only, own profile and inbox refused, partner only, `agent_access`, an agent's own token unchanged, each §4.7 revocation ends `/mcp`). No contract change.
+
+## [Unreleased] - 2026-11-12 — Malafat calls /v1 as the person, with a tenant-bound delegated token (MUT-593, ADR-254)
+
+### Added
+- **A third principal, `delegated`** (`server/src/auth/middleware.ts`, `server/src/auth/delegation.ts`): an OAuth access token issued to a confidential client for `<origin>/v1` resolves to the person, with `via { clientId, grantId, tenantId, organizationId }`, and runs the session path unchanged (selectProfile, scopes, store guard, billing gate). It reaches only the profile its Malafat tenant names; any other, the person's own included, is 404 PROFILE_NOT_FOUND. Organization-independent routes are refused except `/v1/me` (filtered to that profile, no client books, billing standing or operator flag) and the owner routes that name the tenant's profile in the path (accountants, share links).
+- **Malafat as MTB3A's first confidential OAuth client** (`server/src/oauth/client-assertion.ts`, `service.ts`): `private_key_jwt` against its JWKS (RS256, PS256, ES256 only; `aud` the token endpoint or issuer; at most 5 minutes; each `jti` once), on the code exchange and every refresh. It names its tenant at authorize (`malafat_tenant`); consent checks the person is a member of that tenant's firm with Malafat access on. `/v1` tokens never open `/mcp` and agents' tokens never open `/v1`. Registered and disabled by the operator only: `POST /admin/v1/oauth/confidential-clients` and `.../{clientId}/disable`, `npm run oauth:client`.
+- **Opt-in routes** (`server/src/routes/security.ts`, `PERSON_OR_MALAFAT`): expenses, receipts, expense groups, vendors, categories, conversions, income, the profile feed, summaries (not the cross-profile verdict), period-download tickets, and the owner routes for accountants and share links. A delegated period-download ticket is bound to its grant (`gid` claim).
+- **Audit:** every row written as the person on a delegated call carries `metadata.via = 'malafat'`, stamped where every store call passes (`server/src/auth/store-guard.ts`).
+- **Revocation (ADR-254 §4.7):** Connected apps (`GET/DELETE /v1/me/connected-apps`, session only), membership removal, integration disconnect (in its transaction), password change and operator disable or sign-out, the per-firm switch, and the operator's client disable each end access on the next call. A routine key rotation does not (R4). Revoking `agent_access` no longer ends a Malafat grant (agents only).
+- **Switches:** `MALAFAT_DELEGATION` (default off; on in `.env.example`) and the operator's audited per-firm switch `POST /v1/operator/organizations/{id}/malafat-delegation`.
+
+### Technical
+- Migration `20261112120000_mut593_delegated_access` (additive): `OAuthClientKind.CONFIDENTIAL`, client `jwksUri`/`allowedResources`/`disabledAt`, request and grant `tenantId` (indexed), `oauth_client_assertions`, integration `delegationEnabledAt`/`delegationEnabledBy`. OAuth cleanup never removes a confidential client and drops expired assertion ids.
+- `SessionIdentity.session` and `SessionAuth.session` are nullable; session-only routes read `personSession(c)`, which refuses a call without one.
+- `jose` 6.2.13 is a direct dependency. Contract `1.109.0-mut593`.
+- Review fixes: `POST /v1/receipts/{id}/move` is never delegated (its destination is outside the tenant), and a contract test refuses `profileId`/`organizationId` in any delegated route's body or query; a reconnect or a new tenant turns the per-firm switch off (both stores); the purge catalog knows `oauth_client_assertions`. TD-312.
+- Local snapshot format 16 → 17 (`ints` gains the two switch fields, off) with its migration (`src/hosted/local/migrations/index.ts`).
+- An agent's `/mcp` token on a route that accepts Malafat's token (`/v1/me`) is now 401 `delegation_ended`; elsewhere it is still 403 PRINCIPAL_NOT_ACCEPTED.
+- Tests: `routes-delegated.test.ts`, `routes-operator-malafat-delegation.test.ts`, `oauth/__tests__/client-assertion.test.ts`, store contract (confidential client, assertion ids, scoped revokes), route-security guards for the delegated surface.
+
+## [Unreleased] - 2026-11-11 — Move a saved expense, with its receipts, to another profile (MUT-589, ADR-255)
+
+**Why:** a receipt saved onto the wrong profile could never leave it (MUT-503 moved To-review receipts only); Basel's D4 widened it to any saved expense.
+
+### Added
+- `GET /v1/expenses/{id}/move-preview?profileId=` and `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (API 1.109.0-mut589): the same gates (SAME_PROFILE, EXPENSE_NOT_FOUND, MALAFAT_PROFILE, NOT_OWNER, PROFILE_NOT_FOUND, lapse 402), fields mapped by name with every change listed, receipts copied then re-homed in one transaction with both audits. Files: `server/src/expenses/{move-plan,expense-move}.ts`, `routes/expenses.ts`, `schemas.ts`, `repositories/{ports,memory,prisma}.ts`, `auth/{store-guard,writability}.ts`.
+- Portal: Move beside Delete in the expense drawer and "Move with its expense…" on a filed receipt card open `MoveExpenseDrawer` (`?moveExpense=`), which lists what changes on the chosen profile before Move. Move shows only to an owner (creator or co-owner) of a profile Malafat doesn't feed; for anyone else, and on a read-only profile, with one profile or signed out, it is hidden entirely (Basel, 2026-11-12; the server's 403 stays as the backstop). i18n `hosted.expenses.move.*`, `hosted.expenses.drawer.move` (ar, en).
+
+### Changed
+- `MoveReceiptDrawer`'s body is now `MoveToProfileDrawer`, shared with the expense move. A Filed receipt card has a ⋯ menu (Open, Move with its expense…) where the person has another profile.
+- `writableTarget` is exported from receipts-compose; `categoryNameIn` added to presets.
+
+### Technical
+- Tests listed under MUT-589 in TEST_PLAN.md. Release-QA: `portal.expenses.move-expense`, `move-expense-refused`, `portal.receipts.move-filed`; `filed-no-move` updated. TD-308, TD-309. No migration.
+## [Unreleased] - 2026-11-12 — Design: Malafat runs every MTB3A feature through the lawyer's own access (epic MUT-592, ADR-254)
+
+### Added
+- **Design brief only, no code:** `.claude/designs/malafat-delegated-access.md`, approved by Basel with decisions D1–D11 and defaults DF1–DF3. Malafat calls `/v1` and `/mcp` with each person's tenant-bound delegated token (MTB3A as its authorization server, Malafat the first confidential client); Sign in with Malafat; Malafat syncs members and roles; partners own a Malafat firm (overrides part of ADR-245).
+- Tickets: MUT-593..598 under MUT-592; Malafat's side MAL-1539..1544 under MAL-1538, linked as blockers.
+
+## [Unreleased] - 2026-11-11 — Vendor-made invoice PDFs read right; a skipped receipt read says why (MUT-590, ADR-252)
+
+### Fixed
+- **A PDF's text layer is read by position** (AC2/AC3): the sidecar returns it as placed runs (`server/ocr/app/decode.py`, `pipeline.py`), and the API runs them through `orderedRows` (`server/src/receipts/extract/extract.ts`), so a label and its amount printed apart on one line, or one over the other, meet. Without places it reads `pdfText` line by line as before.
+- **Visual-order Hebrew text layers** are put in logical order (`server/ocr/app/text.py`).
+- **Found on Basel's real invoices:** an ordinal day reads as a date (`6th May 2026`, `dates.ts`), and a buyer's number first on a row gives way to the vendor's labelled one after it (`fields.ts`).
+- **A skipped read says why** (AC1): `code: deleted | filed | complete | ungranted`, plus `engine` and `chars` (`server/src/receipts/reading/reader.ts`, `repositories/{ports,prisma,memory}.ts`). Receipt 27e28e05 was filed onto an expense mid-read; nothing was lost.
+
+### Technical
+- `SERVER_READER_GENERATION` 3 → 4; `receipts:reread` takes `--mime <type>` (`server/src/scripts/receipts-reread.ts`).
+- Bench: `vendor-pdf` scope (`server/ocr/bench/run.py`); on Basel's 14 vendor-made invoices 57/82 fields (main 48/82), the rest is MUT-591 (TD-307). Release-QA: `portal-selfservice.receipts.vendor-pdf` with a synthetic fixture `server/ocr/tests/fixtures/syn-vendor-invoice-en.pdf`.
+- Ships with the next API release: `receipt-ocr` image and API in the same apply (before-release.md).
+
+## [Unreleased] - 2026-11-11 — Arabic dates name the Levantine months everywhere (MUT-587, ADR-253)
+
+### Changed
+- **كانون الثاني, not يناير**, on every Arabic date that names a month, portal and website and the mails: `getLocale('ar')` is now `ar-PS-u-nu-latn` (Latin digits kept). Numeric dates, amounts, relative times and country names read as before. Files: `src/lib/i18n/core.tsx`, `src/lib/utils.ts`, `src/hosted/format/reportFormat.ts`, `src/hosted/pages/sharing/sharingRules.ts`, `src/hosted/pages/client-books/clientBooksRules.ts`, `src/hosted/pages/accountant-invite/inviteState.ts`, `src/hosted/operator/time.ts`, `src/hosted/data/periodDownload.ts`, `src/pages/landing/components/mocks/useMockFormat.ts`, `server/src/dates.ts`, `server/src/email/templates/copy.ts`, `server/src/billing/checkout.ts`.
+- Copy: the privacy page's "آخر تحديث: 7 تشرين الثاني 2026" and the web 0.3.4 Arabic release note. Frozen terms versions unchanged (ADR-102).
+
+### Removed
+- `getLocaleFromLanguage` (no caller), the three `latn()` helpers and Reports' `REPORTS_ARABIC_DATES`.
+
+### Technical
+- Lint guard `DATE_LOCALE_SYNTAX` in `eslint.config.js` and `server/eslint.config.js`. Tests: `arabicLocale.test.ts`, `dateLocaleGuard.test.ts` (ESLint run programmatically), `levantineDates.test.ts`; expectations moved in sharing, privacy, checkout, renewal-mail and templates tests. Release-QA `@portal.direction.levantine-months`.
+- Ships with the next API release (mail and pay-page dates) and the next web release.
+
 ## [Unreleased] - 2026-11-07 — Operator passkey step-up works from a browser without the passkey; adding one asks for it in place; Connect Claude says when the server has it off
 
 ### Fixed

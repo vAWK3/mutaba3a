@@ -9,7 +9,8 @@ import { loadTurnstile, type TurnstileApi } from './loadTurnstile';
  */
 
 export type TurnstileStatus = 'loading' | 'ready' | 'failed';
-export type TurnstileAction = 'signup' | 'recover';
+/** MUT-618: `sign-in-code`, "Email me a sign-in code" on /sign-in. */
+export type TurnstileAction = 'signup' | 'recover' | 'sign-in-code';
 
 /** Cloudflare's published always-pass site key, when the build named none (tests). Builds always define one. */
 const TEST_SITE_KEY = '1x00000000000000000000AA';

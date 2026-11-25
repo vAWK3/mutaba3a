@@ -1,0 +1,30 @@
+app: portal-selfservice
+area: signin
+title: Sign in with an emailed code
+tier: secondary
+# MUT-618 (ADR-256): "Email me a sign-in code" beside "Forgot your password?", on the live dev API with the memory
+# mailer: the code is read from the outbox, as a person reads it from their mail.
+paths:
+  - src/hosted/pages/auth/SignInCodeStep.tsx
+  - src/hosted/pages/auth/signInCode.ts
+  - server/src/auth/sign-in-code.ts
+  - server/src/auth/sign-in.ts
+  - server/src/routes/self-service.ts
+features:
+  - id: email-code
+    title: Email me a sign-in code mails a 6-digit code that signs you in, in English and Arabic; an address with no account gets the same screen and no mail
+    tier: core
+    tickets: [MUT-618]
+    paths:
+      - src/hosted/pages/auth/SignInPage.tsx
+      - server/src/routes/sessions.ts
+      - server/src/email/templates/copy.ts
+    steps:
+      - On sign-in type your email and press Email me a sign-in code
+      - Open the mail and type its code; a wrong code first says how many tries are left
+      - Ask for a code for an address with no account
+    expect:
+      - '"Check your email" says a code went to the address if it has an account'
+      - The mail carries the code in its subject and body, in the page's language
+      - The right code lands you on Home; a wrong one says how many tries are left
+      - An address with no account sees the same screen and its outbox stays empty

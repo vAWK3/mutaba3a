@@ -78,3 +78,23 @@ features:
       - The page is right to left, its labels are Arabic, and the receipt sits to the right of the form
       - The amount still reads 84.20 left to right
       - On the phone the receipt stacks above the form and the page does not scroll sideways
+  - id: levantine-months
+    title: In Arabic, every date that names a month uses the Levantine name (كانون الثاني, not يناير), with Latin digits (MUT-587)
+    tier: secondary
+    tickets: [MUT-587]
+    paths:
+      - src/lib/i18n/core.tsx
+      - src/lib/utils.ts
+      - src/hosted/pages/client-books/clientBooksRules.ts
+      - src/hosted/pages/sharing/sharingRules.ts
+      - src/hosted/pages/accountant-invite/inviteState.ts
+      - src/hosted/operator/time.ts
+      - src/hosted/format/reportFormat.ts
+      - src/hosted/data/closeAccount.ts
+      - src/hosted/data/periodDownload.ts
+    steps:
+      - Open a client book in Arabic
+      - Open a trip expense group in Arabic
+      - Close the account in Arabic and read the closing page
+    expect:
+      - Each page's dates name Levantine months, never يناير … ديسمبر, and every digit is Latin

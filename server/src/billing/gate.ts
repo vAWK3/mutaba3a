@@ -91,6 +91,8 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'GET /v1/operator/firm-requests/:organizationId': 'open',
   'POST /v1/operator/firm-requests/:organizationId/enable': 'open',
   'POST /v1/operator/firm-requests/:organizationId/decline': 'open',
+  // MUT-593: the per-firm Malafat switch.
+  'POST /v1/operator/organizations/:organizationId/malafat-delegation': 'open',
   // MUT-559 (ADR-245): who can read a profile is privacy, never a paid feature: an owner sees and revokes their
   // accountants, and an accountant accepts or leaves, in any state. Inviting is a write on the profile in the path.
   'GET /v1/profiles/:profileId/accountants': 'open',
@@ -114,6 +116,9 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/oauth/requests/:requestId/decision': 'open',
   'GET /v1/oauth/grants': 'open',
   'DELETE /v1/oauth/grants/:grantId': 'open',
+  // MUT-593: seeing and revoking Malafat's access writes no record; a lapsed person can always revoke it.
+  'GET /v1/me/connected-apps': 'open',
+  'DELETE /v1/me/connected-apps/:grantId': 'open',
   // D6: leaving a co-owned profile, or its creator removing someone, adds no record.
   'DELETE /v1/profiles/:profileId/owners/:userId': 'open',
   // D4: the person's own captures and their cross-profile feed, and a new profile of their own.

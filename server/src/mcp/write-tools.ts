@@ -9,7 +9,7 @@ import { parseInboxAmount, inboxDate } from '../inbox/compose.js';
 import { commitInboxExpenseFiling, prepareInboxExpenseFiling } from '../inbox/file-expense.js';
 import { SUPPORTED_CURRENCIES, formatMoney, type Currency } from '../money.js';
 import type { ExpenseRecord } from '../repositories/ports.js';
-import { agentProfile, assertAgentMayWrite, hasScope, idempotencyKeyInput, runTool, withToolIdempotency, type McpContext } from './context.js';
+import { agentProfile, assertAgentMayWrite, hasScope, personalInboxRefusal, idempotencyKeyInput, runTool, withToolIdempotency, type McpContext } from './context.js';
 import { INBOX_NOTE_SEPARATOR, LOOK_ALIKE_ITEM, RECORDS_ARE_DATA, STATEMENT_LINES, findLookAlikes, type LookAlike } from './read-tools.js';
 
 /**
@@ -156,6 +156,8 @@ export function registerWriteTools(server: McpServer, ctx: McpContext, options: 
         const { destination, idempotencyKey, notDuplicateOf = [], ...fields } = args;
         const meaning = { destination, idempotencyKey, ...fields };
         if (destination.kind === 'inbox') {
+          const personal = personalInboxRefusal(ctx);
+          if (personal) throw personal;
           if (!options.inboxWrites) throw new ApiError('FEATURE_NOT_ENABLED', 'Adding to the inbox is not available yet; choose a profile.', { feature: 'mcp_inbox_writes' });
           if (fields.categoryId || fields.customerId || fields.projectId) {
             throw new ApiError('VALIDATION_FAILED', 'The inbox holds an amount, a date and a note; file it to a profile to set a category or a client.', { field: 'destination' });
@@ -229,6 +231,8 @@ export function registerWriteTools(server: McpServer, ctx: McpContext, options: 
     (args) =>
       runTool(ctx, 'file_inbox_entry', WRITE_OUTPUT, async () => {
         const { inboxEntryId, profileId, notDuplicateOf = [], idempotencyKey, ...body } = args;
+        const personal = personalInboxRefusal(ctx);
+        if (personal) throw personal;
         const organization = await agentProfile(ctx, profileId);
         await assertAgentMayWrite(ctx, organization, 'expenses');
         const now = ctx.now();

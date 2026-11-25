@@ -28,6 +28,9 @@ function HeaderCta({ visible, signupUrl }: { visible: boolean; signupUrl: string
     return (
       <a href={signupUrl} target="_blank" rel="noopener noreferrer" className="landing-header-cta" data-part="header-cta" data-visible={visible}>
         <span className="landing-header-cta-label">{t('landing.hero.ctaCreate')}</span>
+        <span className="landing-header-cta-short" aria-hidden="true">
+          {t('landing.header.ctaCreateShort')}
+        </span>
         <span className="sr-only"> {t('common.opensInNewTab')}</span>
       </a>
     );
@@ -35,6 +38,9 @@ function HeaderCta({ visible, signupUrl }: { visible: boolean; signupUrl: string
   return (
     <a href="#get-it" className="landing-header-cta" data-part="header-cta" data-visible={visible}>
       <span className="landing-header-cta-label">{t('landing.hero.ctaRequest')}</span>
+      <span className="landing-header-cta-short" aria-hidden="true">
+        {t('landing.header.ctaRequestShort')}
+      </span>
     </a>
   );
 }

@@ -3813,6 +3813,15 @@ Run: `npx vitest run scripts/__tests__/no-hardcoded-hosts.test.ts scripts/__test
 | Portal | `PasskeysDrawer.test.tsx` (12), `SignInPasskey.test.tsx` (8), `passkeys/__tests__/webauthn.test.ts` | `npm run test:run` |
 | Release-QA | `portal-selfservice.passkeys.add` (core), `.sign-in` (core), `.remove`, `.password-change-keeps`, `.autofill`, `.arabic-phone` | `release-qa run --attach --only portal-selfservice.passkeys` |
 
+## MUT-619 — the passkey step at the end of /setup (2026-11-14, ADR-257)
+
+| Layer | Tests | Command |
+|---|---|---|
+| Unit | `data/__tests__/passkeyPrompt.test.ts` › passkeyOfferable (2: offered even with the trial step open; never unsupported, local, not due, null, closing, no own sign-in) | `npx vitest run src/hosted/data` |
+| Portal | `pages/auth/__tests__/SetupPasskeyStep.test.tsx` (16: offered on /setup with focus and the offered event; Create adds with no password, toast, Home, no card, Me cache not due; step-up past 10 min sends the password once; Not now spends one offer; a failed Not now save still lands; cancelled and failed notes keep both choices, retry works; buttons held while the sheet is open; Arabic RTL; lost-answer retry offers it; unsupported, not due and passkey-holding recovery skip it; signup goes on to the personal profile) | `npx vitest run src/hosted/pages/auth` |
+| Contract | `scripts/__tests__/analytics-taxonomy.test.ts` (events 2.9.0 pin) | `npx vitest run scripts/__tests__/analytics-taxonomy.test.ts` |
+| Release-QA | `portal-selfservice.setup.passkey-create` (core), `.passkey-not-now`, `.passkey-cancelled`, `.passkey-arabic-phone`; changed: `passkeys.suggest-first-sign-in`, `passkeys.review-after-recovery`, `signup.create`, `signup.business-instant`, `recover.reset`, `recover.pending-account`; `portal.setup.set-password` is the no-passkey device | `release-qa run --attach --only portal-selfservice.setup` |
+
 ## MUT-370 — passkey suggestion, portal half (2026-10-25, ADR-191)
 
 | Layer | Tests | Command |
@@ -4294,6 +4303,17 @@ Manual check: `npx tsx --env-file=.env.example` loading `loadConfig` reports bot
 | Portal | `src/hosted/components/__tests__/MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/receiptHooks.test.tsx` | ⋯ menu items and keys; Filed and solo have no Move (DR2, AC3); radio rows, named primary, Idempotency-Key, both profiles refreshed, toast with Open (DR4); read-only/locked disabled with reasons and the none-open note (AC2); reading note (DR9); 402 banner; D8 recovery; focus to the neighbour; review page button and next receipt (DR1); `moveErrorOf` table |
 | Release-QA | `@portal.receipts.move`, `@portal.receipts.move-review`, `@portal.receipts.move-refused`, `@portal.receipts.filed-no-move` | the four portal flows on the FakeApi's per-profile receipts |
 
+## MUT-589 — move a saved expense, with its receipts, to another profile (ADR-255)
+
+| Level | Where | What it proves |
+|---|---|---|
+| Unit | `server/src/expenses/__tests__/move-plan.test.ts` | category by name, by preset key across ar/en, to Other, to none, never archived; client and matter cleared; vendor link; VAT kept on a firm, cleared (gross kept) otherwise; groups; fixed change order; money, date, title and notes untouched |
+| Route | `server/src/__tests__/routes-expenses-move.test.ts` | 0, 1 and 3 receipts: same ids, new keys, old objects gone; totals move; fields mapped and changes answered; vendor found or created on the target; approval category rewritten; group marks dropped; both audits; one move per Idempotency-Key; 422 same, 404 unknown/deleted, 404 stranger, 403 NOT_OWNER, 403 MALAFAT_PROFILE, 409 stale (nothing copied), 409 unfinished upload (copies removed); failed copy leaves A untouched; a filing landed after the copies (R1) → 409, only this move's copies removed; failed post-commit delete still 200; preview equals applied changes and creates nothing; preview runs the gates; lapsed target 402 |
+| Store (Postgres) | `server/src/repositories/__tests__/store-prisma-expense-move.test.ts` | re-home under the locks with VAT cleared, marks dropped, audits written; stale, changed set, unfinished refused with nothing written; two moves → one wins |
+| Inventories | `route-security`, `writability-routes`, `routes-expenses`, `accountant-route-matrix`, `direction.test.ts` | the two routes are session-only, counted, leak-free; accountants never reach the preview; the drawers' dir sites |
+| Portal | `src/hosted/components/__tests__/MoveExpenseDrawer.test.tsx`, `MoveReceiptDrawer.test.tsx`, `src/hosted/data/__tests__/expenseMoveQueries.test.tsx` | Move beside Delete, none with one profile or read-only; preview on choice, changes list and receipt count, Move held until then; move body and key, toast, list refresh; NOT_OWNER and stale banners (stale re-reads the preview); read-only row disabled; Filed card ⋯ offers Move with its expense; both profiles invalidated; D8 recovery; error table |
+| Release-QA | `@portal.expenses.move-expense`, `@portal.expenses.move-expense-refused`, `@portal.receipts.move-filed`, `@portal.receipts.filed-no-move` | passed 2026-11-11 on the FakeApi (expenses scoped by profile, `/move-preview` and `/move`) |
+
 ## MUT-513 — the portal's first-visit welcome (ADR-230)
 - **Unit/integration (Vitest):** `client-mode.test.ts` — an unhinted 401 leaves the browser undecided (nothing stored, no local import, one request), waiting calls share it, no ended session, ALWAYS_REMOTE still goes out, a later Try wins; `mode.test.ts` — undecided is memory-only and never local; `errorReporting.test.ts` — undecided holds nothing for Sentry; `carryOverPages.test.tsx` — a receive on an undecided browser chooses this device, signed in stays remote; `local-mode.test.tsx` — the welcome on `/`, Arabic default, the explainer, Try, Sign in and Back, Create an account, deep links to sign-in, 200 straight in, a saved choice skips it, network failure with Retry and this-visit Try, 5xx keeps the can't-connect screen, `/welcome` reopened and signed in; `WelcomePage.test.tsx` — a browser that blocks storage saves nothing, each door counted once; `portalAnalytics.welcome.test.ts`, `guard.test.ts`, `posthogConfig.test.ts`, `analytics-taxonomy.test.ts` (contract 2.4.0).
 - **Release-QA:** `qa/features/portal/welcome.yaml` (first-visit core, try-local, sign-in-door, signup-door, deep-link-skips, offline, reopen, phone-fit, reduced-motion); `@portal.local.first-visit` now passes the welcome; `signedOutServer` seeds `local` unless a spec passes `null`.
@@ -4503,7 +4523,7 @@ Full map: `.claude/designs/MUT-575-client-books-server-tests.md` (the plan's 15 
 
 ### MUT-557 — the Israeli allocation number (ADR-246)
 - `israel/__tests__/allocation-number.test.ts`: the dated thresholds and their boundaries (₪4,999.99 / ₪5,000 on 2026-06-01, ₪9,000 the day before, 2024-05-04), USD, no VAT, unknown net, Personal, the A4 guard, normalizing.
-- `receipts/extract/__tests__/allocation.test.ts` (labels he/en/ar, row under, right to left, ח.פ beside it, bare number, bill-to, PDF, unsure row; D3 completeness; fillAbsent) and `qr.test.ts` (the registry).
+- `receipts/extract/__tests__/allocation.test.ts` (labels he/en/ar, row under, right to left, ח.פ beside it, bare number, bill-to (read there since the 2026-11-12 amendment; a buyer's ח.פ under a blank label is still refused), the reversed and shortened labels, PDF, unsure row; D3 completeness; fillAbsent) and `qr.test.ts` (the registry).
 - `ocr-client.test.ts`: `qr` passed through, absent = [], an unusable list = [] (A3). Sidecar: `server/ocr/tests/test_qr.py`, `test_privacy.py`.
 - Routes: `routes-expenses.test.ts` (store, 422, flag, clear, Personal, list/detail/feed), `routes-receipts.test.ts` (approve, `allocationNumberExpected`).
 - Store contract: the column and its CHECK (`store-contract-expenses.ts`), the A2 backlog pick (`store-contract-receipt-reading.ts`); Prisma under `test:db`.
@@ -4529,3 +4549,248 @@ Full map: `.claude/designs/MUT-562-client-books-desk-tests.md`.
 - Release-QA (stubbed portal, `qa/support/clientBooksApi.ts`): portal.client-books.{list,empty,client,receipt,revoked}, portal.accountant-invite.{signed-out,signup,accept,refusals}, portal.share-link.{pin,view}.
 - Open: downloads (MUT-314), 4th-client card (MUT-565), the live `portal-selfservice.accountant` journeys (after MUT-561/575 merge).
 
+## MUT-590 — vendor-made invoice PDFs, read skip reasons (ADR-252)
+
+- `server/ocr/tests/test_caps.py`: placed runs (label and value apart on one line, page 2 under page 1), the character cap and a pdfium error keep `pdfText` with no lines; `test_units.py`: visual Hebrew repaired, logical Hebrew and Arabic unchanged.
+- `server/src/receipts/extract/__tests__/extract.test.ts`: placed text layer → total/currency/date (Hebrew label and amount apart), label over amount in a column, registration label and number in neighbouring runs; `pdfText` without lines → line-by-line (back-compat).
+- `server/src/receipts/__tests__/reader-skip-reason.test.ts`: deleted, filed (mid-read), complete and ungranted skips log their `code`; a text-PDF read logs `engine` and `chars`, no text.
+- `server/src/scripts/__tests__/receipts-reread.test.ts`: `--mime application/pdf` picks PDFs only; a generation above the current reader is refused.
+- `extract.test.ts` also: an ordinal day (`6th May 2026`); a buyer's number first on a row gives way to the vendor's labelled one after it, and with no label after it still ends the search.
+- `store-contract-receipt-reading.ts`: F8 pins the skip reason (deleted, filed) for memory and Prisma.
+- Release-QA `portal-selfservice.receipts.vendor-pdf` (live API + sidecar). Bench `vendor-pdf` scope on Basel's 17 real invoices: 57/82 (TD-307, MUT-591).
+
+
+
+## MUT-587 — Levantine Arabic months everywhere (ADR-253)
+
+- Unit: `src/lib/i18n/__tests__/arabicLocale.test.ts` (getLocale, all 12 months, numeric dates and amounts unchanged), `src/hosted/format/__tests__/levantineDates.test.ts` (close-account day, invite end, client-book labels, operator times, formatDay), `utils.test.ts` (formatDate in Arabic).
+- Guard: `src/lib/i18n/__tests__/dateLocaleGuard.test.ts` runs ESLint on probe code for the portal and the website.
+- Server: templates, renewal-mail and checkout tests hold the Levantine names.
+- Release-QA: `@portal.direction.levantine-months` (client book, trip group, closing page). Manual: Safari, one date, one amount, one country name in Arabic (D4).
+
+## MUT-593 — Malafat's delegated token on /v1 (ADR-254)
+
+| What | Where |
+|---|---|
+| Assertion verification: ES256/RS256 accepted; wrong key, iss, sub, aud, no jti, expired, too long, replay, HS256, `none`, an org key refused | `server/src/oauth/__tests__/client-assertion.test.ts` |
+| AC1: opted-in route reached as the person, audited `via: malafat`; 404 on own and other profiles; 403 on undeclared and cross-profile routes; `/v1/me` filtered; firm role unchanged | `server/src/__tests__/routes-delegated.test.ts` |
+| AC2: an org key mints nothing and opens no person route; `/v1` tokens never open `/mcp`, agents' tokens never open `/v1` | same |
+| ADR-197 §5: assertion on code and every refresh, rotation, reuse revokes; JWKS rotation keeps connections (R4); public client can't ask for `/v1` | same |
+| Consent: tenant must name a firm the person is in with the switch on (R6) | same |
+| §4.7, one test per row: Connected apps, membership removal, disconnect (and reconnect revives nothing), password change, operator disable, operator sign-out, per-firm switch (and back on revives nothing), client disable; `agent_access` revoke leaves Malafat | same |
+| Global switch off; agents and Connected apps lists kept apart; delegated period download dies with its grant | same |
+| Operator per-firm switch: on/off audited ADMIN, NOT_MALAFAT_FED, dark when off | `server/src/__tests__/routes-operator-malafat-delegation.test.ts` |
+| Contract: every delegated route also takes a session; none under a never prefix; organization-independent ones only through the tenant allowlist | `server/src/__tests__/route-security.test.ts` |
+| Store: confidential client, tenant on grants, `claimAssertion`, `disableClient`, `revokeForUserTenant`, cleanup keeps confidential clients | `server/src/repositories/__tests__/store-contract-oauth.ts` (memory; Prisma in `test:db`) |
+
+## MUT-598 — Malafat's connector on /mcp (ADR-254 D11)
+
+| What | Where |
+|---|---|
+| The tools list and write the tenant's firm only, audited `via: malafat`; the person's own profile and inbox refused; partner (OWNER) only; `agent_access` still applies; an agent's own token unchanged | `server/src/__tests__/mcp-delegated.test.ts` |
+| Each §4.7 revocation ends `/mcp`: Connected apps, disconnect, per-firm switch, client disable, account disable; leaving the firm hides it from the tools | same |
+
+## MUT-594 — Malafat member sync, partners own the firm (ADR-254)
+
+| What | Where |
+|---|---|
+| Sync adds pending seats; a claim makes the D3 membership; re-role; legacy members untouched; NOT_CONNECTED; duplicate subjects; key only | `server/src/__tests__/routes-member-sync.test.ts` |
+| A PARTNER invites an accountant and makes a share link, an ASSOCIATE gets 403; name, type, firm request and members refused `MANAGED_IN_MALAFAT`; a partner's own connector never sees the firm; a role change takes effect | same |
+| A removal ends the membership and the delegated token on the next call; listed again comes back | same |
+| Seats in both stores: claim once, re-role, removal revokes that tenant's grants only, `memberSyncAt` | `server/src/repositories/__tests__/store-contract-oauth.ts` |
+| `ownsProfile` on a Malafat firm | `server/src/__tests__/owns-profile.test.ts` |
+| Local snapshot 17 → 18 | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` |
+
+## MUT-596 — The portal's Malafat screens (ADR-254)
+
+| What | Where |
+|---|---|
+| Office step: slug from any typed form, remembered, checked before leaving, not-found and required | `src/hosted/pages/auth/malafat/__tests__/{malafatSignIn.test.ts,MalafatPages.test.tsx}` |
+| Return: one exchange, fragment stripped, declined/expired, consent with currency, link with password (wrong then right), linked elsewhere | `MalafatPages.test.tsx` |
+| Connected apps (row only where on, confirm, Keep), members (read-only, nothing when not Malafat's), via Malafat, second way in (first password, Not now, not for others) | `src/hosted/components/__tests__/MalafatAccountScreens.test.tsx` |
+| Server: captureSource malafat, `GET /v1/members` (order, stranger 404), ownSignIn/ownPassword and the first password with no current one | `server/src/__tests__/routes-malafat-portal-support.test.ts` |
+| QA plumbing: local-http client only with the flag and only on this machine, the admin switch (on, not fed, dark) | `server/src/__tests__/routes-malafat-qa-plumbing.test.ts`, `config.test.ts` |
+| Recorded flows (brief §12): first sign-in, link existing, declined, partner invites / associate can't, submitter expense, ledger read-only, Connected apps, members, second way in | `qa/specs/portal-selfservice/malafat-delegation.spec.ts` |
+
+## MUT-595 — Sign in with Malafat (ADR-254)
+
+| What | Where |
+|---|---|
+| Round trip: PKCE + state to the firm's own origin, token revoked; refusals as `#error=`; a state once; office preflight | `server/src/__tests__/routes-malafat-sign-in.test.ts` |
+| The three first sign-ins: new (ACTIVE, trial, no review, seat claimed), existing account (password proof only, never by email), linked (straight in) | same |
+| Phone: fixed return, S256 verifier required, code burns on first try, device token | same |
+| Switch off for the firm, firm not bound, IDENTITY_LINKED_ELSEWHERE, currency/timezone/terms, Malafat down, MALAFAT_SIGN_IN off | same |
+| Sign-in attempt and link in both stores | `server/src/repositories/__tests__/store-contract-oauth.ts` |
+
+## MUT-618 — "Email me a sign-in code" (2026-11-14, ADR-256)
+
+| Layer | Tests | AC |
+|---|---|---|
+| Pure | `server/src/auth/__tests__/sign-in-code.test.ts` (policy, generator, digest, who gets mail); `src/hosted/pages/auth/__tests__/signInCode.test.ts` (digits, refusal mapping, PostHog reasons) | AC2, AC3 |
+| Store | `store-contract-sign-in-codes.ts` on memory and Postgres (single use, expiry, resend cancels, fifth miss kills, prune) | AC3 |
+| Routes | `server/src/__tests__/routes-sign-in-code.test.ts`: same answer and floor for real / unknown / disabled / password-less; mail only for real, not for a Malafat-made account; Turnstile and origin on the portal ask only; budgets per address (shared by both asks, not /recover's) and IP; cookie and device sessions audited `email-code`; once, 10 minutes, resend, 4-3-2-1 then too many tries then 429; unknown answers like real; under review 403; no step-up stamp; change password and close account still need the password | AC1–AC5 |
+| Portal | `SignInCode.test.tsx`: link beside Forgot, email first, the full step, Arabic-Indic digits, each refusal, under review, resend after 60 s, back to password, RTL | AC1, AC6 |
+| Release-QA | `portal.signin.email-code` (stubbed, en + ar), `portal-selfservice.signin.email-code` (live outbox, en + ar) | AC1, AC6, AC7 |
+
+## MUT-535 — the monthly summary mail (ADR-259)
+
+- `routes-verdict.test.ts` (MUT-535 block): `readProfileFigures` gives the verdict's came-in and owed figures; no entries in a month though money is owed.
+- `billing/__tests__/monthly-summary.test.ts`: the month in Jerusalem (and across the year), a western profile still in the month, panels per currency without zero rows or retired currencies, no entries → no panel, the D7 default / OFF / ON_ALL and what turning the switch stores.
+- `monthly-summary-mail.test.ts` (memory store + memory mailer, people made through the API): one mail per payer with the overview and opt-out links, Arabic, the yearly line after 2 paid invoices and not without Stripe, trialists, AC5, opted-out / nobody paying, an operator-made account with an unconfirmed address is mailed (TD-315), Malafat default and ON_ALL, month-not-over, dry run and duplicates, the send budget and the cap, a read failure waits.
+- `routes-monthly-summary-mail.test.ts`: job token and counts, no Stripe, operator dry run, the switch (default, Malafat-only → ON_ALL, session needed), the opt-out door (on/off, other pepper or garbage → 404, another site → 403). `mail-off-token.test.ts`.
+- `templates.test.ts` (monthly-summary: panels, Arabic isolation and Levantine months, empty rows, yearly line, opt-out footer, Arabic counts; ADR-159 pin with the allowed amounts), `mailer.test.ts`, route-security and no-self-registration pins.
+- Portal: `MonthlySummarySwitchRow.test.tsx`, `MailOffPage.test.tsx`; local `migrations.test.ts` 19 → 20 and the fingerprint; `PrivacyPolicyPage.test.tsx`.
+- Terraform: `monthly_summary_mail.tftest.hcl` (off by default, on with mail and the switch, never without mail).
+- Release-QA (portal-live): `monthly-summary-mail` (core), `monthly-summary-off-link` (Arabic), `monthly-summary-account-switch`, `monthly-summary-yearly-line` (Stripe sandbox).
+
+## MUT-630/631 — no buyer email, billed line, item line or garbled name as the vendor's (2026-11-21, ADR-241 addendum)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/receipts/extract/__tests__/buyer.test.ts` "MUT-630" | a customer-number row never ends the block; up to 2 contact rows past the cap (email, phone, labelled), nothing else, not past a non-contact row; block emails learned lower-cased, contact rows past the cap excluded but never learned; digits inside an email are no phone or ID; `startsBody`; `normalizeIdentifier` on emails; `learnedBuyerIds` keeps an email |
+| Unit (vitest) | `extract.test.ts` "MUT-630/631" | a mobile bill's text layer gives no email or phone and its total; a billed line under the table header or on a money row (labelled `נייד`) is no phone; header and footer phones still read; a bill-to or learned email is no vendor email, a vendor's is; emails never in `vendorIdentifiers`; a table header or money row first gives no vendor; three garbled names give none (nor the row under them); five real names with Latin in them still read |
+| Reader (memory store) | `receipts/__tests__/reader-buyer-memory.test.ts` | generation 5 stamp; a learned bill-to email is never filled on a later receipt; `withVendor` gives a saved vendor's name by registration no. (`source: 'vendor'`) |
+| Script (memory store) | `scripts/__tests__/receipts-reread.test.ts` "--buyer-contacts" | lists a vendor (phone + email) and a To-review receipt (email) carrying the buyer's contact by id and field name only, writes nothing, no value in the output; only profiles of a `receipt_reading` holder |
+| Bench | `server/ocr/bench/run.py --rescore … --compare` (main's extractor as the baseline) | 78 real receipts incl. `prod-8285ca9d.pdf`: 0 fields lost; wrong vendor 8 → 5, phone 10 → 7, email 6 → 3; the four production receipts give no vendor, phone or email |
+
+Not run: `test:db` (no store change: the report only reads through existing repository methods).
+
+## MUT-568 — the issuing core (2026-11-22, ADR-260)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/issuing/__tests__/compose.test.ts` | type codes; dated VAT rate; quantity parsing; line math, both discounts, half-up rounding, VAT spread that always adds up; receipts carry no VAT; exempt dealer receipts only; ILS only; line and total refusals; copy labels |
+| Store contract (memory + Postgres) | `server/src/repositories/__tests__/store-contract-issuing.ts` | number 1 + lines + Owed; per-type numbering from a starting number; **25 concurrent issues → 1..25, no gaps** (AC2); refusals take no number; same request key → same document; 320 paid in full; 400 pays a 305 up to what's owed; **credit note credits up to what's owed** (AC3); refused originals; **copies 0..3 under concurrency** (AC4); list paging and filters; issuer If-Match; reads are copies |
+| Postgres only | `store-prisma-issuing.test.ts` | **UPDATE/DELETE/TRUNCATE refused by the database** on documents, lines, copies, counters (AC1); counter never moves back; documents survive a profile delete (R-D1) |
+| Routes (memory store) | `server/src/__tests__/routes-issuing.test.ts` | feature and personal-profile gate; preview writes nothing; issue totals and Owed; idempotent replay; **no PATCH/PUT/DELETE route, the Owed out of the person's routes** (AC1); type-field, future and before-last date refusals; credit note and ORIGINAL_PAID; 320 and exempt-dealer receipts; copies and retried first copy; starting numbers and **gaps** (AC5); co-owner issues on the creator's feature; accountant reads, never writes; session-only audit |
+| Matrix / guards | `accountant-route-matrix.test.ts` (5 issuing GETs seeded), `accountant-store-guard.test.ts`, `store-guard.test.ts`, `api-key.test.ts`, `writability-drift.test.ts`, `prisma-account-purge-catalog.test.ts`, `rollback-check.test.ts` | the new domain, scopes, the owner-flag read, purge exemptions, rollback hazard |
+
+No release-qa flow: MUT-568 has no user-visible screen; MUT-570 (portal) and MUT-573 (phone) carry the flows.
+
+## MUT-569 — the uniform file (מבנה אחיד 1.31) (2026-11-22, ADR-272)
+
+| Layer | File | Covers |
+|---|---|---|
+| Formats | `server/src/issuing/uniform-file/__tests__/format.test.ts` | record widths add up to the spec (466/19/95/444/339/222/110) and the spec's start positions; alpha/numeric padding; signed amounts and quantities; ISO-8859-8 text: Hebrew kept, points and bidi marks dropped, punctuation to ASCII, Arabic in Hebrew letters with final forms, Arabic-Indic digits; `encodeLine` refuses anything else |
+| Writer | `…/__tests__/export.test.ts` | AC2 INI summary = BKMVDATA counts, A000 1002 = Z900 1155, running record numbers, one primary id in three places; AC3 no documents → A100 + Z900; CRLF and widths; the A000 header fields; Israel time across DST; a 305 with a document discount adds up (lines → 1219, 1219 + 1220 = 1221, + 1222 = 1223, each line qty × 1265 + 1266 = 1267); 330 names its 305; 400 is C100 + D120 (walk-in key 0); 320 has D110 + D120 (bank 4); customer key, VAT number and an Arabic name |
+| Package | `…/__tests__/package.test.ts` | the zip's OPENFRMT folder, inner BKMVDATA.zip and report; the report in ar/en, escaped, empty case |
+| Routes | `server/src/__tests__/routes-uniform-file.test.ts` | every type in range with headers and audit; out of range and another profile left out; AC3 empty; reversed, future and malformed ranges 422; accountant 200; personal and feature-off 404 |
+| Store | `store-contract-issuing.ts` | `inRange` inclusive bounds, order, lines, per profile (memory locally; Prisma in CI, TD-323) |
+| Fixture | `server/src/__tests__/uniform-file-fixture.test.ts` | AC1 ≥ 2,000 records (2,345), < 4 MB, every type, Hebrew and Arabic; writes the simulator files with `UNIFORM_FILE_FIXTURE_OUT` |
+| Portal | `src/hosted/pages/invoicing/__tests__/UniformFileExport.test.tsx` | last year by default, download call and counts, empty, reversed dates refused, failure toast and retry, reader copy |
+| Release QA | `qa/specs/portal/invoicing.spec.ts` | `@portal.invoicing.uniform-file`, `@portal.invoicing.uniform-file-empty` |
+
+The simulator pass itself (AC1) is Basel's step: `docs/operations/tax-authority/uniform-file/README.md`.
+
+## MUT-641 — signed issued-document PDFs (2026-11-22, ADR-265)
+
+| Layer | File | Covers |
+|---|---|---|
+| Signer | `server/src/issuing/pdf/sign/__tests__/sign.test.ts` | AC1 intact CAdES-detached signature + time-stamp; AC2 one byte changed anywhere (content, dictionary, CMS, signature, end) fails; bytes appended after signing; AC5 key and TSA outages reject; key/certificate mismatch refused; panel language; KMS request carries only the digest; RFC 3161 client refuses HTTP errors, refusals, another nonce or digest; config → signer |
+| Render gate | `server/src/issuing/pdf/__tests__/gate.test.ts` | AC6 the MUT-640 gate on signed output, 3 styles × he/ar/en; signed files in `server/.pdf-e2e/*-signed.pdf` |
+| Routes | `server/src/__tests__/routes-issuing-pdf.test.ts` | AC4 POST, GET and the accountant's GET signed, preview unsigned; the original replayed byte-for-byte; no signer → 503, no copy counted; AC5 outage → 503 JSON, retry with the same key is the signed original |
+| Interim certificate | `sign.test.ts` | a stand-in KMS (public key + digest-only signing) self-issues the certificate in the business name and it signs PDFs; EC P-256 path; unsupported algorithms and a KMS signing with another key refused; the CSR's subject (C, O, serialNumber, CN), extension request and KMS signature verify. Live check 2026-11-22: `openssl req -verify` OK on an RSA 3072 request. Live check 2026-11-22: DigiCert, Sectigo and FreeTSA tokens verify (and again under the stricter token check; Sectigo and FreeTSA over https) |
+| Review fixes | `sign.test.ts`, `routes-issuing-pdf.test.ts`, `tests/issuing_signing*.tftest.hcl` (Terraform 1.9.8 as CI, and 1.15) | the outage then a fresh-key retry is the original (and the failure is logged), and the failed request's own retry is then a copy; KMS 403 is KEY_UNAVAILABLE without a retry; a chunked reply past 256 KB is refused while it streams; setup errors give 503 SIGNING_NOT_CONFIGURED with a reason; the view copy is signed once per 10 minutes; a certificate outside its validity, a chain CA-first or out of order, and an unreadable chain are refused; a time-stamp token with a broken signature, from a non-time-stamping certificate, or 60 minutes off is refused; KMS and the TSA each retry once; padding bytes are flagged; the boot status (info, warn within 30 days, error past the end); Terraform keeps the key (prevent_destroy) and fails a chain without a key |
+| Config | `server/src/__tests__/config.test.ts` | AC3 dev refused in production; kms needs key, chain, TSA; a private key in the chain is refused |
+| Store | `store-contract-issuing.ts`, `store-prisma-issuing.test.ts` | the first original kept wins; another profile sees none; the trigger refuses UPDATE/DELETE/TRUNCATE |
+
+Independent check: poppler `pdfsig` and `openssl cms -verify` on the generated files (ac-evidence). No release-qa flow: no screen yet (MUT-570/573).
+
+## MUT-640 — issued-document PDF (2026-11-22, ADR-261)
+
+| Layer | File | Covers |
+|---|---|---|
+| Render gate | `server/src/issuing/pdf/__tests__/gate.test.ts` | AC1/AC5 3 styles × he/ar/en: zero `.notdef`, every word extractable (NFKC), RTL first word rightmost; AC3 black and blue ink only; AC4 logo / no logo; draft mark; unknown style → Professional; PDFs in `server/.pdf-e2e/` (AC2, human look) |
+| Routes | `server/src/__tests__/routes-issuing-pdf.test.ts` | produced copies: original then copy, a retried key keeps its copy; view copy counts nothing; preview draft writes nothing; accountant views, can't produce |
+| Store contract | `store-contract-issuing.ts` | a copy's request key returns the same copy |
+
+No release-qa flow: no screen yet (MUT-570/573 show and share the PDF).
+
+## MUT-710 — two-step sign-in and the authentication log, server (2026-11-22, ADR-274)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/auth/__tests__/totp.test.ts`, `two-factor.test.ts`, `observability/__tests__/auth-log.test.ts` | RFC 6238 vectors, recovery codes, sealing, the log line |
+| Store contract | `repositories/__tests__/store-contract-two-factor.ts` (memory + Postgres) | conditional counters; `reserveTry` lets exactly 5 of 12 parallel tries through; single-use challenge, step, recovery code |
+| Sign-in | `__tests__/routes-two-factor-sign-in.test.ts` | password, emailed code, cookie and device; wrong/expired/replayed codes; 8 parallel wrong codes (≤4 judged, rest locked, one lockout audit); 5 parallel right codes → one session; one recovery code on two challenges → one session; email method and resend; D6; throttle not cleared; every setup link incl. SETUP after `--lock`; the auth_event lines carry no secret |
+| Management | `__tests__/routes-two-factor-enrolment.test.ts` | app and email enrolment, proof, parallel confirm, switching, new codes, off refused while issuing, operator reset |
+| Gate | `__tests__/routes-two-factor-gate.test.ts` | the four routes, enrolled false/true, no idempotent replay of the refusal, disconnect open |
+| Terraform | `infrastructure/terraform/tests/auth_log.tftest.hcl` | 365-day bucket, location, pinned sink filter |
+
+Release-qa flows (brief §5) wait for the portal and phone screens.
+
+## MUT-660 — documents due, not for invoice, the books split (2026-11-22, ADR-270)
+
+| Layer | File | Covers |
+|---|---|---|
+| Domain | `server/src/issuing/__tests__/documents-due.test.ts` | every preference × Owed/Received; AC2 3,400 → 1,000 → second receipt; partial payments; no client (N1); exempt; non-₪; mixed splits; receipt number; attached invoices; marks; deleted/credited/reversed; order; older than (month ends) |
+| Domain | `server/src/issuing/__tests__/ledger-plan.test.ts` | `fromEntryMode` take vs link vs refuse; `entryAmount` |
+| Domain | `server/src/income/__tests__/invoice-class.test.ts` | split order, mixed shares, the reconciliation property (AC9), `invoiceStatusOf` |
+| Store contract | `store-contract-issuing.ts` (memory + Prisma) | linked 305 for a credited Owed; linked 320 for a partial payment; linked 400 keeping its invoice; no-client 320; `dueInputs` with documentsDue; `setNotForInvoice` all-or-nothing, idempotent, versions, HAS_TAX_DOCUMENT, credit note lifts it; `incomeContext` |
+| Routes | `server/src/__tests__/routes-documents-due.test.ts` | gate (404), AC1 preference, AC2, AC3, N1, Issue all refusals and replay, AC6/AC8 bulk + count, AC5 + If-Match + idempotent single mark, older than, accountant read-only; Reports split and non-invoicing unchanged (AC10); export `invoice_status` |
+| Mail | `server/src/billing/__tests__/monthly-summary.test.ts` | two split lines on invoicing profiles; no key elsewhere |
+| Local | `src/hosted/local/__tests__/migrations.test.ts`, `format-fingerprint.test.ts` | snapshot 21 → 22 |
+| Portal | `src/hosted/pages/__tests__/DocumentsDue.test.tsx` | grouping, reasons, Issue all, bulk + Undo, credit-note refusal, older than (D21), hidden at 404; Home group and its absence; the row mark (If-Match, refusal, marked state); the client field (If-Match, hidden at 404); the Reports card |
+| Release-QA | `qa/specs/portal/invoicing.spec.ts`, `reports.spec.ts` | `@portal.invoicing.to-issue-issue-all`, `…to-issue-bulk-not-for-invoice`, `…not-for-invoice-refused`, `…client-documents-preference`, `@portal.reports.invoice-split` |
+
+The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning session's.
+
+## MUT-702 Part A — three plans, provider-neutral (2026-11-22, ADR-275)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/billing/__tests__/plans.test.ts` | plan names; `TIER_OF` round trip; `RANK` (Solo = Freelancer < Business < Firm); `changeTimingOf` for every current tier × target plan; `nextPlanAbove`; the `PLAN_LIMITS` table and its monotony; `currentPlanOf` (none, read-only/locked/Malafat ignored, GRACE counts, highest rank, Solo over Freelancer on a tie) |
+| Pure | `server/src/billing/__tests__/entitlement.test.ts` | a trial is BUSINESS (active, read-only, locked); grants and subscriptions rank Firm > Business > Solo = Freelancer (ties fall to expiry / period end); legacy Freelancer still covers its owner's profiles; ACCOUNTANT neither covers nor outranks |
+| Routes | `server/src/__tests__/routes-operator-billing-firms.test.ts` | SOLO and BUSINESS granted and revoked on the console route and the admin route; the profile resolves to the tier; audit carries it |
+| Routes | `server/src/__tests__/billing-routes.test.ts` | `currentPlan`: null with nothing, business in a running trial and null after it, solo / business / firm grants, a legacy Freelancer subscription, a lapsed one alone null, best tier across profiles, Malafat names no plan |
+| Routes | `server/src/__tests__/billing-core.test.ts` | `/v1/me` reports a trial as BUSINESS |
+| Portal | `src/hosted/pages/operator/__tests__/OperatorAccountPage.test.tsx` | Solo, Business, Firm, Freelancer (legacy) in order, Solo chosen; granting Business sends BUSINESS and lists it |
+| Release-QA | `qa/specs/portal-selfservice/operator.spec.ts` `@portal-selfservice.operator.billing-grant-business` | the operator grants Business on a 375 px phone; the CLI's list shows it. Written, not yet run (needs the shared local API). |
+| CI only | `test:db` | the Prisma enum accepts SOLO and BUSINESS (existing grant round trips run against Postgres in CI) |
+
+### MUT-722 — "Finish setting up invoicing" after a save (2026-11-25)
+- Unit: `src/hosted/components/__tests__/setupHint.test.ts` (availability rules incl. personal, Malafat, not owned, no feature, local mode; first missing step; `?step=` parse; once-a-day memory incl. storage that throws; the hook due/not due and never asking where unavailable). `Toast.test.tsx` › detail line.
+- Release-QA: `portal.invoicing.setup-hint` (AC1–AC4 and Arabic) passing; neighbours `portal.invoicing.setup`, `issue-gate`, `offer-after-save` re-run and passing.
+- Phone (Flutter repo): `test/presentation/screens/invoicing/setup_hint_gate_test.dart`, `invoicing_setup_screen_test.dart` › initial step; flow `ios.invoicing.setup-hint`.
+
+
+## MUT-643 — a credit note against a paid invoice (2026-11-24, ADR-276)
+- Unit: `server/src/issuing/__tests__/credit-split.test.ts` (cap, split, newest-first release); `settlement.test.ts` (a credited 320); `statements/__tests__/period.test.ts` (refunds figure, identity); `summaries/__tests__/activity.test.ts` (refund nets out); `period-pack/__tests__/report-refunds.test.ts`.
+- Store contract (memory + Prisma): `store-contract-issuing.ts` "MUT-643" block: AC1 refund on a paid 320 with the statement ending at 0 and the period nets out; AC3 kept credit; split and choice; newest-first across two payments; AC2 cap; a non-owned Owed keeps the old rule; idempotent retry; AC5 reverse refused.
+- Routes: `routes-issuing.test.ts` "MUT-643" block (preview facts, ORIGINAL_PAID with paid, refund issue, date and paidPart guards, keep).
+- Local: the fingerprint row and fixture for `refunds`.
+- Release-QA: `portal.invoicing.credit-note-paid-refund`, `credit-note-paid-keep`, `credit-note-cap`.
+
+## MUT-644 — closed profiles' issued documents: the retention sweep and the owner's archive (2026-11-25, ADR-277)
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/issuing/__tests__/retention.test.ts` | `retentionEndsOn` (any day of the year → 1 January of year + 8; null), `sweepCutoff` at the UTC year boundary and its agreement with `retentionEndsOn`, a cancellation's Israel date |
+| Pure | `server/src/repositories/__tests__/prisma-purge-tables.test.ts` | `RETAINED_ISSUING_TABLES` equals the "kept 7 years" exemptions; none is purged; the retention log is exempt |
+| Store contract (memory + Prisma) | `store-contract-issuing-retention.ts` | AC1 with a clock: issue (receipt with a kept original, a cancelled payment request), close and purge → the rows survive and the profile is listed (by name, by VAT prefix, by due date) → not due on 31 Dec 2034 23:59:59 UTC → swept on 1 Jan 2035, every retained table empty, SWEPT logged with counts → `nothing` after; a live profile `not_closed`; a profile with only business details is due at once; `ARCHIVE_EXPORTED` rows in order |
+| Runner | `server/src/accounts/__tests__/issuing-retention-sweep.test.ts` | the purge keeps; the sweep waits for the date; dry run deletes nothing; the hourly purge runs it (`issuingProfilesSwept`), never when dry; the cap (`incomplete`); one profile's failure, or the whole sweep failing, never stops the purge |
+| Routes | `server/src/__tests__/routes-issuing-retention.test.ts` | find by name and VAT number with `retainedUntil`; the archive's zip (the original byte for byte as sent, a signed copy, the uniform file, README) and its log row; 409 for a live profile, 404, 422, 401; the sweep route before and after the date, dry and real |
+| CLI | `server/src/scripts/__tests__/issuing-retained.test.ts`, `users-cli.test.ts` | list, archive written to `--out` with the reference, a refusal, required options, sweep dry run; the purge line names the swept count |
+| Portal | `src/hosted/components/__tests__/CloseAccountDrawer.test.tsx` | Kept always shows the issued-documents line, even when every profile is deleted |
+| Privacy | `src/pages/landing/__tests__/PrivacyPolicyPage.test.tsx` | the deletion section names the 7 years and the copy on request; the new date (en, ar) |
+| Release-QA | `qa/specs/portal/account.spec.ts` `@portal.account.close-keeps-issued` | the line in English, then in Arabic right to left |
+| Phone | Flutter `test/presentation/screens/account_close_test.dart`, `integration_test/qa/account_close_scenario.dart` (`ios.account.closing`) | the line in English and Arabic |
+
+**Amended 2026-11-25 (per-document retention, erasure after hand-over; API 1.139.0-mut644):**
+
+| Layer | File | Covers |
+|---|---|---|
+| Pure | `server/src/issuing/__tests__/retention.test.ts` | `retainedUntil` (the day after the 7th anniversary; 29 Feb → 1 Mar), `sweepCutoff` agrees with it on every day of 9 years, the UTC day is never early in Israel, `retentionDateOf` (the later of the date and a cancellation's Israel date), `handsOverArchive` (notice version, logged no later than the erasure) |
+| Pure | `prisma-purge-tables.test.ts` | per-document and per-profile tables partition the retained set; `issued_documents` deleted last |
+| Store contract (memory + Prisma) | `store-contract-issuing-retention.ts` | clock: a 2024 receipt (copy + original) and a 2026 payment request cancelled into 2027 → the receipt goes alone on 2031-03-11 (4 rows), the request and profile rows stay; the request goes on 2034-01-02 with the business details, logo and counters; two SWEPT entries with `remaining`/`profileRows`. Erase: `not_closed` when live; refused with no archive, with a pre-notice archive, with one logged after; erased after a notice archive, ERASED with `archiveEventId`; `nothing` after |
+| Runner | `issuing-retention-sweep.test.ts` | due the day after the anniversary; two documents years apart: the older on its day, the newer kept, the profile's rows with the last; `deleted`/`remaining`/`documentsDeleted` |
+| Routes | `routes-issuing-retention.test.ts` | listing's `nextSweepOn`/`retainedUntil`; README keep notice in en/ar/he and `noticeVersion` logged; per-document sweep through the route; erase 401/422/409 `ARCHIVE_NOT_HANDED_OVER` → archive → 200, ERASED logged, then 404; 409 `PROFILE_NOT_CLOSED`; 404 unknown |
+| CLI | `issuing-retained.test.ts` | list line, sweep (dry and real), erase with `--org`, refusal reason, required reference |
+| Portal / privacy / QA | `CloseAccountDrawer.test.tsx`, `PrivacyPolicyPage.test.tsx`, `qa/specs/portal/account.spec.ts` | "7 years from the date of each one"; the privacy policy's earlier-deletion clause |
+
+### MUT-661: issue as you record
+| Layer | File | Covers |
+|---|---|---|
+| Routes | `server/src/__tests__/routes-settle-and-issue.test.ts` | AC3 receipt on the tax invoice for 1,000 (2,400 stays owed), AC4 invoice-receipt, next payment its own document, AC5 `issue:false`, AC6 No document / marked, AC7 failed issue keeps the payment (allocation number required) and the document due, setup incomplete, retry with the same key (one payment, one document), 404 without invoicing, 422 over outstanding, payment-only refused on a tax invoice's Owed |
+| Portal | `DocumentsPreferenceAsk.test.tsx`, `RecordPaymentDrawerIssue.test.tsx`, `issueOffers.test.ts` | the ask (four choices, saved with the fresh version, Arabic, failure), the control (on by default, off, failed issue message, hidden for No document, locked on a tax invoice's Owed), offers by preference |
+| QA | `portal.invoicing.issue-as-you-record`, `ios.invoicing.issue-as-you-record` | see the brief |

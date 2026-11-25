@@ -21,7 +21,8 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 export function operatorGate(): MiddlewareHandler<AppEnv> {
   return async (c, next) => {
     const identity = c.get('identity');
-    if (!identity?.user.operatorAt || identity.session.kind !== 'cookie') throw new ApiError('NOT_FOUND', 'Not found');
+    // MUT-593: a delegated call has no session, so it is never the operator (the same 404 as anyone else).
+    if (!identity?.user.operatorAt || identity.session?.kind !== 'cookie') throw new ApiError('NOT_FOUND', 'Not found');
     if (!SAFE_METHODS.has(c.req.method) && !OPERATOR_STEP_UP_EXEMPT.has(c.req.path)) assertOperatorStepUp(identity.session, c.get('now')());
     await next();
   };

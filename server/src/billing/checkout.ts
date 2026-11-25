@@ -2,6 +2,7 @@ import type Stripe from 'stripe';
 import countriesFile from './billing-countries.json' with { type: 'json' };
 import { grantIsLive, periodOver, type BillingTier, type Entitlement, type GrantFact } from './entitlement.js';
 import { formatMinor } from './money.js';
+import { ARABIC_LOCALE } from '../dates.js';
 
 /**
  * MUT-362 (plan §2.3, eng review D5/D6): who may start a Stripe Checkout, and with exactly which parameters. Pure: the
@@ -323,9 +324,9 @@ export function renewsOnOf(now: Date, trialEndSeconds: number | undefined): Date
 
 const ISOLATE = (text: string) => `\u2068${text}\u2069`;
 
-/** A pay-page date (DD12a): a long date on the Jerusalem calendar, Western digits in Arabic too. */
+/** A pay-page date (DD12a): a long date on the Jerusalem calendar, Levantine months and Western digits in Arabic (MUT-587). */
 export function payPageDay(at: Date, locale: 'ar' | 'en'): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar-u-nu-latn' : 'en-US', { dateStyle: 'long', timeZone: 'Asia/Jerusalem' }).format(at);
+  return new Intl.DateTimeFormat(locale === 'ar' ? ARABIC_LOCALE : 'en-US', { dateStyle: 'long', timeZone: 'Asia/Jerusalem' }).format(at);
 }
 
 /**

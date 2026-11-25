@@ -4406,7 +4406,7 @@ The owner decided on 2026-10-15 to remove both, quote: "drop data it's ok, remov
 - Build stories MUT-359, MUT-366..371 (brief §12).
 ## ADR-160: Billing Is Stripe Billing + Stripe Tax; the Person Pays and Each Profile Is Entitled; Unpaid Trials Lock, Paid Lapses Stay Read-Only (MUT-332)
 
-**Status**: Active (spike decision; built by MUT-358, MUT-360…365)
+**Status**: Active (spike decision; built by MUT-358, MUT-360…365). *Point 2's tiers amended by ADR-275 (MUT-702, 2026-11-22): Solo, Business and Firm are the plans; Freelancer is legacy.*
 **Date**: 2026-10-20
 **Context**: GA gate (MUT-322). People must be able to pay without the operator. The seller is Barmajiyat Ltd (UK), and the pilot is already billed with Stripe subscriptions made by hand in the dashboard. Malafat firms pay through Malafat (MAL-870). The full comparison, costs and sources are in `docs/commercial/billing-spike.md`.
 **Decision** (Basel, 2026-10-20):
@@ -5823,6 +5823,9 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - Extraction inside the Python service (D2 B). Not taken: rules split from the rest of the stack; raw text crosses to the API in memory only and is never stored or logged.
 - An LLM or a third-party OCR API. Rejected, as in ADR-199.
 
+
+**Amendment (MUT-659, Basel 2026-11-22): reading is for everyone.** Override log: replaces the per-user half of decision 6 (D3) and MUT-514's R11 gate ("score the next ~15 production reads before granting anyone else"), which Basel waived knowingly. While `SERVER_OCR` is on, every uploader's receipts are read; `receipt_reading` leaves `FEATURES` and its open grants are revoked by migration `20261122220000_mut659_receipt_reading_for_everyone` (rows kept for history). The kill switch stays the deploy flag. Never-read To-review receipts are asked for once after the deploy with `npm run receipts:reread -- --backlog --apply`. `RECEIPTS_LIBRARY` and Terraform `receipts_library_enabled` default to on. Open reading bugs (MUT-586, MUT-632, MUT-637) are fixed as they come; a read only fills a To-review suggestion the person checks before filing.
+
 ## ADR-221: A New Expense's Receipts Upload in Its Edit Drawer After Save (MUT-491)
 
 **Status:** Accepted (2026-10-28, MUT-491; epic MUT-252). Plan and eng review: `.claude/designs/mut-491-receipt-on-create.md`. ADR-220 is reserved by MUT-441.
@@ -6320,6 +6323,13 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 - The buyer as a number seen with three or more vendors (the plan's first D-Q1 B). Rejected (R3): a chain's head office qualifies at once.
 - Re-queue by nulling the whole suggestion (D4). Rejected (R1, OV-4): it drops phone-sent fields, and a receipt first claimed over 30 minutes ago would FAIL 'exhausted' on its next claim.
 - A total − subtotal VAT under 20% with no rate check. Rejected (R2): it fills service charges and deposits as VAT.
+**Addendum (2026-11-21, MUT-630/631, reader generation 5):** the production check by eye of 15 reads found 0 wrong money, dates or VAT but 5 wrong vendor and contact fields, and the bill-to rules gain four parts (plan `.claude/designs/mut-630-631-vendor-contact.md`, Basel approved 2026-11-21):
+1. **One primitive for where the body starts:** `startsBody(row)` = a money row (never a customer-number row, `CUSTOMER_NUMBER`) or an item table's header. A bill-to block ends at it, or at a total or date label. After its 5-row cap a block keeps up to 2 contact rows (email, phone, or their labelled row); those exclude on this receipt only and are never learned.
+2. **Emails are the buyer's too:** an email inside a block is learned like the block's phone and ID numbers (lower-cased by `normalizeIdentifier`) and is never unlearned (an email is never reported as the vendor's, so an e-receipt printing the buyer's email unlabelled can't unteach it; a vendor's email hidden that way is empty, not wrong). `readEmail` never reads a bill-to row or a buyer email.
+3. **No phone from the item body,** labelled or not: a money row, or a row between an item table's header and the total. Header and footer phones are unchanged (P2 of the plan, "unlabelled phones only from the header", was dropped by the review).
+4. **The vendor name stops at the body and at garbled OCR:** no name from or under a money row or table header, and a row with a short or lowercase Latin run between two right-to-left words ends the search with no name (dropped, not repaired, P3). A saved vendor's name by registration no. still wins (MUT-254 `withVendor`).
+`receipts:reread --buyer-contacts` reports vendors and To-review receipts that already carry a learned buyer phone or email; nothing is cleared without Basel's OK.
+
 ## ADR-242: MTB3A Sends Its Own Failed-Card Mail, ar + en, From an Hourly Job; Stripe's Goes Off (MUT-533, Pricing Program MUT-528)
 
 **Status:** Accepted (Basel, 2026-11-02: plan `.claude/designs/mut-533-534-card-failed-comeback-plan.md` D1–D7 and the §6 copy; eng review R1–R15). Built 2026-11-02. Part of MUT-528 (D10).
@@ -6424,6 +6434,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 **Consequences:** one extra read per big never-read ILS receipt; one `organizations.getById` per distinct profile on a feed page; snapshot format 16 (portal local migration fills null). The duplicate-number warning is deferred to MUT-506's duplicate guard (R2).
 
 **Alternatives considered:** adding the number to `SUGGESTION_FIELDS` (every receipt would read as incomplete); reading any nine-digit number (registration numbers collide); storing the flag (a threshold change would need a backfill).
+
+**Amendment 2026-11-12 (Basel's real tax invoices, receipt-bench `allocation-2026-11-12-*`), overriding D2's "never a bill-to row":** the allocation number is read in a bill-to block too. It is the invoice's number, not a party's, and invoicing software often prints it in the customer box (invoice 01 prints it right under the buyer's ח.פ). The label is what keeps a buyer's ח.פ out, there as anywhere; a blank label's next row must still be the number alone. The labels also gain `הקצאה מספר` (the Tax Authority's own form prints the words in that order), `מ.הקצאה` and `מ. הקצאה`. Bench: allocation 2/6 → 3/6 on the six, 0 filled wrong, `--compare` against main loses 0 fields on all 77 real receipts. What's left on those six is an OCR misread digit (06), handwriting (03), and the Tax Authority confirmation page (04, MUT-599).
 
 ## ADR-247: A Share Link Opens One Period of One Profile Through One Door, With a PIN and No Account (MUT-560, Epic MUT-558)
 
@@ -6532,3 +6544,592 @@ Contract 1.108.0-mut565; migrations `20261108120000_mut565_accountant_tier`, `20
 **Alternatives rejected:** a part of You or the island menu for the desk (layouts A/B, Basel chose C); a consent prompt on public pages (a stranger has no account to hold a choice); storing the link token for a returning browser.
 
 **Consequences:** downloads (MUT-314), the 4th-client card and free counter (MUT-565), and the scenes / scope bullets (MUT-561) are hooks marked in code until those land.
+
+## ADR-252: A PDF's Text Layer Is Read by Position Through the OCR Row Builder; a Skipped Read Says Why (MUT-590, Epic MUT-252)
+
+**Status:** Accepted (2026-11-11; plan and eng review CLEARED, Basel's D1–D4: `.claude/designs/mut-590-vendor-pdf-reading.md`).
+
+**Context:** invoices a vendor's software makes (Hebrew, Arabic, English) carry a real text layer, but print a label and
+its amount far apart on one line, or the amount under its label. The API read that layer line by line in the PDF's own
+stream order (`pdfRows`), so the label and the amount often landed on different rows and the total was missed. Visual-
+order Hebrew layers came reversed. Separately, receipt 27e28e05's read ended `skipped` with no reason in the log.
+
+**Decision:**
+1. The `receipt-ocr` sidecar returns the text layer **placed on the page**: pdfium text runs with boxes, top-down, page 2
+   under page 1, at conf 1, in the OCR `lines` contract, next to `pdfText`. Past 20 000 characters or on a pdfium error,
+   `lines` is empty.
+2. The API reads a `pdf-text` read's lines through `orderedRows` (the OCR row builder: vertical-overlap rows,
+   `joinLabelAbove`), source still `pdf-text`. No lines (cap, error, older sidecar) → `pdfRows(pdfText)` as before (D4).
+   One row builder, not two.
+3. A Hebrew layer is visual when a Hebrew word starts with a final letter (impossible in logical text); its Hebrew lines
+   are reordered whole (UAX #9, `get_display`). Logical layers are untouched.
+4. `SERVER_READER_GENERATION` 4. After rollout, `receipts:reread -- --reader-below 4 --mime application/pdf` re-reads
+   To-review PDFs only (D3); images would read the same.
+5. `finishRead`'s skip carries a reason (`deleted | filed`), the reader adds `complete` and `ungranted`, and the log line
+   carries it as `code`, with `engine` and (text PDFs) `chars`; never text (D1). 27e28e05 was filed onto an expense
+   10 s into its read: the drop was right.
+
+**Consequences:** conf-1 rows clear every rule weight, so more label/value pairs mean more chances of a confident wrong
+field; the bench's vendor-pdf scope (0 wrong-and-confident, ≥95% of present fields) and `--compare` against main are the
+guard. Mixed-version rollout is safe both ways.
+
+**Measured (2026-11-12, Basel's 17 real invoices, 14 vendor-made):** total/date/currency 34/40 with 0 confidently wrong
+(main 32/40); the secondary fields 23/42 (main 16/42); 57/82 overall against the ticket's 95%. One field reads worse
+than main: the two-column registration row (a known buyer number is now passed over for the vendor's labelled one
+after it, but an unlearned one still wins). Basel landed it as is; the rest is MUT-591 (TD-307).
+
+
+## ADR-253: Arabic Dates Name the Levantine Months Everywhere, Through getLocale (MUT-587)
+
+**Status:** Accepted (2026-11-11; plan `.claude/designs/mut-587-levantine-dates.md`, eng review D1–D5 by Basel, R5 by default). Numbered 253 at build (252 is held by a parallel worktree); re-check at merge.
+
+**Context:** the portal and website printed Arabic months the Egyptian/Gregorian way (يناير, نوفمبر) everywhere except Reports, which MUT-448 had switched to the Levantine names on its own constant. The phone app already writes the Levantine names. Our people read كانون الثاني، شباط، آذار.
+
+**Decision:**
+- `getLocale('ar')` returns `ARABIC_LOCALE = 'ar-PS-u-nu-latn'` (`src/lib/i18n/core.tsx`); there is no second date locale. Checked on Node 22 / ICU 78: currency, unit, relative time, list, collation and country names read exactly as under plain `ar`; only month names change. Numeric dates (`dateStyle: 'medium'`) stay numeric (Basel: "keep numbers").
+- The three `latn()` helpers, `inviteEnds`'s template, Reports' own constant and the unused `getLocaleFromLanguage` go: appending `-u-nu-latn` to the new tag throws. `formatDate`/`formatPaymentDate`/`formatDateShort` take a `Language`.
+- The server keeps its own `ARABIC_LOCALE` (`server/src/dates.ts`) for `mailDay` and `payPageDay`; the period pack writes no month names.
+- A lint guard (web + server `no-restricted-syntax`) refuses a hand-written Arabic locale (a literal, or a ternary branch, starting with `ar`) in `Intl.DateTimeFormat` / `RelativeTimeFormat` / `toLocale*String`, and any template with `-u-nu-`. Locale variables are out of its reach; the getLocale and per-formatter tests cover those.
+- Frozen terms versions keep their words (their sha256 is in the manifest, ADR-102); the next version writes the Levantine name. The privacy page's "updated" line and the unreleased web 0.3.4 note change.
+
+**Supersedes:** MUT-448's "only Reports' dates" limit (ADR-189's AC6 note).
+
+**Alternatives rejected:** a separate `dateLocale` beside `getLocale` (two locales, a rule to police forever, D5); spelling out numeric dates.
+
+**Consequences:** Safari is checked by hand once (one date, one amount, one country name in Arabic) at qa-reconcile (D4).
+
+## ADR-254: Malafat Acts as the Person, With a Tenant-Bound Delegated Token; the Org Key Keeps the Legal Ledger (Epic MUT-592)
+
+**Status:** Accepted (design, 2026-11-12; brief `.claude/designs/malafat-delegated-access.md`, decisions D1–D11 and DF1–DF3 answered by Basel). Not built: MUT-593..598, Malafat's side MAL-1538. Number re-checked at merge.
+
+**Context:** Malafat's backend reaches only the legal ledger with its organization API key. Expenses, receipts, groups, conversions, capture, accountants, share links, downloads and the Claude connector are person-only (MUT-42 D4), and a Malafat-fed profile has no owner, so nobody can share it with an accountant (ADR-245). Basel wants every feature inside Malafat, secure, built once, while the portal and app keep working on the firm's books.
+
+**Decision:**
+1. **A third principal, `delegated`.** Malafat is the first **confidential** client of MTB3A's authorization server (extends ADR-197; `private_key_jwt`, no shared secret) and may ask for resource `<origin>/v1` (and `/mcp`). The token resolves to the person; everything below is the session path (selectProfile, scopes, firm roles, store guards, billing, features). No per-feature permission code.
+2. **Tenant-bound (D9).** A delegated call is admitted only on a profile whose CONNECTED integration names the token's tenant; any other profile, the person's own included, is 404 PROFILE_NOT_FOUND.
+3. **Default refuse.** A route accepts `delegated` only when its OpenAPI `security` declares it. Never: password, passkeys, sessions, account closure and purge, billing checkout and portal, OAuth grants, operator and admin, records export.
+4. **The org key is unchanged** and gains one route, `PUT /v1/integration/members`. It never mints or uses a person's token.
+5. **Sign in with Malafat (D1, D4, D5, DF1)** is a sign-in method on one ordinary account (`external_identities`, unique per tenant and subject). An existing account links only after its own sign-in, never by email. A signup through Malafat skips signup review and gets the normal trial on its own profile.
+6. **Malafat syncs members (D2, D3, D7):** PARTNER → OWNER, OFFICE_ADMIN → BOOKKEEPER, ASSOCIATE and INTERN → SUBMITTER; unknown people are pending seats until their first sign-in. Members are read-only in MTB3A on a Malafat firm.
+7. **Override log (ADR-245 and `ownsProfile`).** *Why:* a Malafat firm had no owner, so it could never be shared. *What replaces it:* on a Malafat firm an OWNER-role member owns the profile; `canCoOwn` is unchanged for profiles people create. *Date:* 2026-11-12.
+8. **The legal ledger stays Malafat's to write (D6);** the writability matrix is unchanged.
+9. **Revocation (DF2, DF3):** a person's revoke, member removal, integration disconnect, password change, sign out everywhere, operator disable, the per-firm switch and a client disable each end delegated access.
+10. **Ships dark (D10):** `MALAFAT_DELEGATION` plus a per-firm operator switch; Sader's office first. Malafat's MCP forwards MTB3A's tools with the delegated token (D11).
+
+**Alternatives rejected:** widening the org key's scopes to person domains (one leaked key would act for every lawyer); sending an acting-user header with the org key (same blast radius); Malafat re-implementing receipts, accountants or downloads (duplicate logic); two Claude connectors.
+
+**Consequences:** one indexed tenant check per delegated request; a new table for external identities; every owner gate gains a Malafat-firm test.
+
+**Built (MUT-593, 2026-11-12):** decisions 1–4, 9 and 10 for `/v1`. Choices made in the build: a delegated token reaches organization-independent routes only through an allowlist (`/v1/me` filtered; owner routes whose path names the tenant's profile), so the cross-profile feed and verdict stay closed even if they ever declare `delegated`; `PRINCIPAL_NOT_ACCEPTED` stays 403 as everywhere (the ticket's "401" was a slip); a routine JWKS key rotation is not a revoke, only the operator's client disable is (Basel, R4); Connected apps lists Malafat only, agents keep `/v1/oauth/grants` (Basel, R5); a person-side "sign out everywhere" does not exist, so DF2 is password change plus the operator's disable and sign-out; revoking `agent_access` no longer ends a Malafat grant. Review (qa-reconcile): a route whose body or query names another profile is never delegated (the receipt move; a contract test guards it); a reconnect or a new tenant turns the per-firm switch off; a share link or accountant invite Malafat makes as an owner outlives revoking Malafat, as one a person makes outlives their sign-out (both are revoked from the profile's own pages). **Built (MUT-598, 2026-11-12):** decision 10's `/mcp` half. One consent covers every resource the operator registered the client for, so Malafat's connector needs no second consent; under Malafat the tools reach the tenant's firm for a partner only, and never the person's inbox. **Built (MUT-594, 2026-11-12):** decisions 6 and 7. A firm whose members Malafat syncs is marked `organizations.memberSyncAt`; `ownsProfile` admits its OWNER members (the override above). Choices: members made in MTB3A before the first sync are left alone until their own Sign in with Malafat links them (D4 forbids matching by email); a partner still can't rename, retype or change members of the firm (`MANAGED_IN_MALAFAT`); a partner's own connector never sees it (§4.6); a removed seat keeps its link. **Built (MUT-595, 2026-11-12):** decisions 5 (D1, D4, D5, DF1) and D8. Choices: an account created through Malafat gets a random password nobody holds, so every session rule that binds to the password hash (MUT-115 D6, ADR-194) holds unchanged and the person can set their own through recovery; nothing is written before consent; the phone's result is bound to an S256 challenge it sent to /start (agreed with MUT-597); Malafat's token is revoked straight after userinfo; one consent screen, at the first link, is the portal's and the phone's (MUT-596/597). **Built (MUT-596, 2026-11-12):** the portal's screens. Choices: the consent shows no terms box (the version isn't known before the exchange; the terms gate after sign-in asks, as on the phone); a Malafat firm's members are on You › Profiles, not an edit pane (nobody owns a firm as a person); the second-way-in card replaces MUT-370's passkey card for an account with no way in of its own, and a passkey past the 10-minute recent sign-in asks the person to sign in with Malafat again (there is no password to step up with); `Me.user.ownPassword` decides whether Change password asks for a current one; the office address is checked before the browser leaves. For local QA only, `OAUTH_CLIENT_LOCAL_HTTP` lets the stub be Malafat's confidential client over http on this machine, and the operator's per-firm switch has an admin twin. The recorded flows found: Sign in with Malafat's calls must always reach the server (the signed-out portal answers from its in-page backend); a new account agrees to the terms on consent (`termsVersion` on the exchange, `acceptedTermsVersion` on consent; Basel, portal and app); and a profile publishes `managedInMalafat` (memberSyncAt), so a partner who owns a Malafat firm (MUT-594) is offered none of its records or settings to edit (`ownsItsRecords`), while a person's own profile connected to Malafat keeps its MUT-61 captures. Basel (2026-11-13): brief §12.4's "own list only" and "no firm totals" belong to MUT-305; roles stay inert on every firm until it lands. Review (Basel, 2026-11-13): a web result code works only in the browser that called /start (an httpOnly, Lax `mtb3a_malafat_flow` cookie holding the flow's state, checked against its digest at /exchange: login CSRF); a first password needs a sign-in under 10 minutes old, like a passkey (403 RECENT_SIGN_IN_REQUIRED: sign in with Malafat again); pending seats' emails stay visible to every member of the firm. The phone (MUT-597) is still to build.
+
+## ADR-255: A Saved Expense Moves to Another Profile With All Its Receipts, Its Fields Mapped by Name and Every Change Shown First (MUT-589)
+
+**Status:** Accepted (2026-11-11, MUT-589; epic MUT-252; Basel's decisions in Jira MUT-589 comment 13297). Plan: `.claude/designs/mut-589-move-saved-receipt.md`. Amends ADR-228 ("filed receipts stay out"): a filed receipt still never moves alone (`POST /v1/receipts/{id}/move` keeps 409 `RECEIPT_ALREADY_FILED` with `details.expenseId`); it moves with its expense.
+
+**Context:** a receipt shared into the phone lands on a profile the app picks, and once saved there it could not leave. Basel shares vendor invoices for a firm and for himself, and did not save at all rather than save onto the wrong books. D4 widened the ticket to any saved expense, with or without receipts.
+
+**Decision:**
+1. **Two routes, one set of gates.** `GET /v1/expenses/{id}/move-preview?profileId=` (session, `expenses:read`; never an accountant's, `ACCOUNTANT_EXCLUDED_ROUTES`) answers `{changes, receiptCount, expenseVersion}`; `POST /v1/expenses/{id}/move {profileId, expectedVersion}` (session, `expenses:write`, Idempotency-Key `expenses.move`) answers `{expense (ExpenseDetail, on the target, same id), fromProfileId, changes}`. Both run, in order: 422 `SAME_PROFILE`; 404 `EXPENSE_NOT_FOUND`; the source's lapse (402, the door does it for the POST); 403 `READ_ONLY_PROFILE` reason `MALAFAT_PROFILE` when Malafat is the source's writer of record; 403 reason `NOT_OWNER` unless the person owns the source (`ownsProfile`: creator or co-owner, so a firm's members never move its expenses out, as MUT-453); the target (404 `PROFILE_NOT_FOUND`, 402 lapsed: `writableTarget`, now exported from receipts-compose); 403 `MALAFAT_PROFILE` for a Malafat-fed target. Then the move only: 409 `VERSION_MISMATCH` (`details.currentVersion`) on a stale `expectedVersion`.
+2. **Fields (D1), by the pure planner `planExpenseMove`** (`server/src/expenses/move-plan.ts`): category by the same `nameKey`, else the same preset entry across Arabic and English (`presetKeyForName`), else the target's Other, else none (never an archived one); vendor found or created on the target (registration number of the source vendor first, then the name); client and matter cleared; VAT and allocation number kept only when the target is a firm, else cleared with the gross kept; group marks dropped, membership on the target follows the date. Amount, currency, date, title, notes and typed vendor never change (ADR-004). `changes` lists, in a fixed order (category, client, matter, vat, allocationNumber, groups), each field a person sees change, in the request's language.
+3. **Copy, then one transaction, then delete** (ADR-228's pattern). Each READY receipt on the expense is copied to `movedReceiptStorageKey(target, id, nonce)`; a failed copy removes the copies made and answers 5xx. `expenses.moveToProfile` (memory and Prisma, guard `write: expenses`) locks the expense, then its receipts, and refuses, writing nothing: gone; stale; an unfinished upload on it (409 `RECEIPT_NOT_READY`); a receipt set that differs from the copied set (a filing landed meanwhile, review R1 → 409 `VERSION_MISMATCH`). Otherwise it re-homes the expense (patch, version + 1) and every receipt (target, new key, its approval's `categoryId` rewritten to the mapped one, version + 1), deletes the expense's group marks and writes `expense.moved_out` `{toProfileId, receiptCount, changes}` and `expense.moved_in` `{fromProfileId, receiptCount, changes}` in the same transaction. A refusal removes only this move's copies; after the commit the old objects are removed and the vendor touched, never thrown.
+4. **Preview drift (R2):** the move re-plans with the target as it is just before its transaction and answers the changes it applied; the clients build the confirmation from those.
+5. **Clients:** a retry answered 404 `EXPENSE_NOT_FOUND` or 409 `OPERATION_IN_PROGRESS` reads the expense on the target; found there, the move happened (ADR-228 D8). Portal: `MoveToProfileDrawer` (MUT-503's drawer, generalised) with a changes list, opened by `?moveExpense=<id>` from the expense drawer's Move and a filed receipt card's "Move with its expense…". **Move is hidden entirely (no disabled button, no banner) unless the person owns the profile (creator or co-owner, `/v1/me` `owned`) and Malafat doesn't feed it** (`mayMoveExpensesFrom`, Basel 2026-11-12, as the phone does); it is also hidden on a read-only profile, with no other profile, and signed out. A `?moveExpense` link on such a profile opens nothing. The server's 403 `NOT_OWNER` / `MALAFAT_PROFILE` stay as the backstop.
+
+**Consequences:** API 1.109.0-mut589, no migration. A vendor created on the target for a move that then fails stays (R3, TD-308). An abandoned upload on an expense blocks its move until it is deleted (TD-309). The plan's "recompute under the lock" (R2) is done just before the transaction instead, since category and vendor lookups would otherwise run inside the store layer.
+
+**Alternatives rejected:** asking per field on move (Basel chose map-and-show); moving receipts without their expense; a new expense id on the target (links and receipt foreign keys would break).
+
+## ADR-256: An Emailed Six-Digit Code Is a Sign-In Method Beside the Password; the Phone's Ask Has No Bot Check, Only Budgets (MUT-618)
+
+**Status:** Accepted (2026-11-14, MUT-618; epic MUT-322). Basel decided the placement (beside "Forgot password?"), that every account keeps a password (ADR-159 d9) and the code's shape (6 digits, 10 minutes, single use). D1 was left to planning and is recorded here. Plan: `.claude/designs/mut-618-email-sign-in-code.md`.
+
+**Context:** people set the password on the portal, often a browser-generated one saved on a computer, then have to type it on the phone. Android has no passkeys (MUT-115 is iOS-only), and a passkey can only be added after the first sign-in.
+
+**Decision:**
+1. **D1, the phone's bot check: rate limits alone, no App Attest / Play Integrity.** Mail only ever goes to an account that could sign in, so spraying made-up addresses sends nothing and costs no sender reputation. Aiming it at real people is capped at 1 a minute and 5 a day per address, plus the 500/day global mail cap. Guessing is capped by the code itself: 5 tries per code, the password's 5-in-15-minutes lockout on the same email key, and at most 5 codes a day, so about 1 in 40,000 per account per day. App Attest doesn't run on the Simulator (a QA bypass would be the hole), and Play Integrity needs a Google Cloud project and server-side verification. Revisit if the `sign_in_code.requested` log (client, mailed) shows a spread of IPs on the app route. The portal keeps Turnstile.
+2. **Routes:** `POST /v1/sign-in-codes` (portal: same origin and Turnstile, as /recover) and `POST /v1/device-sign-in-codes` (phone) answer 202 for every address, no earlier than the 1.5 s recovery floor. They share the self-service IP limiter (10/h) and the address limiters (1/min, 5/day) under `sign-in-code:` keys, so asking for a code never spends /recover's budget. `POST /v1/sessions/code` and `/v1/device-sessions/code` spend the sign-in IP budget.
+3. **D3: a code row for every address asked for, real or not.** An unknown, disabled or password-less address gets a row with a random code nobody is sent. So wrong (`triesLeft`), expired and too-many-tries answer identically whatever exists, and the clients can say which without revealing an account (ADR-037 §4). Stored as HMAC(pepper, email, code). A new code cancels the live one. Rows are deleted a day after expiry.
+4. **D4: who gets mail:** ACTIVE or PENDING_REVIEW, with a password set that the person chose (not an account Sign in with Malafat created, MUT-596), not closed past its deadline, address not suppressed.
+5. **Checks:** `signInWithCode` (`auth/sign-in.ts`) runs the password's checks. A wrong code counts as a failed sign-in on the email key. A locked key answers 429 without spending a try. The right code on PENDING_REVIEW answers 403 ACCOUNT_UNDER_REVIEW. A code for an account that can no longer sign in answers the usual 401 INVALID_CREDENTIALS.
+6. **D7: a code session is never step-up stamped** (no passkey, so `stepUpAt` stays null; MUT-459). Changing the password or closing the account still needs the current password.
+7. **D8: mail `sign-in-code`:** the code in the subject (iOS Mail's one-time-code detection, notifications) and in a large left-to-right block. No link: magic links stay out of scope.
+
+**Consequences:** API 1.114.0-mut618 and migration `20261114120000_mut618_sign_in_codes`, additive. Analytics contract 2.10.0 (the union with MUT-619's 2.9.0). A stranger who knows someone's address can cancel their live code by asking for a new one, capped at 5 a day; the password still works. The in-process limiters keep TD-017's single-instance assumption.
+
+**Alternatives rejected:** App Attest / Play Integrity now (D1). Magic links, SMS and passwordless accounts (out of scope). One uniform 401 for every refused code (it hides whether to retype or resend; D3 makes the distinction safe). Counting misses only per code (the shared lockout keeps the password and the code from adding up to more guesses).
+
+## ADR-257: /setup Offers a Passkey Before Home, on MUT-370's Offer Budget (MUT-619)
+
+**Status:** Accepted (2026-11-14, MUT-619; epic MUT-322; Basel's decision 2026-11-14). Plan: `.claude/designs/mut-619-setup-passkey.md`. Extends ADR-191 (MUT-370); ADR-159 d9 (every account keeps a password) stands.
+
+**Context:** users find the password hard to type on the phone; the first passkey offer came only on Home after a later sign-in, so the first phone sign-in still meant typing a long, often browser-generated password.
+
+**Decision:**
+1. Once a setup, reset or signup link has set the password and signed the person in, `/setup` shows one more step before Home: Create a passkey (MUT-115's ceremony) or Not now. No route of its own; the URL stays `/setup`.
+2. It is shown on the Home card's rules (`passkeyOfferable`: device check, `passkeyPrompt.due`, not closing, a sign-in of its own), without MUT-418's first-run order, which comes after it. `due` is false whenever the account holds a passkey, so a recovery with passkeys keeps the MUT-415 review.
+3. Not now is one of MUT-370's three offers (the same `PATCH /v1/me/passkey-prompt`), so Home does not ask again for 30 days. Setup never waits on it for more than a session check's 15 s, nor on a failed or cancelled ceremony.
+4. No server change.
+
+**Alternatives rejected:** a separate setup-only offer budget (the person would be asked twice in a row); a passkey-only account (ADR-159 d9); offering it on `/accountant-invite` in the same change (accountants work at a computer, and its QA needs a live-API invite flow; `SetupPasskeyStep` takes only `onDone`, so a follow-up can adopt it).
+
+**Consequences:** every portal-selfservice flow that sets a password through `/setup` now meets the step (`skipSetupPasskey`). Analytics 2.9.0. A reload while the step is open shows the "incomplete link" notice although the person is signed in (the token was already stripped); Home is one click away.
+
+## ADR-258: An Accountant Sees Only the Expenses That Have a Receipt (amends ADR-245)
+
+**Status:** Accepted (2026-11-14, Basel: "for accountant, they should only see expenses who have an attachment, without it they don't make much sense").
+
+**Context:** an accountant reads a client's books to file them (MUT-559, ADR-245). An expense with no receipt or invoice behind it is not a document they can book; listing it beside the documented ones only adds noise and questions for the owner.
+
+**Decision:**
+1. For an accountant, an expense exists only when it has at least one READY, live receipt (`expense_receipts.status = READY`, `deletedAt` null). An unfinished upload or a deleted receipt does not count; adding a receipt later makes the expense appear, deleting the last one hides it again.
+2. Enforced once, in the store guard, not per route: `accountantStoreGuard` (and `periodDownloadStoreGuard('accountant')`) narrows every expense read with `accountantExpenseView` (`server/src/auth/store-guard.ts`): `expenses.list` / `totalsByCurrency` get `withReceipt`, `expenses.getById` gets `{ withReceipt }` (so `GET /v1/expenses/{id}` answers 404 for a receipt-less one), `entries.list` gets `expensesWithReceipt` (the profile feed and the period download's rows), and `periodPack.estimate` gets `expensesWithReceipt`. Lists, single reads, the expenses and period summaries, groups, `/v1/profile-entries` and the period downloads therefore agree on one set, whatever route asks, including routes added later.
+3. `entries.clientActivity` (the accountant's `/v1/clients` monthly count and last activity, read from their own session) counts only receipted expenses too; it has no other caller.
+4. Owners, members, API keys, Malafat and share links are unchanged: a share link is the owner's own export of a period, not the accountant's desk.
+
+**Consequences:** no migration, no API shape change. An accountant's totals can be lower than the owner's for the same period, by exactly the receipt-less expenses; that is the point. `GET /v1/expenses/streak` still reads logged days (dates only, no amounts).
+
+**Alternatives rejected:** a per-route `hasReceipt` query flag (every new route would have to remember it); showing receipt-less expenses greyed out (the accountant can do nothing with them).
+
+## ADR-259: The Monthly Summary Mail Names a Person's Own Amounts, Per Profile and Per Currency, Read as Reports Reads Them (MUT-535, Pricing Program MUT-528)
+
+**Status:** Accepted (Basel, 2026-11-21: amounts allowed, Jira MUT-535 comment 13353; plan `.claude/designs/mut-535-monthly-summary-mail.md` D1–D14 with eng review R1–R17, and the §7 copy and privacy wording, comment 13362). Built 2026-11-22. Part of MUT-528 (D10). Overrides ADR-159 §5 for one mail (decision 5).
+
+**Context:** MUT-528's main retention lever is showing the product's value without anyone opening the app: once a month, what came in, what is still owed and what is overdue. ADR-159 §5 kept every amount out of mail; the summary is pointless without them.
+
+**Decision:**
+1. **One mail per person a month,** on days 1–7 at 14:00 Jerusalem (`/jobs/v1/billing/monthly-summary-mail`, Terraform job created only with `mailer = resend` and `monthly_summary_mail_enabled`), reporting the calendar month before the run's month in Jerusalem. A panel per profile: its name, *came in* (POSTED payments by receivedOn), *still owed* and *overdue* (with the overdue count), each per currency, never converted or summed; a link to the profile's overview.
+2. **The same numbers as the app.** `summaries/profile-figures.ts › readProfileFigures` is the verdict route's own per-profile read (post due items, the activity window, open income), now called by both; the job posts as SYSTEM through the unguarded store, a dry run doesn't post. Retired currencies are left out as on the Glance. A profile whose own today is still inside the month (west of UTC) waits for the next day; a profile that fails to read keeps the person's mail for the next day.
+3. **Who:** a person whose own facts cover a profile (their Freelancer/Firm subscription in a covering status, their running trial, a live grant to them, or a Malafat link on a profile they own), active, not closing, address not suppressed (whether or not a mailed link confirmed it: Basel, 2026-11-22, below). Their mail covers every profile of the verdict's set whose entitlement is ACTIVE or GRACE and not paused. A co-owner who doesn't pay gets no mail of their own; an Accountant-plan-only payer gets none. A profile with no entry dated in the month, or nothing to show, has no panel; no panel, no mail.
+4. **Off with one link, and in You › Account.** `User.monthlySummaryMail`: NULL (default: every covered profile but Malafat-covered ones), `OFF`, or `ON_ALL`. The switch shows on exactly when a mail would go; turning it on stores the default, or `ON_ALL` when Malafat covers everything. The mail's footer links to `/mail-off#<token>`: `mail-off:v1:<userId>` signed with HMAC-SHA256 under a key derived (HKDF) from `SESSION_TOKEN_PEPPER`, no expiry, good for this switch only; the page asks for a press before `POST /v1/mail-preferences/monthly-summary` (same origin, IP budget), so link scanners change nothing. Rotating the pepper voids sent links (the page then points at You › Account). No RFC 8058 header: it would put the token in a URL path.
+5. **Mail may name the person's own amounts (ADR-159 §5 override log).** *Why:* the mail exists to show the money without opening the app. *What replaces it:* `monthly-summary` names, per profile and per currency, what came in last month, what is still owed and what is overdue, the overdue count, the day they are read on, and MUT-531's yearly saving. Never a client's name or a single entry; every other mail is unchanged. The privacy policy names this mail (Last updated 21 November 2026). *Date:* 2026-11-21.
+6. **Inside the mail cap.** Every mail shares `mail_daily_cap` (90 a day, Resend's free plan shared with Malafat). Each run sends at most `MONTHLY_SUMMARY_DAILY_SENDS` (40), one at a time, and stops at the first `capped`; days 1–7 carry ~280 people a month. The mailer's send log keeps `monthly-summary:<userId>:<YYYY-MM>` once. Past ~250 paying and trialling people, Resend needs a paid plan and both numbers rise.
+7. **Switch to yearly** is MUT-531's own line (`billing/yearly-switch-line.ts`, moved from the Billing route), linking to `/?billing=true&step=switch`; without Stripe, prices or a saving, the mail goes without it.
+
+**Consequences:** one migration (a nullable column) and a local snapshot step (19 → 20). The verdict route and the job read through one function, so a change to Reports' figures changes the mail with it. A catch-up day re-reads the people already mailed (the mailer answers `duplicate`); fine at this size. An operator-created account that never redeemed a mailed link is skipped as unverified until it does.
+
+**Alternatives considered:** one mail per profile (more mail, the same reads); converted totals (need a rate and a base; ADR-004 keeps the mail per currency); auto-POST on opening the link (scanners would turn people's mail off); a `sentKeys` read before the figures (not needed at this size); mailing only addresses a mailed link confirmed (eng review R7: a mistyped address would receive someone's books). Built first, then dropped by Basel on 2026-11-22 (MUT-535): self-service accounts are always confirmed before they exist, so the rule only shut out the accounts the operator made for pilot people, whose addresses the operator set up with them.
+
+## ADR-260: MTB3A Issues Invoices: an Immutable Issuing Core (supersedes ADR-067 for issuing)
+
+**Status:** Accepted (2026-11-22, Basel; MUT-568 under epic MUT-566). Plan `.claude/designs/MUT-568-issuing-core.md` (D1–D7, R-D1–R-D3 and the eng review's fixes).
+
+**Context:** Basel, 2026-11-06: Israel first; issue tax invoices with allocation numbers ourselves, as registered software (Instruction 36, Appendix E), no partner APIs. ADR-067 (MUT-145) retired document generation and made the app ledger-only; it stays true for everything except issuing. Registered software must keep issued documents permanently, number them gap-free per type, and correct them only with new documents, while our ledger rows are editable (ADR-075, ADR-083).
+
+**Decision:**
+1. **A separate, append-only record.** `issued_documents`, `issued_document_lines` and `issued_document_copies` are INSERT-only: a row trigger refuses UPDATE and DELETE, a statement trigger refuses TRUNCATE. `issued_document_counters` never moves back once a document of its type exists and is never deleted. The only bypass is `SET LOCAL mutaba3a.issuing_bypass = 'on'`, for the MUT-644 retention sweep. No route or store method changes or removes a document; a credit note corrects a tax invoice.
+2. **Kept 7 years after the account closes** (R-D1). The issuing tables hold no foreign keys (customer and issuer are JSON snapshots); the account purge leaves them (`PURGE_PROFILE_TABLES_EXEMPT`); MUT-644 deletes them after retention.
+3. **Gap-free numbers per profile and type, never per year** (D2), from a starting number settable until the first document (D3). The number is taken by one `INSERT … ON CONFLICT DO UPDATE … RETURNING` as the issue transaction's first statement; every refusal throws inside the transaction so the increment rolls back with it.
+4. **One transaction posts the money** (D5): 305 an Owed, 320 an Owed paid in full by a Received, 400 a Received (optionally paying an open 305), 330 a credit on its 305 up to what's still owed (R-D2; paid invoices: MUT-643). The ledger rows carry the new origin `ISSUED_DOCUMENT` (wire: `issued_document`); the person-side edit, undo, settle, credit and reversal routes already refuse non-ADJUSTMENT/CAPTURE rows, so a document's money can't be edited from the ledger.
+5. **Idempotent by design:** the issue request's Idempotency-Key is stored on the document (`@@unique(organizationId, requestKey)`); a retry returns the same document even when the idempotency record was lost.
+6. **The issuing core is versioned on its own** (`server/src/issuing/`, `ISSUING_CORE_VERSION`, stamped on every document; its own tests in `server/src/issuing/__tests__`). VAT comes from the statutory table in `issuing/vat-rate.ts`, not the editable firm rates: the registered version decides the national rate.
+7. **Gating** (D1): session-only domain `issuing`; a business profile whose owner holds the operator feature `invoicing`; Malafat firms, Malafat-connected profiles and delegated calls get the switched-off 404. Writes need an owner (creator or co-owner); an accountant reads under their grant (the owner's flag is read under the accountant guard). ILS only (D4); no stored drafts, a stateless preview (D7).
+8. Records export and restore leave issued documents out (the unified file is MUT-569); the signed-out portal has no issuing.
+9. **Issuing from a recorded entry (I1-a, Basel 2026-11-22):** `fromEntry` names a person's own Owed (for a 305) or captured Received (for a 320 or 400) with the same customer, currency and amount; the document takes it over (origin `ISSUED_DOCUMENT`, the document's VAT split) and posts no new Owed or Received. The entry is then read-only like any document-owned row.
+10. **Prices including VAT (V1-a):** `pricesIncludeVat` per document (default in the business details), overridable per line, and a VAT-exempt line. An inclusive line's VAT is taken out of the typed amount (half up), so an all-inclusive invoice totals exactly what was typed; exclusive lines are taxed together on their net. Stored on the document and each line.
+
+**Consequences:** a rollback past MUT-568 is harmless until the first document is issued, then roll-forward only (rollback hazard). Document-owned Owed rows stay out of the entries feed until MUT-570 gives them their own rows; their Received rows appear as `origin: 'issued_document'`. Customer VAT numbers and addresses come with MUT-642.
+
+**Alternatives rejected:** partner APIs (Basel, 2026-11-06); issued documents as locked ledger rows (every ledger edit path would need a lock, and the record would not be INSERT-only); per-year numbering; a refund on a paid invoice in v1 (MUT-643).
+
+## ADR-261: Issued Documents Print Server-Side With Malafat's Tri-Script Engine, in the Business's Own Style and Ink (MUT-640)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-640-issued-document-pdf.md`; styles approved by Basel on the canvas https://claude.ai/artifact/EevXQWU3AyFvJxugLTGrNC).
+
+**Context:** one PDF of an issued document (ADR-260) serves the portal, the phone, email and links, in Hebrew, Arabic or English, with the other scripts quoted inside. Malafat already prints three scripts reliably in pure Node (its ADR-168, MAL-64).
+
+**Decision:**
+1. **Engine:** Malafat's per-character font coverage and `@digicole/pdfmake-rtl@2.1.2` with its patch (here through `patch-package`, `server/patches/`). No Chromium. Every node declares its direction, every table its `rtl`; numbers, ids, dates and amounts are their own left-to-right nodes.
+2. **Styles** (`server/src/issuing/pdf/styles.ts`): Professional (Frank Ruhl Libre), Modern (IBM Plex Sans + Hebrew), Minimal (Assistant); one view model, different layout, typeface, size and information architecture; **black or blue ink only**. A document prints in the style and ink snapshotted on it; an unknown style prints as Professional.
+3. **Arabic is Thmanyah** in every style (serif display for Professional, sans for the others): Noto Naskh, Noto Sans Arabic and IBM Plex Sans Arabic draw correctly but don't extract word for word; IBM Plex Sans Hebrew is the last fallback for Latin, Hebrew and ₪.
+4. **Copies:** `POST /v1/issued-documents/{id}/pdf` records a produced copy (download, email, share) and prints its mark, the first ever the original ("מקור"); its Idempotency-Key is stored on the copy (`issued_document_copies.requestKey`), so a retry returns the same copy and mark. `GET …/pdf` is a view copy ("העתק") and records nothing. `POST /v1/issued-documents/preview/pdf` is a draft ("טיוטה") with the next number; nothing is written.
+5. D-PDF1 Arabic and English documents carry the Hebrew legal title as a second line (until the accountant answers); D-PDF3 A4, the table header repeats; D-PDF4 dates DD/MM/YYYY, ₪ after the amount in he/ar and before it in en; D-PDF5 the business details sit at the start side (RTL text keeps to its start edge in pdfmake-rtl), the logo at the end side.
+
+**Consequences:** the image carries 3.1 MB of fonts (`server/assets/fonts/pdf`, OFL licences beside them). The logo prints once MUT-646 uploads it (`IssuerDetails.logoAttachmentId`); the customer's VAT number and address once MUT-642 snapshots them.
+
+**Alternatives rejected:** headless Chromium (≈200 MB image, cold starts); Noto Naskh for Arabic (scrambled extraction, Malafat MAL-1008); the idempotency middleware for the PDF POST (it replays JSON only).
+
+**Pre-landing review (2026-11-22):** copies are produced only through `POST …/pdf` (the JSON `POST …/copies` is removed, so no copy is ever counted without being printed); a request key replays for the same person within 24 h only; an all-inclusive document's subtotal and discount print as typed; exempt and taxable amounts print apart; at most two renders run at once; `postinstall` is `patch-package --error-on-fail && prisma generate`.
+
+## ADR-262: A Client's VAT Number Is Checked Locally and Looked Up in the Open Registries (MUT-642)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-642-customer-tax-id.md`).
+
+**Context:** a tax invoice prints the client's VAT or company number and address, and the allocation API (MUT-572) sends `Customer_VAT_Number`. Basel: adding a client must be the easiest step.
+
+**Decision:**
+1. `Customer.taxId VARCHAR(9)` and `address TEXT`, both optional. A number is accepted with spaces or dashes, left-padded to 9 digits, and refused unless the Israeli check digit holds (`server/src/israel/tax-id.ts`).
+2. `GET /v1/business-lookup` asks data.gov.il's CKAN `datastore_search` (Registrar of Companies `f004176c-…`; nonprofits `be5b7935-…` for 58-prefixed numbers), 2.5 s timeout, answers cached 24 h (LRU 1,000), failures not cached, 30 a minute per person. A sole dealer (עוסק מורשה/פטור) is in no open registry: 404 `NOT_IN_REGISTRY`, and the person types the details.
+3. The lookup is hosted only (outside `PORTAL_ROUTES`); the signed-out portal never calls it. `PATCH /v1/customers/{id}` opens to sessions so the portal can save.
+4. Issued documents snapshot `{ name, taxId, address }` at issue; editing the client later changes no document.
+5. Portal: a Business details card on the client page (shown to whoever may add clients: not accountants, not Malafat-fed profiles); a complete number shows the registry's name with a tick (on) to rename the client to it, fills an empty address (never overwrites typed text) and warns when the registry's status is not active. A version conflict reloads the client and asks to save again.
+
+**Pre-landing review (2026-11-22):** an all-zero number is refused (its check sum is 0); a blank number or address clears the field; the cache is least-recently-answered (a refresh never evicts another number); the nonprofit address includes the house number (`כתובת - מספר דירה`); both registry number columns are `numeric` on the live resources (checked 2026-11-22), so the filter sends a number.
+
+**Consequences:** one outbound dependency (data.gov.il, no key, no cost); an outage degrades to typing by hand.
+
+**Alternatives rejected:** Nevo or paid company-data APIs (cost, contracts); scanning a certificate (MUT-650, later); validating against the Tax Authority's dealer list (no open API).
+
+## ADR-263: Issuing Waits for a Five-Step Setup; Logos Are Kept Like the Documents That Print Them (MUT-646)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-646-invoicing-setup.md`; wireframe round 3, variant 2, approved by Basel).
+
+**Context:** no invoice may go out missing what the law prints on it, and a business moving from another tool must continue its numbering. The setup has to be a guided five minutes, on the portal and the phone.
+
+**Decision:**
+1. Five steps: business details (required), logo, defaults (style, ink, language, VAT pricing, payment terms, bank details, footer), numbering (required: "already issuing elsewhere?"), Tax Authority (`later` until MUT-571). `GET /v1/issuing/setup` is the one source of progress; each step saves on its own route.
+2. Hard gate (S1-a): `POST /v1/issued-documents` → 409 `CONFLICT` reason `ISSUING_SETUP_INCOMPLETE`, `details.missing` (`DETAILS`, `NUMBERING`), checked before any number is taken. The preview stays open.
+3. The setup's progress lives in its own row (`issuing_setup`), not on `issuer_details`: the logo, the numbering answer and the introduction can come before the details (which need a name and a number to exist).
+4. The defaults are their own route (`PUT /v1/issuer/defaults`, If-Match the details' version); `PUT /v1/issuer` keeps them. Saving the defaults is what marks that step done.
+5. Logos are append-only rows (`issuer_logos`, bytea ≤ 256 KB, PNG/JPEG by their own bytes and an engine trial print, since a broken image takes the decoder seconds to refuse); the current one is `issuing_setup.logoId`. A document snapshots `issuer.logoId` at issue and its PDF loads that row, so replacing or removing the logo never changes an issued document. A logo the engine can't draw at print time costs the logo, never the copy.
+6. Portal page under You (`/p/:id/you/invoicing`, like Sharing), shown only where `GET /v1/issuing/setup` answers (a 404 is issuing off); the letterhead is HTML, not the PDF, and follows each form as it is typed.
+
+**Drift from the plan:** the page path is `/you/invoicing` (the You convention) rather than `/settings/invoicing`; progress is a separate table rather than columns on `issuer_details` (point 3); the defaults have their own route rather than extending `PUT /v1/issuer`.
+
+**Pre-landing review (2026-11-22):** a numbering answer is checked whole before anything changes (no half-applied starts); "No" puts back to 1 every type without documents, so a corrected answer can't leave an earlier "yes" in place; a logo that fails at print time is logged (`logoFailed`), not just dropped; the portal shows an error with Try again instead of an endless skeleton, keeps a form as typed after a version conflict, never sets the letterhead's state while rendering, and lets only an owner see the introduction and the forms (anyone else reads the letterhead).
+
+**Consequences:** existing issuing tests answer the numbering question first; a profile issuing on dev before this lands must answer it once. Logos sit in Postgres (no blob storage, no cost); they are kept with the documents under MUT-644's retention.
+
+**Alternatives rejected:** a soft gate (a banner only) — S1-a chose the hard one; storing the logo as an attachment (its bucket object could be deleted or replaced under an issued document).
+
+## ADR-264: Allocation Numbers Are Asked For Inside the Issue, After the Counter Lock (MUT-571, MUT-572)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-571-572-tax-authority.md`). Sandbox only until MUT-567/638.
+
+**Context:**
+- A tax invoice (305) or invoice-receipt (320) to a business, at or over the threshold, must carry the Tax Authority's allocation number. The number is obtained before the document exists.
+- Our numbering is gap-free and issuing is one transaction (ADR-260).
+- The Approval request names the document's own number (`invoice_reference_number`), so that number must be known first.
+
+**Decision:**
+1. **Inside the issue.** The issue transaction takes the counter's row lock, runs every check, then calls the injected `allocate(number)` hook before writing anything. Anything but a number throws the transaction away: no gap, no trace. The lock is held for the call's round trip (timeout 10 s, transaction 40 s), so issuing is serialised per profile and document type while it waits; acceptable for one business's invoices. The memory store does the same in order.
+2. **Idempotent by key.** Our `invoice_id` is a hash of (profile, Idempotency-Key). A timeout (502 TAX_AUTHORITY_UNAVAILABLE, not cached by the idempotency layer) and a retry with the same key send the same id, and the Tax Authority answers it once. A replayed key returns the stored document without calling again.
+3. **Held numbers.**
+   - 409 ALLOCATION_HELD offers CANCEL, CONTINUE and FURTHER_OBJECTION. CANCEL and FURTHER_OBJECTION are reported through `POST /v1/issuing/allocation-decisions`. CONTINUE is the issue again with a new key and `withoutAllocation.heldKey`, which reports CONTINUE and issues without a number.
+   - Reverse charge waits for VAT-0 compose rules.
+   - The held error codes aren't published, so they are learned from the sandbox's held test dealer.
+4. **Connection.**
+   - OAuth 2.0 authorization code against the `longtimetoken` endpoints. The callback trusts only an HMAC state (profile, person, 10 minutes).
+   - Tokens are sealed (AES-256-GCM) at rest, never logged, never answered.
+   - The single-use refresh token is spent under a row lock (`SELECT … FOR UPDATE`, or the memory store's queue), so two callers refresh once.
+   - The consent lasts 90 days from `consented_on`; then the status reads `expired` and the owner connects again.
+5. **The threshold** is the one shared table, `israel/allocation-number.ts` (ADR-246: ₪25,000 from 2024-05-05, ₪20,000 2025-01-01, ₪10,000 2026-01-01, ₪5,000 2026-06-01; before VAT, by the invoice date). The Tax Authority's general-information service (MinimumAmount) isn't subscribed. The specs Basel supplied state no figures; the table's source is MUT-557's ticket and the 2026 rules recorded in ADR-246.
+6. **Off by default.** No `TAX_AUTHORITY_ENV` means no routes (404 `TAX_AUTHORITY_OFF`) and issuing as before. Production needs every value set explicitly and its own token key.
+
+**Consequences:**
+- An issue over the threshold depends on the Tax Authority answering: when it doesn't, nothing is issued and the person tries again.
+- The software registration number defaults to the spec's test value until MUT-567.
+
+**Alternatives rejected:**
+- Reserving a number and allocating afterwards: it leaves a gap or a pending document when the call fails, against ADR-260.
+- Asking before the transaction with a predicted number: a concurrent issue could take it.
+
+**Amendment (2026-11-22, invoicing follow-ups, API 1.130.0-followups):**
+- **Where the callback lands.** PORTAL_ORIGIN alone doesn't say a portal page exists there (a local API sets it to itself and serves no portal), so the callback used to redirect to an API 404. Now the state also signs the portal the person pressed Connect on: the connect request's Origin, kept only when it is PORTAL_ORIGIN, the API's own origin, or a loopback origin on a local server (the Vite dev portal on another port). The callback returns there; with none, to this server's own portal when it serves one (PORTAL_DIST_DIR); with neither (a phone's start, a forged or late state), to its own short page in Arabic and English. A declined consent (`error=access_denied`) lands as `taxAuthority=refused` with its own words.
+- **The re-consent reminder (AC3).** A daily job (`POST /jobs/v1/issuing/tax-authority-reminders`, Terraform `tax_authority_reminders_enabled`, off by default) mails the profile's owner ten days before the consent ends and once when it has ended (for 7 days), each once per consent through the send log (`tax-authority-reconnect:<profile>:<end>:<stage>`), with no new column: the windows stay inside the log's 30 days. The setup page's Tax Authority step says the same from `until` and offers Connect again.
+
+## ADR-265: Issued-Document PDFs Leave Signed (PAdES B-T), With a Pluggable Key; Production Refuses Until Its Certificate Is In Place (MUT-641)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-641-signed-pdf.md`). The production certificate is Basel's open decision (accountant's answer to MUT-567 Q3 first), queued in `~/Work/tools/heavy-gate/DECISIONS.md`.
+
+**Context:** Instruction 18B: a tax document sent electronically is the original only with an electronic signature proving who issued it and that it is unchanged. MUT-640 (ADR-261) prints the PDF; nothing signed it. The ticket assumes the software house (Barmajiyat) signs on behalf of every issuer.
+
+**Decision:**
+1. **Every issued-document PDF that leaves is signed**: `GET` (view copy) and `POST` (produced copy, original or copy) `/v1/issued-documents/{id}/pdf`. The draft preview (`POST …/preview/pdf`) is never signed.
+2. **The signature:** PAdES baseline B-T in pure Node (`server/src/issuing/pdf/sign/`): an invisible signature field, `/SubFilter /ETSI.CAdES.detached`, CMS with content-type, message-digest and signing-certificate-v2 signed attributes over SHA-256, and an RFC 3161 time-stamp token over the signature value. The panel's `/Reason` names the business in the document's language ("signed by MTB3A on behalf of …").
+3. **The key is pluggable** (`ISSUING_SIGNER`): `dev` = a throwaway authority (root, signer, TSA) made in the process on first use, never written anywhere, refused in production; `kms` = a Cloud KMS key (asymmetricSign over the digest; the service account holds only `roles/cloudkms.signer`), its certificate chain from `ISSUING_SIGNING_CERT_CHAIN` (refused if it contains a private key) and the CA's TSA (`ISSUING_TSA_URL`); `off` = none. Unset = `dev` outside production, `off` in production. A key whose signature doesn't verify against its certificate is refused before use.
+4. **Never unsigned:** no signer → 503 `SIGNING_NOT_CONFIGURED`, checked before a copy is recorded; a key or TSA failure → 503 `SIGNING_UNAVAILABLE` (logged), the issue stands, and a retry with the same Idempotency-Key gets the same copy signed.
+5. **The original is signed once and kept** (`issued_document_originals`, INSERT-only by the MUT-568 trigger, no foreign keys, purge-exempt, MUT-644's retention): every later request for copy 0 gets the same bytes. Copies are signed per request.
+6. **Interim v1 (Basel, 2026-11-22): sign in production before a certifying authority does.** The production KMS key certifies itself: `npm run signing:interim-cert` reads the key's public key and has KMS sign a self-issued document-signing certificate in Barmajiyat's name ("… document signing (self-issued)"); that PEM is `ISSUING_SIGNING_CERT_CHAIN`. Readers verify the signature and that nothing changed, but show the signer as not trusted. When the authority's deal closes, it certifies **the same key** (a CSR from it: `npm run signing:interim-cert -- --csr`, signed inside KMS) and only the chain changes. The time-stamp comes from a public RFC 3161 service until the authority's: Sectigo over https (DigiCert, Sectigo and FreeTSA verified against our client on 2026-11-22; production refuses a plain-http one, since over http anyone on the path could answer with a token signed by a certificate of their own). Whether this interim signature counts as the legal original under Instruction 18B is the accountant's call (MUT-567 Q3); until then it proves who issued the file and that it is unchanged.
+
+**Consequences:** production PDFs answer 503 until the certificate is bought and configured (issuing is still behind the operator's `invoicing` feature). Each view copy costs one KMS signature and one TSA call in production. Long-term validation (B-LT: revocation data in a DSS dictionary) waits for the real CA (TD-316). The recipient's consent to digital documents is not stored yet (TD-317; its shape waits for the accountant's answer, the field and UI for MUT-570/573). Dependencies: `pkijs` 3.4.3, `asn1js` 3.1.0, `pdf-lib` now a runtime dependency.
+
+**Pre-landing review (2026-11-22; 7 specialists, Red Team, adversarial pass):**
+- The original goes out on exactly one produced copy: it is kept with that copy's index (`issued_document_originals.copyIndex`). A failed signing doesn't spend it: until an original has been kept, the next produced copy (any key, any person) is the original. Every other copy, a racing twin that lost the keep and the failed request's own later retry included, is a copy.
+- The signing certificate must be valid at the signing time, or the signer refuses (SIGNING_NOT_CONFIGURED, `details.reason` CERTIFICATE_NOT_VALID).
+- A kms chain must parse, start with the signer's own certificate and chain issuer by issuer, or the server doesn't boot. Each start logs the signer's subject, fingerprint and end date, and warns within 30 days of it.
+- The time-stamp token is verified before it is embedded: its signature, a timeStamping certificate, a SHA-256 imprint of this signature, our nonce, and its time within 10 minutes of ours. The reply is capped at 256 KB.
+- KMS and the time-stamp authority each get one retry after 400 ms; KMS's own refusals (400/403/404) are setup errors (KEY_UNAVAILABLE), not retried. The time-stamp reply is read as it streams and dropped past 256 KB.
+- Setup errors are SIGNING_NOT_CONFIGURED with a reason (KEY_MISMATCH, CHAIN_INVALID, KEY_ALGORITHM, SIGNATURE_TOO_LARGE); transient ones are SIGNING_UNAVAILABLE.
+- View copies are cached per instance for 10 minutes (32 documents), so a reload isn't another KMS signature and time-stamp.
+- Terraform: `prevent_destroy` on the key ring and key (signing is switched off by removing the certificate chain; the key-on tests only plan, since Terraform 1.9's test teardown can't destroy a protected key); the chain-needs-key rule is a precondition on the Cloud Run service (Terraform 1.5 compatible); `issuing_tsa_url` must be https.
+- The verifier matches the signer by issuer and serial, and flags non-zero bytes in the signature slot's padding.
+
+**Supported KMS algorithms:** `RSA_SIGN_PKCS1_{2048,3072,4096}_SHA256` and `EC_SIGN_P256_SHA256` (what the CMS declares). Production's key is Terraform's (`signing.tf`): RSA 3072, HSM, the API's service account holding only `roles/cloudkms.signer` on it; signing reaches Cloud Run only once `issuing_signing_cert_chain` is set.
+
+**Alternatives rejected:** `@signpdf` (adbe.pkcs7.detached by default, no RFC 3161 client, no signing-certificate-v2); a key file or PKCS#12 in Secret Manager (the key could be read and copied; KMS keeps it unexportable); signing at issue time instead of at delivery (each copy carries its own mark, so each is a different file); falling back to an unsigned file during an outage (the ticket forbids it).
+
+## ADR-266: Issuing in the Portal Lives Under Documents, in a Drawer (MUT-570)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-570-portal-issue.md`; wireframes round 2, direction B).
+
+**Decision:**
+1. Issued documents are a tab of Documents (Issued · Files), shown where `GET /v1/issuing/setup` answers. A client's page shows that client's documents. The wireframe's top-level "Documents" nav item is a shell change, left for Basel to decide.
+2. Issuing happens in a drawer over the list, never a page. The totals are the server's preview (debounced; nothing written). Issue uses one Idempotency-Key per attempt. The button names the type, and one line says a credit note is the only correction.
+3. What follows a document comes from its page, and the document itself never changes:
+   - a receipt for what's still owed (appliesToDocumentId; the amount defaults to the remainder);
+   - a credit note prefilled with its lines (originalId);
+   - a similar document.
+
+   Downloading makes a produced, counted copy (the first is the original). Viewing counts nothing.
+4. The draft PDF downloads; it isn't embedded, so no `blob:` frame source is needed.
+5. Style choices come from `GET /v1/issuing/styles` (Basel: new styles appear without a portal release).
+
+**Consequences:** the issue drawer is reusable by MUT-648 (offer after saving income) and MUT-647. Paid status per row is read on the document page only (no request per row).
+
+
+## ADR-267: An Invoice Issued Elsewhere Is Kept Beside Its Entry, Never Numbered Here (MUT-647)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/MUT-647-external-invoice.md`; wireframes round 3, A+B).
+
+**Decision:**
+1. An invoice another system issued is attached to the Owed or Received it belongs to: one live one per entry (`external_invoices`, a partial unique index on the live row). It is never numbered by MTB3A, never counted in its numbering, and never goes in the uniform file.
+2. The file is the entry's INVOICE attachment, written by the issuing store in the same transaction as the link (sessions can't write the attachments domain: attachments are Malafat's). The server writes the bytes itself (the bucket has no CORS for a browser PUT). Removing it soft-deletes both.
+3. `POST /v1/issuing/external-invoices/read` reads the number, date and total with the receipts reader (ADR-199) plus a number reader for Hebrew, Arabic and English invoices. Nothing is stored; nothing read is an error, the person types it. No upload-day window: an old invoice is fine.
+4. The person confirms or corrects every field. An amount that differs from the entry's is said, never blocking.
+5. While an entry has one, issuing a MTB3A document from that entry is refused (409 `EXTERNAL_INVOICE_ATTACHED`, with the number). An Owed MTB3A issued takes none (409 `ISSUED_HERE`).
+6. Same gate as issuing: the owner's `invoicing` feature; owner writes, accountants read and open.
+
+**Consequences:** a separate table, not new attachment columns, so the signed-out portal's local format needs no migration (signed out, nothing is attached). The phone half (share a file to an entry) follows MUT-573.
+
+## ADR-268: After Saving Income, the Toast Offers Its Document, Linked to the Entry (MUT-648)
+
+**Status:** Accepted (2026-11-22; wireframe round 3, variant 1; Basel P2-a).
+
+**Decision:**
+1. The offer appears only where the person holds `invoicing`, on an owned Business profile with the setup done, in shekels, and with the business's `offerAfterSave` on (default true, in the defaults step). Nobody else pays for a request: the setup is read only for `invoicing` holders.
+2. An Owed suggests a tax invoice. A Received suggests an invoice-receipt (with a client), then a receipt.
+3. Each opens the MUT-570 drawer linked to the entry (`fromEntry`), with one line for the entry's amount, VAT included. The VAT is taken out of the amount, so the document's gross equals the entry and the server's ENTRY_MISMATCH rule holds.
+4. The portal toast carries the suggested document as its action and the other as a quieter second action. This replaces the wireframe's split-button menu; both choices stay visible and reachable by keyboard.
+5. An Owed with no document yet offers its tax invoice from its row (E4).
+
+**Consequences:** the issue drawer now takes `fromEntry`. When a Received is taken over, the drawer leaves out the payment section, since the entry already says how the money came in. The phone half follows MUT-573.
+
+## ADR-269: Home Takes the Profile's Root; Owed Moves to /owed (MUT-657, addendum to ADR-192)
+
+**Status:** Accepted (2026-11-22; plan `~/.gstack/projects/vAWK3-mutaba3a/mut-657-plan.md`, wireframe `.claude/designs/portal-home-hub.html` concept 2 "Two lanes", chosen by Basel). Amends ADR-192 (E1, the four destinations) and replaces MUT-426 D8 (a profile switch keeps the section).
+
+**Decision:**
+1. **Home is the bare `/p/:id`** and the first item in the pill (`DESTINATIONS` starts with `{ key: 'home', path: '' }`). On a desktop it is the word; on a phone its icon, named by `aria-label`, so five items and the island fit 375 px in Arabic. Every inbound bare link (Stripe returns, the phone's Recent "website" row, first run, restore, a new profile, a lost profile) now lands on home without changing.
+2. **Owed's overview moves to `/p/:id/owed`.** `?currency=` was the overview's only key, so a bare `/p/:id?currency=X` is an old Owed link: it redirects to `/owed?currency=X` (`replace: true`), keeping every `SHELL_OVERLAY_KEYS` key (`legacyOwedSearch`). Receivables' back link and DeeperLinks follow `destinationPath`.
+3. **Switching profile always lands on home** (`switchTarget(id)` returns the bare path, the open profile too). The You island's second press still returns to the exact page (`islandTarget`, `?back=`), else the kept section (`sectionPath`).
+4. **Home has two views; the view lives only in the URL.** Receipts & to-dos (no key) and In & out (`?view=in-out`). Coming back to home opens Receipts & to-dos. In & out's currency is component state, never `?currency=` (point 2 owns it).
+5. **No totals on Receipts & to-dos.** Receipt cards show status and day (`ReceiptCard showAmount={false}`); Clients overdue shows names and "N days late" only. Clients overdue is computed in the portal from the org summary by Owed's rule (`overdueClientCount`, distinct across currencies). No new endpoint.
+6. **The monthly summary mail links each profile to `/p/:id?view=in-out`** (the month the mail sums up). Bare-path PostHog page views now mean home, not Owed.
+
+**Consequences:** the one-time notices (Trial, Passkey, Second way in, Malafat created, Firm on) moved from Owed to home (`LandingNotices`). The To invoice group waits for MUT-648 and a not-for-invoice flag (`TODO(blocked-by …)` in `HomeTodo`); MUT-604's period cards will sit under the Waiting lane. AASA claims neither path.
+
+
+## ADR-270: Documents Due Are Derived per Client; "Not for Invoice" Is a Mark; Issue Linked Where Taking Over Would Rewrite Money (MUT-660)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/mut-660-documents-due.md`, wireframes `mut-660-wireframes.html`, approved by Basel; decisions D1–D4 in Jira 13423, N1–N3 in the brief; canvas D21 and D24 from the MUT-660..665 planning session).
+
+**Decision:**
+1. **A client's documents preference** (`Customer.documentsPreference`: TAX_INVOICE_FIRST, PAYMENT_REQUEST_FIRST, ON_PAYMENT, NO_DOCUMENT; null follows `IssuerDetails.defaultDocumentsPreference`, ON_PAYMENT by default). Money received with no client counts as ON_PAYMENT and is due an invoice-receipt (N1).
+2. **What is due is derived on every read, never stored** (`server/src/issuing/documents-due.ts`). One function feeds the list, Home's count, Issue all and MUT-661's offer. TAX_INVOICE_FIRST: an Owed is due a 305, and a payment on an Owed with no 305 yet is not due (no double invoicing); after the 305 each payment is due a 400 on it. PAYMENT_REQUEST_FIRST and ON_PAYMENT: each payment, partial ones included, is due a 320 for its own amount. An exempt dealer: payments are due a 400 only. Issued documents (`receivableId` / `paymentId`), attached invoices (MUT-647) and a receipt number (MUT-481, a receipt only) settle what is due. All open income counts, with no cutoff (D1).
+3. **Home's count counts every listed item** (N2), including what MTB3A can't issue yet (payment requests until MUT-662, non-₪, split payments mixing invoiced and uninvoiced Owed, API-recorded payments): those rows say why and offer Attach and Not for invoice.
+4. **"Not for invoice" is a mark** on an Owed or a Received (`notForInvoice`, versioned, If-Match on one entry, all or nothing in bulk). No reason. Refused (409 HAS_TAX_DOCUMENT) while a live 305 (not fully cancelled by credit notes) or a 320 is linked; a receipt doesn't block. No hidden mode: marked income stays in All income, the accountant's view and exports.
+5. **Take over or link** (`fromEntryMode`, both stores). A document takes its entry over (I1-a, MUT-648) only for an untouched ADJUSTMENT Owed or an unallocated captured Received. Otherwise it is issued **linked only**: numbered and linked to the entry, nothing posted or changed: an agreement's charge or a credited Owed (taking over would cut the agreement or the credit), an allocated Received (a 320 taking over a 3,400 Owed for a 1,000 payment would rewrite it), and no-client money taking a 320 (no Owed can be posted without a client). This revises the plan's review item C1 during the build.
+6. **The books split** (`server/src/income/invoice-class.ts`): every received payment's money is Invoice income or Not for invoice, so All income = Invoice income + Not for invoice per currency. A document on the money wins; then the payment's mark; then each allocated share follows its Owed (marked, or a NO_DOCUMENT client); the rest follows the payment's client. Cash basis. Only where invoicing is on (`issuing/invoicing-on.ts`); every other profile's answers are unchanged (no key at all). It feeds Reports (`invoiceSplit`), the monthly summary (two lines), the share-link summary and the Excel Income sheet's `invoice_status` column (English codes: due, issued, not_for_invoice, no_document; canvas D24).
+7. **Issue all** is one client per call, at most 25 items, each through the single issue (`issueOne`) with its own derived idempotency key, dated today, one line for its amount with VAT included. Each item answers issued, held (MUT-572: issue it on its own to choose) or refused.
+
+**Consequences:** migration 20261122230000 (additive) and API 1.127.0-mut660. The portal gains Documents › To issue (a third tab), Home's To issue group (replacing MUT-657's TODO), the row mark, the client field, the profile default and the Reports card. This device keeps the fields (snapshot 22) but has no invoicing, so nothing changes there. The phone half runs in its own session (N3). MUT-666 is narrowed to splits of mixed status.
+
+## ADR-271: A Payment Request Is a Non-Tax Document Tied to an Owed, Settled by Referring Documents and Cancelled by Record (MUT-662)
+
+**Date:** 2026-11-23 · **Status:** Accepted (Basel approved the canvas, D16/D18)
+
+**Context.** Businesses whose clients get a payment request first must not report VAT before the money arrives. The approval spec lists חשבון עסקה as code 300.
+
+**Decision.**
+- PAYMENT_REQUEST is an issued document with its own series. It shows VAT (exempt dealers: none) so the invoice-receipts that follow match it, but it is not in `TAX_DOCUMENTS`: never allocated, never in VAT or tax totals.
+- It is always tied to an Owed: linked to an existing one (never taking it over), or posting an ordinary ADJUSTMENT Owed when issued with no entry. Cancelling never changes the Owed.
+- Each payment gets its own 320 (400 for exempt dealers) referring to it by `originalId`; status is derived (UNPAID, PARTLY_PAID, PAID, CANCELLED), nothing stored.
+- It is cancelled by an insert-only cancellation record (CX series), refused while a live 320/400 refers to it (D18). A credit note never targets it.
+- Shown as PR-0007 / CX-0002 in every language; the stored number and the uniform file use the plain int.
+
+**Consequences.** One live request per Owed (a cancelled one doesn't count). Old phone builds skip the unknown type. The uniform-file mapping (record 300) is wired by whichever of MUT-569 / MUT-662 merges second.
+
+## ADR-272: The Uniform File Is the Issued Documents Only, Written in ISO-8859-8 With Arabic in Hebrew Letters (MUT-569)
+
+**Status:** Accepted (2026-11-22; Basel approved the plan D1–D7 and the wireframe).
+
+**Context:** The Instruction 36 registration (MUT-567) declares the uniform-file module, version 1.31, and attaches the Tax Authority simulator's result. The spec (10.05.2009) separates the bookkeeping module (B100/B110, trial balance) from the document module (C100/D110/D120, documents report), and the file's character set (ISO-8859-8 or CP-862) holds no Arabic.
+
+**Decision:**
+1. **Documents only (D1).**
+   - The file holds what MTB3A issued: C100 per document, D110 per line of a 305/320/330, and D120 for the payment of a 320/400 (a 400 has no D110, D4). A000 1013 = 0 ("not relevant").
+   - No B100/B110/M100: MTB3A keeps no journal or chart of accounts.
+   - Documents issued elsewhere (ADR-267) and plain Owed/Received entries are never in it.
+   - The accountant's answer (MUT-567 Q2) may add a single-entry B100/B110 follow-up; nothing here changes then.
+2. **ISO-8859-8, logical order, one byte per character (A000 1029 = 1).**
+   - Every text field goes through `toFileText`: Hebrew points and direction marks are dropped, typographic punctuation becomes ASCII, Arabic letters are written in Hebrew letters with final forms (D2), Arabic-Indic digits become ASCII, and anything else is `?`.
+   - `encodeLine` refuses any other character, so a field that skipped `toFileText` fails loudly.
+   - The PDF keeps the original script.
+3. **Amounts in agorot and positive, with the type carrying the meaning** (a 330 is positive). Discounts are negative (spec §2.4 יב). D110 1265 is the unit price before VAT, and 1266 is the discount that makes quantity × price − discount equal the line net to the agora, so lines add up to C100 1219.
+4. **INI summary lines** only for the document record types present (the spec's §2.5 table). A100 and Z900 are counted in A000 1002, which equals Z900 1155.
+5. **Times are Israel time** (1206, 1026/1027, the folder). The range is document dates (1230), multi-year software (1011 = 2), and one random 15-digit primary id per export.
+6. **Built on request, never stored.** A 10k-document history is a few MB in memory (TD-323 for streaming).
+7. **Same gate as the issuing reads.** An accountant may export; only a member's export is audited (an accountant runs under the read-only store).
+
+## ADR-273: Plan B, an Allocation Number Requested by Hand Is Entered Before Issuing (MUT-711, addendum to ADR-264)
+
+**Status:** Accepted (2026-11-22; wireframe A "Number first, then issue", chosen by Basel; canvas https://claude.ai/artifact/Ev11vFMKsFAuXVXVp2nx4e).
+
+**Context:** MTB3A requests allocation numbers itself only where the Tax Authority is on (`TAX_AUTHORITY_ENV`) and the profile is connected (ADR-264). Until the software is registered (MUT-567/638) that is nowhere in production, and until now a server with the Tax Authority off issued such an invoice with no number at all.
+
+**Decision:**
+1. **The preview says what the review step needs.** `POST /v1/issued-documents/preview` answers `allocation`: null when the document needs no number (`needsAllocation`), else `{ mode, nextNumber, documentDate, net, customerTaxId, requestUrl }`. `mode` is AUTOMATIC when the Tax Authority is on here and the profile is connected, else MANUAL.
+2. **The number is entered before issuing.** `POST /v1/issued-documents` takes `manualAllocation: { number, forNumber }`. The number is normalized like an expense's (`normalizeAllocationNumber`, 422 ALLOCATION_NUMBER_INVALID). A document that needs none refuses it (422 ALLOCATION_NOT_NEEDED). Without one, a document that needs a number is refused: 409 ALLOCATION_NUMBER_REQUIRED (`details.next`) when the Tax Authority is off here, 409 TAX_AUTHORITY_NOT_CONNECTED as before when it is on.
+3. **The invoice number is a preview, never a reservation.** The manual number runs through the same `allocate` hook as the API's, inside the issue with the counter locked: if the number this document takes is not `forNumber`, nothing is written and the answer is 409 ALLOCATION_NUMBER_MOVED (`details.requestedFor`, `details.next`). Walking away consumes nothing, so the numbering has no gaps, and a number requested for another invoice number is never printed.
+4. **The source is kept.** `issued_documents.allocationSource` is API or MANUAL (null with no number; a CHECK keeps a source from standing without a number). Issued documents are immutable (MUT-568), so rows issued before the column are not backfilled: a number with no source reads as API, the only source there was. The API answers it as `allocationSource`. The PDF prints a manual number exactly like an API one.
+5. **The link is configuration.** `TAX_AUTHORITY_MANUAL_ALLOCATION_URL` (https), default the Tax Authority's site (`DEFAULT_MANUAL_ALLOCATION_URL`) until the exact page is confirmed.
+6. **Clients.** The portal drawer and the phone's issue sheet show the panel for MANUAL: the four details with Copy and Copy all, the link, a 9-digit input and "change the amount". Issue stays disabled until the number is well formed. On ALLOCATION_NUMBER_MOVED the entered number is cleared and the preview read again.
+
+**Consequences:** a server with the Tax Authority off no longer issues a qualifying tax invoice without a number. A held number (ALLOCATION_HELD) keeps its own path (`withoutAllocation`). API 1.133.0-mut711.
+
+## ADR-274: Two-Step Sign-In (Authenticator App or Emailed Code) and a 12-Month Authentication Log (MUT-710)
+
+**Date**: 2026-11-22 · **Status**: Accepted (Basel: build first, then sign the SHAAM security appendix; wireframes approved 2026-11-22) · **Number**: reserved above in-flight ADR-269…271; renumber at merge if needed.
+
+**Context.** The SHAAM security appendix (22-07-2025) §17 requires a second factor, §19 authentication logs kept encrypted for 12 months. The full design (D1–D14) is `.claude/designs/mut-710-two-factor.md`.
+
+**Decision.**
+1. The second factor is an authenticator app (TOTP, RFC 6238) or an emailed 6-digit code, the person's choice; no SMS; passkeys stay a first step and are not relied on as a second.
+2. One way to mint a session: `beginOrIssue` after any first step (password, passkey, emailed sign-in code, Malafat) creates a challenge when the person has two-step on; `finishTwoFactor` issues the session (twoFactorAt). `issueSession` is private.
+3. Every person setup link (any purpose) asks for the second step when it is on (review 4). The challenge is bound to the link and consumed before the redeem's transaction; a redeem that then loses its race leaves it spent (stricter, see TD-326).
+4. Counting is atomic (review 2): a try is reserved on the person under their `two_factor` row lock before the code is read; 5 in 15 minutes lock the second step 15 minutes (429). Challenges: 10 minutes, 5 tries, single use; TOTP steps and recovery codes are claimed by conditional updates.
+5. Issuing and the Tax Authority need two-step on and a session that passed it (`requireTwoFactor`, before idempotency so a refusal is never replayed); disconnecting always works; turning it off is refused while the person owns an issuing profile. The gate (and that refusal, and Me's `requiredForIssuing`) is enforced only with `TWO_FACTOR_ISSUING_GATE_ENABLED=true` (Terraform `two_factor_issuing_gate_enabled`, default false): it ships dark so nobody already issuing is locked out before the screens that turn it on are live; the second step at sign-in is always on for people who turned it on.
+6. With the email method an emailed sign-in code is refused as a first step (`TWO_FACTOR_USE_PASSWORD`), and a reset rests on the mailbox alone (link and code both mailed); the enrolment screen recommends the app. Linking a Malafat identity to an account with two-step on is refused for now (TD-324).
+7. TOTP secrets are sealed with AES-256-GCM under `TWO_FACTOR_SEAL_KEY` (own key on production and staging); recovery codes are keyed digests from the same secret, so rotating the session pepper doesn't void them.
+8. Authentication events are `auth_event` stdout lines (never a code, token, password or unknown address) copied by a pinned sink into a Cloud Logging bucket kept 365 days (Google-managed AES-256 at rest); locking the bucket is an operator step after a month.
+
+**Consequences.** Old phone builds show the server's message for a two-step sign-in until the phone half ships (then the minimum build rises). Support load from lost factors is covered by recovery codes and the audited operator reset (`two-factor-reset`, plus `rotate --lock` for a suspected takeover).
+
+---
+
+## ADR-275: Three Plans: Solo, Business, Firm as Provider-Neutral Tiers (MUT-702 Part A)
+
+**Status:** Accepted (2026-11-22; plan `.claude/designs/mut-702-three-plans-plan.md`, section "Split after MUT-700 and the eng review", Part A). Amends ADR-160 point 2's tier list (Freelancer and Firm) and ADR-162's "Firm includes Freelancer" ranking.
+
+**Context:** Epic MUT-701 (Basel, 2026-11-22) sells three plans: Solo, Business and Firm. Who sells them, and through which payment provider, is open until MUT-700's decision 1 (Narabnd Studio Ltd owns Mutaba3a; MUT-701 comment 13467: no new Stripe or "Barmajiyat sells" assumptions, and plan logic stays apart from the provider). So the plans are built in two parts: Part A, provider-neutral, now; Part B (per-plan prices, Checkout per plan, plan change, the catalog script, the mirror's product tags, offers and retention per plan) held for MUT-700.
+
+**Decision:**
+1. **Tiers.** Prisma `enum BillingTier` gains `SOLO` and `BUSINESS` (migration `20261124130000_mut702_plan_tiers`, `ADD VALUE` only, like MUT-565's). `FREELANCER` stays as the legacy plan of the ₪29 payers and the ₪21 founders: never sold again, still mirrored, granted and covering exactly as before, until MUT-707 moves them. `ACCOUNTANT` (ADR-251) is unchanged and is never a profile's plan.
+2. **One source.** `server/src/billing/plans.ts` (pure) holds the plan names (`solo | business | firm`, legacy `freelancer`), `TIER_OF` / `planOfTier`, `RANK` (Solo = Freelancer 1 < Business 2 < Firm 3), `changeTimingOf` (a higher rank takes effect now; the same or a lower rank waits for the period end; the same plan is `same`), `nextPlanAbove`, `PLAN_LIMITS` and `currentPlanOf`. It names no provider, price or lookup key. `entitlement.ts` ranks grants and subscriptions by `RANK` (ACCOUNTANT ranks 0 and is filtered out before ranking anyway).
+3. **A trial is Business.** A running trial, and the trial's READ_ONLY and LOCKED ends, resolve to tier `BUSINESS` (was `FREELANCER`). Nothing reads the entitlement tier today (checked in the server and the portal), so this changes no behaviour until MUT-704 enforces limits.
+4. **Plan limits, defined here and enforced by MUT-704.** Businesses exclude the personal profile.
+
+   | Plan | Businesses | Partners | Documents / month | Scans / month |
+   |---|---|---|---|---|
+   | Solo | 1 | 0 | 50 | 100 |
+   | Business | 3 | 2 | 250 | 500 |
+   | Firm | 6 | 2 | 1,000 | 2,000 |
+
+   Legacy Freelancer has no row: MUT-704 decides whether it keeps today's limits until MUT-707 moves it (the plan suggests 6 businesses and 3 owners). Every pre-billing user holds a no-expiry FREELANCER grant (`mut358_billing_core`), so this matters.
+5. **Operator grants.** `POST /admin/v1/billing/grants`, `POST /v1/operator/accounts/{id}/billing-grants` and `users billing-grant` accept SOLO and BUSINESS, so the plans can be given and tested with no payment provider. The operator console lists Solo, Business, Firm, then "Freelancer (legacy)", with Solo chosen first.
+6. **`GET /v1/billing` gains `currentPlan`** (`solo | business | firm | freelancer | null`): the highest-ranked tier that covers (ACTIVE or GRACE) any profile the person created, from a grant, a subscription or the running trial; on a tie of rank the plan on sale beats legacy Freelancer. Null when nothing covers them (lapsed, read-only, locked, or only Malafat, which has no tier). `catalog` and every other field are unchanged.
+7. **Schemas.** `BillingTierSchema` gains SOLO and BUSINESS; one inline `ProfilePlanTierSchema` (FREELANCER, SOLO, BUSINESS, FIRM) replaces the `FREELANCER | FIRM` enums on `/v1/me`'s `billing.tier`, `BillingEntitlement.tier` and `BillingOverview.subscription.tier`; the operator status list's subscription tier is `BillingTier`. Additive only. API 1.136.0-mut702.
+
+**Consequences:**
+- Per-plan prices, Checkout for a chosen plan, changing plan, the catalog script, the mirror's `solo`/`business` product tags, and offers and retention per plan are held for MUT-700 (the seller). A Stripe product tagged `solo` or `business` today is still UNKNOWN_TIER in the mirror (on purpose).
+- Clients that read `billing.tier` see BUSINESS for a trial. The portal never reads it; Flutter's `BillingTier.tryParse` gives null for an unknown tier and `ProfileBilling` never reads `tier`.
+- Arabic plan names (Basel, 2026-11-23): Solo «مستقل» (خطة المستقل), Business «تجاري» (الخطة التجارية), Firm «مؤسسة» (خطة المؤسسة); legacy Freelancer «الخطة السابقة», so it never reads as the same plan as Solo. Real Arabic words, not transliterations; «أعمال» was dropped because it is already the business profile type.
+- Merging the migration restarts the shared dev API: warn the orchestrator before the merge.
+
+## ADR-276: A Credit Note May Reach a Paid Invoice's Paid Part: Refunded or Kept as the Client's Credit (MUT-643, amends ADR-260 decision 4)
+
+**Status:** Accepted (2026-11-24, Basel; MUT-643 under epic MUT-566). Plan `.claude/designs/MUT-643-credit-note-paid.md` (revision 2, after an adversarial eng review).
+
+**Context:** ADR-260 decision 4 let a credit note (330) credit only what was still owed on its tax invoice (R-D2), and an invoice-receipt (320) could not be credited at all. A business that refunds a client had no way to issue the credit note.
+
+**Decision:**
+1. **What may be credited (D1).** A 305 or a 320 whose Owed the document owns (origin `ISSUED_DOCUMENT`, `originId` = the document). The credit notes on one original never add up to more than its gross: 422 `CREDIT_EXCEEDS_ORIGINAL` (`maximum`). An original that doesn't own its Owed (a 320 that applied a payment request, a linked 305/320) keeps the old rule: only what is still owed (MUT-730).
+2. **The split (D2).** What is still owed is credited first; the rest is the paid part. The Owed's `creditedMinor` rises by the credit and its `paidMinor` falls by the paid part, so paid + credited never exceeds gross.
+3. **The release (D3).** The paid part comes off the Owed's live allocations newest first (createdAt, then id), as MUT-444's terms correction releases (`releasedAt`; a partial release leaves a smaller live row with the released row's own createdAt).
+4. **Basel's choice per note (C1, D5).** `paidPart: KEEP` leaves the released money on its payments as unallocated (the client's credit; applying it later is MUT-729). `paidPart: REFUND` writes a refund (`refunds` + `refund_sources`) dated `refundedOn` (not before the credit note's date, `pastMoneyDate`), method `PaymentMethod`. Refunded money counts in the payments' `allocatedMinor` again, so every `amount − allocated` stays right unchanged. Without a choice while there is a paid part: 422 `ORIGINAL_PAID` with `details.paid` (older apps keep their message).
+5. **A refund is a ledger line, not a document (C2).** The 330 is the tax document; the uniform file is unchanged. Whether a refund needs its own document is accountant question 6 on MUT-567.
+6. **Lock order (D4).** For a credit note, the issue takes the counter, reads the original's paying payments, locks them in id order, then the Owed, and re-reads; if the paying payments changed: 409 `ORIGINAL_CHANGED`. That is every payment writer's order (payment, then receivables), so a reversal racing it waits instead of deadlocking; a deadlock or serialization failure is 409, not 500.
+7. **Guard (D8).** Reverse and correct refuse a payment a refund drew on, inside the store after the payment row is locked: 409 `PAYMENT_HAS_REFUND`. Undo already refuses allocated money.
+8. **Where refunds count (D7).** A `REFUND` statement line (debit on `refundedOn`, whole-customer statement only); the period summary's `refunds` (received = payments − reversals − refunds); client balances; activity (Reports, verdict, the monthly mail, the phone Glance); the MUT-660 books split; the accountant's shared summary and period pack. A 320 credited in full reads CANCELLED like a 305. Payment views gain `refunded`.
+9. **Records file (D9).** `refunds` joins the snapshot in the unreleased 21 → 22 step (an empty map for older files).
+
+**Consequences:** two additive tables (purged with the profile, no trigger); API 1.137.0-mut643, additive wire (`paidPart`, preview `creditNote`, `refundId`, `refunded`, the `REFUND` line, period `refunds`). Roll-forward only once the first refund exists (TD-328). The paid part of a document that doesn't own its Owed, and applying kept credit, are MUT-730 and MUT-729.
+
+**Alternatives rejected:** a refund as an Owed paid by the released money (it raises Billed instead of lowering Received); a refund as a negative payment (breaks every positive-amount rule); counting refunds outside `allocatedMinor` (every unallocated calculation would need to learn it); a numbered refund document (waits on the accountant, C2).
+
+---
+
+## ADR-277: Closed Profiles' Issued Documents Are Swept 7 Years After the End of the Year of the Newest One; the Owner's Copy Is an Operator Path (MUT-644)
+
+**Status:** Accepted (2026-11-25; built under Basel's standing go-ahead while he was away; plan `.claude/designs/MUT-644-issuing-retention.md`). Completes ADR-260 decision 2. **Amended the same day** by Basel's answers (MUT-644 comment 13504): D1, D4 and D8 replaced, see the override log at the end.
+
+**Context:** the account purge (ADR-188) deletes a closed account's profiles but leaves their issuing tables (ADR-260 decision 2: legal records kept 7 years, no foreign keys, an immutability trigger with one sanctioned bypass). Nothing deleted them afterwards, and a former owner had no way to get a copy.
+
+**Decision:**
+1. **Retention date:** a closed profile's issuing rows may be deleted from 1 January of the 8th year after the calendar year of its newest document (a document's date, or a payment-request cancellation's Israel date if later): 7 full years after the end of that tax year. One constant, `ISSUING_RETENTION_YEARS = 7` (`server/src/issuing/retention.ts`). The year boundary is read in UTC (never early in Israel). A profile that never issued anything holds nothing to keep and goes on the next run.
+2. **Closed = the profile row is gone.** A live profile is never swept, however old its documents.
+3. **Where it runs:** inside the hourly account purge (like MUT-382's share-link viewer sweep), at most 25 profiles a run, never in a dry run; a failure is logged and never stops the purge. The purge summary gains `issuingProfilesSwept`. The operator can run or dry-run it alone (`POST /admin/v1/issuing/retention/sweep`, `npm run issuing:retained -- sweep`). No new scheduler job or Terraform.
+4. **How:** one transaction per profile that re-checks closed + due, runs `SET LOCAL mutaba3a.issuing_bypass = 'on'` and deletes from `RETAINED_ISSUING_TABLES` (the nine "kept 7 years" exemptions, pinned by a unit test).
+5. **Audit:** a new table `issuing_retention_events` (`SWEPT`, `ARCHIVE_EXPORTED`; counts, dates, the operator's support reference; never a name or address), no foreign keys, kept indefinitely, exempt from the purge. `audit_events` can't hold these rows: its profile foreign key is gone.
+6. **The former owner's copy is an operator path:** `GET /admin/v1/issuing/retained` finds the profile (business name or VAT number); `POST /admin/v1/issuing/retained/{id}/archive {reference}` returns a zip of the signed originals as kept, freshly signed copies of documents never produced, and the uniform file (MUT-569), and logs `ARCHIVE_EXPORTED`. A live profile is refused (409 `PROFILE_NOT_CLOSED`). The operator checks who is asking and hands the zip over; the server never mails it (ADR-159 §5: a mail never carries a money record).
+7. **Copy:** Close my account (portal and phone) always lists in Kept that issued invoices and receipts and the business details printed on them are kept 7 years after the end of the year of the last one, then deleted; the privacy policy's deletion section says the same.
+8. **Erasure requests** do not shorten the 7 years (pending the lawyer).
+
+**Consequences:** nothing is due before 1 January 2034. API 1.138.0-mut644 (additive: a summary field and admin routes); migration `20261125120000_mut644_issuing_retention_events` (one table). `issuing.ts` now exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf`, shared with the archive. An archive with many never-produced documents signs each one in the request (TD-331).
+
+**Alternatives rejected:** a retention date per document (keeps a business's history half-deleted for years; **overridden 2026-11-25, below**); counting from the account's closing (not what the bookkeeping rules count); a new Cloud Scheduler job (infra for one cheap query an hour); writing the audit to `audit_events` (foreign key to a deleted profile); mailing the archive or a self-service download (no account left to authenticate, and mail never carries money records).
+
+**Override log (2026-11-25, Basel, MUT-644 comment 13504; API 1.139.0-mut644, branch `feature/mut-644-per-document`):**
+- **D1 replaced: 7 years from each document's own date.** Why: Basel decided the 7 years run from each document's creation, not from the profile's newest one. What replaces it: a document's retention date is its `documentDate` (a cancelled payment request: its cancellation's Israel date when later, `retentionDateOf`); it is kept through its 7th anniversary and due the next day (`retainedUntil`; a 29 February document's anniversary in a common year is 28 February, as Postgres adds years). `sweepCutoff(now)` is seven years before today's UTC day (rolled forward when that day doesn't exist), so nothing goes before its day in Israel. Still one constant, `ISSUING_RETENTION_YEARS = 7`. The rejected alternative "a retention date per document" is now the decision: a business's history may be half-deleted for years, which Basel accepts.
+- **D4 replaced: one document at a time.** The sweep deletes each due document with its lines, copies, kept original and cancellation (`RETAINED_ISSUING_DOCUMENT_TABLES`), and the profile's own rows (business details, numbering, cancellation numbering, logos: `RETAINED_ISSUING_PROFILE_TABLES`) with its last document; still one transaction per profile under the bypass, still only for closed profiles. SWEPT records `{ documents, cancellations, rows, remaining, oldestDocumentDate, newestDocumentDate, profileRows }`. The listing and sweep rows add `oldestDocumentDate`, `nextSweepOn`, `deleted`, `remaining`; the run adds `documentsDeleted`.
+- **D8 replaced: an erasure may shorten the 7 years, only after the archive was handed over (D7).** Why: Basel decided a former owner may have their records erased once they were given everything and told to keep it 7 years. What replaces it: the archive's README carries a 7-year keep notice (English, Arabic, Hebrew; `ARCHIVE_KEEP_NOTICE`), and each export logs `noticeVersion` (`ARCHIVE_KEEP_NOTICE_VERSION = 1`). `POST /admin/v1/issuing/retained/{organizationId}/erase {reference}` (`npm run issuing:retained -- erase --org <id> --reference <ref>`) deletes every retained row through the same bypass and logs `ERASED` (`reference`, counts, `archiveEventId`) only when an `ARCHIVE_EXPORTED` entry with a notice version was logged no later than the erasure (`handsOverArchive`); otherwise 409 `ARCHIVE_NOT_HANDED_OVER`; a live profile 409 `PROFILE_NOT_CLOSED`. Archives exported under 1.138.0 (no notice) never count. `ERASED` needs no migration (`action` is a string).
+- **D6 confirmed:** handing the archive over by the operator after an identity check is enough; TD-332 closed won't do.
+- **D7 (copy) updated:** Close my account says each issued document is kept 7 years from its date; the privacy policy says so and adds that, once they have their copy, a former owner can ask for earlier deletion. The phone's line still says "after the end of the year of the last one" (Flutter follow-up).
+- Consequences: nothing is due until 7 years after the oldest issued document's date (issuing went live in November 2026; a back-dated document counts from its own date).
+
+## ADR-278: "Finish setting up invoicing" After a Save While the Setup Can't Issue (MUT-722, addendum to MUT-648)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-722-setup-hint.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** MUT-648 offers to issue after saving an income only once the setup can issue; before that both apps said nothing, so a person who hadn't finished the setup never learned why no invoice was offered.
+
+**Decision:**
+1. Where invoicing is available (the person's `invoicing` feature, an owned business profile Malafat doesn't write) and the setup answers `canIssue: false`, saving a shekel income shows one line, "Finish setting up invoicing to issue its invoice", with **Set up**: the portal in the save toast (a new optional `detail` line on `Toast`), the phone as a SnackBar from a new `SetupHintGate` beside `IssueOfferGate`. MUT-648's offer is unchanged once the setup can issue; the two never both speak.
+2. Set up opens the profile's invoicing setup at the first missing step (Business details, else Numbering) through `?step=` on the setup route (portal `/p/:id/you/invoicing?step=`, phone `accountProfileInvoicing(id, step:)`).
+3. At most once a day per person and profile, remembered on the device (portal `localStorage`, phone secure storage), recorded when shown (dismissing counts). No server store: none exists for MUT-648's prompts and a missed or repeated hint costs nothing.
+4. Portal Receivables shows "Finish setup to issue" (a link to the setup at that step) where Issue would be, on the same rows.
+
+**Consequences:** No API change. A setup that can't be read says nothing. Another device or browser can show the hint again the same day.
+
+
+## ADR-280: Issue as You Record: the Documents Preference Is Asked Once, and a Payment and Its Document Are One Step (MUT-661, Design B)
+
+**Status:** Accepted (2026-11-25; brief `.claude/designs/MUT-661-issue-as-you-record.md`). Built under Basel's standing authorisation, decisions recorded here for his review.
+
+**Context:** Documents follow a moment the person is already in. MUT-660 derives what is due; MUT-648 offered "Issue invoice" regardless of the client; MUT-722 says "Finish setting up" while the setup can't issue.
+
+**Decision:**
+1. **Ask once.** After an income is saved for a client whose `documentsPreference` is null, on a profile that can issue (MUT-648's conditions: setup `canIssue`, offer-after-save on) and in shekels, the portal opens a drawer «كيف تُصدر المستندات لـ…؟» with the four choices; the answer is saved on the client (version read fresh, If-Match). "Not now" saves nothing (asked again at the next income; the profile default applies meanwhile). MUT-722's hint speaks only while the setup can't issue, so the two never both speak.
+2. **The next action follows the answer** (`issueOffers`): Tax invoice first -> "Issue tax invoice"; Payment request first -> "Issue payment request"; On payment and No document -> none. An exempt dealer is offered a payment request for an Owed unless the client takes none first. A Received offers its documents unless No document. This absorbs MUT-648's rule.
+3. **One server step.** `POST /v1/receivables/{id}/settle-and-issue` (Idempotency-Key): the payment is recorded exactly as settle records it (`settleOwed`, shared), then the document that payment is due (`documentsDue`, the same function as the list and Issue all) is issued through the single issue, linked to the payment, under a key derived from the request's key and the payment. Not one database transaction: the payment is the commitment and a refused issue is a message, not a rollback (AC7: 201, `issue.status` failed or held with the reason, the document stays in To issue). A retry finds the payment by its request key and the document by `moneyDocumentOn`, so neither is made twice. `issue:false` records only the payment; a payment due nothing answers `not_due`.
+4. **A tax invoice's own Owed** (origin ISSUED_DOCUMENT) can't take a captured payment (MUT-568: only issuing pays a document's Owed), so the payment there is a receipt applying the tax invoice (`appliesToDocumentId`, with the payment's method and date), issued in the one transaction the issue already is. There is no payment-only form (`issue:false` is 422 PAYMENT_NEEDS_DOCUMENT) and a refused issue records nothing. The portal shows the control on and locked. **Open question for Basel:** whether Tax invoice first clients should be able to say "Later" there too (it would need an unallocated payment the receipt later allocates).
+5. **The control** shows only where the setup can issue, the Owed is in shekels, the entry isn't marked not for invoice, and the client isn't No document. Receipt when the Owed has a tax invoice, else an invoice-receipt for the amount paid. After a partial payment the rest stays owed; the next payment gets its own document.
+
+**Consequences:** API 1.140.0-mut661, no migration. A held allocation (MUT-572) leaves its request open at the Tax Authority as Issue all does; the person issues it from To issue. Portal local mode is untouched (no invoicing). The phone half mirrors this.
+
+## ADR-279: Promotional Mail Has Its Own Opt-Out, a Link and One-Click List-Unsubscribe (legal pages rewrite)
+
+**Status:** Accepted (Basel, 2026-11-25: "marketing emails must have a proper opt-out with an unsubscribe link").
+
+**Context:** the come-back offer (MUT-534, ADR-243) is promotional, and Israeli law (Communications Law s.30A) and mail providers expect a way to refuse in every such message. Only the monthly summary (MUT-535, ADR-259) had an opt-out.
+
+**Decision:**
+1. **Promotional mail** is the come-back offer today. Account, security and billing mail (trial, card failed, renewal notice, Tax Authority reconnect) is not promotional and has no unsubscribe.
+2. **A person-level switch** `users.offerMail` ('OFF' | NULL = on), in both stores (migration `20261125160000_offer_mail_opt_out`; local snapshot 22 → 23, a device keeps null). The come-back run skips 'OFF' (`opted-out`).
+3. **Two ways out, one token:** the footer links `{portal}/mail-off?mail=offers#token` (the MUT-535 page and token, asked before it acts; `POST /v1/mail-preferences/offers`, same origin), and the mail carries `List-Unsubscribe: <{portal}/v1/mail-preferences/unsubscribe?mail=offers&token=…>` (its own token, signed for one person and one mail, so a logged URL can only turn that mail off; the one exception to "no token in a query", pinned in routes-share-links.test.ts) + `List-Unsubscribe-Post: List-Unsubscribe=One-Click` (RFC 8058). The one-click door has no origin check (mail clients post it), keeps the IP budget, and only ever turns a mail off. The monthly summary gets the same headers (`mail=monthly-summary`).
+4. **The transport passes only those two headers** (MUT-359 A2: nothing else rides along).
+
+**Consequences:** API 1.140.0-adr279 (two routes, a summary field `skipped.optedOut`). Turning offers back on is the mail-off page's second button; there is no You › Account row for offers yet. The s.30A "פרסומת" subject label and sender details are a lawyer question (privacy policy TODO).
+
+**Alternatives rejected:** the address-level suppression list (stops all mail, security notices included); a billing retention event as the opt-out (needs a subscription id the token doesn't carry); a token purpose per mail (the token already names one person and switches only their own mail).
+

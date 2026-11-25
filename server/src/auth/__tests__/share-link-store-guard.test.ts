@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
-import { PROFILE_FEED_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAccess } from '../store-guard.js';
+import { PROFILE_FEED_READS, SHARE_LINK_EXTRA_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAccess } from '../store-guard.js';
 
 /**
  * MUT-560 (ADR-247) test group 9, at the guard: every share-link view request runs under shareLinkStoreGuard, so a
@@ -9,11 +9,11 @@ import { PROFILE_FEED_READS, STORE_ACCESS, shareLinkStoreGuard, type MethodAcces
 const isRead = (access: MethodAccess) => access === 'read' || (typeof access === 'object' && 'read' in access);
 
 describe('shareLinkStoreGuard (MUT-560)', () => {
-  it('passes reads and the named feed reads; refuses every other classified method', () => {
+  it('passes reads and the named extra reads (the feed, and the owner\'s flags since MUT-660); refuses every other classified method', () => {
     const guard = shareLinkStoreGuard();
     for (const [repo, methods] of Object.entries(STORE_ACCESS)) {
       for (const [method, access] of Object.entries(methods as Record<string, MethodAccess>)) {
-        if (isRead(access) || PROFILE_FEED_READS.has(`${repo}.${method}`)) {
+        if (isRead(access) || SHARE_LINK_EXTRA_READS.has(`${repo}.${method}`)) {
           expect(() => guard.assertCanCall(repo, method), `${repo}.${method}`).not.toThrow();
           continue;
         }

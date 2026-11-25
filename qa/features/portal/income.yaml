@@ -10,11 +10,8 @@ paths:
   - src/hosted/components/incomeApiErrors.ts
   - src/hosted/components/ClientPicker.tsx
   - src/hosted/components/ProjectPicker.tsx
-  - src/hosted/components/Drawer.tsx
-  - src/hosted/components/Toast.tsx
   - src/hosted/data/incomeAffordances.ts
   - src/hosted/data/incomeQueries.ts
-  - src/hosted/data/attemptKey.ts
 features:
   - id: add-received
     title: Add income, Received, from Payments sends the canonical amount, client and method with an Idempotency-Key, says Saved, and lists the payment
@@ -297,6 +294,22 @@ features:
       - The toast says Payment reversed and the payment reads Reversed
       - Opening it again shows "Reversed on <date> · Applied to the wrong job" and no Reverse button
       - The Owed entry is back among the open ones
+  - id: reverse-receipted
+    title: A payment a receipt or invoice-receipt was issued for can't be reversed; the portal says to issue a credit note first and nothing changes (MUT-709 AC3)
+    tier: secondary
+    tickets: [MUT-709]
+    paths:
+      - src/hosted/components/CorrectionPane.tsx
+      - src/hosted/components/incomeApiErrors.ts
+      - src/hosted/pages/views/PaymentsList.tsx
+    steps:
+      - Record payment in full on an Owed entry; on the server an issued receipt stands on that payment
+      - Open that payment from Payments and choose Reverse payment
+      - Give a reason and confirm
+    expect:
+      - The server answers 409 CONFLICT with reason HAS_DOCUMENT
+      - The toast says "A receipt was issued for this payment, so it can't be reversed. Issue a credit note first."
+      - The payment does not read Reversed, and the portal doesn't re-read or retry
   - id: credit-owed
     title: Reduce amount owed by part of what is left, with a reason; what is left drops and the credit is listed (MUT-453)
     tier: secondary

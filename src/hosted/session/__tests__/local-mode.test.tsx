@@ -303,12 +303,12 @@ describe('the shell signed out', () => {
     expect(server.calls.map((call) => `${call.method} ${call.url.pathname}`)).toEqual(['GET /v1/self-service']);
   });
 
-  it('shows the same four destinations as signed in, with Conversions one level in under Paid (MUT-287, MUT-424)', async () => {
+  it('shows the same home and four destinations as signed in, with Conversions one level in under Paid (MUT-287, MUT-424, MUT-657)', async () => {
     stubApi({});
     const { user } = renderPortal(`/p/${ORG_A}`);
     const nav = await screen.findByRole('navigation', { name: 'Sections' });
     const links = within(nav).getAllByRole('link').map((link) => link.textContent);
-    expect(links).toEqual(['Owed', 'Paid', 'Spent', 'Clients']);
+    expect(links).toEqual(['Home', 'Owed', 'Paid', 'Spent', 'Clients']);
     await user.click(within(nav).getByRole('link', { name: 'Paid' }));
     const deeper = await screen.findByRole('navigation', { name: 'More in Paid' });
     expect(within(deeper).getByRole('link', { name: /^Currency conversions/ })).toHaveAttribute('href', `/p/${ORG_A}/conversions`);

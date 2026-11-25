@@ -1,5 +1,6 @@
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
+import { invoiceSplitOf, serializeInvoiceSplit } from '../income/invoice-split.js';
 import { randomUUID } from 'node:crypto';
 import { displayNameOf } from '../accountants/grants.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
@@ -15,7 +16,7 @@ import { summarizeExpenses } from '../expenses/summary.js';
 import { formatMoney, type Currency } from '../money.js';
 import { ownedProfileOf, profileOwnerOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, ShareLinkWithViewers, UserLocale } from '../repositories/ports.js';
+import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, RefundRecord, ShareLinkWithViewers, UserLocale } from '../repositories/ports.js';
 import {
   CreateShareLinkRequestSchema,
   ErrorEnvelopeSchema,
@@ -61,6 +62,7 @@ import { displayCategoryNames } from '../expenses/presets.js';
 import { preferredLanguage } from './shared.js';
 import { mintDownload, resolveAsOf } from '../period-pack/index.js';
 import { checkMintBudget, type PeriodDownloadServices } from './period-downloads.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
 /**
  * MUT-560 (ADR-247): one-time share links to a period of one profile, opened with a PIN and no account.
@@ -128,7 +130,6 @@ export interface ShareLinkRouteOptions {
   downloads: PeriodDownloadServices;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const DAY_MS = 86_400_000;
 /** The summary walks the range a page at a time, as /v1/summaries/expenses does. */
 const SUMMARY_PAGE = 200;
@@ -240,7 +241,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'Make a one-time link to a period of this profile, opened with a PIN',
       description: `MUT-560 (ADR-247). Whoever holds the link and its PIN reads the period's entries, totals and expense receipts, and changes nothing, on up to ${SHARE_LINK_MAX_VIEWERS} devices, until it expires (1, 7 or 30 days), is revoked, or locks after ${SHARE_LINK_PIN_ATTEMPTS} wrong PINs. The answer's \`url\` is the only time the link is shown: share it with the PIN, separately. At most ${maxPerProfile} live links per profile (409 CONFLICT, details.reason SHARE_LINK_LIMIT). Any profile you own, your personal one included.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema, body: jsonBody(CreateShareLinkRequestSchema) },
       responses: {
         201: { description: 'Made', content: { 'application/json': { schema: ShareLinkCreatedSchema } } },
@@ -307,7 +308,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'The share links on this profile: active, and those that ended in the last day',
       description: 'MUT-560 (ADR-247, OW5). Every owner sees every link on the profile, each with its `status` (active, locked, expired, revoked) and `endedAt`. Locked, expired and revoked links stay listed for 24 hours after they ended or locked, then drop out. A link’s URL is never shown again. Oldest first.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ProfileIdParamSchema },
       responses: {
         200: { description: 'The links', content: { 'application/json': { schema: ShareLinkListSchema } } },
@@ -331,7 +332,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       tags: ['Profiles'],
       summary: 'Revoke a share link',
       description: 'MUT-560 (ADR-247). Every viewer’s next request answers 404, as if it had never been shared. Any owner of the profile may revoke any of its links.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       request: { params: ShareLinkParamSchema },
       responses: {
         204: { description: 'Revoked' },
@@ -506,7 +507,11 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
         if (row.kind === 'payment' && row.record.status !== 'REVERSED') received.push(row.record);
       }
       const ctx = await visitorContext(access, rows.filter((row) => row.kind === 'expense'), lang);
-      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received) }, 200);
+      // MUT-643: money credit notes gave back in the range comes off what was received.
+      const refunds = await store.refunds.list(organization.id, { ...(range.from ? { from: range.from } : {}), to: range.to });
+      // MUT-660: the accountant's link shows the books split too (invoicing profiles only).
+      const split = await invoiceSplitOf(store, organization, received, refunds, range);
+      return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received, refunds), ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
 
@@ -599,11 +604,16 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
 }
 
 /** Received payments per currency, never summed across currencies (ADR-004). */
-function receivedByCurrency(payments: readonly PaymentRecord[]) {
+function receivedByCurrency(payments: readonly PaymentRecord[], refunds: readonly RefundRecord[]) {
   const byCurrency = new Map<string, { minor: bigint; count: number }>();
   for (const p of payments) {
     const total = byCurrency.get(p.currency) ?? { minor: 0n, count: 0 };
     byCurrency.set(p.currency, { minor: total.minor + p.amountMinor, count: total.count + 1 });
+  }
+  // MUT-643: a refund nets out of the total; `count` stays the payments received.
+  for (const f of refunds) {
+    const total = byCurrency.get(f.currency) ?? { minor: 0n, count: 0 };
+    byCurrency.set(f.currency, { ...total, minor: total.minor - f.amountMinor });
   }
   return [...byCurrency.entries()]
     .sort(([a], [b]) => (a < b ? -1 : 1))

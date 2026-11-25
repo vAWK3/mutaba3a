@@ -59,7 +59,9 @@ describe('signed out: no network (AC4)', () => {
     const profileId = me.profiles[0]!.id;
 
     const client = await api.createCustomer(profileId, { name: 'Ramallah Bakery' }, 'no-network-client-1');
-    const owed = await api.createIncome(profileId, { kind: 'owed', amount: '900.00', currency: 'ILS', occurredOn: '2026-10-01', customerId: client.id, title: 'Menu design' }, 'no-network-owed-1');
+    // Billed today: its status is read against today's date, and one billed on a fixed day reads OVERDUE once its terms pass
+    const today = new Date().toLocaleDateString('en-CA');
+    const owed = await api.createIncome(profileId, { kind: 'owed', amount: '900.00', currency: 'ILS', occurredOn: today, customerId: client.id, title: 'Menu design' }, 'no-network-owed-1');
     await api.settleReceivable(profileId, owed.id, { amount: '400.00' }, 'no-network-settle-1');
     const receivable = await api.receivable(profileId, owed.id);
 

@@ -1,0 +1,14 @@
+# App-wide code every website page uses (theme, i18n, shared helpers). A change here is an
+# indirect impact on every recorded web flow: read the diff (`release-qa impact --diff`), re-record
+# the flows it can change and carry the rest with a reason. Listing these under one area put every
+# flow of that area in scope on any string or helper change.
+app: web
+area: shared
+title: Website-wide code (i18n, theme, helpers)
+shared: true
+paths:
+  - src/hooks/**
+  - src/lib/i18n/**
+  - src/lib/theme/**
+  - src/lib/{appVersion,dates,utils}.ts
+  - src/components/ui/{ErrorBoundary,Input}.*

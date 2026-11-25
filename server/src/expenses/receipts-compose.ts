@@ -135,7 +135,7 @@ export interface MoveReceiptOptions {
 const moveNonce = () => randomUUID().replace(/-/g, '').slice(0, 12);
 
 /** The target profile, refused unless the person belongs to it and may write it now (MUT-503 AC2, D7). */
-async function writableTarget(deps: ReceiptDeps, actor: ReceiptActor, targetProfileId: string, billingGate: boolean): Promise<Organization> {
+export async function writableTarget(deps: ReceiptDeps, actor: ReceiptActor, targetProfileId: string, billingGate: boolean): Promise<Organization> {
   const notFound = () => new ApiError('NOT_FOUND', 'No such profile', { reason: 'PROFILE_NOT_FOUND' });
   if (!(await deps.store.memberships.find(actor.userId, targetProfileId))) throw notFound();
   const target = await deps.store.organizations.getById(targetProfileId);

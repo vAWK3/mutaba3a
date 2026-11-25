@@ -1,6 +1,7 @@
 import type { UserLocale } from '../../repositories/ports.js';
 import { formatMinor } from '../../billing/money.js';
-import type { CalendarDay, MailOffer, MailTemplateId, TemplateVars } from '../ports.js';
+import { ARABIC_LOCALE } from '../../dates.js';
+import type { CalendarDay, MailMoney, MailOffer, MailSummaryProfile, MailTemplateId, TemplateVars } from '../ports.js';
 import type { CustomerMailBody, Inline, MailBody } from './layout.js';
 import type { CustomerTemplateId } from './look.js';
 
@@ -27,6 +28,19 @@ function arHours(n: number): string {
   if (n === 2) return 'ساعتين';
   if (n >= 3 && n <= 10) return `${n} ساعات`;
   return `${n} ساعة`;
+}
+
+/** "1 minute", "10 minutes". */
+function enMinutes(n: number): string {
+  return n === 1 ? '1 minute' : `${n} minutes`;
+}
+
+/** Arabic counted noun: دقيقة واحدة / دقيقتين / 3–10 دقائق / 11+ دقيقة. */
+function arMinutes(n: number): string {
+  if (n === 1) return 'دقيقة واحدة';
+  if (n === 2) return 'دقيقتين';
+  if (n >= 3 && n <= 10) return `${n} دقائق`;
+  return `${n} دقيقة`;
 }
 
 /** "1 day", "3 days". */
@@ -359,7 +373,7 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
  * calendar date, read in UTC so no zone moves it to another day.
  */
 export function mailDay(day: CalendarDay, locale: UserLocale): string {
-  return new Intl.DateTimeFormat(locale === 'ar' ? 'ar' : 'en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(day.year, day.month - 1, day.day)));
+  return new Intl.DateTimeFormat(locale === 'ar' ? ARABIC_LOCALE : 'en-US', { dateStyle: 'long', timeZone: 'UTC' }).format(new Date(Date.UTC(day.year, day.month - 1, day.day)));
 }
 
 const accountClosing: Copy<'account-closing'> = {
@@ -423,6 +437,84 @@ const accountantInvite: Copy<'accountant-invite'> = {
     ],
     action: { label: 'Accept the invite', href: link },
     outro: [['Accept with an account on this address, or create one from the invite. If you weren’t expecting it, ignore this email.']],
+  }),
+};
+
+/**
+ * MUT-618 (ADR-256 D8): the code in the subject too, where iOS Mail's one-time-code detection and a phone's
+ * notification find it. No link: a code is typed, never tapped (magic links are out of scope).
+ */
+const signInCode: Copy<'sign-in-code'> = {
+  en: ({ code, validMinutes }) => ({
+    subject: `${code} is your MTB3A sign-in code`,
+    preheader: `It works once, for ${enMinutes(validMinutes)}.`,
+    headline: 'Your sign-in code',
+    intro: [[`Enter this code to sign in to MTB3A. It works once and expires in ${enMinutes(validMinutes)}.`]],
+    code,
+    outro: [["If you didn't ask for this, ignore it; your password hasn't changed."], ['Never share this code. MTB3A will never ask you for it.']],
+  }),
+  ar: ({ code, validMinutes }) => ({
+    subject: `رمز تسجيل الدخول إلى متابعة: ${code}`,
+    preheader: `يعمل مرة واحدة، لمدة ${arMinutes(validMinutes)}.`,
+    headline: 'رمز تسجيل الدخول',
+    intro: [[`أدخل هذا الرمز لتسجيل الدخول إلى متابعة. يعمل مرة واحدة وتنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
+    code,
+    outro: [['إذا لم تطلب ذلك، فتجاهل هذه الرسالة؛ لم تتغيّر كلمة مرورك.'], ['لا تشارك هذا الرمز مع أحد. لن تطلبه منك متابعة أبدًا.']],
+  }),
+};
+
+/** MUT-710 (ADR-274 D5): the second step's code, in the subject too for one-time-code detection. Never a link. */
+const twoFactorCode: Copy<'two-factor-code'> = {
+  en: ({ code, validMinutes }) => ({
+    subject: `${code} is your MTB3A two-step code`,
+    preheader: `It works once, for ${enMinutes(validMinutes)}.`,
+    headline: 'Your two-step code',
+    intro: [[`Your password was just entered. Enter this code to finish signing in to MTB3A. It works once and expires in ${enMinutes(validMinutes)}.`]],
+    code,
+    outro: [["If you didn't just sign in, someone may know your password: change it right away."], ['Never share this code. MTB3A will never ask you for it.']],
+  }),
+  ar: ({ code, validMinutes }) => ({
+    subject: `رمز التحقق بخطوتين في متابعة: ${code}`,
+    preheader: `يعمل مرة واحدة، لمدة ${arMinutes(validMinutes)}.`,
+    headline: 'رمز التحقق بخطوتين',
+    intro: [[`أُدخلت كلمة مرورك للتو. أدخل هذا الرمز لإكمال تسجيل الدخول إلى متابعة. يعمل مرة واحدة وتنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
+    code,
+    outro: [['إذا لم تسجّل الدخول للتو، فقد يعرف أحدٌ كلمة مرورك: غيّرها فورًا.'], ['لا تشارك هذا الرمز مع أحد. لن تطلبه منك متابعة أبدًا.']],
+  }),
+};
+
+const TWO_FACTOR_EN = {
+  enabled: { subject: 'Two-step sign-in is on for your MTB3A account', headline: 'Two-step sign-in is on', body: 'Two-step sign-in was just turned on for your MTB3A account, and your other devices were signed out.' },
+  switched: { subject: 'Your MTB3A two-step sign-in method changed', headline: 'Your two-step method changed', body: 'The second step for your MTB3A account was just changed, and your other devices were signed out.' },
+  disabled: { subject: 'Two-step sign-in is off for your MTB3A account', headline: 'Two-step sign-in is off', body: 'Two-step sign-in was just turned off for your MTB3A account. Signing in now needs only your password or passkey.' },
+  recovery_codes: { subject: 'New MTB3A recovery codes were made', headline: 'New recovery codes', body: 'New recovery codes were just made for your MTB3A account. The old ones no longer work.' },
+  reset: { subject: 'Two-step sign-in was reset on your MTB3A account', headline: 'Two-step sign-in was reset', body: 'At your request, our support team turned off two-step sign-in for your MTB3A account and signed out every device.' },
+} as const;
+const TWO_FACTOR_AR = {
+  enabled: { subject: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين مفعّل', body: 'تم للتو تفعيل التحقق بخطوتين لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
+  switched: { subject: 'تغيّرت طريقة التحقق بخطوتين في متابعة', headline: 'تغيّرت طريقة الخطوة الثانية', body: 'تم للتو تغيير الخطوة الثانية لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
+  disabled: { subject: 'تم إيقاف التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين متوقف', body: 'تم للتو إيقاف التحقق بخطوتين لحسابك في متابعة. يكفي الآن لتسجيل الدخول كلمة المرور أو مفتاح المرور.' },
+  recovery_codes: { subject: 'أُنشئت رموز استرداد جديدة في متابعة', headline: 'رموز استرداد جديدة', body: 'أُنشئت للتو رموز استرداد جديدة لحسابك في متابعة. الرموز القديمة لم تعد تعمل.' },
+  reset: { subject: 'أُعيد ضبط التحقق بخطوتين لحسابك في متابعة', headline: 'أُعيد ضبط التحقق بخطوتين', body: 'بناءً على طلبك، أوقف فريق الدعم التحقق بخطوتين لحسابك في متابعة وسجّل خروج كل الأجهزة.' },
+} as const;
+
+/** MUT-710 (D8, D9): two-step sign-in changed on the account. */
+const twoFactorChanged: Copy<'two-factor-changed'> = {
+  en: ({ change, method, signInLink }) => ({
+    subject: TWO_FACTOR_EN[change].subject,
+    preheader: "If this was you, there's nothing to do.",
+    headline: TWO_FACTOR_EN[change].headline,
+    intro: [[TWO_FACTOR_EN[change].body], [`Method: ${method === 'totp' ? 'authenticator app' : 'code by email'}.`], ['If this was you, there is nothing else to do.']],
+    action: { label: 'Sign in', href: signInLink },
+    outro: [["If this wasn't you, set a new password from the sign-in page right away, then reply to this email so we can help."]],
+  }),
+  ar: ({ change, method, signInLink }) => ({
+    subject: TWO_FACTOR_AR[change].subject,
+    preheader: 'إن كنت أنت، فلا حاجة لأي إجراء.',
+    headline: TWO_FACTOR_AR[change].headline,
+    intro: [[TWO_FACTOR_AR[change].body], [`الطريقة: ${method === 'totp' ? 'تطبيق المصادقة' : 'رمز بالبريد الإلكتروني'}.`], ['إذا كنت أنت من قام بذلك، فلا حاجة لأي إجراء آخر.']],
+    action: { label: 'تسجيل الدخول', href: signInLink },
+    outro: [['إذا لم تكن أنت، عيّن كلمة مرور جديدة من صفحة تسجيل الدخول فورًا، ثم ردّ على هذه الرسالة لنساعدك.']],
   }),
 };
 
@@ -577,12 +669,14 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
  * after a paid plan ended. The records are still there; the first month back costs the list price less the come-back
  * coupon's amount. Only the subject differs between the two stages.
  */
+/** Communications Law s.30A: an advertisement's subject opens with this word (Hebrew, whatever the mail's language). */
+export const ADVERTISEMENT_LABEL = 'פרסומת';
 const comebackOffer: Copy<'comeback-offer'> = {
-  en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink }) => {
+  en: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
     const money = (amount: number) => formatMinor(amount, currency);
     const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
     return {
-      subject: stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`,
+      subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'Your MTB3A records are still here' : `Come back to MTB3A for ${first} your first month`}`,
       preheader: `Your first month back is ${first}, then ${month} a month.`,
       headline: 'Your records are still here',
       intro: [
@@ -595,14 +689,17 @@ const comebackOffer: Copy<'comeback-offer'> = {
       ],
       action: { label: 'Come back to MTB3A', href: subscribeLink },
       outro: [["The price applies on its own when you subscribe; there's no code to enter. This offer is one time only."]],
+      // ADR-279: a promotional mail always offers its way out
+      optOut: { text: "Don't want offers from MTB3A?", label: 'Unsubscribe.', href: offLink, after: 'Emails about your account still reach you.' },
+      sender: 'Sent by Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel. Contact: info@mtb3a.com.',
     };
   },
-  ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink }) => {
+  ar: ({ stage, firstMonth, listMonth, firstYear, listYear, currency, subscribeLink, offLink }) => {
     // Isolated so each amount reads left to right inside Arabic (ADR-101).
     const money = (amount: number) => `\u2068${formatMinor(amount, currency)}\u2069`;
     const [first, month, year, yearly] = [money(firstMonth), money(listMonth), money(firstYear), money(listYear)] as const;
     return {
-      subject: stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`,
+      subject: `${ADVERTISEMENT_LABEL}: ${stage === 'day-30' ? 'سجلاتك في متابعة ما زالت هنا' : `عُد إلى متابعة بـ ${first} لشهرك الأول`}`,
       preheader: `شهرك الأول عند العودة بـ ${first}، ثم ${month} شهريًا.`,
       headline: 'سجلاتك ما زالت هنا',
       intro: [
@@ -615,8 +712,160 @@ const comebackOffer: Copy<'comeback-offer'> = {
       ],
       action: { label: 'عُد إلى متابعة', href: subscribeLink },
       outro: [['يُطبَّق السعر تلقائيًا عند الاشتراك، دون أي رمز. هذا العرض مرة واحدة فقط.']],
+      optOut: { text: 'لا تريد عروضًا من متابعة؟', label: 'ألغِ الاشتراك.', href: offLink, after: 'وتبقى الرسائل المتعلقة بحسابك تصلك.' },
+      sender: 'أرسلتها Narabnd Studio Ltd (نارابند ستوديو م.ض.)، شارع الزهراء 18، القدس، إسرائيل. للتواصل: info@mtb3a.com.',
     };
   },
+};
+
+/**
+ * MUT-535: a canonical decimal in its currency, as Intl writes it in English (₪12,400, $1,234.50, JOD 1,234.500):
+ * whole amounts without a fraction, otherwise the currency's own digits. Arabic mails isolate it (ADR-101).
+ */
+function summaryMoney(m: MailMoney): string {
+  const digits = new Intl.NumberFormat('en-US', { style: 'currency', currency: m.currency }).resolvedOptions().maximumFractionDigits ?? 2;
+  const whole = /^-?\d+(\.0+)?$/.test(m.amount);
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: m.currency, minimumFractionDigits: whole ? 0 : digits, maximumFractionDigits: digits }).format(Number(m.amount));
+}
+
+const isolate = (text: string) => `⁨${text}⁩`;
+
+/** The month's name (Levantine in Arabic, ADR-253), with the year when asked. */
+function monthName(month: { year: number; month: number }, locale: UserLocale, withYear: boolean): string {
+  return new Intl.DateTimeFormat(locale === 'ar' ? ARABIC_LOCALE : 'en-US', { month: 'long', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(new Date(Date.UTC(month.year, month.month - 1, 1)));
+}
+
+function enEntries(n: number): string {
+  return n === 1 ? '1 entry' : `${n} entries`;
+}
+
+/** Arabic counted noun: قيد واحد، قيدان، 3–10 قيود، 11+ قيدًا. */
+function arEntries(n: number): string {
+  if (n === 1) return 'قيد واحد';
+  if (n === 2) return 'قيدان';
+  return n <= 10 ? `${n} قيود` : `${n} قيدًا`;
+}
+
+/**
+ * MUT-535 (plan §7a, copy approved by Basel 2026-11-21; ADR-259 overrides ADR-159 §5 for this mail): last month in
+ * the person's books, one panel per profile, per currency and never converted.
+ */
+const monthlySummary: Copy<'monthly-summary'> = {
+  en: ({ month, asOf, profiles, yearly, offLink }) => {
+    const amounts = (rows: MailMoney[]) => rows.map(summaryMoney).join(' · ');
+    const name = monthName(month, 'en', false);
+    const panel = (p: MailSummaryProfile) => ({
+      title: p.name,
+      rows: [
+        { label: `Came in during ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'Nothing recorded' },
+        // MUT-660: invoicing profiles only.
+        ...(p.invoiceSplit
+          ? [
+              { label: 'Invoice income', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'None' },
+              { label: 'Not for invoice', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'None' },
+            ]
+          : []),
+        { label: 'Still owed', value: p.owed.length > 0 ? amounts(p.owed) : 'Nothing owed' },
+        { label: 'Overdue', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${enEntries(p.overdueCount)})` : 'Nothing overdue' },
+      ],
+      link: { label: `Open ${p.name}`, href: p.link },
+    });
+    return {
+      subject: `Your ${name} in MTB3A`,
+      preheader: "What came in, what's still owed, and what's overdue.",
+      headline: `${monthName(month, 'en', true)} at a glance`,
+      intro: [["Here's last month in your books, as MTB3A shows it today."]],
+      sections: profiles.map(panel),
+      ...(yearly ? { secondary: { label: `Switch to yearly and save ${summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) })} a year`, href: yearly.link } } : {}),
+      outro: [[`Amounts stay in the currency you recorded them in; nothing is converted. Still owed and overdue are as of ${mailDay(asOf, 'en')}.`]],
+      optOut: { text: "Don't want this monthly email?", label: 'Turn it off.', href: offLink, after: 'You can turn it back on in You › Account.' },
+    };
+  },
+  ar: ({ month, asOf, profiles, yearly, offLink }) => {
+    // Isolated so each amount and each profile's name reads in its own direction inside Arabic (ADR-101).
+    const amounts = (rows: MailMoney[]) => rows.map((m) => isolate(summaryMoney(m))).join(' · ');
+    const name = monthName(month, 'ar', false);
+    const panel = (p: MailSummaryProfile) => ({
+      title: p.name,
+      rows: [
+        { label: `المستلَم في ${name}`, value: p.cameIn.length > 0 ? amounts(p.cameIn) : 'لا شيء مسجّل' },
+        ...(p.invoiceSplit
+          ? [
+              { label: 'دخل مفوتر', value: p.invoiceSplit.invoiceIncome.length > 0 ? amounts(p.invoiceSplit.invoiceIncome) : 'لا شيء' },
+              { label: 'خارج الفوترة', value: p.invoiceSplit.notForInvoice.length > 0 ? amounts(p.invoiceSplit.notForInvoice) : 'لا شيء' },
+            ]
+          : []),
+        { label: 'المستحق', value: p.owed.length > 0 ? amounts(p.owed) : 'لا شيء مستحق' },
+        { label: 'المتأخر', value: p.overdue.length > 0 ? `${amounts(p.overdue)} (${arEntries(p.overdueCount)})` : 'لا شيء متأخر' },
+      ],
+      link: { label: `افتح ${isolate(p.name)}`, href: p.link },
+    });
+    return {
+      subject: `${name} في متابعة`,
+      preheader: 'ما وصلك، وما زال مستحقًا لك، وما تأخّر.',
+      headline: `${monthName(month, 'ar', true)} باختصار`,
+      intro: [['هذا ما جرى في دفاترك الشهر الماضي، كما تعرضه متابعة اليوم.']],
+      sections: profiles.map(panel),
+      ...(yearly ? { secondary: { label: `انتقل إلى الاشتراك السنوي ووفّر ${isolate(summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) }))} في السنة`, href: yearly.link } } : {}),
+      outro: [[`تبقى المبالغ بالعملة التي سجّلتها بها، دون أي تحويل. المستحق والمتأخر كما هما في ${mailDay(asOf, 'ar')}.`]],
+      optOut: { text: 'لا تريد هذه الرسالة الشهرية؟', label: 'أوقفها.', href: offLink, after: 'ويمكنك إعادتها من أنت › الحساب.' },
+    };
+  },
+};
+
+/**
+ * MUT-571 AC3: the Tax Authority asks the business owner to approve the connection again every 90 days. Ten days
+ * before it ends, then once it has ended. Formal Arabic (MSA). The day count only: no date (ADR-159 §5).
+ */
+const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
+  en: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `Your MTB3A connection to the Tax Authority ends within ${enDays(daysLeft)}`,
+          preheader: 'Connect again so invoices keep receiving allocation numbers.',
+          headline: 'Approve the Tax Authority connection again',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority ends within ${enDays(daysLeft)}.`],
+            ['The Tax Authority asks the business owner to approve it again every 90 days. It takes a minute: sign in on the Tax Authority’s site and approve.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Once it ends, invoices that need an allocation number wait until you connect again.']],
+        }
+      : {
+          subject: 'Your MTB3A connection to the Tax Authority has ended',
+          preheader: 'Connect again so invoices receive allocation numbers again.',
+          headline: 'The Tax Authority connection has ended',
+          intro: [
+            [`The connection between “${profileName}” and the Tax Authority has ended.`],
+            ['Invoices that need an allocation number wait until you connect again. Sign in on the Tax Authority’s site and approve; it takes a minute.'],
+          ],
+          action: { label: 'Connect again', href: link },
+          outro: [['Reply to this email if you need help.']],
+        },
+  ar: ({ stage, daysLeft, profileName, link }) =>
+    stage === 'soon'
+      ? {
+          subject: `ينتهي ربط متابعة بسلطة الضرائب خلال ${arDays(daysLeft)}`,
+          preheader: 'أعد الربط لتواصل الفواتير الحصول على أرقام التخصيص.',
+          headline: 'جدّد الموافقة على الربط بسلطة الضرائب',
+          intro: [
+            [`ينتهي ربط ملف «${profileName}» بسلطة الضرائب خلال ${arDays(daysLeft)}.`],
+            ['تطلب سلطة الضرائب من صاحب العمل تجديد موافقته كل 90 يومًا. لا يستغرق ذلك سوى دقيقة: سجّل الدخول في موقع سلطة الضرائب ووافق.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['بعد انتهائه، تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط.']],
+        }
+      : {
+          subject: 'انتهى ربط متابعة بسلطة الضرائب',
+          preheader: 'أعد الربط لتحصل الفواتير على أرقام التخصيص من جديد.',
+          headline: 'انتهى الربط بسلطة الضرائب',
+          intro: [
+            [`انتهى ربط ملف «${profileName}» بسلطة الضرائب.`],
+            ['تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط. سجّل الدخول في موقع سلطة الضرائب ووافق، ولا يستغرق ذلك سوى دقيقة.'],
+          ],
+          action: { label: 'إعادة الربط', href: link },
+          outro: [['ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+        },
 };
 
 export const COPY: { [T in MailTemplateId]: Copy<T> } = {
@@ -639,4 +888,9 @@ export const COPY: { [T in MailTemplateId]: Copy<T> } = {
   'card-failed-reminder': cardFailedReminder,
   'comeback-offer': comebackOffer,
   'accountant-invite': accountantInvite,
+  'sign-in-code': signInCode,
+  'two-factor-code': twoFactorCode,
+  'two-factor-changed': twoFactorChanged,
+  'monthly-summary': monthlySummary,
+  'tax-authority-reconnect': taxAuthorityReconnect,
 };

@@ -1,3 +1,5 @@
+import { PERSON_OR_MALAFAT } from './security.js';
+import type { DelegatedVia } from '../auth/delegation.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv } from '../auth/middleware.js';
@@ -39,14 +41,19 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
       path: '/v1/me',
       tags: ['Sessions'],
       summary: 'The signed-in person and the hosted profiles they may open',
-      security: [{ session: [] }, { deviceSession: [] }],
+      description: 'MUT-593: under a delegated token (Malafat acting as the person), only the profile its Malafat tenant names, and nothing of the person’s own (no client books, billing standing or operator flag).',
+      security: PERSON_OR_MALAFAT,
       responses: {
         200: { description: 'Me', content: { 'application/json': { schema: MeSchema } } },
         401: errorResponse('No valid session'),
         403: errorResponse('PRINCIPAL_NOT_ACCEPTED'),
       },
     }),
-    async (c) => c.json(await buildMe(store, c.get('identity').user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan')), 200),
+    async (c) => {
+      const { user, via } = c.get('identity');
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      return c.json(via ? delegatedMe(me, via) : me, 200);
+    },
   );
 
   return app;
@@ -71,6 +78,7 @@ export async function buildMe(
   maxOwnedProfiles = MAX_OWNED_PROFILES,
   accountantAccess = false,
   accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
+  twoFactorIssuingGate = false,
 ) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
@@ -99,7 +107,7 @@ export async function buildMe(
   // the caller created (MUT-182), then the caller's personal profile last. The portal opens profiles[0].
   const rank = (p: { isPersonalDefault: boolean; owned: boolean }) => (p.isPersonalDefault ? 2 : p.owned ? 1 : 0);
   profiles.sort((a, b) => rank(a) - rank(b));
-  const [ownedProfiles, termsNow, passkeyPrompt, features, clients] = await Promise.all([
+  const [ownedProfiles, termsNow, passkeyPrompt, features, clients, passkeyCount, twoFactor] = await Promise.all([
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
@@ -107,6 +115,10 @@ export async function buildMe(
     // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`. MUT-575: ended ones too,
     // until removed, so the clients show the tab while any row is left. No stat queries here (GET /v1/clients has them).
     accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
+    // MUT-596: only when it decides ownSignIn (a password the person never chose).
+    user.passwordChosen ? 0 : store.passkeys.listByUser(user.id).then((keys) => keys.length),
+    // MUT-710 (D8): three small reads by the person's id.
+    twoFactorStateOf(store, user.id, twoFactorIssuingGate),
   ]);
   return {
     user: {
@@ -115,6 +127,9 @@ export async function buildMe(
       displayName: user.displayName,
       locale: user.locale,
       malafatSuggestions: resolveMalafatSuggestions(user.malafatSuggestions),
+      // MUT-596: false for an account Sign in with Malafat created, until the person adds a passkey or their own password.
+      ownSignIn: user.passwordChosen || passkeyCount > 0,
+      ownPassword: user.passwordChosen,
       trialPrompt: resolveTrialPrompt(user.trialPrompt),
       // MUT-370 (D3, D9): the server decides whether to suggest a passkey; null where it offers none.
       passkeyPrompt: passkeyPrompt && passkeyPromptView(passkeyPrompt.prompt, passkeyPrompt.passkeys, passkeysAt!, user.closure !== null),
@@ -125,6 +140,7 @@ export async function buildMe(
       features,
       // MUT-459: only an operator's /v1/me names it; the console's link and pages hang off this.
       ...(user.operatorAt ? { operator: true as const } : {}),
+      twoFactor,
     },
     profiles,
     limits: { ownedProfiles, maxOwnedProfiles },
@@ -135,8 +151,25 @@ export async function buildMe(
   };
 }
 
+/**
+ * MUT-593 (ADR-254 D9): Me as Malafat sees it when acting as the person — the tenant's profile alone, and none of the
+ * person's own standing: no accountant client books, no billing standing (their own profiles' bills), no operator flag.
+ */
+function delegatedMe(me: Awaited<ReturnType<typeof buildMe>>, via: DelegatedVia): Awaited<ReturnType<typeof buildMe>> {
+  const { operator, ...user } = me.user;
+  void operator;
+  return { user, profiles: me.profiles.filter((p) => p.id === via.organizationId), limits: me.limits, currencies: me.currencies, terms: me.terms, billingStanding: null };
+}
+
 /** MUT-324: the current version, and whether the person's latest acceptance covers it (D10). */
 async function termsStatus(store: LedgerStore, userId: string, terms: CurrentTerms) {
   const latest = await store.users.latestTermsAcceptance(userId);
   return { version: terms.version, accepted: termsAccepted(latest?.version ?? null, terms.version) };
+}
+
+/** MUT-710 (ADR-274 D8): Me's and GET /v1/me/two-factor's view of the person's two-step sign-in. */
+export async function twoFactorStateOf(store: LedgerStore, userId: string, issuingGate: boolean): Promise<{ enabled: boolean; method: 'totp' | 'email' | null; recoveryCodesLeft: number; requiredForIssuing: boolean }> {
+  // With the issuing gate off (TWO_FACTOR_ISSUING_GATE_ENABLED), nothing requires it, so it can always be turned off.
+  const [state, recoveryCodesLeft, requiredForIssuing] = await Promise.all([store.twoFactor.get(userId), store.twoFactor.recoveryCodesLeft(userId), issuingGate ? store.twoFactor.ownsIssuingProfile(userId) : false]);
+  return { enabled: state !== null, method: state?.method ?? null, recoveryCodesLeft: state ? recoveryCodesLeft : 0, requiredForIssuing };
 }

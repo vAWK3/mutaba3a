@@ -32,7 +32,7 @@ describe('MUT-527 the account list', () => {
     minutes(h, 1);
     const active = await named(h, 'active@studio.example', 'Active');
     await passwordSignIn(h, active.email, active.password);
-    expect((await h.app.request(`/admin/v1/users/${active.id}/features/receipt_reading`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
+    expect((await h.app.request(`/admin/v1/users/${active.id}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
 
     const res = await get(h, LIST, op.token);
     expect(res.status).toBe(200);
@@ -45,7 +45,7 @@ describe('MUT-527 the account list', () => {
       status: 'ACTIVE',
       operator: false,
       lastSignInAt: h.clock.now.toISOString(),
-      features: ['receipt_reading'],
+      features: ['invoicing'],
     });
     expect(body.data[1]).toMatchObject({ id: op.id, operator: true });
     expect(body.data[3]).toMatchObject({ lastSignInAt: null, features: [] });
@@ -125,14 +125,14 @@ describe('MUT-527 the operator’s own features (E10 amendment)', () => {
   it('switches a feature on and off on their own account with the step-up, audited like anyone’s', async () => {
     const h = harness();
     const op = await operator(h);
-    const on = await send(h, 'PUT', featurePath(op.id, 'receipt_reading'), op.token);
+    const on = await send(h, 'PUT', featurePath(op.id, 'invoicing'), op.token);
     expect(on.status).toBe(200);
-    expect(await read(on)).toMatchObject({ feature: 'receipt_reading', granted: true });
-    expect(await h.store.features.activeFor(op.id)).toEqual(['receipt_reading']);
+    expect(await read(on)).toMatchObject({ feature: 'invoicing', granted: true });
+    expect(await h.store.features.activeFor(op.id)).toEqual(['invoicing']);
 
-    const off = await send(h, 'DELETE', featurePath(op.id, 'receipt_reading'), op.token);
+    const off = await send(h, 'DELETE', featurePath(op.id, 'invoicing'), op.token);
     expect(off.status).toBe(200);
-    expect(await read(off)).toMatchObject({ feature: 'receipt_reading', revoked: true });
+    expect(await read(off)).toMatchObject({ feature: 'invoicing', revoked: true });
     expect(await h.store.features.activeFor(op.id)).toEqual([]);
 
     const audit = (await h.store.audit.list(await personalOf(h, op.id), {}, { limit: 100, cursor: null })).items
@@ -140,8 +140,8 @@ describe('MUT-527 the operator’s own features (E10 amendment)', () => {
       .map((e) => [e.action, e.actorId, e.entityId, e.metadata])
       .sort();
     expect(audit).toEqual([
-      ['user.feature_granted', op.id, op.id, { feature: 'receipt_reading' }],
-      ['user.feature_revoked', op.id, op.id, { feature: 'receipt_reading' }],
+      ['user.feature_granted', op.id, op.id, { feature: 'invoicing' }],
+      ['user.feature_revoked', op.id, op.id, { feature: 'invoicing' }],
     ]);
   });
 
@@ -149,7 +149,7 @@ describe('MUT-527 the operator’s own features (E10 amendment)', () => {
     const h = harness();
     const op = await operator(h);
     for (const method of ['PUT', 'DELETE']) {
-      const res = await send(h, method, featurePath(op.id, 'receipt_reading'), op.passwordToken);
+      const res = await send(h, method, featurePath(op.id, 'invoicing'), op.passwordToken);
       expect([method, res.status, (await read(res)).error.code]).toEqual([method, 403, 'RECENT_SIGN_IN_REQUIRED']);
     }
     expect(await h.store.features.activeFor(op.id)).toEqual([]);

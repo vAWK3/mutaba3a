@@ -20,8 +20,8 @@ import {
 } from '../schemas.js';
 import { serializeConversion } from '../serializers.js';
 import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { PERSON_OR_MALAFAT } from './security.js';
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const noContent = { 204: { description: 'Done' } } as const;
 
@@ -54,7 +54,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Log a currency conversion',
       description:
         'Two legs, each in its own currency and fractional digits. toCurrency must differ from currency. occurredOn may not be later than today (ADR-038) and not more than ten years before it (MUT-227); backdated is accepted.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('conversions:write'), idempotent(store, 'conversions.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateConversionRequestSchema) },
       responses: { 201: { description: 'Logged', content: { 'application/json': { schema: ConversionSchema } } }, ...validationResponse, ...errorResponses },
@@ -83,7 +83,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/conversions',
       tags: ['Conversions'],
       summary: 'List conversions, newest first',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('conversions:read')] as const,
       request: { query: ListConversionsQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ConversionPageSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
@@ -104,7 +104,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/conversions/{conversionId}',
       tags: ['Conversions'],
       summary: 'A single conversion',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('conversions:read')] as const,
       request: { params: ConversionIdParamSchema },
       responses: { 200: { description: 'The conversion', content: { 'application/json': { schema: ConversionSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -123,7 +123,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       summary: 'Change a conversion (optimistic, If-Match)',
       description:
         'Any field. A currency comes with its own amount (422 AMOUNT_REQUIRED), each amount is read in the merged currency\'s digits, and the merged legs must differ (422 SAME_CURRENCY). occurredOn, when changed, may not be later than today and not more than ten years before it (MUT-227). null clears the notes.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('conversions:write'), ifMatch()] as const,
       request: { params: ConversionIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateConversionRequestSchema) },
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: ConversionSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
@@ -152,7 +152,7 @@ export function conversionRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       tags: ['Conversions'],
       summary: 'Delete a conversion (soft)',
       description: '204 again for a conversion already deleted; 404 for an id this profile never had.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('conversions:write')] as const,
       request: { params: ConversionIdParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...validationResponse, ...errorResponses },

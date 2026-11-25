@@ -35,6 +35,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   // B: text that reads left to right in any language
   'src/hosted/pages/you/YouPage.tsx': { ltr: 1, auto: 1 }, // MUT-425: the account's email; the person's name (D)
   'src/hosted/shell/YouIsland.tsx': { auto: 1 },
+  'src/hosted/pages/home/HomeInOut.tsx': { auto: 1 }, // MUT-657: a category's name (D)
+  'src/hosted/pages/home/OverdueGroup.tsx': { auto: 1 }, // MUT-657: a client's name (D)
   // MUT-562: the Client books desk, the accept-invite page and a share link's page (names, emails, months, PINs)
   'src/hosted/components/EntriesTable.tsx': { auto: 2 }, // an entry's title and category (D)
   'src/hosted/components/PinBoxes.tsx': { ltr: 1 }, // a PIN's digits run left to right in both languages (B)
@@ -47,8 +49,23 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/expenseForm/ExpenseAllocationNumberRow.tsx': { ltr: 1 }, // MUT-426: the open profile's name on the island (D)
   'src/hosted/pages/you/YouProfiles.tsx': { auto: 1 }, // MUT-425: each profile's name (D)
   'src/hosted/components/ProfilesManageDrawer.tsx': { ltr: 1, auto: 1 }, // currency code; the profile name (D)
-  'src/hosted/components/MoveReceiptDrawer.tsx': { auto: 1 }, // MUT-503: each profile's name in the Move drawer (D)
+  'src/hosted/components/MoveToProfileDrawer.tsx': { auto: 1 }, // MUT-503/589: each profile's name in the Move drawer (D)
+  'src/hosted/components/MoveExpenseDrawer.tsx': { auto: 2 }, // MUT-589: the expense's title or vendor, and a change's value (D)
   'src/hosted/components/ProfileEditForm.tsx': { ltr: 1, auto: 1 }, // IANA timezone; the name input (D)
+  'src/hosted/components/ClientBusinessDetails.tsx': { ltr: 2, auto: 2 }, // MUT-642: the VAT number (B); the address, often Hebrew in an en/ar page (D)
+  // MUT-646: the invoicing setup. Numbers, phone and email (B); names, addresses, bank details and footer, in any script (D)
+  'src/hosted/pages/invoicing/InvoicingSteps.tsx': { ltr: 5, auto: 5 },
+  // MUT-646: the letterhead reads in the document's language, not the portal's: English left to right, Hebrew and Arabic right to left
+  'src/hosted/pages/invoicing/Letterhead.tsx': { ltr: 1, rtl: 1 },
+  // MUT-569: the file names (OPENFRMT…zip, INI.TXT, BKMVDATA.zip, report.html) read left to right.
+  'src/hosted/pages/invoicing/UniformFileExport.tsx': { ltr: 4 },
+  // MUT-570: the issue drawer. Numbers, dates and the reference (B); line descriptions and notes in any script (D)
+  // MUT-643: + the refund reference.
+  'src/hosted/components/IssueDocumentDrawer.tsx': { ltr: 5, auto: 2 },
+  // MUT-570: issued documents. The allocation number (B); client names, in any script (D)
+  'src/hosted/pages/views/IssuedDocuments.tsx': { ltr: 1, auto: 3 }, // MUT-662: + the cancel reason (D)
+  'src/hosted/components/AttachExternalInvoiceDrawer.tsx': { ltr: 3 }, // MUT-647: the invoice's number, date and total (B)
+  'src/hosted/components/ManualAllocationPanel.tsx': { ltr: 2 }, // MUT-711: the invoice facts to copy (number, date, amount, VAT id) and the 9-digit number field (B)
   'src/hosted/components/ProfileOwnersSection.tsx': { ltr: 2, auto: 1 }, // MUT-373: an owner's email and the support address; their name (D)
   'src/hosted/components/SharingEntryRow.tsx': { auto: 1 }, // MUT-561: the open profile's name under "Share with your accountant" (D)
   'src/hosted/pages/sharing/AccountantsColumn.tsx': { ltr: 2, auto: 1 }, // MUT-561: an accountant's email, or the email as the label; their name (D)
@@ -57,14 +74,22 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/components/ProfileCreateDrawer.tsx': { auto: 1 }, // the name input (D)
   'src/hosted/components/TimezoneChoice.tsx': { ltr: 2 }, // timezone select and readout (MUT-368: shared by New profile and signup)
   'src/hosted/pages/views/DocumentsList.tsx': { ltr: 1 }, // invoice number
+  'src/hosted/pages/views/DocumentsDuePage.tsx': { auto: 1 }, // MUT-660: the client's name heading a group
+  'src/hosted/pages/home/ToIssueGroup.tsx': { auto: 1 }, // MUT-660: a client's name
   'src/hosted/pages/views/PaymentsList.tsx': { ltr: 1 }, // payment number
   'src/hosted/pages/auth/SignInPage.tsx': { ltr: 2 }, // email, password
   'src/hosted/pages/auth/SetupPage.tsx': { ltr: 2, auto: 1 }, // account email, password; the new account's name (D, MUT-368)
   'src/hosted/pages/auth/EmailLinkForm.tsx': { ltr: 1 }, // the email on /signup and /recover (MUT-368)
+  'src/hosted/pages/auth/SignInCodeStep.tsx': { ltr: 1 }, // the emailed sign-in code's digits (MUT-618)
   'src/hosted/components/ChangePasswordDrawer.tsx': { ltr: 2 }, // passwords
   // MUT-434: the MCP address and the Claude Code command read left to right; agents' self-declared names are auto
   'src/hosted/components/CopyField.tsx': { ltr: 1 },
   'src/hosted/components/ConnectClaudeDrawer.tsx': { ltr: 1, auto: 2 },
+  // MUT-596: the office address and the MTB3A password (B); the office's name, a firm's name, a member's name (D)
+  'src/hosted/pages/auth/malafat/MalafatOfficePage.tsx': { ltr: 1 },
+  'src/hosted/pages/auth/malafat/MalafatReturnPage.tsx': { ltr: 1, auto: 1 },
+  'src/hosted/components/ConnectedAppsDrawer.tsx': { auto: 1 },
+  'src/hosted/components/MalafatMembersSection.tsx': { auto: 1 },
   'src/hosted/pages/connect/ConsentPage.tsx': { ltr: 1, auto: 2 }, // the redirect host; the client's name
   'src/hosted/pages/operator/OperatorAccountsPage.tsx': { ltr: 1, auto: 2 }, // MUT-527: each row's address; the search field (an address or a name) and each row's name
   'src/hosted/pages/operator/OperatorAccountPage.tsx': { ltr: 1, auto: 2 }, // MUT-461: the account's address; its name and each profile's name

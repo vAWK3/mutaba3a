@@ -7,6 +7,9 @@ import { CategoryFilter, ClientFilter, DateFilter, FilterBar } from '../../compo
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ExpenseDrawer } from '../../components/ExpenseDrawer';
+import { MoveExpenseDrawer } from '../../components/MoveExpenseDrawer';
+import { hasOtherProfiles, useExpenseMovedToast } from '../../components/useMovedToast';
+import type { HostedProfile } from '../../api/client';
 import { AnchoredNote, SavedNotice } from '../../components/SavedNotice';
 import { useSavedFlashRows } from '../../../lib/useSavedFlash';
 import { isNarrowed, type ExpensesPageSearch } from '../../data/filters';
@@ -15,9 +18,11 @@ import { useAnchoredList } from '../../data/anchoredList';
 import { useExpenseCategories, useExpenses } from '../../data/expenseQueries';
 import { DecimalAmount } from '../../format/DecimalAmount';
 import { formatDay } from '../../format/dates';
-import { useProfile, useWriteGate } from '../../session/me';
+import { useMe, useProfile, useWriteGate } from '../../session/me';
+import { useIsLocalMode } from '../../session/mode';
 import { saveFeedbackPreset } from '../../../lib/motion/saveFeedbackPreset';
 import { canAddClient } from '../../data/incomeAffordances';
+import { mayMoveExpensesFrom } from '../../data/profileRules';
 import { NoMatch, PageHeader, ShowMore } from './shared';
 import { SectionTabs } from '../../components/SectionTabs';
 import { useExpensesTabs } from './ExpenseGroupsList';
@@ -72,6 +77,12 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const categoriesQuery = useExpenseCategories(profile.id);
   const customers = useCustomerDirectory(profile.id);
   const tabs = useExpensesTabs();
+  const me = useMe();
+  const local = useIsLocalMode();
+  const movedToast = useExpenseMovedToast();
+  // MUT-589: Move only for an owner of a profile Malafat doesn't feed, where there is somewhere to move to and this
+  // profile may be written; never signed out (no library). Anyone else sees no Move at all.
+  const canMove = writable && !local && mayMoveExpensesFrom(profile) && hasOtherProfiles(me, profile.id);
 
   const categoriesById = useMemo(
     () => new Map((categoriesQuery.data ?? []).map((c) => [c.id, c])),
@@ -128,6 +139,13 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
   const openEdit = (row: ExpenseRow) => setFilters({ ...filters, expense: row.id, newExpense: undefined });
   const closeDrawer = () => setFilters({ ...filters, expense: undefined, newExpense: undefined });
   // An anchored list can't start at a record that no longer exists (the server would 404): drop the anchor with it.
+  const openMove = (id: string) => setFilters({ ...filters, expense: undefined, newExpense: undefined, moveExpense: id });
+  const closeMove = () => setFilters({ ...filters, moveExpense: undefined });
+  const afterMove = (target: HostedProfile) => {
+    const id = filters.moveExpense;
+    setFilters({ ...filters, moveExpense: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
+    if (id) movedToast(target, id);
+  };
   const afterDelete = (id: string) =>
     setFilters({ ...filters, expense: undefined, newExpense: undefined, anchor: filters.anchor === id ? undefined : filters.anchor });
 
@@ -156,7 +174,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
         data={anchored.staleAnchor ? undefined : rows}
         isEmpty={(r) => r.length === 0}
         empty={
-          isNarrowed(filters, { newExpense: undefined, expense: undefined }) ? (
+          isNarrowed(filters, { newExpense: undefined, expense: undefined, moveExpense: undefined }) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
             <Empty title={t('hosted.expenses.empty.title')} body={t('hosted.expenses.empty.body')} action={recordButton} />
@@ -191,8 +209,10 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           onCreated={(id) => setFilters({ ...filters, expense: id, newExpense: undefined })}
           firm={profile.firm}
           defaultCurrency={profile.defaultCurrency}
+          onMove={canMove ? openMove : undefined}
         />
       )}
+      {filters.moveExpense && canMove && <MoveExpenseDrawer profile={profile} expenseId={filters.moveExpense} onClose={closeMove} onMoved={afterMove} />}
     </>
   );
 }

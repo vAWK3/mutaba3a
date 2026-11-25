@@ -11,10 +11,10 @@ import {
 } from '../gate.js';
 
 /** MUT-361 (ADR-181): the lapse gate's pure rules. */
-const ACTIVE: Entitlement = { state: 'ACTIVE', source: 'TRIAL', tier: 'FREELANCER', until: new Date('2026-11-05T00:00:00Z') };
+const ACTIVE: Entitlement = { state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: new Date('2026-11-05T00:00:00Z') };
 const GRACE: Entitlement = { state: 'GRACE', source: 'STRIPE', tier: 'FREELANCER', until: new Date('2026-11-05T00:00:00Z') };
-const READ_ONLY: Entitlement = { state: 'READ_ONLY', source: 'TRIAL', tier: 'FREELANCER', until: new Date('2026-11-20T00:00:00Z') };
-const LOCKED: Entitlement = { state: 'LOCKED', source: 'TRIAL', tier: 'FREELANCER', until: null };
+const READ_ONLY: Entitlement = { state: 'READ_ONLY', source: 'TRIAL', tier: 'BUSINESS', until: new Date('2026-11-20T00:00:00Z') };
+const LOCKED: Entitlement = { state: 'LOCKED', source: 'TRIAL', tier: 'BUSINESS', until: null };
 
 describe('standingOf', () => {
   it('maps ACTIVE and GRACE to open, READ_ONLY to read-only, LOCKED to locked', () => {

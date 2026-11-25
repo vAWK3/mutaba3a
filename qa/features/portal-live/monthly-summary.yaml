@@ -1,0 +1,78 @@
+app: portal-live
+area: monthly-summary
+title: The monthly summary mail
+tier: secondary
+# MUT-535 (ADR-259, plan .claude/designs/mut-535-monthly-summary-mail.md): on days 1-7 the job mails each paying or
+# trialling person last month per profile and per currency (came in, still owed, overdue), read as Reports reads it.
+# The flows run the operator's door on the portal-live API (memory mailer, real Postgres, Stripe's sandbox for the
+# yearly line) and read the mail from the dev outbox; the month reported is the one before today's in Jerusalem.
+paths:
+  - server/src/billing/monthly-summary.ts
+  - server/src/billing/monthly-summary-mail.ts
+  - server/src/billing/yearly-switch-line.ts
+  - server/src/summaries/profile-figures.ts
+  - server/src/routes/monthly-summary-mail.ts
+  - server/src/email/mail-off-token.ts
+  - src/hosted/components/MonthlySummarySwitchRow.tsx
+  - src/hosted/pages/mail-off/MailOffPage.tsx
+features:
+  - id: monthly-summary-mail
+    title: The monthly summary - last month per currency, the same Owed as the overview, one mail a month
+    tier: core
+    paths:
+      - server/src/billing/monthly-summary-mail.ts
+      - server/src/billing/monthly-summary.ts
+      - server/src/summaries/profile-figures.ts
+      - server/src/routes/monthly-summary-mail.ts
+      - server/src/email/templates/copy.ts
+    steps:
+      - A new trialist records ₪12,400 and $900 received last month, and ₪3,200 owed that fell due last month
+      - The monthly job runs
+      - Open the mail's "Open" link
+      - The job runs again
+    expect:
+      - 'One mail, "Your <last month> in MTB3A", with "Came in during <last month>: ₪12,400 · $900", "Still owed: ₪3,200" and "Overdue: ₪3,200 (1 entry)"'
+      - The link opens that profile's home on In & out (MUT-657 E-5), and its Owed shows the same ₪3,200 owed
+      - The second run sends nothing more
+  - id: monthly-summary-off-link
+    title: Turn the monthly summary off from its mail, in Arabic, and back on
+    tier: secondary
+    paths:
+      - src/hosted/pages/mail-off/MailOffPage.tsx
+      - server/src/email/mail-off-token.ts
+      - server/src/routes/monthly-summary-mail.ts
+    steps:
+      - An Arabic trialist gets the monthly summary
+      - Open its "أوقفها" link
+      - Press أوقفه
+      - Press أعِد تشغيله
+    expect:
+      - The page asks first and changes nothing until pressed
+      - After the press it says أُوقف الملخّص الشهري, and You › Account's switch is off
+      - After turning it back on the page says الملخّص الشهري مُفعَّل
+  - id: monthly-summary-account-switch
+    title: You › Account's Monthly summary email switch - off, then on, kept after a reload
+    tier: secondary
+    paths:
+      - src/hosted/components/MonthlySummarySwitchRow.tsx
+      - src/hosted/pages/you/YouAccount.tsx
+    steps:
+      - A trialist opens You › Account
+      - Turn Monthly summary email off and reload
+      - Turn it on again
+    expect:
+      - The switch starts on, stays off after the reload, and the job then skips the person
+      - Turned on again, the next run mails them
+  - id: monthly-summary-yearly-line
+    title: After a monthly payer's 2nd payment the summary carries Switch to yearly
+    tier: secondary
+    paths:
+      - server/src/billing/yearly-switch-line.ts
+      - server/src/billing/monthly-summary-mail.ts
+    steps:
+      - A monthly subscriber in shekels has paid two months and recorded ₪400 received last month
+      - The monthly job runs
+      - Open the mail's Switch to yearly link
+    expect:
+      - The mail says "Switch to yearly and save ₪58 a year"
+      - The link opens Billing's Switch to yearly

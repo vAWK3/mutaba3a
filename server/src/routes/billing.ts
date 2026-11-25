@@ -7,7 +7,6 @@ import {
   accountantCheckoutRefusalOf,
   ALL_ACCOUNTANT_LOOKUP_KEYS,
   ALL_GA_LOOKUP_KEYS,
-  catalogFrom,
   checkoutRefusalOf,
   planAccountantCheckout,
   type AccountantCatalog,
@@ -29,8 +28,9 @@ import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } 
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
 import { entitlementsFor } from '../billing/coverage.js';
 import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
+import { currentPlanOf } from '../billing/plans.js';
 import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
-import { SWITCH_AFTER_PAID_INVOICES, yearlySwitchOf } from '../billing/retention.js';
+import { catalogOf, catalogOrNothing, NO_CATALOG, yearlySwitchLine } from '../billing/yearly-switch-line.js';
 import type { PlanGateway } from '../billing/stripe/plan-gateway.js';
 import { CATALOG_TTL_MS, type CheckoutGateway } from '../billing/stripe/checkout-gateway.js';
 import { StripeGatewayError } from '../billing/stripe/gateway.js';
@@ -38,7 +38,7 @@ import { ApiError } from '../errors.js';
 import type { Logger } from '../logger.js';
 import { ownedProfilesOf } from '../personal-profile.js';
 import type { RateLimiter } from '../rate-limit.js';
-import type { BillingRetentionEventRecord, BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
+import type { BillingSubscriptionRecord, JsonObject, LedgerStore, Organization, UserRecord } from '../repositories/ports.js';
 import { BillingOverviewSchema, BillingRedirectSchema, CardRetryResponseSchema, CheckoutSessionRequestSchema, ErrorEnvelopeSchema, PortalSessionRequestSchema } from '../schemas.js';
 
 /**
@@ -83,8 +83,9 @@ export const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const MINUTE_MS = 60 * 1000;
 /** Refusals Stripe will repeat however often it's asked: the operator's to fix, so never "try again". */
 const PERMANENT_STRIPE_ERRORS: ReadonlySet<string> = new Set(['StripeInvalidRequestError', 'StripePermissionError', 'StripeAuthenticationError', 'StripeIdempotencyError']);
-const NO_CATALOG: Catalog = { ILS: null, USD: null };
 const NO_ACCOUNTANT_CATALOG: AccountantCatalog = { ILS: null, USD: null };
+/** MUT-535: moved to billing/yearly-switch-line.ts; re-exported for billing-plan.ts. */
+export { catalogOf };
 export const errorResponse = (description: string) => ({ description, content: { 'application/json': { schema: ErrorEnvelopeSchema } } });
 export const refusedResponses = {
   401: errorResponse('No valid session'),
@@ -117,18 +118,20 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
         '`offer` (MUT-525): the launch offer while its Stripe coupon runs, with the first year per currency and whether this person gets it ' +
         '(never had a subscription); null when there is none or Stripe could not be asked. Its `endsAt` is an hour before the coupon’s own end. ' +
         '`comeback` (MUT-534): once the come-back mail has offered it and the person still may have it, what the first month and first year back ' +
-        'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise.',
+        'cost per currency (the list prices less the come-back coupon), and the list prices after them; null otherwise. ' +
+        '`currentPlan` (MUT-702): solo, business, firm or the legacy freelancer, the best plan covering any profile the person created (an operator grant, ' +
+        'a subscription, or the running trial, which is business); null when nothing covers them.',
       security: SESSION_ONLY,
       responses: { 200: { description: 'Billing', content: { 'application/json': { schema: BillingOverviewSchema } } }, 401: refusedResponses[401], 403: refusedResponses[403] },
     }),
     async (c) => {
       const { user } = c.get('identity');
-      const [summary, catalog, covered] = await Promise.all([
+      const now = c.get('now')();
+      const [summary, catalog, owned] = await Promise.all([
         store.billing.summaryOf(user.id),
         options.checkout ? catalogOrNothing(options.checkout, options.logger, c.get('requestId')) : NO_CATALOG,
-        ownedProfilesOf(store, user.id),
+        ownedWithEntitlements(store, user.id, now),
       ]);
-      const now = c.get('now')();
       // MUT-565 (ADR-251): everything below is the profile plan's; the Accountant plan has its own field.
       const subscriptions = profilePlanSubscriptions(summary.subscriptions);
       const shown = currentSubscription(subscriptions, now);
@@ -144,11 +147,13 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           trial: summary.trialStartedAt ? trialView(summary.trialStartedAt) : null,
           catalog: { ILS: amountsOf(catalog.ILS), USD: amountsOf(catalog.USD) },
           countries: countriesView(options.countries),
-          coveredProfileIds: covered.map((p) => p.id),
+          coveredProfileIds: owned.profiles.map((p) => p.id),
           offer: offer ? offerView(offer, offerEligible(offer, subscriptions, offer.interval), catalog) : null,
           yearlySwitch,
           comeback: comeback ? { id: comeback.id, firstMonth: comeback.firstMonth, listMonth: comeback.listMonth, firstYear: comeback.firstYear, listYear: comeback.listYear } : null,
           accountantPlan,
+          // MUT-702 (ADR-275): provider-neutral, from the same entitlements the gate reads.
+          currentPlan: currentPlanOf(owned.entitlements),
         },
         200,
       );
@@ -373,20 +378,6 @@ async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Da
   return { profiles, entitlements: profiles.map((p) => entitlements.get(p.id)!) };
 }
 
-export async function catalogOf(checkout: CheckoutGateway): Promise<Catalog> {
-  return catalogFrom(await checkout.pricesByLookupKey(ALL_GA_LOOKUP_KEYS));
-}
-
-/** GET must open for a person who only wants Manage billing, so a failed price lookup is logged and shown as no prices. */
-async function catalogOrNothing(checkout: CheckoutGateway, logger: Pick<Logger, 'warn' | 'error'>, requestId: string): Promise<Catalog> {
-  try {
-    return await catalogOf(checkout);
-  } catch (err) {
-    if (!(err instanceof StripeGatewayError)) throw err;
-    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'billing catalog unavailable; prices hidden');
-    return NO_CATALOG;
-  }
-}
 
 /** MUT-534: the come-back offer's ids, as a subscription's `offerId` names them. */
 const COMEBACK_IDS: ReadonlySet<string> = new Set(OFFERS.filter((e) => e.kind === 'comeback').map((e) => e.id));
@@ -471,39 +462,6 @@ export async function auditOn(
   }
 }
 
-/**
- * MUT-531 (D2, D3, R1): the "switch to yearly" line, from the mirror plus Stripe's paid-invoice count (cached). Only a
- * monthly list price that is active and not cancelling asks Stripe at all; a failure hides the line, never the read.
- * Stripe's own discount and pause are checked when the person opens the switch (GET /v1/billing/yearly-switch).
- */
-async function yearlySwitchLine(
-  store: LedgerStore,
-  userId: string,
-  plan: PlanGateway,
-  shown: BillingSubscriptionRecord,
-  catalog: Catalog,
-  now: Date,
-  logger: Pick<Logger, 'warn'>,
-  requestId: string,
-) {
-  const mirrored = { status: shown.status, priceLookupKey: shown.priceLookupKey, cancelAtPeriodEnd: shown.cancelAtPeriodEnd };
-  const paused = shown.pausedFrom !== null;
-  if (yearlySwitchOf(mirrored, { paidInvoices: SWITCH_AFTER_PAID_INVOICES, discounted: false, paused }, catalog).ok === false) return null;
-  // MUT-532 (D13): not while the stay offer runs; the rest of its discount would land on the yearly invoice or be lost.
-  if (stayOfferRuns(await store.billing.retentionEventsOf(userId), now)) return null;
-  try {
-    const decision = yearlySwitchOf(mirrored, { paidInvoices: await plan.paidInvoiceCount(shown.stripeSubscriptionId), discounted: false, paused: false }, catalog);
-    return decision.ok ? { currency: decision.currency, savings: decision.savings } : null;
-  } catch (err) {
-    if (!(err instanceof StripeGatewayError)) throw err;
-    logger.warn({ code: err.code, type: err.type, stripeRequestId: err.requestId, requestId }, 'paid invoices unavailable; switch line hidden');
-    return null;
-  }
-}
-
-function stayOfferRuns(events: readonly BillingRetentionEventRecord[], now: Date): boolean {
-  return events.some((e) => e.kind === 'STAY_OFFER' && (e.endsAt === null || e.endsAt > now));
-}
 
 function subscriptionView(sub: BillingSubscriptionRecord & { tier: Exclude<BillingSubscriptionRecord['tier'], 'ACCOUNTANT'> }, currency: string) {
   const interval = sub.priceLookupKey?.includes('_yearly_') ? 'year' : sub.priceLookupKey?.includes('_monthly_') ? 'month' : null;

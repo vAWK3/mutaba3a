@@ -5,6 +5,7 @@ import { todayFor, validationError } from '../agreements/compose.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import { endOfMonth, monthOf } from '../dates.js';
 import { ApiError } from '../errors.js';
+import { moveExpense, previewExpenseMove } from '../expenses/expense-move.js';
 import { completeExpenseReceipt, receiptAudit, startExpenseReceipt, type ReceiptActor, type ReceiptDeps } from '../expenses/receipts-compose.js';
 import { assertCategoryChoosable, expenseDate, expensePatch, learnedFromNew, learnedFromPatch, MAX_RECEIPTS_PER_EXPENSE, prepareExpenseCreate, requestedLinks, resolveLinks, touchExpenseVendor, withCategoryForeignKey, withResolvedVendor } from '../expenses/compose.js';
 import { decodeExpenseCursor, encodeExpenseCursor } from '../expenses/cursor.js';
@@ -24,6 +25,10 @@ import {
   ErrorEnvelopeSchema,
   ExpenseDetailSchema,
   ExpenseIdParamSchema,
+  ExpenseMovePreviewQuerySchema,
+  ExpenseMovePreviewSchema,
+  MoveExpenseRequestSchema,
+  MoveExpenseResponseSchema,
   ExpensePageSchema,
   ExpenseReceiptParamSchema,
   ReceiptDownloadQuerySchema,
@@ -37,7 +42,9 @@ import {
   UpdateExpenseRequestSchema,
 } from '../schemas.js';
 import { expenseContextOf, serializeExpense, serializeExpenseReceipt } from '../serializers.js';
-import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, validationResponse, versionMismatch } from './shared.js';
+import { conflictResponse, errorResponses, IdempotencyHeaderSchema, ledgerPageStart, notFoundResponse, requestLanguage, validationResponse, versionMismatch } from './shared.js';
+import { PERSON, PERSON_OR_MALAFAT } from './security.js';
+import { DELEGATED_CAPTURE_SOURCE } from '../auth/delegation.js';
 
 /** MUT-339: how far back a streak is read; past a year it is shown as a year and more. */
 const STREAK_LOOKBACK_DAYS = 400;
@@ -50,7 +57,6 @@ export interface ExpenseRouteOptions {
   receiptsLibrary: boolean;
 }
 
-const SESSION_ONLY = [{ session: [] }, { deviceSession: [] }];
 const jsonBody = <T>(schema: T) => ({ required: true as const, content: { 'application/json': { schema } } });
 const noContent = { 204: { description: 'Done' } } as const;
 const notConfigured = { 503: { description: 'No attachments bucket is configured for this deployment', content: { 'application/json': { schema: ErrorEnvelopeSchema } } } } as const;
@@ -99,7 +105,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses',
       tags: ['Expenses'],
       summary: 'List expenses, newest first',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ListExpensesQuerySchema },
       responses: { 200: { description: 'A page', content: { 'application/json': { schema: ExpensePageSchema } } }, ...validationResponse, ...notFoundResponse, ...errorResponses },
@@ -138,7 +144,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       summary: 'This personal profile’s logging streak',
       description:
         'MUT-339 (ADR-177): consecutive days, in the profile’s timezone, on which the profile logged an entry — an expense, money received or an Owed, by when it was logged (createdAt; a capture’s capturedAt within 48 hours). Live rows by the entries feed’s rules; conversions don’t count. Alive through yesterday (D3). Only on a personal profile the caller owns: 409 CONFLICT, details.reason NOT_PERSONAL, elsewhere.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       responses: { 200: { description: 'Streak', content: { 'application/json': { schema: StreakResponseSchema } } }, ...conflictResponse, ...errorResponses },
     }),
@@ -161,7 +167,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses/{expenseId}',
       tags: ['Expenses'],
       summary: 'An expense with its receipts',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ExpenseIdParamSchema },
       responses: { 200: { description: 'The expense', content: { 'application/json': { schema: ExpenseDetailSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -181,16 +187,17 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Record an expense',
       description: 'In its original amount and currency, never converted. Personal versus firm-associated is the profile, optionally narrowed by customerId/projectId; with projectId alone the customer is the project\'s.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), idempotent(store, 'expenses.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateExpenseRequestSchema) },
       responses: { 201: { description: 'Recorded', content: { 'application/json': { schema: ExpenseSchema } } }, ...validationResponse, ...errorResponses },
     }),
     async (c) => {
-      const { organization, user } = sessionAuth(c);
+      const { organization, user, via } = sessionAuth(c);
       const body = c.req.valid('json');
       const now = c.get('now')();
-      const prepared = await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body);
+      // MUT-596: what Malafat records as the person reads "(via Malafat)"; the server says so, never the caller.
+      const prepared = { ...(await prepareExpenseCreate(store, organization.id, user.id, todayFor(organization, now), body)), ...(via ? { captureSource: DELEGATED_CAPTURE_SOURCE } : {}) };
       const input = await withResolvedVendor(store, organization.id, prepared, body.vendorDetails, now);
       // MUT-339 (S4): kept as when it was logged on the phone, within 48 hours.
       const expense = await withCategoryForeignKey(() => store.expenses.create(input, loggedAtOf(body.capturedAt, now)));
@@ -207,7 +214,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Change an expense (optimistic, If-Match)',
       description: 'Any field. A currency changes only together with its amount (422 AMOUNT_REQUIRED), and the amount is read in the merged currency\'s digits. null clears an optional field. An archived category may stay on a row but cannot be newly chosen.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write'), ifMatch()] as const,
       request: { params: ExpenseIdParamSchema, headers: IfMatchHeaderSchema, body: jsonBody(UpdateExpenseRequestSchema) },
       responses: { 200: { description: 'Changed', content: { 'application/json': { schema: ExpenseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses },
@@ -251,7 +258,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Delete an expense (soft)',
       description: '204 again for an expense already deleted; 404 for an id this profile never had. Where the receipts library is on (RECEIPTS_LIBRARY, MUT-255/389), its READY receipts stay, back under To review in the library, and an unfinished upload is deleted with its file. Where it is off (the production default until MUT-260/258) and in the signed-out portal, every receipt is deleted with its file.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseIdParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...validationResponse, ...errorResponses },
@@ -269,6 +276,54 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
     },
   );
 
+  // ---- MUT-589 (ADR-255): move a saved expense, with its receipts, to another of the person's profiles ----
+
+  const MOVE_REFUSALS =
+    '422 SAME_PROFILE for this profile; 404 EXPENSE_NOT_FOUND; 403 READ_ONLY_PROFILE reason NOT_OWNER on a profile you belong to but do not own (a firm, or a business profile someone else owns that you are not a co-owner of); 403 READ_ONLY_PROFILE reason MALAFAT_PROFILE when Malafat is the writer of record of either profile; 404 PROFILE_NOT_FOUND for a profile you are not on; 402 SUBSCRIPTION_LAPSED when either profile is read-only or locked.';
+
+  app.openapi(
+    createRoute({
+      method: 'get',
+      path: '/v1/expenses/{expenseId}/move-preview',
+      tags: ['Expenses'],
+      summary: 'What moving an expense to another of your profiles would change (MUT-589)',
+      description: `The move's own gates, in its order, so a refusal shows before the person confirms. ${MOVE_REFUSALS} Changes are listed in the request's language (Accept-Language, else the user's). Creates nothing.`,
+      // MUT-593 (ADR-254 D9): the destination is another profile, outside any Malafat tenant, so never delegated.
+      security: PERSON,
+      middleware: [requireScope('expenses:read')] as const,
+      request: { params: ExpenseIdParamSchema, query: ExpenseMovePreviewQuerySchema },
+      responses: { 200: { description: 'The preview', content: { 'application/json': { schema: ExpenseMovePreviewSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses },
+    }),
+    async (c) => {
+      const preview = await previewExpenseMove(receiptDeps, receiptActor(c), c.req.valid('param').expenseId, c.req.valid('query').profileId, { billingGate: c.get('billingGate') === true, lang: requestLanguage(c) });
+      return c.json(preview, 200);
+    },
+  );
+
+  app.openapi(
+    createRoute({
+      method: 'post',
+      path: '/v1/expenses/{expenseId}/move',
+      tags: ['Expenses'],
+      summary: 'Move an expense, with its receipts, to another of your profiles (MUT-589)',
+      description: `The expense keeps its id, amount, currency, date, title, notes and typed vendor (ADR-004). Its category is matched by name on the target, then by the same preset in either language, then the target's Other, else none; its vendor is found or created on the target; its client and matter are cleared; its VAT and allocation number are kept only on a firm; its group marks are dropped (membership on the target follows its date). Every receipt on it moves too: same id, its file copied inside the bucket and removed from this profile. ${MOVE_REFUSALS} 409 CONFLICT VERSION_MISMATCH (details.currentVersion) when expectedVersion is stale or a receipt was filed onto it meanwhile: load the preview again. 409 CONFLICT RECEIPT_NOT_READY while an upload on it is unfinished (one left unfinished for over 24 hours is abandoned: the move deletes it). Answers the changes applied. A retry with the same Idempotency-Key moves once; a 4xx is stored under it, so retry that one with a new key.`,
+      // MUT-593 (ADR-254 D9): the destination is another profile, outside any Malafat tenant, so never delegated.
+      security: PERSON,
+      middleware: [requireScope('expenses:write'), idempotent(store, 'expenses.move')] as const,
+      request: { params: ExpenseIdParamSchema, headers: IdempotencyHeaderSchema, body: jsonBody(MoveExpenseRequestSchema) },
+      responses: { 200: { description: 'Moved', content: { 'application/json': { schema: MoveExpenseResponseSchema } } }, ...notFoundResponse, ...conflictResponse, ...validationResponse, ...errorResponses, ...notConfigured },
+    }),
+    async (c) => {
+      const body = c.req.valid('json');
+      const moved = await moveExpense(receiptDeps, receiptActor(c), c.req.valid('param').expenseId, body.profileId, body.expectedVersion, {
+        billingGate: c.get('billingGate') === true,
+        reportError: c.get('reportError'),
+        lang: requestLanguage(c),
+      });
+      return c.json({ expense: { ...serializeExpense(moved.expense, expenseContextOf(moved.target)), receipts: moved.receipts.map(serializeExpenseReceipt) }, fromProfileId: moved.fromProfileId, changes: moved.changes }, 200);
+    },
+  );
+
   // ---- receipts: the M6 upload flow, on the same bucket and TTL ----
 
   app.openapi(
@@ -278,7 +333,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Start a receipt upload: a PENDING_UPLOAD receipt and a short-lived signed PUT URL',
       description: `PDF, JPEG or PNG up to 10 MB; at most ${MAX_RECEIPTS_PER_EXPENSE} per expense. PUT the bytes to upload.url with upload.headers, then POST …/receipts/{receiptId}/complete. The object key never contains the filename.`,
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseIdParamSchema, body: jsonBody(CreateReceiptUploadRequestSchema) },
       responses: { 201: { description: 'Upload started', content: { 'application/json': { schema: CreateReceiptUploadResponseSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -297,7 +352,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Finish a receipt upload: verify the object and mark the receipt READY',
       description: '422 UPLOAD_INCOMPLETE when no object exists yet; 422 UPLOAD_MISMATCH when its size or content type differ from what was declared. Idempotent once READY.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseReceiptParamSchema },
       responses: { 200: { description: 'READY', content: { 'application/json': { schema: ExpenseReceiptSchema } } }, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -314,7 +369,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses/{expenseId}/receipts/{receiptId}/download',
       tags: ['Expenses'],
       summary: 'A short-lived signed download URL for a READY receipt',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       description: '`disposition=inline` (MUT-575, as the library route since MUT-260) signs a URL that displays the file instead of saving it, for the desk\'s preview. The default `attachment` saves it.',
       middleware: [requireScope('expenses:read')] as const,
       request: { params: ExpenseReceiptParamSchema, query: ReceiptDownloadQuerySchema },
@@ -338,7 +393,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       path: '/v1/expenses/{expenseId}/receipts/{receiptId}',
       tags: ['Expenses'],
       summary: 'Delete a receipt (soft; the object is removed)',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:write')] as const,
       request: { params: ExpenseReceiptParamSchema },
       responses: { ...noContent, ...notFoundResponse, ...validationResponse, ...errorResponses, ...notConfigured },
@@ -364,7 +419,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
       tags: ['Expenses'],
       summary: 'Expenses per currency for a date range, by category and by client',
       description: 'Defaults to this month in the organization timezone; from and to are inclusive. One block per currency — never summed across currencies. customerId null = spending linked to no client.',
-      security: SESSION_ONLY,
+      security: PERSON_OR_MALAFAT,
       middleware: [requireScope('expenses:read')] as const,
       request: { query: ExpenseSummaryQuerySchema },
       responses: { 200: { description: 'Summary', content: { 'application/json': { schema: ExpenseSummarySchema } } }, ...validationResponse, ...errorResponses },

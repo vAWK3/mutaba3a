@@ -108,9 +108,9 @@ variable "sentry_enabled" {
 }
 
 variable "receipts_library_enabled" {
-  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. false (default) = the API behaves as before MUT-255. Turn it on when MUT-260 (portal) or MUT-258 (phone) ships, and don't turn it back off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
+  description = "MUT-255/389: sets RECEIPTS_LIBRARY=true on Cloud Run, which mounts the receipts library (/v1/receipts*) and makes deleting an expense keep its receipts To review. MUT-659: true by default, for everyone. Don't turn it off: To-review receipts would stay stored but unseen (DEPLOYMENT.md)."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "accountant_access_enabled" {
@@ -153,6 +153,28 @@ variable "comeback_mail_enabled" {
   description = "MUT-534 (ADR-243): creates the daily come-back mail job. Off (default) until the operator has read `npm run billing:comeback-mail -- --dry-run` after the release: the first run would mail everyone whose plan ended in a window."
   type        = bool
   default     = false
+}
+
+variable "monthly_summary_mail_enabled" {
+  description = "MUT-535 (ADR-259): creates the monthly summary mail job (days 1-7 of each month, 14:00 Jerusalem). Off (default) until the operator has read `npm run billing:monthly-summary-mail -- --dry-run` after the release, the privacy policy that names the mail is live, and the paying + trialling count fits the mail budget (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "tax_authority_reminders_enabled" {
+  description = "MUT-571 AC3: creates the daily Tax Authority re-consent reminder job (09:00 Jerusalem): the owner of each connected profile is mailed 10 days before the 90-day consent ends and when it has ended. Off (default) until the Tax Authority connection (TAX_AUTHORITY_ENV) is configured on this service and the operator has read a dry run (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "monthly_summary_daily_sends" {
+  description = "MUT-535 (D12): monthly summary mails per run (MONTHLY_SUMMARY_DAILY_SENDS). Every other mail shares mail_daily_cap with it, so keep it well under the cap: 40 of 90 leaves room for signups, trial and card mails. Seven runs a month carry 7x this many people. 40 (the API's default) leaves the variable unset."
+  type        = number
+  default     = 40
+  validation {
+    condition     = var.monthly_summary_daily_sends >= 1 && floor(var.monthly_summary_daily_sends) == var.monthly_summary_daily_sends
+    error_message = "monthly_summary_daily_sends must be a whole number of at least 1."
+  }
 }
 
 variable "billing_retry_window_days" {
@@ -462,3 +484,93 @@ variable "budget_currency" {
     error_message = "budget_currency is a three-letter ISO 4217 code, such as GBP."
   }
 }
+
+# ----------------------------------------------------------------------------
+# MUT-641 (ADR-265): issued-document signing (signing.tf)
+# ----------------------------------------------------------------------------
+
+variable "issuing_signing_key" {
+  description = "MUT-641: creates the Cloud KMS key ring and HSM signing key for issued-document PDFs, and lets the API's service account sign with it (roles/cloudkms.signer on that key only). Nothing signs until issuing_signing_cert_chain is set too."
+  type        = bool
+  default     = false
+}
+
+variable "issuing_signing_algorithm" {
+  description = "MUT-641: the key's algorithm, one the API's signer speaks. RSA 3072 is the widest-accepted choice for certifying authorities and PDF readers. Changing it after the key exists replaces the key (and its certificate)."
+  type        = string
+  default     = "RSA_SIGN_PKCS1_3072_SHA256"
+  validation {
+    condition     = contains(["RSA_SIGN_PKCS1_2048_SHA256", "RSA_SIGN_PKCS1_3072_SHA256", "RSA_SIGN_PKCS1_4096_SHA256", "EC_SIGN_P256_SHA256"], var.issuing_signing_algorithm)
+    error_message = "issuing_signing_algorithm must be RSA_SIGN_PKCS1_{2048,3072,4096}_SHA256 or EC_SIGN_P256_SHA256 (what the API's CMS signer declares)."
+  }
+}
+
+variable "issuing_signing_key_version" {
+  description = "MUT-641: which version of the key signs (KMS creates version 1 with the key). Move it only with a certificate for the new version."
+  type        = number
+  default     = 1
+}
+
+variable "issuing_signing_cert_chain" {
+  description = "MUT-641: the PEM certificate for the signing key, then its issuers: the interim self-issued one (`npm run signing:interim-cert`), later the certifying authority's. Public, never a key. Null (default) = the API doesn't sign and its PDF routes answer 503."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.issuing_signing_cert_chain == null || (strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "-----BEGIN CERTIFICATE-----") && !strcontains(coalesce(var.issuing_signing_cert_chain, "-"), "PRIVATE KEY"))
+    error_message = "issuing_signing_cert_chain must hold PEM certificates and no private key: the signing key stays in Cloud KMS."
+  }
+}
+
+variable "issuing_tsa_url" {
+  description = "MUT-641: the RFC 3161 time-stamp authority on every signature: Sectigo's public service (https, checked 2026-11-22) until the certifying authority's. https only: over http anyone on the path could answer with a token of their own."
+  type        = string
+  default     = "https://timestamp.sectigo.com"
+  validation {
+    condition     = can(regex("^https://", var.issuing_tsa_url))
+    error_message = "issuing_tsa_url must be an https URL (the API refuses plain http on production)."
+  }
+}
+
+
+variable "auth_log_bucket_locked" {
+  description = "MUT-710: lock the 12-month authentication-log bucket (auth_log.tf). Irreversible: the retention can't be shortened and the bucket can't be deleted. Turn on after the first month's records are checked (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "two_factor_issuing_gate_enabled" {
+  description = "MUT-710 (ADR-274 D10): sets TWO_FACTOR_ISSUING_GATE_ENABLED=true, so PUT /v1/issuer, issuing, the Tax Authority connect and allocation decisions need two-step sign-in on and a session that passed it (403 TWO_FACTOR_SETUP_REQUIRED). false (default) = issuing as before MUT-710. Turn on only after the portal and phone screens that turn two-step sign-in on are live, and after everyone already issuing has turned it on (docs/operations/before-release.md)."
+  type        = bool
+  default     = false
+}
+
+variable "uniform_file_registration_number" {
+  description = "MUT-569 (ADR-272): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.uniform_file_registration_number == null || can(regex("^[0-9]{8}$", var.uniform_file_registration_number))
+    error_message = "uniform_file_registration_number is 8 digits."
+  }
+}
+
+variable "software_house_vat_id" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_VAT_ID, the registering software house's 9-digit company number in the uniform file (A000 1009). The owner is Narabnd Studio Ltd, 517108775 (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_vat_id == null || can(regex("^[0-9]{9}$", var.software_house_vat_id))
+    error_message = "software_house_vat_id is a 9-digit company number."
+  }
+}
+
+variable "software_house_name" {
+  description = "MUT-569 (ADR-272): SOFTWARE_HOUSE_NAME, the software house's registered name in the uniform file (A000 1010, at most 20 characters), e.g. נאראבנד סטודיו בע\"מ (MUT-700). null (default) = the API's placeholder."
+  type        = string
+  default     = null
+  validation {
+    condition     = var.software_house_name == null || (length(var.software_house_name) >= 1 && length(var.software_house_name) <= 20)
+    error_message = "software_house_name is 1 to 20 characters."
+  }
+}
+

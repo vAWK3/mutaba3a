@@ -8,7 +8,11 @@
  * though local mode never issues API keys), `createHash('sha256')`
  * (`idempotency.ts`, `preview-token.ts`), `createHmac('sha256')`
  * (`auth/sessions.ts` `sessionDigest`, used directly by `mintLocalSession`)
- * and `timingSafeEqual` (`preview-token.ts`, `auth/api-key.ts`).
+ * and `timingSafeEqual` (`preview-token.ts`, `auth/api-key.ts`). MUT-710 put the two-step sign-in modules in the
+ * graph (`auth/sign-in-code.ts`, `auth/two-factor.ts`): `randomInt` and `hkdfSync('sha256')`. Local mode has no
+ * accounts, so TOTP's `createHmac('sha1')` never runs here; any algorithm but sha256 throws rather than mis-hash.
+ * `createApp` builds `TwoFactorKeys` in local mode too (HKDF at boot, `Buffer.alloc` in buffer-shim.ts); AES-GCM
+ * (`createCipheriv`/`createDecipheriv`) is only ever used to seal or open, which local mode never does.
  *
  * Node's `createHash`/`createHmac` are synchronous; Web Crypto's
  * `subtle.digest`/`subtle.sign` are Promise-only, and every call site above
@@ -90,14 +94,71 @@ class Hmac {
   }
 }
 
+function assertSha256(algorithm: string): void {
+  if (algorithm !== 'sha256') throw new Error(`node:crypto shim: only sha256 is available in local mode, not ${algorithm}`);
+}
+
 export function createHash(algorithm: HashAlgorithm): Hash {
-  void algorithm; // only 'sha256' is ever requested (see file docblock); nothing to branch on.
+  assertSha256(algorithm); // only 'sha256' is ever requested (see file docblock)
   return new Hash();
 }
 
 export function createHmac(algorithm: HashAlgorithm, key: string | Uint8Array): Hmac {
-  void algorithm;
+  assertSha256(algorithm);
   return new Hmac(typeof key === 'string' ? new TextEncoder().encode(key) : key);
+}
+
+const MAX_RANDOM_INT_RANGE = 2 ** 32;
+
+/** `node:crypto.randomInt([min,] max)`: a uniform integer in [min, max), from Web Crypto, by rejection sampling. */
+export function randomInt(minOrMax: number, maybeMax?: number): number {
+  const [min, max] = maybeMax === undefined ? [0, minOrMax] : [minOrMax, maybeMax];
+  const range = max - min;
+  if (!Number.isSafeInteger(min) || !Number.isSafeInteger(max) || range <= 0 || range > MAX_RANDOM_INT_RANGE) {
+    throw new RangeError(`randomInt: invalid range [${min}, ${max})`);
+  }
+  const limit = MAX_RANDOM_INT_RANGE - (MAX_RANDOM_INT_RANGE % range);
+  const word = new Uint32Array(1);
+  for (;;) {
+    globalThis.crypto.getRandomValues(word);
+    if (word[0]! < limit) return min + (word[0]! % range);
+  }
+}
+
+/**
+ * MUT-710: `TokenBox` (Tax Authority tokens, two-step sign-in's TOTP secrets) imports AES-GCM. Local mode has no
+ * accounts and no Tax Authority connection, so it never seals or opens: these exist for the build and refuse if called.
+ */
+function unavailableInLocalMode(name: string): never {
+  throw new Error(`node:crypto shim: ${name} is not available in local mode`);
+}
+export function createCipheriv(...args: unknown[]): never {
+  void args;
+  return unavailableInLocalMode('createCipheriv');
+}
+export function createDecipheriv(...args: unknown[]): never {
+  void args;
+  return unavailableInLocalMode('createDecipheriv');
+}
+
+const toBytes = (value: string | Uint8Array): Uint8Array => (typeof value === 'string' ? new TextEncoder().encode(value) : value);
+
+/** `node:crypto.hkdfSync('sha256', …)` (RFC 5869): extract, then expand to `keylen` bytes. */
+export function hkdfSync(digest: HashAlgorithm, ikm: string | Uint8Array, salt: string | Uint8Array, info: string | Uint8Array, keylen: number): ArrayBuffer {
+  assertSha256(digest);
+  const hashLength = 32;
+  if (keylen > 255 * hashLength) throw new RangeError('hkdfSync: keylen too large');
+  const saltBytes = toBytes(salt);
+  const prk = hmacSha256(saltBytes.length ? saltBytes : new Uint8Array(hashLength), toBytes(ikm));
+  const infoBytes = toBytes(info);
+  const out = new Uint8Array(keylen);
+  let previous: Uint8Array = new Uint8Array(0);
+  for (let i = 0, offset = 0; offset < keylen; i += 1) {
+    previous = hmacSha256(prk, concatBytes([previous, infoBytes, new Uint8Array([i + 1])]));
+    out.set(previous.subarray(0, Math.min(hashLength, keylen - offset)), offset);
+    offset += hashLength;
+  }
+  return out.buffer;
 }
 
 // ---- SHA-256 (FIPS 180-4), pure JS: the one piece with no synchronous browser-native equivalent ----

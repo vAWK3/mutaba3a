@@ -133,13 +133,14 @@ export const parseExpenses = (raw: Raw): ExpenseFilters =>
     anchor: id(raw.anchor),
   });
 
-/** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create. */
+/** The expense drawer's own URL state: `?expense=<id>` to edit, `?newExpense=1` to create, `?moveExpense=<id>` to move (MUT-589). */
 export interface ExpenseDrawerSearch {
   expense?: string;
   newExpense?: true;
+  moveExpense?: string;
 }
 export const parseExpenseDrawer = (raw: Raw): ExpenseDrawerSearch =>
-  compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined });
+  compact({ expense: id(raw.expense), newExpense: raw.newExpense === '1' || raw.newExpense === true ? true : undefined, moveExpense: id(raw.moveExpense) });
 
 /** The /expenses route's full search: the list's own filters plus the drawer's open/edit state. */
 export type ExpensesPageSearch = ExpenseFilters & ExpenseDrawerSearch;
@@ -209,8 +210,11 @@ export interface ReceiptsPageSearch {
   status?: Exclude<ReceiptStatusFilter, 'to_review'>;
   /** MUT-503: the receipt whose Move drawer is open. */
   move?: string;
+  /** MUT-589: the expense (a filed receipt's) whose Move drawer is open. */
+  moveExpense?: string;
 }
-export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch => compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined, move: id(raw.move) });
+export const parseReceiptsPage = (raw: Raw): ReceiptsPageSearch =>
+  compact({ status: raw.status === 'filed' || raw.status === 'all' ? raw.status : undefined, move: id(raw.move), moveExpense: id(raw.moveExpense) });
 
 /** MUT-503: a receipt's review page; `move` opens its Move drawer. */
 export interface ReceiptReviewSearch {
@@ -257,17 +261,25 @@ export interface DocumentFilters {
 }
 export const parseDocuments = (raw: Raw): DocumentFilters => compact({ customerId: id(raw.customerId), kind: oneOf(raw.kind, DOCUMENT_KINDS) });
 
-export const CLIENT_TABS = ['summary', 'receivables', 'payments', 'documents'] as const;
+/** MUT-664: Ledger card (the default) | Documents | Details, as on the approved board. */
+export const CLIENT_TABS = ['ledger', 'documents', 'details'] as const;
 export type ClientTab = (typeof CLIENT_TABS)[number];
+/** Links from before MUT-664 keep working: the receivables and payments tabs folded into the ledger card, summary is Details. */
+const LEGACY_CLIENT_TABS: Record<string, ClientTab> = { summary: 'details', receivables: 'ledger', payments: 'ledger' };
+const clientTab = (raw: unknown): ClientTab | undefined => oneOf(raw, CLIENT_TABS) ?? (typeof raw === 'string' ? LEGACY_CLIENT_TABS[raw] : undefined);
+/** The ledger card's period: everything, this month, the last three months, this year. */
+export const LEDGER_PERIODS = ['all', 'month', 'quarter', 'year'] as const;
+export type LedgerPeriod = (typeof LEDGER_PERIODS)[number];
 
 /** Client detail: the tab, plus the filters of whichever list it shows (the client itself is fixed). */
-export type ClientDetailSearch = { tab?: ClientTab } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
+export type ClientDetailSearch = { tab?: ClientTab; period?: LedgerPeriod } & Omit<ReceivableFilters, 'customerId'> & Omit<PaymentFilters, 'customerId' | 'status'> & {
     paymentStatus?: PaymentStatusFilter;
     kind?: DocumentFilters['kind'];
   } & IncomeDrawerSearch;
 export const parseClientDetail = (raw: Raw): ClientDetailSearch =>
   compact({
-    tab: oneOf(raw.tab, CLIENT_TABS),
+    tab: clientTab(raw.tab),
+    period: oneOf(raw.period, LEDGER_PERIODS),
     projectId: id(raw.projectId),
     currency: oneOf(raw.currency, CURRENCIES),
     status: oneOf(raw.status, RECEIVABLE_STATUSES),
@@ -324,6 +336,8 @@ export interface ProfileDrawerSearch {
   review?: 'password' | 'recovery';
   /** MUT-434: You › Account › Connect Claude (signed in, with agent_access). */
   connectClaude?: true;
+  /** MUT-596: You › Account › Connected apps (signed in, where Malafat access is on). */
+  connectedApps?: true;
   /**
    * MUT-362 DR2: the Subscribe step inside the Billing drawer, deep-linkable (MUT-361's locked screen opens it).
    * MUT-418: `welcome`, the first-run "Your 14-day free trial has started" step.
@@ -337,7 +351,7 @@ export interface ProfileDrawerSearch {
    */
   portal?: 'returned' | 'card';
 }
-export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'step', 'checkout', 'portal'] as const;
+export const SHELL_OVERLAY_KEYS = ['newProfile', 'manageProfiles', 'editProfile', 'changePassword', 'yourData', 'billing', 'closeAccount', 'passkeys', 'review', 'connectClaude', 'connectedApps', 'step', 'checkout', 'portal'] as const;
 
 const flag = (value: unknown): true | undefined => (value === true || value === 'true' || value === 1 || value === '1' ? true : undefined);
 
@@ -353,6 +367,7 @@ export const parseProfileDrawer = (raw: Raw): ProfileDrawerSearch =>
     passkeys: flag(raw.passkeys),
     review: raw.review === 'password' || raw.review === 'recovery' ? raw.review : undefined,
     connectClaude: flag(raw.connectClaude),
+    connectedApps: flag(raw.connectedApps),
     step: raw.step === 'subscribe' || raw.step === 'welcome' || raw.step === 'switch' || raw.step === 'cancel' ? raw.step : undefined,
     checkout: raw.checkout === 'success' || raw.checkout === 'cancelled' ? raw.checkout : undefined,
     portal: raw.portal === 'returned' || raw.portal === 'card' ? raw.portal : undefined,
@@ -370,4 +385,23 @@ export function pickShellOverlay(search: Raw): Partial<ProfileDrawerSearch> {
   const picked: Raw = {};
   for (const key of SHELL_OVERLAY_KEYS) if (search[key] !== undefined) picked[key] = search[key];
   return picked as Partial<ProfileDrawerSearch>;
+}
+
+/**
+ * Home (MUT-657): its view (`?view=in-out`; Receipts & to-dos has no key, so coming back opens it) and the income
+ * drawer its Add income opens. Nothing else: a bare `?currency=` belongs to Owed (`legacyOwedSearch`).
+ */
+export interface HomeSearch extends IncomeDrawerSearch {
+  view?: 'in-out';
+}
+export const parseHome = (raw: Raw): HomeSearch => compact({ view: raw.view === 'in-out' ? ('in-out' as const) : undefined, ...parseIncomeDrawer(raw) });
+
+/**
+ * MUT-657 (E-1): Owed's overview moved from the bare `/p/:id` to `/owed`, and `?currency=` was its only key, so a bare
+ * address that carries one is an old Owed link. Its search for `/owed`: the currency and every shell key (a Stripe
+ * return's `?checkout=`, `?billing=`, …); null when the address is home's.
+ */
+export function legacyOwedSearch(raw: Raw): (OverviewFilters & Partial<ProfileDrawerSearch>) | null {
+  const currency = oneOf(raw.currency, CURRENCIES);
+  return currency ? { ...pickShellOverlay(raw), currency } : null;
 }

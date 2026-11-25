@@ -6,6 +6,9 @@ import { signIn } from '../sign-in.js';
 import { SignInThrottle } from '../sessions.js';
 import { ARGON2_MINIMUMS, createArgon2Hasher } from '../users.js';
 import { MemoryLedgerStore } from '../../repositories/memory.js';
+import { testTwoFactorFlow } from '../../__tests__/helpers/two-factor.js';
+
+const TEST_TWO_FACTOR = testTwoFactorFlow();
 
 /**
  * MUT-115 regression contract (plan §11.8, R1/D8): the sign-in core was reshaped for passkeys, and the two lockout
@@ -35,7 +38,7 @@ async function setup() {
     personal: { name: 'Personal', slug: `personal-${Math.random().toString(36).slice(2)}`, defaultCurrency: 'ILS', timezone: 'Asia/Jerusalem' },
     at: t0,
   });
-  return { store, hasher, org, user, deps: { store, passwordHasher: hasher, throttle: new SignInThrottle(), pepper: PEPPER } };
+  return { store, hasher, org, user, deps: { store, passwordHasher: hasher, throttle: new SignInThrottle(), pepper: PEPPER, twoFactor: TEST_TWO_FACTOR } };
 }
 
 describe('sign-in audit contract (MUT-115 R1)', () => {

@@ -1,3 +1,4 @@
+import { membershipRoleOf } from '../malafat-members.js';
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue, Semaphore } from './keyed-queue.js';
 import { Prisma, PrismaClient } from '@prisma/client';
@@ -11,7 +12,8 @@ import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
-import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS } from './prisma-purge-tables.js';
+import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS, RETAINED_ISSUING_DOCUMENT_TABLES, RETAINED_ISSUING_PROFILE_TABLES, RETAINED_ISSUING_TABLES } from './prisma-purge-tables.js';
+import { handsOverArchive, retentionSweepMetadata } from '../issuing/retention.js';
 import { GRACE_MS, isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } from '../accounts/purge-plan.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
@@ -27,6 +29,23 @@ import { firmAuditRow, firmEnableRefusal, firmOwnersOf, firmUnchanged, roleForNe
 import { grantOwnerRefusal, ownerIdsOf, ownerRemovedAudit, removeOwnerDecision } from '../co-owners.js';
 import type {
   AccountPurgeRepository,
+  IssueDocumentInput,
+  NotForInvoiceItem,
+  NotForInvoiceResult,
+  IssueResult,
+  IssuedDocumentRecord,
+  IssuedDocumentCancellationRecord,
+  CancelPaymentRequestResult,
+  IssuingRepository,
+  IssuingRetentionAction,
+  IssuingRetentionEventRecord,
+  IssuingRetentionRepository,
+  RetainedIssuingProfile,
+  PaymentMethod,
+  RefundRepository,
+  IssuerLogoRecord,
+  ExternalInvoiceRecord,
+  MonthlySummaryChoice,
   OperatorAccountCursor,
   VendorRecord,
   VendorNameRecord,
@@ -128,6 +147,21 @@ import type {
   FeaturesRepository,
   UserFeatureRecord,
   OAuthAuthorizationRequestRecord,
+  ExternalIdentityRecord,
+  MalafatSignInFacts,
+  MalafatSignInOutcome,
+  MalafatSignInRecord,
+  MalafatSignInRepository,
+  SignInCodeRecord,
+  SignInCodeRepository,
+  TwoFactorChallengeRecord,
+  TwoFactorFirstStep,
+  TwoFactorRecord,
+  TwoFactorRepository,
+  ExternalIdentityRepository,
+  MalafatRole,
+  MembershipRole,
+  MemberSyncResult,
   OAuthClientRecord,
   OAuthCodeRecord,
   OAuthGrantRecord,
@@ -173,11 +207,34 @@ import type {
   AcceptAccountantResult,
   PeriodPackRepository,
 } from './ports.js';
-import { CAPTURE_UNDO_REASON, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
+import { CAPTURE_UNDO_REASON, MONTHLY_SUMMARY_CHOICES, READY_RECEIPT, SETUP_LINK_STATUSES, STRIPE_EVENT_ERROR_MAX } from './ports.js';
 import { FEATURES, isFeature } from '../features.js';
 import { ledgerYear, receivableNumber } from '../payments/numbering.js';
+import { COPY_REPLAY_MS } from '../issuing/copies.js';
+import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, postsNewOwed, type EntryState, type LedgerPlan } from '../issuing/ledger-plan.js';
+import { planRelease, splitCredit, type LiveAllocation } from '../issuing/credit-split.js';
+import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
+import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DuePaymentInput, type DueReceivableInput } from '../issuing/documents-due.js';
+import { numberGaps } from '../issuing/gaps.js';
+import { DOC_TYPE_CODES, type IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
+
+/** MUT-571 */
+const TAX_CONNECTION_SELECT = { organizationId: true, environment: true, accessTokenSealed: true, accessExpiresAt: true, refreshTokenSealed: true, refreshExpiresAt: true, connectedByUserId: true, connectedAt: true, version: true } as const;
+
+/** MUT-647 */
+const toExternal = (row: { entryKind: string } & Omit<ExternalInvoiceRecord, 'entryKind'>): ExternalInvoiceRecord => ({ ...row, entryKind: row.entryKind === 'RECEIVED' ? 'RECEIVED' : 'OWED' });
+
+/** MUT-646 */
+/** MUT-569: documents per lines query (Postgres takes at most 32,767 bind parameters). */
+const ISSUED_LINES_CHUNK = 5_000;
+const SETUP_SELECT = { organizationId: true, logoId: true, numberingAnsweredAt: true, introSeenAt: true, defaultsSavedAt: true } as const;
+const toLogo = (row: { id: string; organizationId: string; contentType: string; bytes: Uint8Array; sha256: string; createdAt: Date }): IssuerLogoRecord => ({
+  ...row,
+  contentType: row.contentType === 'image/png' ? 'image/png' : 'image/jpeg',
+  bytes: new Uint8Array(row.bytes),
+});
 
 /**
  * Production LedgerStore over Postgres.
@@ -358,7 +415,7 @@ export class PrismaLedgerStore implements LedgerStore {
     setPassword: async (id, passwordHash, at) => {
       const { count } = await this.prisma.user.updateMany({
         where: { id },
-        data: { passwordHash, passwordChangedAt: at, failedSignIns: 0, lockedUntil: null, updatedAt: at },
+        data: { passwordHash, passwordChangedAt: at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: at },
       });
       return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
     },
@@ -402,6 +459,14 @@ export class PrismaLedgerStore implements LedgerStore {
         return toUser(await tx.user.update({ where: { id }, data: { malafatSuggestions: next as unknown as Prisma.InputJsonValue, updatedAt: at } }));
       }),
     // MUT-418: the same row-lock discipline, so a welcome answered on two devices keeps the first
+    setMonthlySummaryMail: async (id, choice, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { monthlySummaryMail: choice, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
+    setOfferMail: async (id, choice, at) => {
+      const { count } = await this.prisma.user.updateMany({ where: { id }, data: { offerMail: choice, updatedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.user.findUnique({ where: { id } }), toUser);
+    },
     updateTrialPrompt: async (id, action, at) =>
       this.prisma.$transaction(async (tx) => {
         const [locked] = await tx.$queryRaw<Array<{ trialPrompt: unknown }>>`SELECT "trialPrompt" FROM "users" WHERE "id" = ${id}::uuid FOR UPDATE`;
@@ -465,12 +530,12 @@ export class PrismaLedgerStore implements LedgerStore {
           // gets it second finds the hash it verified gone and its own session revoked by the first, and writes nothing.
           const kept = await tx.session.findFirst({
             where: { id: input.exceptSessionId, userId: input.userId, revokedAt: null },
-            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true },
+            select: { id: true, kind: true, userAgent: true, passkeyId: true, absoluteExpiresAt: true, twoFactorAt: true },
           });
           if (person.passwordHash !== input.verifiedPasswordHash || !kept) throw new StateConflict('user', 'CREDENTIAL_CHANGED');
           const user = await tx.user.update({
             where: { id: input.userId },
-            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
+            data: { passwordHash: input.passwordHash, passwordChangedAt: input.at, passwordChosen: true, failedSignIns: 0, lockedUntil: null, updatedAt: input.at },
           });
           await tx.session.updateMany({
             where: { userId: input.userId, revokedAt: null, id: { not: input.exceptSessionId } },
@@ -494,6 +559,8 @@ export class PrismaLedgerStore implements LedgerStore {
                 passkeyId: kept.passkeyId,
                 // MUT-459 (review): a password change proves the password only; the rotated session has no step-up.
                 stepUpAt: null,
+                // MUT-710 (review 6): changing the password isn't losing a factor; the second step carries over.
+                twoFactorAt: kept.twoFactorAt,
               },
             });
           } else {
@@ -561,6 +628,7 @@ export class PrismaLedgerStore implements LedgerStore {
         ...(input.passkeyId === undefined ? {} : { passkeyId: input.passkeyId }),
         // MUT-459: a passkey sign-in is itself the operator's step-up (step-up.ts); a password sign-in is none.
         ...(input.passkeyId ? { stepUpAt: input.at } : {}),
+        ...(input.twoFactorAt ? { twoFactorAt: input.twoFactorAt } : {}),
       };
       const { verifiedPasswordHash } = input;
       if (verifiedPasswordHash === undefined) return toSession(await translate(() => this.prisma.session.create({ data })));
@@ -758,13 +826,370 @@ export class PrismaLedgerStore implements LedgerStore {
   };
 
   /**
+   * MUT-568 (ADR-260): the issuing core. `issue` is one transaction: the counter row first (INSERT … ON CONFLICT, so
+   * the very first document of a type can't race), then D6's date check after that lock (READ COMMITTED: the previous
+   * holder's commit is visible), the original's Owed locked for a credit note or a receipt, the ledger rows, then the
+   * document. A refusal throws IssueRefused so the whole transaction, counter increment included, rolls back: no gap.
+   */
+  readonly issuing: IssuingRepository = {
+    getIssuer: (organizationId) => this.prisma.issuerDetails.findUnique({ where: { organizationId } }),
+    putIssuer: async (organizationId, input, expectedVersion, at) => {
+      if (expectedVersion === null) {
+        try {
+          const record = await translate(() => this.prisma.issuerDetails.create({ data: { organizationId, ...input, createdAt: at, updatedAt: at } }));
+          return { kind: 'created', record };
+        } catch (err) {
+          if (!(err instanceof UniqueViolation)) throw err;
+          const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+          return record ? { kind: 'stale', record } : { kind: 'not_found' };
+        }
+      }
+      const { count } = await this.prisma.issuerDetails.updateMany({ where: { organizationId, version: expectedVersion }, data: { ...input, version: { increment: 1 }, updatedAt: at } });
+      const record = await this.prisma.issuerDetails.findUnique({ where: { organizationId } });
+      if (!record) return { kind: 'not_found' };
+      return count === 1 ? { kind: 'updated', record } : { kind: 'stale', record };
+    },
+    getSetup: (organizationId) => this.prisma.issuingSetup.findUnique({ where: { organizationId }, select: SETUP_SELECT }),
+    markSetup: async (organizationId, mark, at) => {
+      await this.prisma.issuingSetup.upsert({ where: { organizationId }, create: { organizationId, [mark]: at, updatedAt: at }, update: {} });
+      // First stamp wins: a repeat (or a racing twin) leaves it as it was.
+      await this.prisma.issuingSetup.updateMany({ where: { organizationId, [mark]: null }, data: { [mark]: at, updatedAt: at } });
+      return this.prisma.issuingSetup.findUniqueOrThrow({ where: { organizationId }, select: SETUP_SELECT });
+    },
+    addLogo: (organizationId, logo, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const row = await tx.issuerLogo.create({ data: { organizationId, contentType: logo.contentType, bytes: Buffer.from(logo.bytes), sha256: logo.sha256, createdAt: at } });
+        await tx.issuingSetup.upsert({ where: { organizationId }, create: { organizationId, logoId: row.id, updatedAt: at }, update: { logoId: row.id, updatedAt: at } });
+        return toLogo(row);
+      }),
+    clearLogo: async (organizationId, at) => {
+      await this.prisma.issuingSetup.updateMany({ where: { organizationId }, data: { logoId: null, updatedAt: at } });
+    },
+    getLogo: async (organizationId, logoId) => {
+      const row = await this.prisma.issuerLogo.findFirst({ where: { id: logoId, organizationId } });
+      return row ? toLogo(row) : null;
+    },
+    getTaxConnection: (organizationId) => this.prisma.taxAuthorityConnection.findUnique({ where: { organizationId }, select: TAX_CONNECTION_SELECT }),
+    putTaxConnection: (record) =>
+      this.prisma.taxAuthorityConnection.upsert({
+        where: { organizationId: record.organizationId },
+        create: { ...record, version: 1 },
+        update: { ...record, version: { increment: 1 } },
+        select: TAX_CONNECTION_SELECT,
+      }),
+    deleteTaxConnection: async (organizationId) => (await this.prisma.taxAuthorityConnection.deleteMany({ where: { organizationId } })).count > 0,
+    // A small table (one row per connected profile), read once a day: no index on the consent's end.
+    taxConnectionsEndingBetween: (from, to) =>
+      this.prisma.taxAuthorityConnection.findMany({ where: { refreshExpiresAt: { gte: from, lt: to } }, orderBy: { refreshExpiresAt: 'asc' }, select: TAX_CONNECTION_SELECT }),
+    withTaxConnectionLock: (organizationId, fn) =>
+      // The row is locked for the refresh's round trip, so a second caller waits and then sees the new tokens.
+      this.prisma.$transaction(
+        async (tx) => {
+          await tx.$queryRaw`SELECT 1 FROM "tax_authority_connections" WHERE "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+          const current = await tx.taxAuthorityConnection.findUnique({ where: { organizationId }, select: TAX_CONNECTION_SELECT });
+          const { update, result } = await fn(current);
+          if (update) await tx.taxAuthorityConnection.update({ where: { organizationId }, data: { ...update, version: { increment: 1 } } });
+          return result;
+        },
+        { timeout: 30_000, maxWait: 30_000 },
+      ),
+    counters: (organizationId) => this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+    setStartingNumber: (organizationId, docType, start) =>
+      this.prisma.$transaction(async (tx) => {
+        // Review fix 9: lock the counter first, so a first document can't commit between the check and the write.
+        await tx.$queryRaw`SELECT 1 FROM "issued_document_counters" WHERE "organizationId" = ${organizationId}::uuid AND "docType" = ${docType}::"IssuedDocType" FOR UPDATE`;
+        if (await tx.issuedDocument.findFirst({ where: { organizationId, docType }, select: { id: true } })) return { kind: 'has_documents' as const };
+        const counter = await tx.issuedDocumentCounter.upsert({
+          where: { organizationId_docType: { organizationId, docType } },
+          create: { organizationId, docType, start, next: start },
+          update: { start, next: start },
+        });
+        return { kind: 'set' as const, counter };
+      }),
+    issue: async (input, at) => {
+      const replay = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+      if (replay) return { kind: 'issued', document: replay, created: false };
+      try {
+        // MUT-572: an allocation request waits on the Tax Authority inside the issue (at most its timeout), so it gets longer.
+        return await this.prisma.$transaction((tx) => issueTx(tx, input, at), input.allocate ? ISSUE_WITH_ALLOCATION_TX_OPTIONS : CORRECT_TX_OPTIONS);
+      } catch (err) {
+        if (err instanceof IssueRefused) return err.result;
+        // MUT-643 (D4): a credit note locks payments then the Owed, like every payment writer; Postgres breaking a rare
+        // deadlock or serialization conflict is a retryable 409, not a 500.
+        if (isLockConflict(err)) throw new LockConflict();
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+          // Two requests with one key raced past the replay read: the winner's document is the answer.
+          const winner = await findIssuedByKey(this.prisma, input.organizationId, input.requestKey);
+          if (winner) return { kind: 'issued', document: winner, created: false };
+        }
+        throw err;
+      }
+    },
+    getById: async (organizationId, id) => {
+      const row = await this.prisma.issuedDocument.findFirst({ where: { id, organizationId } });
+      return row ? withLines(this.prisma, row) : null;
+    },
+    moneyDocumentOn: (organizationId, paymentId) =>
+      this.prisma.issuedDocument.findFirst({
+        where: { organizationId, paymentId, docType: { in: ['RECEIPT', 'TAX_INVOICE_RECEIPT'] } },
+        select: { id: true, docType: true, number: true },
+        orderBy: [{ issuedAt: 'asc' }, { id: 'asc' }],
+      }),
+    list: async (organizationId, filter, page) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: {
+          organizationId,
+          ...(filter.docType ? { docType: filter.docType } : {}),
+          ...(filter.customerId ? { customerId: filter.customerId } : {}),
+          ...(filter.currency ? { currency: filter.currency } : {}),
+          ...(filter.from || filter.to ? { documentDate: { ...(filter.from ? { gte: filter.from } : {}), ...(filter.to ? { lte: filter.to } : {}) } } : {}),
+          ...(page.cursor ? { OR: [{ issuedAt: { lt: page.cursor.createdAt } }, { issuedAt: page.cursor.createdAt, id: { lt: page.cursor.id } }] } : {}),
+        },
+        orderBy: [{ issuedAt: 'desc' }, { id: 'desc' }],
+        take: page.limit + 1,
+      });
+      const kept = rows.slice(0, page.limit);
+      const lines = await this.prisma.issuedDocumentLine.findMany({ where: { documentId: { in: kept.map((r) => r.id) } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+      const items = kept.map((row) => issuedRecord(row, lines.filter((l) => l.documentId === row.id)));
+      const last = kept[kept.length - 1];
+      return { items, nextCursor: rows.length > page.limit && last ? { createdAt: last.issuedAt, id: last.id } : null };
+    },
+    recordCopy: (organizationId, documentId, copy, at) =>
+      this.prisma.$transaction(async (tx) => {
+        // A row lock, not an UPDATE: the immutability trigger never fires, and concurrent copies queue here.
+        const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM "issued_documents" WHERE "id" = ${documentId}::uuid AND "organizationId" = ${organizationId}::uuid FOR UPDATE`;
+        if (locked.length === 0) return null;
+        // MUT-640: the same request key gets the same copy back (under the lock, so a racing retry waits for it).
+        // Review fix 6: only the same person's retry within a day; a reused key otherwise produces a new copy, never a
+        // second original.
+        let requestKey = copy.requestKey ?? null;
+        if (requestKey) {
+          const again = await tx.issuedDocumentCopy.findFirst({ where: { documentId, requestKey }, select: { copyIndex: true, producedByUserId: true, producedAt: true } });
+          if (again && again.producedByUserId === copy.producedByUserId && at.getTime() - again.producedAt.getTime() <= COPY_REPLAY_MS) return { copyIndex: again.copyIndex };
+          if (again) requestKey = null;
+        }
+        const copyIndex = await tx.issuedDocumentCopy.count({ where: { documentId } });
+        await tx.issuedDocumentCopy.create({ data: { documentId, copyIndex, organizationId, producedAt: at, producedByUserId: copy.producedByUserId, channel: copy.channel, requestKey } });
+        return { copyIndex };
+      }),
+    attachExternal: async (input, file) => {
+      const live = await this.prisma.externalInvoice.findFirst({ where: { organizationId: input.organizationId, entryKind: input.entryKind, entryId: input.entryId, removedAt: null } });
+      if (live) return { kind: 'exists', record: toExternal(live) };
+      try {
+        const created = await this.prisma.$transaction(async (tx) => {
+          await tx.attachment.create({ data: { id: input.attachmentId, organizationId: input.organizationId, kind: 'INVOICE', ...file, invoiceNumber: input.number, invoiceDate: input.documentDate, status: 'READY', createdAt: input.createdAt, completedAt: input.createdAt } });
+          return tx.externalInvoice.create({ data: { ...input } });
+        });
+        return { kind: 'attached', record: toExternal(created) };
+      } catch (err) {
+        // Two attaches raced past the read: the partial unique index lets one through.
+        if (!(err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002')) throw err;
+        const winner = await this.prisma.externalInvoice.findFirstOrThrow({ where: { organizationId: input.organizationId, entryKind: input.entryKind, entryId: input.entryId, removedAt: null } });
+        return { kind: 'exists', record: toExternal(winner) };
+      }
+    },
+    liveExternal: async (organizationId, entryKind, entryIds) =>
+      entryIds.length === 0 ? [] : (await this.prisma.externalInvoice.findMany({ where: { organizationId, entryKind, entryId: { in: [...entryIds] }, removedAt: null } })).map(toExternal),
+    getExternal: async (organizationId, id) => {
+      const row = await this.prisma.externalInvoice.findFirst({ where: { id, organizationId } });
+      return row ? toExternal(row) : null;
+    },
+    removeExternal: async (organizationId, id, at) => {
+      return this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.externalInvoice.updateMany({ where: { id, organizationId, removedAt: null }, data: { removedAt: at } });
+        if (count === 0) return null;
+        const removed = await tx.externalInvoice.findUniqueOrThrow({ where: { id } });
+        await tx.attachment.updateMany({ where: { id: removed.attachmentId, organizationId, deletedAt: null }, data: { deletedAt: at } });
+        return toExternal(removed);
+      });
+    },
+    dueInputs: async (organizationId) => {
+      const [issuer, preferences, payments] = await Promise.all([
+        this.prisma.issuerDetails.findUnique({ where: { organizationId }, select: { dealerType: true, defaultDocumentsPreference: true } }),
+        preferencesOf(this.prisma, organizationId),
+        this.prisma.$queryRaw<DuePaymentRow[]>`
+          SELECT p."id", p."number", p."customerId", p."origin"::text AS "origin", p."status"::text AS "status", p."currency", p."amountMinor", p."receivedOn",
+                 p."notForInvoice", p."receiptNumber",
+                 EXISTS (SELECT 1 FROM "external_invoices" x WHERE x."organizationId" = p."organizationId" AND x."entryKind" = 'RECEIVED' AND x."entryId" = p."id" AND x."removedAt" IS NULL) AS "externalInvoice"
+          FROM "payments" p
+          WHERE p."organizationId" = ${organizationId}::uuid AND p."status" = 'POSTED' AND p."origin" <> 'ISSUED_DOCUMENT'
+            AND NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = p."organizationId" AND d."paymentId" = p."id")
+            AND (p."replacesPaymentId" IS NULL OR NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = p."organizationId" AND d."paymentId" = p."replacesPaymentId"))
+          ORDER BY p."createdAt", p."id"`,
+      ]);
+      const allocations = await liveAllocationsOf(this.prisma, organizationId, payments.map((p) => p.id));
+      const reached = [...new Set([...allocations.values()].flat().map((a) => a.receivableId))];
+      const receivables = await this.prisma.$queryRaw<DueReceivableRow[]>`
+        SELECT r."id", r."number", r."customerId", r."origin"::text AS "origin", r."currency", r."grossMinor", r."paidMinor", r."creditedMinor", r."postingDate", r."notForInvoice",
+               (r."deletedAt" IS NOT NULL) AS "deleted",
+               EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" IN ('TAX_INVOICE', 'TAX_INVOICE_RECEIPT')) AS "documented",
+               (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'TAX_INVOICE' ORDER BY d."issuedAt", d."id" LIMIT 1) AS "taxInvoiceId",
+               (SELECT d."id"::text FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'PAYMENT_REQUEST'
+                  AND NOT EXISTS (SELECT 1 FROM "issued_document_cancellations" c WHERE c."documentId" = d."id") ORDER BY d."issuedAt", d."id" LIMIT 1) AS "paymentRequestId",
+               EXISTS (SELECT 1 FROM "external_invoices" x WHERE x."organizationId" = r."organizationId" AND x."entryKind" = 'OWED' AND x."entryId" = r."id" AND x."removedAt" IS NULL) AS "externalInvoice"
+        FROM "receivables" r
+        WHERE r."organizationId" = ${organizationId}::uuid AND r."deletedAt" IS NULL AND (
+          r."id" = ANY(${reached}::uuid[])
+          OR (r."origin" <> 'ISSUED_DOCUMENT' AND NOT EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" IN ('TAX_INVOICE', 'TAX_INVOICE_RECEIPT')))
+          OR (r."status" = 'OPEN' AND EXISTS (SELECT 1 FROM "issued_documents" d WHERE d."organizationId" = r."organizationId" AND d."receivableId" = r."id" AND d."docType" = 'TAX_INVOICE'))
+        )
+        ORDER BY r."createdAt", r."id"`;
+      return {
+        dealerType: issuer?.dealerType ?? null,
+        defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE,
+        preferences,
+        receivables: receivables.map((r) => ({ ...r, origin: r.origin as DueReceivableInput['origin'] })),
+        payments: payments.map((p) => ({ ...p, origin: p.origin as DuePaymentInput['origin'], status: p.status as DuePaymentInput['status'], documented: false, allocations: allocations.get(p.id) ?? [] })),
+      };
+    },
+    incomeContext: async (organizationId, paymentIds) => {
+      const rows = await this.prisma.payment.findMany({ where: { organizationId, id: { in: [...paymentIds] } }, select: { id: true, replacesPaymentId: true } });
+      const ids = rows.map((r) => r.id);
+      const linkedTo = [...ids, ...rows.flatMap((r) => (r.replacesPaymentId ? [r.replacesPaymentId] : []))];
+      const [docs, externals, allocations, issuer, preferences] = await Promise.all([
+        this.prisma.issuedDocument.findMany({ where: { organizationId, paymentId: { in: linkedTo } }, select: { paymentId: true } }),
+        this.prisma.externalInvoice.findMany({ where: { organizationId, entryKind: 'RECEIVED', entryId: { in: ids }, removedAt: null }, select: { entryId: true } }),
+        liveAllocationsOf(this.prisma, organizationId, ids),
+        this.prisma.issuerDetails.findUnique({ where: { organizationId }, select: { defaultDocumentsPreference: true } }),
+        preferencesOf(this.prisma, organizationId),
+      ]);
+      const documented = new Set(docs.map((d) => d.paymentId));
+      const attached = new Set(externals.map((x) => x.entryId));
+      const reached = [...new Set([...allocations.values()].flat().map((a) => a.receivableId))];
+      const receivableRows = await this.prisma.receivable.findMany({ where: { organizationId, id: { in: reached } }, select: { id: true, customerId: true, notForInvoice: true } });
+      return {
+        defaultPreference: issuer?.defaultDocumentsPreference ?? DEFAULT_DOCUMENTS_PREFERENCE,
+        preferences,
+        receivables: new Map(receivableRows.map((r) => [r.id, { customerId: r.customerId, notForInvoice: r.notForInvoice }])),
+        payments: new Map(rows.map((r) => [r.id, { documented: documented.has(r.id) || (!!r.replacesPaymentId && documented.has(r.replacesPaymentId)), externalInvoice: attached.has(r.id), allocations: allocations.get(r.id) ?? [] }])),
+      };
+    },
+    setNotForInvoice: async (organizationId, items, value, at) =>
+      this.prisma.$transaction(async (tx): Promise<NotForInvoiceResult> => {
+        const found: Array<{ item: NotForInvoiceItem; notForInvoice: boolean }> = [];
+        for (const item of items) {
+          const table = item.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
+          const live = item.kind === 'receivable' ? Prisma.sql`"deletedAt" IS NULL` : Prisma.sql`"status" = 'POSTED'`;
+          const rows = await tx.$queryRaw<Array<{ version: number; notForInvoice: boolean }>>`SELECT "version", "notForInvoice" FROM ${table} WHERE "id" = ${item.id}::uuid AND "organizationId" = ${organizationId}::uuid AND ${live} FOR UPDATE`;
+          const row = rows[0];
+          if (!row) return { kind: 'not_found', item };
+          // Already at `value`: a retry after a lost answer succeeds whatever version it read.
+          if (item.expectedVersion !== undefined && row.version !== item.expectedVersion && row.notForInvoice !== value) return { kind: 'stale', item, version: row.version };
+          if (value && (await hasTaxDocumentTx(tx, organizationId, item))) return { kind: 'has_tax_document', item };
+          found.push({ item, notForInvoice: row.notForInvoice });
+        }
+        const change = found.filter((f) => f.notForInvoice !== value);
+        const ids = (kind: NotForInvoiceItem['kind'], list: typeof found) => list.filter((f) => f.item.kind === kind).map((f) => f.item.id);
+        if (ids('receivable', change).length) await tx.receivable.updateMany({ where: { organizationId, id: { in: ids('receivable', change) } }, data: { notForInvoice: value, version: { increment: 1 } } });
+        if (ids('payment', change).length) await tx.payment.updateMany({ where: { organizationId, id: { in: ids('payment', change) } }, data: { notForInvoice: value, version: { increment: 1 }, updatedAt: at } });
+        const [receivables, payments] = await Promise.all([
+          tx.receivable.findMany({ where: { organizationId, id: { in: ids('receivable', found) } } }),
+          tx.payment.findMany({ where: { organizationId, id: { in: ids('payment', found) } } }),
+        ]);
+        return { kind: 'done', changed: change.length, receivables, payments };
+      }),
+    getOriginalPdf: async (organizationId, documentId) => {
+      const row = await this.prisma.issuedDocumentOriginal.findFirst({ where: { documentId, organizationId } });
+      return row ? { ...row, bytes: new Uint8Array(row.bytes) } : null;
+    },
+    originalCopyIndex: async (organizationId, documentId) =>
+      (await this.prisma.issuedDocumentOriginal.findFirst({ where: { documentId, organizationId }, select: { copyIndex: true } }))?.copyIndex ?? null,
+    keepOriginalPdf: async (organizationId, documentId, pdf, at) => {
+      if (!(await this.prisma.issuedDocument.findFirst({ where: { id: documentId, organizationId }, select: { id: true } }))) return null;
+      // INSERT-only: the first original kept wins; a racing twin's insert conflicts and gets the winner's back.
+      await this.prisma.issuedDocumentOriginal.createMany({ data: [{ documentId, organizationId, copyIndex: pdf.copyIndex, bytes: Buffer.from(pdf.bytes), sha256: pdf.sha256, createdAt: at }], skipDuplicates: true });
+      return this.issuing.getOriginalPdf(organizationId, documentId);
+    },
+    inRange: async (organizationId, from, to) => {
+      const rows = await this.prisma.issuedDocument.findMany({
+        where: { organizationId, documentDate: { gte: from, lte: to } },
+        orderBy: [{ docType: 'asc' }, { number: 'asc' }],
+      });
+      // Lines in chunks: a whole history can pass Postgres's bind-parameter limit in one IN list.
+      const byDocument = new Map<string, IssuedLineRow[]>();
+      for (let i = 0; i < rows.length; i += ISSUED_LINES_CHUNK) {
+        const ids = rows.slice(i, i + ISSUED_LINES_CHUNK).map((r) => r.id);
+        const lines = await this.prisma.issuedDocumentLine.findMany({ where: { organizationId, documentId: { in: ids } }, orderBy: [{ documentId: 'asc' }, { index: 'asc' }] });
+        for (const line of lines) byDocument.set(line.documentId, [...(byDocument.get(line.documentId) ?? []), line]);
+      }
+      return rows
+        .map((row) => issuedRecord(row, byDocument.get(row.id) ?? []))
+        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number);
+    },
+    gaps: async (organizationId) => {
+      const [counters, numbers] = await Promise.all([
+        this.prisma.issuedDocumentCounter.findMany({ where: { organizationId }, orderBy: { docType: 'asc' } }),
+        this.prisma.issuedDocument.findMany({ where: { organizationId }, select: { docType: true, number: true } }),
+      ]);
+      return counters.map((c) => numberGaps(c, numbers.filter((n) => n.docType === c.docType).map((n) => n.number)));
+    },
+    cancelPaymentRequest: async (organizationId, documentId, cancel, at) =>
+      this.prisma.$transaction(async (tx): Promise<CancelPaymentRequestResult> => {
+        const replay = await tx.issuedDocumentCancellation.findFirst({ where: { organizationId, requestKey: cancel.requestKey } });
+        if (replay) return replay.documentId === documentId ? { kind: 'cancelled', cancellation: replay, created: false } : { kind: 'not_found' };
+        const d = await tx.issuedDocument.findFirst({ where: { id: documentId, organizationId }, select: { id: true, docType: true, receivableId: true } });
+        if (!d) return { kind: 'not_found' };
+        if (d.docType !== 'PAYMENT_REQUEST') return { kind: 'not_a_payment_request' };
+        // R4: the request's Owed first, the order a 320 applying it takes. (FOR UPDATE on the document itself is refused
+        // by its insert-only trigger's spirit; the Owed is the shared lock.)
+        if (d.receivableId) await lockReceivable(tx, d.receivableId);
+        const existing = await tx.issuedDocumentCancellation.findUnique({ where: { documentId } });
+        if (existing) return { kind: 'already_cancelled', cancellation: existing };
+        if (blocksCancel(await referringDocumentsOf(tx, organizationId, [documentId]).then((m) => m.get(documentId) ?? []))) return { kind: 'has_documents' };
+        const counter = await tx.$queryRaw<Array<{ taken: number }>>`
+          INSERT INTO "issued_cancellation_counters" ("organizationId", "next") VALUES (${organizationId}::uuid, 2)
+          ON CONFLICT ("organizationId") DO UPDATE SET "next" = "issued_cancellation_counters"."next" + 1
+          RETURNING "next" - 1 AS "taken"`;
+        const cancellation: IssuedDocumentCancellationRecord = await tx.issuedDocumentCancellation.create({
+          data: { organizationId, documentId, number: Number(counter[0]!.taken), cancelledAt: at, reason: cancel.reason, createdByUserId: cancel.userId, requestKey: cancel.requestKey },
+        });
+        return { kind: 'cancelled', cancellation, created: true };
+      }),
+    paymentRequestFacts: async (organizationId, documentIds) => {
+      const out = new Map<string, PaymentRequestFacts>();
+      if (documentIds.length === 0) return out;
+      const requests = await this.prisma.issuedDocument.findMany({ where: { organizationId, id: { in: [...documentIds] }, docType: 'PAYMENT_REQUEST' }, select: { id: true, grossMinor: true } });
+      if (requests.length === 0) return out;
+      const ids = requests.map((r) => r.id);
+      const [referring, cancellations] = await Promise.all([
+        referringDocumentsOf(this.prisma, organizationId, ids),
+        this.prisma.issuedDocumentCancellation.findMany({ where: { organizationId, documentId: { in: ids } } }),
+      ]);
+      const byDoc = new Map(cancellations.map((c) => [c.documentId, c]));
+      for (const r of requests) {
+        const c = byDoc.get(r.id);
+        out.set(r.id, paymentRequestFacts(r.grossMinor, referring.get(r.id) ?? [], c ? { number: c.number, cancelledAt: c.cancelledAt, reason: c.reason } : null));
+      }
+      return out;
+    },
+  };
+
+  /**
    * MUT-314 (ADR-248): three aggregates in parallel, each on the kind's (organizationId, money date) index; the
    * receipts' is joined to the same expense filter. The same row rules as the entries feed and listReadyByExpenseIds.
    */
+  /** MUT-643: refunds written by credit notes, oldest first, with their sources. */
+  readonly refunds: RefundRepository = {
+    list: async (organizationId, filter) => {
+      const rows = await this.prisma.refund.findMany({
+        where: {
+          organizationId,
+          ...(filter.customerId !== undefined ? { customerId: filter.customerId } : {}),
+          ...(filter.currency !== undefined ? { currency: filter.currency } : {}),
+          ...(filter.paymentIds !== undefined ? { sources: { some: { paymentId: { in: [...filter.paymentIds] } } } } : {}),
+          ...(filter.from !== undefined || filter.to !== undefined ? { refundedOn: { ...(filter.from !== undefined ? { gte: filter.from } : {}), ...(filter.to !== undefined ? { lte: filter.to } : {}) } } : {}),
+        },
+        include: { sources: { select: { paymentId: true, amountMinor: true }, orderBy: { paymentId: 'asc' } } },
+        orderBy: [{ refundedOn: 'asc' }, { createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map((row) => ({ ...row, method: row.method as PaymentMethod }));
+    },
+  };
+
   readonly periodPack: PeriodPackRepository = {
     estimate: async (organizationId, bounds, asOf) => {
       const days = { ...(bounds.occurredFrom !== undefined && { gte: bounds.occurredFrom }), lt: bounds.occurredBefore };
-      const expenseWhere = { organizationId, deletedAt: null, occurredOn: days, createdAt: { lte: asOf } };
+      const expenseWhere = { organizationId, deletedAt: null, occurredOn: days, createdAt: { lte: asOf }, ...(bounds.expensesWithReceipt ? { receipts: { some: READY_RECEIPT } } : {}) };
       const [expenses, income, receipts] = await Promise.all([
         this.prisma.expense.count({ where: expenseWhere }),
         this.prisma.payment.count({ where: { organizationId, status: 'POSTED', receivedOn: days, createdAt: { lte: asOf } } }),
@@ -933,7 +1358,10 @@ export class PrismaLedgerStore implements LedgerStore {
           const { count } = await tx.userFeatureGrant.updateMany({ where: { userId: input.userId, feature: input.feature, revokedAt: null }, data: { revokedAt: input.at } });
           if (count > 0 && input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
           // MUT-434 AC7 (OV10): the person's agent grants go in the same transaction, even if the flag was already off.
-          const agentGrantsRevoked = input.agentGrants ? await revokeOAuthGrantsInTx(tx, input.userId, 'feature_revoked', input.at, input.agentGrants.audit) : 0;
+          // MUT-593: agents only; a confidential client's grant (Malafat) isn't governed by the agent flag.
+          const agentGrantsRevoked = input.agentGrants
+            ? await revokeOAuthGrantsWhereInTx(tx, { userId: input.userId, client: { kind: { not: 'CONFIDENTIAL' } } }, 'feature_revoked', input.at, input.agentGrants.audit)
+            : 0;
           return { revoked: count > 0, agentGrantsRevoked };
         }),
       ),
@@ -953,6 +1381,31 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(async () =>
         toOAuthClient(await this.prisma.oAuthClient.create({ data: { id: input.id, kind: 'DCR', clientName: input.clientName, redirectUris: input.redirectUris, createdAt: input.at } })),
       ),
+    createConfidentialClient: (input) =>
+      translate(async () =>
+        toOAuthClient(
+          await this.prisma.oAuthClient.create({
+            data: { id: input.id, kind: 'CONFIDENTIAL', clientName: input.clientName, redirectUris: input.redirectUris, jwksUri: input.jwksUri, allowedResources: input.allowedResources, createdAt: input.at },
+          }),
+        ),
+      ),
+    disableClient: ({ clientId, at }) =>
+      this.prisma.$transaction(async (tx) => {
+        const existing = await tx.oAuthClient.findUnique({ where: { id: clientId } });
+        if (!existing) return null;
+        const client = existing.disabledAt ? existing : await tx.oAuthClient.update({ where: { id: clientId }, data: { disabledAt: at } });
+        const grantsRevoked = await revokeOAuthGrantsWhereInTx(tx, { clientId }, 'client_disabled', at, []);
+        return { client: toOAuthClient(client), grantsRevoked };
+      }),
+    claimAssertion: async ({ clientId, jti, expiresAt, at }) => {
+      try {
+        await this.prisma.oAuthClientAssertion.create({ data: { clientId, jti, expiresAt, createdAt: at } });
+        return true;
+      } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return false;
+        throw err;
+      }
+    },
     upsertCimdClient: async (input) =>
       toOAuthClient(
         await this.prisma.oAuthClient.upsert({
@@ -966,7 +1419,7 @@ export class PrismaLedgerStore implements LedgerStore {
       translate(async () =>
         toOAuthRequest(
           await this.prisma.oAuthAuthorizationRequest.create({
-            data: { clientId: input.clientId, redirectUri: input.redirectUri, codeChallenge: input.codeChallenge, scopes: input.scopes, state: input.state, resource: input.resource, createdAt: input.createdAt, expiresAt: input.expiresAt },
+            data: { clientId: input.clientId, redirectUri: input.redirectUri, codeChallenge: input.codeChallenge, scopes: input.scopes, state: input.state, resource: input.resource, tenantId: input.tenantId, createdAt: input.createdAt, expiresAt: input.expiresAt },
           }),
         ),
       ),
@@ -984,7 +1437,7 @@ export class PrismaLedgerStore implements LedgerStore {
           let grant: OAuthGrantRecord | null = null;
           if (input.approve) {
             const row = await tx.oAuthGrant.create({
-              data: { userId: input.userId, clientId: request.clientId, redirectUri: request.redirectUri, scopes: request.scopes, resource: request.resource, createdAt: input.at, expiresAt: input.approve.grantExpiresAt },
+              data: { userId: input.userId, clientId: request.clientId, redirectUri: request.redirectUri, scopes: request.scopes, resource: request.resource, tenantId: request.tenantId, createdAt: input.at, expiresAt: input.approve.grantExpiresAt },
             });
             await tx.oAuthCode.create({
               data: { codeDigest: input.approve.code.digest, grantId: row.id, codeChallenge: request.codeChallenge, redirectUri: request.redirectUri, resource: request.resource, createdAt: input.at, expiresAt: input.approve.code.expiresAt },
@@ -1036,6 +1489,8 @@ export class PrismaLedgerStore implements LedgerStore {
         return count > 0;
       }),
     revokeAllForUser: (input) => this.prisma.$transaction((tx) => revokeOAuthGrantsInTx(tx, input.userId, input.reason, input.at, input.audit)),
+    revokeForUserTenant: (input) =>
+      this.prisma.$transaction((tx) => revokeOAuthGrantsWhereInTx(tx, { userId: input.userId, clientId: input.clientId, tenantId: input.tenantId }, input.reason, input.at, input.audit)),
     listLiveGrants: async (userId, at) => {
       const rows = await this.prisma.oAuthGrant.findMany({
         where: { userId, revokedAt: null, expiresAt: { gt: at } },
@@ -1057,9 +1512,183 @@ export class PrismaLedgerStore implements LedgerStore {
             where: { OR: [{ expiresAt: { lte: before } }, { grant: { revokedAt: { lte: before } } }, { grant: { revokedAt: null, expiresAt: { lte: before } } }] },
           })
         ).count;
-        const clients = (await tx.oAuthClient.deleteMany({ where: { createdAt: { lte: clientsBefore }, grants: { none: {} }, requests: { none: { createdAt: { gt: clientsBefore } } } } })).count;
-        return { requests, codes, tokens, clients };
+        const clients = (
+          await tx.oAuthClient.deleteMany({ where: { kind: { not: 'CONFIDENTIAL' }, createdAt: { lte: clientsBefore }, grants: { none: {} }, requests: { none: { createdAt: { gt: clientsBefore } } } } })
+        ).count;
+        const assertions = (await tx.oAuthClientAssertion.deleteMany({ where: { expiresAt: { lte: at } } })).count;
+        return { requests, codes, tokens, clients, assertions };
       }),
+  };
+
+  readonly signInCodes: SignInCodeRepository = {
+    issue: async (input) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.signInCode.updateMany({ where: { email: input.email, usedAt: null, cancelledAt: null }, data: { cancelledAt: input.at } });
+        return toSignInCode(
+          await tx.signInCode.create({ data: { email: input.email, userId: input.userId, codeDigest: input.codeDigest, createdAt: input.at, expiresAt: input.expiresAt } }),
+        );
+      }),
+    attempt: async ({ email, codeDigest, at, maxAttempts }) => {
+      const live = await this.prisma.signInCode.findFirst({ where: { email, usedAt: null, cancelledAt: null, expiresAt: { gt: at } }, orderBy: { createdAt: 'desc' } });
+      if (!live) return { kind: 'none' };
+      const open = { id: live.id, usedAt: null, cancelledAt: null };
+      if (live.codeDigest === codeDigest) {
+        // Single use under races: only the claim that changes the row signs in.
+        const { count } = await this.prisma.signInCode.updateMany({ where: open, data: { usedAt: at } });
+        return count === 1 ? { kind: 'matched', userId: live.userId } : { kind: 'none' };
+      }
+      const { count } = await this.prisma.signInCode.updateMany({ where: { ...open, attempts: { lt: maxAttempts } }, data: { attempts: { increment: 1 } } });
+      if (count === 0) return { kind: 'none' };
+      const after = await this.prisma.signInCode.findUnique({ where: { id: live.id }, select: { attempts: true } });
+      const attempts = after?.attempts ?? maxAttempts;
+      if (attempts < maxAttempts) return { kind: 'wrong', triesLeft: maxAttempts - attempts };
+      await this.prisma.signInCode.updateMany({ where: { id: live.id, cancelledAt: null }, data: { cancelledAt: at } });
+      return { kind: 'exhausted' };
+    },
+    prune: async (before) => (await this.prisma.signInCode.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+  };
+
+  readonly twoFactor: TwoFactorRepository = {
+    get: async (userId) => mapNullable(await this.prisma.twoFactor.findUnique({ where: { userId } }), toTwoFactor),
+    enable: (input) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // Review 2: under the person's row lock, so two confirmations can't leave two sets of recovery codes.
+          const [person] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM users WHERE id = ${input.userId}::uuid FOR NO KEY UPDATE`;
+          if (!person) throw new ForeignKeyViolation('two_factor.userId');
+          const existing = await tx.twoFactor.findUnique({ where: { userId: input.userId } });
+          const row = {
+            method: input.method,
+            totpSecretSealed: input.totpSecretSealed,
+            lastUsedStep: input.lastUsedStep === null ? null : BigInt(input.lastUsedStep),
+            failures: 0,
+            failuresSince: null,
+            lockedUntil: null,
+            enabledAt: existing && existing.method === input.method ? existing.enabledAt : input.at,
+            updatedAt: input.at,
+          };
+          await tx.twoFactor.upsert({ where: { userId: input.userId }, create: { userId: input.userId, ...row }, update: row });
+          await tx.twoFactorRecoveryCode.deleteMany({ where: { userId: input.userId } });
+          await tx.twoFactorRecoveryCode.createMany({ data: input.recoveryDigests.map((codeDigest) => ({ userId: input.userId, codeDigest, createdAt: input.at })) });
+          const { count } = await tx.session.updateMany({
+            where: { userId: input.userId, revokedAt: null, ...(input.keepSessionId ? { id: { not: input.keepSessionId } } : {}) },
+            data: { revokedAt: input.at, revokedReason: 'two_factor_enabled' },
+          });
+          if (input.keepSessionId) await tx.session.updateMany({ where: { id: input.keepSessionId, revokedAt: null }, data: { twoFactorAt: input.at } });
+          if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+          return { revokedSessions: count };
+        }),
+      ),
+    disable: (userId, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.twoFactor.deleteMany({ where: { userId } });
+        if (count === 0) return false;
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorChallenge.deleteMany({ where: { userId } });
+        await tx.session.updateMany({ where: { userId, twoFactorAt: { not: null } }, data: { twoFactorAt: null } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
+    recordStep: async (userId, step, at) => {
+      const { count } = await this.prisma.twoFactor.updateMany({
+        where: { userId, OR: [{ lastUsedStep: null }, { lastUsedStep: { lt: BigInt(step) } }] },
+        data: { lastUsedStep: BigInt(step), updatedAt: at },
+      });
+      return count === 1;
+    },
+    reserveTry: (userId, at, policy) =>
+      this.prisma.$transaction(async (tx) => {
+        // Review 2: the person's two_factor row lock serializes parallel tries, so no more than `lockAfter` pass.
+        const [row] = await tx.$queryRaw<Array<{ failures: number; failuresSince: Date | null; lockedUntil: Date | null }>>`SELECT failures, "failuresSince", "lockedUntil" FROM two_factor WHERE "userId" = ${userId}::uuid FOR UPDATE`;
+        if (!row) return { allowed: false, lockedUntil: null };
+        if (row.lockedUntil && row.lockedUntil.getTime() > at.getTime()) return { allowed: false, lockedUntil: row.lockedUntil };
+        const fresh = !row.failuresSince || at.getTime() - row.failuresSince.getTime() > policy.windowMs;
+        const failures = fresh ? 1 : row.failures + 1;
+        if (failures < policy.lockAfter) {
+          await tx.twoFactor.update({ where: { userId }, data: { failures, failuresSince: fresh ? at : row.failuresSince } });
+          return { allowed: true, lockedUntil: null };
+        }
+        const lockedUntil = new Date(at.getTime() + policy.lockMs);
+        await tx.twoFactor.update({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil } });
+        return { allowed: true, lockedUntil };
+      }),
+    clearFailures: async (userId) => {
+      await this.prisma.twoFactor.updateMany({ where: { userId }, data: { failures: 0, failuresSince: null, lockedUntil: null } });
+    },
+    replaceRecoveryCodes: (userId, digests, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.twoFactorRecoveryCode.deleteMany({ where: { userId } });
+        await tx.twoFactorRecoveryCode.createMany({ data: digests.map((codeDigest) => ({ userId, codeDigest, createdAt: at })) });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+      }),
+    useRecoveryCode: async (userId, digest, at) => {
+      const { count } = await this.prisma.twoFactorRecoveryCode.updateMany({ where: { userId, codeDigest: digest, usedAt: null }, data: { usedAt: at } });
+      const left = await this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } });
+      return { used: count === 1, left };
+    },
+    recoveryCodesLeft: (userId) => this.prisma.twoFactorRecoveryCode.count({ where: { userId, usedAt: null } }),
+    createChallenge: async (input) =>
+      toTwoFactorChallenge(
+        await translate(() =>
+          this.prisma.twoFactorChallenge.create({
+            data: {
+              userId: input.userId,
+              tokenDigest: input.tokenDigest,
+              purpose: input.purpose,
+              method: input.method,
+              sessionKind: input.sessionKind ?? null,
+              firstStep: input.firstStep ? { ...input.firstStep } : Prisma.JsonNull,
+              passwordChangedAt: input.passwordChangedAt ?? null,
+              linkId: input.linkId ?? null,
+              pendingSecretSealed: input.pendingSecretSealed ?? null,
+              createdAt: input.at,
+              expiresAt: input.expiresAt,
+            },
+          }),
+        ),
+      ),
+    findChallenge: async (tokenDigest, at) =>
+      mapNullable(await this.prisma.twoFactorChallenge.findFirst({ where: { tokenDigest, consumedAt: null, expiresAt: { gt: at } } }), toTwoFactorChallenge),
+    spendAttempt: async (id, at, maxAttempts) => {
+      // One conditional UPDATE … RETURNING: the count and the tries left come from the same statement.
+      const [row] = await this.prisma.$queryRaw<Array<{ attempts: number }>>`
+        UPDATE two_factor_challenges SET attempts = attempts + 1
+        WHERE id = ${id}::uuid AND "consumedAt" IS NULL AND "expiresAt" > ${at} AND attempts < ${maxAttempts}
+        RETURNING attempts`;
+      return row ? { spent: true, triesLeft: Math.max(0, maxAttempts - Number(row.attempts)) } : { spent: false, triesLeft: 0 };
+    },
+    consumeChallenge: async (id, at) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({ where: { id, consumedAt: null, expiresAt: { gt: at } }, data: { consumedAt: at } });
+      return count === 1;
+    },
+    recordCodeSent: async (id, codeDigest, at, limits) => {
+      const { count } = await this.prisma.twoFactorChallenge.updateMany({
+        where: {
+          id,
+          consumedAt: null,
+          expiresAt: { gt: at },
+          codesSent: { lt: limits.maxCodes },
+          OR: [{ codeSentAt: null }, { codeSentAt: { lte: new Date(at.getTime() - limits.minGapMs) } }],
+        },
+        data: { codeDigest, codeSentAt: at, codesSent: { increment: 1 } },
+      });
+      return count === 1;
+    },
+    pruneChallenges: async (before) => (await this.prisma.twoFactorChallenge.deleteMany({ where: { expiresAt: { lt: before } } })).count,
+    ownsIssuingProfile: async (userId) => {
+      // A person owns a handful of profiles at most: read their ids, then whether any issues.
+      const owned = await this.prisma.organization.findMany({
+        where: { OR: [ownedBy(userId), coOwnedBy(userId), { memberSyncAt: { not: null }, memberships: { some: { userId, role: 'OWNER' } } }] },
+        select: { id: true },
+      });
+      const ids = owned.map((o) => o.id);
+      if (ids.length === 0) return false;
+      const [issuers, connections] = await Promise.all([
+        this.prisma.issuerDetails.count({ where: { organizationId: { in: ids } } }),
+        this.prisma.taxAuthorityConnection.count({ where: { organizationId: { in: ids } } }),
+      ]);
+      return issuers + connections > 0;
+    },
   };
 
   readonly passkeys: PasskeyRepository = {
@@ -1202,6 +1831,7 @@ export class PrismaLedgerStore implements LedgerStore {
             data: {
               passwordHash: input.passwordHash,
               passwordChangedAt: input.at,
+              passwordChosen: true,
               failedSignIns: 0,
               lockedUntil: null,
               updatedAt: input.at,
@@ -1371,8 +2001,11 @@ export class PrismaLedgerStore implements LedgerStore {
       this.prisma.integration.findUnique({ where: { provider_externalTenantId: { provider, externalTenantId } } }),
     listByOrganization: (organizationId) => this.prisma.integration.findMany({ where: { organizationId } }),
     connect: (input) =>
-      translate(() =>
-        this.prisma.integration.upsert({
+      translate(async () => {
+        // MUT-593 (ADR-254 D10): a new tenant, or coming back after a disconnect, starts with Malafat access off.
+        const existing = await this.prisma.integration.findUnique({ where: { organizationId_provider: { organizationId: input.organizationId, provider: input.provider } } });
+        const resetDelegation = existing !== null && (existing.externalTenantId !== input.externalTenantId || existing.status === 'DISCONNECTED');
+        return this.prisma.integration.upsert({
           where: { organizationId_provider: { organizationId: input.organizationId, provider: input.provider } },
           create: {
             organizationId: input.organizationId,
@@ -1390,12 +2023,144 @@ export class PrismaLedgerStore implements LedgerStore {
             connectedByApiKeyId: input.connectedByApiKeyId,
             connectedAt: input.at,
             disconnectedAt: null,
+            ...(resetDelegation ? { delegationEnabledAt: null, delegationEnabledBy: null } : {}),
           },
+        });
+      }),
+    disconnect: (id, at) =>
+      this.prisma.$transaction(async (tx) => {
+        await tx.integration.updateMany({ where: { id }, data: { status: 'DISCONNECTED', disconnectedAt: at } });
+        const integration = await tx.integration.findUnique({ where: { id } });
+        // MUT-593 (ADR-254 §4.7): every person's delegated access to the tenant ends with the connection.
+        if (integration) await revokeOAuthGrantsWhereInTx(tx, { tenantId: integration.externalTenantId }, 'integration_disconnected', at, []);
+        return integration;
+      }),
+    setDelegation: ({ id, enabled, by, at, audit }) =>
+      this.prisma.$transaction(async (tx) => {
+        const existing = await tx.integration.findUnique({ where: { id } });
+        if (!existing) return null;
+        const integration = await tx.integration.update({
+          where: { id },
+          data: enabled ? { delegationEnabledAt: existing.delegationEnabledAt ?? at, delegationEnabledBy: by } : { delegationEnabledAt: null, delegationEnabledBy: null },
+        });
+        const grantsRevoked = enabled ? 0 : await revokeOAuthGrantsWhereInTx(tx, { tenantId: integration.externalTenantId }, 'delegation_disabled', at, []);
+        // MUT-594 (ADR-254 §4.4): turning Malafat access on turns firm features on, so the synced roles mean something.
+        if (enabled) await tx.organization.updateMany({ where: { id: integration.organizationId, firmEnabledAt: null }, data: { firmEnabledAt: at, version: { increment: 1 } } });
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return { integration, grantsRevoked };
+      }),
+  };
+
+  readonly externalIdentities: ExternalIdentityRepository = {
+    syncMembers: ({ organizationId, tenantId, members, at, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // The firm's row lock serializes two syncs of one firm, so a diff is never computed over a half-written one.
+          const [org] = await tx.$queryRaw<Array<{ id: string; memberSyncAt: Date | null }>>`SELECT id, "memberSyncAt" FROM organizations WHERE id = ${organizationId}::uuid FOR NO KEY UPDATE`;
+          if (!org) throw new ForeignKeyViolation('external_identities.organizationId');
+          const existing = new Map((await tx.externalIdentity.findMany({ where: { provider: 'MALAFAT', tenantId } })).map((r) => [r.subject, r]));
+          const listed = new Map(members.map((m) => [m.subject, m]));
+          const result: MemberSyncResult = { added: 0, changed: 0, removed: 0, pending: 0 };
+          for (const m of listed.values()) {
+            const seat = existing.get(m.subject);
+            if (!seat || seat.removedAt) result.added++;
+            else if (seat.malafatRole !== m.role) result.changed++;
+            const row = await tx.externalIdentity.upsert({
+              where: { provider_tenantId_subject: { provider: 'MALAFAT', tenantId, subject: m.subject } },
+              create: { provider: 'MALAFAT', tenantId, subject: m.subject, organizationId, email: m.email, malafatRole: m.role, createdAt: at, updatedAt: at },
+              update: { email: m.email, malafatRole: m.role, organizationId, removedAt: null, updatedAt: at },
+            });
+            if (row.userId) await upsertSeatMembershipInTx(tx, row.userId, organizationId, membershipRoleOf(m.role), at);
+            else result.pending++;
+          }
+          for (const seat of existing.values()) {
+            if (seat.removedAt || listed.has(seat.subject)) continue;
+            await tx.externalIdentity.update({ where: { id: seat.id }, data: { removedAt: at, updatedAt: at } });
+            result.removed++;
+            if (seat.userId) {
+              await tx.membership.deleteMany({ where: { userId: seat.userId, organizationId } });
+              await revokeOAuthGrantsWhereInTx(tx, { userId: seat.userId, tenantId }, 'member_removed', at, []);
+            }
+          }
+          if (!org.memberSyncAt) await tx.organization.update({ where: { id: organizationId }, data: { memberSyncAt: at } });
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return result;
         }),
       ),
-    disconnect: async (id, at) => {
-      await this.prisma.integration.updateMany({ where: { id }, data: { status: 'DISCONNECTED', disconnectedAt: at } });
-      return this.prisma.integration.findUnique({ where: { id } });
+    findBySubject: async (provider, tenantId, subject) => mapNullable(await this.prisma.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } }), toExternalIdentity),
+    listByUser: async (userId) => (await this.prisma.externalIdentity.findMany({ where: { userId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExternalIdentity),
+    listByOrganization: async (organizationId) =>
+      (await this.prisma.externalIdentity.findMany({ where: { organizationId, removedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toExternalIdentity),
+    claim: ({ provider, tenantId, subject, userId, at, audit }) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          // D7: the conditional update is the claim; a second first sign-in finds userId set and changes nothing.
+          const { count } = await tx.externalIdentity.updateMany({ where: { provider, tenantId, subject, userId: null, removedAt: null }, data: { userId, linkedAt: at, updatedAt: at } });
+          const row = await tx.externalIdentity.findUnique({ where: { provider_tenantId_subject: { provider, tenantId, subject } } });
+          if (count === 0 || !row) return { claimed: false, identity: mapNullable(row, toExternalIdentity) };
+          // A link with no firm (the tenant isn't bound to MTB3A) makes no membership.
+          if (row.organizationId) await upsertSeatMembershipInTx(tx, userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), at);
+          if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+          return { claimed: true, identity: toExternalIdentity(row) };
+        }),
+      ),
+    link: (input) =>
+      this.prisma.$transaction(async (tx) => {
+        const where = { provider_tenantId_subject: { provider: input.provider, tenantId: input.tenantId, subject: input.subject } };
+        const seat = await tx.externalIdentity.findUnique({ where });
+        if (seat?.userId && seat.userId !== input.userId) return { kind: 'elsewhere' as const };
+        if (seat?.userId === input.userId) return { kind: 'linked' as const, identity: toExternalIdentity(seat) };
+        let row;
+        if (seat) {
+          // The claim is conditional, so a second consent racing this one finds it linked and reads 'elsewhere' or 'linked'.
+          const { count } = await tx.externalIdentity.updateMany({ where: { id: seat.id, userId: null }, data: { userId: input.userId, linkedAt: input.at, updatedAt: input.at } });
+          row = await tx.externalIdentity.findUniqueOrThrow({ where });
+          if (count === 0) return row.userId === input.userId ? { kind: 'linked' as const, identity: toExternalIdentity(row) } : { kind: 'elsewhere' as const };
+          if (row.organizationId && !row.removedAt) await upsertSeatMembershipInTx(tx, input.userId, row.organizationId, membershipRoleOf(row.malafatRole as MalafatRole), input.at);
+        } else {
+          try {
+            row = await tx.externalIdentity.create({
+              data: { provider: input.provider, tenantId: input.tenantId, subject: input.subject, organizationId: input.organizationId, email: input.email, malafatRole: input.malafatRole, userId: input.userId, linkedAt: input.at, createdAt: input.at, updatedAt: input.at },
+            });
+          } catch (err) {
+            if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') return { kind: 'elsewhere' as const };
+            throw err;
+          }
+        }
+        if (input.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(input.audit, input.at) });
+        return { kind: 'linked' as const, identity: toExternalIdentity(row) };
+      }),
+  };
+
+  readonly malafatSignIns: MalafatSignInRepository = {
+    create: async (input) =>
+      toMalafatSignIn(
+        await this.prisma.malafatSignIn.create({
+          data: { stateDigest: input.stateDigest, codeVerifier: input.codeVerifier, tenantSlug: input.tenantSlug, client: input.client, appChallenge: input.appChallenge, createdAt: input.at, expiresAt: input.expiresAt },
+        }),
+      ),
+    claimCallback: async (stateDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { stateDigest, callbackAt: null, expiresAt: { gt: at } }, data: { callbackAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { stateDigest } }), toMalafatSignIn);
+    },
+    recordResult: async ({ id, facts, outcome, userId, resultDigest, resultExpiresAt }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { facts: facts as unknown as Prisma.InputJsonValue, outcome, userId, resultDigest, resultExpiresAt } });
+    },
+    claimResult: async (resultDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { resultDigest, resultUsedAt: null, resultExpiresAt: { gt: at } }, data: { resultUsedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { resultDigest } }), toMalafatSignIn);
+    },
+    issueTicket: async ({ id, ticketDigest, ticketExpiresAt }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { ticketDigest, ticketExpiresAt } });
+    },
+    findByTicket: async (ticketDigest, at) =>
+      mapNullable(await this.prisma.malafatSignIn.findFirst({ where: { ticketDigest, completedAt: null, ticketExpiresAt: { gt: at } } }), toMalafatSignIn),
+    proveLink: async ({ id, userId, at }) => {
+      await this.prisma.malafatSignIn.update({ where: { id }, data: { userId, linkProvenAt: at } });
+    },
+    claimCompletion: async (ticketDigest, at) => {
+      const { count } = await this.prisma.malafatSignIn.updateMany({ where: { ticketDigest, completedAt: null, ticketExpiresAt: { gt: at } }, data: { completedAt: at } });
+      return count === 0 ? null : mapNullable(await this.prisma.malafatSignIn.findUnique({ where: { ticketDigest } }), toMalafatSignIn);
     },
   };
 
@@ -1617,6 +2382,9 @@ export class PrismaLedgerStore implements LedgerStore {
       if (patch.phone !== undefined) data.phone = patch.phone;
       if (patch.notes !== undefined) data.notes = patch.notes;
       if (patch.vatTreatment !== undefined) data.vatTreatment = patch.vatTreatment;
+      if (patch.taxId !== undefined) data.taxId = patch.taxId;
+      if (patch.address !== undefined) data.address = patch.address;
+      if (patch.documentsPreference !== undefined) data.documentsPreference = patch.documentsPreference;
       const { count } = await this.prisma.customer.updateMany({ where: { id, organizationId, version: expectedVersion }, data });
       const record = await this.prisma.customer.findFirst({ where: { id, organizationId } });
       if (!record) return { kind: 'not_found' };
@@ -2067,7 +2835,8 @@ export class PrismaLedgerStore implements LedgerStore {
       return rows.filter((r) => r.grossMinor - r.paidMinor - r.creditedMinor > 0n);
     },
     credit: async (organizationId, receivableId, input: CreditInput, at) => {
-      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null }, select: { id: true } });
+      // MUT-568 (review fix 2): a document's Owed is corrected only by a credit note, never credited here.
+      const exists = await this.prisma.receivable.findFirst({ where: { id: receivableId, organizationId, deletedAt: null, origin: { not: 'ISSUED_DOCUMENT' } }, select: { id: true } });
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         const r = await lockReceivable(tx, receivableId);
@@ -2083,7 +2852,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // one page without the other.
     statementSources: async (organizationId, customerId, currency) => {
       const agreement = { organizationId, customerId, currency };
-      const [receivables, credits, payments, allocations, installments, charges] = await this.prisma.$transaction(
+      const [receivables, credits, payments, allocations, installments, charges, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, customerId, currency, deletedAt: null } }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { customerId, currency, deletedAt: null } } }),
@@ -2091,25 +2860,28 @@ export class PrismaLedgerStore implements LedgerStore {
           this.prisma.paymentAllocation.findMany({ where: { organizationId, releasedAt: null, payment: { customerId, currency } } }),
           this.prisma.installment.findMany({ where: { organizationId, agreement } }),
           this.prisma.retainerCharge.findMany({ where: { organizationId, agreement } }),
+          this.prisma.refund.findMany({ where: { organizationId, customerId, currency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments, allocations, installments, charges };
+      return { receivables, credits, payments, allocations, installments, charges, refunds: refunds.map(refundLine) };
     },
     // MUT-483: three queries over the organization, each led by organizationId (the first column of an existing index on
     // every table; currency is a residual filter), with only the ledger fields: deserializing whole rows is the cost
     // (TD-291). One REPEATABLE READ snapshot, so a payment and the charge it pays never land in different reads.
     periodSources: async (organizationId, currency) => {
       const inCurrency = currency === null ? {} : { currency };
-      const [receivables, credits, payments] = await this.prisma.$transaction(
+      const [receivables, credits, payments, refunds] = await this.prisma.$transaction(
         [
           this.prisma.receivable.findMany({ where: { organizationId, deletedAt: null, ...inCurrency }, select: PERIOD_RECEIVABLE_FIELDS }),
           this.prisma.receivableCredit.findMany({ where: { organizationId, receivable: { deletedAt: null, ...inCurrency } }, select: PERIOD_CREDIT_FIELDS }),
           this.prisma.payment.findMany({ where: { organizationId, ...inCurrency }, select: PERIOD_PAYMENT_FIELDS }),
+          // MUT-643: refunds are lines too (organizationId leads both refund indexes).
+          this.prisma.refund.findMany({ where: { organizationId, ...inCurrency }, select: REFUND_LINE_FIELDS }),
         ],
         { isolationLevel: 'RepeatableRead' },
       );
-      return { receivables, credits, payments };
+      return { receivables, credits, payments, refunds: refunds.map(refundLine) };
     },
     list: async (organizationId, filter: ReceivableFilter, page) => {
       const rows = await this.prisma.receivable.findMany({
@@ -2138,7 +2910,7 @@ export class PrismaLedgerStore implements LedgerStore {
     // landing in between would otherwise hide a row a POSTED payment is allocated to. Same shape as
     // payments.reverse re-asserting `status: 'POSTED'`. A refusal shows up as a row that comes back undeleted.
     softDeleteAdjustment: async (organizationId, id, at) => {
-      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n }, data: { deletedAt: at } });
+      await this.prisma.receivable.updateMany({ where: { id, organizationId, deletedAt: null, paidMinor: 0n, creditedMinor: 0n, origin: { not: 'ISSUED_DOCUMENT' } }, data: { deletedAt: at } });
       return this.prisma.receivable.findFirst({ where: { id, organizationId } });
     },
     // One transaction (MUT-223 pre-landing review, write-race fix): the updated row stays locked until commit, so the re-read is exactly this
@@ -2224,6 +2996,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (!exists) return null;
       return this.prisma.$transaction(async (tx) => {
         if (!(await markReversedTx(tx, paymentId, null, reason, null, at))) return { payment: await tx.payment.findUniqueOrThrow({ where: { id: paymentId } }), changed: false };
+        await assertNoRefundTx(tx, paymentId);
         const allocations = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
         await lockReceivablesInIdOrder(tx, allocations.map((a) => a.receivableId));
         await releaseAllocationsTx(tx, allocations);
@@ -2244,6 +3017,7 @@ export class PrismaLedgerStore implements LedgerStore {
             const current = await tx.payment.findUniqueOrThrow({ where: { id: paymentId }, select: { status: true } });
             throw new StateConflict('payment', current.status === 'POSTED' ? 'PREVIEW_STALE' : 'PAYMENT_NOT_POSTED');
           }
+          await assertNoRefundTx(tx, paymentId);
           await assertPaymentRefsTx(tx, input);
           const number = await nextPaymentNumberTx(tx, input.organizationId, input.receivedOn);
           const released = await tx.paymentAllocation.findMany({ where: { paymentId, releasedAt: null } });
@@ -2259,6 +3033,7 @@ export class PrismaLedgerStore implements LedgerStore {
         throw isTransactionTimeout(err) ? new LockConflict() : err;
       });
     },
+    findByClientRequestKey: (organizationId, clientRequestKey) => this.prisma.payment.findFirst({ where: { organizationId, clientRequestKey } }),
     findReplacedBy: (organizationId, paymentId) => this.prisma.payment.findFirst({ where: { organizationId, replacesPaymentId: paymentId, status: 'POSTED' } }),
     capture: (input, at) =>
       this.paymentWrite(() =>
@@ -2320,7 +3095,8 @@ export class PrismaLedgerStore implements LedgerStore {
   readonly expenses: ExpenseRepository = {
     // The row insert itself lives in createExpenseRow so MUT-66's filing can run it inside its own transaction.
     create: (input, at) => createExpenseRow(this.prisma, input, at),
-    getById: (organizationId, id) => this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null } }),
+    getById: (organizationId, id, options) =>
+      this.prisma.expense.findFirst({ where: { id, organizationId, deletedAt: null, ...(options?.withReceipt ? { receipts: { some: READY_RECEIPT } } : {}) } }),
     list: async (organizationId, filter, page) => {
       const rows: ExpenseRecord[] = await this.prisma.expense.findMany({
         // One AND array (MUT-267 Q1): the group clause and the cursor each need their own OR, and spread keys would overwrite each other.
@@ -2354,6 +3130,55 @@ export class PrismaLedgerStore implements LedgerStore {
         await tx.expenseReceipt.updateMany({ where: { id: { in: pending.map((r) => r.id) } }, data: { deletedAt: at } });
         return { record, changed: true, removedReceipts: pending.map((r) => toExpenseReceipt({ ...r, deletedAt: at })) };
       }, RECEIPT_TX_OPTIONS),
+    moveToProfile: (params) =>
+      translate(() =>
+        this.prisma.$transaction(async (tx) => {
+          const { organizationId, expenseId, targetOrganizationId } = params;
+          // Expense first, then its receipts: the order a delete and a MUT-44 completion take. A filing onto this
+          // expense (fileOntoExpense) holds its own To-review receipt, then waits here, and after the commit finds no
+          // live expense on the source.
+          if (!(await lockLiveExpense(tx, organizationId, expenseId))) return { kind: 'not_found' as const };
+          const { version } = await tx.expense.findUniqueOrThrow({ where: { id: expenseId }, select: { version: true } });
+          if (version !== params.expectedVersion) return { kind: 'stale' as const, currentVersion: version };
+          const live = await tx.$queryRaw<Array<{ id: string; status: string; storageKey: string; createdAt: Date }>>`SELECT "id", "status", "storageKey", "createdAt" FROM "expense_receipts" WHERE "organizationId" = ${organizationId}::uuid AND "expenseId" = ${expenseId}::uuid AND "deletedAt" IS NULL ORDER BY "id" FOR NO KEY UPDATE`;
+          // TD-309: an upload left unfinished past the pending window goes with the move instead of blocking it.
+          const abandoned = live.filter((r) => r.status === 'PENDING_UPLOAD' && r.createdAt < params.abandonedBefore);
+          const onExpense = live.filter((r) => !abandoned.includes(r));
+          if (onExpense.some((r) => r.status !== 'READY')) return { kind: 'receipt_not_ready' as const };
+          const wanted = Object.keys(params.receiptKeys).sort();
+          if (onExpense.length !== wanted.length || onExpense.map((r) => r.id).sort().some((id, i) => id !== wanted[i])) return { kind: 'receipts_changed' as const, currentVersion: version };
+
+          const data: Prisma.ExpenseUncheckedUpdateInput = { organizationId: targetOrganizationId, version: { increment: 1 }, updatedAt: params.at };
+          for (const [k, v] of Object.entries(params.patch)) if (v !== undefined) (data as Record<string, unknown>)[k] = v;
+          const expense = await tx.expense.update({ where: { id: expenseId }, data });
+          const receipts: ExpenseReceiptRecord[] = [];
+          for (const r of onExpense) {
+            const { approved } = await tx.expenseReceipt.findUniqueOrThrow({ where: { id: r.id }, select: { approved: true } });
+            const moved = await tx.expenseReceipt.update({
+              where: { id: r.id },
+              data: {
+                organizationId: targetOrganizationId,
+                storageKey: params.receiptKeys[r.id]!,
+                version: { increment: 1 },
+                ...(approved !== null && typeof approved === 'object' ? { approved: { ...(approved as Prisma.JsonObject), categoryId: params.approvedCategoryId } } : {}),
+              },
+            });
+            receipts.push(toExpenseReceipt(moved));
+          }
+          if (abandoned.length > 0) {
+            await tx.expenseReceipt.updateMany({ where: { id: { in: abandoned.map((r) => r.id) } }, data: { deletedAt: params.at, version: { increment: 1 } } });
+          }
+          await tx.expenseGroupOverride.deleteMany({ where: { expenseId } });
+          if (params.audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(params.audit, params.at) });
+          return {
+            kind: 'moved' as const,
+            expense,
+            receipts,
+            previousStorageKeys: onExpense.map((r) => r.storageKey),
+            abandonedStorageKeys: abandoned.map((r) => r.storageKey).filter((k) => k !== ''),
+          };
+        }, RECEIPT_TX_OPTIONS),
+      ),
     totalsByCurrency: async (organizationId, filter) => {
       const rows = await this.prisma.expense.groupBy({
         by: ['currency'],
@@ -2610,6 +3435,13 @@ export class PrismaLedgerStore implements LedgerStore {
       const row = await this.prisma.vendorName.findUnique({ where: { organizationId_nameKey: { organizationId, nameKey } }, include: { vendor: true } });
       return row ? toVendor(row.vendor) : null;
     },
+    // One statement: an expense linked to it meanwhile keeps it (expenses.vendorId would otherwise be SET NULL). Its
+    // names go by ON DELETE CASCADE.
+    removeIfUnused: (organizationId, id) =>
+      translate(async () => {
+        const deleted = await this.prisma.$executeRaw`DELETE FROM "vendors" v WHERE v."id" = ${id}::uuid AND v."organizationId" = ${organizationId}::uuid AND NOT EXISTS (SELECT 1 FROM "expenses" e WHERE e."vendorId" = v."id")`;
+        return deleted > 0;
+      }),
   };
 
   readonly expenseReceipts: ExpenseReceiptRepository = {
@@ -2691,7 +3523,7 @@ export class PrismaLedgerStore implements LedgerStore {
       if (row.deletedAt || row.filingStatus === 'FILED') {
         // F8: filed or deleted while it was read: SKIPPED, and the reading is dropped.
         const skipped = await this.prisma.expenseReceipt.updateMany({ where: { id, readStatus: 'PENDING' }, data: end('SKIPPED', null) });
-        return skipped.count === 1 ? { kind: 'skipped' } : { kind: 'not_pending' };
+        return skipped.count === 1 ? { kind: 'skipped', reason: row.deletedAt ? 'deleted' : 'filed' } : { kind: 'not_pending' };
       }
       return { kind: 'stale', record: toExpenseReceipt(row) };
     },
@@ -2728,7 +3560,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     markBacklogPending: async (scope, now) => {
       const candidates = await this.prisma.expenseReceipt.findMany({
-        where: { uploadedByUserId: scope.userId, ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
+        where: { ...(scope.userId ? { uploadedByUserId: scope.userId } : { uploadedByUserId: { not: null } }), ...(scope.organizationId ? { organizationId: scope.organizationId } : {}), status: 'READY', filingStatus: 'TO_REVIEW', deletedAt: null, readStatus: 'NONE' },
         select: { id: true, suggested: true },
       });
       const ids = candidates.filter((r) => !isCompleteSuggestion(r.suggested as unknown as ReceiptSuggestion | null)).map((r) => r.id);
@@ -2952,6 +3784,25 @@ export class PrismaLedgerStore implements LedgerStore {
           ? [{ stripeSubscriptionId: s.stripeSubscriptionId, endedAt: s.endedAt, tier: s.tier, currency: s.billingAccount.currency as 'ILS' | 'USD', userId: user.id, email: user.email, locale: user.locale as UserLocale }]
           : [];
       });
+    },
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+      const people = await this.prisma.user.findMany({
+        where: {
+          status: 'ACTIVE',
+          deleteAfter: null,
+          ...(after ? { id: { gt: after } } : {}),
+          OR: [
+            { billingAccount: { is: { subscriptions: { some: { tier: { not: 'ACCOUNTANT' }, status: { in: ['active', 'trialing', 'past_due'] } } } } } },
+            { trialStartedAt: { gt: trialStartedAfter } },
+            { entitlementGrants: { some: { tier: { not: 'ACCOUNTANT' }, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } },
+            { memberships: { some: { role: 'OWNER', organization: { integrations: { some: { provider: 'MALAFAT', status: 'CONNECTED' } } } } } },
+          ],
+        },
+        select: { id: true, email: true, locale: true, monthlySummaryMail: true },
+        orderBy: { id: 'asc' },
+        take: limit,
+      });
+      return people.map((p) => ({ userId: p.id, email: p.email, locale: p.locale as UserLocale, choice: monthlySummaryChoiceOf(p.monthlySummaryMail) }));
     },
     pastDueCandidates: async () => {
       const subs = await this.prisma.billingSubscription.findMany({
@@ -3247,6 +4098,66 @@ export class PrismaLedgerStore implements LedgerStore {
     },
   };
 
+  /**
+   * MUT-644 (ADR-277, amended 2026-11-25): closed profiles' issuing rows. A profile id held by a retained table with no
+   * organizations row is a closed one (the purge deleted the profile and left the rows, ADR-260). One aggregate read;
+   * the sweep and the erasure re-check inside their own transaction, under the trigger's bypass.
+   */
+  readonly issuingRetention: IssuingRetentionRepository = {
+    listClosed: async (filter, limit) => {
+      const due = filter.dueBefore === undefined ? Prisma.empty : Prisma.sql`AND (r.oldest IS NULL OR r.oldest < ${filter.dueBefore})`;
+      const query = filter.query?.trim();
+      const search = query ? Prisma.sql`AND (r."legalName" ILIKE ${`%${likeEscape(query)}%`} OR r."vatId" LIKE ${`${likeEscape(query)}%`})` : Prisma.empty;
+      return (await this.prisma.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.empty)} WHERE TRUE ${due} ${search} ORDER BY r.oldest ASC NULLS FIRST, r."organizationId" ASC LIMIT ${limit}`).map(toRetained);
+    },
+    getClosed: async (organizationId) => {
+      const [row] = await this.prisma.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.sql`WHERE "organizationId" = ${organizationId}::uuid`)}`;
+      return row ? toRetained(row) : null;
+    },
+    sweep: (organizationId, dueBefore, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const held = await closedProfileIn(tx, organizationId);
+        if (held.kind !== 'held') return held;
+        const due = await tx.$queryRaw<Array<{ id: string; retainedFrom: string; cancelled: boolean }>>`
+          SELECT x.id::text AS id, ${RETENTION_DATE_SQL} AS "retainedFrom", (c.id IS NOT NULL) AS cancelled
+          FROM issued_documents x LEFT JOIN issued_document_cancellations c ON c."documentId" = x.id
+          WHERE x."organizationId" = ${organizationId}::uuid AND ${RETENTION_DATE_SQL} < ${dueBefore}
+          ORDER BY 2 ASC, 1 ASC`;
+        if (due.length === 0 && held.profile.documents > 0) return { kind: 'not_due' as const, oldestDocumentDate: held.profile.oldestDocumentDate! };
+        // ADR-260 decision 1: the only sanctioned way past the immutability triggers, for this transaction alone.
+        await tx.$executeRawUnsafe(`SET LOCAL mutaba3a.issuing_bypass = 'on'`);
+        const ids = due.map((d) => d.id);
+        let rows = 0;
+        if (ids.length > 0) {
+          for (const [table, column] of RETAINED_ISSUING_DOCUMENT_TABLES) {
+            rows += await tx.$executeRaw`DELETE FROM ${Prisma.raw(`"${table}"`)} WHERE "organizationId" = ${organizationId}::uuid AND ${Prisma.raw(`"${column}"`)} = ANY(${ids}::uuid[])`;
+          }
+        }
+        const remaining = held.profile.documents - due.length;
+        const profileRows = remaining === 0;
+        if (profileRows) rows += await deleteRetainedRows(tx, RETAINED_ISSUING_PROFILE_TABLES, organizationId);
+        const swept = { documents: due.length, cancellations: due.filter((d) => d.cancelled).length, oldest: due[0]?.retainedFrom ?? null, newest: due.at(-1)?.retainedFrom ?? null };
+        const event = await tx.issuingRetentionEvent.create({ data: { organizationId, action: 'SWEPT', metadata: retentionSweepMetadata(swept, rows, remaining, profileRows), createdAt: at } });
+        return { kind: 'swept' as const, documents: swept.documents, cancellations: swept.cancellations, rows, remaining, profileRows, event: toRetentionEvent(event) };
+      }),
+    erase: (organizationId, reference, at) =>
+      this.prisma.$transaction(async (tx) => {
+        const held = await closedProfileIn(tx, organizationId);
+        if (held.kind !== 'held') return held;
+        const exported = await tx.issuingRetentionEvent.findMany({ where: { organizationId, action: 'ARCHIVE_EXPORTED', createdAt: { lte: at } }, orderBy: [{ createdAt: 'desc' }, { id: 'desc' }] });
+        const handed = exported.map(toRetentionEvent).find((e) => handsOverArchive(e, at));
+        if (!handed) return { kind: 'archive_not_handed_over' as const };
+        await tx.$executeRawUnsafe(`SET LOCAL mutaba3a.issuing_bypass = 'on'`);
+        const rows = await deleteRetainedRows(tx, RETAINED_ISSUING_TABLES, organizationId);
+        const { documents, cancellations } = held.profile;
+        const event = await tx.issuingRetentionEvent.create({ data: { organizationId, action: 'ERASED', metadata: { reference, documents, cancellations, rows, archiveEventId: handed.id }, createdAt: at } });
+        return { kind: 'erased' as const, documents, cancellations, rows, event: toRetentionEvent(event) };
+      }),
+    record: async (organizationId, action, metadata, at) => toRetentionEvent(await this.prisma.issuingRetentionEvent.create({ data: { organizationId, action, metadata, createdAt: at } })),
+    events: async (organizationId) =>
+      (await this.prisma.issuingRetentionEvent.findMany({ where: { organizationId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toRetentionEvent),
+  };
+
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = await this.prisma.signupReview.findMany({
@@ -3405,7 +4316,11 @@ export class PrismaLedgerStore implements LedgerStore {
       const branchesOf = (organizationId: string): Array<Promise<EntryRow[]>> => [
         wanted('expense')
           ? this.prisma.expense
-              .findMany({ where: { organizationId, deletedAt: null, ...bounds('occurredOn') }, orderBy: orderBy('occurredOn'), take })
+              .findMany({
+                where: { organizationId, deletedAt: null, ...(page.expensesWithReceipt ? { receipts: { some: READY_RECEIPT } } : {}), ...bounds('occurredOn') },
+                orderBy: orderBy('occurredOn'),
+                take,
+              })
               .then((rows) => rows.map((record): EntryRow => ({ kind: 'expense', record })))
           : Promise.resolve([]),
         wanted('payment')
@@ -3440,7 +4355,8 @@ export class PrismaLedgerStore implements LedgerStore {
       for (const a of allocations) count.set(a.paymentId, (count.get(a.paymentId) ?? 0) + 1);
       return new Map(allocations.filter((a) => count.get(a.paymentId) === 1 && a.receivable.origin === 'ADJUSTMENT').map((a) => [a.paymentId, a.receivableId]));
     },
-    // MUT-575: two queries whatever the number of clients. The counts read each kind's money-date index
+    // MUT-575: two queries whatever the number of clients. An expense counts only with a READY, live receipt: what the
+    // accountant sees of the profile. The counts read each kind's money-date index
     // ((organizationId, occurredOn | receivedOn, …)), bounded by the month; the newest logged reads the createdAt
     // indexes, one row per kind per client. GREATEST ignores a NULL (a kind with no live row).
     clientActivity: async (windows) => {
@@ -3450,14 +4366,17 @@ export class PrismaLedgerStore implements LedgerStore {
         this.prisma.$queryRaw<Array<{ organizationId: string; count: bigint }>>`
           SELECT w.org::text AS "organizationId",
             (SELECT count(*) FROM "expenses" e
-               WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL AND e."occurredOn" >= w.f AND e."occurredOn" < w.b)
+               WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL AND e."occurredOn" >= w.f AND e."occurredOn" < w.b
+                 AND EXISTS (SELECT 1 FROM "expense_receipts" r WHERE r."organizationId" = e."organizationId" AND r."expenseId" = e."id" AND r."status" = 'READY' AND r."deletedAt" IS NULL))
             + (SELECT count(*) FROM "payments" p
                WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
                  AND p."receivedOn" >= w.f AND p."receivedOn" < w.b) AS count
           FROM unnest(${ids}::uuid[], ${windows.map((w) => w.from)}::text[], ${windows.map((w) => w.before)}::text[]) AS w(org, f, b)`,
         this.prisma.$queryRaw<Array<{ organizationId: string; last: Date | null }>>`
           SELECT w.org::text AS "organizationId", GREATEST(
-            (SELECT e."createdAt" FROM "expenses" e WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL ORDER BY e."createdAt" DESC LIMIT 1),
+            (SELECT e."createdAt" FROM "expenses" e WHERE e."organizationId" = w.org AND e."deletedAt" IS NULL
+               AND EXISTS (SELECT 1 FROM "expense_receipts" r WHERE r."organizationId" = e."organizationId" AND r."expenseId" = e."id" AND r."status" = 'READY' AND r."deletedAt" IS NULL)
+               ORDER BY e."createdAt" DESC LIMIT 1),
             (SELECT p."createdAt" FROM "payments" p WHERE p."organizationId" = w.org AND (p."reversalReason" IS NULL OR p."reversalReason" <> ${CAPTURE_UNDO_REASON})
                ORDER BY p."createdAt" DESC LIMIT 1)
           ) AS last
@@ -3663,7 +4582,12 @@ function toUserFeature(row: { userId: string; feature: string; grantedBy: string
 
 /** Every live grant of the person in one UPDATE; `audit` only when there was one. */
 async function revokeOAuthGrantsInTx(tx: Prisma.TransactionClient, userId: string, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
-  const { count } = await tx.oAuthGrant.updateMany({ where: { userId, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
+  return revokeOAuthGrantsWhereInTx(tx, { userId }, reason, at, audit);
+}
+
+/** MUT-593: every live grant matching `where` in one UPDATE; `audit` only when there was one. */
+async function revokeOAuthGrantsWhereInTx(tx: Prisma.TransactionClient, where: Prisma.OAuthGrantWhereInput, reason: OAuthGrantRevokedReason, at: Date, audit: AuditEventInput[]): Promise<number> {
+  const { count } = await tx.oAuthGrant.updateMany({ where: { ...where, revokedAt: null }, data: { revokedAt: at, revokedReason: reason } });
   if (count > 0 && audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
   return count;
 }
@@ -3682,20 +4606,51 @@ async function revokeOAuthGrantsAuditedInTx(tx: Prisma.TransactionClient, userId
   return count;
 }
 
+/** MUT-594: a seat's membership, created or re-roled by D3. */
+async function upsertSeatMembershipInTx(tx: Prisma.TransactionClient, userId: string, organizationId: string, role: MembershipRole, at: Date): Promise<void> {
+  await tx.membership.upsert({ where: { userId_organizationId: { userId, organizationId } }, create: { userId, organizationId, role, createdAt: at }, update: { role } });
+}
+
+function toSignInCode(row: Prisma.SignInCodeGetPayload<object>): SignInCodeRecord {
+  return { id: row.id, email: row.email, userId: row.userId, createdAt: row.createdAt, expiresAt: row.expiresAt, attempts: row.attempts };
+}
+
+function toMalafatSignIn(row: Prisma.MalafatSignInGetPayload<object>): MalafatSignInRecord {
+  const { resultDigest: _r, ticketDigest: _t, ...record } = row;
+  void _r;
+  void _t;
+  return { ...record, client: record.client as 'web' | 'app', outcome: record.outcome as MalafatSignInOutcome | null, facts: record.facts as unknown as MalafatSignInFacts | null };
+}
+
+function toExternalIdentity(row: Prisma.ExternalIdentityGetPayload<object>): ExternalIdentityRecord {
+  return { ...row, malafatRole: row.malafatRole as MalafatRole };
+}
+
 function oauthTokenRows(grantId: string, tokens: readonly OAuthTokenInput[], at: Date): Prisma.OAuthTokenCreateManyInput[] {
   return tokens.map((t) => ({ id: t.id, tokenDigest: t.digest, grantId, kind: t.kind, createdAt: at, expiresAt: t.expiresAt }));
 }
 
 function toOAuthClient(row: Prisma.OAuthClientGetPayload<object>): OAuthClientRecord {
-  return { id: row.id, kind: row.kind, clientName: row.clientName, redirectUris: row.redirectUris, createdAt: row.createdAt, lastUsedAt: row.lastUsedAt, metadataExpiresAt: row.metadataExpiresAt };
+  return {
+    id: row.id,
+    kind: row.kind,
+    clientName: row.clientName,
+    redirectUris: row.redirectUris,
+    createdAt: row.createdAt,
+    lastUsedAt: row.lastUsedAt,
+    metadataExpiresAt: row.metadataExpiresAt,
+    jwksUri: row.jwksUri,
+    allowedResources: row.allowedResources,
+    disabledAt: row.disabledAt,
+  };
 }
 
 function toOAuthRequest(row: Prisma.OAuthAuthorizationRequestGetPayload<object>): OAuthAuthorizationRequestRecord {
-  return { id: row.id, clientId: row.clientId, redirectUri: row.redirectUri, codeChallenge: row.codeChallenge, scopes: row.scopes, state: row.state, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, decidedAt: row.decidedAt, userId: row.userId };
+  return { id: row.id, clientId: row.clientId, redirectUri: row.redirectUri, codeChallenge: row.codeChallenge, scopes: row.scopes, state: row.state, resource: row.resource, tenantId: row.tenantId, createdAt: row.createdAt, expiresAt: row.expiresAt, decidedAt: row.decidedAt, userId: row.userId };
 }
 
 function toOAuthGrant(row: Prisma.OAuthGrantGetPayload<object>): OAuthGrantRecord {
-  return { id: row.id, userId: row.userId, clientId: row.clientId, redirectUri: row.redirectUri, scopes: row.scopes, resource: row.resource, createdAt: row.createdAt, expiresAt: row.expiresAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revokedReason: row.revokedReason };
+  return { id: row.id, userId: row.userId, clientId: row.clientId, redirectUri: row.redirectUri, scopes: row.scopes, resource: row.resource, tenantId: row.tenantId, createdAt: row.createdAt, expiresAt: row.expiresAt, lastUsedAt: row.lastUsedAt, revokedAt: row.revokedAt, revokedReason: row.revokedReason };
 }
 
 function toOAuthCode(row: Prisma.OAuthCodeGetPayload<object>): OAuthCodeRecord {
@@ -3818,6 +4773,12 @@ function countReadyOnExpense(tx: Tx, organizationId: string, expenseId: string):
 /** MUT-483: the ledger fields `periodSources` reads (ports.ts `Ledger*Row`), so a period read never loads whole rows. */
 const PERIOD_RECEIVABLE_FIELDS = { id: true, customerId: true, currency: true, origin: true, postingDate: true, grossMinor: true, paidMinor: true, creditedMinor: true, deletedAt: true, createdAt: true } as const;
 const PERIOD_CREDIT_FIELDS = { id: true, receivableId: true, amountMinor: true, effectiveDate: true, createdAt: true } as const;
+/** MUT-643: the refund fields a ledger line reads. */
+const REFUND_LINE_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, refundedOn: true, createdAt: true, issuedDocumentId: true, method: true, reference: true } as const;
+function refundLine(row: { id: string; customerId: string; currency: string; amountMinor: bigint; refundedOn: string; createdAt: Date; issuedDocumentId: string; method: string; reference: string | null }) {
+  return { ...row, method: row.method as PaymentMethod };
+}
+
 const PERIOD_PAYMENT_FIELDS = { id: true, customerId: true, currency: true, amountMinor: true, receivedOn: true, status: true, reversalReason: true, reversedAt: true, updatedAt: true, createdAt: true } as const;
 
 const RECEIPT_LOCK_TIMEOUT = '8s';
@@ -3825,6 +4786,8 @@ const RECEIPT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
 
 /** MUT-443 (review 1): a correction does a reversal's and a payment's writes in one transaction. */
 const CORRECT_TX_OPTIONS = { timeout: 15_000, maxWait: 5_000 } as const;
+/** MUT-572 (ADR-264): an issue that asks for an allocation number holds its counter for the Tax Authority's answer. */
+const ISSUE_WITH_ALLOCATION_TX_OPTIONS = { timeout: 40_000, maxWait: 30_000 } as const;
 
 /**
  * MUT-255/389: the first step of filing a library receipt. Locks its row, so of two concurrent filings the second
@@ -3894,6 +4857,7 @@ function expenseWhere(f: ExpenseFilter): Prisma.ExpenseWhereInput {
     ...(f.projectId ? { projectId: f.projectId } : {}),
     ...(f.unlinked ? { customerId: null } : {}),
     ...(f.group ? { AND: [expenseGroupWhere(f.group)] } : {}),
+    ...(f.withReceipt ? { receipts: { some: READY_RECEIPT } } : {}),
   };
 }
 
@@ -4104,10 +5068,10 @@ async function nextPaymentNumberTx(tx: Tx, organizationId: string, receivedOn: s
 }
 
 /** Inserts a numbered payment and its allocations (capacity checked under row locks). */
-async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
+async function insertPaymentTx(tx: Tx, input: CreatePaymentInput, number: string, at: Date, allowDocumentOwned = false): Promise<{ payment: PaymentRecord; allocations: AllocationRecord[] }> {
   const { allocations: requested, ...rest } = input;
   const payment = await tx.payment.create({ data: { ...rest, number, allocatedMinor: 0n, status: 'POSTED', createdAt: at, updatedAt: at } });
-  const allocations = await applyAllocations(tx, payment, requested, at);
+  const allocations = await applyAllocations(tx, payment, requested, at, allowDocumentOwned);
   const fresh = await tx.payment.findUniqueOrThrow({ where: { id: payment.id } });
   return { payment: fresh, allocations };
 }
@@ -4167,10 +5131,15 @@ async function createAdjustmentTx(tx: Tx, input: CreateAdjustmentReceivableInput
 }
 
 /** Allocation rows + receivable sums + payment allocated total, all inside the caller's transaction; capacity checked under row locks. */
-async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date): Promise<AllocationRecord[]> {
+async function applyAllocations(tx: Tx, payment: PaymentRecord, requested: readonly AllocationInput[], at: Date, allowDocumentOwned = false): Promise<AllocationRecord[]> {
   const created: AllocationRecord[] = [];
   let total = 0n;
   await lockReceivablesInIdOrder(tx, requested.map((a) => a.receivableId));
+  // MUT-568 (review fix 2): only issuing pays a document's Owed (a 320, or a 400 naming its invoice); any other payment can't.
+  if (!allowDocumentOwned && requested.length > 0) {
+    const owned = await tx.receivable.count({ where: { id: { in: requested.map((a) => a.receivableId) }, origin: 'ISSUED_DOCUMENT' } });
+    if (owned > 0) throw new ForeignKeyViolation('payment_allocations.receivableId');
+  }
   for (const a of requested) {
     created.push(await allocateRowTx(tx, { organizationId: payment.organizationId, paymentId: payment.id, ...a }, at));
     total += a.amountMinor;
@@ -4445,6 +5414,7 @@ async function insertPerson(
       locale: input.locale,
       status: input.status,
       passwordChangedAt: input.at,
+      passwordChosen: input.passwordChosen ?? true,
       emailVerifiedAt: input.emailVerifiedAt,
       trialStartedAt: input.trialStartedAt,
       createdAt: input.at,
@@ -4525,18 +5495,26 @@ function toUser(row: Prisma.UserGetPayload<object>): UserRecord {
     failedSignIns: row.failedSignIns,
     lockedUntil: row.lockedUntil,
     passwordChangedAt: row.passwordChangedAt,
+    passwordChosen: row.passwordChosen,
     lastSignInAt: row.lastSignInAt,
     emailVerifiedAt: row.emailVerifiedAt,
     malafatSuggestions: row.malafatSuggestions === null ? null : resolveMalafatSuggestions(row.malafatSuggestions),
     trialPrompt: row.trialPrompt === null ? null : resolveTrialPrompt(row.trialPrompt),
     closure: closureOf(row),
     operatorAt: row.operatorAt,
+    monthlySummaryMail: monthlySummaryChoiceOf(row.monthlySummaryMail),
+    offerMail: row.offerMail === 'OFF' ? 'OFF' : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
 }
 
 /** MUT-333: the CHECK keeps closeRequestedAt and deleteAfter together. */
+/** MUT-535: an unknown stored value reads as the default rather than failing every read of the person. */
+function monthlySummaryChoiceOf(value: string | null): MonthlySummaryChoice | null {
+  return value !== null && (MONTHLY_SUMMARY_CHOICES as readonly string[]).includes(value) ? (value as MonthlySummaryChoice) : null;
+}
+
 function closureOf(row: Prisma.UserGetPayload<object>): UserRecord['closure'] {
   if (row.closeRequestedAt === null || row.deleteAfter === null) return null;
   return {
@@ -4601,6 +5579,43 @@ function toSession(row: Prisma.SessionGetPayload<object>): SessionRecord {
     userAgent: row.userAgent,
     passkeyId: row.passkeyId,
     stepUpAt: row.stepUpAt,
+    twoFactorAt: row.twoFactorAt,
+  };
+}
+
+function toTwoFactor(row: Prisma.TwoFactorGetPayload<object>): TwoFactorRecord {
+  return {
+    userId: row.userId,
+    method: row.method,
+    totpSecretSealed: row.totpSecretSealed,
+    lastUsedStep: row.lastUsedStep === null ? null : Number(row.lastUsedStep),
+    failures: row.failures,
+    failuresSince: row.failuresSince,
+    lockedUntil: row.lockedUntil,
+    enabledAt: row.enabledAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toTwoFactorChallenge(row: Prisma.TwoFactorChallengeGetPayload<object>): TwoFactorChallengeRecord {
+  return {
+    id: row.id,
+    userId: row.userId,
+    tokenDigest: row.tokenDigest,
+    purpose: row.purpose,
+    method: row.method,
+    sessionKind: row.sessionKind,
+    firstStep: (row.firstStep as TwoFactorFirstStep | null) ?? null,
+    passwordChangedAt: row.passwordChangedAt,
+    linkId: row.linkId,
+    pendingSecretSealed: row.pendingSecretSealed,
+    codeDigest: row.codeDigest,
+    codeSentAt: row.codeSentAt,
+    codesSent: row.codesSent,
+    attempts: row.attempts,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+    consumedAt: row.consumedAt,
   };
 }
 
@@ -4636,6 +5651,417 @@ function isUniqueViolation(err: unknown): err is Prisma.PrismaClientKnownRequest
 /** A Stripe metadata user id is free text; only a UUID is looked up (the `::uuid` cast would throw otherwise). */
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// ---- MUT-568 (ADR-260): the issuing core's transaction -----------------------------------------------------------
+
+/** A refusal found inside the issue transaction: thrown so the counter's increment rolls back with everything else. */
+class IssueRefused extends Error {
+  constructor(readonly result: Exclude<IssueResult, { kind: 'issued' }>) {
+    super(result.kind);
+  }
+}
+
+type IssuedRow = Prisma.IssuedDocumentGetPayload<object>;
+type IssuedLineRow = Prisma.IssuedDocumentLineGetPayload<object>;
+
+function issuedRecord(row: IssuedRow, lines: IssuedLineRow[]): IssuedDocumentRecord {
+  return {
+    ...row,
+    issuer: row.issuer as JsonObject,
+    customer: row.customer as JsonObject,
+    paymentDetails: row.paymentDetails as IssuedDocumentRecord['paymentDetails'],
+    // MUT-711: a number issued before the column has no source; the API was the only one then.
+    allocationSource: (row.allocationSource ?? (row.allocationNumber ? 'API' : null)) as IssuedDocumentRecord['allocationSource'],
+    lines: lines.map((l) => ({ index: l.index, description: l.description, kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
+  };
+}
+
+async function withLines(db: Tx | PrismaClient, row: IssuedRow): Promise<IssuedDocumentRecord> {
+  return issuedRecord(row, await db.issuedDocumentLine.findMany({ where: { documentId: row.id }, orderBy: { index: 'asc' } }));
+}
+
+async function findIssuedByKey(db: Tx | PrismaClient, organizationId: string, requestKey: string): Promise<IssuedDocumentRecord | null> {
+  const row = await db.issuedDocument.findUnique({ where: { organizationId_requestKey: { organizationId, requestKey } } });
+  return row ? withLines(db, row) : null;
+}
+
+/** The number this document takes. One statement, so two first documents of a type never race on creating the row. */
+/** MUT-662: the 320s and 400s referring to each payment request, with their credit notes: two reads, never per row. */
+async function referringDocumentsOf(db: Pick<PrismaClient, 'issuedDocument'>, organizationId: string, requestIds: readonly string[]): Promise<Map<string, ReferringDocument[]>> {
+  const docs = await db.issuedDocument.findMany({
+    where: { organizationId, originalId: { in: [...requestIds] }, docType: { in: ['TAX_INVOICE_RECEIPT', 'RECEIPT'] } },
+    select: { id: true, docType: true, number: true, grossMinor: true, originalId: true },
+    orderBy: { number: 'asc' },
+  });
+  const credits = docs.length
+    ? await db.issuedDocument.groupBy({ by: ['originalId'], where: { organizationId, docType: 'CREDIT_NOTE', originalId: { in: docs.map((d) => d.id) } }, _sum: { grossMinor: true } })
+    : [];
+  const credited = new Map(credits.map((c) => [c.originalId, c._sum.grossMinor ?? 0n]));
+  const out = new Map<string, ReferringDocument[]>();
+  for (const d of docs) {
+    if (!d.originalId || !referringToRequest(d.docType)) continue;
+    out.set(d.originalId, [...(out.get(d.originalId) ?? []), { id: d.id, docType: d.docType, number: d.number, grossMinor: d.grossMinor, creditedMinor: credited.get(d.id) ?? 0n }]);
+  }
+  return out;
+}
+
+async function nextIssuedNumberTx(tx: Tx, organizationId: string, docType: IssuedDocType): Promise<number> {
+  const rows = await tx.$queryRaw<Array<{ taken: number }>>`
+    INSERT INTO "issued_document_counters" ("organizationId", "docType", "start", "next")
+    VALUES (${organizationId}::uuid, ${docType}::"IssuedDocType", 1, 2)
+    ON CONFLICT ("organizationId", "docType") DO UPDATE SET "next" = "issued_document_counters"."next" + 1
+    RETURNING "next" - 1 AS "taken"`;
+  return Number(rows[0]!.taken);
+}
+
+/**
+ * I1-a: locks the recorded entry a document takes over and checks it is a person's own, untouched one for the same
+ * customer, currency and amount. Refusals throw IssueRefused (inside the issue transaction, so nothing is kept).
+ */
+/** MUT-660: what fromEntryMode reads of an entry, or null when it isn't this profile's. */
+async function entryStateTx(tx: Tx, organizationId: string, from: NonNullable<IssueDocumentInput['fromEntry']>): Promise<EntryState | null> {
+  // MUT-662: a cancelled payment request no longer counts (its Owed can be asked for again).
+  const linked = async (where: Prisma.IssuedDocumentWhereInput) => {
+    const docs = await tx.issuedDocument.findMany({ where: { organizationId, docType: { not: 'CREDIT_NOTE' }, ...where }, select: { id: true, docType: true } });
+    const requests = docs.filter((d) => d.docType === 'PAYMENT_REQUEST').map((d) => d.id);
+    const cancelled = requests.length ? await tx.issuedDocumentCancellation.count({ where: { documentId: { in: requests } } }) : 0;
+    return docs.length - cancelled > 0;
+  };
+  if (from.kind === 'receivable') {
+    const r = await tx.receivable.findFirst({ where: { id: from.id, organizationId } });
+    if (!r) return null;
+    return { kind: 'receivable', origin: r.origin, deleted: !!r.deletedAt, posted: true, customerId: r.customerId, currency: r.currency, grossMinor: r.grossMinor, creditedMinor: r.creditedMinor, allocatedMinor: 0n, documented: await linked({ receivableId: r.id }) };
+  }
+  const p = await tx.payment.findFirst({ where: { id: from.id, organizationId } });
+  if (!p) return null;
+  return { kind: 'payment', origin: p.origin, deleted: false, posted: p.status === 'POSTED', customerId: p.customerId, currency: p.currency, grossMinor: p.amountMinor, creditedMinor: 0n, allocatedMinor: p.allocatedMinor, documented: await linked({ paymentId: p.id }) };
+}
+
+/**
+ * Locks the entry and checks it can take this document the way the unlocked read said (`expected`): a change in
+ * between (another document, an allocation) refuses it rather than posting the wrong way.
+ */
+async function lockFromEntryTx(tx: Tx, input: IssueDocumentInput, expected: 'take' | 'link' | null): Promise<{ kind: 'receivable' | 'payment'; id: string; mode: 'take' | 'link' } | null> {
+  const from = input.fromEntry;
+  if (!from) return null;
+  const table = from.kind === 'receivable' ? Prisma.sql`"receivables"` : Prisma.sql`"payments"`;
+  const locked = await tx.$queryRaw<Array<{ id: string }>>`SELECT "id" FROM ${table} WHERE "id" = ${from.id}::uuid AND "organizationId" = ${input.organizationId}::uuid FOR UPDATE`;
+  if (locked.length === 0) throw new IssueRefused({ kind: 'entry_not_found' });
+  const entry = await entryStateTx(tx, input.organizationId, from);
+  const mode = fromEntryMode(entry, input.docType);
+  const refusal = fromEntryRefusal({ ok: mode !== null && mode === expected, customerId: entry?.customerId ?? null, currency: entry?.currency ?? '', amountMinor: entry ? entryAmount(entry) : 0n }, input);
+  if (refusal || !mode) throw new IssueRefused(refusal ?? { kind: 'entry_not_found' });
+  return { ...from, mode };
+}
+
+/** MUT-660: a live 305 (not fully cancelled by credit notes) or a 320 is linked to the entry; a receipt doesn't count. */
+async function hasTaxDocumentTx(tx: Tx, organizationId: string, item: Pick<NotForInvoiceItem, 'kind' | 'id'>): Promise<boolean> {
+  const docs = await tx.issuedDocument.findMany({
+    where: { organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] }, ...(item.kind === 'receivable' ? { receivableId: item.id } : { paymentId: item.id }) },
+    select: { id: true, docType: true, grossMinor: true },
+  });
+  // MUT-643: a 320 may be credited too; fully credited, like a 305, it no longer counts.
+  for (const d of docs) {
+    const credited = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: d.id }, _sum: { grossMinor: true } });
+    if ((credited._sum.grossMinor ?? 0n) < d.grossMinor) return true;
+  }
+  return false;
+}
+
+type PrismaReader = Pick<PrismaClient, 'paymentAllocation' | 'customer'>;
+
+async function liveAllocationsOf(db: PrismaReader, organizationId: string, paymentIds: readonly string[]): Promise<Map<string, Array<{ receivableId: string; amountMinor: bigint }>>> {
+  const rows = paymentIds.length ? await db.paymentAllocation.findMany({ where: { organizationId, paymentId: { in: [...paymentIds] }, releasedAt: null }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }], select: { paymentId: true, receivableId: true, amountMinor: true } }) : [];
+  const out = new Map<string, Array<{ receivableId: string; amountMinor: bigint }>>();
+  for (const r of rows) out.set(r.paymentId, [...(out.get(r.paymentId) ?? []), { receivableId: r.receivableId, amountMinor: r.amountMinor }]);
+  return out;
+}
+
+async function preferencesOf(db: PrismaReader, organizationId: string): Promise<Map<string, DocumentsPreference | null>> {
+  const rows = await db.customer.findMany({ where: { organizationId }, select: { id: true, documentsPreference: true } });
+  return new Map(rows.map((c) => [c.id, c.documentsPreference]));
+}
+
+type DuePaymentRow = Omit<DuePaymentInput, 'origin' | 'status' | 'documented' | 'allocations'> & { origin: string; status: string };
+type DueReceivableRow = Omit<DueReceivableInput, 'origin'> & { origin: string };
+
+/**
+ * MUT-643 (D8): a payment a refund drew on can't be reversed or corrected. Asked after the payment row is written (so
+ * locked): a credit note releasing it locks the same row first, so the two can't both pass.
+ */
+async function assertNoRefundTx(tx: Tx, paymentId: string): Promise<void> {
+  if ((await tx.refundSource.count({ where: { paymentId } })) > 0) throw new StateConflict('payment', 'PAYMENT_HAS_REFUND');
+}
+
+/** MUT-643: a credit note's original Owed, locked, with the live allocations that pay it (read under the same locks). */
+interface CreditTarget {
+  owed: { id: string; customerId: string; currency: string; grossMinor: bigint; paidMinor: bigint; creditedMinor: bigint };
+  live: LiveAllocation[];
+}
+
+/**
+ * MUT-643 (D1, D4): finds the 305 or 320 a credit note credits and locks what the credit may move. Payments first, in id
+ * order, then the Owed: the order every payment writer takes (allocate, reverse, correct, terms corrections), so a
+ * reversal racing this credit note waits instead of deadlocking. The allocations are read again under the locks; when
+ * the payments paying the Owed changed meanwhile the issue is refused, nothing written. Then the cap and the paid-part
+ * rules (`creditNoteRefusal`).
+ */
+async function creditTargetTx(tx: Tx, input: IssueDocumentInput, originalId: string): Promise<CreditTarget> {
+  const { organizationId } = input;
+  const original = await tx.issuedDocument.findFirst({
+    where: { id: originalId, organizationId, docType: { in: ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT'] } },
+    select: { id: true, grossMinor: true, receivableId: true, customerId: true },
+  });
+  if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+  const receivableId = original.receivableId;
+  const payers = async () => [...new Set((await liveAllocationsOnTx(tx, receivableId)).map((a) => a.paymentId))].sort();
+  const seen = await payers();
+  for (const id of seen) await tx.$queryRaw`SELECT 1 FROM "payments" WHERE "id" = ${id}::uuid FOR UPDATE`;
+  await lockReceivable(tx, receivableId);
+  const live = await liveAllocationsOnTx(tx, receivableId);
+  const now = [...new Set(live.map((a) => a.paymentId))].sort();
+  if (now.length !== seen.length || now.some((id, i) => id !== seen[i])) throw new IssueRefused({ kind: 'original_changed' });
+  const owed = await tx.receivable.findUniqueOrThrow({ where: { id: receivableId } });
+  const noted = await tx.issuedDocument.aggregate({ where: { organizationId, docType: 'CREDIT_NOTE', originalId: original.id }, _sum: { grossMinor: true } });
+  const outstandingMinor = owed.status === 'OPEN' ? owed.grossMinor - owed.paidMinor - owed.creditedMinor : 0n;
+  const refusal = creditNoteRefusal({ original, owed, creditedByNotesMinor: noted._sum.grossMinor ?? 0n, outstandingMinor }, input);
+  if (refusal) throw new IssueRefused(refusal);
+  return { owed, live };
+}
+
+/** The live allocation rows of POSTED payments on one Owed. */
+async function liveAllocationsOnTx(tx: Tx, receivableId: string): Promise<LiveAllocation[]> {
+  return tx.paymentAllocation.findMany({
+    where: { receivableId, releasedAt: null, payment: { status: 'POSTED' } },
+    select: { id: true, paymentId: true, amountMinor: true, createdAt: true },
+  });
+}
+
+/**
+ * MUT-643 (D3, D5): releases the paid part off the Owed's live allocations, newest first, as MUT-444's terms correction
+ * releases (`releasedAt`; a partial release leaves a smaller live row carrying the released row's own createdAt). KEEP
+ * leaves the money on its payments as unallocated; REFUND records it going back, and it counts in their allocatedMinor
+ * again. The Owed's paidMinor is lowered by the caller, with the credit, in one settle.
+ */
+async function releasePaidPartTx(tx: Tx, input: IssueDocumentInput, target: CreditTarget, paidPartMinor: bigint, documentId: string, at: Date): Promise<string | null> {
+  const given = new Map<string, bigint>();
+  for (const { allocation, releaseMinor } of planRelease(target.live, paidPartMinor)) {
+    await tx.paymentAllocation.update({ where: { id: allocation.id }, data: { releasedAt: at } });
+    if (releaseMinor < allocation.amountMinor) {
+      await tx.paymentAllocation.create({
+        data: { organizationId: input.organizationId, paymentId: allocation.paymentId, receivableId: target.owed.id, amountMinor: allocation.amountMinor - releaseMinor, createdAt: allocation.createdAt },
+      });
+    }
+    given.set(allocation.paymentId, (given.get(allocation.paymentId) ?? 0n) + releaseMinor);
+  }
+  const choice = input.paidPart;
+  if (!choice) throw new Error('a paid part carries its choice (creditNoteRefusal checks this first)');
+  for (const [paymentId, releasedMinor] of given) {
+    const delta = choice.mode === 'REFUND' ? 0n : releasedMinor;
+    await tx.payment.update({ where: { id: paymentId }, data: { allocatedMinor: { decrement: delta }, version: { increment: 1 }, updatedAt: at } });
+  }
+  if (choice.mode !== 'REFUND') return null;
+  const refund = await tx.refund.create({
+    data: {
+      organizationId: input.organizationId,
+      customerId: target.owed.customerId,
+      currency: target.owed.currency,
+      amountMinor: paidPartMinor,
+      refundedOn: choice.refundedOn,
+      method: choice.method,
+      reference: choice.reference,
+      issuedDocumentId: documentId,
+      requestId: input.requestId,
+      createdByUserId: input.createdByUserId,
+      createdAt: at,
+      sources: { create: [...given].map(([paymentId, amountMinor]) => ({ organizationId: input.organizationId, paymentId, amountMinor })) },
+    },
+  });
+  return refund.id;
+}
+
+async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<IssueResult> {
+  const { organizationId } = input;
+  const number = await nextIssuedNumberTx(tx, organizationId, input.docType);
+  // MUT-660: an unlocked read says whether the document takes its entry over or is linked to it (posting nothing); the
+  // locked read below must agree, so a linked document never takes a ledger number.
+  const expected = input.fromEntry ? fromEntryMode(await entryStateTx(tx, organizationId, input.fromEntry), input.docType) : null;
+  const linked = expected === 'link';
+  // Review fix 7: the year counters before any receivable lock, the order every other posting writer takes (MUT-443).
+  const postsOwed = !linked && postsNewOwed(input);
+  const postsReceived = !linked && (input.docType === 'TAX_INVOICE_RECEIPT' || input.docType === 'RECEIPT') && input.fromEntry?.kind !== 'payment' && input.payment !== null;
+  const owedNumber = postsOwed ? await nextReceivableNumberTx(tx, organizationId, input.documentDate) : null;
+  const receivedNumber = postsReceived && input.payment ? await nextPaymentNumberTx(tx, organizationId, input.payment.receivedOn) : null;
+  const last = await tx.issuedDocument.findFirst({ where: { organizationId, docType: input.docType }, orderBy: { documentDate: 'desc' }, select: { documentDate: true } });
+  if (last && last.documentDate > input.documentDate) throw new IssueRefused({ kind: 'date_before_last', lastDate: last.documentDate });
+  if (input.customerId && !(await tx.customer.findFirst({ where: { id: input.customerId, organizationId }, select: { id: true } }))) {
+    throw new IssueRefused({ kind: 'customer_not_found' });
+  }
+  const originalId = input.docType === 'CREDIT_NOTE' ? input.originalId : input.appliesToDocumentId;
+  let originalReceivableId: string | null = null;
+  let credited: CreditTarget | null = null;
+  if (originalId && input.docType === 'CREDIT_NOTE') {
+    credited = await creditTargetTx(tx, input, originalId);
+    originalReceivableId = credited.owed.id;
+  } else if (originalId) {
+    // MUT-662: a 320 or 400 may apply a live payment request.
+    const types: IssuedDocType[] = ['TAX_INVOICE', 'PAYMENT_REQUEST'];
+    const original = await tx.issuedDocument.findFirst({ where: { id: originalId, organizationId, docType: { in: types } }, select: { id: true, docType: true, receivableId: true, customerId: true } });
+    if (!original?.receivableId || original.customerId !== input.customerId) throw new IssueRefused({ kind: 'original_not_found' });
+    if (original.docType === 'PAYMENT_REQUEST') {
+      // R4: the request's Owed is locked before its cancellation is read, the order cancelling takes, so a 320 can't
+      // land after a cancel passed its check (or the other way round).
+      await lockReceivable(tx, original.receivableId);
+      if ((await tx.issuedDocumentCancellation.count({ where: { documentId: original.id } })) > 0) throw new IssueRefused({ kind: 'original_not_found' });
+    }
+    // MUT-660: a linked receipt names the invoice its payment already paid; it allocates nothing, so no outstanding check.
+    if (!linked) {
+      const r = await lockReceivable(tx, original.receivableId);
+      const outstandingMinor = r.status === 'OPEN' ? r.grossMinor - r.paidMinor - r.creditedMinor : 0n;
+      if (input.composed.grossMinor > outstandingMinor) throw new IssueRefused({ kind: 'exceeds_outstanding', outstandingMinor });
+      originalReceivableId = original.receivableId;
+    }
+  }
+  const from = await lockFromEntryTx(tx, input, expected);
+  // MUT-572 (ADR-264): every check has passed and the counter is locked; the Tax Authority is asked now, so a refusal
+  // rolls the whole issue back and takes no number.
+  let allocationNumber = input.allocationNumber;
+  let allocationSource = input.allocationNumber ? (input.allocationSource ?? 'API') : null;
+  if (input.allocate) {
+    const outcome = await input.allocate(number);
+    if (outcome.kind !== 'allocated') throw new IssueRefused({ kind: 'allocation_failed', outcome });
+    allocationNumber = outcome.number;
+    allocationSource = outcome.source;
+  }
+  const plan: LedgerPlan = linked ? { receivable: null, payment: null, credit: null } : ledgerPlan(input, number);
+  const documentId = randomUUID();
+  let receivableId: string | null = null;
+  let paymentId: string | null = null;
+  let creditId: string | null = null;
+  if (linked && from) {
+    // MUT-660: linked only: the entry keeps its money; its version moves so a stale edit of it is caught.
+    if (from.kind === 'receivable') await tx.receivable.update({ where: { id: from.id }, data: { version: { increment: 1 } } });
+    else await tx.payment.update({ where: { id: from.id }, data: { version: { increment: 1 }, updatedAt: at } });
+    receivableId = from.kind === 'receivable' ? from.id : null;
+    paymentId = from.kind === 'payment' ? from.id : null;
+  }
+  if (plan.receivable && from?.kind === 'receivable') {
+    // I1-a: the recorded Owed becomes the document's: its money is now the document's VAT split, read-only from here.
+    // Review fix 3: it also takes the document's dates, so its VAT falls in the invoice's month.
+    const { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate } = plan.receivable;
+    await tx.receivable.update({ where: { id: from.id }, data: { netMinor, vatMinor, grossMinor, vatTreatment, vatRateBasisPoints, title, dueDate, postingDate, origin: 'ISSUED_DOCUMENT', originId: documentId, version: { increment: 1 } } });
+    receivableId = from.id;
+  } else if (plan.receivable) {
+    const receivable = await tx.receivable.create({
+      data: {
+        ...plan.receivable,
+        organizationId,
+        number: owedNumber ?? (await nextReceivableNumberTx(tx, organizationId, plan.receivable.postingDate)),
+        projectId: null,
+        agreementId: null,
+        // MUT-662: a payment request's Owed is an ordinary one (ADJUSTMENT, no origin id): cancelling the request leaves it.
+        originId: plan.receivable.origin === 'ISSUED_DOCUMENT' ? documentId : null,
+        postedAt: at,
+        createdByUserId: input.createdByUserId,
+        createdAt: at,
+      },
+    });
+    receivableId = receivable.id;
+  }
+  if (plan.payment && from?.kind === 'payment') {
+    // I1-a: the captured Received becomes the document's, and pays its Owed (320) or the invoice it names (400).
+    const target = plan.payment.allocate === 'own' ? receivableId : plan.payment.allocate === 'applies' ? originalReceivableId : null;
+    const payment = await tx.payment.update({ where: { id: from.id }, data: { origin: 'ISSUED_DOCUMENT', version: { increment: 1 }, updatedAt: at } });
+    if (target) await applyAllocations(tx, payment, [{ receivableId: target, amountMinor: payment.amountMinor }], at, true);
+    paymentId = from.id;
+  } else if (plan.payment) {
+    const { allocate, ...p } = plan.payment;
+    const target = allocate === 'own' ? receivableId : allocate === 'applies' ? originalReceivableId : null;
+    const { payment } = await insertPaymentTx(
+      tx,
+      {
+        ...p,
+        organizationId,
+        projectId: null,
+        receiptNumber: null,
+        notes: null,
+        replacesPaymentId: null,
+        requestId: input.requestId,
+        createdByUserId: input.createdByUserId,
+        origin: 'ISSUED_DOCUMENT',
+        captureSource: null,
+        allocations: target ? [{ receivableId: target, amountMinor: p.amountMinor }] : [],
+      },
+      receivedNumber ?? (await nextPaymentNumberTx(tx, organizationId, p.receivedOn)),
+      at,
+      true,
+    );
+    paymentId = payment.id;
+  }
+  let refundId: string | null = null;
+  if (plan.credit && credited) {
+    // MUT-643 (D2, D3): what the credit reaches past what is still owed comes back off the newest allocations first.
+    const { paidPartMinor } = splitCredit(credited.owed, plan.credit.amountMinor);
+    if (paidPartMinor > 0n) refundId = await releasePaidPartTx(tx, input, credited, paidPartMinor, documentId, at);
+    const credit = await tx.receivableCredit.create({ data: { organizationId, receivableId: credited.owed.id, ...plan.credit, requestId: input.requestId, createdAt: at } });
+    await settleReceivable(tx, credited.owed.id, { creditedMinor: { increment: plan.credit.amountMinor }, paidMinor: { decrement: paidPartMinor } });
+    creditId = credit.id;
+  }
+  const { composed } = input;
+  const row = await tx.issuedDocument.create({
+    data: {
+      id: documentId,
+      organizationId,
+      docType: input.docType,
+      number,
+      documentDate: input.documentDate,
+      issuedAt: at,
+      currency: input.currency,
+      subtotalMinor: composed.subtotalMinor,
+      discountMinor: composed.discountMinor,
+      netMinor: composed.netMinor,
+      vatRateBasisPoints: composed.vatRateBasisPoints,
+      vatMinor: composed.vatMinor,
+      grossMinor: composed.grossMinor,
+      pricesIncludeVat: composed.pricesIncludeVat,
+      issuer: input.issuer,
+      customerId: input.customerId,
+      customer: input.customer,
+      language: input.language,
+      style: input.style,
+      ink: input.ink,
+      notes: input.notes,
+      // Review fix 5: a receipt keeps the invoice it pays.
+      originalId: input.originalId ?? input.appliesToDocumentId,
+      paymentDetails: input.payment ? { ...input.payment } : Prisma.DbNull,
+      allocationNumber,
+      allocationSource,
+      receivableId,
+      paymentId,
+      creditId,
+      refundId,
+      coreVersion: input.coreVersion,
+      createdByUserId: input.createdByUserId,
+      requestKey: input.requestKey,
+    },
+  });
+  const lines = composed.lines.map((l) => ({
+    documentId,
+    organizationId,
+    index: l.index,
+    description: l.description.trim(),
+    kind: l.kind,
+    quantityMilli: l.quantityMilli,
+    unitPriceMinor: l.unitPriceMinor,
+    discountMinor: l.discountMinor,
+    netMinor: l.netMinor,
+    pricesIncludeVat: l.pricesIncludeVat,
+    vatRateBasisPoints: l.vatRateBasisPoints,
+    vatMinor: l.vatMinor,
+  }));
+  await tx.issuedDocumentLine.createMany({ data: lines });
+  return { kind: 'issued', document: issuedRecord(row, lines), created: true };
+}
+
 async function translate<T>(op: () => Promise<T>): Promise<T> {
   try {
     return await op();
@@ -4651,3 +6077,68 @@ async function translate<T>(op: () => Promise<T>): Promise<T> {
 }
 
 export type { IntegrationRecord };
+
+// ---- MUT-644 (ADR-277): closed profiles' issuing rows ---------------------------------
+
+interface RetainedRow {
+  organizationId: string;
+  legalName: string | null;
+  vatId: string | null;
+  documents: number;
+  cancellations: number;
+  oldest: string | null;
+  newest: string | null;
+}
+
+/** The date a document's 7 years count from (issuing/retention.ts retentionDateOf), for `x` joined to its cancellation `c`. */
+const RETENTION_DATE_SQL = Prisma.sql`GREATEST(x."documentDate", to_char((c."cancelledAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jerusalem', 'YYYY-MM-DD'))`;
+
+/**
+ * Every profile id a retained table holds with no organizations row (narrowed by `where` on "organizationId"), with
+ * its business details, counts, and its documents' earliest and latest retention dates. Selected as `r`, so callers
+ * append WHERE / ORDER BY.
+ */
+function retainedProfilesSql(where: Prisma.Sql): Prisma.Sql {
+  const held = Prisma.join(
+    RETAINED_ISSUING_TABLES.map((table) => Prisma.sql`SELECT "organizationId" FROM ${Prisma.raw(`"${table}"`)} ${where}`),
+    ' UNION ',
+  );
+  return Prisma.sql`SELECT * FROM (
+    SELECT h."organizationId"::text AS "organizationId", d."legalName", d."vatId", k.documents, k.cancellations, k.oldest, k.newest
+    FROM (${held}) h
+    LEFT JOIN issuer_details d ON d."organizationId" = h."organizationId"
+    CROSS JOIN LATERAL (
+      SELECT count(x.id)::int AS documents, count(c.id)::int AS cancellations, min(${RETENTION_DATE_SQL}) AS oldest, max(${RETENTION_DATE_SQL}) AS newest
+      FROM issued_documents x LEFT JOIN issued_document_cancellations c ON c."documentId" = x.id
+      WHERE x."organizationId" = h."organizationId"
+    ) k
+    WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.id = h."organizationId")
+  ) r`;
+}
+
+/** Inside a sweep or erasure: the closed profile's retained rows, re-read, or why there is nothing to do. */
+async function closedProfileIn(tx: Prisma.TransactionClient, organizationId: string): Promise<{ kind: 'held'; profile: RetainedIssuingProfile } | { kind: 'not_closed' } | { kind: 'nothing' }> {
+  // The profile row can't come back (ids are never reused), so no lock is needed beyond this transaction's reads.
+  const [live] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM organizations WHERE id = ${organizationId}::uuid`;
+  if (live) return { kind: 'not_closed' };
+  const [row] = await tx.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.sql`WHERE "organizationId" = ${organizationId}::uuid`)}`;
+  return row ? { kind: 'held', profile: toRetained(row) } : { kind: 'nothing' };
+}
+
+/** Under the bypass already set: every row of these tables the profile holds. */
+async function deleteRetainedRows(tx: Prisma.TransactionClient, tables: readonly string[], organizationId: string): Promise<number> {
+  let rows = 0;
+  for (const table of tables) rows += await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "organizationId" = $1::uuid`, organizationId);
+  return rows;
+}
+
+/** A LIKE pattern's literal text (backslash is Postgres's default escape). */
+const likeEscape = (text: string) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+function toRetained(row: RetainedRow): RetainedIssuingProfile {
+  return { organizationId: row.organizationId, legalName: row.legalName, vatId: row.vatId, documents: Number(row.documents), cancellations: Number(row.cancellations), oldestDocumentDate: row.oldest, newestDocumentDate: row.newest };
+}
+
+function toRetentionEvent(row: { id: string; organizationId: string; action: string; metadata: Prisma.JsonValue; createdAt: Date }): IssuingRetentionEventRecord {
+  return { id: row.id, organizationId: row.organizationId, action: row.action as IssuingRetentionAction, metadata: row.metadata as JsonObject, createdAt: row.createdAt };
+}

@@ -8,31 +8,13 @@ tier: secondary
 paths:
   - src/hosted/main.tsx
   - src/hosted/HostedApp.tsx
-  - src/hosted/router.tsx
-  - src/hosted/queryClient.ts
-  - src/hosted/api/client.ts
-  - src/hosted/api/schema.d.ts
-  - src/hosted/i18n/en.json
-  - src/hosted/i18n/ar.json
   - src/hosted/format/DecimalAmount.tsx
-  - src/hosted/format/dates.ts
   - src/hosted/shell/HostedShell.tsx
   - src/hosted/shell/YouIsland.tsx
   - src/hosted/shell/usePopover.ts
-  - src/hosted/pages/views/shared.tsx
-  - src/hosted/components/HostedTable.tsx
-  - src/hosted/components/QueryView.tsx
-  - src/hosted/components/Icons.tsx
-  - src/hosted/components/Toast.tsx
-  # Shared UI outside src/hosted that only the portal renders now: the free web app that shared it is retired (MUT-445)
-  - src/components/{expenses,filters,icons,ui}/**
-  - src/lib/{dom,forms,motion,whatsNew}/**
-  - src/lib/{malafatMomentStore,savedFlashStore,useSavedFlash}.ts
-  - src/hosted/data/queries.ts
-  - src/hosted/data/filters.ts
 features:
   - id: navigate
-    title: Signed in, the portal opens on Owed for the first profile (owed, overdue, proposed, overdue clients first, per currency), the four destinations Owed, Paid, Spent and Clients are one click away, and عربي turns it right to left
+    title: Signed in, the portal opens on home for the first profile (MUT-657); Owed (owed, overdue, proposed, overdue clients first, per currency, at /owed) and the other destinations are one click away from the pill, and عربي turns it right to left
     tier: core # the portal is unusable for everyone signed in if this breaks
     paths:
       - src/hosted/pages/views/OverviewPage.tsx
@@ -42,15 +24,17 @@ features:
       - src/components/filters/SegmentedTabs.tsx
       # MUT-165 D9: the shell's spacing, screenshotted in English and Arabic
       - src/hosted/hosted.css
+    tickets: [MUT-657]
     steps:
       - Sign in and open the portal at /
-      - Read the overview, then switch it to USD
-      - Visit each of the four destinations from the pill
+      - Open Owed from the pill, read the overview, then switch it to USD
+      - Visit home and each of the four destinations from the pill
       - Open You › App, choose عربي, then go to Conversions through Paid
     expect:
-      - / lands on the first profile's Owed page (today's overview) with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
+      - / lands on the first profile's home, with Home lit first in the pill
+      - Owed opens at /owed with the ILS strip (Owed 4,500.00, Overdue 1,200.00, Proposed 800.00), an As of line, and the overdue client first
       - USD shows the USD block and puts currency=USD in the URL
-      - The pill holds exactly Owed, Paid, Spent and Clients; each page's heading is its tab's word and its link is aria-current
+      - The pill holds exactly Home, Owed, Paid, Spent and Clients; each page's heading is its tab's word and its link is aria-current
       - The page turns rtl with the Arabic destination names
       - Every profile call carried X-Mutaba3a-Profile for that profile
       - A screenshot of the shell is attached in English and in Arabic, for spacing review
@@ -73,8 +57,9 @@ features:
       - In Arabic, a deep link to Receivables lights المستحق and its back link reads المستحق
       - A screenshot of Receivables in Arabic is attached
   - id: switch-profile
-    title: You › Profiles lists each profile with its kind, keeps the section when switching (?from=, MUT-425), and a profile not on the account says so
+    title: You › Profiles lists each profile with its kind, switching lands on that profile's home (MUT-657), and a profile not on the account says so
     tier: secondary
+    tickets: [MUT-657]
     paths:
       - src/hosted/pages/you/YouProfiles.tsx
       - src/hosted/shell/YouIsland.tsx
@@ -86,22 +71,43 @@ features:
       - Open a profile id that is not on the account, then Go to the first profile
     expect:
       - Each profile shows Hosted and its kind (Business, Income recorded by Malafat), with the local-profiles footer
-      - Switching lands on the same section for the other profile, whose figures are fetched with its own header
-      - An unknown profile reads "This profile isn't available" and its button opens the first profile
+      - Switching lands on the other profile's home, whose figures are fetched with its own header
+      - An unknown profile reads "This profile isn't available" and its button opens the first profile's home
   - id: client-detail
-    title: A client opens to its summary (last payment, per-currency strip, matters), then its own receivables, payments and documents
+    title: A client opens to its ledger card (newest first, running balance, Client in credit), then its documents and its details
     tier: secondary
+    tickets: [MUT-664]
     paths:
       - src/hosted/pages/views/ClientDetailPage.tsx
       - src/hosted/pages/views/ClientsPage.tsx
+      - src/hosted/components/ledger/LedgerCard.tsx
+      - src/hosted/data/statementQueries.ts
+      - src/hosted/format/ledger.ts
     steps:
       - Open Clients and choose a client
-      - Read the summary
-      - Open the Receivables, Payments and Documents tabs, then All clients
+      - Read the ledger card
+      - Open the Documents and Details tabs, then All clients
     expect:
-      - The summary shows Last payment, the ILS strip and each matter with its status
-      - Each tab lists only this client's records, without a client column, and asks the server with that customerId
+      - The ledger card lists only this client's movements, newest first, asks the statement with order=desc in ILS, and a balance below zero reads "Client in credit" without a minus (D15)
+      - Documents lists only this client's files; Details shows Last payment, the ILS strip and each matter with its status
       - All clients returns to the list
+  - id: client-business
+    title: A client's VAT or company number and address, filled from the companies registry by its number (MUT-642)
+    tier: secondary
+    tickets: [MUT-642]
+    paths:
+      - src/hosted/components/ClientBusinessDetails.tsx
+      - src/hosted/data/customerQueries.ts
+    steps:
+      - Open Client 1 and choose Add business details
+      - Type a company's 9-digit number
+      - Save, then type a dissolved company's number and a sole dealer's
+      - Open it in Arabic
+    expect:
+      - The registry's name shows under the number, ticked to rename the client, and its registered address fills the empty Address
+      - Save sends PATCH /v1/customers/<id> with the number, address and registered name (If-Match the version); the card shows both and the heading the new name
+      - A dissolved company shows its registry status as a warning; a sole dealer's number says it is not in the registry and the details are typed by hand
+      - The Arabic card reads بيانات المنشأة, right to left, with the number left to right
   - id: no-profiles
     title: An account with no profile yet is offered New profile beside Sign out (MUT-183)
     tier: secondary
@@ -115,19 +121,18 @@ features:
       - '"You don''t have a profile yet" shows, with no section navigation'
       - New profile opens its drawer (newProfile=true); Back closes it; Sign out is beside it
   - id: firm-enabled-banner
-    title: Once an operator turns firm features on, the Overview shows one "Firm features are on" note; Dismiss keeps it gone, in English and in Arabic (MUT-300, DR5)
+    title: Once an operator turns firm features on, home shows one "Firm features are on" note; Dismiss keeps it gone, in English and in Arabic (MUT-300, DR5)
     tier: secondary
     paths:
       - src/hosted/components/FirmOnBanner.tsx
       - src/hosted/data/firmBanner.ts
-      - src/hosted/pages/views/OverviewPage.tsx
     steps:
       - Sign in to a profile whose firm features are on
       - Dismiss the note
       - Reload the portal
       - Open the portal in Arabic on another profile with firm features on
     expect:
-      - Owed shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
+      - Home shows "Firm features are on for Khatib Law. New tools show up here as they're released." with Dismiss
       - Dismiss removes it, and it stays gone after the reload
       - In Arabic the page is right to left and the note reads "ميزات المكتب مفعّلة لملف …" with إغلاق
   - id: mtb3a-name
@@ -194,7 +199,7 @@ features:
       - You › Profiles opens with from=clients and back= in the URL, and the island is aria-current
       - The second press lands back on that client, not the Clients list
       - Paid leaves You and the island is no longer current
-      - Reports is aria-current on its icon, and switching lands on the other profile's Reports
+      - Reports is aria-current on its icon, and switching profile lands on the other profile's home (MUT-657 E-3)
   - id: page-motion
     title: Going deeper slides forward, back slides the other way, mirrored in Arabic; the You page grows from the island; tabs cross-fade; drawers start no transition; reduced motion only cross-fades (MUT-426 D6)
     tier: secondary
@@ -229,14 +234,14 @@ features:
       - By default the pill's backdrop is blurred and its background see-through
       - With reduced transparency its backdrop-filter is none and its background opaque
   - id: keyboard
-    title: From the top of a page, Tab reaches Reports, Owed, Paid, Spent, Clients, then the island, each with a visible focus ring; aria-current marks the lit tab, and the island on You (MUT-426)
+    title: From the top of a page, Tab reaches Reports, Home, Owed, Paid, Spent, Clients, then the island, each with a visible focus ring; aria-current marks the lit tab, and the island on You (MUT-426)
     tier: secondary
     paths:
       - src/hosted/shell/HostedShell.tsx
       - src/hosted/shell/YouIsland.tsx
       - src/hosted/hosted.css
     steps:
-      - Open Paid and press Tab six times
+      - Open Paid and press Tab seven times
       - Press Enter on the island
     expect:
       - Focus goes Reports, Owed, Paid, Spent, Clients, You · Nour Studio, each with a focus ring; only Paid is aria-current

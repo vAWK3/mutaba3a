@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { ApiError, apiErrorReason, request, retryMinutes, type PeriodDownloadTicket, type PeriodDownloadType } from '../api/client';
 import { profileKey } from '../session/me';
+import { getLocale } from '../../lib/i18n/core';
 
 /**
  * MUT-562 (D7, over MUT-314's routes): a period download. A ticket is minted per file (it says what the period holds,
@@ -59,7 +60,7 @@ export function downloadProblem(error: unknown): DownloadProblem {
 /** "about 4 MB" from bytes: whole megabytes, at least 1 (or KB under one). */
 export function aboutSize(bytes: number, language: 'en' | 'ar'): string {
   const MB = 1024 * 1024;
-  const fmt = (n: number) => new Intl.NumberFormat(`${language}-u-nu-latn`).format(n);
+  const fmt = (n: number) => new Intl.NumberFormat(getLocale(language)).format(n);
   if (bytes < MB) return `${fmt(Math.max(1, Math.round(bytes / 1024)))} KB`;
   return `${fmt(Math.round(bytes / MB))} MB`;
 }

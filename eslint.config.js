@@ -37,6 +37,21 @@ const PORTAL_DECIMAL_SYNTAX = [
   { selector: "CallExpression[callee.object.name='Number'][callee.property.name=/^parse(Float|Int)$/]", message: 'No Number.parseFloat/parseInt in the portal: amounts are decimal strings.' },
   { selector: "UnaryExpression[operator='+']", message: 'No unary + in the portal: amounts are decimal strings.' },
 ]
+/**
+ * MUT-587: Arabic dates take getLocale(language) (Levantine months, Latin digits). A hand-written Arabic locale brings
+ * back يناير, and appending -u-nu- to getLocale's tag throws. Locale variables are out of a lint's reach; the
+ * getLocale and per-formatter tests cover those. Server twin: server/eslint.config.js.
+ */
+const DATE_CALL = ["NewExpression[callee.object.name='Intl'][callee.property.name=/^(DateTimeFormat|RelativeTimeFormat)$/]", "CallExpression[callee.property.name=/^toLocale(Date|Time)?String$/]"]
+const ARABIC_LITERAL = '/^ar(-|$)/'
+const DATE_LOCALE_SYNTAX = [
+  ...DATE_CALL.flatMap((call) => [
+    `${call}[arguments.0.type='Literal'][arguments.0.value=${ARABIC_LITERAL}]`,
+    `${call}[arguments.0.type='ConditionalExpression'][arguments.0.consequent.value=${ARABIC_LITERAL}]`,
+    `${call}[arguments.0.type='ConditionalExpression'][arguments.0.alternate.value=${ARABIC_LITERAL}]`,
+  ]).map((selector) => ({ selector, message: 'Format Arabic dates with getLocale(language) from lib/i18n/core (MUT-587): Levantine months, Latin digits.' })),
+  { selector: 'TemplateElement[value.raw=/-u-nu-/]', message: "Use getLocale(language) as it is: its Arabic tag already sets Latin digits, and a second -u-nu- throws (MUT-587)." },
+]
 /** The server modules src/hosted/local may import (ADR-097 §9). Everything they import in turn is the server's business. */
 const LOCAL_SERVER_ALLOWLIST = [
   'app-shell',
@@ -102,6 +117,14 @@ export default defineConfig([
     ignores: ['src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
     rules: {
       '@typescript-eslint/no-restricted-imports': ['error', { paths: [SENTRY_SDK_PATH] }],
+    },
+  },
+  {
+    // MUT-587: the portal's two blocks below spread DATE_LOCALE_SYNTAX into their own no-restricted-syntax.
+    files: ['src/**/*.{ts,tsx}'],
+    ignores: ['src/hosted/**', 'src/**/__tests__/**', 'src/test/**'],
+    rules: {
+      'no-restricted-syntax': ['error', ...DATE_LOCALE_SYNTAX],
     },
   },
   {
@@ -249,7 +272,7 @@ export default defineConfig([
           ],
         },
       ],
-      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX],
+      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX, ...DATE_LOCALE_SYNTAX],
     },
   },
   {
@@ -274,7 +297,7 @@ export default defineConfig([
           ],
         },
       ],
-      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX],
+      'no-restricted-syntax': ['error', ...PORTAL_DECIMAL_SYNTAX, ...DATE_LOCALE_SYNTAX],
     },
   },
 ])

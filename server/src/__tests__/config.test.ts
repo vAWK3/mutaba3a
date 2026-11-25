@@ -9,6 +9,8 @@ const base = {
   MUTABA3A_ADMIN_TOKEN: 'x'.repeat(32),
   API_KEY_ENVIRONMENT: 'test',
   SESSION_TOKEN_PEPPER: 's'.repeat(32),
+  // MUT-710: production and staging refuse to start without it; set here so the other production cases load.
+  TWO_FACTOR_SEAL_KEY: 't'.repeat(32),
 };
 
 describe('loadConfig — argon2 parameters (MUT-37)', () => {
@@ -154,8 +156,8 @@ describe('loadConfig — receipts library switch (MUT-389)', () => {
     expect(loadConfig({ ...base, BILLING_GATE: 'false' }).BILLING_GATE).toBe(false);
   });
 
-  it('is off unless RECEIPTS_LIBRARY is exactly "true"; "false" is off (z.coerce.boolean would read it as on)', () => {
-    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(false);
+  it('is on by default (MUT-659); only "false" turns it off (z.coerce.boolean would read "false" as on)', () => {
+    expect(loadConfig(base).RECEIPTS_LIBRARY).toBe(true);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'false' }).RECEIPTS_LIBRARY).toBe(false);
     expect(loadConfig({ ...base, RECEIPTS_LIBRARY: 'true' }).RECEIPTS_LIBRARY).toBe(true);
   });
@@ -188,6 +190,20 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...deployed, READ_QUEUE: 'receipt-reads' })).toThrow(/READ_QUEUE/);
   });
 
+  it('TWO_FACTOR_SEAL_KEY (MUT-710 D4): required on production and staging, optional elsewhere', () => {
+    const without = { ...base, TWO_FACTOR_SEAL_KEY: undefined };
+    for (const env of ['production', 'staging']) expect(() => loadConfig({ ...without, NODE_ENV: env }), env).toThrow('TWO_FACTOR_SEAL_KEY');
+    expect(loadConfig({ ...without, NODE_ENV: 'development' }).TWO_FACTOR_SEAL_KEY).toBeUndefined();
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).TWO_FACTOR_SEAL_KEY).toBe('t'.repeat(32));
+  });
+
+  it('TWO_FACTOR_ISSUING_GATE_ENABLED (MUT-710 D10): off unless exactly "true", production included', () => {
+    expect(loadConfig(base).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
+    expect(loadConfig({ ...base, TWO_FACTOR_ISSUING_GATE_ENABLED: 'true' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(true);
+    expect(loadConfig({ ...base, TWO_FACTOR_ISSUING_GATE_ENABLED: 'false' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
+  });
+
   it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {
     expect(loadConfig(base).QA_READ_DELAY_MS).toBeUndefined();
     expect(loadConfig({ ...base, QA_READ_DELAY_MS: '5000' }).QA_READ_DELAY_MS).toBe(5000);
@@ -195,6 +211,21 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...base, QA_READ_DELAY_MS: '60001' })).toThrow(/QA_READ_DELAY_MS/);
     expect(() => loadConfig({ ...deployed, QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
     expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', QA_READ_DELAY_MS: '5000' })).toThrow(/QA_READ_DELAY_MS/);
+  });
+
+  it('MALAFAT_ORIGIN_TEMPLATE (MUT-595): {slug} required; the QA stub’s plain http only off production and staging', () => {
+    expect(loadConfig(base).MALAFAT_ORIGIN_TEMPLATE).toBe('https://{slug}.malafat.app');
+    expect(loadConfig({ ...base, MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' }).MALAFAT_ORIGIN_TEMPLATE).toBe('http://{slug}.lvh.me:3939');
+    expect(() => loadConfig({ ...base, MALAFAT_ORIGIN_TEMPLATE: 'https://malafat.app' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+    expect(() => loadConfig({ ...deployed, MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', MALAFAT_ORIGIN_TEMPLATE: 'http://{slug}.lvh.me:3939' })).toThrow(/MALAFAT_ORIGIN_TEMPLATE/);
+  });
+
+  it('OAUTH_CLIENT_LOCAL_HTTP (MUT-596): off by default; the QA stub\'s http keys only off production and staging', () => {
+    expect(loadConfig(base).OAUTH_CLIENT_LOCAL_HTTP).toBe(false);
+    expect(loadConfig({ ...base, OAUTH_CLIENT_LOCAL_HTTP: 'true' }).OAUTH_CLIENT_LOCAL_HTTP).toBe(true);
+    expect(() => loadConfig({ ...deployed, OAUTH_CLIENT_LOCAL_HTTP: 'true' })).toThrow(/OAUTH_CLIENT_LOCAL_HTTP/);
+    expect(() => loadConfig({ ...deployed, NODE_ENV: 'staging', OAUTH_CLIENT_LOCAL_HTTP: 'true' })).toThrow(/OAUTH_CLIENT_LOCAL_HTTP/);
   });
 
   it('the read job\'s audience defaults to API_ORIGIN', () => {
@@ -653,5 +684,37 @@ describe('loadConfig — local QA profile cap (MUT-474)', () => {
 
   it.each(['production', 'staging'])('refuses an override in %s', (env) => {
     expect(() => loadConfig({ ...base, NODE_ENV: env, QA_MAX_OWNED_PROFILES: '100' })).toThrow(/QA_MAX_OWNED_PROFILES: the profile cap override is for the dev server and local QA only/);
+  });
+});
+
+describe('loadConfig — the issued-document signer (MUT-641, ADR-265)', () => {
+  const CERT = '-----BEGIN CERTIFICATE-----\nMIIB\n-----END CERTIFICATE-----\n';
+  const KEY = 'projects/p/locations/europe-west1/keyRings/issuing/cryptoKeys/documents/cryptoKeyVersions/1';
+  const kms = { ISSUING_SIGNER: 'kms', ISSUING_SIGNING_KMS_KEY: KEY, ISSUING_SIGNING_CERT_CHAIN: CERT, ISSUING_TSA_URL: 'https://tsa.example/' };
+
+  it('is unset by default (dev outside production, off in production) with a 10 s timeout', () => {
+    expect(loadConfig(base).ISSUING_SIGNER).toBeUndefined();
+    expect(loadConfig(base).ISSUING_SIGNING_TIMEOUT_MS).toBe(10_000);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).ISSUING_SIGNER).toBeUndefined();
+  });
+
+  it('refuses the development authority in production', () => {
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', ISSUING_SIGNER: 'dev' })).toThrow(/ISSUING_SIGNER: the development authority signs for development, tests and QA only/);
+    expect(loadConfig({ ...base, NODE_ENV: 'staging', ISSUING_SIGNER: 'dev' }).ISSUING_SIGNER).toBe('dev');
+  });
+
+  it('a kms signer needs its key version, certificate chain and time-stamp authority', () => {
+    expect(loadConfig({ ...base, NODE_ENV: 'production', ...kms })).toMatchObject(kms);
+    for (const name of ['ISSUING_SIGNING_KMS_KEY', 'ISSUING_SIGNING_CERT_CHAIN', 'ISSUING_TSA_URL']) {
+      expect(() => loadConfig({ ...base, ...kms, [name]: undefined })).toThrow(new RegExp(`${name}: ISSUING_SIGNER=kms needs`));
+    }
+  });
+
+  it('never takes key material or a malformed key name; a time-stamp authority is http(s)', () => {
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_CERT_CHAIN: `${CERT}-----BEGIN PRIVATE KEY-----\nAA\n-----END PRIVATE KEY-----\n` })).toThrow(/holds a private key/);
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_SIGNING_KMS_KEY: 'documents' })).toThrow(/ISSUING_SIGNING_KMS_KEY/);
+    expect(loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'http://timestamp.digicert.com' }).ISSUING_TSA_URL).toBe('http://timestamp.digicert.com');
+    expect(() => loadConfig({ ...base, NODE_ENV: 'production', ...kms, ISSUING_TSA_URL: 'http://timestamp.digicert.com' })).toThrow(/ISSUING_TSA_URL: a time-stamp authority is reached over https on production/);
+    expect(() => loadConfig({ ...base, ...kms, ISSUING_TSA_URL: 'ftp://tsa.example/' })).toThrow(/ISSUING_TSA_URL/);
   });
 });

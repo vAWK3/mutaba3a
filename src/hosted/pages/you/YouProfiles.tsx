@@ -1,24 +1,26 @@
 import { useNavigate } from '@tanstack/react-router';
+import { MalafatMembersSection } from '../../components/MalafatMembersSection';
 import { useT } from '../../../lib/i18n/core';
 import { useTp } from '../../../lib/i18n/plural';
 import type { HostedProfile } from '../../api/client';
 import { ProfileKindLine } from '../../components/ProfileKindLine';
 import { RowButton, RowGroup } from '../../components/YouRows';
 import { SharingEntryRow } from '../../components/SharingEntryRow';
+import { InvoicingEntryRow } from '../../components/InvoicingEntryRow';
 import { atProfileCap, canCreateProfile } from '../../data/profileRules';
 import { useMe } from '../../session/me';
 import { useIsLocalMode } from '../../session/mode';
 import { useProfileDrawers } from '../../shell/ProfileDrawers';
-import { switchTarget, type SectionSegment } from '../../shell/youRoutes';
+import { switchTarget } from '../../shell/youRoutes';
 
 /**
  * You › Profiles (MUT-425; was the profile switcher, hosted-portal.md §7.2): each profile with its kind, the Hosted
  * chip and the shared cue; New profile and Manage profiles (MUT-183); the note that local profiles stay on the device.
- * Picking a profile, the open one included, goes to the section the person came from (`from`), never the record: a
- * client id from one firm means nothing in another. At the cap, New profile stays focusable and says why it does
+ * Picking a profile, the open one included, goes to its home (MUT-657 E-3), never the record: a client id from one
+ * firm means nothing in another. At the cap, New profile stays focusable and says why it does
  * nothing (`aria-disabled`, plan §2.2).
  */
-export function YouProfiles({ active, from }: { active: HostedProfile | null; from: SectionSegment | undefined }) {
+export function YouProfiles({ active }: { active: HostedProfile | null }) {
   const t = useT();
   const tp = useTp();
   const me = useMe();
@@ -57,13 +59,17 @@ export function YouProfiles({ active, from }: { active: HostedProfile | null; fr
                 </span>
               }
               sub={<ProfileKindLine profile={profile} viewerId={me.user.id} />}
-              onClick={() => void navigate({ to: switchTarget(profile.id, from) })}
+              onClick={() => void navigate({ to: switchTarget(profile.id) })}
             />
           );
         })}
       </RowGroup>
       {/* MUT-561: the open profile's Sharing page, for its owner on a server with accountant access */}
       {active && <SharingEntryRow profile={active} place="you" />}
+      {/* MUT-646: the open profile's invoicing setup, where issuing is on for it */}
+      {active && <InvoicingEntryRow profile={active} />}
+      {/* MUT-596: the open firm's members, read-only, when Malafat manages them */}
+      {active?.managedInMalafat && !local && <MalafatMembersSection profileId={active.id} />}
       <RowGroup>
         <RowButton tone="action" inert={!canCreate} label={t('hosted.shell.switcher.newProfile')} sub={newProfileSub} onClick={drawers.openNew} />
         <RowButton tone="action" label={t('hosted.shell.switcher.manage')} onClick={drawers.openManage} />

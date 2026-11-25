@@ -82,23 +82,48 @@ describe('no self-registration route exists (MUT-37)', () => {
       .map((op) => op.key)
       .sort();
     expect(publicOperations).toEqual([
+      // MUT-595 (ADR-254 D1, DF1): Sign in with Malafat. It creates an account only from a Malafat-verified person, at
+      // consent, and links an existing one only after that account's own password or passkey (D4).
+      'GET /v1/auth/malafat/callback',
+      'GET /v1/auth/malafat/office',
+      'GET /v1/auth/malafat/start',
+      // MUT-571 (ADR-264): the Tax Authority sends the browser back here after sign-in; it trusts only its signed state
+      // and creates no account.
+      'GET /v1/issuing/tax-authority/callback',
       'GET /v1/public/fx-rates',
       'GET /v1/self-service',
       'POST /v1/account-recovery',
       'POST /v1/account-setup',
       'POST /v1/account-setup/check',
+      // MUT-710 (ADR-274): the second step of a sign-in or setup link already begun. Its credential is the challenge token
+      // the first step returned; it creates no account.
+      'POST /v1/account-setup/two-factor',
       // MUT-559 (ADR-245): the accountant invite's check, and signing up from it.
       'POST /v1/accountant-invites/check',
       'POST /v1/accountant-invites/signup',
+      'POST /v1/auth/malafat/consent',
+      'POST /v1/auth/malafat/exchange',
+      'POST /v1/auth/malafat/link',
       'POST /v1/billing/stripe/webhook',
       'POST /v1/device-sessions',
+      'POST /v1/device-sessions/code',
       'POST /v1/device-sessions/passkey',
+      'POST /v1/device-sessions/two-factor', // MUT-710: the device sign-in's second step
+      // MUT-618 (ADR-256): asking for an emailed sign-in code, portal and phone. Mails only an existing account.
+      'POST /v1/device-sign-in-codes',
       'POST /v1/email/resend/webhook',
+      // MUT-535 (D8): the monthly summary's opt-out page. It switches one mail for the person its signed token names; no account.
+      'POST /v1/mail-preferences/monthly-summary',
+      // ADR-279: promotional mail's opt-out page and the one-click unsubscribe. They only switch mail; no account.
+      'POST /v1/mail-preferences/offers',
+      'POST /v1/mail-preferences/unsubscribe',
       'POST /v1/passkey-challenges',
       // MUT-314 (ADR-248): a period download's stream; its credential is the ticket in the body. Creates no account.
       'POST /v1/period-downloads/stream',
       'POST /v1/sessions',
+      'POST /v1/sessions/code',
       'POST /v1/sessions/passkey',
+      'POST /v1/sessions/two-factor', // MUT-710: the portal sign-in's second step
       // MUT-560 (ADR-247): a share link's visitor. No account is created and no one is signed in: a viewer token opens
       // only the link's period, through these routes.
       'POST /v1/share-links/check',
@@ -107,7 +132,10 @@ describe('no self-registration route exists (MUT-37)', () => {
       'POST /v1/share-links/expense-receipts',
       'POST /v1/share-links/summary',
       'POST /v1/share-links/unlock',
+      'POST /v1/sign-in-codes',
       'POST /v1/signups',
+      // MUT-710 (D5): resends the second step's emailed code for a challenge token; mails only that challenge's person.
+      'POST /v1/two-factor/email-code',
     ]);
   });
 

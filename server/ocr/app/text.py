@@ -9,6 +9,7 @@ direction from the first strong character (P2, P3). Rules W1–W7, N1–N2, I1�
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 _ARAB = re.compile(r"[؀-ۿݐ-ݿࢠ-ࣿﭐ-﷿ﹰ-﻿]")
 _HEBR = re.compile(r"[֐-׿יִ-ﭏ]")
@@ -179,14 +180,43 @@ def _looks_reversed(word: str) -> bool:
     return word.startswith(_FINAL_ONLY) or (len(word) >= _REVERSED_ARTICLE_MIN_LEN and word.endswith("لا") and not word.startswith("ال"))
 
 
-def pdf_text_to_logical(text: str) -> str:
-    """A PDF text layer with its Arabic words put in logical order (MUT-441 benchmark).
+#: MUT-590: Hebrew letters, and the final forms that only ever end a word.
+_HEBREW_WORD = re.compile(r"[א-ת]+")
+_HEBREW_FINALS = "ךםןףץ"
 
-    Some generators (Chromium among them) write each Arabic word's letters in visual order while keeping the words in
-    logical order, and only for some words ("ةيلديص الشفاء"), so a whole-line reorder would break the right ones. A layer
-    counts as visual only when some Arabic word starts with a final-only letter (impossible in logical text); then
-    each word that looks reversed goes through the same reorder RapidOCR's lines get. A logical layer is unchanged.
+
+def _hebrew_is_visual(layer: str) -> bool:
+    """A Hebrew word of two letters or more that starts with a final form (impossible in logical text): the layer
+    writes its Hebrew lines as they look, right to left reversed."""
+    return any(len(w) >= 2 and w[0] in _HEBREW_FINALS for w in _HEBREW_WORD.findall(layer))
+
+
+def layer_fixer(layer: str) -> Callable[[str], str]:
+    """The repair one PDF text layer needs, decided once from the whole layer and applied to its text or to any piece
+    of it (a positioned run, MUT-590): a logical layer is unchanged.
+
+    Arabic (MUT-441 benchmark): some generators (Chromium among them) write each Arabic word's letters in visual order
+    while keeping the words in logical order, and only for some words ("ةيلديص الشفاء"), so a whole-line reorder would
+    break the right ones. A layer counts as visual only when some Arabic word starts with a final-only letter; then each
+    word that looks reversed goes through the same reorder RapidOCR's lines get.
+
+    Hebrew (MUT-590): older invoice generators write whole lines in visual order. A layer counts as visual when some
+    Hebrew word starts with a final form; then every line with a Hebrew letter is reordered whole (UAX #9), numbers
+    kept left to right. A reversed line need not hold a final form itself, so the call is the layer's, not the line's.
     """
-    if not any(w.startswith(_FINAL_ONLY) for w in _ARABIC_WORD.findall(text)):
+    arabic = any(w.startswith(_FINAL_ONLY) for w in _ARABIC_WORD.findall(layer))
+    hebrew = _hebrew_is_visual(layer)
+
+    def fix(text: str) -> str:
+        if arabic:
+            text = _ARABIC_WORD.sub(lambda m: visual_to_logical(m.group(0)) if _looks_reversed(m.group(0)) else m.group(0), text)
+        if hebrew:
+            text = "\n".join(visual_to_logical(line) if _HEBREW_WORD.search(line) else line for line in text.split("\n"))
         return text
-    return _ARABIC_WORD.sub(lambda m: visual_to_logical(m.group(0)) if _looks_reversed(m.group(0)) else m.group(0), text)
+
+    return fix
+
+
+def pdf_text_to_logical(text: str) -> str:
+    """A PDF text layer with its visual-order Arabic words and Hebrew lines put in logical order (`layer_fixer`)."""
+    return layer_fixer(text)(text)

@@ -146,10 +146,26 @@
   }
 }
 
-/* The narrowest phones (320–360): the bar's button keeps its icon; its full name stays as the accessible name */
-@media (max-width: 360px) {
+/* The bar's short label ("Sign up"), shown only on narrow phones (below) */
+.landing-header-cta-short {
+  display: none;
+}
+
+/* Phones up to 400px (375 and 320 included): the full label beside the wordmark and the switch clipped the
+   wordmark in English, so the bar's button says the short one. Its accessible name stays the full label. */
+@media (max-width: 400px) {
+  /* Visually hidden, not display: none, so the full label stays the button's accessible name */
   .landing-header-cta-label {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .landing-header-cta-short {
+    display: inline;
   }
 }
 

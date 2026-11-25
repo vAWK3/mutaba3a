@@ -1,6 +1,8 @@
 import { displayCategoryNames } from '../expenses/presets.js';
+import { invoiceStatusOf, type InvoiceStatus } from '../income/invoice-class.js';
+import { invoicingOn } from '../issuing/invoicing-on.js';
 import { moneyDateOf } from '../entries/merge.js';
-import type { EntryRow, ExpenseRecord, LedgerStore, Organization, PaymentRecord, PeriodBounds, PeriodReceiptRecord } from '../repositories/ports.js';
+import type { EntryRow, ExpenseRecord, IncomeContextRecord, LedgerStore, Organization, PaymentRecord, PeriodBounds, PeriodReceiptRecord, RefundRecord } from '../repositories/ports.js';
 import { addDays } from '../dates.js';
 import type { Lang } from './columns.js';
 import type { PeriodRange } from './range.js';
@@ -45,6 +47,8 @@ export interface IncomeLine {
   client: string | null;
   project: string | null;
   loggedBy: string | null;
+  /** MUT-660: invoicing profiles only. */
+  invoiceStatus?: InvoiceStatus;
 }
 
 /**
@@ -56,6 +60,13 @@ export interface CollectOptions {
   forLink: boolean;
 }
 
+/** MUT-643: a refund on the Income sheet (ref R-n). */
+export interface RefundLine {
+  ref: string;
+  record: RefundRecord;
+  client: string | null;
+}
+
 export interface PeriodRows {
   organization: Organization;
   range: PeriodRange;
@@ -64,6 +75,10 @@ export interface PeriodRows {
   forLink: boolean;
   expenses: ExpenseLine[];
   income: IncomeLine[];
+  /** MUT-643: money credit notes gave back in the range; the Income sheet lists each as a negative row. */
+  refunds?: RefundLine[];
+  /** MUT-660: invoicing is on, so the Income sheet carries the invoice status. */
+  invoicing?: boolean;
 }
 
 const RECEIPT_EXTENSIONS: Readonly<Record<string, string>> = {
@@ -82,7 +97,7 @@ export function receiptExtension(mimeType: string): string {
   return RECEIPT_EXTENSIONS[mimeType.toLowerCase()] ?? 'bin';
 }
 
-export function refOf(prefix: 'E' | 'I', index: number): string {
+export function refOf(prefix: 'E' | 'I' | 'R', index: number): string {
   return `${prefix}${String(index + 1).padStart(4, '0')}`;
 }
 
@@ -134,6 +149,8 @@ export async function collectRows(store: LedgerStore, organization: Organization
       }),
     };
   });
+  const invoicing = report && (await invoicingOn(store, organization));
+  const ctx = invoicing ? await store.issuing.incomeContext(organization.id, sortedPayments.map((p) => p.id)) : null;
   const incomeLines = sortedPayments.map(
     (record, i): IncomeLine => ({
       ref: refOf('I', i),
@@ -141,9 +158,20 @@ export async function collectRows(store: LedgerStore, organization: Organization
       client: record.customerId ? (names.customers.get(record.customerId) ?? null) : null,
       project: record.projectId ? (names.projects.get(record.projectId) ?? null) : null,
       loggedBy: record.createdByUserId ? (names.users.get(record.createdByUserId) ?? null) : null,
+      ...(ctx ? { invoiceStatus: statusOf(record, ctx) } : {}),
     }),
   );
-  return { organization, range, asOf, lang, forLink: options.forLink, expenses: expenseLines, income: incomeLines };
+  // MUT-643: refunds are issuing money (a credit note's), so only a profile that issues has any.
+  const refundRecords = invoicing ? await store.refunds.list(organization.id, { ...(range.from !== null ? { from: range.from } : {}), to: range.to }) : [];
+  const missing = [...new Set(refundRecords.map((f) => f.customerId).filter((id) => !names.customers.has(id)))];
+  const more = new Map((await Promise.all(missing.map((id) => store.customers.getById(organization.id, id)))).filter((c) => c !== null).map((c) => [c!.id, c!.name]));
+  const refunds = refundRecords.map((record, i): RefundLine => ({ ref: refOf('R', i), record, client: names.customers.get(record.customerId) ?? more.get(record.customerId) ?? null }));
+  return { organization, range, asOf, lang, forLink: options.forLink, expenses: expenseLines, income: incomeLines, ...(refunds.length > 0 ? { refunds } : {}), ...(invoicing ? { invoicing: true } : {}) };
+}
+
+function statusOf(p: PaymentRecord, ctx: IncomeContextRecord): InvoiceStatus {
+  const links = ctx.payments.get(p.id);
+  return invoiceStatusOf({ currency: p.currency, amountMinor: p.amountMinor, customerId: p.customerId, origin: p.origin, notForInvoice: p.notForInvoice, documented: links?.documented ?? false, externalInvoice: links?.externalInvoice ?? false, allocations: links?.allocations ?? [] }, ctx);
 }
 
 /** Receipts per expense id, oldest upload first, in batches (one query each). */

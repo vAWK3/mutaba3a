@@ -13,7 +13,7 @@ export function useMockFormat() {
       language,
       money: (amountMinor: number, currency: Currency) => formatAmount(amountMinor, currency, locale),
       // Noon keeps a fixed calendar date on the same day in every timezone.
-      date: (isoDate: string) => formatDateShort(`${isoDate}T12:00:00`, locale),
+      date: (isoDate: string) => formatDateShort(`${isoDate}T12:00:00`, language),
     };
   }, [language]);
 }

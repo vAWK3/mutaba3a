@@ -18,6 +18,12 @@
 
 ## Open Debt
 
+### TD-307: Vendor-made invoice PDFs read 70% of their printed fields, against a 95% bar
+**Status**: Open (MUT-590, 2026-11-12; ADR-252; the work is MUT-591)
+- **What:** on Basel's 14 vendor-made invoices in receipt-bench, 57/82 printed fields are read right (total/date/currency 34/40, 0 confidently wrong; vendor, VAT, registration, allocation 23/42, 4 confidently wrong). One field reads worse than main: a registration number when the bill-to's ח.פ/ת.ז and the vendor's ח.פ/ע.מ share one printed line and the buyer's number isn't learned yet. The bench truth has no phone or email for these invoices, so a filled phone or email scores as wrong.
+- **Why it's acceptable:** Basel chose to land MUT-590 (2026-11-12): it reads more than main on every field group, with no new confidently wrong total, date or currency.
+- **Fix:** MUT-591: rank date labels (invoice date over the others), vendor name on invoices, a signal for the two-column registration row, phone/email truth.
+
 ### TD-306: The same allocation number on two expenses is not flagged
 **Status**: Accepted (MUT-557, 2026-11-06; ADR-246, Basel's R2)
 - **What:** an allocation number belongs to one invoice, so the same number on two expenses is a duplicate or a typo. Nothing warns about it yet.
@@ -34,6 +40,58 @@
 **Status**: Open (MUT-540, 2026-11-03; ADR-244)
 - **What:** `min_confident_chars` 80, `turn_gain` 1.25, `min_turn_gain_chars` 20, `sideways_keep` 0.8, and the 6°/2° torn-edge rule were set on the synthetic photos turned four ways and one real sideways photo (Maxi), the same receipts the bench then checks: nothing held out. An upside-down page whose first read still scores 80 confident characters or more is never turned.
 - **Fix:** recheck them on MUT-541's approved receipts once there are some, and on any new sideways or upside-down production photo.
+
+### TD-316: Signed PDFs are PAdES B-T, not long-term validated (B-LT)
+**Status**: Open (2026-11-22, MUT-641 S1)
+- **What:** the signature carries a time-stamp but no revocation data (no DSS dictionary with OCSP/CRL), so once the certificate expires a validator can't prove it was valid at signing without the CA's online services. Add the DSS (and a document time-stamp for B-LTA) once the production CA, its OCSP responder and TSA are known.
+
+### TD-317: The customer's consent to receive documents digitally isn't recorded yet
+**Status**: Open (2026-11-22, MUT-641 S4)
+- **What:** Instruction 18B wants the recipient's prior agreement to digital documents. Its shape and retention wait for the accountant's answer (MUT-567 Q3); the field and UI belong to MUT-570/573, which send documents. Until then nothing records it.
+
+### TD-318: Signing errors reach Sentry as one group, and the off switch is reported too
+**Status**: Open (2026-11-22, MUT-641 review)
+- **What:** SIGNING_UNAVAILABLE is reported without its root cause (that lives in the `issued document could not be signed` log line, with the document), and SIGNING_NOT_CONFIGURED (503) is reported on every PDF request while production is deliberately off. Fine while issuing is behind the `invoicing` feature; before it opens, report the cause and exempt the deliberate off state (app-shell's onError reports every status >= 500).
+
+### TD-320: Payment requests are listed but can't be issued (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** PAYMENT_REQUEST_FIRST clients' Owed entries show in To issue with "can't be issued here yet"; the person attaches one or marks it.
+- **Fix:** MUT-662 adds the payment request type; `documentsDue` then marks those items issuable.
+
+### TD-321: A held allocation number in Issue all resumes only through the single issue (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** Issue all reports a held item (MUT-572) and leaves it in the list; the person issues it on its own to choose CANCEL/CONTINUE. The batch can't resume it itself.
+- **Fix:** return the held key per item and let the page offer the four choices inline.
+
+### TD-322: Documents due are read whole for the count (MUT-660)
+**Status**: Open (2026-11-22, ADR-270)
+- **What:** GET /v1/documents-due/count runs the same reads as the list (open and undocumented receivables, undocumented payments, their allocations). Indexed, but not measured on a 5k-payment profile.
+- **Fix:** measure; if slow, a COUNT-only SQL path, or cache per profile until a write.
+
+### TD-319: The view-copy cache is per instance
+**Status**: Open (2026-11-22, MUT-641 review)
+- **What:** each Cloud Run instance signs a document's view copy once per 10 minutes, so N instances can each sign it. Fine at today's 1-3 instances; a shared cache (or storing view copies) if signing volume grows.
+
+### TD-310: Malafat's connect and revoke are audited as an agent's
+**Status**: Open (MUT-593, 2026-11-12; ADR-254)
+- **What:** consenting to Malafat and revoking it in Connected apps write `user.agent_connected` / `user.agent_disconnected` (with `clientKind: CONFIDENTIAL`, `tenantId`), the actions MCP agents use, so an audit feed that names the action reads "connected an agent".
+- **Fix:** with MUT-596's Connected apps screen, give the confidential client its own actions (`user.app_connected`, `user.app_disconnected`) and copy.
+
+### TD-313: A Malafat-made account can't add a passkey after its sign-in grows old
+**Status**: Accepted (MUT-596, 2026-11-12; ADR-254)
+- **What:** adding a passkey needs a sign-in under 10 minutes old or the current password. An account Sign in with Malafat created has no password of its own, so past 10 minutes the second-way-in card asks the person to sign in with Malafat again.
+- **Fix (if it bites):** let a fresh Malafat round trip stand in as the step-up, or set the password first.
+
+### TD-312: The `via: malafat` audit stamp is tested on one write
+**Status**: Open (MUT-593, 2026-11-12; ADR-254 AC9)
+- **What:** `stampDelegatedAudit` (store-guard) marks every audit row that reaches the store as an argument, up to three levels deep. A repository that builds its audit row itself from plain inputs would write it without `via`. Only the expense create is tested.
+- **Fix:** a test that runs each opted-in write route under a delegated token and checks every audit row it writes carries `via`.
+
+### TD-311: A confidential client's JWKS fetch trusts the operator's URL
+**Status**: Accepted (MUT-593, 2026-11-12; ADR-254 R7)
+- **What:** `remoteKeys` fetches only https and only the URL the operator registered, but doesn't run the CIMD fetch's private-address guard.
+- **Why it's acceptable:** only the admin token registers a confidential client, and there is one (Malafat).
+- **Fix:** route `createRemoteJWKSet` through `trust.ts`'s guarded fetch before a second confidential client is registered.
 
 ### TD-305: A turned photo pays two full reads
 **Status**: Open (MUT-540, 2026-11-03; ADR-244)
@@ -89,7 +147,8 @@
 - **Fix:** prefer the registration number on the same row as the vendor's name (or a "בע"מ" line), and score vendor candidates against a learned vendor (MUT-254) before suggesting one.
 
 ### TD-293: The real-receipt bench is one person's eye-read of 54 receipts
-**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02; MUT-540 2026-11-03)
+**Status**: Open (MUT-504, 2026-10-29; ADR-229; MUT-514 2026-11-02; MUT-540 2026-11-03; MUT-630 2026-11-21)
+- **MUT-630/631 (2026-11-21):** `prod-8285ca9d.pdf` (a Partner mobile bill with a text layer, `receivedOn` 2026-11-20 assumed: the upload day was not checked) added with truth read by eye; its read is from the local sidecar of 2026-11-21 (`mut630-new-reads.json`), appended to `reads.json`. Vendor, phone and email truth checked by eye on it and on `prod-5e132120` (header cut off: no vendor), `prod-a9c80dc0` and `prod-68422cb9` (no email printed). Backup `manifest.before-mut630.json`. Basel's OK to add them came with the plan; for Basel to confirm the truth.
 - **MUT-540:** the 6 production receipts not on disk were copied read-only from the production bucket (Basel's D3) as `prod-<id>` with truth read by eye (`receivedOn` 2026-10-31; the Abu Shukri and Beit Jala images as `scanned`, the phone's Scans). Paz Afek was already 2026-10-29-p07. 3-p15 gains the corporation number it prints (the same pharmacy's as the Maxi photo). Backups in `receipt-bench/.mut540/`. For Basel to confirm.
 - **What:** `receipt-bench/manifest.json` (out of every repo) was read off the scans by Claude and not yet checked by Basel; 48 receipts since MUT-514. MUT-514 changed it three ways, for Basel to confirm: `receivedOn` (the scan day, 2026-10-29) on every receipt; 3-p35's phone accepts either of the vendor's two printed numbers (R6); p02 gains the dealer number it prints (the same vendor's as 3-p21). Truth values may now be lists. The three production Paz receipts the plan meant to add are not in the folder yet.
 - **Fix:** Basel checks the manifest and adds receipts (more Arabic ones especially); raise AC2's bar as the set grows.
@@ -2814,7 +2873,66 @@ empty option and list the profiles only), with a drawer test for each.
 
 ---
 
+### TD-324: Linking Malafat to an account with two-step sign-in on is refused
+**Status**: Open (2026-11-22, MUT-710 D6, review 8)
+- **What:** `/v1/auth/malafat/link` and `/consent` write the link before any session exists, so with two-step on they answer `TWO_FACTOR_LINK_UNAVAILABLE`.
+- **Fix:** link after the second step (a challenge between link and consent), then lift the refusal.
+
+### TD-325: TWO_FACTOR_SEAL_KEY can't be rotated without re-enrolment
+**Status**: Open (2026-11-22, MUT-710 D4)
+- **What:** one key seals every TOTP secret and keys every recovery-code digest; there is no key id or second key.
+- **Fix:** a versioned key list (seal with the newest, open with any), and a re-seal job.
+
+### TD-326: A setup link's second step is consumed before the redeem, not inside its transaction
+**Status**: Open (2026-11-22, MUT-710 D11)
+- **What:** the challenge is claimed by a conditional update just before `accountSetup.redeem`; if the redeem then loses a race (another tab, a newer link) the person starts the second step again. Never weaker, only a retry.
+- **Fix:** pass the challenge id into both stores' redeem and consume it in the same transaction.
+
+### TD-328: Refunds make the MUT-643 migration roll-forward only (MUT-643)
+- **What:** once a refund exists, a payment's `allocatedMinor` counts its refund sources. Rolling the API back past 1.137.0-mut643 would read that money as allocated with nothing behind it, and drop the REFUND lines (statements would end at −R).
+- **Why accepted:** additive tables; issuing is behind the per-account flag, so only Barmajiyat (MUT-639) writes refunds at first.
+- **Fix when:** never needed unless a rollback is; then recompute `allocatedMinor` from live allocations and keep the refunds table.
+
+### TD-329: Kept credit can't be applied by a person yet (MUT-643 → MUT-729)
+- **What:** `paidPart: KEEP` leaves money unallocated on the client's account; only an API key can allocate it, and never to a document's Owed.
+- **Fix:** MUT-729.
+
+### TD-330: The operator search contract test depends on what else is in the test database (seen in MUT-643)
+- **What:** `store-contract-operator.ts` "q matches any part…" searches `BaSeL` with `limit: 50` and expects its two new accounts among the results. After a full `test:db` run the database holds many "Basel" accounts (other contracts' fixtures), the two fall off the page, and the test fails; on a fresh database it passes.
+- **Fix:** search with the test's own marker, or page through all results.
+
+### TD-327: Tax Authority token refreshes are logged, not audited
+**Status**: Open (2026-11-22, MUT-710 D13)
+- **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.
+- **Fix:** after that branch merges, append the audit rows in `accessTokenFor`.
+
+### TD-331: A closed profile's archive signs its never-produced documents inside one request
+**Status**: Open (2026-11-25, MUT-644 D6)
+- **What:** `POST /admin/v1/issuing/retained/{id}/archive` renders and signs (KMS + time stamp) a copy of every document whose original was never produced, one after another, in the request. A business with hundreds of such documents could pass Cloud Run's request timeout. Most documents are produced when issued, so the list is usually short.
+- **Fix:** if it bites, build the archive in a job (as the period downloads do, MUT-314) and give the operator a link.
+
+### TD-332: The archive is handed over by the operator, by hand
+**Status**: Won't do (2026-11-25, Basel, MUT-644 comment 13504: the operator's handover after an identity check is enough; ADR-277 override log)
+- **What:** after checking who is asking, the operator downloads the zip and sends it over a channel of their choosing; nothing in the product delivers it.
+- **Fix:** if the lawyer or volume asks for it, a time-limited, single-use download link sent to an address the operator confirmed.
+
 ## Resolved Debt
+
+### TD-314: The monthly summary's catch-up days re-read everyone already mailed
+**Status**: Open (2026-11-22, MUT-535 D12, eng review R14)
+- **What:** each run walks every candidate from the start; someone mailed on the 1st is read again on days 2-7 (their profiles' figures and billing), and the mailer answers `duplicate`. Fine at tens to a few hundred people; past that, ask the send log which `monthly-summary:<id>:<month>` keys are SENT before reading (an `email.sentKeys` read, counting UNCERTAIN as sent).
+
+### TD-315: Operator-made accounts get no monthly summary until they prove their address
+**Status**: Resolved (2026-11-22, Basel: "include them". The summary no longer looks at `emailVerifiedAt`; ADR-259 decision 3)
+- **What:** the summary first mailed only `emailVerifiedAt` addresses, and an account the operator made (setup link handed over, not mailed) stays unverified until it redeems a mailed link, so pilot people were skipped.
+
+### TD-309: An abandoned upload on an expense blocks moving it
+**Status**: Resolved (2026-11-20, MUT-589: the move soft-deletes an upload left PENDING_UPLOAD past the 24 h pending window, in its transaction; a newer one still answers 409 RECEIPT_NOT_READY)
+- **What:** a MUT-44 upload started on an expense and never completed left a PENDING_UPLOAD receipt on it; the move answered 409 `RECEIPT_NOT_READY` until that receipt was deleted.
+
+### TD-308: A vendor made on the target for an expense move that then fails stays behind
+**Status**: Resolved (2026-11-20, MUT-589: a failed move deletes the vendor it created, through `VendorRepository.removeIfUnused`, unless an expense took it up meanwhile)
+- **What:** the move resolves (finds or creates) the vendor on the target before its transaction; if the transaction refused, a new vendor was left with no expense.
 
 ### TD-236: The sidebar's two links into the You page are a stopgap until MUT-426
 **Status**: Resolved (2026-10-25, MUT-426: the You island replaced both links; `YouLinks.tsx` and its CSS are deleted, ADR-195)
@@ -3232,3 +3350,16 @@ When resolving debt:
 1. Move to "Resolved Debt" section
 2. Add resolution date and description
 3. Update status to "Resolved"
+
+### TD-323: The uniform file is built in memory (MUT-569)
+- **What:** `GET /v1/issuing/uniform-file` reads every document in the range with its lines and builds INI, BKMVDATA, the report and the zip in memory. That's about 1 KB per document, so a 10k-document history is about 10 MB for a moment.
+- **When to pay:** a profile nearing 100k issued documents, or exports showing up in memory alerts. Stream BKMVDATA in document pages (keyset on type and number) into a streamed zip, as `period-pack/receipts-zip.ts` does.
+- **Also:** the Prisma side of `inRange` runs in server CI's `test:db`. The shared local test database was behind main's schema on 2026-11-22, so it wasn't run locally.
+
+
+### TD-333: Settle-and-issue is two writes, not one transaction (MUT-661)
+- **What:** `POST /v1/receivables/{id}/settle-and-issue` records the payment, then issues (ADR-280). A crash between them leaves a payment whose document is in To issue, which is the same state "Later" makes, so nothing is lost.
+- **When to pay:** if a pair-in-one-transaction guarantee is ever wanted (a Prisma `$transaction` around `payments.create` and `issuing.issue`).
+
+### TD-334: A tax invoice's Owed has no "pay now, document later" (MUT-661)
+- **What:** an Owed a tax invoice posted is paid only by its receipt (MUT-568), so Record payment there can't leave the document for later. Basel to decide whether it matters (ADR-280 decision 4).

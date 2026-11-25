@@ -43,6 +43,11 @@ export function ProfileProvider({ profile, children }: { profile: HostedProfile;
 }
 
 /** The signed-in person; only valid under the authenticated routes. */
+/** MUT-648: the signed-in person, or null outside the authenticated routes (a drawer rendered on its own). */
+export function useMeOrNull(): Me | null {
+  return useContext(MeContext) ?? null;
+}
+
 export function useMe(): Me {
   const me = useContext(MeContext);
   if (!me) throw new Error('useMe must be used under the authenticated routes');

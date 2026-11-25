@@ -30,8 +30,30 @@ const SAMPLE: { [T in MailTemplateId]: TemplateVars[T] } = {
   'offer-renewing-soon': { renewsOn: { year: 2027, month: 11, day: 12 }, listAmount: 29000, currency: 'ILS', manageLink: 'https://portal.example.test/?billing=true' },
   'card-failed': { updateLink: 'https://portal.example.test/?billing=true' },
   'card-failed-reminder': { daysLeft: 6, readOnlyAfter: true, updateLink: 'https://portal.example.test/?billing=true' },
-  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe' },
+  'comeback-offer': { stage: 'day-90', firstMonth: 900, listMonth: 2900, firstYear: 27000, listYear: 29000, currency: 'ILS', subscribeLink: 'https://portal.example.test/?billing=true&step=subscribe', offLink: 'https://portal.example.test/mail-off?mail=offers#tok_ABC123def' },
+  'tax-authority-reconnect': { stage: 'soon', daysLeft: 6, profileName: 'Sader Studio', link: 'https://portal.example.test/p/sample-profile/you/invoicing' },
   'accountant-invite': { ownerName: 'Basel Sader', profileName: 'Sader Studio', link: 'https://portal.example.test/accountant-invite#tok_ABC123def', expiresOn: { year: 2026, month: 11, day: 20 } },
+  // MUT-618: a sign-in code, typed, never a link.
+  'sign-in-code': { code: '482913', validMinutes: 10 },
+  'two-factor-code': { code: '482913', validMinutes: 10 },
+  'two-factor-changed': { change: 'enabled', method: 'totp', signInLink: 'https://app.example.test/' },
+  // MUT-535 (ADR-259): one profile in two currencies, and the yearly line.
+  'monthly-summary': {
+    month: { year: 2026, month: 11 },
+    asOf: { year: 2026, month: 12, day: 1 },
+    profiles: [
+      {
+        name: 'Sader Studio',
+        link: 'https://portal.example.test/p/0b7d4f2e-6a1c-4c8e-9f3a-2d5b7e9c1a40',
+        cameIn: [{ currency: 'ILS', amount: '12400.00' }, { currency: 'USD', amount: '900.00' }],
+        owed: [{ currency: 'ILS', amount: '3200.00' }, { currency: 'USD', amount: '450.50' }],
+        overdue: [{ currency: 'ILS', amount: '1100.00' }, { currency: 'USD', amount: '200.00' }],
+        overdueCount: 3,
+      },
+    ],
+    yearly: { savings: 5800, currency: 'ILS', link: 'https://portal.example.test/?billing=true&step=switch' },
+    offLink: 'https://portal.example.test/mail-off#tok_ABC123def',
+  },
 };
 /** MUT-525: the launch offer line the trial mails carry while it runs (ADR-237). */
 const OFFER = { percentOff: 50, endsOn: { year: 2027, month: 2, day: 1 } };
@@ -44,16 +66,28 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   'trial-ending-soon': ['3'],
   'trial-locking-soon': ['2'],
   'card-failed-reminder': ['6'],
+  // MUT-571 AC3: the days left and the Tax Authority's 90-day rule; no date.
+  'tax-authority-reconnect': ['90', '6'],
   // MUT-534 (ADR-243, overriding ADR-159 §5): the come-back prices, longest first so none hides inside another.
-  'comeback-offer': ['₪290', '₪270', '₪29', '₪9'],
+  // '18' and the contact address (mtb3a) are in the sender's details (s.30A).
+  'comeback-offer': ['₪290', '₪270', '₪29', '₪9', '18', 'info@mtb3a.com'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
   'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
   // MUT-525 (ADR-237, overriding ADR-159 §5): a renewal notice must state its price and day.
   'offer-renewing-soon': ['₪290', mailDay({ year: 2027, month: 11, day: 12 }, 'en'), mailDay({ year: 2027, month: 11, day: 12 }, 'ar')],
   // MUT-559 (ADR-245): the last day an accountant invite works, a calendar day, never a money date.
   'accountant-invite': [mailDay({ year: 2026, month: 11, day: 20 }, 'en'), mailDay({ year: 2026, month: 11, day: 20 }, 'ar')],
+  // MUT-618 (ADR-256 D8): the code itself and its ten minutes; a code, never an amount or a date.
+  'sign-in-code': ['482913', '10'],
+  // MUT-710 (ADR-274 D5): the same as the sign-in code.
+  'two-factor-code': ['482913', '10'],
+  // MUT-535 (ADR-259, overriding ADR-159 §5): the person's own amounts per currency, the yearly saving, the overdue
+  // count, the month's year and the day owed is read on. Longest first, so none hides inside another.
+  'monthly-summary': [mailDay({ year: 2026, month: 12, day: 1 }, 'en'), mailDay({ year: 2026, month: 12, day: 1 }, 'ar'), '₪12,400', '$450.50', '₪3,200', '₪1,100', '$900', '$200', '₪58', '2026', '3'],
 };
-const LINKS_OF = (vars: object): string[] => Object.values(vars).filter((v): v is string => typeof v === 'string' && /^https?:\/\//.test(v));
+/** Every link in the vars, nested ones too (MUT-535: each profile's panel carries its own). */
+const LINKS_OF = (vars: object): string[] =>
+  Object.values(vars).flatMap((v): string[] => (typeof v === 'string' ? (/^https?:\/\//.test(v) ? [v] : []) : v && typeof v === 'object' ? LINKS_OF(v as object) : []));
 const CURRENCY = /\b(USD|ILS|NIS|EUR|GBP|JOD|AED|SAR|QAR|KWD|BHD|OMR|EGP)\b|[₪$€£]|شيكل|دولار|دينار|درهم|ريال/;
 const ARABIC = /[؀-ۿ]/;
 
@@ -261,13 +295,18 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'trial-ending-soon': { en: 'Your MTB3A free trial ends within 3 days', ar: 'تنتهي تجربتك المجانية في متابعة خلال 3 أيام' },
   'trial-ended': { en: 'Your MTB3A account is read-only', ar: 'حسابك في متابعة للقراءة فقط' },
   'trial-locking-soon': { en: 'Your MTB3A account locks within 2 days', ar: 'يُقفَل حسابك في متابعة خلال يومين' },
-  'account-closing': { en: 'Your MTB3A account will be deleted on November 23, 2026', ar: 'سيُحذف حسابك في متابعة بتاريخ 23 نوفمبر 2026' },
+  'account-closing': { en: 'Your MTB3A account will be deleted on November 23, 2026', ar: 'سيُحذف حسابك في متابعة بتاريخ 23 تشرين الثاني 2026' },
   'passkey-added': { en: 'A passkey was added to your MTB3A account', ar: 'أُضيف مفتاح مرور إلى حسابك في متابعة' },
-  'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 نوفمبر 2027' },
+  'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 تشرين الثاني 2027' },
   'card-failed': { en: "Your card didn't go through", ar: 'لم تنجح عملية الدفع ببطاقتك' },
   'card-failed-reminder': { en: 'Your card still isn’t going through', ar: 'ما زالت عملية الدفع ببطاقتك لا تنجح' },
-  'comeback-offer': { en: 'Come back to MTB3A for ₪9 your first month', ar: 'عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
+  'comeback-offer': { en: 'פרסומת: Come back to MTB3A for ₪9 your first month', ar: 'פרסומת: عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
   'accountant-invite': { en: 'Basel Sader shared “Sader Studio” with you on MTB3A', ar: 'Basel Sader يشاركك ملف «Sader Studio» في متابعة' },
+  'sign-in-code': { en: '482913 is your MTB3A sign-in code', ar: 'رمز تسجيل الدخول إلى متابعة: 482913' },
+  'monthly-summary': { en: 'Your November in MTB3A', ar: 'تشرين الثاني في متابعة' },
+  'two-factor-code': { en: '482913 is your MTB3A two-step code', ar: 'رمز التحقق بخطوتين في متابعة: 482913' },
+  'two-factor-changed': { en: 'Two-step sign-in is on for your MTB3A account', ar: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة' },
+  'tax-authority-reconnect': { en: 'Your MTB3A connection to the Tax Authority ends within 6 days', ar: 'ينتهي ربط متابعة بسلطة الضرائب خلال 6 أيام' },
 };
 const tagsOf = (html: string, tag: string) => [...html.matchAll(new RegExp(`<${tag}\\b[^>]*>`, 'g'))].map((m) => m[0]);
 const attrOf = (tag: string, name: string) => tag.match(new RegExp(`\\s${name}="([^"]*)"`))?.[1];
@@ -393,7 +432,7 @@ describe('MUT-468 frame', () => {
     const closing = renderMail('account-closing', 'ar', SAMPLE['account-closing'], FRAME);
     expect(closing.html).toContain('data-details');
     expect(closing.text).toContain(`يوم الحذف: ${mailDay(SAMPLE['account-closing'].deleteOn, 'ar')}`);
-    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon' && t !== 'comeback-offer' && t !== 'accountant-invite')) {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'passkey-added' && t !== 'account-closing' && t !== 'offer-renewing-soon' && t !== 'comeback-offer' && t !== 'accountant-invite' && t !== 'monthly-summary')) {
       expect(renderMail(id, 'en', SAMPLE[id] as never, FRAME).html).not.toContain('data-details');
     }
   });
@@ -469,6 +508,88 @@ describe('MUT-468 frame: light only, in every client that honours it', () => {
       expect(tagsOf(html, 'body')[0]).toContain('color-scheme:light only');
       expect(tagsOf(html, 'table')[0]).toContain('color-scheme:light only');
       expect(html).toContain(`<html lang="${locale}" dir="${locale === 'ar' ? 'rtl' : 'ltr'}">`);
+    }
+  });
+});
+
+describe('monthly-summary (MUT-535, ADR-259)', () => {
+  const vars = SAMPLE['monthly-summary'];
+  const en = renderMail('monthly-summary', 'en', vars, FRAME);
+  const ar = renderMail('monthly-summary', 'ar', vars, FRAME);
+
+  it('shows each profile’s month per currency, never summed or converted, with its overview link', () => {
+    expect(en.text).toContain('Sader Studio');
+    expect(en.text).toContain('Came in during November: ₪12,400 · $900');
+    expect(en.text).toContain('Still owed: ₪3,200 · $450.50');
+    expect(en.text).toContain('Overdue: ₪1,100 · $200 (3 entries)');
+    expect(en.text).toContain('Open Sader Studio: https://portal.example.test/p/0b7d4f2e-6a1c-4c8e-9f3a-2d5b7e9c1a40');
+    expect(en.html).toContain('data-section');
+    expect(en.text).toContain('as of December 1, 2026');
+  });
+
+  it('writes Arabic with Levantine months, every amount and name isolated', () => {
+    expect(ar.subject).toBe('تشرين الثاني في متابعة');
+    expect(ar.text).toContain('تشرين الثاني 2026 باختصار');
+    expect(ar.text).toContain('المستلَم في تشرين الثاني: \u2068₪12,400\u2069 · \u2068$900\u2069');
+    expect(ar.text).toContain('المتأخر: \u2068₪1,100\u2069 · \u2068$200\u2069 (3 قيود)');
+    expect(ar.text).toContain('افتح \u2068Sader Studio\u2069');
+    expect(ar.html).toContain('dir="rtl"');
+  });
+
+  it('names what is empty rather than leaving a row blank', () => {
+    const empty = renderMail('monthly-summary', 'en', { ...vars, profiles: [{ ...vars.profiles[0]!, cameIn: [], overdue: [], overdueCount: 0 }] }, FRAME);
+    expect(empty.text).toContain('Came in during November: Nothing recorded');
+    expect(empty.text).toContain('Overdue: Nothing overdue');
+    const arEmpty = renderMail('monthly-summary', 'ar', { ...vars, profiles: [{ ...vars.profiles[0]!, owed: [], overdue: [], overdueCount: 0 }] }, FRAME);
+    expect(arEmpty.text).toContain('المتأخر: لا شيء متأخر');
+  });
+
+  it('carries the yearly line only when given one (MUT-531)', () => {
+    expect(en.text).toContain('Switch to yearly and save ₪58 a year:');
+    expect(ar.text).toContain('انتقل إلى الاشتراك السنوي ووفّر \u2068₪58\u2069 في السنة');
+    const none = renderMail('monthly-summary', 'en', { ...vars, yearly: null }, FRAME);
+    expect(none.text).not.toContain('yearly');
+  });
+
+  it('says how to turn it off, in the footer and the text part (AC3)', () => {
+    expect(en.html).toContain('data-opt-out');
+    expect(en.html).toContain('href="https://portal.example.test/mail-off#tok_ABC123def"');
+    expect(en.text).toContain("Don't want this monthly email? Turn it off. You can turn it back on in You › Account.");
+    expect(ar.text).toContain('لا تريد هذه الرسالة الشهرية؟ أوقفها. ويمكنك إعادتها من أنت › الحساب.');
+  });
+
+  it('counts entries in Arabic grammar', () => {
+    const count = (n: number) => renderMail('monthly-summary', 'ar', { ...vars, profiles: [{ ...vars.profiles[0]!, overdueCount: n }] }, FRAME).text;
+    expect(count(1)).toContain('(قيد واحد)');
+    expect(count(2)).toContain('(قيدان)');
+    expect(count(11)).toContain('(11 قيدًا)');
+  });
+});
+
+describe('the come-back offer is an advertisement (Communications Law s.30A)', () => {
+  const vars = SAMPLE['comeback-offer'];
+  for (const stage of ['day-30', 'day-90'] as const) {
+    for (const locale of ['en', 'ar'] as const) {
+      it(`${stage} in ${locale}: «פרסומת» opens the subject, the sender's details are in both parts, and the unsubscribe stays`, () => {
+        const mail = renderMail('comeback-offer', locale, { ...vars, stage }, FRAME);
+        expect(mail.subject.startsWith('פרסומת: ')).toBe(true);
+        for (const part of [mail.html, mail.text]) {
+          expect(part).toContain('Narabnd Studio Ltd');
+          expect(part).toContain('18');
+          expect(part).toContain('info@mtb3a.com');
+        }
+        expect(mail.html).toContain('data-sender');
+        expect(mail.html).toContain('data-opt-out');
+        expect(mail.text).toContain('mail-off?mail=offers#tok_ABC123def');
+      });
+    }
+  }
+
+  it('no other mail carries a sender block or the advertisement label', () => {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'comeback-offer')) {
+      const mail = renderMail(id, 'en', SAMPLE[id] as never, FRAME);
+      expect(mail.subject).not.toContain('פרסומת');
+      expect(mail.html).not.toContain('data-sender');
     }
   });
 });

@@ -110,8 +110,8 @@ describe('MUT-42 carries MUT-39’s expense criteria', () => {
     const ops = Object.entries(doc.paths)
       .filter(([path]) => /^\/v1\/(expenses|expense-categories|vendors|summaries\/expenses)/.test(path))
       .flatMap(([path, item]) => ['get', 'post', 'patch', 'delete'].filter((m) => item[m]).map((m) => [m.toUpperCase(), path] as const));
-    // MUT-339 added GET /v1/expenses/streak, MUT-254 GET /v1/vendors.
-    expect(ops).toHaveLength(15);
+    // MUT-339 added GET /v1/expenses/streak, MUT-254 GET /v1/vendors, MUT-589 the move's preview and the move.
+    expect(ops).toHaveLength(17);
     for (const [method, path] of ops) {
       const res = await h.app.request(path.replace(/\{[^}]+\}/g, '00000000-0000-4000-8000-0000000000aa'), { method, headers: { ...a.auth, 'content-type': 'application/json', ...idem(), 'if-match': '1' }, ...(method === 'GET' || method === 'DELETE' ? {} : { body: '{}' }) });
       expect(res.status, `${method} ${path}`).toBe(403);

@@ -102,6 +102,16 @@ describe('LandingHeader', () => {
     expect(headerCta()).toHaveTextContent('اطلب حسابًا');
   });
 
+  it('carries a short label beside the full one for narrow phones, in both languages', () => {
+    const { unmount } = renderHeader();
+    expect(headerCta().querySelector('.landing-header-cta-label')).toHaveTextContent(en.landing.hero.ctaRequest);
+    expect(headerCta().querySelector('.landing-header-cta-short')).toHaveTextContent(en.landing.header.ctaRequestShort);
+    expect(headerCta()).toHaveAccessibleName(en.landing.hero.ctaRequest);
+    unmount();
+    renderHeader({ language: 'ar' });
+    expect(headerCta().querySelector('.landing-header-cta-short')).toHaveTextContent('اطلب حسابًا');
+  });
+
   it('on a page with no hero: no button, and the wordmark goes home', () => {
     localStorage.setItem('mutaba3a-language', 'en');
     render(

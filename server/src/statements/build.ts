@@ -1,7 +1,7 @@
 import type { ItemStatus } from '../agreements/status.js';
 import { daysBetween, type IsoDate } from '../dates.js';
 import { ApiError } from '../errors.js';
-import type { AllocationRecord, CreditRecord, InstallmentRecord, PaymentRecord, ReceivableRecord, RetainerChargeRecord } from '../repositories/ports.js';
+import type { AllocationRecord, CreditRecord, InstallmentRecord, LedgerRefundRow, PaymentRecord, ReceivableRecord, RetainerChargeRecord } from '../repositories/ports.js';
 import { receivableStatus } from '../serializers.js';
 import { outstandingOf } from '../summaries/compute.js';
 import { isStatementPayment, LINE_RANK, ledgerEntries, reversalDateOf, reversalInstantOf, type LedgerEntry, type StatementLineKind } from './lines.js';
@@ -40,6 +40,8 @@ export interface StatementSources {
   /** Every installment of the agreements the receivables belong to (for "N of M"). */
   installments: readonly InstallmentRecord[];
   charges: readonly RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency; lines on the whole-customer statement only. */
+  refunds: readonly LedgerRefundRow[];
 }
 
 export interface StatementView {
@@ -78,6 +80,8 @@ interface LineBase {
   credit: CreditRecord | null;
   /** PAYMENT and PAYMENT_REVERSAL. */
   payment: PaymentRecord | null;
+  /** MUT-643: REFUND only. */
+  refund: LedgerRefundRow | null;
   /** PAYMENT on the whole-customer statement: what is still to apply; null on a project statement. */
   unallocatedMinor: bigint | null;
   /** PAYMENT on a project statement: the allocation shown; null on the whole-customer one. */
@@ -101,7 +105,10 @@ export interface StatementPage {
   nextCursor: StatementCursor | null;
 }
 
-export function buildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null }): StatementPage {
+/** MUT-664 (D14): `desc` pages newest first; the running balance is still computed oldest first, so it is the same either way. */
+export type StatementOrder = 'asc' | 'desc';
+
+export function buildStatement(sources: StatementSources, view: StatementView, page: { limit: number; cursor: StatementCursor | null; order?: StatementOrder }): StatementPage {
   const lines = ledgerLines(sources, view).sort(compareLines);
   let openingMinor = 0n;
   const inPeriod: SortedLine[] = [];
@@ -118,11 +125,14 @@ export function buildStatement(sources: StatementSources, view: StatementView, p
     const line: StatementLine = { ...key, runningMinor: running };
     return { line, key };
   });
-  const start = page.cursor ? withBalance.findIndex((x) => compareLines(x.key, page.cursor!) > 0) : 0;
-  const from = start < 0 ? withBalance.length : start;
-  const slice = withBalance.slice(from, from + page.limit);
+  const desc = page.order === 'desc';
+  const ordered = desc ? [...withBalance].reverse() : withBalance;
+  const after = (key: StatementCursor, cursor: StatementCursor) => (desc ? compareLines(cursor, key) : compareLines(key, cursor)) > 0;
+  const start = page.cursor ? ordered.findIndex((x) => after(x.key, page.cursor!)) : 0;
+  const from = start < 0 ? ordered.length : start;
+  const slice = ordered.slice(from, from + page.limit);
   const last = slice.at(-1)?.key;
-  const more = from + page.limit < withBalance.length;
+  const more = from + page.limit < ordered.length;
   return {
     openingMinor,
     totals,
@@ -141,7 +151,9 @@ function ledgerLines(sources: StatementSources, view: StatementView): SortedLine
   // The whole-customer statement is every line of the classifier; a project's takes its charges and their credits
   // from it, and shows payments as their allocations there (D8).
   const receivables = whole ? s.receivables : s.receivables.filter((r) => r.projectId === view.projectId);
-  const entries = ledgerEntries({ receivables, credits: s.credits, payments: whole ? s.payments : [] }, view);
+  // MUT-643: a refund is whole-customer money, like unallocated money: a project statement already drops the
+  // allocation a credit note released, so its refund would leave the project owing it.
+  const entries = ledgerEntries({ receivables, credits: s.credits, payments: whole ? s.payments : [], refunds: whole ? s.refunds : [] }, view);
   const projectOfPayment = whole ? wholePaymentProjects(s) : new Map<string, string | null>();
   const lines = entries.map((e) => decorate(e, s, view.asOf, projectOfPayment));
   if (!whole) {
@@ -169,6 +181,8 @@ function decorate(e: Entry, s: StatementSources, asOf: IsoDate, projectOfPayment
     }
     case 'PAYMENT_REVERSAL':
       return line({ ...at, projectId: projectOfPayment.get(e.source.id) ?? null, number: e.source.number, debitMinor: e.debitMinor, paymentId: e.source.id, payment: e.source });
+    case 'REFUND':
+      return line({ ...at, projectId: null, number: null, debitMinor: e.debitMinor, refund: e.source });
   }
 }
 
@@ -243,6 +257,7 @@ function line(o: Partial<SortedLine> & Pick<SortedLine, 'id' | 'kind' | 'date' |
     daysOverdue: null,
     credit: null,
     payment: null,
+    refund: null,
     unallocatedMinor: null,
     allocatedMinor: null,
     rank: LINE_RANK[o.kind],

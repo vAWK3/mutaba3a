@@ -34,7 +34,7 @@ export interface ReceiptReading {
 }
 
 /**
- * MUT-441: what a receipt says, from its PDF text layer when it has one, else its OCR lines: date, total, currency,
+ * MUT-441: what a receipt says, from its PDF text layer when it has one (placed on the page, MUT-590), else its OCR lines: date, total, currency,
  * VAT and its rate, the vendor's name, registration no., phone and email, and an Israeli allocation number (MUT-557). Pure: no I/O, and nothing it reads is logged.
  * Money is minor units of the currency read (two decimals assumed when none is). Fields under the threshold are absent.
  */
@@ -45,7 +45,10 @@ export function extractReceipt(input: ExtractInput, options: ExtractOptions): Re
 /** `extractReceipt`, with the buyer and vendor numbers the read job keeps (MUT-514). */
 export function readReceipt(input: ExtractInput, options: ExtractOptions): ReceiptReading {
   const fromPdf = Boolean(input.pdfText?.trim());
-  const rows = fromPdf ? pdfRows(input.pdfText ?? '') : orderedRows(input.lines ?? []);
+  // MUT-590: a text layer placed on the page comes as lines, and is read by position like OCR boxes; without places
+  // (a cap, a pdfium error, an older reader) it is read line by line.
+  const lines = input.lines ?? [];
+  const rows = fromPdf && !lines.length ? pdfRows(input.pdfText ?? '') : orderedRows(lines);
   const source: SuggestionSource = fromPdf ? 'pdf-text' : 'ocr';
   const field = <T>(value: T, rule: number, conf: number): SuggestedField<T> | undefined => {
     const confidence = round2(rule * conf);
@@ -63,8 +66,8 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
   const vendor = readVendor(rows, buyer);
   const registration = readRegistration(rows, buyer);
   const phone = readPhone(rows, buyer);
-  const email = readEmail(rows);
-  const allocationNumber = readAllocationNumber(rows, buyer);
+  const email = readEmail(rows, buyer);
+  const allocationNumber = readAllocationNumber(rows);
 
   const suggestion: ReceiptSuggestion = {
     readerVersion: options.readerVersion,
@@ -87,7 +90,9 @@ export function readReceipt(input: ExtractInput, options: ExtractOptions): Recei
 
 /**
  * R9: the numbers this receipt shows as the vendor's outside its own bill-to blocks, read without the learned buyer
- * numbers: a number a misfired block once taught is still seen as a vendor's here, so the memory unlearns it.
+ * numbers: a number a misfired block once taught is still seen as a vendor's here, so the memory unlearns it. MUT-630:
+ * never an email: an e-receipt printing the buyer's email unlabelled would unlearn it (a vendor email hidden this way
+ * is left empty, not wrong).
  */
 function vendorIdentifiersOf(rows: Parameters<typeof buyerOf>[0]): string[] {
   const ownBlocks = buyerOf(rows);

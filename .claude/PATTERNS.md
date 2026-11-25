@@ -2926,3 +2926,39 @@ An operator action lives once in `server/src/operator/actions/<area>.ts`, taking
 ## Pattern: claim the once-rule in our store before the Stripe write; release only when Stripe definitely didn't act (MUT-532 R3)
 **Where**: `server/src/routes/billing-plan.ts` (`settleClaim`, POST `/v1/billing/pause` and `/v1/billing/stay-offer`), `billing.claimRetentionEvent`.
 **Rule**: a "once per person" or "once a year" promise that ends in a Stripe write is claimed first (a unique index, or a re-check under a row lock), then Stripe is asked. On failure: a refusal Stripe will repeat releases the claim; a timeout re-reads Stripe and releases only if nothing applied (and counts the press as done if it did); if the re-read fails too, the claim stays and is logged for the operator. Never release on "any error": a retry would give the thing twice.
+
+
+## Pattern: Arabic dates go through getLocale(language), as it is (MUT-587, ADR-253)
+**Where**: `src/lib/i18n/core.tsx` `getLocale` / `ARABIC_LOCALE`; server `server/src/dates.ts` `ARABIC_LOCALE`.
+**Rule**: every `Intl` date (and number) formatter takes `getLocale(language)` (server: `ARABIC_LOCALE` for Arabic). Never write `'ar'` by hand (it brings back يناير) and never append `-u-nu-…` (the tag already sets Latin digits; a second one throws). Machine-readable `en-CA` parts are not display and stay. The lint guard `DATE_LOCALE_SYNTAX` catches literals and templates; a variable holding a locale is on you.
+
+## Pattern: a mail's opt-out link is a signed, single-purpose token in the fragment, and the page asks before it acts (MUT-535, ADR-259)
+**Where**: `server/src/email/mail-off-token.ts`, `server/src/routes/monthly-summary-mail.ts` (`POST /v1/mail-preferences/monthly-summary`), `src/hosted/pages/mail-off/MailOffPage.tsx`.
+**Rule**: a link that changes a person's setting without a sign-in carries `<id>.<HMAC(purpose:v1:id)>` under a key derived (HKDF) from an existing server secret, never a stored row: it can't expire unnoticed and it does one thing. The token rides in the URL fragment (never a server log), the page strips it at once, and nothing changes until the person presses (link scanners open links, some run scripts). The API door is same-origin and IP-budgeted, and answers one 404 for anything it doesn't accept.
+
+## Pattern: a job that reads what a screen shows calls the screen's own reader (MUT-535 D5)
+**Where**: `server/src/summaries/profile-figures.ts` (`readProfileFigures`), called by `GET /v1/summaries/verdict` and the monthly summary job.
+**Rule**: when a mail or a job states figures the app also shows, extract the route's read into one function and call it from both, with the request's posting door or the job's (unguarded store, SYSTEM). Pin it with a parity test that runs the route and the function on the same records. A second query "that should give the same numbers" is how the mail and the app come to disagree.
+
+### Pattern: A legal record is INSERT-only in the database, not just in code (MUT-568)
+Issued documents get a row trigger that refuses UPDATE and DELETE and a statement trigger that refuses TRUNCATE (row triggers don't fire on TRUNCATE). The only bypass is a transaction-local setting (`SET LOCAL mutaba3a.issuing_bypass = 'on'`) that one named job sets. Such tables hold no foreign keys to rows that can be deleted, keep JSON snapshots of what they print, and are listed as kept in the purge catalog. A row lock (`SELECT … FOR UPDATE`) still works: it doesn't fire the trigger.
+
+### Pattern: A gap-free counter is one upsert statement, and refusals throw inside the transaction (MUT-568)
+`INSERT … ON CONFLICT DO UPDATE SET next = next + 1 RETURNING next - 1` as the transaction's first statement: the row lock serialises, the very first row can't race (Prisma's upsert can raise P2002 there), and checks that need the latest committed state run after it (READ COMMITTED). A refusal found after the increment throws a typed error caught outside `$transaction`, so the increment rolls back and no number is wasted; the memory store gets the same by checking everything before it writes.
+
+### Pattern: what is due is derived from the records, never stored (MUT-660)
+A "to do" that follows from the ledger (a document due, an income class) is a pure function of the rows (`documentsDue`, `splitPayment`), fed by one store read (`dueInputs`, `incomeContext`). The list, the count and every consumer call the same function, so nothing can drift and issuing, attaching or marking settles an item with no extra write. The only stored input is the person's own decision (`notForInvoice`, a preference).
+
+### Pattern: link a legal document to an entry when taking it over would rewrite its money (MUT-660)
+`fromEntryMode` decides once, for both stores: take over only an entry whose money becomes exactly the document's; otherwise issue linked only (the document points at the entry, nothing is posted). The store re-checks the mode under the lock and refuses a mismatch, so a linked document never takes a ledger number.
+
+### Pattern: a split that must reconcile is computed per item and summed, and a property test checks the sum (MUT-660)
+`splitIncome` adds each payment's split, so All = Invoice + Not for invoice holds by construction; a seeded random test asserts it for every currency.
+
+## Pattern: plan names, rank and limits live only in `billing/plans.ts` (MUT-702, ADR-275)
+**Where**: `server/src/billing/plans.ts`; read by `billing/entitlement.ts` (rank) and `routes/billing.ts` (`currentPlan`).
+**Rule**: any code that compares plans, picks the better one, decides when a change takes effect, or reads a plan's limits imports `RANK`, `changeTimingOf`, `nextPlanAbove`, `PLAN_LIMITS` or `currentPlanOf` from `plans.ts`. Never compare tiers by hand (`tier === 'FIRM'`) and never spell a limit elsewhere. `plans.ts` stays pure and provider-neutral: no payment provider, price or lookup key (those belong to the provider adapter, MUT-702 Part B).
+
+## Retention sweeps of rows the purge leaves behind (MUT-644, ADR-277)
+
+Rows kept past an account's deletion carry no foreign key to the profile, so "closed" is "the profile row is gone". Issuing rows go one document at a time (each 7 years from its own date) and the profile's own rows with the last; an early erasure is gated on a logged hand-over of the owner's archive (ADR-277 as amended 2026-11-25). A sweep that removes them runs inside the hourly purge (never its own scheduler job), caps itself per run, deletes one owner per transaction after re-checking closed + due, and logs to a table of its own (the profile's `audit_events` can't outlive it). Immutable tables are passed only with `SET LOCAL mutaba3a.issuing_bypass = 'on'` inside that transaction.

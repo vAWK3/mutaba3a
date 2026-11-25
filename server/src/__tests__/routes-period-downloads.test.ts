@@ -258,9 +258,13 @@ describe('8. who may download (MUT-314)', () => {
   it('an accountant with an ACTIVE grant downloads through the derived allowlist; revoked, another profile or none: 404', async () => {
     const h = downloadHarness();
     const { p, profileId } = await owner(h);
-    await expenseOn(h, p, profileId, { title: 'shared' });
+    const withReceipt = await expenseOn(h, p, profileId, { title: 'shared' });
+    await receiptOn(h, p, profileId, withReceipt.id, PNG);
+    // An accountant's download holds only the expenses with a receipt (ADR-258); the owner's holds both.
+    await expenseOn(h, p, profileId, { title: 'no receipt' });
     const acc = await shared(h, p, profileId);
     expect((await expenseRows(await download(h, acc, profileId))).slice(1).map((r) => r[3])).toEqual(['shared']);
+    expect((await expenseRows(await download(h, p, profileId))).slice(1).map((r) => r[3]).sort()).toEqual(['no receipt', 'shared']);
     expect((await download(h, acc, profileId, { type: 'receipts' })).status).toBe(200);
     const other = await businessOf(h, p, 'Not shared');
     expect((await mintRequest(h, acc, other)).status).toBe(404);

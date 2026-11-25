@@ -8,6 +8,10 @@ import type { ContingencyOutcome, UpfrontTreatment } from '../agreements/conting
 import type { PricingBasis, VatTreatment } from '../vat.js';
 import type { CreditReasonCode } from '../payments/credit.js';
 import type { ShareLinkPeriod } from '../share-links/period.js';
+import type { ComposedDocument } from '../issuing/compose.js';
+import type { DealerType, IssuedDocType } from '../issuing/types.js';
+import type { DocumentsDueInput, DocumentsPreference } from '../issuing/documents-due.js';
+import type { PaymentRequestFacts } from '../issuing/payment-request.js';
 
 /**
  * Storage ports for the Milestone 1 control tables.
@@ -45,6 +49,8 @@ export interface Organization {
   firmRequestedAt: Date | null;
   /** MUT-300: set exactly when firmRequestedAt is. */
   firmRequestedByUserId: string | null;
+  /** MUT-594 (ADR-254 D2): members come from Malafat's sync since this instant; null = managed in MTB3A. */
+  memberSyncAt: Date | null;
   createdAt: Date;
 }
 
@@ -95,6 +101,9 @@ export interface IntegrationRecord {
   connectedByApiKeyId: string | null;
   connectedAt: Date;
   disconnectedAt: Date | null;
+  /** MUT-593 (ADR-254 D10): the operator's per-firm switch for delegated access; null = off. */
+  delegationEnabledAt: Date | null;
+  delegationEnabledBy: string | null;
 }
 
 export interface ConnectIntegrationInput {
@@ -328,8 +337,290 @@ export interface IntegrationRepository {
   listByOrganization(organizationId: string): Promise<IntegrationRecord[]>;
   /** Creates, or re-connects a DISCONNECTED row for the same (organization, provider) keeping its id. */
   connect(input: ConnectIntegrationInput): Promise<IntegrationRecord>;
+  /** MUT-593 (ADR-254 §4.7): also ends every live delegated grant for the tenant, in the same transaction. */
   disconnect(id: string, at: Date): Promise<IntegrationRecord | null>;
+  /**
+   * MUT-593 (ADR-254 D10): the operator's per-firm switch, with `audit` in the same transaction. Turning it off also
+   * ends every live delegated grant for the tenant (reason `delegation_disabled`), so turning it on again revives none.
+   */
+  setDelegation(input: { id: string; enabled: boolean; by: string | null; at: Date; audit: AuditEventInput[] }): Promise<{ integration: IntegrationRecord; grantsRevoked: number } | null>;
 }
+
+// ---- MUT-594/595: Malafat seats (ADR-254 D2, D3, D4, D7) ------------------------------------------------------
+
+/** A person's role in Malafat, as its member sync and userinfo name it. */
+export type MalafatRole = 'PARTNER' | 'OFFICE_ADMIN' | 'ASSOCIATE' | 'INTERN';
+
+export interface ExternalIdentityRecord {
+  id: string;
+  provider: IntegrationProvider;
+  tenantId: string;
+  /** The Malafat user id: stable, never the email. */
+  subject: string;
+  /** The tenant's firm; null while the tenant isn't bound to MTB3A (a sign-in link only, MUT-595). */
+  organizationId: string | null;
+  email: string;
+  malafatRole: MalafatRole;
+  /** Null = a pending seat, until the person's first Sign in with Malafat links it (never by email, D4). */
+  userId: string | null;
+  linkedAt: Date | null;
+  /** Set when Malafat's sync stops listing the person; cleared if it lists them again. */
+  removedAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface MemberSyncInput {
+  organizationId: string;
+  tenantId: string;
+  members: ReadonlyArray<{ subject: string; email: string; role: MalafatRole }>;
+  at: Date;
+  /** One summary row, written with the sync. */
+  audit: AuditEventInput[];
+}
+
+export interface MemberSyncResult {
+  /** Seats new to the firm, or listed again after a removal. */
+  added: number;
+  /** Listed seats whose Malafat role changed. */
+  changed: number;
+  /** Seats Malafat no longer lists: their memberships and delegated grants for the tenant end in the same transaction (DF3). */
+  removed: number;
+  /** Listed seats no account has claimed yet (D7). */
+  pending: number;
+}
+
+export interface ExternalIdentityRepository {
+  /**
+   * MUT-594: one transaction. Upserts every listed seat; a linked seat's membership is created or re-roled by D3;
+   * an active seat Malafat no longer lists is marked removed, its membership deleted and its person's delegated grants
+   * for the tenant revoked (`member_removed`). Memberships with no seat (made in MTB3A before the first sync) are left
+   * alone: they can't be matched to a Malafat person without that person's own sign-in (D4). Marks the organization
+   * `memberSyncAt` on the first sync.
+   */
+  syncMembers(input: MemberSyncInput): Promise<MemberSyncResult>;
+  findBySubject(provider: IntegrationProvider, tenantId: string, subject: string): Promise<ExternalIdentityRecord | null>;
+  listByUser(userId: string): Promise<ExternalIdentityRecord[]>;
+  /** MUT-596: a firm's seats Malafat lists now (removed ones left out), for its read-only members list. */
+  listByOrganization(organizationId: string): Promise<ExternalIdentityRecord[]>;
+  /**
+   * MUT-594/595 (D7): links an unclaimed, unremoved seat to `userId` and makes their membership (D3 role) in one
+   * conditional write, so two first sign-ins claim it once. `claimed: false` = already linked (to anyone), removed,
+   * or unknown; nothing written. `audit` is written only on a claim.
+   */
+  claim(input: { provider: IntegrationProvider; tenantId: string; subject: string; userId: string; at: Date; audit: AuditEventInput[] }): Promise<{ claimed: boolean; identity: ExternalIdentityRecord | null }>;
+  /**
+   * MUT-595 (D4): links the Malafat person to `userId` at consent: claims their pending seat (and its membership), or
+   * records a link for a tenant whose members MTB3A doesn't hold yet (`organizationId` null, or the bound firm's). Already
+   * this account's: `linked`, nothing changed. Another account's: `elsewhere` (409 IDENTITY_LINKED_ELSEWHERE).
+   */
+  link(input: { provider: IntegrationProvider; tenantId: string; subject: string; userId: string; email: string; malafatRole: MalafatRole; organizationId: string | null; at: Date; audit: AuditEventInput[] }): Promise<LinkIdentityResult>;
+}
+
+// ---- MUT-595: Sign in with Malafat (ADR-254 D1, D4, D8) ------------------------------------------------------
+
+/** What Malafat's userinfo says about the person signing in. */
+export interface MalafatSignInFacts {
+  subject: string;
+  tenantId: string;
+  tenantSlug: string;
+  tenantName: string;
+  role: MalafatRole;
+  email: string;
+  name: string | null;
+  locale: string | null;
+}
+
+/**
+ * MUT-618 (ADR-256 D3): an emailed sign-in code. One row per ask, for every address asked for, real or not, so the
+ * verify answers (wrong / expired / too many tries) are the same whether or not an account exists. Only the digest is
+ * kept. `userId` is the account the code was issued for (null for an address with none, or one that gets no mail).
+ */
+export interface SignInCodeRecord {
+  id: string;
+  email: string;
+  userId: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  attempts: number;
+}
+
+/** What one try at a code did. `wrong` spent a try; `exhausted` was the last one and the code is dead. */
+export type SignInCodeAttempt =
+  | { kind: 'none' }
+  | { kind: 'matched'; userId: string | null }
+  | { kind: 'wrong'; triesLeft: number }
+  | { kind: 'exhausted' };
+
+export interface SignInCodeRepository {
+  /** Issues a code for `email`, cancelling any live one for it first (a resend replaces the older code, AC3). */
+  issue(input: { email: string; userId: string | null; codeDigest: string; at: Date; expiresAt: Date }): Promise<SignInCodeRecord>;
+  /**
+   * One try at the newest live code for `email`: unused, uncancelled, unexpired. A match uses it (once, under races);
+   * a miss spends a try, and the try that reaches `maxAttempts` cancels it.
+   */
+  attempt(input: { email: string; codeDigest: string; at: Date; maxAttempts: number }): Promise<SignInCodeAttempt>;
+  /** Deletes codes that expired before `before`; returns how many. */
+  prune(before: Date): Promise<number>;
+}
+
+// --- MUT-710 (ADR-274): two-step sign-in ---------------------------------------------------------------------------
+
+export type TwoFactorMethod = 'totp' | 'email';
+export type TwoFactorPurpose = 'sign_in' | 'enrol' | 'reset' | 'manage';
+
+export interface TwoFactorRecord {
+  userId: string;
+  method: TwoFactorMethod;
+  totpSecretSealed: string | null;
+  lastUsedStep: number | null;
+  failures: number;
+  failuresSince: Date | null;
+  lockedUntil: Date | null;
+  enabledAt: Date;
+  updatedAt: Date;
+}
+
+/** The first step a sign-in challenge carries to its session and audit (sign-in.ts SignInAudit). */
+export interface TwoFactorFirstStep {
+  method: 'password' | 'passkey' | 'malafat' | 'email-code';
+  passkeyId?: string;
+}
+
+export interface TwoFactorChallengeRecord {
+  id: string;
+  userId: string;
+  tokenDigest: string;
+  purpose: TwoFactorPurpose;
+  method: TwoFactorMethod;
+  sessionKind: SessionKind | null;
+  firstStep: TwoFactorFirstStep | null;
+  passwordChangedAt: Date | null;
+  linkId: string | null;
+  pendingSecretSealed: string | null;
+  codeDigest: string | null;
+  codeSentAt: Date | null;
+  codesSent: number;
+  attempts: number;
+  createdAt: Date;
+  expiresAt: Date;
+  consumedAt: Date | null;
+}
+
+export interface CreateTwoFactorChallengeInput {
+  userId: string;
+  tokenDigest: string;
+  purpose: TwoFactorPurpose;
+  method: TwoFactorMethod;
+  sessionKind?: SessionKind;
+  firstStep?: TwoFactorFirstStep;
+  passwordChangedAt?: Date;
+  linkId?: string;
+  pendingSecretSealed?: string;
+  at: Date;
+  expiresAt: Date;
+}
+
+export interface EnableTwoFactorInput {
+  userId: string;
+  method: TwoFactorMethod;
+  totpSecretSealed: string | null;
+  /** The step the confirming code used, so it can't be used again. */
+  lastUsedStep: number | null;
+  recoveryDigests: string[];
+  at: Date;
+  /** The session that turned it on: stamped twoFactorAt and kept; every other live session of the person is revoked. */
+  keepSessionId: string | null;
+  audit: AuditEventInput[];
+}
+
+/**
+ * MUT-710: every counter moves by a conditional update (review 2), so parallel requests can't win extra guesses or
+ * reuse a code. Challenges are looked up by their token's digest and are live only while unconsumed and unexpired.
+ */
+export interface TwoFactorRepository {
+  get(userId: string): Promise<TwoFactorRecord | null>;
+  /**
+   * Turns it on (or switches method), replacing any earlier row and recovery codes, under the person's row lock.
+   * Returns how many other sessions were signed out.
+   */
+  enable(input: EnableTwoFactorInput): Promise<{ revokedSessions: number }>;
+  /** Turns it off: deletes the row, the recovery codes and live challenges. False when it was already off. */
+  disable(userId: string, at: Date, audit: AuditEventInput[]): Promise<boolean>;
+  /** D4: records a TOTP step only if it is after the last one used; false = already used (replay or a lost race). */
+  recordStep(userId: string, step: number, at: Date): Promise<boolean>;
+  /**
+   * D3 (review 2): reserves one second-step try before the code is checked, under the person's row lock, so parallel
+   * tries can't slip past the lock. Counts within the window; the try that reaches `lockAfter` sets lockedUntil and
+   * restarts the count (`lockedUntil` returned: this try set it). While locked, or with two-step sign-in off, nothing
+   * is counted and `allowed` is false (`lockedUntil` = the lock's end, or null when off). A right code then calls
+   * clearFailures, which also lifts a lock its own reservation set.
+   */
+  reserveTry(userId: string, at: Date, policy: { lockAfter: number; windowMs: number; lockMs: number }): Promise<{ allowed: boolean; lockedUntil: Date | null }>;
+  clearFailures(userId: string): Promise<void>;
+  replaceRecoveryCodes(userId: string, digests: string[], at: Date, audit: AuditEventInput[]): Promise<void>;
+  /** Uses one unused code; false when no unused code has this digest. Returns the codes left on success. */
+  useRecoveryCode(userId: string, digest: string, at: Date): Promise<{ used: boolean; left: number }>;
+  recoveryCodesLeft(userId: string): Promise<number>;
+  createChallenge(input: CreateTwoFactorChallengeInput): Promise<TwoFactorChallengeRecord>;
+  /** The live challenge with this token digest, else null. */
+  findChallenge(tokenDigest: string, at: Date): Promise<TwoFactorChallengeRecord | null>;
+  /** Spends one try while attempts < max and the challenge is live; false when none is left. Returns tries left. */
+  spendAttempt(id: string, at: Date, maxAttempts: number): Promise<{ spent: boolean; triesLeft: number }>;
+  /** Single use: true for exactly one caller. */
+  consumeChallenge(id: string, at: Date): Promise<boolean>;
+  /** D5: stores a newly mailed code's digest if the last one went out at least `minGapMs` ago and fewer than `maxCodes` were sent. */
+  recordCodeSent(id: string, codeDigest: string, at: Date, limits: { minGapMs: number; maxCodes: number }): Promise<boolean>;
+  /** Deletes challenges that expired before `before`. */
+  pruneChallenges(before: Date): Promise<number>;
+  /**
+   * D8/D10: true when the person owns a profile (creator, co-owner or a Malafat firm's partner, as `ownsProfile`) that
+   * has issuer details or a Tax Authority connection; then two-step sign-in can't be turned off.
+   */
+  ownsIssuingProfile(userId: string): Promise<boolean>;
+}
+
+export type MalafatSignInOutcome = 'signed_in' | 'needs_consent' | 'needs_link';
+
+export interface MalafatSignInRecord {
+  id: string;
+  /** MUT-596: the state's digest; a web exchange must come from the browser holding that state (login-CSRF binding). */
+  stateDigest: string;
+  tenantSlug: string;
+  client: 'web' | 'app';
+  codeVerifier: string;
+  appChallenge: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  callbackAt: Date | null;
+  facts: MalafatSignInFacts | null;
+  outcome: MalafatSignInOutcome | null;
+  userId: string | null;
+  resultExpiresAt: Date | null;
+  resultUsedAt: Date | null;
+  ticketExpiresAt: Date | null;
+  linkProvenAt: Date | null;
+  completedAt: Date | null;
+}
+
+/** Each step is a conditional claim on one row, so a state, a result code or a ticket works once. */
+export interface MalafatSignInRepository {
+  create(input: { stateDigest: string; codeVerifier: string; tenantSlug: string; client: 'web' | 'app'; appChallenge: string | null; at: Date; expiresAt: Date }): Promise<MalafatSignInRecord>;
+  /** The callback's claim: an unexpired attempt whose state was not used yet. Null otherwise. */
+  claimCallback(stateDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  recordResult(input: { id: string; facts: MalafatSignInFacts; outcome: MalafatSignInOutcome; userId: string | null; resultDigest: string; resultExpiresAt: Date }): Promise<void>;
+  /** The exchange's claim: the result code burns on the first attempt (R9), right or wrong. Null when used, expired or unknown. */
+  claimResult(resultDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  issueTicket(input: { id: string; ticketDigest: string; ticketExpiresAt: Date }): Promise<void>;
+  /** An unexpired, uncompleted attempt by its ticket. */
+  findByTicket(ticketDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+  /** D4: the person proved the existing account (password or passkey) — `userId` is that account. */
+  proveLink(input: { id: string; userId: string; at: Date }): Promise<void>;
+  /** Consent's claim: completes the attempt once. Null when already completed, expired or unknown. */
+  claimCompletion(ticketDigest: string, at: Date): Promise<MalafatSignInRecord | null>;
+}
+
+export type LinkIdentityResult = { kind: 'linked'; identity: ExternalIdentityRecord } | { kind: 'elsewhere' };
 
 export interface AuditFilter {
   entityType?: string;
@@ -471,6 +762,11 @@ export interface CustomerRecord {
   notes: string | null;
   /** Default VAT treatment for this customer's items (M3; e.g. OUT_OF_SCOPE for a foreign client). Null = inherit STANDARD_RATED. */
   vatTreatment: VatTreatment | null;
+  /** MUT-642: VAT, company or ID number (9 digits, validated); printed on issued documents. */
+  taxId: string | null;
+  address: string | null;
+  /** MUT-660: which documents this client is due; null follows the profile default. */
+  documentsPreference: DocumentsPreference | null;
   status: EntityStatus;
   archivedAt: Date | null;
   /** Optimistic-concurrency version; starts at 1, +1 per write. */
@@ -486,6 +782,8 @@ export interface CreateCustomerInput {
   phone: string | null;
   notes: string | null;
   vatTreatment?: VatTreatment | null;
+  taxId?: string | null;
+  address?: string | null;
 }
 
 /** Absent key = unchanged; null = cleared. */
@@ -495,6 +793,10 @@ export interface UpdateCustomerPatch {
   phone?: string | null;
   notes?: string | null;
   vatTreatment?: VatTreatment | null;
+  taxId?: string | null;
+  address?: string | null;
+  /** MUT-660: set on invoicing profiles only (the route checks). */
+  documentsPreference?: DocumentsPreference | null;
 }
 
 export interface ProjectRecord {
@@ -601,7 +903,7 @@ export interface VatRateRepository {
 export type AgreementType = 'FIXED' | 'RECURRING' | 'CONTINGENCY';
 export type AgreementStatus = 'ACTIVE' | 'CANCELLED';
 export type TriggerType = 'IMMEDIATE' | 'DATE' | 'MANUAL';
-export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT';
+export type ReceivableOrigin = 'INSTALLMENT' | 'RETAINER_CHARGE' | 'ADJUSTMENT' | 'ISSUED_DOCUMENT';
 export type ReceivableStatus = 'OPEN' | 'SETTLED';
 export type FinalMonth = 'FULL' | 'PRORATE' | 'WAIVE';
 export type SupplementDistribution = 'LAST_UNPOSTED' | 'PRORATE_UNPOSTED' | 'NEW_INSTALLMENT' | 'REDUCTION' | 'CORRECTION';
@@ -762,6 +1064,8 @@ export interface ReceivableRecord {
   createdByUserId: string | null;
   /** Soft-delete for the undo path (MUT-65); mirrors Expense.deletedAt. Null for every receivable this ticket does not create. */
   deletedAt: Date | null;
+  /** MUT-660: marked "not for invoice" (due no document, outside Invoice income). */
+  notForInvoice: boolean;
   /** MUT-478: CHG-YYYY-NNNN, gap-free per organization and year of `postingDate`, assigned when it posts (`receivable_counters`). */
   number: string;
   version: number;
@@ -1077,6 +1381,8 @@ export interface StatementSourceRows {
   /** Every installment of the customer's agreements in the currency (for "installment N of M"). */
   installments: InstallmentRecord[];
   charges: RetainerChargeRecord[];
+  /** MUT-643: the customer's refunds in the currency. */
+  refunds: LedgerRefundRow[];
 }
 
 /** MUT-483: the receivable fields a ledger line reads (`statements/lines.ts`), and nothing more. */
@@ -1094,7 +1400,12 @@ export interface PeriodSourceRows {
   credits: LedgerCreditRow[];
   /** Every payment of any status, a payment with no client included (D4). */
   payments: LedgerPaymentRow[];
+  /** MUT-643: every refund (sources left out), in the same snapshot. */
+  refunds: LedgerRefundRow[];
 }
+
+/** MUT-643: the refund fields a ledger line reads (`statements/lines.ts`). */
+export type LedgerRefundRow = Pick<RefundRecord, 'id' | 'customerId' | 'currency' | 'amountMinor' | 'refundedOn' | 'createdAt' | 'issuedDocumentId' | 'method' | 'reference'>;
 
 export interface ReceivableRepository {
   getById(organizationId: string, id: string): Promise<ReceivableRecord | null>;
@@ -1157,7 +1468,7 @@ export interface ReceivableRepository {
 export type PaymentMethod = 'CASH' | 'BANK';
 export type PaymentStatus = 'POSTED' | 'REVERSED';
 /** MUT-61: who put a payment on the ledger. */
-export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE';
+export type PaymentOrigin = 'INTEGRATION' | 'CAPTURE' | 'ISSUED_DOCUMENT';
 
 export interface PaymentRecord {
   id: string;
@@ -1191,9 +1502,13 @@ export interface PaymentRecord {
   origin: PaymentOrigin;
   /** MUT-61: the capture surface (CaptureSourceSchema), or null — always null for INTEGRATION. */
   captureSource: string | null;
+  /** MUT-660: marked "not for invoice" (due no document, outside Invoice income). */
+  notForInvoice: boolean;
   version: number;
   createdAt: Date;
   updatedAt: Date;
+  /** MUT-709: the recording request's key (`paymentRequestKey`); absent or null when it had none. */
+  clientRequestKey?: string | null;
 }
 
 export interface AllocationRecord {
@@ -1234,6 +1549,8 @@ export interface CreatePaymentInput {
   origin: PaymentOrigin;
   captureSource: string | null;
   allocations: AllocationInput[];
+  /** MUT-709: `paymentRequestKey` of the request that records it; unique per organization. */
+  clientRequestKey?: string | null;
 }
 
 /**
@@ -1254,6 +1571,8 @@ export interface CaptureReceivedInput {
   requestId: string | null;
   createdByUserId: string;
   captureSource: string | null;
+  /** MUT-709: as on CreatePaymentInput. */
+  clientRequestKey?: string | null;
 }
 
 /** The reversal reason `payments.undoCapture` records (and the route audits). */
@@ -1353,6 +1672,8 @@ export interface PaymentRepository {
    * InsufficientCapacity / LockConflict as `create` does. Null when no such payment.
    */
   correct(organizationId: string, paymentId: string, input: CorrectPaymentInput, at: Date): Promise<{ reversed: PaymentRecord; payment: PaymentRecord; allocations: AllocationRecord[] } | null>;
+  /** MUT-709: the payment an earlier attempt of the same request recorded (any status), if any. */
+  findByClientRequestKey(organizationId: string, clientRequestKey: string): Promise<PaymentRecord | null>;
   /** The POSTED payment that names this one as replacesPaymentId, if any. */
   findReplacedBy(organizationId: string, paymentId: string): Promise<PaymentRecord | null>;
   /**
@@ -1412,6 +1733,8 @@ export interface UserRecord {
   failedSignIns: number;
   lockedUntil: Date | null;
   passwordChangedAt: Date;
+  /** MUT-596: false while the only password is the random one Sign in with Malafat gave the account. */
+  passwordChosen: boolean;
   lastSignInAt: Date | null;
   /** MUT-366 (D18): when the person proved they read this address (a signup or a mailed recovery link); null until then. */
   emailVerifiedAt: Date | null;
@@ -1423,9 +1746,16 @@ export interface UserRecord {
   closure: AccountClosureRecord | null;
   /** MUT-459 (ADR-212): when the CLI made this person an operator; null when they are not one. */
   operatorAt: Date | null;
+  /** MUT-535 (D6): the monthly summary mail; null = the default (on, without Malafat-covered profiles). */
+  monthlySummaryMail: MonthlySummaryChoice | null;
+  /** ADR-279: promotional mail (the come-back offer); 'OFF' once the person opted out, null = the default (on). */
+  offerMail: OfferMailChoice | null;
   createdAt: Date;
   updatedAt: Date;
 }
+
+/** ADR-279: the one stored choice for promotional mail; turning it back on stores null. */
+export type OfferMailChoice = 'OFF';
 
 /** MUT-459: mark or unmark an operator. `audit` is written in the same transaction, and only when the mark changes. */
 export interface SetOperatorInput {
@@ -1465,6 +1795,10 @@ export type TrialPromptAction = 'welcome-accepted' | 'welcome-skipped' | 'banner
 /** A contextual Malafat suggestion a person can retire (MUT-189). */
 export type MalafatMoment = 'business-profile' | 'client-threshold' | 'second-business';
 
+/** MUT-535 (D6, D7): `OFF`, or `ON_ALL` (also the profiles Malafat covers). The default is stored as null. */
+export const MONTHLY_SUMMARY_CHOICES = ['OFF', 'ON_ALL'] as const;
+export type MonthlySummaryChoice = (typeof MONTHLY_SUMMARY_CHOICES)[number];
+
 export interface MalafatSuggestionsRecord {
   off: boolean;
   /** Retired for good; only ever grows. Stored in the moments' fixed order. */
@@ -1491,6 +1825,8 @@ export interface CreateUserInput {
   /** The firm this user belongs to, if any. */
   organizationId?: string;
   personal: { name: string; slug: string; defaultCurrency: string; timezone: string };
+  /** MUT-596: false for an account Sign in with Malafat creates with a random password nobody knows. Default true. */
+  passwordChosen?: boolean;
   /**
    * MUT-235 (review fix): the person's first setup link, written in the same transaction as the user, so a
    * create never leaves an account with neither a password nor a link. UniqueViolation on a duplicate digest.
@@ -1533,6 +1869,10 @@ export interface UserRepository {
    * devices or tabs never undo each other's dismissals. Null for an unknown user.
    */
   updateMalafatSuggestions(id: string, change: MalafatSuggestionsChange, at: Date): Promise<UserRecord | null>;
+  /** MUT-535 (D6): stores the monthly summary choice (null = the default). Null for an unknown user. */
+  setMonthlySummaryMail(id: string, choice: MonthlySummaryChoice | null, at: Date): Promise<UserRecord | null>;
+  /** ADR-279: stores the promotional-mail opt-out (null = the default, on). Null for an unknown user. */
+  setOfferMail(id: string, choice: OfferMailChoice | null, at: Date): Promise<UserRecord | null>;
   /** MUT-418: applies one trial-prompt action under a row lock (billing/trial-prompt.ts). Null for an unknown user. */
   updateTrialPrompt(id: string, action: TrialPromptAction, at: Date): Promise<UserRecord | null>;
   /**
@@ -1761,6 +2101,8 @@ export interface SessionRecord {
   passkeyId: string | null;
   /** MUT-459 (ADR-212): the last operator passkey step-up on this session; never moves credentialsVerifiedAt. */
   stepUpAt: Date | null;
+  /** MUT-710 (ADR-274): when this session passed the second step or turned it on; issuing needs it. */
+  twoFactorAt: Date | null;
 }
 
 export interface CreateSessionInput {
@@ -1779,6 +2121,8 @@ export interface CreateSessionInput {
   verifiedPasswordHash?: string;
   /** MUT-115: set on a passkey sign-in, so removing the passkey can revoke this session. */
   passkeyId?: string;
+  /** MUT-710: set when the sign-in passed the second step. */
+  twoFactorAt?: Date;
 }
 
 export interface SessionRepository {
@@ -2123,8 +2467,11 @@ export interface SignupReviewRepository {
 
 // ---- MUT-358 (ADR-160): billing core ---------------------------------------
 
-/** MUT-565 (ADR-251): ACCOUNTANT is a person's plan (client books), never a profile's; see billing/accountant-plan.ts. */
-export type BillingTierRecord = 'FREELANCER' | 'FIRM' | 'ACCOUNTANT';
+/**
+ * MUT-565 (ADR-251): ACCOUNTANT is a person's plan (client books), never a profile's; see billing/accountant-plan.ts.
+ * MUT-702 (ADR-275): SOLO and BUSINESS are plans on sale; FREELANCER is legacy (billing/plans.ts).
+ */
+export type BillingTierRecord = 'FREELANCER' | 'SOLO' | 'BUSINESS' | 'FIRM' | 'ACCOUNTANT';
 
 /** One Stripe customer; `userId` is null until the operator (or MUT-360's checkout) links it to a person. */
 export interface BillingAccountRecord {
@@ -2301,6 +2648,14 @@ export interface OfferRenewalCandidate {
   locale: UserLocale;
 }
 
+/** MUT-535 (plan D2): a person whose own billing facts may cover a profile, for the monthly summary run. */
+export interface MonthlySummaryCandidate {
+  userId: string;
+  email: string;
+  locale: UserLocale;
+  choice: MonthlySummaryChoice | null;
+}
+
 /** MUT-534: a subscription Stripe ended, whose payer the come-back mail may reach. */
 export interface ComebackCandidate {
   stripeSubscriptionId: string;
@@ -2380,6 +2735,13 @@ export interface BillingRepository {
    * closing their account, oldest end first: who the daily come-back run looks at.
    */
   comebackCandidates(window: { endedAfter: Date; endedUpTo: Date }): Promise<ComebackCandidate[]>;
+  /**
+   * MUT-535 (D2): ACTIVE people who aren't closing their account and whose own facts may cover a profile: a profile-plan
+   * subscription of theirs in a covering status (active, trialing, past_due), a trial started after
+   * `trialStartedAfter`, a live profile-plan grant to them, or a profile they OWN with Malafat connected. Keyset by
+   * userId (after `after`), at most `limit`. Entitlement still decides per profile; this only finds who to ask.
+   */
+  monthlySummaryCandidates(input: { trialStartedAfter: Date; now: Date; after: string | null; limit: number }): Promise<MonthlySummaryCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */
@@ -2526,6 +2888,90 @@ export interface AccountPurgeRepository {
   finishStoragePurge(organizationId: string): Promise<void>;
 }
 
+// ---- MUT-644 (ADR-277): the retention of closed profiles' issued documents -----------
+
+/** A profile that no longer exists but still holds issuing rows (its account was purged, ADR-260 decision 2). */
+export interface RetainedIssuingProfile {
+  organizationId: string;
+  /** From the business details kept with the documents; null when the profile never saved them. */
+  legalName: string | null;
+  vatId: string | null;
+  documents: number;
+  cancellations: number;
+  /**
+   * The earliest retention date among its documents (a document's date, or its cancellation's Israel date when later;
+   * issuing/retention.ts): the next document to go goes from `retainedUntil` of it. Null with no document.
+   */
+  oldestDocumentDate: IsoDate | null;
+  /** The latest retention date: the last document, and with it the profile's own rows, go from `retainedUntil` of it. */
+  newestDocumentDate: IsoDate | null;
+}
+
+export interface RetainedIssuingFilter {
+  /** Only profiles holding a document whose retention date is before this day, or holding no document: the sweep's due list. */
+  dueBefore?: IsoDate;
+  /** Case-insensitive match on the legal name, or a VAT number prefix. */
+  query?: string;
+}
+
+export type IssuingRetentionAction = 'SWEPT' | 'ARCHIVE_EXPORTED' | 'ERASED';
+
+export interface IssuingRetentionEventRecord {
+  id: string;
+  organizationId: string;
+  action: IssuingRetentionAction;
+  /** Counts, dates and the operator's support reference; never a name or an address (D5). */
+  metadata: JsonObject;
+  createdAt: Date;
+}
+
+export type IssuingSweepResult =
+  | {
+      kind: 'swept';
+      /** Documents deleted (each with its lines, copies, kept original and cancellation). */
+      documents: number;
+      cancellations: number;
+      rows: number;
+      /** Documents still kept. */
+      remaining: number;
+      /** The profile's own rows (business details, logos, counters) went with its last document. */
+      profileRows: boolean;
+      event: IssuingRetentionEventRecord;
+    }
+  | { kind: 'not_closed' }
+  | { kind: 'not_due'; oldestDocumentDate: IsoDate }
+  | { kind: 'nothing' };
+
+export type IssuingEraseResult =
+  | { kind: 'erased'; documents: number; cancellations: number; rows: number; event: IssuingRetentionEventRecord }
+  | { kind: 'not_closed' }
+  | { kind: 'nothing' }
+  /** No archive carrying the 7-year keep notice was exported first (D7). */
+  | { kind: 'archive_not_handed_over' };
+
+/** MUT-644: operator only (the hourly purge job and /admin), on the unguarded store. */
+export interface IssuingRetentionRepository {
+  /** Closed profiles still holding issuing rows, oldest document first (none first), at most `limit`. */
+  listClosed(filter: RetainedIssuingFilter, limit: number): Promise<RetainedIssuingProfile[]>;
+  /** One closed profile; null when the profile still exists or holds no issuing row. */
+  getClosed(organizationId: string): Promise<RetainedIssuingProfile | null>;
+  /**
+   * D4 (amended 2026-11-25): in one transaction, re-checks that the profile is gone, deletes each document whose
+   * retention date is before `dueBefore` with its lines, copies, kept original and cancellation, and, once no document
+   * is left, the profile's own rows; all through the trigger's bypass. Writes a SWEPT event with the counts.
+   */
+  sweep(organizationId: string, dueBefore: IsoDate, at: Date): Promise<IssuingSweepResult>;
+  /**
+   * D7: an erasure request that shortens the 7 years. In one transaction, re-checks that the profile is gone and that
+   * an archive carrying the keep notice was exported no later than `at` (issuing/retention.ts handsOverArchive), then
+   * deletes every retained row through the same bypass and writes an ERASED event with `reference`.
+   */
+  erase(organizationId: string, reference: string, at: Date): Promise<IssuingEraseResult>;
+  record(organizationId: string, action: IssuingRetentionAction, metadata: JsonObject, at: Date): Promise<IssuingRetentionEventRecord>;
+  /** The profile's retention log, oldest first. */
+  events(organizationId: string): Promise<IssuingRetentionEventRecord[]>;
+}
+
 export interface LedgerStore {
   organizations: OrganizationRepository;
   apiKeys: ApiKeyRepository;
@@ -2535,6 +2981,10 @@ export interface LedgerStore {
   /** MUT-235: one-time setup links. Operator-only below the routes; the two public setup routes run unguarded, like sign-in. */
   accountSetup: AccountSetupRepository;
   integrations: IntegrationRepository;
+  /** MUT-594/595: Malafat seats. */
+  externalIdentities: ExternalIdentityRepository;
+  /** MUT-595: Sign in with Malafat round trips. */
+  malafatSignIns: MalafatSignInRepository;
   audit: AuditRepository;
   idempotency: IdempotencyRepository;
   customers: CustomerRepository;
@@ -2578,6 +3028,10 @@ export interface LedgerStore {
   accountPurge: AccountPurgeRepository;
   /** MUT-115: passkeys and their challenges; the person's own (sessionOnly), sign-in reads them unguarded. */
   passkeys: PasskeyRepository;
+  /** MUT-618: emailed sign-in codes; sign-in reads and writes them unguarded (operator-only below the routes). */
+  signInCodes: SignInCodeRepository;
+  /** MUT-710 (ADR-274): two-step sign-in. */
+  twoFactor: TwoFactorRepository;
   /** MUT-433: per-user feature flags; `/v1/me` reads the person's own (sessionOnly), only the operator writes them. */
   features: FeaturesRepository;
   /** MUT-434: the OAuth authorization server's clients, requests, grants, codes and tokens. */
@@ -2588,6 +3042,12 @@ export interface LedgerStore {
   shareLinks: ShareLinkRepository;
   /** MUT-314 (ADR-248): a period download's size estimate and its batched name lookups. Reads only. */
   periodPack: PeriodPackRepository;
+  /** MUT-568 (ADR-260): issued documents, INSERT-only legal records, and the details printed on them. Session only. */
+  issuing: IssuingRepository;
+  /** MUT-644 (ADR-277): closed profiles' issued documents: the retention sweep and the operator's archive. Operator only. */
+  issuingRetention: IssuingRetentionRepository;
+  /** MUT-643: refunds written by credit notes. */
+  refunds: RefundRepository;
 }
 
 // ---- MUT-314 (ADR-248): period downloads ---------------------------------------
@@ -2596,6 +3056,8 @@ export interface LedgerStore {
 export interface PeriodBounds {
   occurredFrom?: IsoDate;
   occurredBefore: IsoDate;
+  /** Count only expenses with a READY receipt (ExpenseFilter `withReceipt`): an accountant's download. */
+  expensesWithReceipt?: boolean;
 }
 
 /**
@@ -2906,7 +3368,8 @@ export interface FeaturesRepository {
 
 // ---- MUT-434: OAuth 2.1 for MCP clients (ADR-197) ------------------------------
 
-export type OAuthClientKind = 'DCR' | 'CIMD';
+/** MUT-593: CONFIDENTIAL = operator-registered, private_key_jwt (ADR-254); never made by /oauth/register. */
+export type OAuthClientKind = 'DCR' | 'CIMD' | 'CONFIDENTIAL';
 
 export interface OAuthClientRecord {
   /** `mcl_…` (DCR) or the metadata document URL (CIMD). */
@@ -2918,6 +3381,11 @@ export interface OAuthClientRecord {
   lastUsedAt: Date | null;
   /** CIMD: when the cached document goes stale; null for DCR. */
   metadataExpiresAt: Date | null;
+  /** MUT-593 (CONFIDENTIAL only): where the client publishes its public keys. */
+  jwksUri: string | null;
+  /** MUT-593: the resources a confidential client may ask for; empty for a public client (MCP only). */
+  allowedResources: string[];
+  disabledAt: Date | null;
 }
 
 export interface OAuthAuthorizationRequestRecord {
@@ -2928,6 +3396,8 @@ export interface OAuthAuthorizationRequestRecord {
   scopes: string[];
   state: string | null;
   resource: string;
+  /** MUT-593: the Malafat tenant a confidential client asks to act in; null for a public client. */
+  tenantId: string | null;
   createdAt: Date;
   expiresAt: Date;
   decidedAt: Date | null;
@@ -2935,7 +3405,21 @@ export interface OAuthAuthorizationRequestRecord {
 }
 
 /** Why a grant ended; stored in `revokedReason`. */
-export type OAuthGrantRevokedReason = 'user' | 'feature_revoked' | 'disabled' | 'operator' | 'password_changed' | 'refresh_reuse' | 'code_reuse' | 'account_changed';
+export type OAuthGrantRevokedReason =
+  | 'user'
+  | 'feature_revoked'
+  | 'disabled'
+  | 'operator'
+  | 'password_changed'
+  | 'refresh_reuse'
+  | 'code_reuse'
+  | 'account_changed'
+  // MUT-593 (ADR-254 §4.7): the delegated grant's own endings.
+  | 'integration_disconnected'
+  | 'delegation_disabled'
+  | 'client_disabled'
+  // MUT-594 (DF3): the person was removed from the firm in Malafat.
+  | 'member_removed';
 
 export interface OAuthGrantRecord {
   id: string;
@@ -2944,6 +3428,8 @@ export interface OAuthGrantRecord {
   redirectUri: string;
   scopes: string[];
   resource: string;
+  /** MUT-593 (ADR-254 D9): the one Malafat tenant a delegated grant acts in; null for an agent's grant. */
+  tenantId: string | null;
   createdAt: Date;
   expiresAt: Date;
   lastUsedAt: Date | null;
@@ -2992,6 +3478,12 @@ export interface OAuthRepository {
   createClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date }): Promise<OAuthClientRecord>;
   /** CIMD (OV2): creates the row for a fetched document, or refreshes name, redirects and expiry on a re-fetch. */
   upsertCimdClient(input: { id: string; clientName: string; redirectUris: string[]; at: Date; metadataExpiresAt: Date }): Promise<OAuthClientRecord>;
+  /** MUT-593 (operator script): a CONFIDENTIAL client. UniqueViolation on an id already taken. */
+  createConfidentialClient(input: { id: string; clientName: string; redirectUris: string[]; jwksUri: string; allowedResources: string[]; at: Date }): Promise<OAuthClientRecord>;
+  /** MUT-593: disables a client and ends every live grant of it (`client_disabled`) in one transaction. Null = unknown client. */
+  disableClient(input: { clientId: string; at: Date }): Promise<{ client: OAuthClientRecord; grantsRevoked: number } | null>;
+  /** MUT-593 (RFC 7523 §3): records an assertion id; false when the client used it before (a replay). */
+  claimAssertion(input: { clientId: string; jti: string; expiresAt: Date; at: Date }): Promise<boolean>;
   findClient(id: string): Promise<OAuthClientRecord | null>;
   createAuthorizationRequest(input: Omit<OAuthAuthorizationRequestRecord, 'id' | 'decidedAt' | 'userId'>): Promise<OAuthAuthorizationRequestRecord>;
   findAuthorizationRequest(id: string): Promise<OAuthAuthorizationRequestRecord | null>;
@@ -3033,15 +3525,18 @@ export interface OAuthRepository {
   revokeGrant(input: { grantId: string; userId?: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<boolean>;
   /** Every live grant the person holds, in one statement; `audit` is written only when there was one. */
   revokeAllForUser(input: { userId: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<number>;
+  /** MUT-593: the person's live grants of one client in one tenant (Connected apps' revoke); `audit` only when there was one. */
+  revokeForUserTenant(input: { userId: string; clientId: string; tenantId: string; reason: OAuthGrantRevokedReason; at: Date; audit: AuditEventInput[] }): Promise<number>;
   /** Live (unrevoked, unexpired) grants, newest first, with the client's name. */
   listLiveGrants(userId: string, at: Date): Promise<OAuthGrantListing[]>;
   /** Throttled by the caller; never moves `expiresAt`. */
   touchGrant(grantId: string, at: Date): Promise<void>;
   /**
    * Nightly housekeeping: expired requests and codes, tokens of grants revoked or expired before `before`, and clients
-   * created before `clientsBefore` that never had a grant (OV5) and has no request newer than that.
+   * created before `clientsBefore` that never had a grant (OV5) and has no request newer than that. MUT-593: never a
+   * CONFIDENTIAL client (the operator registered it), and assertion ids once expired.
    */
-  cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number }>;
+  cleanup(input: { at: Date; before: Date; clientsBefore: Date }): Promise<{ requests: number; codes: number; tokens: number; clients: number; assertions: number }>;
 }
 
 // ---- Milestone 7: fee proposals (negotiations before an agreement) ----------
@@ -3299,6 +3794,11 @@ export interface VendorRepository {
   findByRegistration(organizationId: string, registrationNo: string): Promise<VendorRecord | null>;
   /** MUT-303 (review): the profile's vendor one of whose names is exactly this name (by `nameKey`), or null. One indexed lookup. */
   findByName(organizationId: string, name: string): Promise<VendorRecord | null>;
+  /**
+   * MUT-589 TD-308: delete the vendor (and its names) only while no expense row, live or deleted, points at it, in one
+   * statement, so an expense linked meanwhile keeps it. True when it was deleted. For a vendor a failed write just made.
+   */
+  removeIfUnused(organizationId: string, id: string): Promise<boolean>;
 }
 
 
@@ -3317,7 +3817,15 @@ export interface ExpenseFilter {
   group?: ExpenseGroupFilter;
   /** MUT-437: exactly this amount (minor units): the look-alike pre-filter, with `currency` and a date window. */
   amountMinor?: bigint;
+  /**
+   * Only expenses with at least one READY, live receipt (`hasReadyReceipt`). An accountant's reads always set it
+   * (store-guard.ts `accountantExpenseView`): an expense with no receipt is not a book entry they can use.
+   */
+  withReceipt?: boolean;
 }
+
+/** What `withReceipt` reads as a receipted expense: one READY receipt on it, not deleted. */
+export const READY_RECEIPT = { status: 'READY', deletedAt: null } as const;
 
 /**
  * MUT-267: membership as a ledger filter. The caller resolves the group and its
@@ -3352,10 +3860,37 @@ export interface ExpensePage {
   nextCursor: ExpenseCursor | null;
 }
 
+/** MUT-589 (ADR-255): `expenses.moveToProfile`'s input. */
+export interface MoveExpenseParams {
+  organizationId: string;
+  expenseId: string;
+  targetOrganizationId: string;
+  expectedVersion: number;
+  patch: UpdateExpensePatch;
+  /** The new storage key of each READY receipt on the expense, by receipt id (copied before the transaction). */
+  receiptKeys: Readonly<Record<string, string>>;
+  /** The category a receipt's approval names on the target (the expense's mapped one). */
+  approvedCategoryId: string | null;
+  /**
+   * TD-309: an upload on the expense still PENDING_UPLOAD and created before this is abandoned: the move soft-deletes it
+   * instead of refusing. A newer one may still finish, and still answers `receipt_not_ready`.
+   */
+  abandonedBefore: Date;
+  audit: AuditEventInput[];
+  at: Date;
+}
+
+export type MoveExpenseResult =
+  | { kind: 'moved'; expense: ExpenseRecord; receipts: ExpenseReceiptRecord[]; previousStorageKeys: string[]; abandonedStorageKeys: string[] }
+  | { kind: 'not_found' }
+  | { kind: 'stale'; currentVersion: number }
+  | { kind: 'receipts_changed'; currentVersion: number }
+  | { kind: 'receipt_not_ready' };
+
 export interface ExpenseRepository {
   create(input: CreateExpenseInput, at: Date): Promise<ExpenseRecord>;
-  /** Live expenses only; a deleted one reads null. */
-  getById(organizationId: string, id: string): Promise<ExpenseRecord | null>;
+  /** Live expenses only; a deleted one reads null, and so does one without a READY receipt under `withReceipt`. */
+  getById(organizationId: string, id: string, options?: { withReceipt?: boolean }): Promise<ExpenseRecord | null>;
   list(organizationId: string, filter: ExpenseFilter, page: { limit: number; cursor: ExpenseCursor | null }): Promise<ExpensePage>;
   update(organizationId: string, id: string, expectedVersion: number, patch: UpdateExpensePatch, at: Date): Promise<UpdateResult<ExpenseRecord>>;
   /**
@@ -3369,6 +3904,17 @@ export interface ExpenseRepository {
   softDelete(organizationId: string, id: string, at: Date, receipts: 'unlink' | 'remove'): Promise<{ record: ExpenseRecord; changed: boolean; removedReceipts: ExpenseReceiptRecord[] } | null>;
   /** MUT-267: live expenses matching `filter`, summed per currency (sorted by code). One aggregate query, no rows returned. */
   totalsByCurrency(organizationId: string, filter: ExpenseFilter): Promise<ExpenseCurrencyTotal[]>;
+  /**
+   * MUT-589 (ADR-255): re-home a live expense and every receipt on it to `targetOrganizationId`, in one transaction.
+   * Locks the expense, then its receipts (the order a delete and a completion take). Refuses, writing nothing, when the
+   * expense is gone (`not_found`), its version is not `expectedVersion` (`stale`), a receipt on it is unfinished
+   * (`receipt_not_ready`; an abandoned one, see `abandonedBefore`, is soft-deleted instead, its key in
+   * `abandonedStorageKeys`), or its READY receipts are not exactly `receiptKeys`' ids (`receipts_changed`, review R1).
+   * Otherwise: the expense takes the target, `patch` and version + 1; each receipt the target and its new key, its
+   * approval naming `approvedCategoryId` (the rest kept as history) and version + 1; its group marks are deleted; and
+   * `audit` is appended.
+   */
+  moveToProfile(params: MoveExpenseParams): Promise<MoveExpenseResult>;
 }
 
 // ---- MUT-267: expense groups (ADR-094) --------------------------------------
@@ -3595,7 +4141,9 @@ export type ReceiptReadRequest = 'PENDING' | 'SKIPPED';
 /**
  * MUT-514 (D6, D10): the phone and ID numbers a server read found, digits only: in the receipt's bill-to blocks
  * (`buyer`), and the ones it filled as the vendor's (`vendor`). The organization's buyer memory is learned from these.
- * Server-only: never in the API, a records file or a log.
+ * MUT-630: `buyer` also holds the block's emails, lower-cased (`vendor` never does: an email is never unlearned). A
+ * rollback reads a stored email as its digits: an email whose local part is a phone or ID number then reads as that
+ * number (most likely the buyer's own). Server-only: never in the API, a records file or a log.
  */
 export interface ReadIdentifiers {
   buyer: string[];
@@ -3608,11 +4156,14 @@ export interface ReadIdentifiers {
  */
 export type FinishReadOutcome = { status: 'DONE'; suggested?: ReceiptSuggestion; identifiers?: ReadIdentifiers } | { status: 'FAILED'; failReason: string } | { status: 'SKIPPED' };
 
-/** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED, so SKIPPED with nothing written; `not_pending`: someone ended it first. */
+/** MUT-590: why a read that ended SKIPPED wrote nothing: the receipt was deleted, or filed onto an expense. */
+export type ReadSkipReason = 'deleted' | 'filed';
+
+/** MUT-441: `saved` wrote the outcome; `skipped`: deleted or FILED (`reason`), so SKIPPED with nothing written; `not_pending`: someone ended it first. */
 export type FinishReadResult =
   | { kind: 'saved'; record: ExpenseReceiptRecord }
   | { kind: 'stale'; record: ExpenseReceiptRecord }
-  | { kind: 'skipped' }
+  | { kind: 'skipped'; reason: ReadSkipReason }
   | { kind: 'not_pending' }
   | { kind: 'not_found' };
 
@@ -3785,11 +4336,11 @@ export interface ExpenseReceiptRepository {
   /** MUT-441: PENDING receipts whose lease is free (never taken, or expired), oldest request first: the sweep's work. */
   listPendingForSweep(now: Date, limit: number): Promise<ExpenseReceiptRecord[]>;
   /**
-   * MUT-441 (R5): when a person is granted `receipt_reading`, the To-review READY receipts they uploaded (on one
-   * profile, or all) whose suggestion is missing a field and which were never asked to be read (NONE) become PENDING,
-   * requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
+   * MUT-441 (R5): the To-review READY receipts one person uploaded (on one profile, or all), or with no `userId`
+   * everyone's (MUT-659's one-off backlog), whose suggestion is missing a field and which were never asked to be read
+   * (NONE) become PENDING, requested `now`. Idempotent: a second call finds them PENDING already. Returns the ids it moved.
    */
-  markBacklogPending(scope: { userId: string; organizationId?: string }, now: Date): Promise<string[]>;
+  markBacklogPending(scope: { userId?: string; organizationId?: string }, now: Date): Promise<string[]>;
   /**
    * MUT-514 (the re-read command): READY, live, To-review, unapproved receipts not being read now (not PENDING) whose
    * suggestion a server reader stamped (`server-ocr-…`), any profile, oldest first. The caller picks the generations.
@@ -3899,6 +4450,8 @@ export interface FeedPageRequest {
   loggedSince?: Date;
   /** MUT-560: only these kinds (all four when absent); the others' branches are never read. */
   kinds?: ReadonlyArray<EntryRow['kind']>;
+  /** Only expenses with a READY receipt (ExpenseFilter `withReceipt`); the other kinds are unaffected. An accountant's feed. */
+  expensesWithReceipt?: boolean;
 }
 
 export interface FeedPage<T> {
@@ -3927,8 +4480,8 @@ export interface EntriesRepository {
   settledOwedIds(organizationIds: readonly string[], paymentIds: readonly string[]): Promise<Map<string, string>>;
   /**
    * MUT-575 (ADR-249): an accountant's client-list stats, two queries whatever the number of windows. Per window: the
-   * live expenses and received payments (the feed's own rules: not deleted, not a capture undo) whose money date is
-   * in [from, before), and the newest `createdAt` of any live expense or received payment. Owed entries and
+   * live expenses with a READY receipt (what an accountant sees of a profile) and received payments (the feed's own rules: not deleted, not a capture undo) whose money date is
+   * in [from, before), and the newest `createdAt` of any such expense or received payment. Owed entries and
    * conversions never count. Every window's organization is in the answer (0 and null when nothing).
    */
   clientActivity(windows: readonly ClientActivityWindow[]): Promise<Map<string, ClientActivity>>;
@@ -3981,6 +4534,8 @@ export interface ProfileExportRecords {
   /** MUT-254: vendors and their names (both, so a restored store keeps one vendor per name). */
   vendors: VendorRecord;
   vendorNames: VendorNameRecord;
+  /** MUT-643: refunds with their sources, so a restored ledger's statement still balances. */
+  refunds: RefundRecord;
 }
 
 export type ProfileExportField = keyof ProfileExportRecords;
@@ -4115,4 +4670,452 @@ export interface InboxEntryRepository {
   fileAsExpense(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; expense: CreateExpenseInput }, at: Date): Promise<{ kind: 'filed'; expense: ExpenseRecord } | { kind: 'not_found' }>;
   /** The same shape for the Payment (received) or adjustment Receivable (owed) write. */
   fileAsIncome(params: { userId: string; inboxEntryId: string; kind: InboxEntryKind; write: IncomeWriteInput }, at: Date): Promise<{ kind: 'filed'; result: IncomeWriteResult } | { kind: 'not_found' }>;
+}
+
+// ---- MUT-568 (ADR-260): the issuing core -------------------------------------------------------------------------
+
+export interface IssuerDetailsInput {
+  legalName: string;
+  vatId: string;
+  dealerType: DealerType;
+  address: string | null;
+  city: string | null;
+  phone: string | null;
+  email: string | null;
+  website: string | null;
+  /** V1-a: the default for new documents. */
+  pricesIncludeVat: boolean;
+  /** MUT-646: the defaults step. BLACK | BLUE. */
+  ink: string;
+  /** A key in issuing/pdf/styles. */
+  documentStyle: string;
+  /** he | ar | en. */
+  defaultLanguage: string;
+  paymentTermsDays: number | null;
+  bankDetails: string | null;
+  footerNote: string | null;
+  /** MUT-648: offer to issue a document after saving income. */
+  offerAfterSave: boolean;
+  /** MUT-660: the documents a client with no preference is due. */
+  defaultDocumentsPreference: DocumentsPreference;
+}
+
+export interface IssuerDetailsRecord extends IssuerDetailsInput {
+  organizationId: string;
+  version: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+/** MUT-646: where a profile stands in the invoicing setup (no row = nothing done yet). */
+export interface IssuingSetupRecord {
+  organizationId: string;
+  logoId: string | null;
+  numberingAnsweredAt: Date | null;
+  introSeenAt: Date | null;
+  defaultsSavedAt: Date | null;
+}
+
+export type IssuingSetupMark = 'numberingAnsweredAt' | 'introSeenAt' | 'defaultsSavedAt';
+
+export interface IssuerLogoRecord {
+  id: string;
+  organizationId: string;
+  contentType: 'image/png' | 'image/jpeg';
+  bytes: Uint8Array;
+  sha256: string;
+  createdAt: Date;
+}
+
+/** MUT-641 (ADR-265): an issued document's signed original ("מקור"), kept once and handed out as is. */
+export interface IssuedOriginalPdfRecord {
+  documentId: string;
+  organizationId: string;
+  /** The produced copy that received it (review): the original goes out on exactly one copy. */
+  copyIndex: number;
+  bytes: Uint8Array;
+  /** The SHA-256 of `bytes` (hex). */
+  sha256: string;
+  createdAt: Date;
+}
+
+/** MUT-571: a profile's connection to the Tax Authority. The tokens are sealed (AES-256-GCM); the store never opens them. */
+export interface TaxAuthorityConnectionRecord {
+  organizationId: string;
+  environment: string;
+  accessTokenSealed: string;
+  accessExpiresAt: Date;
+  refreshTokenSealed: string | null;
+  /** The consent ends here (90 days after it was given); a reconnect is needed after. */
+  refreshExpiresAt: Date | null;
+  connectedByUserId: string;
+  connectedAt: Date;
+  version: number;
+}
+
+/** MUT-647: the entry an invoice issued elsewhere belongs to: an Owed (receivable) or a Received (payment). */
+export type ExternalEntryKind = 'OWED' | 'RECEIVED';
+
+/** The READY INVOICE attachment an external invoice's file becomes (written with the link, in one transaction). */
+export interface ExternalInvoiceFileInput {
+  filename: string;
+  mimeType: string;
+  sizeBytes: number;
+  storageKey: string;
+  customerId: string | null;
+  paymentId: string | null;
+  requestId: string | null;
+}
+
+export interface ExternalInvoiceRecord {
+  id: string;
+  organizationId: string;
+  entryKind: ExternalEntryKind;
+  entryId: string;
+  attachmentId: string;
+  number: string;
+  documentDate: string;
+  createdByUserId: string;
+  createdAt: Date;
+  removedAt: Date | null;
+}
+
+export interface IssuedDocumentCounterRecord {
+  organizationId: string;
+  docType: IssuedDocType;
+  /** The first number of this type (D3). */
+  start: number;
+  /** The number the next document takes. */
+  next: number;
+}
+
+export interface IssuedDocumentLineRecord {
+  index: number;
+  description: string;
+  kind: string;
+  quantityMilli: bigint;
+  unitPriceMinor: bigint;
+  discountMinor: bigint;
+  netMinor: bigint;
+  pricesIncludeVat: boolean;
+  vatRateBasisPoints: number;
+  vatMinor: bigint;
+}
+
+export interface IssuedPaymentDetails {
+  method: PaymentMethod;
+  reference: string | null;
+  receivedOn: IsoDate;
+}
+
+export interface IssuedDocumentRecord {
+  id: string;
+  organizationId: string;
+  docType: IssuedDocType;
+  number: number;
+  documentDate: IsoDate;
+  issuedAt: Date;
+  currency: string;
+  subtotalMinor: bigint;
+  discountMinor: bigint;
+  netMinor: bigint;
+  vatRateBasisPoints: number;
+  vatMinor: bigint;
+  grossMinor: bigint;
+  pricesIncludeVat: boolean;
+  issuer: JsonObject;
+  customerId: string | null;
+  customer: JsonObject;
+  language: string;
+  style: string;
+  ink: string;
+  notes: string | null;
+  /** A credit note's tax invoice, or the tax invoice a receipt pays. */
+  originalId: string | null;
+  paymentDetails: IssuedPaymentDetails | null;
+  allocationNumber: string | null;
+  /** MUT-711 (ADR-273): requested by MTB3A or entered by the business; null with no number. */
+  allocationSource: AllocationSource | null;
+  receivableId: string | null;
+  paymentId: string | null;
+  creditId: string | null;
+  /** MUT-643: a credit note whose paid part went back to the client. */
+  refundId: string | null;
+  coreVersion: string;
+  createdByUserId: string;
+  requestKey: string;
+  lines: IssuedDocumentLineRecord[];
+}
+
+/** MUT-643 (D5): what happens to the part of a credit note the client already paid. */
+export type CreditPaidPart = { mode: 'KEEP' } | { mode: 'REFUND'; refundedOn: IsoDate; method: PaymentMethod; reference: string | null };
+
+/**
+ * MUT-643 (D6): money going back to a client with a credit note. Insert-only ledger rows (no edit, no delete outside the
+ * profile purge). Its sources name the payments the money came from; refunded money counts in their `allocatedMinor`.
+ */
+export interface RefundRecord {
+  id: string;
+  organizationId: string;
+  customerId: string;
+  currency: string;
+  amountMinor: bigint;
+  refundedOn: IsoDate;
+  method: PaymentMethod;
+  reference: string | null;
+  issuedDocumentId: string;
+  requestId: string | null;
+  createdByUserId: string;
+  createdAt: Date;
+  sources: { paymentId: string; amountMinor: bigint }[];
+}
+
+export interface RefundFilter {
+  customerId?: string;
+  currency?: string;
+  /** Refunds that drew on any of these payments. */
+  paymentIds?: readonly string[];
+  /** Both inclusive, on `refundedOn`. */
+  from?: IsoDate;
+  to?: IsoDate;
+}
+
+export interface RefundRepository {
+  /** Oldest first (`refundedOn`, created, id), with their sources; another organization's match nothing. */
+  list(organizationId: string, filter: RefundFilter): Promise<RefundRecord[]>;
+}
+
+/** What the route hands the store: composed and validated (issuing/compose.ts), snapshots taken. */
+export interface IssueDocumentInput {
+  organizationId: string;
+  docType: IssuedDocType;
+  documentDate: IsoDate;
+  currency: string;
+  composed: ComposedDocument;
+  issuer: JsonObject;
+  /** Required for 305, 320 and 330 (the ledger row names a customer); a 400 may have none. */
+  customerId: string | null;
+  customer: JsonObject;
+  language: string;
+  style: string;
+  ink: string;
+  notes: string | null;
+  /** 305 and 320: when the Owed falls due. */
+  dueDate: IsoDate | null;
+  /** 330: the tax invoice or invoice-receipt it credits. */
+  originalId: string | null;
+  /**
+   * MUT-643 (D5): a 330 reaching past what is still owed into what the client paid says what happens to that part:
+   * KEEP leaves it on the payments as the client's unallocated money; REFUND records it going back. Absent while the
+   * credit stays within what is owed.
+   */
+  paidPart?: CreditPaidPart | null;
+  /** 320 and 400: how the money came in. */
+  payment: IssuedPaymentDetails | null;
+  /** 400: the open tax invoice or payment request this receipt pays; 320: the payment request it settles (MUT-662). */
+  appliesToDocumentId: string | null;
+  /**
+   * I1-a: the recorded entry this document is for. The document takes it over (no new Owed or Received): a 305 an Owed
+   * a person recorded; a 320 or 400 a Received a person captured. Same customer, currency and amount.
+   */
+  fromEntry: { kind: 'receivable' | 'payment'; id: string } | null;
+  /** MUT-572 fills it; null until then. */
+  allocationNumber: string | null;
+  /** MUT-711: where a given `allocationNumber` came from (API when absent); an `allocate` outcome names its own. */
+  allocationSource?: AllocationSource;
+  /**
+   * MUT-572 (ADR-264): asks the Tax Authority for this document's allocation number once its own number is known and
+   * every check has passed, inside the issue (the counter stays locked meanwhile). Anything but `allocated` refuses the
+   * issue as `allocation_failed`: nothing is written and the number is not taken. Absent when no number is needed.
+   */
+  allocate?: (number: number) => Promise<AllocationOutcome>;
+  /** The ledger rows' title before the number, e.g. "חשבונית מס"; the store appends the number. */
+  titlePrefix: string;
+  coreVersion: string;
+  createdByUserId: string;
+  /** The issue request's idempotency key: the same key returns the same document. */
+  requestKey: string;
+  requestId: string | null;
+}
+
+/** MUT-711 (ADR-273): API = requested by MTB3A (MUT-572); MANUAL = requested by hand on the Tax Authority site. */
+export type AllocationSource = 'API' | 'MANUAL';
+
+/** MUT-572: what asking for an allocation number came to. `allocated` carries the 9 digits printed on the document. */
+export type AllocationOutcome =
+  | { kind: 'allocated'; number: string; source: AllocationSource }
+  /** MUT-711: a manual number was requested for another document number; the next one is now `next`. */
+  | { kind: 'number_moved'; requestedFor: number; next: number }
+  /** The Tax Authority held the number: the person picks one of the four choices (InvoiceDecision). */
+  | { kind: 'held'; message: string | null }
+  /** The request was refused for its content (fix and send again). */
+  | { kind: 'refused'; errors: { code: number | null; message: string | null; param: string | null }[] }
+  /** No answer in time, or the service failed: nothing was issued; the same request may be sent again. */
+  | { kind: 'unavailable' }
+  /** The profile's connection is missing or expired. */
+  | { kind: 'not_connected' };
+
+export type IssueResult =
+  | { kind: 'issued'; document: IssuedDocumentRecord; created: boolean }
+  | { kind: 'allocation_failed'; outcome: Exclude<AllocationOutcome, { kind: 'allocated' }> }
+  /** D6: the date is before the last issued document of this type. */
+  | { kind: 'date_before_last'; lastDate: IsoDate }
+  | { kind: 'customer_not_found' }
+  /** 330's original or 320/400's appliesTo: missing, another profile's, not an open tax invoice or a live payment request. */
+  | { kind: 'original_not_found' }
+  /**
+   * R-D2 / MUT-643 (D5): the credit reaches what the client paid. `paidMinor` is that part when a `paidPart` choice
+   * would be taken (the original owns its Owed); absent when only what is still owed may be credited (MUT-730).
+   */
+  | { kind: 'original_paid'; outstandingMinor: bigint; paidMinor?: bigint }
+  /** MUT-643 (D1, AC2): the credit notes on one original may not add up to more than its gross. */
+  | { kind: 'credit_exceeds_original'; maximumMinor: bigint }
+  /** MUT-643 (D4): the payments paying the original changed while the credit note was being issued; nothing written. */
+  | { kind: 'original_changed' }
+  /** 400 against a 305: more than it still owes. */
+  | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
+  /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */
+  | { kind: 'entry_not_found' }
+  | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' };
+
+/** MUT-662: a payment request's cancellation record (CX series). */
+export interface IssuedDocumentCancellationRecord {
+  id: string;
+  organizationId: string;
+  documentId: string;
+  number: number;
+  cancelledAt: Date;
+  reason: string | null;
+  createdByUserId: string;
+  requestKey: string;
+}
+
+export type CancelPaymentRequestResult =
+  | { kind: 'cancelled'; cancellation: IssuedDocumentCancellationRecord; created: boolean }
+  | { kind: 'not_found' }
+  | { kind: 'not_a_payment_request' }
+  | { kind: 'already_cancelled'; cancellation: IssuedDocumentCancellationRecord }
+  /** D18: a live invoice-receipt or receipt refers to it. */
+  | { kind: 'has_documents' };
+
+export interface IssuedDocumentFilter {
+  docType?: IssuedDocType;
+  customerId?: string;
+  /** MUT-664: the client page's Documents tab filters. */
+  currency?: string;
+  /** documentDate on or after. */
+  from?: IsoDate;
+  /** documentDate on or before. */
+  to?: IsoDate;
+}
+
+export interface IssuedNumberGap {
+  docType: IssuedDocType;
+  start: number;
+  /** The last number taken; start − 1 when none. */
+  last: number;
+  missing: number[];
+}
+
+export interface IssuingRepository {
+  getIssuer(organizationId: string): Promise<IssuerDetailsRecord | null>;
+  /** Creates the details (expectedVersion null) or updates them (If-Match); `stale` on a version mismatch. */
+  putIssuer(organizationId: string, input: IssuerDetailsInput, expectedVersion: number | null, at: Date): Promise<UpdateResult<IssuerDetailsRecord> | { kind: 'created'; record: IssuerDetailsRecord }>;
+  /** MUT-646: the setup's progress; null before any step was taken. */
+  getSetup(organizationId: string): Promise<IssuingSetupRecord | null>;
+  /** MUT-646: stamps a setup step (first time only: a repeat keeps the first stamp). */
+  markSetup(organizationId: string, mark: IssuingSetupMark, at: Date): Promise<IssuingSetupRecord>;
+  /** MUT-646: a new logo row (never changed later) that becomes the current one. */
+  addLogo(organizationId: string, logo: Pick<IssuerLogoRecord, 'contentType' | 'bytes' | 'sha256'>, at: Date): Promise<IssuerLogoRecord>;
+  /** MUT-646: no current logo; the rows stay for the documents that print them. */
+  clearLogo(organizationId: string, at: Date): Promise<void>;
+  getLogo(organizationId: string, logoId: string): Promise<IssuerLogoRecord | null>;
+  /** MUT-571: the profile's Tax Authority connection, or null. */
+  getTaxConnection(organizationId: string): Promise<TaxAuthorityConnectionRecord | null>;
+  /** Replaces the connection (a new consent). */
+  putTaxConnection(record: Omit<TaxAuthorityConnectionRecord, 'version'>): Promise<TaxAuthorityConnectionRecord>;
+  deleteTaxConnection(organizationId: string): Promise<boolean>;
+  /** MUT-571 AC3: every connection (any profile) whose consent ends in [from, to), soonest first: the re-consent reminder's job. */
+  taxConnectionsEndingBetween(from: Date, to: Date): Promise<TaxAuthorityConnectionRecord[]>;
+  /**
+   * Runs `fn` with the connection locked (a single-use refresh token is never sent twice): `fn` sees the latest row and
+   * returns the tokens to store, or null to leave it. Concurrent callers wait their turn and see the stored result.
+   */
+  withTaxConnectionLock<T>(organizationId: string, fn: (current: TaxAuthorityConnectionRecord | null) => Promise<{ update: Omit<TaxAuthorityConnectionRecord, 'version'> | null; result: T }>): Promise<T>;
+  counters(organizationId: string): Promise<IssuedDocumentCounterRecord[]>;
+  /** D3: sets a type's first number; `has_documents` once one of that type exists. */
+  setStartingNumber(organizationId: string, docType: IssuedDocType, start: number): Promise<{ kind: 'set'; counter: IssuedDocumentCounterRecord } | { kind: 'has_documents' }>;
+  /** One transaction: the next gap-free number, the document and its lines, and its ledger rows. */
+  issue(input: IssueDocumentInput, at: Date): Promise<IssueResult>;
+  getById(organizationId: string, id: string): Promise<IssuedDocumentRecord | null>;
+  /**
+   * MUT-709: the first receipt or invoice-receipt issued for this payment (`IssuedDocument.paymentId`), or null. Only
+   * what a refusal names, so any principal that may reverse a payment can ask, with or without issuing access.
+   */
+  moneyDocumentOn(organizationId: string, paymentId: string): Promise<{ id: string; docType: IssuedDocType; number: number } | null>;
+  list(organizationId: string, filter: IssuedDocumentFilter, page: PageRequest): Promise<Page<IssuedDocumentRecord>>;
+  /** MUT-569: every document dated `from`…`to` (both inclusive), with its lines, by type code then number (the uniform file). */
+  inRange(organizationId: string, from: IsoDate, to: IsoDate): Promise<IssuedDocumentRecord[]>;
+  /** Records one produced copy and returns its index (0 = original); null for an unknown document. */
+  recordCopy(organizationId: string, documentId: string, copy: { producedByUserId: string; channel: string; requestKey?: string | null }, at: Date): Promise<{ copyIndex: number } | null>;
+  /** MUT-641: the signed original, or null until it was first produced. */
+  getOriginalPdf(organizationId: string, documentId: string): Promise<IssuedOriginalPdfRecord | null>;
+  /** MUT-641 (review): which produced copy received the original, without its bytes; null until one did. */
+  originalCopyIndex(organizationId: string, documentId: string): Promise<number | null>;
+  /**
+   * MUT-641: keeps the signed original for the copy that produced it. The first one kept wins and is what every caller
+   * gets back (a racing twin gets the winner's, with the winner's copyIndex); it is never replaced. Null for an unknown
+   * document.
+   */
+  keepOriginalPdf(organizationId: string, documentId: string, pdf: Pick<IssuedOriginalPdfRecord, 'bytes' | 'sha256' | 'copyIndex'>, at: Date): Promise<IssuedOriginalPdfRecord | null>;
+  gaps(organizationId: string): Promise<IssuedNumberGap[]>;
+  /** MUT-647: attaches an invoice issued elsewhere; `exists` when the entry already has a live one. */
+  attachExternal(input: Omit<ExternalInvoiceRecord, 'id' | 'removedAt'>, file: ExternalInvoiceFileInput): Promise<{ kind: 'attached'; record: ExternalInvoiceRecord } | { kind: 'exists'; record: ExternalInvoiceRecord }>;
+  /** The live external invoices of these entries (one per entry at most). */
+  liveExternal(organizationId: string, entryKind: ExternalEntryKind, entryIds: readonly string[]): Promise<ExternalInvoiceRecord[]>;
+  getExternal(organizationId: string, id: string): Promise<ExternalInvoiceRecord | null>;
+  /** Marks it removed and its file's attachment deleted (both rows stay); null when there is no live one with that id. */
+  removeExternal(organizationId: string, id: string, at: Date): Promise<ExternalInvoiceRecord | null>;
+  /**
+   * MUT-660: the rows `documentsDue` reads, in a few indexed reads: Owed entries that aren't deleted or document-made,
+   * POSTED Received with no linked document, their live allocations and the Owed those reach, every client's
+   * preference, and the issuer's default and dealer type (ON_PAYMENT and null with no issuer details).
+   */
+  dueInputs(organizationId: string): Promise<DocumentsDueInput>;
+  /** MUT-660: what the books split needs for these payments (`splitIncome`): their links, allocations and preferences. */
+  incomeContext(organizationId: string, paymentIds: readonly string[]): Promise<IncomeContextRecord>;
+  /**
+   * MUT-660: marks or unmarks entries "not for invoice", all or nothing, in one transaction. An entry already at `value`
+   * is left alone and not counted (so a replay changes nothing). Refuses the whole set when one has a tax document
+   * (a live 305, or a 320; a receipt doesn't block), is another version than expected, or isn't there.
+   */
+  setNotForInvoice(organizationId: string, items: readonly NotForInvoiceItem[], value: boolean, at: Date): Promise<NotForInvoiceResult>;
+  /**
+   * MUT-662 (D18): cancels a payment request with a record of its own, in one transaction that locks the request's Owed
+   * (the order a 320 applying it takes). The same key returns the same record; the Owed is never changed.
+   */
+  cancelPaymentRequest(organizationId: string, documentId: string, cancel: { reason: string | null; requestKey: string; userId: string }, at: Date): Promise<CancelPaymentRequestResult>;
+  /** MUT-662: each payment request's derived status, in one read per table (never per row). Other ids are left out. */
+  paymentRequestFacts(organizationId: string, documentIds: readonly string[]): Promise<Map<string, PaymentRequestFacts>>;
+}
+
+export interface NotForInvoiceItem {
+  kind: 'receivable' | 'payment';
+  id: string;
+  /** If-Match on a single entry; absent on a bulk action. */
+  expectedVersion?: number;
+}
+
+export type NotForInvoiceResult =
+  | { kind: 'done'; changed: number; receivables: ReceivableRecord[]; payments: PaymentRecord[] }
+  | { kind: 'has_tax_document'; item: NotForInvoiceItem }
+  | { kind: 'stale'; item: NotForInvoiceItem; version: number }
+  | { kind: 'not_found'; item: NotForInvoiceItem };
+
+export interface IncomeContextRecord {
+  defaultPreference: DocumentsPreference;
+  preferences: Map<string, DocumentsPreference | null>;
+  receivables: Map<string, { customerId: string; notForInvoice: boolean }>;
+  /** paymentId → a document is linked / a live external invoice is attached / its live allocations. */
+  payments: Map<string, { documented: boolean; externalInvoice: boolean; allocations: Array<{ receivableId: string; amountMinor: bigint }> }>;
 }

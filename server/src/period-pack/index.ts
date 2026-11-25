@@ -39,8 +39,10 @@ export interface MintInput {
   organization: Organization;
   /** The user id, or the link viewer's id. */
   sub: string;
-  /** The minting session's id (member, accountant); null for a link. */
+  /** The minting session's id (member, accountant); null for a link or a delegated mint. */
   sid: string | null;
+  /** MUT-593: the minting delegated grant's id, when Malafat acts as the person; else null. */
+  gid?: string | null;
   range: PeriodRange;
   asOf: Date;
   lang: Lang;
@@ -70,7 +72,7 @@ export async function mintDownload(store: LedgerStore, input: MintInput): Promis
       estimate: size,
     });
   }
-  const claims: TicketClaims = { type: input.type, kind: input.kind, org: input.organization.id, sub: input.sub, from: input.range.from, to: input.range.to, asOf: input.asOf.toISOString(), lang: input.lang, sid: input.sid };
+  const claims: TicketClaims = { type: input.type, kind: input.kind, org: input.organization.id, sub: input.sub, from: input.range.from, to: input.range.to, asOf: input.asOf.toISOString(), lang: input.lang, sid: input.sid, gid: input.gid ?? null };
   const { ticket, expiresAt } = mintTicket(input.pepper, claims, input.now);
   return { type: input.type, ticket, expiresAt: expiresAt.toISOString(), filename: downloadFilename(input.type, input.organization.name, input.range), estimate };
 }

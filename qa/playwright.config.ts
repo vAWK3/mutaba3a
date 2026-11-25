@@ -11,12 +11,30 @@ import { qa } from './support/qa';
 
 const recording = !qa.warmup;
 
-function appProject(app: string) {
-  return {
-    name: app,
-    testDir: `./specs/${app}`,
-    use: { ...devices['Desktop Chrome'], baseURL: qa.baseURL(app) },
+const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * One test project per form-factor target (`<app>@<target>`, QA-STANDARD.md rule 3) with that
+ * target's viewport and only the flows it must prove. No `-setup` project (no auth, see above).
+ * An app that hasn't declared formFactors yet gets the old single desktop project.
+ */
+function appProjects(app: string) {
+  const common = {
+    ...devices['Desktop Chrome'],
+    baseURL: qa.baseURL(app),
+    permissions: qa.permissions(app),
+    ...(qa.app(app).geolocation ? { geolocation: qa.app(app).geolocation! } : {}),
   };
+  const targets = qa.targets(app);
+  if (!targets.length) return [{ name: app, testDir: `./specs/${app}`, use: common }];
+  return targets
+    .filter((t) => t.features === null || t.features.length)
+    .map((t) => ({
+      name: `${app}@${t.name}`,
+      testDir: `./specs/${app}`,
+      ...(t.features ? { grep: new RegExp(`@(${t.features.map(escape).join('|')})(?![\\w.-])`) } : {}),
+      use: { ...common, ...t.use, video: recording ? { mode: 'on' as const, size: t.use.viewport } : ('off' as const) },
+    }));
 }
 
 export default defineConfig({
@@ -35,7 +53,8 @@ export default defineConfig({
     screenshot: recording ? 'only-on-failure' : 'off',
     actionTimeout: 20_000,
     navigationTimeout: recording ? 60_000 : 180_000,
-    launchOptions: { slowMo: qa.slowMo },
+    // Camera and microphone answer with fake devices instead of a prompt (rule 1).
+    launchOptions: { slowMo: qa.slowMo, args: ['--use-fake-ui-for-media-stream', '--use-fake-device-for-media-stream'] },
   },
-  projects: Object.keys(qa.apps).map(appProject),
+  projects: Object.keys(qa.apps).flatMap(appProjects),
 });

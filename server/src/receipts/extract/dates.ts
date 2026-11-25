@@ -30,11 +30,11 @@ const MONTH_ALTERNATION = [...MONTH_BY_NAME.keys()].sort((a, b) => b.length - a.
 const YMD = /(?<!\d)(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})(?!\d)/;
 const DMY = /(?<!\d)(\d{1,2})[-/.](\d{1,2})[-/.](\d{4}|\d{2})(?!\d)/;
 /**
- * `28 October 2026`, `5 בנובמבר 2026` (Hebrew's ב "in"), `3 تشرين الأول 2026`, and with an abbreviated month and a
+ * `28 October 2026`, `6th May 2026` (MUT-590), `5 בנובמבר 2026` (Hebrew's ב "in"), `3 تشرين الأول 2026`, and with an abbreviated month and a
  * two-digit year, `17-פבר-26`, `5 נוב' 2026`, `17-Feb-26` (MUT-504). A two-digit year is never the start of a time or
  * of a price (`2 may 12.50`).
  */
-const DAY_NAME_YEAR = new RegExp(`(?<!\\d)(\\d{1,2})\\s*(?:ב|-)?\\s*(${MONTH_ALTERNATION})(?![\\p{L}])[.']?[\\s,-]*(\\d{4}|\\d{2})(?![\\d:]|[.,]\\d)`, 'u');
+const DAY_NAME_YEAR = new RegExp(`(?<!\\d)(\\d{1,2})(?:st|nd|rd|th)?\\s*(?:ב|-)?\\s*(${MONTH_ALTERNATION})(?![\\p{L}])[.']?[\\s,-]*(\\d{4}|\\d{2})(?![\\d:]|[.,]\\d)`, 'u');
 /** `Oct 28, 2026`. */
 const NAME_DAY_YEAR = new RegExp(`(?<![\\p{L}])(${MONTH_ALTERNATION})\\.?\\s+(\\d{1,2}),?\\s+(\\d{4})(?!\\d)`, 'u');
 

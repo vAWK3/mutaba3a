@@ -106,7 +106,7 @@ describe('runRenewalMail (MUT-525 DD8)', () => {
     const h = harness();
     const { user } = await h.subscriber({ locale: 'ar' });
     await h.run();
-    expect(h.outbox.list({ to: user.email })[0]!.subject).toBe('تنتهي سنتك الأولى في متابعة يوم 14 نوفمبر 2027');
+    expect(h.outbox.list({ to: user.email })[0]!.subject).toBe('تنتهي سنتك الأولى في متابعة يوم 14 تشرين الثاني 2027');
   });
 
   it(`looks only at offer subscriptions renewing within ${RENEWAL_NOTICE_DAYS} days, active and not cancelling, with a linked payer`, async () => {

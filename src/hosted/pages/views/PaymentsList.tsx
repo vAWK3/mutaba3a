@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
+import { NotForInvoiceAction } from '../../components/NotForInvoiceAction';
 import { Button } from '../../../components/ui/Button';
 import { SegmentedTabs } from '../../../components/filters/SegmentedTabs';
 import { useLanguage } from '../../../lib/i18n/core';
@@ -7,6 +8,7 @@ import { ClientFilter, DateFilter, FilterBar } from '../../components/FilterCont
 import { HostedTable, type Column } from '../../components/HostedTable';
 import { Empty, QueryView } from '../../components/QueryView';
 import { ReadOnlyNotice } from '../../components/ReadOnlyNotice';
+import { useExternalInvoiceColumn } from '../../components/ExternalInvoiceColumn';
 import { isNarrowed, splitIncomeDrawer, type PaymentFilters, type PaymentsPageSearch, type PaymentStatusFilter } from '../../data/filters';
 import { canOpenPayment, incomeAffordancesFor, redateAffordancesFor } from '../../data/incomeAffordances';
 import { ADD_BUTTON_ATTR, IncomeDrawerHost } from '../../components/IncomeDrawerHost';
@@ -16,6 +18,7 @@ import { formatDay } from '../../format/dates';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import { DeeperLinks } from '../../components/DeeperLinks';
 import { NoMatch, PageHeader, ShowMore, StatusBadge } from './shared';
+import { CaptureSourceBadge } from '../../components/CaptureSourceBadge';
 
 /**
  * Payments (hosted-portal.md §7.3): what was received, read-only; a row opens
@@ -33,10 +36,21 @@ interface PaymentRow {
   amount: string;
   unallocated: string;
   status: string;
+  /** MUT-596: 'malafat' when Malafat recorded it acting for the person (and 'mcp' for their Claude). */
+  captureSource: Payment['captureSource'];
   allocations: Allocation[];
   /** MUT-224: the user's own posted capture on a profile they own: its date can be changed. */
   redatable: boolean;
+  /** MUT-660: marked not for invoice; the version a mark sends; a document of MTB3A's is on it. */
+  notForInvoice: boolean;
+  version: number;
+  posted: boolean;
+  issuedHere: boolean;
 }
+
+// MUT-647: a reversed payment takes no invoice issued elsewhere.
+const takesExternal = (r: PaymentRow) => r.status === 'POSTED';
+const amountOf = (r: PaymentRow) => r.amount;
 
 function shape(items: Payment[], customers: Map<string, Customer>, language: 'en' | 'ar', methodLabel: (method: string) => string, redatable: (p: Payment) => boolean): PaymentRow[] {
   return items.map((p) => ({
@@ -49,8 +63,13 @@ function shape(items: Payment[], customers: Map<string, Customer>, language: 'en
     amount: p.amount,
     unallocated: p.unallocated,
     status: p.status,
+    captureSource: p.captureSource,
     allocations: p.allocations,
     redatable: redatable(p),
+    notForInvoice: p.notForInvoice,
+    version: p.version,
+    posted: p.status === 'POSTED',
+    issuedHere: p.origin === 'issued_document',
   }));
 }
 
@@ -81,6 +100,10 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
         : undefined,
     [list.data, customers.data, language, t, profile, userId, writable],
   );
+  // MUT-660: a posted Received with no document of MTB3A's can be marked not for invoice, beside Attach.
+  const canMark = incomeAffordancesFor(profile, writable).kinds.length > 0;
+  const markAction = useCallback((r: PaymentRow) => (canMark && r.posted && !r.issuedHere ? <NotForInvoiceAction kind="received" id={r.id} version={r.version} marked={r.notForInvoice} client={r.client} /> : null), [canMark]);
+  const external = useExternalInvoiceColumn('RECEIVED', rows, amountOf, takesExternal, markAction);
 
   const toggle = useCallback(
     (id: string) =>
@@ -122,9 +145,16 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
       { key: 'method', header: t('hosted.payments.columns.method'), cell: (r) => r.method },
       { key: 'amount', header: t('hosted.payments.columns.amount'), numeric: true, cell: (r) => <DecimalAmount value={r.amount} currency={r.currency} /> },
       { key: 'unallocated', header: t('hosted.payments.columns.unallocated'), numeric: true, cell: (r) => <DecimalAmount value={r.unallocated} currency={r.currency} /> },
-      { key: 'status', header: t('hosted.payments.columns.status'), cell: (r) => <StatusBadge family="payment" status={r.status} /> },
+      { key: 'status', header: t('hosted.payments.columns.status'), cell: (r) => (
+          <span className="hp-badges">
+            <StatusBadge family="payment" status={r.status} />
+            <CaptureSourceBadge source={r.captureSource} />
+          </span>
+        ),
+      },
+      ...(external.column ? [external.column] : []),
     ],
-    [t, fixedCustomerId, open, toggle],
+    [t, fixedCustomerId, open, toggle, external.column],
   );
 
   const status = filters.status ?? 'ALL';
@@ -171,11 +201,14 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
               // The first cell holds the expander, and a button can't nest a button (eng review R5).
               linkColumn="received"
               canOpen={(row) => row.redatable}
+              onRowFileDrop={external.onRowFileDrop}
+              canDropFile={external.canDropFile}
             />
             <ShowMore hasMore={list.hasNextPage} loading={list.isFetchingNextPage} onMore={() => void list.fetchNextPage()} />
           </>
         )}
       </QueryView>
+      {external.drawer}
     </>
   );
 }

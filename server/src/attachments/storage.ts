@@ -49,6 +49,11 @@ export interface AttachmentStorage {
    * Overwrites `to`; throws when `from` is not there.
    */
   copy(from: string, to: string): Promise<void>;
+  /**
+   * MUT-647: stores bytes the API itself received (an invoice issued elsewhere, sent by the portal: the bucket has no
+   * CORS, so a browser can't PUT to a signed URL). At most the upload cap (10 MB), so buffered.
+   */
+  write(key: string, bytes: Uint8Array, contentType: string): Promise<void>;
 }
 
 export class GcsAttachmentStorage implements AttachmentStorage {
@@ -100,6 +105,10 @@ export class GcsAttachmentStorage implements AttachmentStorage {
     await bucket.file(from).copy(bucket.file(to));
   }
 
+  async write(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    await this.storage.bucket(this.bucket).file(key).save(Buffer.from(bytes), { contentType, resumable: false });
+  }
+
   async read(key: string): Promise<ReadableStream<Uint8Array> | null> {
     const file = this.storage.bucket(this.bucket).file(key);
     const [exists] = await file.exists();
@@ -118,6 +127,10 @@ export class MemoryAttachmentStorage implements AttachmentStorage {
   put(key: string, object: StoredObject, bytes?: Uint8Array): void {
     this.objects.set(key, object);
     if (bytes) this.contents.set(key, bytes);
+  }
+
+  async write(key: string, bytes: Uint8Array, contentType: string): Promise<void> {
+    this.put(key, { sizeBytes: bytes.byteLength, contentType }, bytes);
   }
 
   async signUpload(key: string, input: { mimeType: string; sizeBytes: number; ttlSeconds: number; now: Date }) {

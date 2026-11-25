@@ -201,13 +201,11 @@ export function showsClientBooks(clients: readonly unknown[] | undefined): boole
 
 // ---- Words ---------------------------------------------------------------------------------------------------------
 
-const latn = (language: Language) => `${getLocale(language)}-u-nu-latn`;
-
 /** "Oct 2026", or "Aug – Oct 2026" for a range (month names in the language, Western digits). */
 export function periodLabel(from: Month, to: Month, language: Language): string {
   const format = (month: Month, withYear: boolean) => {
     const [year, m] = parts(month);
-    return new Intl.DateTimeFormat(latn(language), { month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(new Date(Date.UTC(year, m - 1, 1)));
+    return new Intl.DateTimeFormat(getLocale(language), { month: 'short', ...(withYear ? { year: 'numeric' } : {}), timeZone: 'UTC' }).format(new Date(Date.UTC(year, m - 1, 1)));
   };
   if (from === to) return format(from, true);
   const sameYear = from.slice(0, 4) === to.slice(0, 4);
@@ -216,11 +214,11 @@ export function periodLabel(from: Month, to: Month, language: Language): string 
 
 /** "12 Oct 2026": an instant's day, for "since …". */
 export function dayLabel(iso: string, language: Language): string {
-  return new Intl.DateTimeFormat(latn(language), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
+  return new Intl.DateTimeFormat(getLocale(language), { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(iso));
 }
 
 /** A money date (`YYYY-MM-DD`) as "30 Oct". */
 export function moneyDay(isoDate: string, language: Language): string {
   const [year, m, d] = digitsOf(isoDate);
-  return new Intl.DateTimeFormat(latn(language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(year, m - 1, d)));
+  return new Intl.DateTimeFormat(getLocale(language), { day: 'numeric', month: 'short', timeZone: 'UTC' }).format(new Date(Date.UTC(year, m - 1, d)));
 }

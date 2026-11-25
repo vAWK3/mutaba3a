@@ -1,4 +1,5 @@
 /* eslint-disable react-refresh/only-export-components */
+import { useOfferIssue } from './IssueOffer';
 import { useNavigate } from '@tanstack/react-router';
 import type { HostedProfile, SettleReceivableResponse } from '../api/client';
 import { incomeAffordancesFor, redateAffordancesFor } from '../data/incomeAffordances';
@@ -77,7 +78,10 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   const redate = redateAffordancesFor(profile, writable);
   const navigate = useNavigate();
   const userId = useMe().user.id;
-  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: { tab: 'payments' } } as never));
+  // MUT-648: the save toast's "Issue …" opens the issue drawer for the entry just saved. The profile's layout owns that
+  // drawer (IssueOfferProvider), so the button still works after this page is left inside the toast's six seconds.
+  const onOfferIssue = useOfferIssue() ?? undefined;
+  const seePayments = onSeePayments ?? ((customerId: string) => void navigate({ to: `/p/${profile.id}/clients/${customerId}`, search: {} } as never));
   if (drawer.settle && canSettle) {
     const receivableId = drawer.settle;
     return (
@@ -96,7 +100,7 @@ export function IncomeDrawerHost({ profile, drawer, onClose, defaultCustomerId, 
   }
   if (drawer.newIncome && kinds.length > 0) {
     return (
-      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} writable={writable} />
+      <IncomeCaptureDrawer profile={profile} initialKind={drawer.newIncome} defaultCustomerId={defaultCustomerId} onClose={onClose} onSaved={focusAfterAdd} onOfferIssue={onOfferIssue} onSetUpInvoicing={(step) => void navigate({ to: `/p/${profile.id}/you/invoicing`, search: { step } } as never)} writable={writable} />
     );
   }
   const redateTarget = drawer.income && redate.owed ? { kind: 'owed' as const, id: drawer.income } : drawer.payment && redate.payments ? { kind: 'payment' as const, id: drawer.payment } : null;

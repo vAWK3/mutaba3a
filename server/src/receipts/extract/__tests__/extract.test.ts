@@ -74,6 +74,8 @@ const ARABIC: Fixture[] = [
 ];
 
 const ENGLISH: Fixture[] = [
+  // MUT-590: an online vendor's invoice dates its day with an ordinal; a billing period on another row is not the date.
+  ['ordinal day before the month name', receipt(['Paddle.com', 'Invoice date: 6th May 2026', 'Total £5.40']), { date: '2026-05-06' }],
   [
     'café: company suffix vendor, ISO date, dollar total',
     receipt(['ACME COFFEE LTD', 'Date: 2026-10-28', 'Latte 4.50', 'Total $4.50']),
@@ -115,9 +117,30 @@ describe('extractReceipt (MUT-441)', () => {
     expect(new Set(Object.values(s).filter((f) => typeof f === 'object').map((f) => f.source))).toEqual(new Set(['ocr']));
   });
 
-  it("reads a PDF's text layer as pdf-text, at full confidence of the text, ignoring OCR lines", () => {
-    const s = read({ pdfText: 'Bistro Verde LTD\nDate: 2026-10-28\nTotal € 23.80\n', lines: receipt(['Something else', 'Total 1.00']) });
+  it("reads a PDF's text layer line by line as pdf-text when it comes without places (an older reader)", () => {
+    const s = read({ pdfText: 'Bistro Verde LTD\nDate: 2026-10-28\nTotal € 23.80\n' });
     expect(s).toMatchObject({ totalMinor: { value: '2380', source: 'pdf-text' }, currency: { value: 'EUR', source: 'pdf-text' }, date: { value: '2026-10-28', source: 'pdf-text' } });
+  });
+
+  /** MUT-590: an invoice generator's text layer, placed on the page by the reader (conf 1: it is the document's text). */
+  const placed = (rows: Parameters<typeof receipt>[0]) => receipt(rows, { conf: 1 });
+
+  it("reads a PDF's placed text layer by position: a label and its amount drawn apart on one line meet on one row", () => {
+    // The layer's own line order puts the amount on a line of its own, after the label's line.
+    const pdfText = 'שובך בע"מ\nתאריך 09/11/2026\nסה"כ לתשלום\n200.00 ₪';
+    const lines = placed(['שובך בע"מ', [{ text: 'תאריך', x: 300 }, { text: '09/11/2026', x: 20 }], [{ text: 'סה"כ לתשלום', x: 260, script: 'hebr' }, { text: '200.00 ₪', x: 20 }]]);
+    const s = read({ pdfText, lines });
+    expect(s).toMatchObject({ totalMinor: { value: '20000', source: 'pdf-text' }, currency: { value: 'ILS', source: 'pdf-text' }, date: { value: '2026-11-09', source: 'pdf-text' } });
+  });
+
+  it("reads a PDF's placed text layer by position: a total label over its amount in a column", () => {
+    const lines = placed(['Studio Shubak', 'Invoice date: 09/11/2026', [{ text: 'Total due', x: 250 }], [{ text: '200.00', x: 250 }]]);
+    expect(value(read({ pdfText: 'Studio Shubak\nInvoice date: 09/11/2026\nTotal due\n200.00', lines }), 'totalMinor')).toBe('20000');
+  });
+
+  it("reads a PDF's placed text layer by position: a registration label and its number in neighbouring runs", () => {
+    const lines = placed(['שובך', [{ text: 'עוסק מורשה', x: 280, script: 'hebr' }, { text: REG_VALID_DEALER, x: 120 }], 'סה"כ 200.00']);
+    expect(value(read({ pdfText: `שובך\nעוסק מורשה\n${REG_VALID_DEALER}\nסה"כ 200.00`, lines }), 'registrationNo')).toBe(REG_VALID_DEALER);
   });
 
   it('finds the PDF reordered lam-meem ligature label (MUT-253 spike quirk)', () => {
@@ -647,6 +670,13 @@ describe('MUT-514: no confidently wrong fields', () => {
       expect(value(read(receipt(['Bill to: Beta Corp', 'Item 10.00', 'Consulting services'])), 'vendorName')).toBeUndefined();
     });
 
+    it("the buyer's number first on a row is passed over for the vendor's labelled one after it (MUT-590, a placed text layer)", () => {
+      const row = (buyer: string) => [{ text: 'ח.פ', x: 360, script: 'hebr' as const }, { text: buyer, x: 290 }, { text: 'ח.פ/ע.מ:', x: 120, script: 'hebr' as const }, { text: REG_VALID_DEALER, x: 20 }];
+      expect(value(readWith(receipt(['חשמל העיר', row(REG_VALID_COMPANY), 'סה"כ 100.00']), { buyerIds: [REG_VALID_COMPANY] }), 'registrationNo')).toBe(REG_VALID_DEALER);
+      // With no registration label after it, a buyer's number still ends the search (MUT-514).
+      expect(value(readWith(receipt(['חשמל העיר', `ח.פ ${REG_VALID_COMPANY} ${REG_VALID_DEALER}`, 'סה"כ 100.00']), { buyerIds: [REG_VALID_COMPANY] }), 'registrationNo')).toBeUndefined();
+    });
+
     it("an exempt dealer's own ID (עוסק פטור ת.ז) stays theirs, and is never learned as the buyer's", () => {
       const r = readReceipt({ lines: receipt(['יוסי צלם', `עוסק פטור ת.ז ${REG_VALID_DEALER}`, 'טל 050-1234567', 'תאריך: 28/10/2026', 'צילום 500.00', 'סה"כ 500.00']) }, { readerVersion: READER });
       expect(value(r.suggestion, 'registrationNo')).toBe(REG_VALID_DEALER);
@@ -832,6 +862,111 @@ describe('MUT-540: card slips, comma decimals and labels above their amount', ()
     it('can be switched off, so the bench can measure the rule alone', () => {
       const s = extractReceipt({ lines: receipt(['תחנת דלק', 'סכום עסקה 184.36']) }, { readerVersion: READER, loneCardSlip: false });
       expect(value(s, 'totalMinor')).toBeUndefined();
+    });
+  });
+});
+
+/** MUT-630/631 (2026-11-21 production check): an empty vendor field beats a wrong one. Synthetic rows only. */
+describe('MUT-630/631: no wrong vendor contact details or names', () => {
+  const EMAIL = 'dana.levi@example.com';
+  const readPdf = (text: string, buyerIds?: readonly string[]) => extractReceipt({ lines: [], pdfText: text }, { readerVersion: READER, ...(buyerIds ? { buyerIds } : {}) });
+  const readWith = (lines: ReturnType<typeof receipt>, options: { buyerIds?: readonly string[] }) => extractReceipt({ lines }, { readerVersion: READER, ...options });
+  /** A mobile bill's text layer: the bill-to block runs past its cap to the customer's email; the billed line is an item. */
+  const BILL = [
+    'אז מה היה לנו ב: 25.09.26-24.10.26',
+    'לכבוד: תאריך: 25/10/26',
+    'דנה לוי',
+    'דרך הגפן 19 דירה 1',
+    'ירושלים 9100001',
+    'ISRAEL',
+    'מספר לקוח: 1.84720519',
+    EMAIL,
+    'תיאור סה"כ לתשלום כולל מע"מ',
+    'מנוי סלולר 055-1234567- 59.90 }',
+    'סה"כ לתשלום 59.90 }',
+    'מספר לקוח: 1.84720519',
+    EMAIL,
+  ].join('\n');
+
+  describe('MUT-630: contact details only where the vendor prints them', () => {
+    it("a mobile bill's text layer gives no email and no phone; its total stays", () => {
+      const s = readPdf(BILL);
+      expect(value(s, 'email')).toBeUndefined();
+      expect(value(s, 'phone')).toBeUndefined();
+      expect(value(s, 'totalMinor')).toBe('5990');
+    });
+
+    it('a billed line under the item table\'s header is never the vendor\'s phone, labelled or not', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'קו 055-1234567', 'סה"כ 59.90'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'מנוי נייד 055-1234567 59.90', 'סה"כ 59.90'])), 'phone')).toBeUndefined();
+    });
+
+    it("the vendor's phone in the header, and a labelled or bare one in the footer, are still read", () => {
+      expect(value(read(receipt(['Phone Co', '03-5551234', 'תיאור כמות מחיר', 'קו 055-1234567 59.90', 'סה"כ 59.90'])), 'phone')).toBe('03-5551234');
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'קו 1 59.90', 'סה"כ 59.90', 'טלפון: 03-5551234'])), 'phone')).toBe('03-5551234');
+      expect(value(read(receipt(['Phone Co', 'Coffee 12.00', 'Total 12.00', '03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
+    it("an email in a bill-to block, or one the organization's receipts showed as theirs, is never the vendor's", () => {
+      expect(value(read(receipt(['Phone Co', 'Bill to: Dana', EMAIL, 'Total 10.00', `info@phoneco.example`])), 'email')).toBe('info@phoneco.example');
+      expect(value(read(receipt(['Phone Co', 'Bill to: Dana', EMAIL, 'Total 10.00'])), 'email')).toBeUndefined();
+      expect(value(readWith(receipt(['Phone Co', `Contact: ${EMAIL.toUpperCase()}`, 'Total 10.00']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', `Contact: ${EMAIL}`, 'Total 10.00'])), 'email')).toBe(EMAIL);
+    });
+
+    it("a customer or account number shaped like a phone is never the vendor's phone (review)", () => {
+      expect(value(read(receipt(['Phone Co', 'מספר לקוח: 052-9876543', 'סה"כ 59.90'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', '03-5551234', "מס' חשבון: 052-9876543", 'סה"כ 59.90'])), 'phone')).toBe('03-5551234');
+    });
+
+    it('an item table with no total row read runs to the end: a billed line after the last amount is never the vendor\'s phone (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 59.90', 'נייד 055-1234567', 'Tel 03-5551234'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 60', 'קו 055-1234567'])), 'phone')).toBeUndefined();
+    });
+
+    it('the item table ends at its last total row with an amount: a wrapped header, a line subtotal or an item named "Total" does not end it (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות', 'מחיר ליחידה סה"כ', 'פריט 10.00', 'נייד 050-1234567', 'סה"כ 10.00'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'מנוי 59.90', 'סה"כ למנוי 59.90', 'מנוי 052-2222222', 'סה"כ 119.80'])), 'phone')).toBeUndefined();
+      expect(value(read(receipt(['Phone Co', 'description qty price', 'Total Care plan', 'mobile 054-3333333', 'Total 30.00', '03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
+    it('a count line (סה"כ פריטים) does not end the item table; the total does (review)', () => {
+      expect(value(read(receipt(['Phone Co', 'תיאור כמות מחיר', 'סה"כ פריטים 2', 'קו 055-1234567', 'סה"כ 59.90', '03-5551234'])), 'phone')).toBe('03-5551234');
+    });
+
+    it("once the buyer's email shows outside a block, no later email is offered, labelled or not: it could be anyone's (review)", () => {
+      expect(value(readWith(receipt(['Phone Co', 'Total 10.00', EMAIL, 'support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      expect(value(readWith(receipt(['Phone Co', 'info@phoneco.example', 'Total 10.00', EMAIL]), { buyerIds: [EMAIL] }), 'email')).toBe('info@phoneco.example');
+      // A label does not say whose: a platform, an accountant, the buyer's own second address.
+      expect(value(readWith(receipt(['Phone Co', `Sent to ${EMAIL}`, 'Total 10.00', 'Questions? Email support@platform.example']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+      expect(value(readWith(receipt(['Phone Co', `Email: ${EMAIL}, accounts@buyer-firm.example`, 'Total 10.00']), { buyerIds: [EMAIL] }), 'email')).toBeUndefined();
+    });
+
+    it('a bill-to email is kept for the buyer memory; an email is never reported as the vendor\'s (it is never unlearned)', () => {
+      const r = readReceipt({ lines: receipt(['Phone Co', 'Bill to: Dana', EMAIL, 'Total 10.00']) }, { readerVersion: READER });
+      expect(r.buyerIdentifiers).toEqual([EMAIL]);
+      const vendorEmail = readReceipt({ lines: receipt(['Phone Co', 'info@phoneco.example', 'Total 10.00']) }, { readerVersion: READER });
+      expect(value(vendorEmail.suggestion, 'email')).toBe('info@phoneco.example');
+      expect(vendorEmail.vendorIdentifiers).toEqual([]);
+    });
+  });
+
+  describe('MUT-631: a vendor name is the shop\'s, or none', () => {
+    it("an item table's header heading the receipt (the shop's header cut off) gives no vendor", () => {
+      expect(value(read(receipt(['السعر الكمية خصم المجموع', 'بنطلون رجالي', '90.00 0.00 1.00 90.00', 'المجموع الكلي 90.00'])), 'vendorName')).toBeUndefined();
+      expect(value(read(receipt(['בגדי הגפן', 'תיאור כמות מחיר', 'מכנסיים 90.00', 'סה"כ 90.00'])), 'vendorName')).toBe('בגדי הגפן');
+    });
+
+    it('a money row before any name ends the search', () => {
+      expect(value(read(receipt(['מכנסיים 90.00', 'חולצה', 'סה"כ 90.00'])), 'vendorName')).toBeUndefined();
+    });
+
+    it.each([['נפט בעמ MAN אלדור'], ['קומפנ\' בע"מ dina בן'], ['Aya נפט MAN אלדור']])('a garbled name (%s) gives no vendor, and no row under it is guessed', (garbled) => {
+      expect(value(read(receipt([garbled, 'סניף רמת גן', `ח.פ ${REG_VALID_COMPANY}`, 'סה"כ 10.00'])), 'vendorName')).toBeUndefined();
+    });
+
+    it.each([['Partner פרטנר'], ['סופר-פארם Super-Pharm'], ['Super-Pharm בע"מ'], ['שופרסל Deal רמת גן'], ['שופרסל בע"מ']])('a real name with Latin in it (%s) is still read', (name) => {
+      expect(value(read(receipt([name, 'סה"כ 10.00'])), 'vendorName')).toBe(name);
     });
   });
 });

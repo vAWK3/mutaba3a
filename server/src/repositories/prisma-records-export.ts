@@ -43,7 +43,7 @@ type Columns<R> = { [K in keyof R]-?: true };
 
 const cols = <R>() => <S extends Columns<R>>(select: S & Record<Exclude<keyof S, keyof R>, never>) => select;
 
-const CUSTOMER = cols<CustomerRecord>()({ id: true, organizationId: true, name: true, email: true, phone: true, notes: true, status: true, vatTreatment: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
+const CUSTOMER = cols<CustomerRecord>()({ id: true, organizationId: true, name: true, email: true, phone: true, notes: true, status: true, vatTreatment: true, taxId: true, address: true, documentsPreference: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 const PROJECT = cols<ProjectRecord>()({ id: true, organizationId: true, customerId: true, name: true, currency: true, status: true, vatTreatment: true, archivedAt: true, version: true, createdAt: true, updatedAt: true });
 const EXTERNAL_REFERENCE = cols<ExternalReferenceRecord>()({ id: true, organizationId: true, provider: true, entityType: true, entityId: true, externalId: true, createdAt: true });
 const VAT_RATE = cols<VatRateRecord>()({ id: true, organizationId: true, rateBasisPoints: true, effectiveFrom: true, createdAt: true });
@@ -66,7 +66,7 @@ const RETAINER_CHARGE = cols<RetainerChargeRecord>()({
 const RECEIVABLE = cols<ReceivableRecord>()({
   id: true, organizationId: true, customerId: true, projectId: true, agreementId: true, origin: true, originId: true, currency: true, netMinor: true,
   vatMinor: true, grossMinor: true, paidMinor: true, creditedMinor: true, vatTreatment: true, vatRateBasisPoints: true, title: true, dueDate: true,
-  postingDate: true, postedAt: true, status: true, createdByUserId: true, deletedAt: true, number: true, version: true, createdAt: true,
+  postingDate: true, postedAt: true, status: true, createdByUserId: true, deletedAt: true, notForInvoice: true, number: true, version: true, createdAt: true,
 });
 const SUPPLEMENT = cols<SupplementRecord>()({ id: true, organizationId: true, agreementId: true, amountMinor: true, resultingAmountMinor: true, distribution: true, effectiveDate: true, description: true, reasonCode: true, appliedGrossMinor: true, creditedMinor: true, requestId: true, createdAt: true });
 const RETAINER_VERSION = cols<RetainerVersionRecord>()({
@@ -76,7 +76,7 @@ const RETAINER_VERSION = cols<RetainerVersionRecord>()({
 const PAYMENT = cols<PaymentRecord>()({
   id: true, organizationId: true, customerId: true, projectId: true, number: true, currency: true, amountMinor: true, allocatedMinor: true, receivedOn: true,
   method: true, reference: true, receiptNumber: true, notes: true, origin: true, status: true, replacesPaymentId: true, reversedAt: true, reversalReason: true, reversalReasonCode: true, captureSource: true,
-  createdByUserId: true, requestId: true, version: true, createdAt: true, updatedAt: true,
+  notForInvoice: true, createdByUserId: true, requestId: true, version: true, createdAt: true, updatedAt: true, clientRequestKey: true,
 });
 // MUT-444 (R14, TD-287): the records file holds the live ledger; `releasedAt` is server-only and released rows stay out.
 const ALLOCATION = cols<Omit<AllocationRecord, 'releasedAt'>>()({ id: true, organizationId: true, paymentId: true, receivableId: true, amountMinor: true, createdAt: true });
@@ -118,6 +118,8 @@ const VENDOR = cols<VendorRecord>()({
   id: true, organizationId: true, canonicalName: true, registrationNo: true, phone: true, email: true, lastCategoryId: true, lastCurrency: true, lastVatTreatment: true, lastVatRateBasisPoints: true, lastUsedAt: true, version: true,
   createdAt: true, updatedAt: true,
 });
+/** MUT-643: a refund with its sources (the one nested read: a refund is never without them). */
+const REFUND = { id: true, organizationId: true, customerId: true, currency: true, amountMinor: true, refundedOn: true, method: true, reference: true, issuedDocumentId: true, requestId: true, createdByUserId: true, createdAt: true, sources: { select: { paymentId: true, amountMinor: true }, orderBy: { paymentId: 'asc' } } } as unknown as Record<string, true>;
 const VENDOR_NAME = cols<VendorNameRecord>()({ id: true, organizationId: true, vendorId: true, name: true, nameKey: true, createdAt: true });
 const INBOX_ENTRY = cols<InboxEntryRecord>()({ id: true, userId: true, kind: true, amountMinor: true, currency: true, occurredOn: true, note: true, captureSource: true, version: true, createdAt: true, updatedAt: true });
 
@@ -162,6 +164,7 @@ function idKeyed(prisma: PrismaClient): { [F in Exclude<ProfileExportField, 'cou
     expGroups: { delegate: d(prisma.expenseGroup), select: EXPENSE_GROUP },
     vendors: { delegate: d(prisma.vendor), select: VENDOR },
     vendorNames: { delegate: d(prisma.vendorName), select: VENDOR_NAME },
+    refunds: { delegate: d(prisma.refund), select: REFUND },
   };
 }
 

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { test, expect } from '../../support/qa';
-import { OFFICE_A, OFFICE_B, customer, office } from '../../support/portal';
+import { MODE_KEY, OFFICE_A, OFFICE_B, customer, office } from '../../support/portal';
 import { switchLanguage } from '../../support/you';
 import { FakeApi, category, expense, payment, todayInJerusalem, type FakeApiSeed, type StubReportRecords } from '../../support/portalApi';
 
@@ -218,6 +218,15 @@ test('The All profiles switch is off by default; on, it combines every profile a
     await expect(toggle).toHaveAttribute('aria-checked', 'true');
     await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪2,000');
   });
+
+  // MUTABA3A-WEB-9: switching back off once crashed the page (the render that dropped Studio still had its report)
+  await step('Turn All profiles off again: Personal alone, no error', async () => {
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-checked', 'false');
+    await expect(page).not.toHaveURL(/scope=all/);
+    await expect(hero(page).locator('.hp-report-received .sr-only')).toHaveText('₪1,500');
+    await expect(page.getByRole('region', { name: 'Who paid' }).getByText('Studio')).toHaveCount(0);
+  });
 });
 
 test('In All profiles a profile that fails is named with its own Retry, and the rest still renders', { tag: '@portal.reports.profile-fails' }, async ({ page, step }) => {
@@ -281,6 +290,8 @@ test('Signed out on this device, Reports runs on the records kept in the browser
     await route.fulfill({ status: 401, contentType: 'application/json', body: JSON.stringify({ error: { code: 'UNAUTHENTICATED', message: 'Sign in' } }) });
   });
   await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [PORTAL_LANGUAGE_KEY, 'en'] as const);
+  // A device that has used the portal signed out says so; a first visit would get the welcome (MUT-513) instead.
+  await page.context().addInitScript(([key, value]) => localStorage.setItem(key, value), [MODE_KEY, 'local'] as const);
 
   await step('Signed out, open Reports', async () => {
     await page.goto('/');
@@ -434,3 +445,17 @@ test('Where it went names a seeded category in the portal’s language, and swit
   });
 });
 
+
+test('On an invoicing profile Reports splits income into Invoice income and Not for invoice', { tag: '@portal.reports.invoice-split' }, async ({ page, step }) => {
+  const api = world({ reports: { [OFFICE_A]: thisMonth() }, invoicing: 'ready', invoiceSplit: [{ currency: 'ILS', invoiceIncome: '1000.00', notForInvoice: '250.00', all: '1250.00' }] });
+
+  await step('Open Reports on Nour Studio', async () => {
+    await api.open(page, reportsPath());
+  });
+
+  await step('The income card shows the split and its sum', async () => {
+    const card = page.getByTestId('invoice-split');
+    await expect(card.getByRole('heading', { name: 'Income and invoices' })).toBeVisible();
+    await expect(card.getByRole('definition')).toHaveText(['₪1,000.00', '₪250.00', '₪1,250.00']);
+  });
+});

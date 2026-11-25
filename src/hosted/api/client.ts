@@ -1,5 +1,6 @@
 import type { components, paths } from './schema';
 import type { LocalBackend } from '../session/localBackendContract';
+import type { ServerErrorCode } from './serverErrorCodes';
 import { currentMode, setMode, setUnhintedMode } from '../session/mode';
 
 /**
@@ -91,6 +92,40 @@ export type MalafatSuggestionsChange = Schemas['MalafatSuggestionsChange'];
 export type Currency = Schemas['Currency'];
 export type Customer = Schemas['Customer'];
 export type CreateCustomerRequest = Schemas['CreateCustomerRequest'];
+export type UpdateCustomerRequest = Schemas['UpdateCustomerRequest'];
+export type BusinessLookup = Schemas['BusinessLookup'];
+export type IssuerDetails = Schemas['IssuerDetails'];
+export type IssuerDetailsRequest = Schemas['IssuerDetailsRequest'];
+export type IssuerDefaultsRequest = Schemas['IssuerDefaultsRequest'];
+export type IssuingSetup = Schemas['IssuingSetup'];
+export type IssuingNumberingRequest = Schemas['IssuingNumberingRequest'];
+export type IssuingSettings = Schemas['IssuingSettings'];
+export type IssuedDocument = Schemas['IssuedDocument'];
+export type IssuedDocumentPage = Schemas['IssuedDocumentPage'];
+export type IssuedDocumentListItem = Schemas['IssuedDocumentListItem'];
+/** MUT-664: the ledger card (כרטסת). */
+export type CustomerStatement = Schemas['CustomerStatement'];
+export type StatementLine = Schemas['StatementLine'];
+export type StatementDocumentTag = Schemas['StatementDocumentTag'];
+export type IssuedDocumentPreview = Schemas['IssuedDocumentPreview'];
+export type IssueDocumentRequest = Schemas['IssueDocumentRequest'];
+export type IssuedDocType = Schemas['IssuedDocType'];
+export type IssuingStyles = Schemas['IssuingStyles'];
+// MUT-660: documents due.
+export type DocumentsDue = Schemas['DocumentsDue'];
+export type DueItem = Schemas['DueItem'];
+export type DueKind = Schemas['DueKind'];
+export type DueReason = Schemas['DueReason'];
+export type DueEntryRef = Schemas['DueEntryRef'];
+export type IssueDueResult = Schemas['IssueDueResult'];
+/** The component is nullable where a client has none of its own; a choice itself never is. */
+export type DocumentsPreference = NonNullable<Schemas['DocumentsPreference']>;
+export type InvoiceSplitRow = Schemas['InvoiceSplitRow'];
+export type NotForInvoiceEntry = Schemas['NotForInvoiceEntry'];
+export type ExternalInvoice = Schemas['ExternalInvoice'];
+export type ExternalInvoiceReading = Schemas['ExternalInvoiceReading'];
+export type ExternalEntryKind = Schemas['ExternalEntryKind'];
+export type TaxAuthorityStatus = Schemas['TaxAuthorityStatus'];
 export type CreateProjectRequest = Schemas['CreateProjectRequest'];
 export type Project = Schemas['Project'];
 export type Receivable = Schemas['Receivable'];
@@ -128,6 +163,10 @@ export type ReceiptDisposition = 'attachment' | 'inline';
 export type ApproveReceiptRequest = Schemas['ApproveReceiptRequest'];
 export type ApproveReceiptResponse = Schemas['ApproveReceiptResponse'];
 export type MoveReceiptResponse = Schemas['MoveReceiptResponse'];
+/** MUT-589 (ADR-255): moving a saved expense, with its receipts. */
+export type ExpenseMovePreview = Schemas['ExpenseMovePreview'];
+export type ExpenseMoveChange = Schemas['ExpenseMoveChange'];
+export type MoveExpenseResponse = Schemas['MoveExpenseResponse'];
 export type CreateLibraryReceiptUploadRequest = Schemas['CreateLibraryReceiptUploadRequest'];
 export type Conversion = Schemas['Conversion'];
 export type CreateConversionRequest = Schemas['CreateConversionRequest'];
@@ -151,6 +190,8 @@ export type CreditsResponse = Schemas['CreditsResponse'];
 export type UpdateIncomeRequest = Schemas['UpdateIncomeRequest'];
 export type UpdatePaymentRequest = Schemas['UpdatePaymentRequest'];
 export type SettleReceivableResponse = Schemas['SettleReceivableResponse'];
+export type SettleAndIssueRequest = Schemas['SettleAndIssueRequest'];
+export type SettleAndIssueResponse = Schemas['SettleAndIssueResponse'];
 export type ProfileType = Schemas['ProfileType'];
 export type CreateProfileRequest = Schemas['CreateProfileRequest'];
 export type UpdateProfileRequest = Schemas['UpdateProfileRequest'];
@@ -159,8 +200,16 @@ export type ProfileTypeChange = Schemas['ProfileTypeChange'];
 export type SetupLinkCheck = Schemas['SetupLinkCheckResponse'];
 /** MUT-368: which self-service doors the server opens. */
 export type SelfServiceDoors = Schemas['SelfServiceDoors'];
+/** MUT-596: Sign in with Malafat's next step, or the person signed in. */
+export type MalafatSignInState = Schemas['MalafatSignInState'];
+export type MalafatConsentRequest = Schemas['MalafatConsentRequest'];
+/** MUT-596: Malafat acting for the person in one firm (You › Connected apps). */
+export type ConnectedApp = Schemas['ConnectedApp'];
+/** MUT-596: who is on a profile, read-only; a Malafat firm's seats. */
+export type ProfileMembers = Schemas['ProfileMembers'];
 export type SignupRequest = Schemas['SignupRequest'];
 export type AccountRecoveryRequest = Schemas['AccountRecoveryRequest'];
+export type SignInCodeRequest = Schemas['SignInCodeRequest'];
 /** MUT-368: the redeem's answer; `status` PENDING_REVIEW is a signup waiting for the operator (MUT-367). */
 export type SetupLinkRedeemed = Schemas['SetupLinkRedeemResponse'];
 export type BillingOverview = Schemas['BillingOverview'];
@@ -204,7 +253,6 @@ export type FirmRequest = Schemas['FirmRequest'];
 /** Why a setup link can't be used (MUT-235): the check's non-valid states, and `details.state` on a 410. */
 export type SetupLinkRefusal = Exclude<SetupLinkCheck['state'], 'valid'>;
 
-type ServerErrorCode = Schemas['ErrorEnvelope']['error']['code'];
 /**
  * Signed out (MUT-286), the local backend's own failures, never dressed up as NETWORK:
  * - `LOCAL_FORMAT_TOO_NEW`: another tab saved this device's records with a newer build; reload (D1);
@@ -352,16 +400,20 @@ interface RequestOptions {
   idempotencyKey?: string;
   /** The `version` read before an optimistic PATCH; sent as `If-Match`, refused with 409 on a stale value. */
   ifMatchVersion?: string;
+  /** MUT-646: a file sent as it is (the logo), in place of a JSON `body`. */
+  file?: Blob;
 }
 
 const SIGN_IN_PATH = '/v1/sessions';
 /** MUT-115: passkey sign-in; like the password sign-in, its 401 is a refused credential, never an ended session. */
 const PASSKEY_SIGN_IN_PATH = '/v1/sessions/passkey';
+/** MUT-618: sign-in with an emailed code; its 401s (wrong, expired, too many tries) are refused codes, never an ended session. */
+const CODE_SIGN_IN_PATH = '/v1/sessions/code';
 /** MUT-460: the server's largest page (server/src/pagination.ts MAX_LIMIT). */
 const OPERATOR_LIST_LIMIT = 200;
 /** MUT-527: the account list's page (the server's default; at most 100). */
 const OPERATOR_ACCOUNTS_PAGE = 50;
-const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH]);
+const SIGN_IN_PATHS: ReadonlySet<string> = new Set([SIGN_IN_PATH, PASSKEY_SIGN_IN_PATH, CODE_SIGN_IN_PATH]);
 const CHANGE_PASSWORD_PATH = '/v1/me/password';
 /**
  * Signing in and redeeming a setup link always talk to the server, whatever the mode (brief §2.6). So do the
@@ -370,7 +422,10 @@ const CHANGE_PASSWORD_PATH = '/v1/me/password';
  */
 // MUT-434: connecting an agent (/v1/oauth) is the server's alone: the agent talks to the hosted service, never this page.
 // MUT-562: an accountant invite and a share link are the server's too: public pages a stranger opens, signed in or not.
-const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|passkey-challenges|oauth|accountant-invites|share-links)(\/|\?|$)/;
+// MUT-596: Sign in with Malafat (office, exchange, link, consent) is the server's: the page is signed out while it runs.
+// MUT-618: asking for an emailed sign-in code is the server's: the in-page backend has no mailer.
+// MUT-535: the monthly summary's opt-out page is the server's: it changes an account's mail, signed in here or not.
+const ALWAYS_REMOTE = /^\/v1\/(sessions|account-setup|self-service|signups|account-recovery|sign-in-codes|passkey-challenges|oauth|accountant-invites|share-links|auth\/malafat|mail-preferences)(\/|\?|$)/;
 /**
  * MUT-562: a share link's visitor routes answer 401 SHARE_VIEW_EXPIRED when the visitor's 8 hours end. That is the
  * link page's own PIN-again state, never the end of whoever is signed in on this browser.
@@ -523,6 +578,7 @@ type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 export async function send(method: Method, path: string, options: RequestOptions & { accept?: string } = {}): Promise<Response> {
   const headers: Record<string, string> = { Accept: options.accept ?? 'application/json' };
   if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+  if (options.file) headers['Content-Type'] = options.file.type;
   if (options.profileId) headers['X-Mutaba3a-Profile'] = options.profileId;
   if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
   if (options.ifMatchVersion) headers['If-Match'] = options.ifMatchVersion;
@@ -534,7 +590,7 @@ export async function send(method: Method, path: string, options: RequestOptions
     method,
     credentials: 'same-origin',
     headers,
-    body: options.body === undefined ? undefined : JSON.stringify(options.body),
+    body: options.file ?? (options.body === undefined ? undefined : JSON.stringify(options.body)),
     signal: options.signal,
   };
   const isAbort = (cause: unknown) => cause instanceof DOMException && cause.name === 'AbortError';
@@ -666,6 +722,20 @@ export const api = {
     request<SetupLinkCheck>('POST', '/v1/account-setup/check', { body: { token }, signal }),
   redeemSetupLink: (body: Schemas['SetupLinkRedeemRequest'], signal?: AbortSignal) =>
     request<SetupLinkRedeemed>('POST', '/v1/account-setup', { body, signal }),
+  /** MUT-596 (MUT-595): whether an address is a Malafat office (404 when not, or when Sign in with Malafat is off). */
+  malafatOffice: (tenant: string, signal?: AbortSignal) => request<Schemas['MalafatOffice']>('GET', '/v1/auth/malafat/office', { query: { tenant }, signal }),
+  /** MUT-596: the result code Malafat's return carries in the fragment; single use. A signed_in answer sets the session cookie. */
+  malafatExchange: (result: string) => request<MalafatSignInState>('POST', '/v1/auth/malafat/exchange', { body: { result } }),
+  /** MUT-596: prove the MTB3A account that has the email, with its password or a passkey assertion. */
+  malafatLink: (body: Schemas['MalafatLinkRequest']) => request<MalafatSignInState>('POST', '/v1/auth/malafat/link', { body }),
+  /** MUT-596: consent; creates or links the account and signs in. */
+  malafatConsent: (body: MalafatConsentRequest) => request<MalafatSignInState>('POST', '/v1/auth/malafat/consent', { body }),
+  /** MUT-596 (MUT-593): Malafat's connections, one per firm (404 while Malafat access is off on this server). */
+  listConnectedApps: (signal?: AbortSignal) => request<Schemas['ConnectedAppList']>('GET', '/v1/me/connected-apps', { signal }),
+  /** MUT-596: ends every connection of that app in that firm; its next call fails. */
+  revokeConnectedApp: (grantId: string) => request<void>('DELETE', `/v1/me/connected-apps/${encodeURIComponent(grantId)}`),
+  /** MUT-596: who is on the profile, read-only (a Malafat firm's seats, managed in Malafat). */
+  profileMembers: (profileId: string, signal?: AbortSignal) => request<ProfileMembers>('GET', '/v1/members', { profileId, signal }),
   /** MUT-368: which self-service doors this server opens (public; says nothing about any account). */
   selfService: (signal?: AbortSignal) => request<SelfServiceDoors>('GET', '/v1/self-service', { signal }),
   /** MUT-366/368: always 202 {status:"sent"} for an address, whatever exists; 404 while signup is closed. */
@@ -673,8 +743,19 @@ export const api = {
   /** MUT-366/368: always 202 {status:"sent"}; mails a link only to an account that can use one. */
   recoverAccount: (body: AccountRecoveryRequest, signal?: AbortSignal) =>
     request<Schemas['SelfServiceAccepted']>('POST', '/v1/account-recovery', { body, signal }),
+  /** MUT-618: always 202 {status:"sent"}; mails a code only to an account that could sign in. */
+  requestSignInCode: (body: SignInCodeRequest, signal?: AbortSignal) => request<Schemas['SelfServiceAccepted']>('POST', '/v1/sign-in-codes', { body, signal }),
+  /** MUT-618: 401 SIGN_IN_CODE_WRONG / _EXPIRED / _TOO_MANY_TRIES, 403 ACCOUNT_UNDER_REVIEW, 429. */
+  signInWithCode: (body: Schemas['CodeSignInRequest']) => request<OkJson<'/v1/sessions/code', 'post'>>('POST', CODE_SIGN_IN_PATH, { body }),
   /** MUT-191: off replaces; dismissals are added to what the account holds. */
   changeMalafatSuggestions: (body: MalafatSuggestionsChange) => request<MalafatSuggestions>('PATCH', '/v1/me/malafat-suggestions', { body }),
+  /** MUT-535 (D7): whether the monthly summary mail reaches the signed-in person (You › Account's switch). */
+  monthlySummaryMail: (signal?: AbortSignal) => request<Schemas['MonthlySummaryMail']>('GET', '/v1/me/monthly-summary-mail', { signal }),
+  setMonthlySummaryMail: (on: boolean) => request<Schemas['MonthlySummaryMail']>('PATCH', '/v1/me/monthly-summary-mail', { body: { on } }),
+  /** MUT-535 (D8): the mail's opt-out page; the token from the link's fragment, in the body. 404: the link no longer works. */
+  mailPreference: (token: string, on: boolean) => request<Schemas['MonthlySummaryMail']>('POST', '/v1/mail-preferences/monthly-summary', { body: { token, on } }),
+  /** ADR-279: the come-back offer's unsubscribe page (promotional mail only). */
+  offerMailPreference: (token: string, on: boolean) => request<Schemas['OfferMail']>('POST', '/v1/mail-preferences/offers', { body: { token, on } }),
   /** MUT-418: answer the first-run trial step, or hide the Home trial banner for 3 days. */
   changeTrialPrompt: (action: TrialPromptAction) => request<TrialPrompt>('PATCH', '/v1/me/trial-prompt', { body: { action } }),
   /** MUT-324: the signed-in person accepts the current terms, read in `locale`. Idempotent per version. */
@@ -705,6 +786,97 @@ export const api = {
   /** MUT-286: the client picker's Add «name», on a profile the person owns (session `customers:write`, MUT-65). */
   createCustomer: (profileId: string, body: CreateCustomerRequest, idempotencyKey: string) =>
     request<Customer>('POST', '/v1/customers', { profileId, body, idempotencyKey }),
+  /** MUT-642: a client's VAT or company number and address, with the version read (If-Match). */
+  updateCustomer: (profileId: string, customerId: string, version: number, body: UpdateCustomerRequest) =>
+    request<Customer>('PATCH', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId, body, ifMatchVersion: String(version) }),
+  /** MUT-642: a company or nonprofit by its number (hosted only: the signed-out portal has no lookup). */
+  businessLookup: (profileId: string, number: string) =>
+    request<BusinessLookup>('GET', '/v1/business-lookup', { profileId, query: { number } }),
+  /** MUT-646: the invoicing setup. Every call is 404 where issuing is off for the profile (and always signed out). */
+  issuingSetup: (profileId: string, signal?: AbortSignal) => request<IssuingSetup>('GET', '/v1/issuing/setup', { profileId, signal }),
+  issuingIntroSeen: (profileId: string) => request<IssuingSetup>('POST', '/v1/issuing/setup/intro-seen', { profileId }),
+  issuer: (profileId: string, signal?: AbortSignal) => request<IssuerDetails>('GET', '/v1/issuer', { profileId, signal }),
+  /** No version creates the details; a version replaces them (409 VERSION_MISMATCH when stale). */
+  saveIssuer: (profileId: string, version: number | null, body: IssuerDetailsRequest) =>
+    request<IssuerDetails>('PUT', '/v1/issuer', { profileId, body, ...(version === null ? {} : { ifMatchVersion: String(version) }) }),
+  saveIssuerDefaults: (profileId: string, version: number, body: IssuerDefaultsRequest) =>
+    request<IssuerDetails>('PUT', '/v1/issuer/defaults', { profileId, body, ifMatchVersion: String(version) }),
+  issuingSettings: (profileId: string, signal?: AbortSignal) => request<IssuingSettings>('GET', '/v1/issuing/settings', { profileId, signal }),
+  answerNumbering: (profileId: string, body: IssuingNumberingRequest) => request<IssuingSetup>('PUT', '/v1/issuing/numbering', { profileId, body }),
+  /** The current logo's bytes; 404 when there is none. */
+  issuerLogo: async (profileId: string, signal?: AbortSignal) => (await send('GET', '/v1/issuer/logo', { profileId, signal, accept: 'image/png, image/jpeg' })).blob(),
+  /** A PNG or JPEG of at most 256 KB (413 beyond; 422 LOGO_NOT_AN_IMAGE when it isn't one). */
+  saveIssuerLogo: (profileId: string, file: Blob) => request<void>('PUT', '/v1/issuer/logo', { profileId, file }),
+  removeIssuerLogo: (profileId: string) => request<void>('DELETE', '/v1/issuer/logo', { profileId }),
+  /** MUT-570: issued documents. Every call is 404 where issuing is off for the profile. */
+  /** MUT-571: the profile's Tax Authority connection; 404 where this server has none configured. */
+  taxAuthorityStatus: (profileId: string, signal?: AbortSignal) => request<TaxAuthorityStatus>('GET', '/v1/issuing/tax-authority', { profileId, signal }),
+  /** The Tax Authority's sign-in address for this profile (state signed, 10 minutes). */
+  taxAuthorityConnect: (profileId: string) => request<Schemas['TaxAuthorityConnect']>('POST', '/v1/issuing/tax-authority/connect', { profileId }),
+  taxAuthorityDisconnect: (profileId: string) => request<void>('DELETE', '/v1/issuing/tax-authority', { profileId }),
+  /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received (404 where issuing is off). */
+  externalInvoices: (profileId: string, entryKind: ExternalEntryKind, entryIds: readonly string[], signal?: AbortSignal) =>
+    request<Schemas['ExternalInvoiceList']>('GET', '/v1/issuing/external-invoices', { profileId, query: { entryKind, entryIds: entryIds.join(',') }, signal }),
+  /** Reads a file (number, date, total) without storing it. */
+  readExternalInvoice: (profileId: string, file: Blob) => request<ExternalInvoiceReading>('POST', '/v1/issuing/external-invoices/read', { profileId, file }),
+  attachExternalInvoice: (profileId: string, query: { entryKind: ExternalEntryKind; entryId: string; number: string; documentDate: string; filename: string }, file: Blob) =>
+    request<ExternalInvoice>('POST', '/v1/issuing/external-invoices', { profileId, query, file }),
+  externalInvoiceFile: (profileId: string, id: string) => request<Schemas['ExternalInvoiceFile']>('GET', `/v1/issuing/external-invoices/${encodeURIComponent(id)}/file`, { profileId }),
+  removeExternalInvoice: (profileId: string, id: string) => request<void>('DELETE', `/v1/issuing/external-invoices/${encodeURIComponent(id)}`, { profileId }),
+  issuingStyles: (profileId: string, signal?: AbortSignal) => request<IssuingStyles>('GET', '/v1/issuing/styles', { profileId, signal }),
+  /** MUT-664: one page of a client's ledger card in one currency (newest first for the portal). */
+  customerStatement: (profileId: string, customerId: string, query: Query<'/v1/customers/{customerId}/statement'>, signal?: AbortSignal) =>
+    request<CustomerStatement>('GET', `/v1/customers/${encodeURIComponent(customerId)}/statement`, { profileId, query, signal }),
+  issuedDocuments: (profileId: string, query: { customerId?: string; docType?: IssuedDocType; currency?: string; from?: string; to?: string; cursor?: string | null } = {}, signal?: AbortSignal) =>
+    request<IssuedDocumentPage>('GET', '/v1/issued-documents', { profileId, query: { ...query, limit: 50 }, signal }),
+  issuedDocument: (profileId: string, documentId: string, signal?: AbortSignal) =>
+    request<IssuedDocument>('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}`, { profileId, signal }),
+  /** The totals a document would have; nothing is written and no number is taken. */
+  previewDocument: (profileId: string, body: IssueDocumentRequest, signal?: AbortSignal) =>
+    request<IssuedDocumentPreview>('POST', '/v1/issued-documents/preview', { profileId, body, signal }),
+  /** Irreversible: the document takes the next number. A retry with the same key returns the same document. */
+  issueDocument: (profileId: string, body: IssueDocumentRequest, idempotencyKey: string) =>
+    request<IssuedDocument>('POST', '/v1/issued-documents', { profileId, body, idempotencyKey }),
+  /** MUT-660: what each income entry is due, grouped by client (or the entries marked not for invoice). */
+  documentsDue: (profileId: string, query: { view: 'to-issue' | 'not-for-invoice'; olderThanMonths: number }, signal?: AbortSignal) =>
+    request<DocumentsDue>('GET', '/v1/documents-due', { profileId, query, signal }),
+  documentsDueCount: (profileId: string, signal?: AbortSignal) => request<{ total: number }>('GET', '/v1/documents-due/count', { profileId, signal }),
+  /** Irreversible per item: one client's due documents, each issued in turn. */
+  issueDue: (profileId: string, body: { customerId: string | null; items: DueEntryRef[] }, idempotencyKey: string) =>
+    request<IssueDueResult>('POST', '/v1/documents-due/issue', { profileId, body, idempotencyKey }),
+  markNotForInvoice: (profileId: string, body: { items: DueEntryRef[]; value: boolean }, idempotencyKey: string) =>
+    request<{ changed: number }>('POST', '/v1/documents-due/not-for-invoice', { profileId, body, idempotencyKey }),
+  setEntryNotForInvoice: (profileId: string, entry: DueEntryRef, value: boolean, version: number) =>
+    request<NotForInvoiceEntry>('PUT', `/v1/${entry.kind === 'owed' ? 'receivables' : 'payments'}/${encodeURIComponent(entry.id)}/not-for-invoice`, { profileId, body: { value }, ifMatchVersion: String(version) }),
+  /** MUT-662 (D18): cancels a payment request with a record of its own; no Undo. The same key returns the same result. */
+  cancelPaymentRequest: (profileId: string, documentId: string, reason: string | null, idempotencyKey: string) =>
+    request<IssuedDocument>('POST', `/v1/issued-documents/${encodeURIComponent(documentId)}/cancel`, { profileId, body: { reason }, idempotencyKey }),
+  /** The draft PDF (watermarked), as a file. */
+  draftPdf: async (profileId: string, body: IssueDocumentRequest) =>
+    (await send('POST', '/v1/issued-documents/preview/pdf', { profileId, body, accept: 'application/pdf' })).blob(),
+  /**
+   * MUT-569: the uniform file (מבנה אחיד 1.31) for the documents dated `from`…`to`, as the OPENFRMT zip, with its counts
+   * and file name from the response headers.
+   */
+  uniformFile: async (profileId: string, query: { from: string; to: string; lang: 'ar' | 'en' }) => {
+    const response = await send('GET', '/v1/issuing/uniform-file', { profileId, query, accept: 'application/zip' });
+    const filename = /filename="([^"]+)"/.exec(response.headers.get('content-disposition') ?? '')?.[1] ?? `OPENFRMT-${query.from}_${query.to}.zip`;
+    return {
+      blob: await response.blob(),
+      filename,
+      // Not amounts: whole counts of documents and records.
+      // eslint-disable-next-line no-restricted-syntax
+      documents: Number.parseInt(response.headers.get('x-uniform-file-documents') ?? '0', 10),
+      // eslint-disable-next-line no-restricted-syntax
+      records: Number.parseInt(response.headers.get('x-uniform-file-records') ?? '0', 10),
+    };
+  },
+  /** A view copy: counts nothing (the original or a copy, as the record stands). */
+  viewPdf: async (profileId: string, documentId: string) =>
+    (await send('GET', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, accept: 'application/pdf' })).blob(),
+  /** A produced copy, counted: the first is the original. The key makes a retry return the same copy. */
+  producePdf: async (profileId: string, documentId: string, idempotencyKey: string) =>
+    (await send('POST', `/v1/issued-documents/${encodeURIComponent(documentId)}/pdf`, { profileId, body: { channel: 'DOWNLOAD' }, idempotencyKey, accept: 'application/pdf' })).blob(),
   customer: (profileId: string, customerId: string) =>
     request<Get<'/v1/customers/{customerId}'>>('GET', `/v1/customers/${encodeURIComponent(customerId)}`, { profileId }),
   projects: (profileId: string, query: Query<'/v1/projects'> = {}) =>
@@ -740,6 +912,12 @@ export const api = {
     request<Expense>('PATCH', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId, body, ifMatchVersion: version }),
   deleteExpense: (profileId: string, expenseId: string) =>
     request<void>('DELETE', `/v1/expenses/${encodeURIComponent(expenseId)}`, { profileId }),
+  /** MUT-589 (ADR-255): what moving the expense to `targetProfileId` would change; the move's own gates. */
+  expenseMovePreview: (profileId: string, expenseId: string, targetProfileId: string, signal?: AbortSignal) =>
+    request<ExpenseMovePreview>('GET', `/v1/expenses/${encodeURIComponent(expenseId)}/move-preview`, { profileId, query: { profileId: targetProfileId }, signal }),
+  /** MUT-589: the expense with its receipts to another profile; the attempt's Idempotency-Key, as the receipt move. */
+  moveExpense: (profileId: string, expenseId: string, targetProfileId: string, expectedVersion: number, idempotencyKey: string) =>
+    request<MoveExpenseResponse>('POST', `/v1/expenses/${encodeURIComponent(expenseId)}/move`, { profileId, body: { profileId: targetProfileId, expectedVersion }, idempotencyKey }),
 
   // MUT-175: Reports names archived categories too (`includeArchived: 'true'`)
   expenseCategories: (profileId: string, query: Query<'/v1/expense-categories'> = {}) =>
@@ -814,6 +992,9 @@ export const api = {
     request<IncomeResponse>('POST', '/v1/income', { profileId, body, idempotencyKey }),
   settleReceivable: (profileId: string, receivableId: string, body: SettleReceivableRequest, idempotencyKey: string) =>
     request<SettleReceivableResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle`, { profileId, body, idempotencyKey }),
+  /** MUT-661: the payment and its document in one step, under the one Idempotency-Key. */
+  settleAndIssue: (profileId: string, receivableId: string, body: SettleAndIssueRequest, idempotencyKey: string) =>
+    request<SettleAndIssueResponse>('POST', `/v1/receivables/${encodeURIComponent(receivableId)}/settle-and-issue`, { profileId, body, idempotencyKey }),
   // MUT-453: correcting money a person recorded. Both carry the attempt's Idempotency-Key.
   reversePayment: (profileId: string, paymentId: string, body: ReversePaymentRequest, idempotencyKey: string) =>
     request<Payment>('POST', `/v1/payments/${encodeURIComponent(paymentId)}/reverse`, { profileId, body, idempotencyKey }),

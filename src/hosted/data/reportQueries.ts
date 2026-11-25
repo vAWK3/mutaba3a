@@ -61,9 +61,16 @@ function settle<T>(query: UseQueryResult<T>): Settled<T> {
   return { status, data: query.isError ? undefined : query.data, error: query.error, stale: query.isPlaceholderData };
 }
 
-/** A stable `combine` (an inline one re-runs every render and defeats structural sharing). */
-function combineSettled<T>(results: UseQueryResult<T>[]): Settled<T>[] {
-  return results.map(settle);
+/**
+ * A `combine` that is stable while the queries are, and new whenever they change (an inline one re-runs every render
+ * and defeats structural sharing). useQueries re-runs a stable `combine` only when its committed result changes, so in
+ * the render where the queries change it would hand back the previous queries' list: one profile too many, or another
+ * profile's report (MUTABA3A-WEB-9: Reports crashed on `profile.id` when "all profiles" was switched off).
+ */
+function useCombineFor<T, R>(keys: readonly (readonly unknown[])[], each: (result: UseQueryResult<T>) => R): (results: UseQueryResult<T>[]) => R[] {
+  const signature = JSON.stringify(keys);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- `signature` stands for the keys; `each` is module-level
+  return useMemo(() => (results: UseQueryResult<T>[]) => results.map(each), [signature]);
 }
 
 function useLoads<T>(profiles: readonly HostedProfile[], settled: Settled<T>[], keyOf: (profileId: string) => readonly unknown[]): ProfileLoad<T>[] {
@@ -74,6 +81,10 @@ function useLoads<T>(profiles: readonly HostedProfile[], settled: Settled<T>[], 
 /** The activity of each profile, in the profiles' order. */
 export function useReportActivity(profiles: readonly HostedProfile[], range: Range, bucket: 'day' | 'month', enabled = true): ProfileLoad<ActivitySummary>[] {
   const queryClient = useQueryClient();
+  const combine = useCombineFor<ActivitySummary, Settled<ActivitySummary>>(
+    profiles.map((profile) => activityKey(profile.id, range, bucket)),
+    settle,
+  );
   const settled = useQueries({
     queries: profiles.map((profile) => ({
       queryKey: activityKey(profile.id, range, bucket),
@@ -82,7 +93,7 @@ export function useReportActivity(profiles: readonly HostedProfile[], range: Ran
       placeholderData: () => lastActivityOf(queryClient, profile.id, bucket),
       enabled,
     })),
-    combine: combineSettled<ActivitySummary>,
+    combine,
   });
   const keyOf = useCallback((id: string) => activityKey(id, { from: range.from, to: range.to }, bucket), [range.from, range.to, bucket]);
   return useLoads(profiles, settled, keyOf);
@@ -92,13 +103,14 @@ const organizationKey = (profileId: string) => profileKey(profileId, 'summary', 
 
 /** Each profile's organization summary (Owed now, DR2): the same cache entries Overview reads. */
 export function useOwedSummaries(profiles: readonly HostedProfile[]): ProfileLoad<OrganizationSummary>[] {
+  const combine = useCombineFor<OrganizationSummary, Settled<OrganizationSummary>>(profiles.map((profile) => organizationKey(profile.id)), settle);
   const settled = useQueries({
     queries: profiles.map((profile) => ({
       queryKey: organizationKey(profile.id),
       queryFn: () => api.organizationSummary(profile.id),
       staleTime: STALE_MS,
     })),
-    combine: combineSettled<OrganizationSummary>,
+    combine,
   });
   return useLoads(profiles, settled, organizationKey);
 }
@@ -116,6 +128,10 @@ export interface NameDirectories {
 
 type CategoriesPage = Awaited<ReturnType<typeof api.expenseCategories>>;
 type Clients = Awaited<ReturnType<typeof everyPage<{ id: string; name: string }>>>;
+type Named<T> = { data: T | undefined; settled: boolean };
+function named<T>(r: UseQueryResult<T>): Named<T> {
+  return { data: r.data, settled: !r.isPending };
+}
 
 /**
  * Category (archived included) and client names per profile, for rows that
@@ -124,13 +140,15 @@ type Clients = Awaited<ReturnType<typeof everyPage<{ id: string; name: string }>
  */
 export function useNameDirectories(profiles: readonly HostedProfile[]): NameDirectories {
   const { language } = useLanguage();
+  const combineCategories = useCombineFor<CategoriesPage, Named<CategoriesPage>>(profiles.map((profile) => expenseCategoriesKey(profile.id, language, true)), named);
+  const combineClients = useCombineFor<Clients, Named<Clients>>(profiles.map((profile) => profileKey(profile.id, 'directory', 'customers')), named);
   const categories = useQueries({
     queries: profiles.map((profile) => ({
       queryKey: expenseCategoriesKey(profile.id, language, true),
       queryFn: () => api.expenseCategories(profile.id, { includeArchived: 'true' }),
       staleTime: STALE_MS,
     })),
-    combine: useCallback((results: UseQueryResult<CategoriesPage>[]) => results.map((r) => ({ data: r.data, settled: !r.isPending })), []),
+    combine: combineCategories,
   });
   const clients = useQueries({
     queries: profiles.map((profile) => ({
@@ -138,7 +156,7 @@ export function useNameDirectories(profiles: readonly HostedProfile[]): NameDire
       queryFn: () => everyPage((cursor) => api.customers(profile.id, { limit: DIRECTORY_LIMIT, cursor })),
       staleTime: STALE_MS,
     })),
-    combine: useCallback((results: UseQueryResult<Clients>[]) => results.map((r) => ({ data: r.data, settled: !r.isPending })), []),
+    combine: combineClients,
   });
   return useMemo(
     () => ({

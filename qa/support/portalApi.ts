@@ -51,6 +51,8 @@ export interface Logged {
   query: URLSearchParams;
   body: Json | null;
   headers: Record<string, string>;
+  /** MUT-646: a file sent as it is (the logo). */
+  raw: Buffer | null;
 }
 
 export type OnceAnswer = { status: number; body?: unknown } | 'abort';
@@ -277,6 +279,8 @@ export function expense(n: number, e: { amount: string; currency?: Currency; tit
     createdAt: STAMP,
     updatedAt: STAMP,
     receipts: [] as StubReceipt[],
+    /** MUT-589: the profile it is on; absent = every profile sees it (the fixtures before moves existed). */
+    profileId: undefined as string | undefined,
   };
 }
 
@@ -375,7 +379,7 @@ export const FX_RATES_ILS = {
 /** A per-currency block of the organization summary (OverviewPage, ClientsPage). */
 export function currencyBlock(
   currency: Currency,
-  b: { outstanding: string; overdue: string; proposed?: string; customers: { customerId: string; outstanding: string; overdue: string; lastPaymentOn?: string | null; status: string }[] },
+  b: { outstanding: string; overdue: string; proposed?: string; customers: { customerId: string; outstanding: string; overdue: string; lastPaymentOn?: string | null; status: string; daysOverdue?: number | null }[] },
 ) {
   return {
     currency,
@@ -394,6 +398,9 @@ export function currencyBlock(
       notYetDue: '0.00',
       unallocated: '0.00',
       lastPaymentOn: c.lastPaymentOn ?? null,
+      // MUT-657: home's Clients overdue says how late, as the server's row does
+      daysOverdue: c.daysOverdue ?? null,
+      oldestOverdueDueDate: null,
       status: c.status,
       proposals: [],
     })),
@@ -454,12 +461,16 @@ export interface FakeApiSeed {
   profiles: StubProfile[];
   /** How many customer(i) clients (Client 1, Client 2, …). */
   clients?: number;
+  /** MUT-661: every seeded client already has this documents preference (none: the ask-once question is asked). */
+  clientPreference?: string;
   projects?: ReturnType<typeof project>[];
   receivables?: StubReceivable[];
   payments?: StubPayment[];
   attachments?: ReturnType<typeof attachment>[];
   categories?: ReturnType<typeof category>[];
   expenses?: StubExpense[];
+  /** MUT-589: what GET /v1/expenses/{id}/move-preview lists (and the move answers); [] when absent. */
+  expenseMoveChanges?: Array<{ field: string; from: string | null; to: string | null }>;
   conversions?: StubConversion[];
   /** Expense groups (MUT-268) and their keep / leave-out marks, keyed `groupId:expenseId`. */
   groups?: StubGroup[];
@@ -470,6 +481,8 @@ export interface FakeApiSeed {
   fxRates?: Json | 'unavailable';
   summary?: ReturnType<typeof currencyBlock>[];
   customerSummaries?: ReturnType<typeof customerSummary>[];
+  /** MUT-642: GET /v1/business-lookup answers these by number; any other complete number is NOT_IN_REGISTRY. */
+  registry?: { taxId: string; kind: 'company' | 'nonprofit'; name: string; nameEn: string | null; status: string; active: boolean; address: string | null }[];
   /** Expenses a type change would leave uncategorized (GET …/type-change). */
   uncategorizedOnTypeChange?: number;
   signedIn?: boolean;
@@ -513,7 +526,68 @@ export interface FakeApiSeed {
   shareLinks?: Record<string, StubShareLink[]>;
   /** MUT-561 + MUT-314: period downloads on (the ticket and the stream answer); absent = off, every call 404. */
   periodDownloads?: boolean;
+  /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
+  invoicing?: boolean | 'ready' | 'details';
+  /** MUT-647: what reading an invoice issued elsewhere answers (default: a read invoice 3381 of 1,500.00). */
+  externalReading?: { read: boolean; number: string | null; documentDate: string | null; amount: string | null };
+  /** MUT-648: the business's "offer to issue after saving" (on unless false). */
+  offerAfterSave?: boolean;
+  /** MUT-660: the documents due (GET /v1/documents-due), with invoicing on; absent = nothing due. */
+  documentsDue?: DueSeed[];
+  /** MUT-660: Reports' income split (GET /v1/summaries/activity invoiceSplit); absent = not an invoicing profile's answer. */
+  invoiceSplit?: Array<{ currency: Currency; invoiceIncome: string; notForInvoice: string; all: string }>;
+  /**
+   * MUT-711: MTB3A can't request allocation numbers here (the Tax Authority is off or the profile not connected): a tax
+   * invoice of 5,000.00 or more before VAT previews a MANUAL allocation (every QA client counts as VAT-registered,
+   * 516123452) and is issued only with `manualAllocation` for the number it takes.
+   */
+  manualAllocation?: boolean;
 }
+
+/** MUT-660: one due document as the server lists it. `hasTaxDocument` makes marking it answer 409 HAS_TAX_DOCUMENT. */
+export interface DueSeed {
+  kind: 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT' | 'RECEIPT' | 'PAYMENT_REQUEST';
+  entry: { kind: 'owed' | 'received'; id: string; number: string };
+  customerId: string | null;
+  amount: string;
+  currency?: Currency;
+  date: string;
+  issuable?: boolean;
+  reason?: string | null;
+  hasTaxDocument?: boolean;
+}
+
+/** MUT-646: one profile's invoicing setup, as the server keeps it. */
+/** The server's same-day order of statement lines (statements/lines.ts LINE_RANK). */
+const LINE_RANK: Record<string, number> = { CHARGE: 0, CREDIT: 1, PAYMENT: 2, PAYMENT_REVERSAL: 3, REFUND: 4 };
+
+/** MUT-570/643: an Owed an issued document posted, in minor units; `credited` is what its credit notes took. */
+interface StubIssuedOwed {
+  gross: number;
+  outstanding: number;
+  credited?: number;
+  customerId: string | null;
+  docId?: string;
+  postingDate?: string;
+}
+
+interface StubIssuing {
+  issuer: (Record<string, Json> & { version: number }) | null;
+  logo: { type: string; bytes: Buffer } | null;
+  introSeen: boolean;
+  numbering: boolean;
+  defaults: boolean;
+  starts: Record<string, number>;
+  /** MUT-570: what this profile issued, newest first, and each Owed it posted (outstanding, in minor units). */
+  docs: Record<string, Json>[];
+  owed: Map<string, StubIssuedOwed>;
+  /** MUT-643: money credit notes gave back (minor units). */
+  refunds?: { id: string; customerId: string; amount: number; refundedOn: string; creditNoteId: string; method: string; reference: string | null }[];
+  /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received; a removed one leaves the list. */
+  external: (Record<string, Json> & { id: string; entryKind: string; entryId: string })[];
+}
+const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
+const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const;
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
 export interface StubShareLink {
@@ -697,6 +771,22 @@ export interface StubSetupLink {
   purpose?: 'SETUP' | 'RESET';
 }
 
+/** GET /v1/billing on a server with Stripe off and a person with no trial or plan (every field the schema requires). */
+const BILLING_OFF: Json = {
+  configured: false,
+  subscription: null,
+  canManage: false,
+  trial: null,
+  catalog: { ILS: null, USD: null },
+  countries: { consumer: [], consumerEverywhere: true, customTaxId: [] },
+  coveredProfileIds: [],
+  offer: null,
+  yearlySwitch: null,
+  comeback: null,
+  accountantPlan: null,
+  currentPlan: null,
+};
+
 export class FakeApi {
   readonly log: Logged[] = [];
   /** Requests that reached the storage bucket (receipt PUTs, signed-URL downloads). */
@@ -713,6 +803,7 @@ export class FakeApi {
   private readonly attachments;
   private readonly categories;
   private readonly expenses;
+  private readonly expenseMoveChanges;
   /** MUT-254 (A18): vendors as the server saves them, matched on a minimal exact key (case and spacing only). */
   private readonly vendors: { id: string; name: string; keys: Set<string>; lastCategoryId: string | null; lastCurrency: string | null; lastVat: VendorVatStub | null; lastUsed: number }[] = [];
   private readonly conversions;
@@ -722,6 +813,7 @@ export class FakeApi {
   private readonly fxRates: Json | 'unavailable';
   private readonly summary;
   private readonly customerSummaries;
+  private readonly registry;
   private readonly uncategorized: number;
   private readonly onceQueue: { method: string; path: RegExp; answer: OnceAnswer }[] = [];
   private serial = 500;
@@ -751,6 +843,18 @@ export class FakeApi {
   readonly shareLinks: Map<string, StubShareLink[]> | null;
   /** MUT-561 + MUT-314: period downloads on or off. */
   readonly periodDownloads: boolean;
+  /** MUT-646: per profile; null = issuing off. */
+  readonly issuing: Map<string, StubIssuing> | null;
+  /** MUT-570: the setup done (details and numbering), so issuing is open. */
+  private readonly invoicingReady: boolean;
+  /** MUT-722: the details saved and the introduction read, the numbering still unanswered (the setup can't issue). */
+  private readonly invoicingDetailsOnly: boolean;
+  private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
+  private readonly offerAfterSave: boolean;
+  private readonly manualAllocation: boolean;
+  /** MUT-660: what is due, and what was marked not for invoice. */
+  private readonly due: { items: DueSeed[]; marked: DueSeed[] };
+  private readonly invoiceSplit: FakeApiSeed['invoiceSplit'] | null;
 
   constructor(seed: FakeApiSeed) {
     this.reports = { ...(seed.reports ?? {}) };
@@ -759,13 +863,14 @@ export class FakeApi {
     this.billingStanding = seed.billingStanding ?? null;
     this.billingOverview = seed.billing ?? null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
-    this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => customer(i));
+    this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => ({ ...customer(i), ...(seed.clientPreference ? { documentsPreference: seed.clientPreference } : {}) }));
     this.projects = [...(seed.projects ?? [])];
     this.receivables = [...(seed.receivables ?? [])];
     this.payments = [...(seed.payments ?? [])];
     this.attachments = [...(seed.attachments ?? [])];
     this.categories = [...(seed.categories ?? [])];
     this.expenses = [...(seed.expenses ?? [])];
+    this.expenseMoveChanges = seed.expenseMoveChanges ?? [];
     this.conversions = [...(seed.conversions ?? [])];
     this.groups = [...(seed.groups ?? [])];
     this.marks = new Map(Object.entries(seed.marks ?? {}));
@@ -773,6 +878,7 @@ export class FakeApi {
     this.fxRates = seed.fxRates ?? FX_RATES_ILS;
     this.summary = seed.summary ?? [];
     this.customerSummaries = new Map((seed.customerSummaries ?? []).map((s) => [s.customerId, s]));
+    this.registry = new Map((seed.registry ?? []).map((r) => [r.taxId, r]));
     this.uncategorized = seed.uncategorizedOnTypeChange ?? 0;
     this.setupLink = seed.setupLink ?? null;
     this.currentPassword = seed.currentPassword ?? 'the-current-password';
@@ -782,6 +888,14 @@ export class FakeApi {
     this.accountantAccess = seed.accountantAccess ?? true;
     this.accountants = seed.accountants ? new Map(Object.entries(seed.accountants).map(([id, grants]) => [id, [...grants]])) : null;
     this.periodDownloads = seed.periodDownloads ?? false;
+    this.issuing = seed.invoicing ? new Map() : null;
+    this.invoicingReady = seed.invoicing === 'ready';
+    this.invoicingDetailsOnly = seed.invoicing === 'details';
+    this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
+    this.offerAfterSave = seed.offerAfterSave ?? true;
+    this.manualAllocation = seed.manualAllocation ?? false;
+    this.due = { items: [...(seed.documentsDue ?? [])], marked: [] };
+    this.invoiceSplit = seed.invoiceSplit ?? null;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
     for (const v of seed.vendors ?? []) this.linkVendor(v.name, v.categoryId ?? null, { currency: v.currency, vat: v.vat ?? null });
   }
@@ -794,7 +908,55 @@ export class FakeApi {
     const month = this.today.slice(0, 7);
     const lastDay = new Date(Date.UTC(Number(month.slice(0, 4)), Number(month.slice(5, 7)), 0)).toISOString().slice(0, 10);
     const bucket = q('bucket') === 'month' ? 'month' : 'day';
-    return json(activitySummary(records, q('from') ?? `${month}-01`, q('to') ?? lastDay, bucket, this.today));
+    const summary = activitySummary(records, q('from') ?? `${month}-01`, q('to') ?? lastDay, bucket, this.today);
+    return json(this.invoiceSplit ? { ...summary, invoiceSplit: this.invoiceSplit } : summary);
+  }
+
+  /** MUT-660: documents due, Issue all and the not-for-invoice marks, as the server answers them (in miniature). */
+  private dueAnswer(e: Logged, id: string | undefined, q: (key: string) => string | undefined) {
+    if (!this.issuing) return notFound();
+    const wire = (d: DueSeed, marked: boolean) => ({ kind: marked ? null : d.kind, entry: d.entry, customerId: d.customerId, amount: d.amount, currency: d.currency ?? 'ILS', date: d.date, issuable: !marked && d.issuable !== false, reason: marked ? null : (d.reason ?? null), appliesToDocumentId: null });
+    const body = (e.body ?? {}) as { items?: Array<{ kind: string; id: string }>; value?: boolean; customerId?: string | null };
+    const same = (d: DueSeed, r: { kind: string; id: string }) => d.entry.id === r.id && d.entry.kind === r.kind;
+    if (e.method === 'GET' && id === 'count') return json({ total: this.due.items.length });
+    if (e.method === 'GET' && !id) {
+      const view = q('view') === 'not-for-invoice' ? 'not-for-invoice' : 'to-issue';
+      const months = Number(q('olderThanMonths') ?? '0');
+      const cutoff = months ? (() => { const d = new Date(`${this.today}T00:00:00Z`); d.setUTCMonth(d.getUTCMonth() - months); return d.toISOString().slice(0, 10); })() : null;
+      const list = (view === 'to-issue' ? this.due.items : this.due.marked).filter((d) => !cutoff || d.date < cutoff);
+      const groups: Array<{ customerId: string | null; items: Json[] }> = [];
+      for (const d of list) {
+        let g = groups.find((x) => x.customerId === d.customerId);
+        if (!g) groups.push((g = { customerId: d.customerId, items: [] }));
+        g.items.push(wire(d, view === 'not-for-invoice') as unknown as Json);
+      }
+      return json({ view, groups, counts: { total: list.length, byKind: {} } });
+    }
+    if (e.method === 'POST' && id === 'issue') {
+      const results = (body.items ?? []).map((r) => {
+        const d = this.due.items.find((x) => same(x, r));
+        if (!d || d.issuable === false) return { entry: r, status: 'refused', reason: d ? (d.reason ?? 'NOT_ISSUABLE') : 'NOT_DUE', document: null };
+        this.due.items = this.due.items.filter((x) => x !== d);
+        return { entry: r, status: 'issued', reason: null, document: { id: `doc-${d.entry.id}`, docType: d.kind, number: this.due.items.length + 1, gross: d.amount } };
+      });
+      return json({ results, issued: results.filter((r) => r.status === 'issued').length });
+    }
+    if (e.method === 'POST' && id === 'not-for-invoice') {
+      const refs = body.items ?? [];
+      const from = body.value ? this.due.items : this.due.marked;
+      const blocked = body.value ? from.find((d) => refs.some((r) => same(d, r)) && d.hasTaxDocument) : undefined;
+      if (blocked) return json({ error: { code: 'CONFLICT', message: 'Has a tax document', details: { reason: 'HAS_TAX_DOCUMENT', kind: blocked.entry.kind, id: blocked.entry.id } } }, 409);
+      const moving = from.filter((d) => refs.some((r) => same(d, r)));
+      if (body.value) {
+        this.due.items = this.due.items.filter((d) => !moving.includes(d));
+        this.due.marked.push(...moving);
+      } else {
+        this.due.marked = this.due.marked.filter((d) => !moving.includes(d));
+        this.due.items.push(...moving);
+      }
+      return json({ changed: moving.length });
+    }
+    return notFound();
   }
 
   /** MUT-448: GET /v1/summaries/verdict, canned; with none given, every profile with nothing in this month. */
@@ -848,7 +1010,7 @@ export class FakeApi {
     return {
       ...body,
       // MUT-577: seeding accountants also gives this person the operator's accountant_access feature
-      user: { ...body.user, closure: this.closure, ...(this.accountants && this.accountantAccess ? { features: [...body.user.features, 'accountant_access'] } : {}) },
+      user: { ...body.user, closure: this.closure, features: [...body.user.features, ...(this.accountants && this.accountantAccess ? ['accountant_access'] : []), ...(this.issuing ? ['invoicing'] : [])] },
       // MUT-559: present only while the server has accountant access on (the portal's gate, MUT-561 D8)
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
@@ -896,7 +1058,7 @@ export class FakeApi {
     } catch {
       body = null;
     }
-    const entry = { method: request.method(), path: url.pathname, query: url.searchParams, body, headers: request.headers() };
+    const entry = { method: request.method(), path: url.pathname, query: url.searchParams, body, headers: request.headers(), raw: request.postDataBuffer() };
     this.log.push(entry);
     return entry;
   }
@@ -953,7 +1115,9 @@ export class FakeApi {
       return json({ error: { code: 'ACCOUNT_CLOSING', message: 'closing', details: { deleteAfter: this.closure.deleteAfter } } }, 403);
     }
     if (resource === 'me' && id === 'closure' && method === 'POST') return this.closeAnswer(e.body as { password?: string } | null);
-    if (resource === 'billing' && method === 'GET' && !id && this.billingOverview) return json(this.billingOverview);
+    // Unseeded, the real API's shape with Stripe off: no subscription, no trial, nothing sellable. (Falling through
+    // answered something without `subscription`, which Billing reads as a plan and crashed on, MUT-532.)
+    if (resource === 'billing' && method === 'GET' && !id) return json(this.billingOverview ?? BILLING_OFF);
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
       if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);
@@ -977,6 +1141,25 @@ export class FakeApi {
       this.customers.push(created);
       return json(created, 201);
     }
+    if (resource === 'issuer' || resource === 'issuing' || resource === 'issued-documents') return this.issuingAnswer(e, resource, id, sub, subId);
+    if (resource === 'documents-due') return this.dueAnswer(e, id, q);
+    // MUT-570: the Owed an issued tax invoice posted, as GET /v1/receivables/{id} reads it.
+    if (resource === 'receivables' && method === 'GET' && id && this.issuedOwed(id)) return json(this.issuedOwed(id));
+    if (resource === 'business-lookup' && method === 'GET') {
+      const found = this.registry.get(q('number') ?? '');
+      return found ? json(found) : json({ error: { code: 'NOT_FOUND', message: 'Not in the registry', details: { reason: 'NOT_IN_REGISTRY' } } }, 404);
+    }
+    if (resource === 'customers' && method === 'PATCH' && id) {
+      // MUT-642: the client's VAT or company number and address, If-Match the version read.
+      const at = this.customers.findIndex((c) => c.id === id);
+      if (at < 0) return notFound();
+      const current = this.customers[at];
+      if (e.headers['if-match'] !== String(current.version)) return json({ error: { code: 'CONFLICT', message: 'changed', details: { reason: 'VERSION_MISMATCH' } } }, 409);
+      const saved = { ...current, ...(e.body as object), version: current.version + 1 };
+      this.customers[at] = saved;
+      return json(saved);
+    }
+    if (resource === 'customers' && method === 'GET' && id && sub === 'statement') return this.statementAnswer(id, q);
     if (resource === 'customers' && method === 'GET') {
       if (!id) return page(this.customers);
       const found = this.customers.find((c) => c.id === id);
@@ -1018,6 +1201,48 @@ export class FakeApi {
     if (resource === 'conversions') return this.conversionAnswer(e, id);
     if (resource === 'receipts') return this.libraryAnswer(e, id, sub);
     return undefined;
+  }
+
+  /**
+   * MUT-664: GET /v1/customers/{id}/statement, the ledger card, from the fake's receivables and payments in one
+   * currency: charges debit, payments credit, running balance oldest first, served in the asked order. No documents.
+   */
+  private statementAnswer(customerId: string, q: (key: string) => string | undefined) {
+    const currency = q('currency') ?? 'ILS';
+    const toAmount = (minor: number) => toDecimal(minor);
+    const raw = [
+      ...this.receivables.filter((r) => r.customerId === customerId && r.currency === currency).map((r) => ({ id: r.id, date: r.postingDate as string, debit: toMinor(r.gross), credit: 0, line: { kind: 'CHARGE' as const, receivableId: r.id, number: (r as { number?: string }).number ?? null, outstanding: r.outstanding } })),
+      ...this.payments.filter((p) => p.customerId === customerId && p.currency === currency && p.status === 'POSTED').map((p) => ({ id: p.id, date: p.receivedOn as string, debit: 0, credit: toMinor(p.amount), line: { kind: 'PAYMENT' as const, paymentId: p.id, number: p.number } })),
+      ...this.issuedLines(customerId),
+    ].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : LINE_RANK[a.line.kind as string]! - LINE_RANK[b.line.kind as string]!));
+    let running = 0;
+    const lines = raw.map((x) => {
+      running += x.debit - x.credit;
+      return { ...x.line, id: x.id, date: x.date, projectId: null, debit: toAmount(x.debit), credit: toAmount(x.credit), runningBalance: toAmount(running), documents: [], due: null };
+    });
+    const closing = toAmount(running);
+    return json({ customerId, currency, projectId: null, from: q('from') ?? null, to: q('to') ?? null, asOf: '2026-10-15', openingBalance: '0.00', totals: { debit: toAmount(raw.reduce((s, x) => s + x.debit, 0)), credit: toAmount(raw.reduce((s, x) => s + x.credit, 0)) }, closingBalance: closing, lines: q('order') === 'desc' ? lines.reverse() : lines, nextCursor: null });
+  }
+
+  /**
+   * MUT-643: the ledger lines issued documents make for a client, in the order the server's classifier ranks them:
+   * an Owed's charge, a 320's payment, a credit note's credit, a refund's debit.
+   */
+  private issuedLines(customerId: string) {
+    type Raw = { id: string; date: string; debit: number; credit: number; line: Record<string, Json> };
+    const out: Raw[] = [];
+    for (const state of this.issuing?.values() ?? []) {
+      for (const d of [...state.docs].reverse()) {
+        if (d.customerId !== customerId) continue;
+        const gross = toMinor(String(d.gross));
+        const date = String(d.documentDate);
+        if (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT') out.push({ id: `${d.id}:charge`, date, debit: gross, credit: 0, line: { kind: 'CHARGE', receivableId: d.receivableId ?? null, number: String(d.number), outstanding: '0.00' } });
+        if (d.docType === 'TAX_INVOICE_RECEIPT') out.push({ id: `${d.id}:payment`, date, debit: 0, credit: gross, line: { kind: 'PAYMENT', paymentId: `${d.id}:payment`, number: String(d.number) } });
+        if (d.docType === 'CREDIT_NOTE') out.push({ id: `${d.id}:credit`, date, debit: 0, credit: gross, line: { kind: 'CREDIT', receivableId: null, number: null } });
+      }
+      for (const f of state.refunds ?? []) if (f.customerId === customerId) out.push({ id: f.id, date: f.refundedOn, debit: f.amount, credit: 0, line: { kind: 'REFUND', refundId: f.id, creditNoteId: f.creditNoteId, method: f.method, reference: f.reference, number: null } });
+    }
+    return out;
   }
 
   /** MUT-260: GET /v1/receipts (and counts, one, download), library uploads, approve and delete, as MUT-255 answers them. */
@@ -1078,6 +1303,26 @@ export class FakeApi {
     return undefined;
   }
 
+  /**
+   * MUT-589 (ADR-255): the expense move's preview (`expectedVersion` null) and the move, as the server answers them:
+   * the same profile 422, a profile not the person's 404, a lapsed target 402, a stale version 409; the move takes the
+   * expense and its filed library receipts to the target, with the seeded changes.
+   */
+  private expenseMoveAnswer(found: StubExpense, from: string | undefined, to: string, expectedVersion: number | null) {
+    if (to === from) return json({ error: { code: 'VALIDATION_FAILED', message: 'Same profile', details: { reason: 'SAME_PROFILE' } } }, 422);
+    const target = this.profiles.find((p) => p.stub.id === to)?.stub;
+    if (!target) return json({ error: { code: 'NOT_FOUND', message: 'No such profile', details: { reason: 'PROFILE_NOT_FOUND' } } }, 404);
+    const state = target.billing?.state;
+    if (state === 'READ_ONLY' || state === 'LOCKED') return json({ error: { code: 'SUBSCRIPTION_LAPSED', message: 'Lapsed', details: { profileId: to, state, source: target.billing?.source ?? 'NONE', until: null } } }, 402);
+    const filed = (this.libraryReceipts ?? []).filter((r) => r.expenseId === found.id && r.status === 'READY');
+    const changes = this.expenseMoveChanges;
+    if (expectedVersion === null) return json({ changes, receiptCount: filed.length + found.receipts.filter((r) => r.status === 'READY').length, expenseVersion: found.version });
+    if (expectedVersion !== found.version) return conflict('VERSION_MISMATCH');
+    Object.assign(found, { profileId: to, version: found.version + 1 });
+    for (const r of filed) Object.assign(r, { profileId: to, version: r.version + 1 });
+    return json({ expense: found, fromProfileId: from, changes });
+  }
+
   /** MUT-503: POST /v1/receipts/{id}/move, as the server answers it: filed 409, a lapsed target 402, else moved. */
   private moveAnswer(found: StubLibraryReceipt, from: string | undefined, to: string) {
     if (found.filingStatus === 'FILED') return json({ error: { code: 'CONFLICT', message: 'Already filed', details: { reason: 'RECEIPT_ALREADY_FILED', expenseId: found.expenseId } } }, 409);
@@ -1097,6 +1342,293 @@ export class FakeApi {
 
   /** MUT-237: a wrong current password is refused; a correct one replaces it, as the server does. */
   /** MUT-333: 30 days from now, as the server counts it. */
+  /**
+   * MUT-647: invoices issued elsewhere, the way the server answers them: read (nothing kept), attach (one per entry;
+   * 409 EXTERNAL_INVOICE_EXISTS, 409 ISSUED_HERE for an Owed MTB3A issued), list by entry, open the file, remove.
+   */
+  private externalAnswer(e: Logged, state: StubIssuing, sub: string | undefined, subId: string | undefined) {
+    const { method, query: q } = e;
+    if (sub === 'read' && method === 'POST') return json(this.externalReading);
+    if (!sub && method === 'POST') {
+      const entryKind = q.get('entryKind') ?? '';
+      const entryId = q.get('entryId') ?? '';
+      const owed = entryKind === 'OWED' ? this.receivables.find((r) => r.id === entryId) : undefined;
+      const received = entryKind === 'RECEIVED' ? this.payments.find((p) => p.id === entryId) : undefined;
+      if (!owed && !received) return notFound();
+      if (owed?.origin === 'ISSUED_DOCUMENT') return conflict('ISSUED_HERE');
+      const live = state.external.find((x) => x.entryKind === entryKind && x.entryId === entryId);
+      if (live) return json({ error: { code: 'CONFLICT', message: 'exists', details: { reason: 'EXTERNAL_INVOICE_EXISTS', externalInvoiceId: live.id } } }, 409);
+      const made = {
+        id: uid(0xe7, state.external.length + 1),
+        entryKind,
+        entryId,
+        attachmentId: uid(0xe8, state.external.length + 1),
+        number: q.get('number') ?? '',
+        documentDate: q.get('documentDate') ?? '',
+        filename: q.get('filename') ?? 'invoice',
+        mimeType: e.headers['content-type'] ?? 'application/pdf',
+        sizeBytes: e.raw?.length ?? 0,
+        createdAt: STAMP,
+      };
+      state.external.push(made);
+      return json(made, 201);
+    }
+    if (!sub && method === 'GET') {
+      const ids = new Set((q.get('entryIds') ?? '').split(',').filter(Boolean));
+      return json({ items: state.external.filter((x) => x.entryKind === q.get('entryKind') && ids.has(x.entryId)) });
+    }
+    const found = state.external.find((x) => x.id === sub);
+    if (!found) return notFound();
+    if (subId === 'file' && method === 'GET') return json({ url: `${STORAGE}/external/${found.id}?disposition=inline`, expiresAt: '2099-01-01T00:00:00Z', filename: found.filename, mimeType: found.mimeType });
+    if (!subId && method === 'DELETE') {
+      state.external = state.external.filter((x) => x !== found);
+      return { status: 204, body: '' };
+    }
+    return notFound();
+  }
+
+  /** MUT-646: the invoicing setup's routes, the way the server answers them (the gate's own rules: details and numbering). */
+  private issuingAnswer(e: Logged, resource: string, id: string | undefined, sub: string | undefined, subId?: string) {
+    const profileId = e.headers['x-mutaba3a-profile'];
+    const profile = this.profiles.find((p) => p.stub.id === profileId);
+    if (!this.issuing || !profile || profile.stub.type === 'PERSONAL') return notFound();
+    let state = this.issuing.get(profileId!);
+    if (!state) {
+      state = { issuer: null, logo: null, introSeen: false, numbering: false, defaults: false, starts: {}, docs: [], owed: new Map(), external: [] };
+      if (this.invoicingReady) {
+        state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
+        Object.assign(state, { introSeen: true, numbering: true, defaults: true });
+      } else if (this.invoicingDetailsOnly) {
+        state.issuer = { ...ISSUER_DEFAULTS, offerAfterSave: this.offerAfterSave, legalName: 'Nour Studio Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: '12 Hermon St', city: 'Nazareth', phone: null, email: null, website: null, version: 1 };
+        state.introSeen = true;
+      }
+      this.issuing.set(profileId!, state);
+    }
+    const body = (e.body ?? {}) as Record<string, Json>;
+    const ifMatch = e.headers['if-match'] === undefined ? null : Number(e.headers['if-match']);
+    const missingOf = () => [...(state.issuer ? [] : ['DETAILS']), ...(state.numbering ? [] : ['NUMBERING'])];
+    const setup = () => {
+      const missing = missingOf();
+      const done = (ok: boolean) => (ok ? 'done' : 'todo');
+      return json({
+        steps: { details: done(!!state.issuer), logo: done(!!state.logo), defaults: done(state.defaults), numbering: done(state.numbering), taxAuthority: 'later' },
+        canIssue: missing.length === 0,
+        missing,
+        introSeen: state.introSeen,
+        hasLogo: !!state.logo,
+      });
+    };
+    const { method } = e;
+    if (resource === 'issued-documents') return this.issuedAnswer(e, state, id, sub, missingOf());
+    if (resource === 'issuing') {
+      if (id === 'external-invoices') return this.externalAnswer(e, state, sub, subId);
+      if (id === 'setup' && !sub && method === 'GET') return setup();
+      if (id === 'setup' && sub === 'intro-seen' && method === 'POST') {
+        state.introSeen = true;
+        return setup();
+      }
+      if (id === 'numbering' && method === 'PUT') {
+        state.numbering = true;
+        state.starts = { ...state.starts, ...((body.starts ?? {}) as Record<string, number>) };
+        return setup();
+      }
+      if (id === 'styles' && method === 'GET') return json({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] });
+      // MUT-569: the uniform file: the documents dated in the range, counted as the API counts them; the zip is a stand-in.
+      if (id === 'uniform-file' && method === 'GET') {
+        const from = e.query.get('from') ?? '';
+        const to = e.query.get('to') ?? '';
+        if (!state.issuer) return json({ error: { code: 'VALIDATION_FAILED', message: 'Add the business details printed on documents first', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 422);
+        if (from > to) return json({ error: { code: 'VALIDATION_FAILED', message: 'to comes before from', details: { reason: 'PERIOD_RANGE', field: 'to' } } }, 422);
+        const docs = state.docs.filter((d) => String(d.documentDate) >= from && String(d.documentDate) <= to);
+        const records = 2 + docs.reduce((sum, d) => sum + 1 + (d.docType === 'RECEIPT' ? 0 : ((d.lines as Json[] | undefined)?.length ?? 1)) + (d.paymentDetails ? 1 : 0), 0);
+        const filename = `OPENFRMT-${String(state.issuer.vatId)}-${from}_${to}.zip`;
+        return { status: 200, contentType: 'application/zip', headers: { 'Content-Disposition': `attachment; filename="${filename}"`, 'X-Uniform-File-Documents': String(docs.length), 'X-Uniform-File-Records': String(records) }, body: 'PK qa' };
+      }
+      if (id === 'settings' && method === 'GET') {
+        return json({ counters: ISSUED_DOC_TYPES.map((docType) => ({ docType, start: state.starts[docType] ?? 1, next: state.starts[docType] ?? 1, hasDocuments: false })) });
+      }
+      return notFound();
+    }
+    if (!id && method === 'GET') return state.issuer ? json(state.issuer) : json({ error: { code: 'NOT_FOUND', message: 'No business details yet', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 404);
+    if (!id && method === 'PUT') {
+      if ((ifMatch === null) !== !state.issuer || (state.issuer && state.issuer.version !== ifMatch)) return conflict('VERSION_MISMATCH');
+      const kept = state.issuer ?? ISSUER_DEFAULTS;
+      state.issuer = { ...ISSUER_DEFAULTS, ...kept, address: null, city: null, phone: null, email: null, website: null, ...body, version: (state.issuer?.version ?? 0) + 1 };
+      return json(state.issuer);
+    }
+    if (id === 'defaults' && method === 'PUT') {
+      if (!state.issuer) return json({ error: { code: 'VALIDATION_FAILED', message: 'details first', details: { reason: 'ISSUER_DETAILS_REQUIRED' } } }, 422);
+      if (state.issuer.version !== ifMatch) return conflict('VERSION_MISMATCH');
+      state.issuer = { ...state.issuer, paymentTermsDays: null, bankDetails: null, footerNote: null, ...body, version: state.issuer.version + 1 };
+      state.defaults = true;
+      return json(state.issuer);
+    }
+    if (id === 'logo') {
+      if (method === 'PUT') {
+        state.logo = { type: e.headers['content-type'] ?? 'image/png', bytes: e.raw ?? PNG_1PX };
+        return { status: 204, body: '' };
+      }
+      if (method === 'DELETE') {
+        state.logo = null;
+        return { status: 204, body: '' };
+      }
+      if (method === 'GET') return state.logo ? { status: 200, contentType: state.logo.type, body: state.logo.bytes } : notFound();
+    }
+    return notFound();
+  }
+
+  /** MUT-570: issued documents as the server answers them: 18% VAT, gap-free numbers per type, an Owed per tax invoice. */
+  private issuedAnswer(e: Logged, state: StubIssuing, id: string | undefined, sub: string | undefined, missing: string[]) {
+    const { method } = e;
+    const pdf = { status: 200, contentType: 'application/pdf', body: '%PDF-1.4 qa' };
+    // MUT-662: a payment request carries its derived status and its PR-0007 number, as the server's serializer does.
+    const withFacts = (d: Record<string, Json>) => {
+      const displayNumber = d.docType === 'PAYMENT_REQUEST' ? `PR-${String(d.number).padStart(4, '0')}` : String(d.number);
+      if (d.docType !== 'PAYMENT_REQUEST') return { ...d, displayNumber, paymentRequest: null };
+      const linked = state.docs.filter((x) => x.originalId === d.id && (x.docType === 'TAX_INVOICE_RECEIPT' || x.docType === 'RECEIPT')).reverse();
+      const covered = linked.reduce((sum, x) => sum + toMinor(String(x.gross)), 0);
+      const cancellation = (d.cancellation as Record<string, Json> | undefined) ?? null;
+      const status = cancellation ? 'CANCELLED' : covered >= toMinor(String(d.gross)) ? 'PAID' : covered > 0 ? 'PARTLY_PAID' : 'UNPAID';
+      return { ...d, displayNumber, paymentRequest: { status, covered: toDecimal(covered), linked: linked.map((x) => ({ id: x.id, docType: x.docType, number: x.number, gross: x.gross })), cancellation } };
+    };
+    if (method === 'GET' && !id) {
+      const customerId = e.query.get('customerId');
+      return page(state.docs.filter((d) => !customerId || d.customerId === customerId).map(withFacts));
+    }
+    if (method === 'POST' && id && sub === 'cancel') {
+      const d = state.docs.find((x) => x.id === id);
+      if (!d) return notFound();
+      if (d.docType !== 'PAYMENT_REQUEST') return json({ error: { code: 'VALIDATION_FAILED', message: 'not a request', details: { reason: 'NOT_A_PAYMENT_REQUEST' } } }, 422);
+      if (d.cancellation) return json({ error: { code: 'CONFLICT', message: 'cancelled', details: { reason: 'ALREADY_CANCELLED' } } }, 409);
+      if ((withFacts(d).paymentRequest as { linked: unknown[] }).linked.length > 0) return json({ error: { code: 'CONFLICT', message: 'has documents', details: { reason: 'PAYMENT_REQUEST_HAS_DOCUMENTS' } } }, 409);
+      const number = state.docs.filter((x) => x.cancellation).length + 1;
+      d.cancellation = { number, displayNumber: `CX-${String(number).padStart(4, '0')}`, cancelledAt: '2026-11-22T11:00:00.000Z', reason: ((e.body as Record<string, Json> | null)?.reason as string | null) ?? null };
+      return json(withFacts(d));
+    }
+    if (id === 'preview' && method === 'POST') {
+      if (sub === 'pdf') return pdf;
+      const body = e.body as Record<string, Json>;
+      const totals = this.composeDoc(body);
+      const facts = body.docType === 'CREDIT_NOTE' ? this.creditFacts(state, body.originalId as string | undefined, toMinor(totals.gross)) : null;
+      const creditNote = facts ? { outstanding: toDecimal(facts.outstanding), paid: toDecimal(facts.paid), maximum: toDecimal(facts.maximum) } : null;
+      return json({ ...totals, creditNote, allocation: this.needsManualAllocation(body, totals.net) ? { mode: 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page' } : null });
+    }
+    if (method === 'GET' && id && !sub) {
+      const d = state.docs.find((x) => x.id === id);
+      return d ? json(withFacts(d)) : json(null, 404);
+    }
+    if (id && sub === 'pdf') return pdf;
+    if (method === 'POST' && !id) {
+      if (missing.length) return json({ error: { code: 'CONFLICT', message: 'setup', details: { reason: 'ISSUING_SETUP_INCOMPLETE', missing } } }, 409);
+      const body = e.body as Record<string, Json>;
+      const docType = String(body.docType);
+      const totals = this.composeDoc(body);
+      const number = this.nextNumber(state, docType);
+      // MUT-711 (ADR-273): the number is only a preview; a manual allocation number must be for the number this one takes.
+      let allocationNumber: string | null = null;
+      if (this.needsManualAllocation(body, totals.net)) {
+        const manual = body.manualAllocation as { number?: string; forNumber?: number } | undefined;
+        if (!manual) return json({ error: { code: 'CONFLICT', message: 'needs a number', details: { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next: number } } }, 409);
+        const digits = String(manual.number ?? '').replace(/[\s-]/g, '');
+        if (!/^\d{9}$/.test(digits)) return json({ error: { code: 'VALIDATION_FAILED', message: 'nine digits', details: { reason: 'ALLOCATION_NUMBER_INVALID', field: 'allocationNumber' } } }, 422);
+        if (manual.forNumber !== number) return json({ error: { code: 'CONFLICT', message: `now ${number}`, details: { reason: 'ALLOCATION_NUMBER_MOVED', field: 'manualAllocation', requestedFor: manual.forNumber ?? null, next: number } } }, 409);
+        allocationNumber = digits;
+      }
+      const customer = this.customers.find((c) => c.id === body.customerId);
+      const docId = uid(0xd0, state.docs.length + 1);
+      const gross = toMinor(totals.gross);
+      let receivableId: string | null = null;
+      // MUT-643: an invoice-receipt posts its own Owed too, paid in full on issue.
+      if (docType === 'TAX_INVOICE' || docType === 'PAYMENT_REQUEST' || docType === 'TAX_INVOICE_RECEIPT') {
+        receivableId = uid(0xe0, state.docs.length + 1);
+        state.owed.set(receivableId, { gross, outstanding: docType === 'TAX_INVOICE_RECEIPT' ? 0 : gross, credited: 0, customerId: (body.customerId as string) ?? null, docId, postingDate: String(body.documentDate) });
+      }
+      const target = (body.originalId ?? body.appliesToDocumentId) as string | undefined;
+      let refundId: string | null = null;
+      if (target && docType === 'CREDIT_NOTE') {
+        // MUT-643 (ADR-276): the cap, then what is owed, then the paid part, which needs a choice.
+        const facts = this.creditFacts(state, target, gross);
+        const original = state.docs.find((d) => d.id === target);
+        const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+        if (!facts || !owed) return notFound();
+        if (gross > facts.maximum) return json({ error: { code: 'VALIDATION_FAILED', message: 'over the original', details: { reason: 'CREDIT_EXCEEDS_ORIGINAL', field: 'lines', maximum: String(facts.maximum) } } }, 422);
+        const paidPart = body.paidPart as { mode: string; refundedOn?: string; method?: string; reference?: string | null } | undefined;
+        if (facts.paid > 0 && !paidPart) return json({ error: { code: 'VALIDATION_FAILED', message: 'paid part', details: { reason: 'ORIGINAL_PAID', field: 'paidPart', outstanding: String(facts.outstanding), paid: String(facts.paid) } } }, 422);
+        owed.outstanding -= facts.outstanding < gross ? facts.outstanding : gross;
+        owed.credited = (owed.credited ?? 0) + gross;
+        if (facts.paid > 0 && paidPart?.mode === 'REFUND') {
+          refundId = uid(0xf0, (state.refunds ?? []).length + 1);
+          (state.refunds ??= []).push({ id: refundId, customerId: String(body.customerId), amount: facts.paid, refundedOn: paidPart.refundedOn ?? String(body.documentDate), creditNoteId: docId, method: paidPart.method ?? 'BANK', reference: paidPart.reference ?? null });
+        }
+      } else if (target) {
+        const original = state.docs.find((d) => d.id === target);
+        const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+        if (owed) {
+          if (gross > owed.outstanding) return json({ error: { code: 'VALIDATION_FAILED', message: 'too much', details: { reason: 'EXCEEDS_OUTSTANDING' } } }, 422);
+          owed.outstanding -= gross;
+        }
+      }
+      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource: allocationNumber ? 'MANUAL' : null, receivableId, paymentId: null, refundId, coreVersion: '1.0.0' };
+      state.docs.unshift(doc);
+      return json(withFacts(doc), 201);
+    }
+    return notFound();
+  }
+
+  /** MUT-643: a credit note's facts against its original: still owed, the part of this credit already paid, the cap. */
+  private creditFacts(state: StubIssuing, originalId: string | undefined, creditMinor: number): { outstanding: number; paid: number; maximum: number } | null {
+    const original = state.docs.find((d) => d.id === originalId && (d.docType === 'TAX_INVOICE' || d.docType === 'TAX_INVOICE_RECEIPT'));
+    const owed = original?.receivableId ? state.owed.get(String(original.receivableId)) : undefined;
+    if (!owed) return null;
+    const maximum = owed.gross - (owed.credited ?? 0);
+    const upTo = creditMinor < maximum ? creditMinor : maximum;
+    return { outstanding: owed.outstanding, paid: upTo > owed.outstanding ? upTo - owed.outstanding : 0, maximum };
+  }
+
+  /** The number the next document of this type takes (gap-free per type). */
+  private nextNumber(state: StubIssuing, docType: string): number {
+    return (state.starts[docType] ?? 1) + state.docs.filter((d) => d.docType === docType).length;
+  }
+
+  /** MUT-711: a tax invoice of 5,000.00 or more before VAT to a client, while MTB3A can't request the number. */
+  private needsManualAllocation(body: Record<string, Json>, net: string): boolean {
+    return this.manualAllocation && (body.docType === 'TAX_INVOICE' || body.docType === 'TAX_INVOICE_RECEIPT') && !!body.customerId && toMinor(net) >= 500_000;
+  }
+
+  /** MUT-711 (AC3): another session issues a tax invoice now, taking the number a preview showed. */
+  issueElsewhere(profileId: string, docType = 'TAX_INVOICE'): number {
+    const state = this.issuing?.get(profileId);
+    if (!state) throw new Error('open the profile first');
+    const number = this.nextNumber(state, docType);
+    state.docs.unshift({ id: uid(0xd0, 900 + state.docs.length), docType, number, documentDate: '2026-11-22', issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: 'en', customerId: null, customer: { name: 'Elsewhere' }, gross: '100.00', net: '100.00', allocationNumber: null, allocationSource: null });
+    return number;
+  }
+
+  /** The issued-document Owed for GET /v1/receivables/{id}, or undefined. */
+  private issuedOwed(receivableId: string) {
+    for (const state of this.issuing?.values() ?? []) {
+      const owed = state.owed.get(receivableId);
+      if (owed) {
+        const credited = owed.credited ?? 0;
+        return { id: receivableId, customerId: owed.customerId, origin: 'ISSUED_DOCUMENT', originId: owed.docId ?? null, currency: 'ILS', gross: toDecimal(owed.gross), outstanding: toDecimal(owed.outstanding), paid: toDecimal(owed.gross - owed.outstanding - credited), credited: toDecimal(credited), status: owed.outstanding === 0 ? 'PAID' : 'OPEN', version: 1 };
+      }
+    }
+    return undefined;
+  }
+
+  /** The server's preview math for the QA: lines at 18% VAT, prices before VAT unless the document says they include it. */
+  private composeDoc(body: Record<string, Json>) {
+    const lines = ((body.lines ?? []) as Record<string, string>[]).map((l, index) => {
+      const net = Math.round(Number(l.quantity) * toMinor(l.unitPrice)) - (l.discount ? toMinor(l.discount) : 0);
+      return { index, description: l.description, kind: l.kind, quantity: l.quantity, unitPrice: l.unitPrice, discount: l.discount ?? '0.00', net: toDecimal(net), pricesIncludeVat: !!body.pricesIncludeVat, vatRateBasisPoints: 1800, vat: '0.00' };
+    });
+    const sum = lines.reduce((acc, l) => acc + toMinor(l.net), 0);
+    const exempt = body.docType === 'RECEIPT';
+    const net = body.pricesIncludeVat && !exempt ? Math.round(sum / 1.18) : sum;
+    const vat = exempt ? 0 : Math.round(net * 0.18);
+    return { subtotal: toDecimal(net), discount: '0.00', net: toDecimal(net), vatRateBasisPoints: exempt ? 0 : 1800, vat: toDecimal(vat), gross: toDecimal(net + vat), pricesIncludeVat: !!body.pricesIncludeVat, lines };
+  }
+
   private closeAnswer(body: { password?: string } | null) {
     if (body?.password !== this.currentPassword) return json({ error: { code: 'CURRENT_PASSWORD_WRONG', message: 'Current password is wrong' } }, 403);
     const now = new Date();
@@ -1297,8 +1829,8 @@ export class FakeApi {
     if (e.method === 'GET' && !sub) return json(found);
     if (e.method === 'GET' && sub === 'credits') return json({ receivable: found, credits: this.credits.get(found.id) ?? [] });
     if (e.method === 'POST' && sub === 'credits') return this.credit(found, e.body as { amount: string; reason: string });
-    if (e.method === 'POST' && sub === 'settle') {
-      const body = e.body as { amount: string; paidAt: string; method: 'CASH' | 'BANK' };
+    if (e.method === 'POST' && (sub === 'settle' || sub === 'settle-and-issue')) {
+      const body = e.body as { amount: string; paidAt: string; method: 'CASH' | 'BANK'; issue?: boolean };
       const paid = toMinor(found.paid) + toMinor(body.amount);
       found.paid = toDecimal(paid);
       found.outstanding = toDecimal(toMinor(found.gross) - paid);
@@ -1314,6 +1846,11 @@ export class FakeApi {
         mine: true,
       });
       this.payments.unshift(made);
+      // MUT-661: settle-and-issue also answers what happened to the payment's document (the fake issues no real document).
+      if (sub === 'settle-and-issue') {
+        const issue = body.issue === false ? { status: 'not_requested', reason: null, document: null } : { status: 'issued', reason: null, document: { id: uid(0xd, this.serial++), number: 1, docType: 'TAX_INVOICE_RECEIPT', gross: body.amount } };
+        return json({ receivable: found, payment: made, issue }, 201);
+      }
       return json({ receivable: found, payment: made }, 201);
     }
     return undefined;
@@ -1450,6 +1987,7 @@ export class FakeApi {
         const group = groupId ? this.groups.find((g) => g.id === groupId) : undefined;
         if (groupId && !group) return notFound();
         const rows = this.expenses
+          .filter((x) => !x.profileId || x.profileId === e.headers['x-mutaba3a-profile'])
           .filter((x) => (!q('categoryId') || x.categoryId === q('categoryId')) && (!q('customerId') || x.customerId === q('customerId')))
           .filter((x) => (!q('from') || x.occurredOn >= q('from')!) && (!q('to') || x.occurredOn <= q('to')!))
           .filter((x) => !group || (q('groupMembership') === 'excluded' ? this.isLeftOut(group, x) : this.isMember(group, x)))
@@ -1471,8 +2009,13 @@ export class FakeApi {
       }
       return undefined;
     }
-    const found = this.expenses.find((x) => x.id === id);
+    const found = this.expenses.find((x) => x.id === id && (!x.profileId || x.profileId === e.headers['x-mutaba3a-profile']));
     if (!found) return notFound();
+    if (sub === 'move-preview' && e.method === 'GET') return this.expenseMoveAnswer(found, e.headers['x-mutaba3a-profile'], e.query.get('profileId') ?? '', null);
+    if (sub === 'move' && e.method === 'POST') {
+      const b = e.body as { profileId: string; expectedVersion: number };
+      return this.expenseMoveAnswer(found, e.headers['x-mutaba3a-profile'], b.profileId, b.expectedVersion);
+    }
     if (!sub) {
       if (e.method === 'GET') return json(found);
       if (e.method === 'PATCH') {

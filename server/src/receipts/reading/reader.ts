@@ -1,7 +1,6 @@
 import type { AttachmentStorage } from '../../attachments/storage.js';
-import { hasFeature } from '../../features.js';
 import type { Logger } from '../../logger.js';
-import type { ExpenseReceiptRecord, FinishReadOutcome, LedgerStore, ReadIdentifiers, ReceiptReadRequest, ReceiptSuggestion } from '../../repositories/ports.js';
+import type { ExpenseReceiptRecord, FinishReadOutcome, LedgerStore, ReadIdentifiers, ReadSkipReason, ReceiptReadRequest, ReceiptSuggestion } from '../../repositories/ports.js';
 import { learnedBuyerIds } from '../extract/buyer.js';
 import { readReceipt } from '../extract/extract.js';
 import { fillAbsent, isCompleteSuggestion } from '../extract/merge.js';
@@ -27,6 +26,17 @@ export const BUYER_MEMORY_RECEIPTS = 200;
 /** What the read job answers for one receipt. `retry` is the only one Cloud Tasks should retry (a 503). */
 export type ReadJobStatus = 'done' | 'skipped' | 'failed' | 'busy' | 'none' | 'retry';
 
+/**
+ * MUT-590: why a read ended SKIPPED, for the log: deleted or filed (onto an expense) before it could write, or its
+ * suggestion already complete. Receipt 27e28e05 was filed 10 s into its read; the log said only `skipped`.
+ */
+export type ReadSkipCode = ReadSkipReason | 'complete' | 'uploader_gone';
+
+interface Finished {
+  status: ReadJobStatus;
+  code?: ReadSkipCode;
+}
+
 export interface SweepSummary {
   enqueued: number;
   failed: number;
@@ -42,7 +52,7 @@ export interface ReceiptReadTrigger {
 export interface ReceiptReader extends ReceiptReadTrigger {
   readOne(receiptId: string): Promise<ReadJobStatus>;
   sweep(): Promise<SweepSummary>;
-  backlog(userId: string): Promise<number>;
+  backlog(userId?: string): Promise<number>;
 }
 
 export interface ReceiptReaderOptions {
@@ -57,10 +67,22 @@ export interface ReceiptReaderOptions {
 
 /**
  * MUT-514: the server reader's generation. 2: no confidently wrong VAT, totals, bill-to numbers or dates. 3 (MUT-540):
- * pages turned upright, PDF pages sized by area, card slips under their label. One constant for the stamp and for
+ * pages turned upright, PDF pages sized by area, card slips under their label. 4 (MUT-590): a PDF's text layer read by
+ * position, visual-order Hebrew put in logical order. 5 (MUT-630/631): no buyer email or billed line as the vendor's
+ * contact, no item line or garbled name as the vendor. One constant for the stamp and for
  * `receipts:reread --reader-below`, so they can't drift.
  */
-export const SERVER_READER_GENERATION = 3;
+export const SERVER_READER_GENERATION = 5;
+
+/**
+ * MUT-514 (D6, D10): the organization's learned buyer numbers (MUT-630: and emails), from the reads of its latest
+ * BUYER_MEMORY_RECEIPTS receipts, less `except` (a re-read never feeds on its own earlier read). The read job and
+ * `receipts:reread --buyer-contacts` share it.
+ */
+export async function organizationBuyerIds(store: LedgerStore, organizationId: string, except?: string): Promise<string[]> {
+  const page = await store.expenseReceipts.list(organizationId, {}, { limit: BUYER_MEMORY_RECEIPTS, cursor: null });
+  return learnedBuyerIds(page.items.flatMap((r) => (r.id !== except && r.readIdentifiers ? [r.readIdentifiers] : [])));
+}
 
 /** The reader version a server read stamps when it added a field (MUT-441 plan, "Merge rule"). */
 export function serverReaderVersion(engine: string): string {
@@ -81,14 +103,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
   const { store, storage, ocr, dispatcher, logger, now } = options;
   const receipts = store.expenseReceipts;
 
-  async function holdsGrant(receipt: ExpenseReceiptRecord): Promise<boolean> {
-    return receipt.uploadedByUserId !== null && (await hasFeature(store, receipt.uploadedByUserId, 'receipt_reading'));
-  }
-
-  /** D3 and F5: a receipt reads only for an uploader who holds the grant; one whose uploader is gone never reads. */
+  /** F5: a receipt whose uploader is gone never reads. MUT-659: every other uploader's does (no per-person grant). */
   async function decide(receipt: ExpenseReceiptRecord): Promise<ReceiptReadRequest | null> {
     if (receipt.uploadedByUserId === null) return 'SKIPPED';
-    if (!(await holdsGrant(receipt))) return null;
     return isCompleteSuggestion(receipt.suggested) ? 'SKIPPED' : 'PENDING';
   }
 
@@ -127,18 +144,19 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return scrubbed('store_failed', () => receipts.finishRead(receiptId, version, outcome));
   }
 
-  async function finish(receiptId: string, version: number, outcome: FinishReadOutcome): Promise<ReadJobStatus> {
+  /** `code` is the skip reason the caller already knows (complete, uploader_gone); the store's own wins (deleted, filed). */
+  async function finish(receiptId: string, version: number, outcome: FinishReadOutcome, code?: ReadSkipCode): Promise<Finished> {
     const result = await finishRead(receiptId, version, outcome);
-    if (result.kind === 'saved') return outcome.status === 'DONE' ? 'done' : outcome.status === 'FAILED' ? 'failed' : 'skipped';
-    if (result.kind === 'skipped') return 'skipped';
-    return 'none';
+    if (result.kind === 'saved') return outcome.status === 'DONE' ? { status: 'done' } : outcome.status === 'FAILED' ? { status: 'failed' } : { status: 'skipped', ...(code ? { code } : {}) };
+    if (result.kind === 'skipped') return { status: 'skipped', code: result.reason };
+    return { status: 'none' };
   }
 
   /**
    * Fill-absent onto what is stored now; a person's edit in between means merging again onto theirs. The vendor is
    * looked up on the profile the receipt is on now (MUT-503: it may have moved during the read).
    */
-  async function save(claimed: ExpenseReceiptRecord, raw: ReceiptSuggestion, identifiers: ReadIdentifiers): Promise<{ status: ReadJobStatus; added: number }> {
+  async function save(claimed: ExpenseReceiptRecord, raw: ReceiptSuggestion, identifiers: ReadIdentifiers): Promise<Finished & { added: number }> {
     let current = claimed;
     for (let i = 0; i < STALE_RETRIES; i += 1) {
       const read = await withVendor(current, raw);
@@ -150,31 +168,38 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
         current = result.record;
         continue;
       }
-      if (result.kind === 'saved') return { status: outcome.status === 'DONE' ? 'done' : 'skipped', added: outcome.status === 'DONE' ? added.length : 0 };
-      return { status: result.kind === 'skipped' ? 'skipped' : 'none', added: 0 };
+      if (result.kind === 'saved') return outcome.status === 'DONE' ? { status: 'done', added: added.length } : { status: 'skipped', code: 'complete', added: 0 };
+      return result.kind === 'skipped' ? { status: 'skipped', code: result.reason, added: 0 } : { status: 'none', added: 0 };
     }
     await scrubbed('store_failed', () => receipts.releaseRead(claimed.id));
     return { status: 'retry', added: 0 };
   }
 
   /**
-   * MUT-514 (D6, D10): the organization's own phone and ID numbers, from the bill-to blocks its latest receipts' reads
-   * found, less any number one of them read as the vendor's. Learned from reads, not approvals; this receipt's own
+   * MUT-514 (D6, D10): the organization's own phone and ID numbers (MUT-630: and emails), from the bill-to blocks its
+   * latest receipts' reads found, less any number one of them read as the vendor's (`organizationBuyerIds`). Learned from reads, not approvals; this receipt's own
    * earlier read is left out, so a re-read never feeds on itself.
    */
   async function buyerIds(receipt: ExpenseReceiptRecord): Promise<string[]> {
-    const page = await scrubbed('store_failed', () => receipts.list(receipt.organizationId, {}, { limit: BUYER_MEMORY_RECEIPTS, cursor: null }));
-    return learnedBuyerIds(page.items.flatMap((r) => (r.id !== receipt.id && r.readIdentifiers ? [r.readIdentifiers] : [])));
+    return scrubbed('store_failed', () => organizationBuyerIds(store, receipt.organizationId, receipt.id));
   }
 
-  async function readFile(receipt: ExpenseReceiptRecord): Promise<{ read: ReceiptSuggestion; identifiers: ReadIdentifiers; lines: number }> {
+  /** What the log says of the file read: its engine, and its line count, or a text PDF's text length (MUT-590). Never a word. */
+  interface FileStats {
+    engine: string;
+    lines: number;
+    chars?: number;
+  }
+
+  async function readFile(receipt: ExpenseReceiptRecord): Promise<{ read: ReceiptSuggestion; identifiers: ReadIdentifiers; stats: FileStats }> {
     const body = await scrubbed('unavailable', () => storage.read(receipt.storageKey));
     if (!body) throw new OcrReadError('missing');
     const result = await ocr.read({ body, contentType: receipt.mimeType, hint: receipt.captureHint === 'SCANNED' ? 'scanned' : 'photo' });
     const learned = await buyerIds(receipt);
     const options = { readerVersion: serverReaderVersion(result.engine), receivedOn: receipt.receivedOn, buyerIds: learned };
     const reading = await scrubbed('extract_failed', () => readReceipt({ lines: result.lines, pdfText: result.pdfText, qr: result.qr }, options));
-    return { read: reading.suggestion, identifiers: { buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers }, lines: result.lines.length };
+    const stats: FileStats = { engine: result.engine, lines: result.lines.length, ...(result.pdfText !== undefined ? { chars: result.pdfText.length } : {}) };
+    return { read: reading.suggestion, identifiers: { buyer: reading.buyerIdentifiers, vendor: reading.vendorIdentifiers }, stats };
   }
 
   /**
@@ -195,27 +220,29 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     }
     const receipt = claim.record;
     const attempts = receipt.readAttempts ?? 1;
-    const done = (status: ReadJobStatus, extra: { code?: OcrReadErrorCode | 'exhausted' | 'moved'; lines?: number; added?: number } = {}) => {
+    type Extra = { code?: OcrReadErrorCode | ReadSkipCode | 'exhausted' | 'moved'; added?: number } & Partial<FileStats>;
+    const done = ({ status, ...extra }: { status: ReadJobStatus } & Extra) => {
       logger.info({ receiptId, status, attempts, durationMs: Date.now() - started, ...extra }, 'receipt read');
       return status;
     };
     if (receipt.deletedAt || receipt.filingStatus === 'FILED') return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }));
     // This claim was one more than the limit allows (a Cloud Tasks retry after three tries), or it waited too long.
-    if (exhausted(receipt, at, attempts - 1)) return done(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: 'exhausted' }), { code: 'exhausted' });
-    // The grant was taken away, or the uploader left, since the receipt was queued.
-    if (!(await holdsGrant(receipt)) || isCompleteSuggestion(receipt.suggested)) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }));
+    if (exhausted(receipt, at, attempts - 1)) return done({ ...(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: 'exhausted' })), code: 'exhausted' });
+    // The uploader left since the receipt was queued (F5). MUT-659: there is no grant to lose.
+    if (receipt.uploadedByUserId === null) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }, 'uploader_gone'));
+    if (isCompleteSuggestion(receipt.suggested)) return done(await finish(receiptId, receipt.version, { status: 'SKIPPED' }, 'complete'));
     try {
-      const { read, identifiers, lines } = await readFile(receipt);
+      const { read, identifiers, stats } = await readFile(receipt);
       const saved = await save(receipt, read, identifiers);
-      return done(saved.status, { lines, added: saved.added });
+      return done({ ...saved, ...stats });
     } catch (err) {
       const failure = err instanceof OcrReadError ? err : new OcrReadError('unavailable');
       // MUT-503 (D6): the receipt moved to another profile since the claim and its old file is gone. Not missing:
       // the lease and the try go back, and the retry reads the file at its new key.
-      if (failure.code === 'missing' && (await scrubbed('store_failed', () => receipts.releaseMovedRead(receiptId, receipt.storageKey)))) return done('retry', { code: 'moved' });
-      if (failure.terminal) return done(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: failure.code }), { code: failure.code });
+      if (failure.code === 'missing' && (await scrubbed('store_failed', () => receipts.releaseMovedRead(receiptId, receipt.storageKey)))) return done({ status: 'retry', code: 'moved' });
+      if (failure.terminal) return done({ ...(await finish(receiptId, receipt.version, { status: 'FAILED', failReason: failure.code })), code: failure.code });
       await scrubbed('store_failed', () => receipts.releaseRead(receiptId));
-      return done('retry', { code: failure.code });
+      return done({ status: 'retry', code: failure.code });
     }
   }
 
@@ -229,7 +256,7 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     const summary: SweepSummary = { enqueued: 0, failed: 0, enqueueErrors: 0 };
     for (const receipt of await receipts.listPendingForSweep(at, SWEEP_BATCH)) {
       if (exhausted(receipt, at, receipt.readAttempts ?? 0)) {
-        if ((await finish(receipt.id, receipt.version, { status: 'FAILED', failReason: 'exhausted' })) === 'failed') summary.failed += 1;
+        if ((await finish(receipt.id, receipt.version, { status: 'FAILED', failReason: 'exhausted' })).status === 'failed') summary.failed += 1;
       } else if (await enqueue(receipt.id, receipt.readAttempts ?? 0)) summary.enqueued += 1;
       else summary.enqueueErrors += 1;
     }
@@ -237,9 +264,9 @@ export function createReceiptReader(options: ReceiptReaderOptions): ReceiptReade
     return summary;
   }
 
-  /** R5: at grant time, the person's To-review receipts that were never read are asked for once. Idempotent. */
-  async function backlog(userId: string): Promise<number> {
-    const ids = await receipts.markBacklogPending({ userId }, now());
+  /** R5, MUT-659: To-review receipts that were never read (one person's, or everyone's) are asked for once. Idempotent. */
+  async function backlog(userId?: string): Promise<number> {
+    const ids = await receipts.markBacklogPending(userId ? { userId } : {}, now());
     for (const id of ids) await enqueue(id, 0);
     logger.info({ userId, queued: ids.length }, 'receipt read backlog');
     return ids.length;

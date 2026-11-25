@@ -1,5 +1,5 @@
 {
-  "version": "2.8.0",
+  "version": "2.11.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -108,6 +108,35 @@
         "prompt": { "type": "enum", "values": ["first_run", "banner"], "description": "Which surface asked." }
       }
     },
+    "setup_passkey_offered": {
+      "emitters": ["portal"],
+      "description": "MUT-619: right after a setup link set the password and signed in, /setup offered Create a passkey (a device that can make one, an account with no passkey and a MUT-370 offer left). Opt-in only (ADR-090), so counts from brand-new accounts are partial; users.passkeyPrompt holds every Not now.",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_created": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Create a passkey on the setup step registered one (the server answered 201).",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_not_now": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Not now on the setup step; it spends one of MUT-370's three offers and hides the Home card for 30 days.",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." }
+      }
+    },
+    "setup_passkey_not_created": {
+      "emitters": ["portal"],
+      "description": "MUT-619: Create a passkey on the setup step ended without one; the step stays, with Try again and Not now. Errors themselves go to Sentry (MUT-146).",
+      "properties": {
+        "link": { "type": "enum", "values": ["setup", "reset", "signup"], "description": "Which setup link set the password: an operator's setup link, a reset or recovery link, or a self-signup link." },
+        "reason": { "type": "enum", "values": ["cancelled", "offline", "other"], "description": "cancelled = the person closed the system sheet (or it timed out); offline = MTB3A couldn't be reached; other = the device or the server refused." }
+      }
+    },
     "report_viewed": {
       "emitters": ["portal"],
       "description": "MUT-175: Reports was opened, or its period or scope changed (debounced 1 s). MUT-448: also the account-level Glance, told apart by layer. Never amounts, names or profile ids; signed out never sends.",
@@ -198,6 +227,33 @@
         "place": { "type": "enum", "values": ["owner", "client_books", "link_page"], "description": "owner = the owner's own profile; client_books = an accountant's client; link_page = a share link's visitor. Named place because surface is a shared property." },
         "file": { "type": "enum", "values": ["report", "receipts"], "description": "report = the period's report; receipts = its receipts archive." },
         "months": { "type": "integer", "description": "How many calendar months the period spans, 1 to 24." }
+      }
+    },
+    "sign_in_code_requested": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: \"Email me a sign-in code\" sent its ask and the server answered (the answer says nothing about whether the address has an account). Sent before anyone signs in: cookieless on the portal, like portal_welcome_choice; on the phone only with the usage choice on.",
+      "properties": {
+        "resend": { "type": "boolean", "description": "true when it was \"Resend code\" on the code step." }
+      }
+    },
+    "sign_in_code_signed_in": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: a person signed in with an emailed code. Cookieless on the portal, as sign_in_code_requested."
+    },
+    "sign_in_code_refused": {
+      "emitters": ["portal", "ios", "android"],
+      "description": "MUT-618: the server refused a typed code. Not an error: what the person does next. Network and server failures go to Sentry instead.",
+      "properties": {
+        "reason": { "type": "enum", "values": ["wrong", "expired", "too_many_tries", "rate_limited", "under_review"], "description": "wrong = a try was spent; expired = no live code (expired, used or replaced); too_many_tries = the fifth wrong try killed it; rate_limited = the address or network must wait; under_review = the right code on an account waiting for review." }
+      }
+    },
+    "save_moment_closed": {
+      "emitters": ["ios", "android"],
+      "description": "MUT-627: the full-screen save moment after a save in the app closed. Shown = the sum of every outcome. An undone entry is never counted as income_recorded or expense_recorded.",
+      "properties": {
+        "kind": { "type": "enum", "values": ["expense", "income", "conversion"], "description": "What was saved." },
+        "outcome": { "type": "enum", "values": ["confirmed", "auto_confirmed", "undone", "backgrounded"], "description": "confirmed = Confirm or back; auto_confirmed = the 6-second countdown ran out; undone = Undo (nothing was sent); backgrounded = the app left the foreground mid-countdown (kept)." },
+        "entry_point": { "type": "enum", "values": ["keypad", "details", "quick_action", "convert", "share", "receipt_review"], "description": "Where it was saved. receipt_review shows a Done-only moment, so its outcome is always confirmed." }
       }
     }
   }

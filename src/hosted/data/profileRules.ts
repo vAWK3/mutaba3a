@@ -23,8 +23,31 @@ export function atProfileCap(me: Me): boolean {
 /** OPERATOR: set up for the user by an operator (MUT-300 D5: "firm" now means firm features are on, owned or not). */
 export type ProfileEditability = { editable: false; reason: 'MALAFAT' | 'OPERATOR' } | { editable: true; typeLocked: boolean };
 
+/**
+ * MUT-596: whether the person's ownership extends to the profile's own records and settings. A partner owns a firm
+ * whose members Malafat syncs (MUT-594: accountants, share links, billing), but its name, members, clients and income
+ * are Malafat's to change, so the portal offers none of those there, as before MUT-594. A person's own profile they
+ * connected to Malafat stays theirs (its MUT-61 captures included).
+ */
+export function ownsItsRecords(profile: Pick<HostedProfile, 'owned' | 'managedInMalafat'>): boolean {
+  return profile.owned && !profile.managedInMalafat;
+}
+
+/**
+ * A firm whose members Malafat syncs, as one of the partners who own it: Manage profiles still opens it, read-only,
+ * so its Sharing row (accountants, links) is reachable there too. Its name, type and members stay Malafat's.
+ */
+export function opensReadOnly(profile: Pick<HostedProfile, 'owned' | 'managedInMalafat'>): boolean {
+  return profile.owned && profile.managedInMalafat === true;
+}
+
+/** Manage profiles opens a profile's pane: to edit it, or read-only for a Malafat-synced firm the person owns. */
+export function opensInManage(profile: HostedProfile): boolean {
+  return profileEditability(profile).editable || opensReadOnly(profile);
+}
+
 export function profileEditability(profile: HostedProfile): ProfileEditability {
-  if (!profile.owned) return { editable: false, reason: profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
+  if (!ownsItsRecords(profile)) return { editable: false, reason: profile.managedInMalafat || profile.writerOfRecord === 'MALAFAT' ? 'MALAFAT' : 'OPERATOR' };
   return { editable: true, typeLocked: profile.isPersonalDefault };
 }
 
@@ -38,7 +61,7 @@ export type FirmRequestState = 'hidden' | 'offer' | 'requested';
  */
 export function firmRequestState(profile: HostedProfile): FirmRequestState {
   if (profile.firm !== false) return 'hidden';
-  if (!profile.owned || profile.isPersonalDefault || profile.type !== 'BUSINESS') return 'hidden';
+  if (!ownsItsRecords(profile) || profile.isPersonalDefault || profile.type !== 'BUSINESS') return 'hidden';
   return profile.firmRequestedAt ? 'requested' : 'offer';
 }
 
@@ -103,17 +126,27 @@ export function createdBy(profile: HostedProfile, viewerId: string): boolean {
 
 /** The creator removes co-owners; a co-owner leaves; the creator never leaves (eng review D3). */
 export function ownerActions(profile: HostedProfile, viewerId: string): { canRemove: boolean; canLeave: boolean } {
-  if (!profile.owned) return { canRemove: false, canLeave: false };
+  if (!ownsItsRecords(profile)) return { canRemove: false, canLeave: false };
   const creator = createdBy(profile, viewerId);
   return { canRemove: creator, canLeave: !creator };
 }
 
 /** The Owners section belongs to owned Business profiles (AD5): never the built-in one, an owned Personal one or a firm. */
 export function ownersSectionVisible(profile: HostedProfile): boolean {
-  return profile.owned && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
+  return ownsItsRecords(profile) && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
 }
 
 /** The cap hint (DR2): only for someone who co-owns a profile they didn't create, which their count leaves out. */
 export function coOwnsOthersProfiles(me: Me): boolean {
   return me.profiles.some((profile) => profile.owned && !createdBy(profile, me.user.id));
+}
+
+/**
+ * MUT-589 (ADR-255, Basel 2026-11-12): whether the portal offers to move this profile's expenses elsewhere. Only an
+ * owner (creator or co-owner, `owned`) of a profile Malafat doesn't feed; anyone else sees no Move at all (the server's
+ * 403 NOT_OWNER / MALAFAT_PROFILE stay as the backstop). Writability, signed-out mode and "somewhere to move to" are
+ * the caller's other conditions.
+ */
+export function mayMoveExpensesFrom(profile: Pick<HostedProfile, 'owned' | 'writerOfRecord' | 'managedInMalafat'>): boolean {
+  return ownsItsRecords(profile) && profile.writerOfRecord !== 'MALAFAT';
 }

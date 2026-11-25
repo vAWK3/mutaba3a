@@ -9,7 +9,6 @@ paths:
   - src/hosted/pages/client-books/**
   - src/hosted/data/clientBooksQueries.ts
   - src/hosted/components/EntriesTable.tsx
-  - src/hosted/shell/HostedShell.tsx
 features:
   - id: list
     title: Client books lists every client book, and an ended one fades until removed (AC1, AC6)

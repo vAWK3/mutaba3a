@@ -16,6 +16,8 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY package.json package-lock.json .npmrc ./
 COPY prisma ./prisma
+# MUT-640: npm ci's postinstall applies the pdfmake-rtl patch (patch-package), so the patch is in place first.
+COPY patches ./patches
 RUN npm ci --no-audit --no-fund
 COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
@@ -30,6 +32,8 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/dist ./dist
+# MUT-640: the issued-document PDF fonts (src/pdf/fonts.ts resolves /app/assets/fonts/pdf from dist/).
+COPY assets ./assets
 COPY dist-hosted ./portal
 ENV PORTAL_DIST_DIR=/app/portal
 USER node

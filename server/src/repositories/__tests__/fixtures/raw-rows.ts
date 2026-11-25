@@ -19,6 +19,13 @@ export async function insertFirmRow(db: PrismaClient, name = 'Firm'): Promise<{ 
   return { id };
 }
 
+/** A client as a raw row: today's client selects customer columns older schemas lack (MUT-642's taxId, address). */
+export async function insertCustomerRow(db: PrismaClient, organizationId: string, name = 'Client'): Promise<{ id: string }> {
+  const id = randomUUID();
+  await db.$executeRawUnsafe(`INSERT INTO customers (id, "organizationId", name, "updatedAt") VALUES ('${id}', '${organizationId}', '${name}', now())`);
+  return { id };
+}
+
 /** A user with their MUT-120 personal organization (needs a database at or after MUT-120) and a membership in each of `organizationIds`. */
 export async function insertUserWithPersonalRow(db: PrismaClient, organizationIds: string[]): Promise<{ userId: string; personalId: string }> {
   const userId = randomUUID();

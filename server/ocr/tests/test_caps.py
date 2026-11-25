@@ -69,6 +69,74 @@ def pdf_with_text(text: str, render_mode: int, footer: str | None = None) -> byt
 RECEIPT_TEXT = "Grocer Ltd Total 61.83 Date 11/12/2025"
 
 
+def pdf_with_items(pages: list[list[tuple[float, float, str]]]) -> bytes:
+    """MUT-590: a PDF whose pages draw each (x, y, text) as its own visible text object: an invoice generator's label
+    and value placed apart on one line, or a label over its value."""
+    objects: list[bytes] = [b"<< /Type /Catalog /Pages 2 0 R >>", b""]
+    kids = []
+    for items in pages:
+        stream = " ".join(f"BT /F1 12 Tf {x} {y} Td ({text}) Tj ET" for x, y, text in items).encode()
+        page_no, content_no = len(objects) + 1, len(objects) + 2
+        kids.append(page_no)
+        objects.append(b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 300 200] /Resources << /Font << /F1 %d 0 R >> >> /Contents %d 0 R >>" % (len(pages) * 2 + 3, content_no))
+        objects.append(b"<< /Length %d >>\nstream\n" % len(stream) + stream + b"\nendstream")
+    objects[1] = b"<< /Type /Pages /Kids [%s] /Count %d >>" % (b" ".join(b"%d 0 R" % k for k in kids), len(kids))
+    objects.append(b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for number, body in enumerate(objects, start=1):
+        offsets.append(len(out))
+        out += b"%d 0 obj\n" % number + body + b"\nendobj\n"
+    xref = len(out)
+    out += b"xref\n0 %d\n0000000000 65535 f \n" % (len(objects) + 1)
+    out += b"".join(b"%010d 00000 n \n" % offset for offset in offsets)
+    out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (len(objects) + 1, xref)
+    return bytes(out)
+
+
+def _row_of(lines: list[dict], text: str) -> dict:
+    return next(line for line in lines if line["text"] == text)
+
+
+def _same_row(a: dict, b: dict) -> bool:
+    overlap = min(a["box"][3], b["box"][3]) - max(a["box"][1], b["box"][1])
+    return overlap >= 0.5 * min(a["box"][3] - a["box"][1], b["box"][3] - b["box"][1])
+
+
+def test_a_text_layer_comes_with_positioned_lines_a_label_and_its_value_apart_on_one_line():
+    # MUT-590: "Total" at the left margin, its amount in a column far to the right, as invoice generators draw them.
+    decoded = decode(pdf_with_items([[(20, 150, "Grocer Ltd"), (20, 100, "Total"), (220, 100, "61.83"), (20, 60, "Date 11/12/2025")]]), "application/pdf")
+    assert decoded.pdf_text is not None
+    lines = decoded.pdf_lines
+    label, value = _row_of(lines, "Total"), _row_of(lines, "61.83")
+    assert _same_row(label, value) and value["box"][0] > label["box"][2]
+    assert not _same_row(label, _row_of(lines, "Grocer Ltd"))
+    # Top-down: the name printed higher on the page comes first.
+    assert _row_of(lines, "Grocer Ltd")["box"][1] < label["box"][1] < _row_of(lines, "Date 11/12/2025")["box"][1]
+    assert all(line["conf"] == 1.0 and line.get("script") in (None, "latn") for line in lines)
+
+
+def test_the_second_pages_lines_sit_below_the_first_pages():
+    decoded = decode(pdf_with_items([[(20, 20, "Page one bottom line")], [(20, 180, "Page two top line")]]), "application/pdf")
+    first, second = _row_of(decoded.pdf_lines, "Page one bottom line"), _row_of(decoded.pdf_lines, "Page two top line")
+    assert second["box"][1] > first["box"][3]
+
+
+def test_a_text_layer_past_the_character_cap_has_no_lines_but_keeps_its_text(monkeypatch):
+    monkeypatch.setattr(decode_mod, "MAX_LAYER_CHARS", 10)
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 0), "application/pdf")
+    assert decoded.pdf_text is not None and "61.83" in decoded.pdf_text and decoded.pdf_lines == []
+
+
+def test_a_pdfium_failure_while_placing_the_text_keeps_the_text(monkeypatch):
+    def boom(*_args):
+        raise RuntimeError("pdfium")
+
+    monkeypatch.setattr(decode_mod, "_layer_lines", boom)
+    decoded = decode(pdf_with_text(RECEIPT_TEXT, 0), "application/pdf")
+    assert decoded.pdf_text is not None and decoded.pdf_lines == []
+
+
 def test_a_visible_text_layer_is_read_as_text():
     decoded = decode(pdf_with_text(RECEIPT_TEXT, 0), "application/pdf")
     assert decoded.pdf_text is not None and "61.83" in decoded.pdf_text and decoded.pages == []
