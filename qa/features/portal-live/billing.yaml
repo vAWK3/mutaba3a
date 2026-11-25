@@ -403,6 +403,22 @@ features:
       - Subscribe says "Welcome back - your first month is ₪9.00, then ₪29.00 a month."
       - Stripe's page says the welcome-back price, and the first invoice takes ₪20 off ₪29
       - Once back, Billing offers it no more and the job mails nothing more
+  - id: comeback-unsubscribe
+    title: The come-back offer carries an unsubscribe - its link turns offers off, and the mail app's one-click does too (ADR-279)
+    tier: secondary
+    paths:
+      - server/src/email/unsubscribe.ts
+      - server/src/email/transports/resend.ts
+      - src/hosted/pages/mail-off/MailOffPage.tsx
+    steps:
+      - A monthly subscriber paid once, and the plan ended 31 days ago
+      - The daily come-back job runs
+      - Open the mail's Unsubscribe link and press Unsubscribe
+      - Press Send me offers again, then use the mail app's one-click unsubscribe
+    expect:
+      - The mail says "Don't want offers from MTB3A? Unsubscribe." and carries List-Unsubscribe and List-Unsubscribe-Post headers
+      - The page asks first, then says "You won't get offers from MTB3A."
+      - After turning offers back on, the one-click POST answers that it unsubscribed
   - id: comeback-yearly
     title: The come-back offer on Yearly - the same ₪20 off the first year, ₪270 then ₪290
     tier: secondary
