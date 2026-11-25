@@ -2893,6 +2893,16 @@ empty option and list the profiles only), with a drawer test for each.
 - **What:** `tax_authority.token_refreshed|token_refresh_failed` go to the 12-month authentication log only; the plan also wanted audit rows. Kept out to stay clear of `fix/invoicing-followups`, which changes the same service.
 - **Fix:** after that branch merges, append the audit rows in `accessTokenFor`.
 
+### TD-331: A closed profile's archive signs its never-produced documents inside one request
+**Status**: Open (2026-11-25, MUT-644 D6)
+- **What:** `POST /admin/v1/issuing/retained/{id}/archive` renders and signs (KMS + time stamp) a copy of every document whose original was never produced, one after another, in the request. A business with hundreds of such documents could pass Cloud Run's request timeout. Most documents are produced when issued, so the list is usually short.
+- **Fix:** if it bites, build the archive in a job (as the period downloads do, MUT-314) and give the operator a link.
+
+### TD-332: The archive is handed over by the operator, by hand
+**Status**: Open (2026-11-25, MUT-644 D6; open question 3 for the lawyer)
+- **What:** after checking who is asking, the operator downloads the zip and sends it over a channel of their choosing; nothing in the product delivers it.
+- **Fix:** if the lawyer or volume asks for it, a time-limited, single-use download link sent to an address the operator confirmed.
+
 ## Resolved Debt
 
 ### TD-314: The monthly summary's catch-up days re-read everyone already mailed
