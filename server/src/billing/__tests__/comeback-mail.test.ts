@@ -93,7 +93,7 @@ describe('runComebackMail (MUT-534)', () => {
     expect(first.summary).toMatchObject({ checked: 1, due: 1, sent: 1 });
     const [mail] = h.outbox.list({ to: user.email });
     expect(mail!.template).toBe('comeback-offer');
-    expect(mail!.subject).toBe('سجلاتك في متابعة ما زالت هنا');
+    expect(mail!.subject).toBe('פרסומת: سجلاتك في متابعة ما زالت هنا');
     expect(mail!.text).toContain('⁨₪9⁩');
     expect(mail!.text).toContain('⁨₪270⁩');
     expect(mail!.html).toContain('step=subscribe');
@@ -108,7 +108,7 @@ describe('runComebackMail (MUT-534)', () => {
     const { user } = await h.lapsed({ endedDaysAgo: 91, currency: 'USD' });
     await h.run();
     const [mail] = h.outbox.list({ to: user.email });
-    expect(mail!.subject).toBe('Come back to MTB3A for $3 your first month');
+    expect(mail!.subject).toBe('פרסומת: Come back to MTB3A for $3 your first month');
     expect(mail!.text).toContain('then $9 a month');
   });
 

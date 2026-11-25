@@ -80,6 +80,8 @@ export interface MailBody {
   sections?: { title: string; rows: { label: string; value: string }[]; link: { label: string; href: string } }[];
   /** MUT-535: a mail the person can turn off says how, in the footer: `text`, the `label` link, then `after`. */
   optOut?: { text: string; label: string; href: string; after: string };
+  /** Communications Law s.30A: an advertisement names its sender (name, address, contact) in the message. */
+  sender?: string;
   /** The note under a rule after the button (what to do if this wasn't you). */
   outro?: Inline[][];
 }
@@ -214,7 +216,7 @@ function section(entry: NonNullable<MailBody['sections']>[number], look: Look | 
   ].join('');
 }
 
-function footer(locale: UserLocale, frame: MailFrame, optOut?: MailBody['optOut']): string {
+function footer(locale: UserLocale, frame: MailFrame, optOut?: MailBody['optOut'], sender?: string): string {
   const service = frame.to ? `${escapeHtml(SERVICE[locale])}${SENT_TO[locale]}<bdi dir="ltr">${escapeHtml(frame.to)}</bdi>.` : `${escapeHtml(SERVICE[locale])}.`;
   const privacy = frame.websiteOrigin ? `${originOf(frame.websiteOrigin)}/privacy?lang=${locale}` : null;
   return [
@@ -222,6 +224,7 @@ function footer(locale: UserLocale, frame: MailFrame, optOut?: MailBody['optOut'
     `<table role="presentation" align="center" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto 12px;"><tr><td><div style="width:6px;height:6px;border-radius:3px;background:${NUQTA};font-size:0;line-height:0;"></div></td></tr></table>`,
     `<p style="margin:0 0 8px;font-size:14px;line-height:1.55;font-weight:700;color:${INK};">${escapeHtml(SAFE[locale])}</p>`,
     `<p style="margin:0 0 8px;font-size:13px;line-height:1.6;color:${SECONDARY_INK};">${service}</p>`,
+    ...(sender ? [`<p data-sender style="margin:0 0 8px;font-size:13px;line-height:1.6;color:${SECONDARY_INK};">${escapeHtml(sender)}</p>`] : []),
     ...(optOut
       ? [`<p data-opt-out style="margin:0 0 8px;font-size:13px;line-height:1.6;color:${SECONDARY_INK};">${escapeHtml(optOut.text)} <a href="${escapeHtml(checkedHref(optOut.href))}" style="color:${LINK};">${escapeHtml(optOut.label)}</a> ${escapeHtml(optOut.after)}<br><bdi dir="ltr">${escapeHtml(checkedHref(optOut.href))}</bdi></p>`]
       : []),
@@ -272,7 +275,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
       ? [`<div style="margin-top:24px;padding-top:20px;border-top:1px solid ${LINE};">`, ...body.outro.map((p) => paragraphHtml(p, SECONDARY_INK)), '</div>']
       : []),
     '</td></tr>',
-    footer(locale, frame, body.optOut),
+    footer(locale, frame, body.optOut, body.sender),
     '</table>',
     MSO_CLOSE,
     '</td></tr>',
@@ -291,6 +294,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     ...(action ? [`${action.label}:`, action.href, ''] : []),
     ...(secondary ? [`${secondary.label}:`, secondary.href, ''] : []),
     ...(body.outro ?? []).map((p) => p.map(inlineText).join('')).flatMap((p) => [p, '']),
+    ...(body.sender ? [body.sender, ''] : []),
     ...(body.optOut ? [`${body.optOut.text} ${body.optOut.label} ${body.optOut.after}`, body.optOut.href, ''] : []),
     '--',
     FOOTER[locale],

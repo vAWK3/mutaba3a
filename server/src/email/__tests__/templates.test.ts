@@ -69,7 +69,8 @@ const NUMERIC_VARS: Partial<Record<MailTemplateId, string[]>> = {
   // MUT-571 AC3: the days left and the Tax Authority's 90-day rule; no date.
   'tax-authority-reconnect': ['90', '6'],
   // MUT-534 (ADR-243, overriding ADR-159 §5): the come-back prices, longest first so none hides inside another.
-  'comeback-offer': ['₪290', '₪270', '₪29', '₪9'],
+  // '18' and the contact address (mtb3a) are in the sender's details (s.30A).
+  'comeback-offer': ['₪290', '₪270', '₪29', '₪9', '18', 'info@mtb3a.com'],
   // MUT-333 (ADR-188): the deletion day is the one date a mail may carry, in the mail's own language.
   'account-closing': [mailDay({ year: 2026, month: 11, day: 23 }, 'en'), mailDay({ year: 2026, month: 11, day: 23 }, 'ar')],
   // MUT-525 (ADR-237, overriding ADR-159 §5): a renewal notice must state its price and day.
@@ -299,7 +300,7 @@ const SUBJECTS: Record<CustomerTemplateId, Record<'en' | 'ar', string>> = {
   'offer-renewing-soon': { en: 'Your MTB3A first year ends on November 12, 2027', ar: 'تنتهي سنتك الأولى في متابعة يوم 12 تشرين الثاني 2027' },
   'card-failed': { en: "Your card didn't go through", ar: 'لم تنجح عملية الدفع ببطاقتك' },
   'card-failed-reminder': { en: 'Your card still isn’t going through', ar: 'ما زالت عملية الدفع ببطاقتك لا تنجح' },
-  'comeback-offer': { en: 'Come back to MTB3A for ₪9 your first month', ar: 'عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
+  'comeback-offer': { en: 'פרסומת: Come back to MTB3A for ₪9 your first month', ar: 'פרסומת: عُد إلى متابعة بـ \u2068₪9\u2069 لشهرك الأول' },
   'accountant-invite': { en: 'Basel Sader shared “Sader Studio” with you on MTB3A', ar: 'Basel Sader يشاركك ملف «Sader Studio» في متابعة' },
   'sign-in-code': { en: '482913 is your MTB3A sign-in code', ar: 'رمز تسجيل الدخول إلى متابعة: 482913' },
   'monthly-summary': { en: 'Your November in MTB3A', ar: 'تشرين الثاني في متابعة' },
@@ -562,5 +563,33 @@ describe('monthly-summary (MUT-535, ADR-259)', () => {
     expect(count(1)).toContain('(قيد واحد)');
     expect(count(2)).toContain('(قيدان)');
     expect(count(11)).toContain('(11 قيدًا)');
+  });
+});
+
+describe('the come-back offer is an advertisement (Communications Law s.30A)', () => {
+  const vars = SAMPLE['comeback-offer'];
+  for (const stage of ['day-30', 'day-90'] as const) {
+    for (const locale of ['en', 'ar'] as const) {
+      it(`${stage} in ${locale}: «פרסומת» opens the subject, the sender's details are in both parts, and the unsubscribe stays`, () => {
+        const mail = renderMail('comeback-offer', locale, { ...vars, stage }, FRAME);
+        expect(mail.subject.startsWith('פרסומת: ')).toBe(true);
+        for (const part of [mail.html, mail.text]) {
+          expect(part).toContain('Narabnd Studio Ltd');
+          expect(part).toContain('18');
+          expect(part).toContain('info@mtb3a.com');
+        }
+        expect(mail.html).toContain('data-sender');
+        expect(mail.html).toContain('data-opt-out');
+        expect(mail.text).toContain('mail-off?mail=offers#tok_ABC123def');
+      });
+    }
+  }
+
+  it('no other mail carries a sender block or the advertisement label', () => {
+    for (const id of CUSTOMER_IDS.filter((t) => t !== 'comeback-offer')) {
+      const mail = renderMail(id, 'en', SAMPLE[id] as never, FRAME);
+      expect(mail.subject).not.toContain('פרסומת');
+      expect(mail.html).not.toContain('data-sender');
+    }
   });
 });
