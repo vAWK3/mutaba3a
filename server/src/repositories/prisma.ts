@@ -12,7 +12,8 @@ import { SENTRY_RULES } from '../observability/sentry-rules.js';
 import { ForeignKeyViolation, InsufficientCapacity, LockConflict, StateConflict, UniqueViolation } from './memory.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { prismaRecordsExport } from './prisma-records-export.js';
-import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS } from './prisma-purge-tables.js';
+import { PURGE_PROFILE_TABLES, PURGE_UNKEYED_USER_COLUMNS, PURGE_USER_COLUMNS, RETAINED_ISSUING_TABLES } from './prisma-purge-tables.js';
+import { retentionSweepMetadata } from '../issuing/retention.js';
 import { GRACE_MS, isDueForPurge } from '../accounts/closure.js';
 import { decidePurge, purgeAuditRows, type PurgeCandidate, type PurgeDecision } from '../accounts/purge-plan.js';
 import { editRatesOf } from '../receipts/edit-rates.js';
@@ -36,6 +37,10 @@ import type {
   IssuedDocumentCancellationRecord,
   CancelPaymentRequestResult,
   IssuingRepository,
+  IssuingRetentionAction,
+  IssuingRetentionEventRecord,
+  IssuingRetentionRepository,
+  RetainedIssuingProfile,
   PaymentMethod,
   RefundRepository,
   IssuerLogoRecord,
@@ -4089,6 +4094,43 @@ export class PrismaLedgerStore implements LedgerStore {
     },
   };
 
+  /**
+   * MUT-644 (ADR-277): closed profiles' issuing rows. A profile id held by a retained table with no organizations row
+   * is a closed one (the purge deleted the profile and left the rows, ADR-260). One aggregate read; the sweep re-checks
+   * inside its own transaction, under the trigger's bypass.
+   */
+  readonly issuingRetention: IssuingRetentionRepository = {
+    listClosed: async (filter, limit) => {
+      const newest = filter.newestBefore === undefined ? Prisma.empty : Prisma.sql`AND (r.newest IS NULL OR r.newest < ${filter.newestBefore})`;
+      const query = filter.query?.trim();
+      const search = query ? Prisma.sql`AND (r."legalName" ILIKE ${`%${likeEscape(query)}%`} OR r."vatId" LIKE ${`${likeEscape(query)}%`})` : Prisma.empty;
+      return (await this.prisma.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.empty)} WHERE TRUE ${newest} ${search} ORDER BY r.newest ASC NULLS FIRST, r."organizationId" ASC LIMIT ${limit}`).map(toRetained);
+    },
+    getClosed: async (organizationId) => {
+      const [row] = await this.prisma.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.sql`WHERE "organizationId" = ${organizationId}::uuid`)}`;
+      return row ? toRetained(row) : null;
+    },
+    sweep: (organizationId, newestBefore, at) =>
+      this.prisma.$transaction(async (tx) => {
+        // The profile row can't come back (ids are never reused), so no lock is needed beyond this transaction's reads.
+        const [live] = await tx.$queryRaw<Array<{ id: string }>>`SELECT id FROM organizations WHERE id = ${organizationId}::uuid`;
+        if (live) return { kind: 'not_closed' as const };
+        const [row] = await tx.$queryRaw<RetainedRow[]>`${retainedProfilesSql(Prisma.sql`WHERE "organizationId" = ${organizationId}::uuid`)}`;
+        if (!row) return { kind: 'nothing' as const };
+        const held = toRetained(row);
+        if (held.newestDocumentDate !== null && held.newestDocumentDate >= newestBefore) return { kind: 'not_due' as const, newestDocumentDate: held.newestDocumentDate };
+        // ADR-260 decision 1: the only sanctioned way past the immutability triggers, for this transaction alone.
+        await tx.$executeRawUnsafe(`SET LOCAL mutaba3a.issuing_bypass = 'on'`);
+        let rows = 0;
+        for (const table of RETAINED_ISSUING_TABLES) rows += await tx.$executeRawUnsafe(`DELETE FROM "${table}" WHERE "organizationId" = $1::uuid`, organizationId);
+        const event = await tx.issuingRetentionEvent.create({ data: { organizationId, action: 'SWEPT', metadata: retentionSweepMetadata(held, rows), createdAt: at } });
+        return { kind: 'swept' as const, documents: held.documents, cancellations: held.cancellations, rows, newestDocumentDate: held.newestDocumentDate, event: toRetentionEvent(event) };
+      }),
+    record: async (organizationId, action, metadata, at) => toRetentionEvent(await this.prisma.issuingRetentionEvent.create({ data: { organizationId, action, metadata, createdAt: at } })),
+    events: async (organizationId) =>
+      (await this.prisma.issuingRetentionEvent.findMany({ where: { organizationId }, orderBy: [{ createdAt: 'asc' }, { id: 'asc' }] })).map(toRetentionEvent),
+  };
+
   readonly signupReviews: SignupReviewRepository = {
     list: async ({ state, limit, cursor }) => {
       const rows = await this.prisma.signupReview.findMany({
@@ -6007,3 +6049,49 @@ async function translate<T>(op: () => Promise<T>): Promise<T> {
 }
 
 export type { IntegrationRecord };
+
+// ---- MUT-644 (ADR-277): closed profiles' issuing rows ---------------------------------
+
+interface RetainedRow {
+  organizationId: string;
+  legalName: string | null;
+  vatId: string | null;
+  documents: number;
+  cancellations: number;
+  newest: string | null;
+}
+
+/**
+ * Every profile id a retained table holds with no organizations row (narrowed by `where` on "organizationId"), with
+ * its business details, counts and newest date: a document's date, or a cancellation's Israel date if later.
+ * Selected as `r`, so callers append WHERE / ORDER BY.
+ */
+function retainedProfilesSql(where: Prisma.Sql): Prisma.Sql {
+  const held = Prisma.join(
+    RETAINED_ISSUING_TABLES.map((table) => Prisma.sql`SELECT "organizationId" FROM ${Prisma.raw(`"${table}"`)} ${where}`),
+    ' UNION ',
+  );
+  return Prisma.sql`SELECT * FROM (
+    SELECT h."organizationId"::text AS "organizationId", d."legalName", d."vatId",
+      (SELECT count(*) FROM issued_documents x WHERE x."organizationId" = h."organizationId")::int AS documents,
+      (SELECT count(*) FROM issued_document_cancellations x WHERE x."organizationId" = h."organizationId")::int AS cancellations,
+      GREATEST(
+        (SELECT max(x."documentDate") FROM issued_documents x WHERE x."organizationId" = h."organizationId"),
+        (SELECT max(to_char((x."cancelledAt" AT TIME ZONE 'UTC') AT TIME ZONE 'Asia/Jerusalem', 'YYYY-MM-DD')) FROM issued_document_cancellations x WHERE x."organizationId" = h."organizationId")
+      ) AS newest
+    FROM (${held}) h
+    LEFT JOIN issuer_details d ON d."organizationId" = h."organizationId"
+    WHERE NOT EXISTS (SELECT 1 FROM organizations o WHERE o.id = h."organizationId")
+  ) r`;
+}
+
+/** A LIKE pattern's literal text (backslash is Postgres's default escape). */
+const likeEscape = (text: string) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+
+function toRetained(row: RetainedRow): RetainedIssuingProfile {
+  return { organizationId: row.organizationId, legalName: row.legalName, vatId: row.vatId, documents: Number(row.documents), cancellations: Number(row.cancellations), newestDocumentDate: row.newest };
+}
+
+function toRetentionEvent(row: { id: string; organizationId: string; action: string; metadata: Prisma.JsonValue; createdAt: Date }): IssuingRetentionEventRecord {
+  return { id: row.id, organizationId: row.organizationId, action: row.action as IssuingRetentionAction, metadata: row.metadata as JsonObject, createdAt: row.createdAt };
+}

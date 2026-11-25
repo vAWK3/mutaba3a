@@ -77,6 +77,31 @@ const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): Jso
   ...(logoId ? { logoId } : {}),
 });
 
+/**
+ * MUT-646: a document always prints. The logo is the one its snapshot names (else, a draft, none); a logo the PDF engine
+ * can't read (it passed the upload's checks but is broken inside) costs the logo, never the copy the customer is owed.
+ * MUT-644: also the operator's archive of a closed profile (routes/issuing-retention.ts).
+ */
+export async function renderIssuedWithLogo(store: LedgerStore, issuedPdf: IssuedPdf | null, render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>): Promise<Uint8Array> {
+  const logoId = doc.issuer.logoId;
+  const logo = typeof logoId === 'string' ? ((await store.issuing.getLogo(doc.organizationId, logoId))?.bytes ?? null) : null;
+  if (!logo) return render(doc, { ...options, logo: null });
+  try {
+    return await render(doc, { ...options, logo });
+  } catch (error) {
+    issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
+    return render(doc, { ...options, logo: null });
+  }
+}
+
+/** MUT-569: a credit note's tax invoice, which may be dated before the range: id → type and number (the uniform file). */
+export async function creditedOriginalsOf(store: LedgerStore, organizationId: string, documents: readonly IssuedDocumentRecord[]): Promise<Map<string, { docType: IssuedDocType; number: number }>> {
+  const inFile = new Map(documents.map((d) => [d.id, d]));
+  const ids = [...new Set(documents.flatMap((d) => (d.docType === 'CREDIT_NOTE' && d.originalId ? [d.originalId] : [])))];
+  const found = await Promise.all(ids.map(async (id) => inFile.get(id) ?? (await store.issuing.getById(organizationId, id))));
+  return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
+}
+
 /** MUT-569: the product's name in the uniform file (A000 1007). */
 const UNIFORM_FILE_SOFTWARE_NAME = 'MTB3A';
 
@@ -88,6 +113,29 @@ const UNIFORM_FILE_ID_FLOOR = 10n ** 14n;
 /** No document predates this (the issuing core shipped in 2026; the spec's dates are 8 digits). */
 const UNIFORM_FILE_EARLIEST = '2000-01-01';
 const uniformFilePrimaryId = () => String(UNIFORM_FILE_ID_FLOOR + (BigInt(`0x${randomBytes(8).toString('hex')}`) % (9n * UNIFORM_FILE_ID_FLOOR)));
+
+/**
+ * MUT-569: the uniform file's zip for these documents. MUT-644: also the operator's archive of a closed profile.
+ * A document too large for the file's fields is a 422 naming it.
+ */
+export async function uniformFileZipOf(
+  store: LedgerStore,
+  house: UniformFileHouse,
+  input: { organizationId: string; issuer: IssuerDetailsRecord; documents: IssuedDocumentRecord[]; range: { from: string; to: string }; now: Date; lang: 'ar' | 'en' },
+): Promise<{ file: UniformFile; zip: Uint8Array }> {
+  const { organizationId, issuer, documents, range, now, lang } = input;
+  const originals = await creditedOriginalsOf(store, organizationId, documents);
+  const software = { ...house, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
+  let file: UniformFile;
+  try {
+    file = buildUniformFile({ issuer, documents, originals, range, producedAt: now, primaryId: uniformFilePrimaryId(), software });
+  } catch (err) {
+    if (!(err instanceof DocumentTooLargeError)) throw err;
+    throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
+  }
+  const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range, producedAt: now, software }, lang);
+  return { file, zip: uniformFileZip(file, report) };
+}
 
 /** A real calendar day (the regex lets 2026-02-31 through). */
 const isCalendarDay = (iso: string) => {
@@ -367,26 +415,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     return expected;
   }
 
-  /** MUT-646: the logo a document prints: the one its snapshot names, else (a draft) the profile's current one. */
-  async function logoBytes(organizationId: string, logoId: unknown): Promise<Uint8Array | null> {
-    if (typeof logoId !== 'string') return null;
-    return (await store.issuing.getLogo(organizationId, logoId))?.bytes ?? null;
-  }
-
-  /**
-   * MUT-646: a document always prints. A logo the PDF engine can't read (it passed the upload's checks but is broken
-   * inside) costs the logo, never the copy the customer is owed.
-   */
-  async function renderPdf(render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>): Promise<Uint8Array> {
-    const logo = await logoBytes(doc.organizationId, doc.issuer.logoId);
-    if (!logo) return render(doc, { ...options, logo: null });
-    try {
-      return await render(doc, { ...options, logo });
-    } catch (error) {
-      issuedPdf?.logoFailed?.({ organizationId: doc.organizationId, documentId: doc.id, error });
-      return render(doc, { ...options, logo: null });
-    }
-  }
+  const renderPdf = (render: IssuedPdfRenderer, doc: IssuedDocumentRecord, options: Omit<Parameters<IssuedPdfRenderer>[1], 'logo'>) => renderIssuedWithLogo(store, issuedPdf, render, doc, options);
 
   /** The request's shape rules per type, then the pure compose (both the preview and the issue run this). */
   /** A credit note's tax invoice: it credits at that invoice's rate and can't be dated before it (review fix 1). */
@@ -1175,17 +1204,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       if (to > todayFor(organization, now)) throw new ApiError('VALIDATION_FAILED', 'A range can’t reach past today', { reason: 'PERIOD_RANGE', field: 'to' });
       const issuer = await mustIssuer(organization.id);
       const documents = await store.issuing.inRange(organization.id, from, to);
-      const originals = await originalsOf(organization.id, documents);
-      const software = { ...uniformFileHouse, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
-      let file: UniformFile;
-      try {
-        file = buildUniformFile({ issuer, documents, originals, range: { from, to }, producedAt: now, primaryId: uniformFilePrimaryId(), software });
-      } catch (err) {
-        if (!(err instanceof DocumentTooLargeError)) throw err;
-        throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
-      }
-      const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range: { from, to }, producedAt: now, software }, lang);
-      const zip = uniformFileZip(file, report);
+      const { file, zip } = await uniformFileZipOf(store, uniformFileHouse, { organizationId: organization.id, issuer, documents, range: { from, to }, now, lang });
       // A member's export is recorded; an accountant reads under a read-only store, like every issuing read (no audit).
       if (sessionAuth(c).access === 'member') await audit(c, 'issuing.uniform_file_exported', 'issuer_details', organization.id, { from, to, documents: documents.length, records: file.totalRecords });
       return c.body(new Uint8Array(zip), 200, {
@@ -1197,14 +1216,6 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       });
     },
   );
-
-  /** A credit note's tax invoice, which may be dated before the range: id → type and number. */
-  async function originalsOf(organizationId: string, documents: readonly IssuedDocumentRecord[]) {
-    const inFile = new Map(documents.map((d) => [d.id, d]));
-    const ids = [...new Set(documents.flatMap((d) => (d.docType === 'CREDIT_NOTE' && d.originalId ? [d.originalId] : [])))];
-    const found = await Promise.all(ids.map(async (id) => inFile.get(id) ?? (await store.issuing.getById(organizationId, id))));
-    return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
-  }
 
   app.openapi(
     createRoute({

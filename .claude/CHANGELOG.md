@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Closed profiles' issued documents: the 7-year sweep and the owner's archive (MUT-644, ADR-277, API 1.138.0-mut644)
+
+### Added
+- `server/src/issuing/retention.ts`: `ISSUING_RETENTION_YEARS = 7`, `retentionEndsOn`, `sweepCutoff`: kept until 1 January of the 8th year after the year of the newest document.
+- Store `issuingRetention` (memory + Prisma, shared contract): `listClosed`, `getClosed`, `sweep` (one transaction, re-checks closed + due, `SET LOCAL mutaba3a.issuing_bypass = 'on'`, the nine retained tables), `record`, `events`. Operator-only in the store guard.
+- Table `issuing_retention_events` (migration `20261125120000_mut644_issuing_retention_events`), exempt from the purge.
+- `runIssuingRetentionSweep` (`server/src/accounts/issuing-retention-sweep.ts`), run by the hourly account purge (summary `issuingProfilesSwept`), at most 25 a run.
+- Admin: `GET /admin/v1/issuing/retained`, `POST /admin/v1/issuing/retained/{organizationId}/archive` (signed originals, signed copies of the rest, the uniform file; 409 `PROFILE_NOT_CLOSED` for a live profile), `POST /admin/v1/issuing/retention/sweep`. `npm run issuing:retained -- list|archive|sweep`.
+- Close my account's Kept section always says issued invoices and receipts are kept 7 years (portal en + ar; phone on `feature/mut-644-phone`). The privacy policy's deletion section says the same (Last updated November 25, 2026; wording awaits Basel, before-release.md).
+- Release-QA `portal.account.close-keeps-issued`.
+
+### Changed
+- `issuing.ts` exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf` (moved out of the route closure, shared with the archive). No behaviour change.
+
+**Why:** ADR-260 kept issued documents after an account closes but nothing deleted them after the 7 years, and a former owner had no way to get a copy.
+
+**Open (lawyer):** the start date; erasure requests vs the duty to keep records; whether a hand-delivered archive is enough.
+
+**Files:** `server/src/issuing/retention.ts`, `server/src/accounts/issuing-retention-sweep.ts`, `server/src/accounts/purge-run.ts`, `server/src/routes/issuing-retention.ts`, `server/src/routes/issuing.ts`, `server/src/repositories/{ports,memory,prisma,prisma-purge-tables}.ts`, `server/src/auth/store-guard.ts`, `server/src/schemas.ts`, `server/src/app.ts`, `server/src/scripts/{issuing-retained,users}.ts`, `server/package.json`, `server/prisma/schema.prisma`, the migration, `server/openapi/openapi.yaml`, `src/hosted/api/schema.d.ts`, `src/hosted/components/CloseAccountDrawer.tsx`, `src/hosted/i18n/{en,ar}.json`, `src/lib/i18n/translations/{en,ar}/landing.json`, `docs/operations/before-release.md`, `qa/features/portal/account.yaml`, `qa/specs/portal/account.spec.ts`, `qa/specs/web/legal.spec.ts`, tests.
 ## [Unreleased] - 2026-11-24 — A credit note against a paid invoice: refunded or kept as credit (MUT-643, ADR-276, API 1.137.0-mut643)
 
 ### Added

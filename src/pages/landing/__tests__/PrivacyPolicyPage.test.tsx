@@ -55,6 +55,9 @@ describe('PrivacyPolicyPage', () => {
     expect(section).toMatch(/the records you added stay, without your name/);
     expect(section).toMatch(/a random internal ID, never your name or email/);
     expect(section).toMatch(/invoices for what you paid/);
+    // MUT-644 (ADR-277 D7): issued documents outlive the account by 7 years after the end of the year of the last one.
+    expect(section).toMatch(/the invoices and receipts you issued with MTB3A and the business details printed on them, for 7 years after the end of the year of the last one/);
+    expect(section).toMatch(/write to us and we'll send you a copy/);
     expect(section).toMatch(/before version 0\.1\.13/);
     // Closing is self-service now, and uninstalling never promised to clear the Keychain (MUT-382 #1, #4)
     expect(section).not.toMatch(/email info@/);
@@ -293,7 +296,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     const sharing = headings.indexOf('Who else handles your data');
     expect(headings.slice(sharing + 1, sharing + 3)).toEqual(['Sharing with your accountant', 'Share links']);
-    expect(document.querySelector('main')?.textContent).toContain('Last updated November 21, 2026');
+    expect(document.querySelector('main')?.textContent).toContain('Last updated November 25, 2026');
   });
 
   it('says what an accountant reads, for how long an invite works, that they change nothing, and who ends it', () => {
@@ -345,7 +348,7 @@ describe('PrivacyPolicyPage accountant access and share links (MUT-382)', () => 
     expect(links).toContain('بعد مرور 30 يومًا على انتهاء الرابط، نحذف سجلات أجهزته');
     expect(sectionOf('من يتعامل مع بياناتك أيضًا')).toContain('رابط مشاركة ورمزه');
     expect(sectionOf('إحصاءات استخدام مجهولة')).toContain('صفحتا روابط المشاركة ودعوات المحاسبين');
-    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 21 تشرين الثاني 2026');
+    expect(document.querySelector('main')?.textContent).toContain('آخر تحديث: 25 تشرين الثاني 2026');
   });
 });
 

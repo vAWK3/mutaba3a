@@ -7057,3 +7057,24 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** a refund as an Owed paid by the released money (it raises Billed instead of lowering Received); a refund as a negative payment (breaks every positive-amount rule); counting refunds outside `allocatedMinor` (every unallocated calculation would need to learn it); a numbered refund document (waits on the accountant, C2).
 
+---
+
+## ADR-277: Closed Profiles' Issued Documents Are Swept 7 Years After the End of the Year of the Newest One; the Owner's Copy Is an Operator Path (MUT-644)
+
+**Status:** Accepted (2026-11-25; built under Basel's standing go-ahead while he was away; plan `.claude/designs/MUT-644-issuing-retention.md`). Completes ADR-260 decision 2. **Open for the lawyer:** the start date, and erasure requests vs the duty to keep records (recorded on MUT-644, comment 13499).
+
+**Context:** the account purge (ADR-188) deletes a closed account's profiles but leaves their issuing tables (ADR-260 decision 2: legal records kept 7 years, no foreign keys, an immutability trigger with one sanctioned bypass). Nothing deleted them afterwards, and a former owner had no way to get a copy.
+
+**Decision:**
+1. **Retention date:** a closed profile's issuing rows may be deleted from 1 January of the 8th year after the calendar year of its newest document (a document's date, or a payment-request cancellation's Israel date if later): 7 full years after the end of that tax year. One constant, `ISSUING_RETENTION_YEARS = 7` (`server/src/issuing/retention.ts`). The year boundary is read in UTC (never early in Israel). A profile that never issued anything holds nothing to keep and goes on the next run.
+2. **Closed = the profile row is gone.** A live profile is never swept, however old its documents.
+3. **Where it runs:** inside the hourly account purge (like MUT-382's share-link viewer sweep), at most 25 profiles a run, never in a dry run; a failure is logged and never stops the purge. The purge summary gains `issuingProfilesSwept`. The operator can run or dry-run it alone (`POST /admin/v1/issuing/retention/sweep`, `npm run issuing:retained -- sweep`). No new scheduler job or Terraform.
+4. **How:** one transaction per profile that re-checks closed + due, runs `SET LOCAL mutaba3a.issuing_bypass = 'on'` and deletes from `RETAINED_ISSUING_TABLES` (the nine "kept 7 years" exemptions, pinned by a unit test).
+5. **Audit:** a new table `issuing_retention_events` (`SWEPT`, `ARCHIVE_EXPORTED`; counts, dates, the operator's support reference; never a name or address), no foreign keys, kept indefinitely, exempt from the purge. `audit_events` can't hold these rows: its profile foreign key is gone.
+6. **The former owner's copy is an operator path:** `GET /admin/v1/issuing/retained` finds the profile (business name or VAT number); `POST /admin/v1/issuing/retained/{id}/archive {reference}` returns a zip of the signed originals as kept, freshly signed copies of documents never produced, and the uniform file (MUT-569), and logs `ARCHIVE_EXPORTED`. A live profile is refused (409 `PROFILE_NOT_CLOSED`). The operator checks who is asking and hands the zip over; the server never mails it (ADR-159 §5: a mail never carries a money record).
+7. **Copy:** Close my account (portal and phone) always lists in Kept that issued invoices and receipts and the business details printed on them are kept 7 years after the end of the year of the last one, then deleted; the privacy policy's deletion section says the same.
+8. **Erasure requests** do not shorten the 7 years (pending the lawyer).
+
+**Consequences:** nothing is due before 1 January 2034. API 1.138.0-mut644 (additive: a summary field and admin routes); migration `20261125120000_mut644_issuing_retention_events` (one table). `issuing.ts` now exports `renderIssuedWithLogo`, `creditedOriginalsOf` and `uniformFileZipOf`, shared with the archive. An archive with many never-produced documents signs each one in the request (TD-331).
+
+**Alternatives rejected:** a retention date per document (keeps a business's history half-deleted for years); counting from the account's closing (not what the bookkeeping rules count); a new Cloud Scheduler job (infra for one cheap query an hour); writing the audit to `audit_events` (foreign key to a deleted profile); mailing the archive or a self-service download (no account left to authenticate, and mail never carries money records).
