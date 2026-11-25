@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — "Finish setting up invoicing" after a save (MUT-722, ADR-278)
+
+### Added
+- The save toast says "Finish setting up invoicing to issue its invoice." with Set up, once a day per person and profile, after a shekel income on a profile where invoicing is available but the setup can't issue; Set up opens the setup at the first missing step (`?step=`).
+- Receivables: "Finish setup to issue" where Issue would be while the setup can't issue.
+- `Toast` `detail` option: a quieter second line under the message.
+- Release-QA `portal.invoicing.setup-hint` (spec passing); FakeApi `invoicing: 'details'`.
+
+**Why:** MUT-648's offer was silent while the setup was incomplete, so nobody learned why no invoice was offered (Basel, phone 0.2.0).
+
+**Files:** `src/hosted/components/setupHint.ts` (+ test), `src/hosted/components/{IncomeCaptureDrawer,IncomeDrawerHost,Toast}.tsx` (+ Toast test), `src/hosted/pages/views/ReceivablesList.tsx`, `src/hosted/pages/invoicing/InvoicingSetupPage.tsx`, `src/hosted/router.tsx`, `src/hosted/hosted.css`, `src/hosted/i18n/{en,ar}.json`, `qa/features/portal/invoicing.yaml`, `qa/specs/portal/invoicing.spec.ts`, `qa/support/portalApi.ts`.
+
 ## [Unreleased] - 2026-11-22 — Three plans, provider-neutral (MUT-702 Part A, ADR-275, API 1.136.0-mut702)
 
 - Arabic plan names (Basel, 2026-11-23): مستقل / تجاري / مؤسسة, legacy Freelancer الخطة السابقة (`src/hosted/i18n/ar.json`).
