@@ -5657,3 +5657,112 @@ export const NotForInvoiceRequestSchema = z.object({ items: z.array(DueEntryRefS
 export const NotForInvoiceResultSchema = z.object({ changed: z.number().int() }).openapi('NotForInvoiceResult');
 export const SetNotForInvoiceRequestSchema = z.object({ value: z.boolean() }).strict().openapi('SetNotForInvoiceRequest');
 export const NotForInvoiceEntrySchema = z.object({ kind: DueEntryKindSchema, id: uuid, notForInvoice: z.boolean(), version: z.number().int() }).openapi('NotForInvoiceEntry');
+
+// ---- MUT-735 (ADR-281): the operator's usage reports ----------------------------------------------------------------
+
+const UsagePlanEnum = z.enum(['starter', 'solo', 'business', 'firm', 'freelancer', 'malafat', 'none']);
+const UsageMonthQuery = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])$/)
+  .optional()
+  .openapi({ param: { name: 'month', in: 'query' }, example: '2026-12', description: 'YYYY-MM, the Asia/Jerusalem month; absent = this month.' });
+
+const UsageMeterViewSchema = z
+  .object({
+    meter: z.enum(['documents', 'scans']),
+    used: z.number().int().nonnegative(),
+    limit: z.number().int().nonnegative().nullable(),
+    level: z.enum(['ok', 'near', 'nudge', 'at_cap']),
+  })
+  .openapi('UsageMeterView');
+
+export const OperatorUsageMonthQuerySchema = z.object({ month: UsageMonthQuery });
+
+export const OperatorUsageOverviewSchema = z
+  .object({
+    month: z.string(),
+    plans: z.array(
+      z.object({
+        plan: UsagePlanEnum,
+        payers: z.number().int().openapi({ description: 'Payers holding a counter this month.' }),
+        near: z.number().int().openapi({ description: 'Of them, at 80% or more of a cap and under it.' }),
+        capped: z.number().int().openapi({ description: 'At a cap.' }),
+        over: z.number().int().openapi({ description: 'Past a cap (their plan changed down).' }),
+        kinds: z.array(z.object({ kind: z.string(), events: z.number().int(), payers: z.number().int() })),
+      }),
+    ),
+    stepUpUntil: z.string().datetime().nullable(),
+  })
+  .openapi('OperatorUsageOverview');
+
+export const OperatorUsagePeopleQuerySchema = z.object({
+  month: UsageMonthQuery,
+  plan: UsagePlanEnum.optional().openapi({ param: { name: 'plan', in: 'query' } }),
+  filter: z.enum(['near', 'capped', 'over']).optional().openapi({ param: { name: 'filter', in: 'query' }, description: 'near: ≥80% of a cap and under it; capped: at it; over: past it. Absent: everyone with a counter.' }),
+  limit: z.coerce.number().int().min(1).max(100).default(50).openapi({ param: { name: 'limit', in: 'query' } }),
+  cursor: z.string().max(80).optional().openapi({ param: { name: 'cursor', in: 'query' } }),
+});
+
+const OperatorUsagePersonSchema = z.object({
+  subjectKey: z.string(),
+  userId: z.string().uuid().nullable(),
+  email: z.string().nullable(),
+  name: z.string(),
+  plan: UsagePlanEnum,
+  meters: z.array(UsageMeterViewSchema),
+});
+
+export const OperatorUsagePeopleSchema = z
+  .object({ month: z.string(), items: z.array(OperatorUsagePersonSchema), nextCursor: z.string().nullable(), stepUpUntil: z.string().datetime().nullable() })
+  .openapi('OperatorUsagePeople');
+
+export const OperatorAccountUsageSchema = z
+  .object({
+    months: z.array(z.object({ month: z.string(), plan: UsagePlanEnum, meters: z.array(UsageMeterViewSchema) })),
+    profiles: z.array(
+      z.object({
+        organizationId: z.string().uuid().nullable(),
+        name: z.string().nullable(),
+        months: z.array(z.object({ month: z.string(), documents: z.number().int(), scans: z.number().int(), other: z.number().int() })),
+      }),
+    ),
+    stepUpUntil: z.string().datetime().nullable(),
+  })
+  .openapi('OperatorAccountUsage');
+
+const UsageDayQuery = (name: string) =>
+  z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional()
+    .openapi({ param: { name, in: 'query' }, description: 'YYYY-MM-DD, an Asia/Jerusalem day; both ends inclusive. Default: the last 7 days.' });
+
+export const OperatorUsageRoutesQuerySchema = z.object({ from: UsageDayQuery('from'), to: UsageDayQuery('to') });
+
+export const OperatorUsageRoutesSchema = z
+  .object({
+    from: z.string(),
+    to: z.string(),
+    routes: z.array(
+      z.object({
+        routeKey: z.string().openapi({ example: 'POST /v1/issued-documents' }),
+        count: z.number().int(),
+        clientErrors: z.number().int(),
+        serverErrors: z.number().int(),
+        meanMs: z.number().int(),
+        p95Ms: z.number().int().nullable().openapi({ description: 'The upper bound of the duration bucket the 95th percentile falls in.' }),
+        p95Over: z.boolean().openapi({ description: 'The 95th percentile is over 10 s (p95Ms then says 10000).' }),
+      }),
+    ),
+    stepUpUntil: z.string().datetime().nullable(),
+  })
+  .openapi('OperatorUsageRoutes');
+
+export const OperatorUsageExportQuerySchema = z.object({
+  view: z.enum(['overview', 'people', 'routes']).openapi({ param: { name: 'view', in: 'query' } }),
+  month: UsageMonthQuery,
+  plan: UsagePlanEnum.optional().openapi({ param: { name: 'plan', in: 'query' } }),
+  filter: z.enum(['near', 'capped', 'over']).optional().openapi({ param: { name: 'filter', in: 'query' } }),
+  from: UsageDayQuery('from'),
+  to: UsageDayQuery('to'),
+});

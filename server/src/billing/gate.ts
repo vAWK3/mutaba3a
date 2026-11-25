@@ -93,6 +93,12 @@ export const PERSON_LEVEL_GATE: Readonly<Record<string, GateClass>> = {
   'POST /v1/operator/firm-requests/:organizationId/decline': 'open',
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/:organizationId/malafat-delegation': 'open',
+  // MUT-735 (ADR-281): Operator › Usage, the same rule.
+  'GET /v1/operator/usage/overview': 'open',
+  'GET /v1/operator/usage/people': 'open',
+  'GET /v1/operator/accounts/:userId/usage': 'open',
+  'GET /v1/operator/usage/routes': 'open',
+  'GET /v1/operator/usage/export.csv': 'open',
   // MUT-559 (ADR-245): who can read a profile is privacy, never a paid feature: an owner sees and revokes their
   // accountants, and an accountant accepts or leaves, in any state. Inviting is a write on the profile in the path.
   'GET /v1/profiles/:profileId/accountants': 'open',

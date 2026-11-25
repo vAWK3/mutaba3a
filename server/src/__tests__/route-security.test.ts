@@ -227,6 +227,12 @@ const OPERATOR_OPERATIONS = [
   'POST /v1/operator/firm-requests/{organizationId}/decline',
   // MUT-593: the per-firm Malafat switch.
   'POST /v1/operator/organizations/{organizationId}/malafat-delegation',
+  // MUT-735: Operator › Usage.
+  'GET /v1/operator/usage/overview',
+  'GET /v1/operator/usage/people',
+  'GET /v1/operator/accounts/{userId}/usage',
+  'GET /v1/operator/usage/routes',
+  'GET /v1/operator/usage/export.csv',
 ];
 
 /** MUT-593 (ADR-254): You › Connected apps, from the portal or the phone; never a delegated token. */

@@ -24668,6 +24668,394 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v1/operator/usage/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Usage this month per plan: payers, how many are near, at or over a cap, and events per kind (MUT-735) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description YYYY-MM, the Asia/Jerusalem month; absent = this month. */
+                    month?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The overview */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorUsageOverview"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a malformed month, day or cursor) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/usage/people": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The payers with usage this month, filtered by plan and by near / capped / over, 50 a page (MUT-735) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description YYYY-MM, the Asia/Jerusalem month; absent = this month. */
+                    month?: string;
+                    plan?: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+                    /** @description near: ≥80% of a cap and under it; capped: at it; over: past it. Absent: everyone with a counter. */
+                    filter?: "near" | "capped" | "over";
+                    limit?: number;
+                    cursor?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description A page of payers */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorUsagePeople"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a malformed month, day or cursor) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/accounts/{userId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One account's last six months: documents and scans against the plan of each month, and per profile (MUT-735) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    userId: string;
+                };
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The account's usage */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorAccountUsage"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator, or no such account */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a malformed month, day or cursor) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/usage/routes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The busiest 50 routes over a range of days: requests, errors, mean and p95 duration (MUT-735) */
+        get: {
+            parameters: {
+                query?: {
+                    /** @description YYYY-MM-DD, an Asia/Jerusalem day; both ends inclusive. Default: the last 7 days. */
+                    from?: string;
+                    /** @description YYYY-MM-DD, an Asia/Jerusalem day; both ends inclusive. Default: the last 7 days. */
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The routes */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["OperatorUsageRoutes"];
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a malformed month, day or cursor) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/operator/usage/export.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** One usage view as CSV, UTF-8 with a byte-order mark; needs a fresh passkey step-up (MUT-735) */
+        get: {
+            parameters: {
+                query: {
+                    view: "overview" | "people" | "routes";
+                    /** @description YYYY-MM, the Asia/Jerusalem month; absent = this month. */
+                    month?: string;
+                    plan?: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+                    filter?: "near" | "capped" | "over";
+                    /** @description YYYY-MM-DD, an Asia/Jerusalem day; both ends inclusive. Default: the last 7 days. */
+                    from?: string;
+                    /** @description YYYY-MM-DD, an Asia/Jerusalem day; both ends inclusive. Default: the last 7 days. */
+                    to?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description The CSV file */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "text/csv": string;
+                    };
+                };
+                /** @description Not signed in */
+                401: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CROSS_SITE_REQUEST, or RECENT_SIGN_IN_REQUIRED `{ method: "passkey", windowMinutes }`: step up with the passkey first */
+                403: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Not an operator */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description Validation failed (a malformed month, day or cursor) */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/admin/v1/billing/grants": {
         parameters: {
             query?: never;
@@ -33407,6 +33795,91 @@ export interface components {
         };
         OperatorEnableFirmRequest: {
             ownerUserIds?: string[];
+        };
+        OperatorUsageOverview: {
+            month: string;
+            plans: {
+                /** @enum {string} */
+                plan: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+                /** @description Payers holding a counter this month. */
+                payers: number;
+                /** @description Of them, at 80% or more of a cap and under it. */
+                near: number;
+                /** @description At a cap. */
+                capped: number;
+                /** @description Past a cap (their plan changed down). */
+                over: number;
+                kinds: {
+                    kind: string;
+                    events: number;
+                    payers: number;
+                }[];
+            }[];
+            /** Format: date-time */
+            stepUpUntil: string | null;
+        };
+        OperatorUsagePeople: {
+            month: string;
+            items: {
+                subjectKey: string;
+                /** Format: uuid */
+                userId: string | null;
+                email: string | null;
+                name: string;
+                /** @enum {string} */
+                plan: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+                meters: components["schemas"]["UsageMeterView"][];
+            }[];
+            nextCursor: string | null;
+            /** Format: date-time */
+            stepUpUntil: string | null;
+        };
+        UsageMeterView: {
+            /** @enum {string} */
+            meter: "documents" | "scans";
+            used: number;
+            limit: number | null;
+            /** @enum {string} */
+            level: "ok" | "near" | "nudge" | "at_cap";
+        };
+        OperatorAccountUsage: {
+            months: {
+                month: string;
+                /** @enum {string} */
+                plan: "starter" | "solo" | "business" | "firm" | "freelancer" | "malafat" | "none";
+                meters: components["schemas"]["UsageMeterView"][];
+            }[];
+            profiles: {
+                /** Format: uuid */
+                organizationId: string | null;
+                name: string | null;
+                months: {
+                    month: string;
+                    documents: number;
+                    scans: number;
+                    other: number;
+                }[];
+            }[];
+            /** Format: date-time */
+            stepUpUntil: string | null;
+        };
+        OperatorUsageRoutes: {
+            from: string;
+            to: string;
+            routes: {
+                /** @example POST /v1/issued-documents */
+                routeKey: string;
+                count: number;
+                clientErrors: number;
+                serverErrors: number;
+                meanMs: number;
+                /** @description The upper bound of the duration bucket the 95th percentile falls in. */
+                p95Ms: number | null;
+                /** @description The 95th percentile is over 10 s (p95Ms then says 10000). */
+                p95Over: boolean;
+            }[];
+            /** Format: date-time */
+            stepUpUntil: string | null;
         };
         CreateEntitlementGrantRequest: {
             /** Format: uuid */
