@@ -4869,3 +4869,17 @@ Written with the build; the full suites, `test:db` and the QA recordings run onc
 | QA (written, not run) | `qa/specs/portal/starter.spec.ts` (`portal.starter.*`, FakeApi `starter` seed) | Billing month (en/ar, 375 overflow), Issue drawer at 3/3, 13th scan before upload + by hand, second business, Continue free, pick dialog, Home notices; the trial step is declared hidden |
 | Postgres (to add with the final run) | `test:db` | the migration round trip (`uuid[]`), the documents cap race in `issueTx` at 2/3 (one 201, one PLAN_LIMIT, no number gap) and the scan complete at 11/12 |
 
+## MUT-702 Part B — buying a plan (2026-11-26, ADR-288)
+
+Written with the build. Full suites, `test:db` and QA recordings wait for Basel's final run.
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `billing/__tests__/plans.test.ts`, `checkout.test.ts` | the twelve list keys and their round trip; per-plan catalogs; plan Checkout metadata (plan, seller), `customer_update.address never`; Israeli VAT rate on the line item with automatic tax off; no rate = PRICES_NOT_SET; USD + Stripe Tax abroad; Solo trial params; Freelancer unchanged; address and Solo-trial rules; `vatRates` parsing |
+| Unit | `billing/stripe/__tests__/checkout-gateway.test.ts`, `mirror.test.ts`, `provider.test.ts`, `sync.test.ts` | plan keys on their own products; ≤10 keys a call; `profile` expiry; address save/read; the VAT rate lookup by percent; solo/business/firm mirror; the adapter's order (address, expire, session); the Solo trial marked used once |
+| Unit | `scripts/__tests__/stripe-plans.test.ts` | the spec's amounts (year = 10 months); empty → rate + 3 products + 12 prices; complete → nothing; ₪149 Firm → new price, key moved; wrong product/tax → moved; adopt `tier: firm`; Freelancer/Accountant untouched; the rate at the configured percent |
+| Routes | `__tests__/billing-plan-checkout.test.ts` | `plans` and `billingAddress` on GET (empty when off); each plan's Checkout, ILS + VAT for Israel, USD abroad; ADDRESS_INVALID; PLAN_CHECKOUT_OFF; ALREADY_SUBSCRIBED; two tabs; Israel without a rate 503; the Solo trial once offered, refused before / for Business / when unset / once used |
+| Infra | `server/infrastructure/terraform/tests/plan_checkout.tftest.hcl` | no env by default; `PLAN_CHECKOUT=true` when set |
+| Portal | `components/__tests__/BillingDrawer.plans.test.tsx`, `session/__tests__/AuthGate.soloTrial.test.tsx`, `data/__tests__/countries-match.test.ts` | the plan row (both currencies, limits line, current plan hidden), + VAT for Israel, the body sent, No match, prefill, plans off = Freelancer step; the trial step's live price, the address step and the trial Checkout's body; typed-country matching in ar/en |
+| Sandbox (by hand) | Stripe test mode | catalog script applied then "nothing to do"; product-tier check OK; a Jerusalem Solo Checkout totals 3900 + 702 ILS; a trial Checkout opens at 0 |
+| QA (written, not run) | `qa/specs/portal/plans.spec.ts` (`portal.plans.*`, FakeApi `starter.plans`) | subscribe-plan, typed-country, address-prefilled; the trial step stays hidden (build constant) |

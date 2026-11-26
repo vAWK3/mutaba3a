@@ -1,6 +1,7 @@
 # MUT-702 Part B: buy Solo, Business or Firm (provider-neutral port, Stripe the one adapter)
 
-Status: **design, awaiting Basel's approval** (revised 2026-11-26 with Basel's decisions 1–3). Not built.
+Status: **approved and built** (2026-11-26: wireframes v3 approved; Q1, Q5, Q6 yes; the country is a typed field). ADR-288.
+Built on `feat/mut-702b-checkout`; see "Build notes" at the end for what changed against this brief.
 Tracker: Jira MUT-702 (In Progress). Epic MUT-701. Unlocks MUT-731's Solo trial and live prices.
 Builds on: Part A (ADR-275, `server/src/billing/plans.ts`), MUT-731 (ADR-284/285), MUT-735 (ADR-281), MUT-736 (ADR-282).
 Earlier full Part B draft (Stripe-only, 2026-11-22): `~/.gstack/projects/vAWK3-mutaba3a/mut-702-plan.md` §D–I. This brief
@@ -113,8 +114,10 @@ Why:
   they keep running before Checkout as today.
 
 How:
-- The form: country (first), address line, city, postal code. It's the existing Subscribe step's country Select,
-  grown into an address. Prefilled from the Stripe customer's address when one exists (a returning payer).
+- The form: country (first), address line, city, postal code, all **free text** (Basel, 2026-11-26). The country is
+  typed and matched against our country list in Arabic and English (case, hamza, short vowels and a leading «ال»
+  ignored), with suggestions as you type; no match says "No match" and Continue stays off. Prefilled from the Stripe
+  customer's address when one exists (a returning payer).
 - On Continue the adapter writes it to the Stripe customer (`customers.update { address }`), then creates the session
   with `currency` from the country, `automatic_tax.enabled = true`, `customer_update.address = 'never'` (the Stripe
   page shows it and cannot change it), and `billing_address_collection = 'auto'`.
@@ -295,3 +298,20 @@ when Basel says so).
 
 4 cached `prices.list` calls per 10 minutes per instance; one `customers.update` per Checkout; Stripe Tax's per-
 transaction fee on every paid invoice. One additive migration; no new tables, jobs or services.
+
+## Build notes (2026-11-26)
+
+- **Israeli VAT is a Stripe tax rate, not Stripe Tax.** The sandbox refused `tax registrations create … country_options[il]`
+  (unknown parameter): Stripe Tax has no Israel registration. So `billing:plans` also makes an exclusive tax rate
+  (`metadata.mtb3a_vat = IL`) at `billing-countries.json` `vatRates.IL` (18; ADR-286 decision 2: one configuration
+  value), and an Israeli address's Checkout puts it on the line item with `automatic_tax` off. Other countries keep
+  Stripe Tax. No rate in Stripe = Israel not sold (PRICES_NOT_SET). Sandbox check: a Jerusalem Solo Checkout totals
+  3900 + 702 ILS; a Jordanian one 1200 USD with no tax (no registration there).
+- **Sandbox state:** head office GB set; the three products, twelve prices and the 18% rate made by the script; a second
+  dry run says nothing to do; `billing:product-tiers` OK. The sandbox account also holds Malafat's products (`planKey`
+  metadata); the script never touches them.
+- **Not built as written:** the unique key stays `stripeSubscriptionId` (TD-348); the QA sandbox seeding
+  (`billing-live.mjs`) and the portal-live flows of §12 wait (TD-347).
+- **Q1/Q5/Q6 (Basel: yes):** the plan row is in this ticket; each plan shows one limits line; USD $12/$27/$75 a month,
+  a year = 10 months.
+

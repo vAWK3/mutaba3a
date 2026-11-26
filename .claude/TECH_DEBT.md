@@ -3408,6 +3408,7 @@ When resolving debt:
 ### TD-344: Starter's portal flows run on the FakeApi; the Solo trial step and `trial: true` Checkout wait for MUT-702 Part B (MUT-731)
 - **What:** `portal.starter.*` runs on the FakeApi (the server's Starter paths are route-tested); TD-341's live flow still waits for a self-service stack with `STARTER_PLAN` on. The Solo trial step is dark (`SOLO_TRIAL_CHECKOUT`, `SOLO_TRIAL_OFFER_SINCE` unset): Try Solo opens Billing's Subscribe step, Checkout has no `plan: solo, trial: true`, and nothing sets `users.paidTrialUsedAt`.
 - **When to pay:** with MUT-702 Part B: Checkout's `trial: true` (14 days, card always, `TRIAL_USED`), the mirror setting `paidTrialUsedAt` on the first `trialing` row, the step's price line from Solo's catalog, a live-API QA flow, then `SOLO_TRIAL_OFFER_SINCE`.
+- **Partly paid (MUT-702 Part B, 2026-11-26):** Checkout's `trial: true` (refused `TRIAL_NOT_OFFERED`), the sync marking `paidTrialUsedAt` from the subscription's `mutaba3a_trial` metadata, the step's live price line and its address step are built. Left: a live-API QA flow, then `SOLO_TRIAL_OFFER_SINCE` and `SOLO_TRIAL_CHECKOUT`.
 
 ### TD-345: Operator › Usage's "near" filter is a plain 80% (MUT-731)
 - **What:** ADR-284 decision 10 warns earlier on a small cap (Starter's 1 of 3 is `near`), but the operator report's near/at-cap SQL (`prisma-usage.ts`, `memory-usage.ts`) still uses `count >= cap × 0.8`, so a Starter person at 1 or 2 of 3 documents isn't listed as near.
@@ -3416,4 +3417,12 @@ When resolving debt:
 ### TD-346: The Flutter copy of the analytics contract is behind (MUT-731)
 - **What:** `docs/analytics/events.json` 2.12.0 adds four portal-only plan events; the Flutter repo's byte-identical copy (`test/fixtures/analytics/events.json`) and its sha256 must follow (README "Changing the contract", step 3).
 - **When to pay:** in the phone half's session (MUT-731 phone), with the same file and hash.
+
+### TD-347: Buying a plan is tested on the FakeApi and by hand in the Stripe sandbox, not in portal-live (MUT-702 Part B)
+- **What:** `portal.plans.*` runs on the FakeApi; the sandbox was checked by hand (catalog script, a Jerusalem Checkout at 3900 + 702 ILS). `qa/support/billing-live.mjs` still seeds its own Freelancer price list instead of running `billing:plans`, and no portal-live flow buys Solo, Business or Firm or ends a Solo trial on a test clock (brief §12's eight scenarios). None of the new specs has been run yet (Basel deferred the QA runs).
+- **When to pay:** before `PLAN_CHECKOUT` goes on: seed the live QA stack with `billing:plans`, turn `PLAN_CHECKOUT` on there, write the portal-live flows, and run the `portal.plans` specs once.
+
+### TD-348: `billing_subscriptions` stays unique on `stripeSubscriptionId` (MUT-702 Part B)
+- **What:** the brief proposed a unique key on `(provider, stripeSubscriptionId)`; the migration only adds `provider` and `seller` (defaults stripe / barmajiyat), because every write path upserts on `stripeSubscriptionId` and Stripe is the only provider.
+- **When to pay:** with a second provider: widen the key and the upserts together.
 
