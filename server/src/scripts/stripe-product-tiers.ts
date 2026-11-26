@@ -14,7 +14,8 @@ import { STRIPE_API_VERSION } from '../billing/stripe/gateway.js';
  * Exit 0: every product in use is tagged. Exit 1: at least one isn't (listed). Exit 2: no key / Stripe refused.
  */
 
-export const KNOWN_TIERS: ReadonlySet<string> = new Set(['freelancer', 'firm', 'accountant']);
+/** MUT-702 Part B: `solo` and `business` join the tiers the mirror reads. */
+export const KNOWN_TIERS: ReadonlySet<string> = new Set(['freelancer', 'solo', 'business', 'firm', 'accountant']);
 /** Subscriptions that can still charge or cover someone; an ended one no longer mirrors anything that matters. */
 const ENDED: ReadonlySet<string> = new Set(['canceled', 'incomplete_expired']);
 
@@ -75,7 +76,7 @@ async function main(): Promise<number> {
   console.log(`Stripe ${key.includes('_live_') ? 'LIVE' : 'test'} mode: ${rows.length} product(s), ${subscriptions.length} subscription(s) read.`);
   for (const r of rows) console.log(`  ${r.id}\ttier=${r.tier ?? '(none)'}\t${r.active ? 'active' : 'inactive'}\tlive subs=${r.liveSubscriptions}\t${r.name}`);
   if (problems.length > 0) {
-    console.error(`\nFAIL: ${problems.length} product(s) in use without a known tier. Set metadata.tier (freelancer, firm or accountant) in the dashboard before deploying:`);
+    console.error(`\nFAIL: ${problems.length} product(s) in use without a known tier. Set metadata.tier (freelancer, solo, business, firm or accountant) in the dashboard before deploying:`);
     for (const p of problems) console.error(`  ${p}`);
     return 1;
   }

@@ -1,5 +1,4 @@
-import type { BillingAddress, CheckoutParams, PlanCatalogs } from './checkout.js';
-import { SELLER } from './checkout.js';
+import type { BillingAddress, CheckoutParams, PlanCatalogs, SELLER } from './checkout.js';
 
 /**
  * MUT-702 Part B (ADR-286): the provider-neutral door the plan Checkout goes through. Barmajiyat sells every

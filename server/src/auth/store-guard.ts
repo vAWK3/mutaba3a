@@ -493,6 +493,8 @@ export const STORE_ACCESS: StoreAccess = {
     listAccounts: 'operator',
     saveAccount: 'operator',
     saveSubscription: 'operator',
+    // MUT-702 Part B: the Stripe sync records the Solo trial used, as it writes the subscription.
+    markPaidTrialUsed: 'operator',
     beginStripeEvent: 'operator',
     finishStripeEvent: 'operator',
     pruneStripeEvents: 'operator',

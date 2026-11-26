@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.145.0-mut731
+  version: 1.146.0-mut702b
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -11933,6 +11933,14 @@ components:
                 - readOnly
                 - mustChoose
             - nullable: true
+        plans:
+          type: array
+          items:
+            $ref: "#/components/schemas/BillingPlan"
+        billingAddress:
+          anyOf:
+            - $ref: "#/components/schemas/BillingAddress"
+            - nullable: true
       required:
         - configured
         - subscription
@@ -12217,6 +12225,97 @@ components:
         - meters
         - businesses
         - partners
+    BillingPlan:
+      type: object
+      properties:
+        plan:
+          type: string
+          enum:
+            - solo
+            - business
+            - firm
+        catalog:
+          type: object
+          properties:
+            ILS:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+                year:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+              required:
+                - month
+                - year
+              description: "Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold."
+            USD:
+              type: object
+              nullable: true
+              properties:
+                month:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+                year:
+                  type: integer
+                  minimum: 0
+                  exclusiveMinimum: true
+              required:
+                - month
+                - year
+              description: "Minor units. Null: this currency has no complete pair of GA prices yet, so it is not sold."
+          required:
+            - ILS
+            - USD
+        limits:
+          type: object
+          properties:
+            businesses:
+              type: integer
+            partners:
+              type: integer
+            documentsPerMonth:
+              type: integer
+            scansPerMonth:
+              type: integer
+          required:
+            - businesses
+            - partners
+            - documentsPerMonth
+            - scansPerMonth
+      required:
+        - plan
+        - catalog
+        - limits
+    BillingAddress:
+      type: object
+      properties:
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+        line1:
+          type: string
+          minLength: 1
+          maxLength: 200
+        city:
+          type: string
+          minLength: 1
+          maxLength: 200
+        postalCode:
+          type: string
+          minLength: 1
+          maxLength: 200
+      required:
+        - country
+        - line1
+        - city
+        - postalCode
+      additionalProperties: false
     BillingRedirect:
       type: object
       properties:
@@ -12253,6 +12352,13 @@ components:
           enum:
             - freelancer
             - accountant
+            - solo
+            - business
+            - firm
+        address:
+          $ref: "#/components/schemas/BillingAddress"
+        trial:
+          type: boolean
       required:
         - interval
         - country
@@ -29516,8 +29622,8 @@ paths:
     post:
       tags:
         - Billing
-      summary: Open Stripe Checkout for the Freelancer plan
-      description: "Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says \"*\"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout."
+      summary: Open Stripe Checkout for a plan
+      description: "Creates a subscription Checkout Session on the person's own Stripe customer (the linked one, else one found or made with their id in its metadata) and returns its URL. ILS for Israel, USD elsewhere; a person (no tax ID) in any country open to consumers (every country while billing-countries.json says \"*\"); a business proves it is one. Stripe itself is asked for the customer's subscriptions first (ALREADY_SUBSCRIBED even before the webhook lands), and the customer's other open Checkouts are expired. During the free trial the subscription starts with the rest of it. The subscription reaches the account through the Stripe webhook. Audited `billing.checkout_started` on each profile the person owns. MUT-525: a yearly Checkout by someone who never had a subscription (the mirror and Stripe agree) carries the launch coupon while it runs; a coupon that is gone or can’t be read means full price. `expectedOffer`, the offer the drawer showed: if it no longer applies, 409 OFFER_ENDED and no Checkout. MUT-702 Part B (ADR-286, PLAN_CHECKOUT): `plan` solo, business or firm sells that plan through the provider port (Stripe, sold by Barmajiyat). It needs `address`, whose country must be `country`: it is saved on the customer first, sets the currency and Stripe Tax computes the tax from it (18% VAT on top in Israel); Stripe’s page shows it and can’t change it. The person’s other open profile-plan Checkouts are expired. No offers apply until MUT-703. `trial: true` (Solo only) carries the one-time 14-day Solo trial with a card required, for an account web onboarding offered it to that never used it."
       security:
         - session: []
         - deviceSession: []
@@ -29547,13 +29653,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server)"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29611,13 +29717,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server)"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29669,13 +29775,13 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "409":
-          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), or OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made)"
+          description: "CONFLICT; `details.reason` is ALREADY_SUBSCRIBED, RESUME_IN_PORTAL, CONTACT_US, NOTHING_TO_COVER, COVERED_BY_MALAFAT, COVERED_BY_GRANT, NO_BILLING_ACCOUNT, BILLING_ACCOUNT_NEEDS_HELP (a Stripe customer gone, or a refusal Stripe will repeat: the operator fixes it), OFFER_ENDED (`expectedOffer` no longer applies; no Checkout was made), MUT-702 Part B: TRIAL_NOT_OFFERED (the Solo trial isn’t offered to this account) or PLAN_CHECKOUT_OFF (Solo, Business and Firm aren’t on sale on this server)"
           content:
             application/json:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29733,7 +29839,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29796,7 +29902,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29854,7 +29960,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29918,7 +30024,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -29975,7 +30081,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -30039,7 +30145,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -30096,7 +30202,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:
@@ -30160,7 +30266,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "422":
-          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS"
+          description: "VALIDATION_FAILED: a malformed body, a return path outside the portal, or `details.reason` COUNTRY_NEEDS_BUSINESS or ADDRESS_INVALID (MUT-702 Part B)"
           content:
             application/json:
               schema:

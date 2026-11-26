@@ -3,7 +3,7 @@ import type { Logger } from '../../logger.js';
 import { ownedProfilesOf, profileOwnerOf } from '../../personal-profile.js';
 import type { AuditEventInput, BillingSyncSource, LedgerStore, SaveBillingAccountConflict, SaveBillingSubscriptionOutcome } from '../../repositories/ports.js';
 import { StateConflict } from '../../repositories/memory.js';
-import { BUSINESS_TAX_NUMBER_KEY } from '../checkout.js';
+import { BUSINESS_TAX_NUMBER_KEY, TRIAL_METADATA_KEY } from '../checkout.js';
 import type { CheckoutGateway } from './checkout-gateway.js';
 import { StripeGatewayError, type Fetched, type StripeGateway } from './gateway.js';
 import { customerIdOf, mirrorOf, pauseOf, stateOf, subscriptionIdOfInvoice, type MirrorError, type MirrorNote } from './mirror.js';
@@ -250,6 +250,8 @@ export function createStripeSync(deps: StripeSyncDependencies): StripeSync {
       at: now(),
       audit: { profileIds, source: context.source, eventId: context.eventId, requestId: context.requestId },
     });
+    // MUT-702 Part B: the one-time Solo trial is used once its subscription exists (an abandoned Checkout keeps it).
+    if (payer !== null && sub.metadata?.[TRIAL_METADATA_KEY] === 'solo') await store.billing.markPaidTrialUsed(payer, now());
     return { subscriptionId: sub.id, outcome, codes, reachesNobody: profileIds.length === 0, blocked: false };
   }
 

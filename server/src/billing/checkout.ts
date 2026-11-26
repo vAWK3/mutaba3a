@@ -274,7 +274,8 @@ export function currentSubscription<T extends SubscriptionState>(subscriptions: 
 }
 
 export function planCheckout(input: CheckoutInput, person: PersonBilling, countries: BillingCountries, catalog: Catalog): CheckoutPlan {
-  const refusal = checkoutRefusalOf(input, person, countries) ?? (input.plan ? (input.address ? addressRefusalOf(input.address) : 'ADDRESS_INVALID') : null);
+  const onSale = input.plan && (PLAN_NAMES as readonly string[]).includes(input.plan);
+  const refusal = checkoutRefusalOf(input, person, countries) ?? (onSale ? (input.address ? addressRefusalOf(input.address) : 'ADDRESS_INVALID') : null);
   if (refusal) return { ok: false, code: refusal };
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
@@ -354,7 +355,8 @@ function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: Catalo
     ? [{ key: BUSINESS_TAX_NUMBER_KEY, label: { type: 'custom', custom: TAX_NUMBER_FIELD_LABEL }, type: 'text', optional: false }]
     : [];
   const offer = input.offer ?? null;
-  const plan = input.plan ?? null;
+  // Only a plan on sale: a caller's wider body (the Accountant Checkout's carries `plan: accountant`) is never one.
+  const plan = input.plan && (PLAN_NAMES as readonly string[]).includes(input.plan) ? input.plan : null;
   const soloTrial = plan === 'solo' && input.soloTrial === true;
   const trial = soloTrial ? {} : trialCarriedOver(input);
   // MUT-702 Part B: a plan Checkout names its plan and seller; the address was saved on the customer first, so

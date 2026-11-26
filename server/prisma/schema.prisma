@@ -1776,6 +1776,10 @@ model BillingSubscription {
   endedReason          String?        @db.VarChar(32)
   /// MUT-731: Stripe's `trial_end`, so a trial cancelled before paying is told apart from a paid plan cancelled.
   trialEnd             DateTime?
+  /// MUT-702 Part B (ADR-286): the payment provider holding it (`stripeSubscriptionId` is that provider's id) and who
+  /// sells it. Always stripe / barmajiyat for now; a second provider or seller adds values, not columns.
+  provider             String         @default("stripe") @db.VarChar(16)
+  seller               String         @default("barmajiyat") @db.VarChar(16)
   /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
   stripeUpdatedAt      DateTime
   createdAt            DateTime       @default(now())
