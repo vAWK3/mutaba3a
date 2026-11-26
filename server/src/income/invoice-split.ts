@@ -14,8 +14,9 @@ export async function invoiceSplitOf(
   payments: ReadonlyArray<Pick<PaymentRecord, 'id' | 'currency' | 'amountMinor' | 'customerId' | 'origin' | 'notForInvoice' | 'status' | 'receivedOn'>>,
   refunds: ReadonlyArray<Pick<RefundRecord, 'currency' | 'amountMinor' | 'customerId' | 'refundedOn'>>,
   range: { from: IsoDate | null; to: IsoDate },
+  invoicingForAll: boolean,
 ): Promise<IncomeSplitRow[] | null> {
-  if (!(await invoicingOn(store, organization))) return null;
+  if (!(await invoicingOn(store, organization, invoicingForAll))) return null;
   const counted = payments.filter((p) => p.status === 'POSTED' && (range.from === null || p.receivedOn >= range.from) && p.receivedOn <= range.to);
   const ctx = await store.issuing.incomeContext(organization.id, counted.map((p) => p.id));
   // MUT-643: a refund gives back money a credit note's document covered: invoice income going out, on refundedOn.

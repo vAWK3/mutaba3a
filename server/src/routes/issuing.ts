@@ -7,7 +7,7 @@ import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
-import { hasFeature } from '../features.js';
+import { invoicingOn } from '../issuing/invoicing-on.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
@@ -257,15 +257,15 @@ export interface IssuingExternalInvoices {
 }
 
 /**
- * The selected profile, if issuing is on for it; 404 otherwise. The feature is the owner's, so co-owners and accountants
- * see the same. `write` also needs the profile's owner. MUT-660: shared with the routes that set documents preferences.
+ * The selected profile, if issuing is on for it (`invoicingOn`: MUT-736's INVOICING_FOR_ALL, else the owner's grant);
+ * 404 otherwise. Co-owners and accountants see what the owner's profile allows. `write` also needs the profile's owner. MUT-660: shared with the routes that set documents preferences.
  */
 export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, write: boolean): Promise<Organization> {
   const { organization, user, membershipRole, writerOfRecord, via } = sessionAuth(c);
   const owner = profileOwnerOf(organization);
   const off = () => new ApiError('NOT_FOUND', 'Not found');
   if (via || writerOfRecord === 'MALAFAT' || isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') throw off();
-  if (!(await hasFeature(store, owner, 'invoicing'))) throw off();
+  if (!(await invoicingOn(store, organization, c.get('invoicingForAll')))) throw off();
   if (write && !ownsProfile(organization, user.id, membershipRole)) throw notOwner();
   return organization;
 }

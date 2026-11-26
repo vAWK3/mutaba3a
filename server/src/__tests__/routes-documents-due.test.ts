@@ -216,13 +216,13 @@ describe('the books split (MUT-660, AC4/AC9/AC10)', () => {
     const issued = await income(h, w, 'received', '100.00', w.nour.id);
     await issueAll(h, w, w.nour.id, [{ kind: 'received', id: issued.id }]);
     const org = (await h.store.organizations.getById(w.profileId))!;
-    const rows = await collectRows(h.store, org, { from: '2026-11-01', to: '2026-11-30' }, new Date('2026-11-06T12:00:00Z'), 'en', { scope: 'report', forLink: false });
+    const rows = await collectRows(h.store, org, { from: '2026-11-01', to: '2026-11-30' }, new Date('2026-11-06T12:00:00Z'), 'en', { scope: 'report', forLink: false, invoicingForAll: false });
     expect(rows.invoicing).toBe(true);
     expect(Object.fromEntries(rows.income.map((l) => [l.record.id, l.invoiceStatus]))).toEqual({ [due.id]: 'due', [marked.id]: 'not_for_invoice', [issued.id]: 'issued' });
     const other = await person(h);
     const plain = await businessOf(h, other);
     await h.app.request('/v1/income', json({ kind: 'received', amount: '10.00', currency: 'ILS', occurredOn: '2026-11-04' }, { ...other.on(plain), ...idem() }));
-    const plainRows = await collectRows(h.store, (await h.store.organizations.getById(plain))!, { from: '2026-11-01', to: '2026-11-30' }, new Date('2026-11-06T12:00:00Z'), 'en', { scope: 'report', forLink: false });
+    const plainRows = await collectRows(h.store, (await h.store.organizations.getById(plain))!, { from: '2026-11-01', to: '2026-11-30' }, new Date('2026-11-06T12:00:00Z'), 'en', { scope: 'report', forLink: false, invoicingForAll: false });
     expect(plainRows).not.toHaveProperty('invoicing');
     expect(plainRows.income[0]).not.toHaveProperty('invoiceStatus');
   });

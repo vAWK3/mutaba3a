@@ -26,6 +26,8 @@ export interface ApiShellDependencies {
   accountantPlan?: AccountantPlanConfig;
   /** MUT-710 (D10, TWO_FACTOR_ISSUING_GATE_ENABLED): whether issuing needs two-step sign-in. Absent = off. */
   twoFactorIssuingGate?: boolean;
+  /** MUT-736 (ADR-282, INVOICING_FOR_ALL): every business profile issues, no operator grant. Absent = off (the grant decides). */
+  invoicingForAll?: boolean;
 }
 
 /**
@@ -57,6 +59,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('billingGate', deps.billingGate ?? false);
     c.set('passkeys', deps.passkeys ?? false);
     c.set('twoFactorIssuingGate', deps.twoFactorIssuingGate ?? false);
+    c.set('invoicingForAll', deps.invoicingForAll ?? false);
     c.set('maxOwnedProfiles', deps.maxOwnedProfiles);
     c.set('accountantAccess', deps.accountantAccess ?? false);
     c.set('accountantPlan', deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF);

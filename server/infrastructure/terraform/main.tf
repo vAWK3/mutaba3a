@@ -785,6 +785,15 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-736 (ADR-282): invoicing for every business profile; off = the operator grant decides (the kill switch).
+        dynamic "env" {
+          for_each = var.invoicing_for_all ? { INVOICING_FOR_ALL = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+
         # MUT-436 (review D3/D5): agents may add to the inbox only once the phone decodes 'mcp' (its minimum build raised).
         dynamic "env" {
           for_each = var.mcp_inbox_writes_enabled ? { MCP_INBOX_WRITES = "true" } : {}

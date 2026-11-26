@@ -3,11 +3,13 @@ import { isMalafatFirm, profileOwnerOf, profileTypeOf } from '../personal-profil
 import type { LedgerStore, Organization } from '../repositories/ports.js';
 
 /**
- * Whether issuing is on for the profile: its owner has the `invoicing` feature, on a business profile that isn't a
- * Malafat firm. The same rule as the issuing routes' gate, without a session (summaries, the monthly mail, exports).
+ * Whether issuing is on for the profile: a business profile with an owner that isn't a Malafat firm, and then
+ * MUT-736 (ADR-282): everyone while INVOICING_FOR_ALL is on. Off, it is the kill switch: the owner's operator
+ * `invoicing` grant decides again, as before. The same rule as the issuing routes' gate (`issuingProfileOf`), and for
+ * the readers without a session (summaries, the monthly mail, exports), which pass the server's flag.
  */
-export async function invoicingOn(store: LedgerStore, organization: Organization): Promise<boolean> {
+export async function invoicingOn(store: Pick<LedgerStore, 'features'>, organization: Organization, forAll: boolean): Promise<boolean> {
   const owner = profileOwnerOf(organization);
   if (isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') return false;
-  return hasFeature(store, owner, 'invoicing');
+  return forAll || hasFeature(store, owner, 'invoicing');
 }

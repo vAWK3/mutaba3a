@@ -187,7 +187,7 @@ export function periodDownloadRoutes(options: PeriodDownloadRouteOptions): OpenA
 
   async function respond(c: Context<AppEnv>, claims: TicketClaims, organization: Organization, shareLinkId: string | null, release: () => void): Promise<Response> {
     const range = { from: claims.from, to: claims.to };
-    const rows = await collectRows(store, organization, range, new Date(claims.asOf), claims.lang, { scope: claims.type === 'report' ? 'report' : 'receipts', forLink: claims.kind === 'link' });
+    const rows = await collectRows(store, organization, range, new Date(claims.asOf), claims.lang, { scope: claims.type === 'report' ? 'report' : 'receipts', forLink: claims.kind === 'link', invoicingForAll: c.get('invoicingForAll') });
     const requestId = c.get('requestId');
     const receiptFiles = rows.expenses.reduce((n, line) => n + line.receipts.length, 0);
     await baseStore.audit.append({

@@ -219,6 +219,11 @@ export interface AppDependencies {
    * TWO_FACTOR_ISSUING_GATE_ENABLED (off by default). Absent = off; issuingHarness and the gate's own suites turn it on.
    */
   twoFactorIssuingGate?: boolean;
+  /**
+   * MUT-736 (ADR-282): every business profile issues, with no operator grant. Production passes INVOICING_FOR_ALL (off by
+   * default). Absent = off: the operator's `invoicing` grant decides, as before.
+   */
+  invoicingForAll?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -434,7 +439,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());

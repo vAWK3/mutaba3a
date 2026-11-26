@@ -254,7 +254,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const receivables = await store.receivables.getByIds(organization.id, [...new Set(allocations.map((a) => a.receivableId))]);
       const summary = summarizeActivity({ payments, expenses, allocations, receivables, refunds, from, to, bucket });
       // MUT-660: invoicing profiles only; every other profile's answer is unchanged.
-      const split = await invoiceSplitOf(store, organization, payments, refunds, { from, to });
+      const split = await invoiceSplitOf(store, organization, payments, refunds, { from, to }, c.get('invoicingForAll'));
       return c.json({ from, to, bucket, asOf: today, earlierData, ...summary, ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );
@@ -296,7 +296,7 @@ export function summaryRoutes(store: LedgerStore, fxRates: CachedFxRates | null 
       const posting = lazyPostingOf(c, store);
       const read = await settledWithLimit(held, VERDICT_PROFILE_CONCURRENCY, async ({ organization, kind, shared }): Promise<VerdictProfileInput> => {
         // MUT-535 (D5): the monthly summary mail reads each profile through this same function.
-        const figures = await readProfileFigures(store, organization, { from, to }, now, posting);
+        const figures = await readProfileFigures(store, organization, { from, to }, now, posting, c.get('invoicingForAll'));
         return {
           profileId: organization.id,
           name: organization.name,

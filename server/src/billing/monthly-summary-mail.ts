@@ -72,6 +72,8 @@ export interface MonthlySummaryRunOptions {
   /** Null: no Stripe on this server; the mail goes without the yearly line (D9). */
   stripe: { catalog(): Promise<Catalog>; plan: PlanGateway } | null;
   dryRun: boolean;
+  /** MUT-736: the server's INVOICING_FOR_ALL, so the books split reads as the portal's Reports do. Absent = off. */
+  invoicingForAll?: boolean;
   sendBudget?: number;
   elapsedMs?: () => number;
   budgetMs?: number;
@@ -179,7 +181,7 @@ async function blocksFor(options: MonthlySummaryRunOptions, candidate: MonthlySu
   const posting: PostingDoor | null = options.dryRun ? null : { store, actor: { actorType: 'SYSTEM', actorId: null, requestId: null } };
   const blocks: ProfileBlock[] = [];
   for (const { organization } of profiles) {
-    const figures = await readProfileFigures(store, organization, month, now, posting);
+    const figures = await readProfileFigures(store, organization, month, now, posting, options.invoicingForAll ?? false);
     if (!monthEndedFor(figures.today, month)) return { skip: 'month-not-over' };
     const block = profileBlockOf({ id: organization.id, name: organization.name }, figures);
     if (block) blocks.push(block);
