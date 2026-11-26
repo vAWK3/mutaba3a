@@ -875,6 +875,8 @@ export function serializeIssuedDocument(d: IssuedDocumentRecord, facts: PaymentR
     paymentId: d.paymentId,
     refundId: d.refundId,
     coreVersion: d.coreVersion,
+    jurisdiction: d.jurisdiction,
+    jurisdictionPackVersion: d.jurisdictionPackVersion,
     displayNumber: documentNumberLabel(d.docType, d.number),
     paymentRequest:
       d.docType === 'PAYMENT_REQUEST' && facts

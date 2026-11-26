@@ -4906,3 +4906,14 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Server | `__tests__/routes-uniform-file.test.ts` | AC4: the issue audit entry carries core and pack versions |
 | Server | existing suites (compose, documents-due, uniform file, PDF, retention, stores, routes) | unchanged behaviour; fixtures pass `IL_PACK` |
 | QA | none re-recorded | no user-visible change: the portal and phone flows read the same API |
+
+## MUT-742 — jurisdiction and pack version on issued documents
+
+| Layer | File | Covers |
+|---|---|---|
+| Postgres | `repositories/__tests__/migration-mut742.test.ts` | AC1/AC2: old documents, issuer and customers unchanged (md5 of every pre-existing column), old documents read IL and 1.0.0, the INSERT-only triggers (UPDATE, DELETE, TRUNCATE) still refuse, the MUT-644 bypass still deletes, the jurisdiction CHECK, wide tax IDs |
+| Store contract | `store-contract-issuing.ts` (memory and Prisma) | a document keeps and reads back its jurisdiction and pack version; the issuer keeps `vatIdScheme` and a wide tax ID |
+| Routes | `routes-uniform-file.test.ts` | the issued document's response and its issuer snapshot carry jurisdiction, pack version, country and scheme |
+| Pack | `jurisdictions/__tests__/il-pack.contract.test.ts` | `taxId.scheme` is `IL_TAX_ID` |
+| Existing | the MUT-741 golden hashes, uniform file, retention sweep and erase tests | unchanged behaviour |
+| QA | none re-recorded | no user-visible change (additive API fields) |

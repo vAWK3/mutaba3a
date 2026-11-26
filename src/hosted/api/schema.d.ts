@@ -32840,6 +32840,10 @@ export interface components {
              */
             refundId: string | null;
             coreVersion: string;
+            /** @description MUT-742 (ADR-287): the country (ISO 3166-1) whose jurisdiction pack the document was issued under. Documents issued before it read IL. Since 1.148.0-mut742. */
+            jurisdiction: string;
+            /** @description MUT-742: the version of that pack; with `coreVersion` it names the rules the document was issued under. Since 1.148.0-mut742. */
+            jurisdictionPackVersion: string;
             /** @description The number as shown: PR-0007 for a payment request, the plain number otherwise */
             displayNumber: string;
             paymentRequest: components["schemas"]["PaymentRequestFacts"];

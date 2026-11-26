@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.147.0-mut740
+  version: 1.148.0-mut742
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -10800,6 +10800,12 @@ components:
           description: "MUT-643: a credit note whose paid part was refunded. Since 1.137.0-mut643."
         coreVersion:
           type: string
+        jurisdiction:
+          type: string
+          description: "MUT-742 (ADR-287): the country (ISO 3166-1) whose jurisdiction pack the document was issued under. Documents issued before it read IL. Since 1.148.0-mut742."
+        jurisdictionPackVersion:
+          type: string
+          description: "MUT-742: the version of that pack; with `coreVersion` it names the rules the document was issued under. Since 1.148.0-mut742."
         displayNumber:
           type: string
           description: "The number as shown: PR-0007 for a payment request, the plain number otherwise"
@@ -10835,6 +10841,8 @@ components:
         - paymentId
         - refundId
         - coreVersion
+        - jurisdiction
+        - jurisdictionPackVersion
         - displayNumber
         - paymentRequest
     PaymentRequestFacts:

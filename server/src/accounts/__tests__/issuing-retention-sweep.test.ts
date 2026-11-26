@@ -13,7 +13,7 @@ import { IL_PACK } from '../../jurisdictions/il/index.js';
 const T0 = new Date(Date.UTC(2026, 10, 22, 10));
 const DUE = new Date(T0.getTime() + GRACE_MS + 60_000);
 const logger = pino({ level: 'silent' });
-const ISSUER = { country: 'IL', dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
+const ISSUER = { country: 'IL', vatIdScheme: 'IL_TAX_ID', dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
 /** A person whose personal profile issued a receipt dated each of `dates`, closed at T0 (due for the purge at DUE). */
 async function issuerClosing(store: LedgerStore, ...dates: string[]) {
@@ -30,7 +30,7 @@ async function issuerClosing(store: LedgerStore, ...dates: string[]) {
     organizationId, docType: 'RECEIPT', documentDate, currency: 'ILS',
     composed: composeDocument({ pack: IL_PACK, docType: 'RECEIPT', currency: 'ILS', documentDate, dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
     issuer: { legalName: 'Rana Studio', vatId: '123456782', dealerType: 'COMPANY' }, customerId: null, customer: { name: 'Walk-in' }, language: 'he', style: 'PROFESSIONAL', ink: 'BLACK', notes: null, dueDate: null,
-    originalId: null, payment: { method: 'BANK', reference: 'T-1', receivedOn: documentDate }, appliesToDocumentId: null, fromEntry: null, allocationNumber: null, titlePrefix: 'קבלה', coreVersion: '1.0.0', createdByUserId: user.id, requestKey: `k-${randomUUID()}`, requestId: null,
+    originalId: null, payment: { method: 'BANK', reference: 'T-1', receivedOn: documentDate }, appliesToDocumentId: null, fromEntry: null, allocationNumber: null, titlePrefix: 'קבלה', coreVersion: '1.0.0', jurisdiction: 'IL', jurisdictionPackVersion: '1.0.0', createdByUserId: user.id, requestKey: `k-${randomUUID()}`, requestId: null,
   }, T0);
   if (result.kind !== 'issued') throw new Error(result.kind);
   documents.push(result.document);

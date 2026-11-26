@@ -45,7 +45,8 @@ describe('IL pack: today\'s Israeli rules, unchanged', () => {
     }
   });
 
-  it('tax IDs: the Israeli check digit', () => {
+  it('tax IDs: the Israeli check digit, and the scheme that says how to read them (MUT-742)', () => {
+    expect(IL_PACK.taxId.scheme).toBe('IL_TAX_ID');
     expect(IL_PACK.taxId.normalize('515151512')).toBe('515151512');
     expect(IL_PACK.taxId.normalize('515151515')).toBeNull();
   });

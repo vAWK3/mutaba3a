@@ -62,7 +62,8 @@ import type { ComposedDocument } from '../issuing/compose.js';
 
 /**
  * MUT-741 (ADR-287, AC4): the rules a document was issued under: the issuing core's version, the issuer's country and that
- * jurisdiction pack's version. The per-document column arrives with MUT-742; until then the issue audit entry carries it.
+ * jurisdiction pack's version. MUT-742 put the same two on the document itself (`jurisdiction`, `jurisdictionPackVersion`);
+ * the audit entry keeps carrying them, so the log alone says what a document was issued under.
  */
 const versionStamp = (pack: JurisdictionPack): JsonObject => ({ coreVersion: ISSUING_CORE_VERSION, jurisdiction: pack.country, packVersion: pack.version });
 
@@ -74,6 +75,9 @@ const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
 const issuerSnapshot = (issuer: IssuerDetailsRecord, logoId: string | null): JsonObject => ({
   legalName: issuer.legalName,
   vatId: issuer.vatId,
+  // MUT-742: the country and the tax ID's scheme, frozen with it (a snapshot from before reads as IL and IL_TAX_ID).
+  country: issuer.country,
+  vatIdScheme: issuer.vatIdScheme,
   dealerType: issuer.dealerType,
   address: issuer.address,
   city: issuer.city,
@@ -331,6 +335,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         allocationNumber: null,
         titlePrefix: DOC_TYPE_TITLES[body.language][body.docType],
         coreVersion: ISSUING_CORE_VERSION,
+        jurisdiction: issuer.country,
+        jurisdictionPackVersion: packFor(issuer.country).version,
         createdByUserId: user.id,
         requestKey,
         requestId: c.get('requestId'),
@@ -584,7 +590,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const vatId = packFor(country).taxId.normalize(body.vatId);
       if (vatId === null) throw validationError('VAT_ID_INVALID', 'This is not a valid Israeli VAT or company number', { field: 'vatId' });
       const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote, offerAfterSave: current.offerAfterSave, defaultDocumentsPreference: current.defaultDocumentsPreference } : DEFAULTS;
-      const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId, country, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
+      const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId, vatIdScheme: packFor(country).taxId.scheme, country, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No business details yet; send them without If-Match');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
@@ -611,7 +617,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const expectedVersion = ifMatch(c);
       if (expectedVersion === null) throw new ApiError('VALIDATION_FAILED', 'Send the details’ version in If-Match', { field: 'If-Match' });
       const current = await mustIssuer(organization.id);
-      const details = { legalName: current.legalName, vatId: current.vatId, country: current.country, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
+      const details = { legalName: current.legalName, vatId: current.vatId, vatIdScheme: current.vatIdScheme, country: current.country, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
       const input: IssuerDetailsInput = { ...details, documentStyle: body.documentStyle, ink: body.ink, defaultLanguage: body.defaultLanguage, pricesIncludeVat: body.pricesIncludeVat, paymentTermsDays: body.paymentTermsDays ?? null, bankDetails: body.bankDetails || null, footerNote: body.footerNote || null, offerAfterSave: body.offerAfterSave ?? current.offerAfterSave, defaultDocumentsPreference: body.defaultDocumentsPreference ?? current.defaultDocumentsPreference };
       const now = c.get('now')();
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, now);
@@ -1141,6 +1147,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           creditId: null,
           refundId: null,
           coreVersion: ISSUING_CORE_VERSION,
+          jurisdiction: issuer.country,
+          jurisdictionPackVersion: packFor(issuer.country).version,
           createdByUserId: sessionAuth(c).user.id,
           requestKey: '',
           lines: composed.lines.map((l) => ({ index: l.index, description: l.description.trim(), kind: l.kind, quantityMilli: l.quantityMilli, unitPriceMinor: l.unitPriceMinor, discountMinor: l.discountMinor, netMinor: l.netMinor, pricesIncludeVat: l.pricesIncludeVat, vatRateBasisPoints: l.vatRateBasisPoints, vatMinor: l.vatMinor })),
@@ -1208,6 +1216,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
 
   registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, servesPortal: tax.servesPortal ?? false, planOf: taxPlanOf, canUpgrade: tax.canUpgrade ?? false, vatNumberOf: async (id) => {
     const issuer = await store.issuing.getIssuer(id);
+    // TD-350: the Tax Authority takes a number; a non-numeric tax ID (a second pack, MUT-743) must not reach this.
     return issuer ? Number(issuer.vatId) : null;
   } });
 

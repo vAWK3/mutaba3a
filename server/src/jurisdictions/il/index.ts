@@ -24,7 +24,7 @@ export const IL_PACK: JurisdictionPack = {
   version: '1.0.0',
   timezone: 'Asia/Jerusalem',
   currency: { base: 'ILS', issuing: ['ILS'], issuingLabel: 'shekels (ILS)' },
-  taxId: { normalize: normalizeTaxId },
+  taxId: { normalize: normalizeTaxId, scheme: 'IL_TAX_ID' },
   documentTypes: IL_DOCUMENT_TYPES,
   dealer: { exemptFromVat: (dealer) => dealer === 'EXEMPT', refusal: exemptDealerRefusal },
   vat: { rateOn: standardVatRateOn },

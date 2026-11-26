@@ -405,13 +405,13 @@ model User {
   webauthnChallenges WebauthnChallenge[]
 
   /// MUT-559 (ADR-245): the profiles this person reads as an accountant, and the invites they sent as an owner.
-  accountantGrants      AccountantGrant[]  @relation("AccountantGrants")
-  accountantInvitesSent AccountantGrant[]  @relation("AccountantInvitesSent")
+  accountantGrants       AccountantGrant[]       @relation("AccountantGrants")
+  accountantInvitesSent  AccountantGrant[]       @relation("AccountantInvitesSent")
   /// MUT-560 (ADR-247): the share links this person created as an owner.
-  shareLinksCreated     ShareLink[]        @relation("ShareLinksCreated")
-  externalIdentities    ExternalIdentity[]
-  malafatSignIns        MalafatSignIn[]
-  signInCodes           SignInCode[]
+  shareLinksCreated      ShareLink[]             @relation("ShareLinksCreated")
+  externalIdentities     ExternalIdentity[]
+  malafatSignIns         MalafatSignIn[]
+  signInCodes            SignInCode[]
   /// MUT-710 (ADR-274): two-step sign-in, when on.
   twoFactor              TwoFactor?
   twoFactorRecoveryCodes TwoFactorRecoveryCode[]
@@ -848,7 +848,7 @@ model Customer {
   /// Default VAT treatment for this customer's items (e.g. OUT_OF_SCOPE for a foreign client).
   vatTreatment        VatTreatment?
   /// MUT-642: VAT, company or ID number (9 digits, check digit validated); printed on issued documents.
-  taxId               String?              @db.VarChar(9)
+  taxId               String?              @db.VarChar(32)
   /// MUT-642: the address printed on issued documents.
   address             String?
   /// MUT-660: which documents this client is due; null follows the profile default (IssuerDetails.defaultDocumentsPreference).
@@ -2300,7 +2300,9 @@ enum DealerType {
 model IssuerDetails {
   organizationId             String              @id @db.Uuid
   legalName                  String
-  vatId                      String              @db.VarChar(9)
+  vatId                      String              @db.VarChar(32)
+  /// MUT-742: how `vatId` is read (the jurisdiction pack's `taxId.scheme`); IL_TAX_ID = Israeli number with its check digit.
+  vatIdScheme                String              @default("IL_TAX_ID") @db.VarChar(16)
   /// MUT-740 (ADR-287 D1): ISO 3166-1 alpha-2, the jurisdiction the profile's invoicing follows; existing rows are IL.
   country                    String              @default("IL") @db.VarChar(2)
   dealerType                 DealerType
@@ -2390,49 +2392,53 @@ model IssuedDocumentCounter {
 }
 
 model IssuedDocument {
-  id                 String        @id @default(uuid()) @db.Uuid
-  organizationId     String        @db.Uuid
-  docType            IssuedDocType
-  number             Int
+  id                      String        @id @default(uuid()) @db.Uuid
+  organizationId          String        @db.Uuid
+  docType                 IssuedDocType
+  number                  Int
   /// YYYY-MM-DD, the document's own date (the allocation API's Invoice_Date).
-  documentDate       String        @db.VarChar(10)
-  issuedAt           DateTime      @default(now())
-  currency           String        @db.VarChar(3)
-  subtotalMinor      BigInt
-  discountMinor      BigInt
-  netMinor           BigInt
-  vatRateBasisPoints Int
-  vatMinor           BigInt
-  grossMinor         BigInt
+  documentDate            String        @db.VarChar(10)
+  issuedAt                DateTime      @default(now())
+  currency                String        @db.VarChar(3)
+  subtotalMinor           BigInt
+  discountMinor           BigInt
+  netMinor                BigInt
+  vatRateBasisPoints      Int
+  vatMinor                BigInt
+  grossMinor              BigInt
   /// V1-a: whether the document's prices were typed including VAT (lines may override).
-  pricesIncludeVat   Boolean
+  pricesIncludeVat        Boolean
   /// Snapshot of IssuerDetails at issue.
-  issuer             Json
-  customerId         String?       @db.Uuid
+  issuer                  Json
+  customerId              String?       @db.Uuid
   /// Snapshot of the customer at issue (name; VAT number and address from MUT-642).
-  customer           Json
+  customer                Json
   /// he | ar | en: the language the document is printed in.
-  language           String        @db.VarChar(2)
-  style              String        @db.VarChar(32)
-  ink                String        @db.VarChar(5)
-  notes              String?
+  language                String        @db.VarChar(2)
+  style                   String        @db.VarChar(32)
+  ink                     String        @db.VarChar(5)
+  notes                   String?
   /// A credit note's original.
-  originalId         String?       @db.Uuid
+  originalId              String?       @db.Uuid
   /// 320/400: how the money came in.
-  paymentDetails     Json?
+  paymentDetails          Json?
   /// MUT-572 fills it before the document is written.
-  allocationNumber   String?       @db.VarChar(9)
+  allocationNumber        String?       @db.VarChar(9)
   /// MUT-711 (ADR-273): API (requested by MTB3A) or MANUAL (requested by hand); null with no number.
-  allocationSource   String?       @db.VarChar(8)
-  receivableId       String?       @db.Uuid
-  paymentId          String?       @db.Uuid
-  creditId           String?       @db.Uuid
+  allocationSource        String?       @db.VarChar(8)
+  receivableId            String?       @db.Uuid
+  paymentId               String?       @db.Uuid
+  creditId                String?       @db.Uuid
   /// MUT-643: a credit note whose paid part went back to the client (refunds.id; no FK, like creditId).
-  refundId           String?       @db.Uuid
-  coreVersion        String        @db.VarChar(16)
-  createdByUserId    String        @db.Uuid
+  refundId                String?       @db.Uuid
+  coreVersion             String        @db.VarChar(16)
+  /// MUT-742 (ADR-287): the country (ISO 3166-1) whose pack this was issued under, and that pack's version. The defaults
+  /// are what every document before MUT-742 reads back as; the application always writes both.
+  jurisdiction            String        @default("IL") @db.VarChar(2)
+  jurisdictionPackVersion String        @default("1.0.0") @db.VarChar(16)
+  createdByUserId         String        @db.Uuid
   /// The issue request's idempotency key: a retry returns this document instead of issuing another.
-  requestKey         String        @db.VarChar(128)
+  requestKey              String        @db.VarChar(128)
 
   @@unique([organizationId, docType, number])
   @@unique([organizationId, requestKey])

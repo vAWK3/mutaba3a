@@ -71,6 +71,15 @@ describe('GET /v1/issuing/uniform-file (MUT-569)', () => {
     expect(issued?.metadata).toMatchObject({ docType: 'TAX_INVOICE', coreVersion: '1.0.0', jurisdiction: 'IL', packVersion: '1.0.0' });
   });
 
+  it('MUT-742: an issued document carries its jurisdiction and pack version, and the issuer snapshot its country and tax ID scheme', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    const doc = await issue(h, w.on, { docType: 'TAX_INVOICE', documentDate: '2026-11-02', customerId: w.customerId, lines: [line('تطوير')] });
+    expect(doc).toMatchObject({ jurisdiction: 'IL', jurisdictionPackVersion: '1.0.0', issuer: { country: 'IL', vatIdScheme: 'IL_TAX_ID' } });
+    const again = await read(await h.app.request(`/v1/issued-documents/${doc.id}`, { headers: w.on }));
+    expect(again).toMatchObject({ jurisdiction: 'IL', jurisdictionPackVersion: '1.0.0', issuer: { country: 'IL', vatIdScheme: 'IL_TAX_ID' } });
+  });
+
   it('leaves out documents dated outside the range, and another profile’s', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);

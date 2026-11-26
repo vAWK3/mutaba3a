@@ -76,6 +76,8 @@ if (!url) {
         allocationNumber: null,
         titlePrefix: 'חשבונית מס',
         coreVersion: '1.0.0',
+        jurisdiction: 'IL',
+        jurisdictionPackVersion: '1.0.0',
         createdByUserId: w.user.id,
         requestKey: `key-${randomUUID()}`,
         requestId: null,

@@ -6114,6 +6114,8 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
       creditId,
       refundId,
       coreVersion: input.coreVersion,
+      jurisdiction: input.jurisdiction,
+      jurisdictionPackVersion: input.jurisdictionPackVersion,
       createdByUserId: input.createdByUserId,
       requestKey: input.requestKey,
     },

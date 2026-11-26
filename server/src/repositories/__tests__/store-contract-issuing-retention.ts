@@ -6,7 +6,7 @@ import type { IssuedDocType } from '../../issuing/types.js';
 import type { IssueDocumentInput, LedgerStore } from '../ports.js';
 import { IL_PACK } from '../../jurisdictions/il/index.js';
 
-const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
+const ISSUER_DEFAULTS = { country: 'IL', vatIdScheme: 'IL_TAX_ID', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /**
@@ -56,6 +56,8 @@ export function describeLedgerStoreIssuingRetentionContract(name: string, makeSt
       allocationNumber: null,
       titlePrefix: docType === 'RECEIPT' ? 'קבלה' : 'דרישת תשלום',
       coreVersion: '1.0.0',
+      jurisdiction: 'IL',
+      jurisdictionPackVersion: '1.0.0',
       createdByUserId: userId,
       requestKey: `key-${unique()}`,
       requestId: null,

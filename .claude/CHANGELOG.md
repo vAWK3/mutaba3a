@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Every issued document records its jurisdiction and pack version (MUT-742, ADR-287, API 1.148.0-mut742)
+
+Epic MUT-738. Option A of `.claude/designs/MUT-742-issuing-schema.md` (eng-reviewed): the immutable table gets the two columns now, while it holds almost no rows; the clearance table and the customer `country`/`taxIdScheme` columns wait for their first readers (TD-351).
+
+### Added
+- Migration `20261127140000_mut742_issuing_jurisdiction` (additive): `issued_documents.jurisdiction VARCHAR(2) NOT NULL DEFAULT 'IL'` (CHECK `^[A-Z]{2}$`, added `NOT VALID` then validated) and `jurisdictionPackVersion VARCHAR(16) NOT NULL DEFAULT '1.0.0'`; `issuer_details.vatIdScheme VARCHAR(16) NOT NULL DEFAULT 'IL_TAX_ID'`; `issuer_details.vatId` and `customers.taxId` widened to `VARCHAR(32)`. No `UPDATE` touches an issued row (catalog-only `ADD COLUMN` with a constant default, Postgres 16), so every earlier document reads back IL and 1.0.0 and the INSERT-only triggers are untouched.
+- `IssuedDocument` (API) gains `jurisdiction` and `jurisdictionPackVersion` (additive, required in responses). The issuer snapshot on a document gains `country` and `vatIdScheme` (a snapshot from before reads as IL and IL_TAX_ID). `IssuerDetailsRecord.vatIdScheme` is written from the pack (`pack.taxId.scheme`, `IL_TAX_ID` for Israel); not an API field.
+- Test `repositories/__tests__/migration-mut742.test.ts` (scratch database from the migrations before it, old rows as raw SQL, md5 of every pre-existing column before and after: identical; triggers and the MUT-644 bypass still work; the CHECK refuses a bad code; widened IDs fit).
+
+### Changed
+- The issue stamps `jurisdiction` and `jurisdictionPackVersion` from the issuer's pack (the MUT-741 audit stamp stays). The PDF preview's draft carries them.
+- Fixed text: three OpenAPI-visible descriptions of MUT-702 Part B said "1.147.0-mut740" after a version sed on merge; they say 1.146.0-mut702b again.
+- Not changed: `issued_documents.allocationNumber` stays `VARCHAR(9)` (Israel's projection), the nine-digit API patterns (TD-350), the uniform file and the records file (no customer fields added).
+
 ## [Unreleased] - 2026-11-26 — Israel is the first jurisdiction pack (MUT-741, ADR-287 D2, no API change)
 
 Epic MUT-738. A behaviour-preserving move: Israel's invoicing rules now sit behind a `JurisdictionPack` picked by the issuer's country, so a second country is a new pack, not edits in the core. Plan `.claude/designs/MUT-741-il-pack.md` (eng-reviewed). No migration, no API or client change.

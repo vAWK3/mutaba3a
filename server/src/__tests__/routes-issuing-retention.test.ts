@@ -79,7 +79,7 @@ describe('closed profiles’ issued documents (MUT-644)', () => {
     const h = accountantHarness();
     const owner = await person(h);
     const live = await businessOf(h, owner, 'Live Studio');
-    await h.store.issuing.putIssuer(live, { ...ISSUER, address: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT', dealerType: 'COMPANY' }, null, T0);
+    await h.store.issuing.putIssuer(live, { ...ISSUER, vatIdScheme: 'IL_TAX_ID', address: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT', dealerType: 'COMPANY' }, null, T0);
     const refused = await archive(h, live);
     expect(refused.status).toBe(409);
     expect((await read(refused)).error.details).toMatchObject({ reason: 'PROFILE_NOT_CLOSED' });
