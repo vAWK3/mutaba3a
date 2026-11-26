@@ -264,7 +264,8 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
         blocked ? undefined : (
           <div className="hp-issue-footer">
             <p className="hp-issue-final">{t('hosted.issue.final')}</p>
-            {starter.usage && <DocumentsLeftLine meter={starter.usage.documents} canUpgrade={starter.canUpgrade} />}
+            {/* Refused, the footer's own Upgrade to Solo button is the one offer; the line doesn't repeat it as a link. */}
+            {starter.usage && <DocumentsLeftLine meter={starter.usage.documents} canUpgrade={starter.canUpgrade && !planLimit} />}
             {planLimit ? (
               <div className="drawer-footer-right">
                 <Button type="button" variant="secondary" onClick={onClose}>

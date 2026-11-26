@@ -129,7 +129,9 @@ describe('read-only after a cancel offers Starter (wireframe 4, 13540 Q3)', () =
     await user.click(within(banner).getByRole('button', { name: 'Continue free on Starter' }));
     await waitFor(() => expect(chosen).toBe(true));
     expect(api.count('POST /v1/billing/starter')).toBe(1);
-    expect(await screen.findByText("You're on Starter now.")).toBeInTheDocument();
+    // A confirmation, in the quiet info toast, never the error alert.
+    expect(await screen.findByTestId('toast-live')).toHaveTextContent("You're on Starter now.");
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('a business read-only for Starter’s count says so and offers Change, not Subscribe', async () => {

@@ -190,7 +190,7 @@ export function ContinueFreeOnStarter({ size, variant = 'secondary' }: { size?: 
       trackPlanEvent('starter_continue_chosen');
       await Promise.all([queryClient.invalidateQueries({ queryKey: ME_KEY }), queryClient.invalidateQueries({ queryKey: BILLING_KEY })]);
       const me = queryClient.getQueryData<Me>(ME_KEY);
-      if (!me?.plan?.businesses?.mustChoose) toast(t('hosted.billing.starter.chosen'));
+      if (!me?.plan?.businesses?.mustChoose) toast(t('hosted.billing.starter.chosen'), { tone: 'info' });
     },
   });
   return (
