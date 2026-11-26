@@ -432,3 +432,62 @@ describe('one tier reading: Stripe’s list and the mirror agree (MUT-565 review
     expect(seen.filter((r) => r.path.startsWith('/v1/products/')).map(route).sort()).toEqual(['GET /v1/products/prod_A', 'GET /v1/products/prod_F']);
   });
 });
+
+/** MUT-702 Part B (ADR-286): the plans' twelve keys, their products, the profile-plan expiry and the billing address. */
+describe('CheckoutGateway for the plans on sale (MUT-702 Part B)', () => {
+  const planPrice = (key: string, tier: string) => ({ ...price(key, key.endsWith('_ils') ? 'ils' : 'usd', 3900, key.includes('yearly') ? 'year' : 'month'), product: { id: `prod_${tier}`, object: 'product', metadata: { tier } } });
+
+  it('a plan key sells only on its own plan’s product', () => {
+    const solo = planPrice('solo_list_monthly_ils', 'solo') as unknown as Stripe.Price;
+    expect(sellableFactOf(solo, expectedTierOfLookupKey('solo_list_monthly_ils'))).toMatchObject({ productId: 'prod_solo' });
+    expect(sellableFactOf(planPrice('solo_list_monthly_ils', 'business') as unknown as Stripe.Price, expectedTierOfLookupKey('solo_list_monthly_ils'))).toBeNull();
+    expect(sellableFactOf(planPrice('firm_list_yearly_usd', 'firm') as unknown as Stripe.Price, expectedTierOfLookupKey('firm_list_yearly_usd'))).toMatchObject({ productId: 'prod_firm', interval: 'year' });
+  });
+
+  it('asks Stripe at most ten keys a call (its limit), and answers them together', async () => {
+    const keys = Array.from({ length: 12 }, (_, i) => `solo_key_${i}`);
+    const { seen, gateway } = gatewayWith((request) => {
+      const asked = [...request.query.entries()].filter(([k]) => k.startsWith('lookup_keys')).map(([, v]) => v);
+      return { status: 200, body: list(asked.map((key) => ({ ...price(key, 'ils', 3900, 'month'), lookup_key: key }))) };
+    });
+    const prices = await gateway.pricesByLookupKey(keys);
+    expect(seen).toHaveLength(2);
+    for (const s of seen) expect([...s.query.keys()].filter((k) => k.startsWith('lookup_keys')).length).toBeLessThanOrEqual(10);
+    expect(prices.size).toBe(12);
+  });
+
+  it('`profile` expires every profile plan’s open Checkout, never the Accountant plan’s', async () => {
+    const session = (id: string, plan?: string) => ({ id, object: 'checkout.session', status: 'open', metadata: plan ? { mutaba3a_plan: plan } : {} });
+    const { seen, gateway } = gatewayWith((request) =>
+      request.method === 'GET'
+        ? { status: 200, body: list([session('cs_free'), session('cs_solo', 'solo'), session('cs_firm', 'firm'), session('cs_acc', 'accountant')]) }
+        : { status: 200, body: { id: request.path.split('/')[4], object: 'checkout.session', status: 'expired' } },
+    );
+    expect(await gateway.expireOpenCheckouts('cus_MINE', 'profile')).toBe(3);
+    expect(seen.slice(1).map(route)).toEqual(['POST /v1/checkout/sessions/cs_free/expire', 'POST /v1/checkout/sessions/cs_solo/expire', 'POST /v1/checkout/sessions/cs_firm/expire']);
+  });
+
+  it('saves the billing address on the customer, and reads it back for the next Checkout', async () => {
+    const address = { country: 'IL', line1: 'Az-Zahra St. 18', city: 'Jerusalem', postalCode: '9100000' };
+    const { seen, gateway } = gatewayWith((request) =>
+      request.method === 'POST'
+        ? { status: 200, body: { id: 'cus_MINE', object: 'customer', address: null } }
+        : { status: 200, body: { id: 'cus_MINE', object: 'customer', address: { country: 'IL', line1: 'Az-Zahra St. 18', line2: null, city: 'Jerusalem', postal_code: '9100000', state: null } } },
+    );
+    await gateway.setCustomerAddress('cus_MINE', address);
+    expect(seen.map(route)).toEqual(['POST /v1/customers/cus_MINE']);
+    expect(seen[0]!.form.get('address[country]')).toBe('IL');
+    expect(seen[0]!.form.get('address[line1]')).toBe('Az-Zahra St. 18');
+    expect(seen[0]!.form.get('address[city]')).toBe('Jerusalem');
+    expect(seen[0]!.form.get('address[postal_code]')).toBe('9100000');
+    expect(await gateway.customerAddress('cus_MINE')).toEqual(address);
+  });
+
+  it('a customer with no full address, or a deleted one, has none to prefill', async () => {
+    const { gateway } = gatewayWith((request) =>
+      request.path.endsWith('cus_GONE') ? { status: 200, body: { id: 'cus_GONE', object: 'customer', deleted: true } } : { status: 200, body: { id: 'cus_HALF', object: 'customer', address: { country: 'IL', line1: null, city: null, postal_code: null } } },
+    );
+    expect(await gateway.customerAddress('cus_HALF')).toBeNull();
+    expect(await gateway.customerAddress('cus_GONE')).toBeNull();
+  });
+});

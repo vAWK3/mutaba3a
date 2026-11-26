@@ -130,3 +130,26 @@ export const HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PL
  * business-cap.ts). Starter only; MUT-704 adds the paid plans.
  */
 export const ENFORCED_BUSINESS_CAPS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);
+
+/**
+ * MUT-702 Part B (ADR-286): each plan's list prices by lookup key, `{plan}_list_{monthly|yearly}_{ils|usd}`. The amounts
+ * live in the payment provider's catalog, written only by the catalog script (scripts/stripe-plans.ts).
+ */
+export type ListInterval = 'month' | 'year';
+export type ListCurrency = 'ILS' | 'USD';
+
+export function listLookupKey(plan: PlanName, interval: ListInterval, currency: ListCurrency): string {
+  return `${plan}_list_${interval === 'month' ? 'monthly' : 'yearly'}_${currency.toLowerCase()}`;
+}
+
+/** Every plan's four list keys, cheapest plan first. */
+export const ALL_PLAN_LOOKUP_KEYS: readonly string[] = PLAN_NAMES.flatMap((plan) =>
+  (['month', 'year'] as const).flatMap((interval) => (['ILS', 'USD'] as const).map((currency) => listLookupKey(plan, interval, currency))),
+);
+
+const PLAN_KEY = /^(solo|business|firm)_list_(monthly|yearly)_(ils|usd)$/;
+
+/** The plan a list key sells; null for legacy (`freelancer_*`), Accountant and anything else. */
+export function planOfLookupKey(key: string): PlanName | null {
+  return (PLAN_KEY.exec(key)?.[1] as PlanName | undefined) ?? null;
+}
