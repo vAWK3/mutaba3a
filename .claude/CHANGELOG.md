@@ -28,6 +28,18 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — MUT-731 final checks: fixes found running the full suites
+
+### Fixed
+- The Solo trial step could never show: AuthGate marked the shell as shown in the same render `/v1/me` first answered. The step now holds the shell back as the terms step does (`session/AuthGate.tsx`, test `AuthGate.soloTrial.test.tsx`).
+- Operator console copy: the hint cleanup (8d1a2705, 62ae966c) updated the tests and the operator QA spec but not `en.json`/`ar.json`; the shorter lines are now in both languages (step-up, Decline, Sign out everywhere, Disable, reset link, own-account note, Revoke, accountant access).
+- The FakeApi publishes Starter's owned-profile cap of 2 as the server's `/v1/me` does, so New profile shows "Starter includes one business" (`qa/support/portalApi.ts`).
+
+### Technical
+- Server tests: the store-guard test classifies repository flags (`billing.starterPlan`); the mirror test expects `endedReason`/`trialEnd`.
+- Postgres contract (`test:db`): `migration-mut731.test.ts` (old rows null, uuid[] round trip, schema diff) and `store-prisma-starter.test.ts` (documents race at 2 of 3: one issued, one plan_limit, no numbering gap; scan at 11 of 12 then refused at 12).
+- `qa/features/portal/starter.yaml` maps `data/starterQueries.ts`.
+
 ## [Unreleased] - 2026-11-26 — The free Starter plan «البداية», server and portal (MUT-731, ADR-284, ADR-285, API 1.145.0-mut731)
 
 Built dark behind `STARTER_PLAN` (and the Solo trial behind `SOLO_TRIAL_OFFER_SINCE` / `SOLO_TRIAL_CHECKOUT`), to go on with MUT-702 Part B. The phone half is a separate session.
