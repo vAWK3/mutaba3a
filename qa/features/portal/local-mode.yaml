@@ -145,7 +145,7 @@ features:
       - Go offline and reload
       - Forget this device's saved rates and reload, still offline
     expect:
-      - The headline keeps $40.00 and ₪120.00 apart, and the ≈ line names today's ECB rate date
+      - The headline keeps $40.00 and ₪120.00 apart, and the ≈ line says it is at today's rate
       - Offline after a reload the ≈ line stays, from the rates this device remembers for an hour (review D8)
       - With no saved rates offline, the ≈ line is gone and the totals stay
       - The only request to the server is GET /v1/public/fx-rates (D3)

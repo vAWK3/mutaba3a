@@ -164,7 +164,7 @@ test('Documents lists invoices and receipts, and Download hands the file to the 
 
 test('A Malafat-fed profile’s income lists say why nothing can be added there', { tag: '@portal.ledger.read-only' }, async ({ page, step }) => {
   const api = new FakeApi({ profiles: [malafatFirm(), office(OFFICE_A, 'Nour Studio')], clients: 1, receivables: [receivable(1, { customerId: C1, gross: '500.00' })] });
-  const note = page.getByRole('note').filter({ hasText: 'Malafat records income and payments for this profile. To change them, use Malafat.' });
+  const note = page.getByRole('note').filter({ hasText: 'To change income here, use Malafat.' });
 
   await step('Open Receivables on the Malafat-fed firm', async () => {
     await api.open(page, `/p/${FIRM}/receivables`);

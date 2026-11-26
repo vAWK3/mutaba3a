@@ -98,13 +98,12 @@ function Invite({ token }: { token: string }) {
 }
 
 function Frame({ context, children }: { context: ReactNode; children: ReactNode }) {
-  const { t } = useLanguage();
-  return <TwoPanelLayout context={context ?? <p className="hp-two-panel-lead">{t('hosted.accountantInvite.mismatch.context')}</p>}>{children}</TwoPanelLayout>;
+  return <TwoPanelLayout context={context}>{children}</TwoPanelLayout>;
 }
 
 function InviteContext({ invite, mismatch }: { invite: AccountantInviteCheck; mismatch: boolean }) {
   const { t } = useLanguage();
-  if (mismatch) return <p className="hp-two-panel-lead">{t('hosted.accountantInvite.mismatch.context')}</p>;
+  if (mismatch) return null;
   return <p className="hp-two-panel-lead">{invite.ownerName ? t('hosted.accountantInvite.about', { owner: invite.ownerName }) : t('hosted.accountantInvite.aboutNoOwner')}</p>;
 }
 
@@ -495,11 +494,8 @@ function SignupForm({ token, invite, onBack, onOutcome }: { token: string; invit
         <label htmlFor={`${ids}-email`}>{t('hosted.accountantInvite.signup.email')}</label>
         <div className="hp-locked-field">
           <LockIcon />
-          <input id={`${ids}-email`} className="input hp-ltr-input" dir="ltr" readOnly value={invite.maskedEmail} aria-describedby={`${ids}-email-hint`} />
+          <input id={`${ids}-email`} className="input hp-ltr-input" dir="ltr" readOnly value={invite.maskedEmail} />
         </div>
-        <p className="hp-field-hint" id={`${ids}-email-hint`}>
-          {t('hosted.accountantInvite.signup.emailFixed')}
-        </p>
       </div>
       <div className="hp-field">
         <label htmlFor={`${ids}-name`}>{t('hosted.accountantInvite.signup.name')}</label>

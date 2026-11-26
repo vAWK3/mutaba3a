@@ -101,7 +101,7 @@ test('Removing a passkey stops it signing in', { tag: '@portal-selfservice.passk
     await dialog.getByRole('button', { name: /^Remove / }).click();
     await expect(dialog.getByText(/You won’t be able to sign in with it/)).toBeVisible();
     await dialog.getByRole('button', { name: 'Remove', exact: true }).click();
-    await expect(page.getByText('Passkey removed. Devices signed in with it are signed out.')).toBeVisible();
+    await expect(page.getByText('Passkey removed', { exact: true })).toBeVisible();
     await expect(dialog.getByText('No passkeys yet')).toBeVisible();
   });
   await step('Sign out, then try Sign in with a passkey', async () => {
@@ -177,7 +177,7 @@ test('After a password change, your passkeys are listed and one is removed in pl
   await step('Press Remove on it and confirm', async () => {
     await review.getByRole('button', { name: /^Remove / }).click();
     await review.getByRole('button', { name: 'Remove', exact: true }).click();
-    await expect(page.getByText('Passkey removed. Devices signed in with it are signed out.')).toBeVisible();
+    await expect(page.getByText('Passkey removed', { exact: true })).toBeVisible();
     await expect(review.getByRole('listitem')).toHaveCount(0);
   });
   await step('Done closes the review', async () => {
@@ -264,7 +264,7 @@ test('Passkeys in Arabic on a phone: مفاتيح المرور, right to left, t
 
 // ---- MUT-370: Home suggests a passkey after a sign-in ---------------------------------------------------------------
 
-const SUGGESTION = 'Add a passkey: the more secure way to sign in.';
+const SUGGESTION = 'Sign in more securely with a passkey.';
 const suggestion = (page: Page, title = SUGGESTION) => page.getByRole('region', { name: title });
 
 test('After signup, a Not now on the setup step means Home does not ask again right away', { tag: '@portal-selfservice.passkeys.suggest-first-sign-in' }, async ({ page, step }) => {
@@ -371,7 +371,7 @@ test('The passkey suggestion in Arabic on a 375 px phone', { tag: '@portal-selfs
   await chooseLanguage(page, 'ar');
   await signedIn(page, 'ar');
   await step('Home suggests a passkey in Arabic, right to left', async () => {
-    const card = suggestion(page, 'أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول.');
+    const card = suggestion(page, 'سجّل الدخول بأمان أكبر بمفتاح مرور.');
     await expect(card).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
     await expect(card.getByText('وتبقى كلمة المرور صالحة.')).toBeVisible();
@@ -380,7 +380,7 @@ test('The passkey suggestion in Arabic on a 375 px phone', { tag: '@portal-selfs
   });
   await step('The card fits the phone, nothing scrolls sideways', async () => {
     await expectNoHorizontalOverflow(page, 'the passkey suggestion at 375 px');
-    const box = await suggestion(page, 'أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول.').boundingBox();
+    const box = await suggestion(page, 'سجّل الدخول بأمان أكبر بمفتاح مرور.').boundingBox();
     expect(box && box.x >= 0 && box.x + box.width <= 375).toBe(true);
   });
 });

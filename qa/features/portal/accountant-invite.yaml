@@ -27,7 +27,7 @@ features:
       - Create an account
       - Fill in a name and password, agree and submit
     expect:
-      - The address is the invite's and can't be changed; "Reading up to 3 client books is always free"
+      - The address is the invite's and can't be changed; "Reading up to 3 client books is free"
       - Signup, then POST /v1/sessions, then the client's book
   - id: accept
     title: Sign in to accept comes back to the invite; Accept opens the client (AC4)

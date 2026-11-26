@@ -90,6 +90,6 @@ describe('UniformFileExport', () => {
 
   it('tells a reader (an accountant) what the file is for this profile', () => {
     show('en', { ...PROFILE, owned: false });
-    expect(screen.getByText(/every document this profile issued/)).toBeInTheDocument();
+    expect(screen.getByText(/every document issued between two dates/i)).toBeInTheDocument();
   });
 });

@@ -442,10 +442,9 @@ test('On a firm, a receipt that read a known vendor opens in its currency and VA
     await expect(page.getByLabel('Vendor')).toHaveValue('Bezeq');
   });
 
-  await step('Currency EUR and VAT 16% come from Bezeq, marked "From this vendor’s last expense"', async () => {
+  await step('Currency EUR and VAT 16% come from Bezeq', async () => {
     await expect(page.getByLabel(/^Currency/)).toHaveValue('EUR');
     await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
-    await expect(page.locator('[data-hint-for="vat"]')).toHaveText('From this vendor’s last expense');
   });
 
   await step('Approve and file sends EUR and the 16 % rate', async () => {

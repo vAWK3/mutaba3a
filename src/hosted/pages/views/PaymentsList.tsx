@@ -185,7 +185,7 @@ export function PaymentsList({ filters, setFilters, fixedCustomerId, addAction, 
           isNarrowed(filters) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.payments.empty.title')} body={t('hosted.payments.empty.body')} action={addAction} />
+            <Empty title={t('hosted.payments.empty.title')} action={addAction} />
           )
         }
       >

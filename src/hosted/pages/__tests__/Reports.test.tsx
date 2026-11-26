@@ -238,7 +238,7 @@ describe('Reports: currencies (AC3, B5, D3)', () => {
     expect(within(panel).getByRole('row', { name: /USD/ })).toHaveTextContent('$100.00');
     expect(within(panel).getByRole('row', { name: /ILS/ })).toHaveTextContent('₪1,500.00');
     expect(panel).toHaveTextContent('1 USD = 4 ILS');
-    expect(panel).toHaveTextContent('ECB · Oct 23, 2026 · today’s rate'.replace('’', "'"));
+    expect(panel).toHaveTextContent('Today’s rate · Oct 23, 2026'.replace('’', "'"));
     await user.keyboard('{Escape}');
     expect(screen.queryByRole('group', { name: 'Exact amounts' })).toBeNull();
   });
@@ -294,7 +294,7 @@ describe('Reports: All profiles (AC4, AC7, D4, DS1–DS5)', () => {
       { on: '2026-09-02', kind: 'in', minor: 10000 },
     ];
     const { user, router } = portal(BASE, { profiles: [personal, studio], records: { [ORG_A]: thisMonth, [ORG_B]: older } });
-    const teaser = await screen.findByText('Personal started in October; insights unlock in November.');
+    const teaser = await screen.findByText('Insights for Personal unlock in November.');
     await user.click(within(teaser.closest('.hp-teaser')!).getByRole('button', { name: 'See insights across all profiles' }));
     await waitFor(() => expect(locationOf(router)).toContain('scope=all'));
   });
@@ -392,7 +392,7 @@ describe('Reports: review regressions', () => {
     const two: Rec[] = [...thisMonth, { on: '2026-10-06', kind: 'out', minor: 5000, currency: 'USD', categoryId: FOOD }];
     portal(BASE, { records: { [ORG_A]: two }, routes: { 'GET /v1/fx-rates': () => fail(503, 'FX_RATES_UNAVAILABLE') } });
     const where = await screen.findByRole('region', { name: 'Where it went' }, { timeout: 4000 });
-    expect(within(where).getByText("In ILS only: today's rates aren't available")).toBeInTheDocument();
+    expect(within(where).getByText("In ILS only")).toBeInTheDocument();
   });
 
   it('remembers what it showed as hashes, never amounts or client ids (DR18, review)', async () => {

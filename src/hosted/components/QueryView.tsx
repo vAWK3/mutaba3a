@@ -58,7 +58,6 @@ export function Unreachable({ onRetry }: { onRetry: () => void }) {
       <AlertIcon />
       <div>
         <h2>{t('hosted.states.unreachable.title')}</h2>
-        <p>{t('hosted.states.unreachable.body')}</p>
       </div>
       <Button variant="secondary" size="sm" onClick={onRetry}>
         {t('hosted.states.unreachable.retry')}

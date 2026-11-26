@@ -173,7 +173,6 @@ export function PasskeysDrawer({ onClose, review }: { onClose: () => void; revie
         empty={
           <div className="hp-passkey-empty">
             <h3>{t('hosted.account.passkeys.emptyTitle')}</h3>
-            <p className="hp-muted">{t('hosted.account.passkeys.emptyBody')}</p>
           </div>
         }
       >

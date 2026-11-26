@@ -1177,14 +1177,13 @@ describe('ExpenseDrawer vendor defaults: currency and VAT (MUT-303)', () => {
   };
   const currency = () => screen.getByLabelText(/^Currency/) as HTMLSelectElement;
 
-  it('on a firm, picking a vendor before the amount fills its currency and VAT, says so, and saves them', async () => {
+  it('on a firm, picking a vendor before the amount fills its currency and VAT, and saves them', async () => {
     const user = userEvent.setup();
     const { onClose } = renderDrawer({ firm: true, defaultCurrency: 'ILS' });
     await screen.findByDisplayValue('Choose a category');
     await pickBezeq(user);
     await waitFor(() => expect(currency().value).toBe('EUR'));
     expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
-    expect(screen.getAllByText('From this vendor’s last expense').length).toBeGreaterThanOrEqual(2);
     await user.type(screen.getByPlaceholderText('0.00'), '116');
     await user.selectOptions(screen.getByDisplayValue('Choose a category'), 'cat-1');
     await user.click(screen.getByRole('button', { name: 'Save' }));

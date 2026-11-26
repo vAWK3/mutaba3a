@@ -21,7 +21,7 @@ export function SharingEntryRow({ profile, place }: { profile: HostedProfile; pl
       {place === 'you' ? (
         <RowNavLink to={to} label={t('hosted.sharing.entryRow')} sub={<span dir="auto">{profile.name}</span>} />
       ) : (
-        <RowNavLink to={to} label={t('hosted.sharing.manageRow')} sub={t('hosted.sharing.manageSub')} />
+        <RowNavLink to={to} label={t('hosted.sharing.manageRow')} />
       )}
     </RowGroup>
   );

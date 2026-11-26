@@ -436,7 +436,6 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
                 ]}
                 onChange={(value) => setPaidChoice(value as 'REFUND' | 'KEEP')}
               />
-              {paidChoice === 'KEEP' && <p className="hp-muted">{t('hosted.issue.creditPaid.keptNote')}</p>}
               {paidChoice === 'REFUND' && (
                 <>
                   <SegmentedControl

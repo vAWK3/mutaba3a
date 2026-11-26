@@ -52,7 +52,6 @@ export function MalafatMembersSection({ profileId }: { profileId: string }) {
           </li>
         ))}
       </ul>
-      <p className="form-hint">{t('hosted.members.changeHint')}</p>
     </section>
   );
 }

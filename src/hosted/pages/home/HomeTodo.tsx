@@ -105,7 +105,6 @@ function CalmLine() {
   return (
     <div className="hp-home-calm">
       <p className="hp-home-calm-title">{t('hosted.home.clear.title')}</p>
-      <p>{t('hosted.home.clear.body')}</p>
     </div>
   );
 }

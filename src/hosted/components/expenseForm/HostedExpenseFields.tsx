@@ -58,14 +58,12 @@ export function HostedExpenseFields({ expenseForm, profileId, timezone, canAddCl
   const { t } = useLanguage();
   const { form, categories, labels, clientFlash, picks } = expenseForm;
   const { control, formState, getValues, setValue, getFieldState } = form;
-  const [selectedClientId, selectedCurrency, selectedVat, allocationNumber] = useWatch({ control, name: ['clientId', 'currency', 'vatTreatment', 'allocationNumber'] });
+  const [selectedClientId, selectedCurrency, allocationNumber] = useWatch({ control, name: ['clientId', 'currency', 'allocationNumber'] });
   // MUT-303: what a picked vendor filled, for the "from this vendor" line while the field still holds it.
   const [ownFilled, setOwnFilled] = useState<VendorFilled>({});
   const vendorFilled = keptFilled ?? ownFilled;
   const recordFill = (fills: VendorFilled) => (onVendorFill ? onVendorFill(fills) : setOwnFilled((prev) => ({ ...prev, ...fills })));
-  const fromVendor = t('hosted.expenses.hints.fromVendor');
-  const { vendor: vendorHint, allocationNumber: allocationHint, vat: vatHint = vendorFilled.vatTreatment && vendorFilled.vatTreatment === selectedVat ? fromVendor : undefined, ...fieldHints } = hints ?? {};
-  if (!fieldHints.currency && vendorFilled.currency && vendorFilled.currency === selectedCurrency) fieldHints.currency = fromVendor;
+  const { vendor: vendorHint, allocationNumber: allocationHint, vat: vatHint, ...fieldHints } = hints ?? {};
   const changed = (name: 'currency' | 'vatTreatment' | 'vatRate') => {
     const state = getFieldState(name);
     return state.isDirty || state.isTouched;

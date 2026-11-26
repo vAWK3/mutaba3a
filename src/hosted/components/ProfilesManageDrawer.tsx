@@ -5,7 +5,7 @@ import { Button } from '../../components/ui/Button';
 import { useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
 import type { HostedProfile, Me, UpdateProfileResponse } from '../api/client';
-import { atProfileCap, canCreateProfile, coOwnsOthersProfiles, opensInManage, profileEditability } from '../data/profileRules';
+import { atProfileCap, canCreateProfile, opensInManage, profileEditability } from '../data/profileRules';
 import { profileKey, ME_KEY, useMe } from '../session/me';
 import { withProfileLeft } from '../data/profileQueries';
 import { useLostAccess } from '../session/lostAccess';
@@ -123,8 +123,6 @@ export function ProfilesManageDrawer({ active, editId, onEdit, onBack, onNew, on
           <div className="hp-profiles-head">
             <span className="hp-muted">
               {tp('hosted.profiles.used', me.limits.maxOwnedProfiles, { owned: String(me.limits.ownedProfiles) })}
-              {/* MUT-373 (DR2): only for someone the count would otherwise puzzle. */}
-              {coOwnsOthersProfiles(me) && <span className="hp-profiles-cap-hint">{t('hosted.profiles.owners.capHint')}</span>}
               {/* MUT-361 (review): New profile is off because of the lapse gate, not the cap */}
               {!canCreate && !atProfileCap(me) && <span className="hp-profiles-cap-hint">{t('hosted.billing.gate.newProfileBlocked')}</span>}
             </span>
@@ -160,12 +158,12 @@ function ProfileRow({ profile, viewerId, open, onEdit }: { profile: HostedProfil
         </span>
         {editability.editable ? (
           <ProfileKindLine profile={profile} viewerId={viewerId} />
-        ) : (
+        ) : editability.reason === 'MALAFAT' ? (
           <span className="hp-option-sub hp-profile-row-reason">
             <LockIcon />
-            {t(editability.reason === 'MALAFAT' ? 'hosted.profiles.readOnly.malafat' : 'hosted.profiles.readOnly.operator')}
+            {t('hosted.profiles.readOnly.malafat')}
           </span>
-        )}
+        ) : null}
       </span>
       <span className="hp-profile-row-currency" dir="ltr">
         {profile.defaultCurrency}

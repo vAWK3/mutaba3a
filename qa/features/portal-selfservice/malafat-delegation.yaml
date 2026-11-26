@@ -27,7 +27,7 @@ features:
       - Allow MTB3A in Malafat
       - Choose the currency, agree to the terms and press Create account and continue
     expect:
-      - The consent names the office and says nothing is saved until you continue
+      - The consent names the office
       - You land signed in with the office's profile beside your personal one, with no terms screen after
       - Home offers a second way to sign in, beside Malafat
   - id: link-existing
@@ -46,7 +46,7 @@ features:
     steps:
       - Sign in with Malafat and press Deny in Malafat
     expect:
-      - '"You didn''t allow MTB3A in Malafat. Nothing was changed." with a way back to sign in'
+      - '"You didn''t allow MTB3A in Malafat." with a way back to sign in'
   - id: partner-invites-accountant
     title: A partner invites the office's accountant from the portal; an associate has no invite control
     tier: secondary
@@ -75,7 +75,7 @@ features:
     steps:
       - As a partner, open the office's Income
     expect:
-      - '"Malafat records income and payments for this profile. To change them, use Malafat."'
+      - '"To change income here, use Malafat."'
       - No way to record or edit income there
   - id: connected-apps
     title: You › Connected apps lists Malafat per office, and disconnecting removes it

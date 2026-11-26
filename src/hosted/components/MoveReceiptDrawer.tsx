@@ -63,7 +63,6 @@ export function MoveReceiptDrawer({ profile, receipt, onClose, onMoved }: MoveRe
         receipt.reading && (
           <p className="hp-banner hp-banner-info" role="note">
             <InfoIcon />
-            <span>{t('hosted.receipts.move.reading')}</span>
           </p>
         )
       }

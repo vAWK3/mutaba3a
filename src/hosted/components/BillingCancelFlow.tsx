@@ -50,7 +50,6 @@ function WhyStep({ flow, headingRef }: { flow: CancelFlow; headingRef: HeadingRe
         <h3 ref={headingRef} tabIndex={-1} id={`${ids}-why`} className="hp-billing-headline">
           {t('hosted.billing.cancel.whyTitle')}
         </h3>
-        <p>{t('hosted.billing.cancel.whyHint')}</p>
       </div>
       <RadioCards<CancellationReason>
         name={`${ids}-reason`}

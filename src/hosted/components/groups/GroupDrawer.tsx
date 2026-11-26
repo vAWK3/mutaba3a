@@ -229,7 +229,6 @@ export function GroupDrawer({ profileId, today, group, onClose, onCreated, onSav
           <input type="checkbox" checked={values.stillGoing} onChange={(event) => set({ stillGoing: event.target.checked })} />
           {t('hosted.groups.drawer.stillGoing')}
         </label>
-        <p className="form-hint">{t(editing ? 'hosted.groups.drawer.editHint' : 'hosted.groups.drawer.autoJoin')}</p>
         <div className="form-group">
           <label className="form-label" htmlFor={`${ids}-notes`}>
             {t('hosted.groups.drawer.notes')} <span className="hp-muted">{t('hosted.groups.drawer.optional')}</span>

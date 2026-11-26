@@ -103,7 +103,6 @@ describe('the passkey step after setting a password', () => {
     const { router } = await setPassword();
     const heading = await screen.findByRole('heading', { level: 1, name: STEP });
     expect(screen.getByText(/so you won’t need to type it/)).toBeInTheDocument();
-    expect(screen.getByText(/iCloud Keychain or Google Password Manager/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: STEP })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Not now' })).toBeEnabled();
     expect(locationOf(router)).toBe('/setup');
@@ -120,7 +119,7 @@ describe('the passkey step after setting a password', () => {
     // No password with the add: the sign-in is seconds old
     expect(calls(api, 'POST /v1/passkeys/creation-options')[0]!.body ?? {}).not.toHaveProperty('currentPassword');
     expect(await screen.findByText('Passkey added')).toBeInTheDocument();
-    expect(screen.queryByText('Add a passkey: the more secure way to sign in.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sign in more securely with a passkey.')).not.toBeInTheDocument();
     expect(calls(api, 'PATCH /v1/me/passkey-prompt')).toHaveLength(0);
     expect(trackPortal).toHaveBeenCalledWith('setup_passkey_created', { link: 'setup' });
   });
@@ -151,7 +150,7 @@ describe('the passkey step after setting a password', () => {
     await waitFor(() => expect(locationOf(router)).toBe(`/p/${ORG_A}`));
     expect(calls(api, 'PATCH /v1/me/passkey-prompt').map((c) => c.body)).toEqual([{ action: 'not-now' }]);
     expect(browser.startRegistration).not.toHaveBeenCalled();
-    expect(screen.queryByText('Add a passkey: the more secure way to sign in.')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sign in more securely with a passkey.')).not.toBeInTheDocument();
     expect(trackPortal).toHaveBeenCalledWith('setup_passkey_not_now', { link: 'setup' });
   });
 

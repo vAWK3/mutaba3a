@@ -106,7 +106,7 @@ describe('first visit: the welcome (MUT-513)', () => {
     renderPortal('/');
 
     const device = await screen.findByRole('region', { name: 'On this device only' });
-    expect(device).toHaveTextContent('Stays in this browser only. No account, and nothing is sent to us.');
+    expect(device).toHaveTextContent('Stays in this browser only. No account needed.');
     expect(device).toHaveTextContent("Clearing this site's data erases it.");
     expect(device).toHaveTextContent('Back it up from Your data › Download my records.');
     expect(device).toHaveTextContent("It doesn't move into an account later.");
@@ -321,7 +321,6 @@ describe('the shell signed out', () => {
     const page = await screen.findByRole('main');
     await within(page).findByRole('button', { name: /Personal/ });
     expect(screen.queryByText('Hosted')).toBeNull();
-    expect(screen.queryByText(/stay in the MTB3A app on your device/)).toBeNull();
     expect(youRows(page)).toEqual(['✓Personal' + 'Your built-in profile', '+ New profile', 'Manage profiles']);
   });
 
@@ -577,7 +576,7 @@ describe('Your data (D2)', () => {
     chooseFile();
     const confirm = await screen.findByRole('alertdialog');
 
-    expect(confirm).toHaveTextContent(/downloaded from your MTB3A account on .*20.*It's an export/);
+    expect(confirm).toHaveTextContent(/came from your MTB3A account \(.*20.*Restoring it here doesn't change the account/);
   });
 
   it('restores only after a confirm that names the record count, then starts again from / on the restored profile', async () => {

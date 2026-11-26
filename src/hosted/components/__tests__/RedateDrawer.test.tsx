@@ -393,7 +393,7 @@ describe('RedateDrawer — corrections (MUT-453)', () => {
     const { user, onClose } = renderDrawer('payment');
     await user.click(await screen.findByRole('button', { name: 'Reverse payment' }));
     await user.click(screen.getByRole('button', { name: 'Reverse payment' }));
-    expect(await screen.findByText('Say why, so the history makes sense later.')).toBeInTheDocument();
+    expect(await screen.findByText('Say why.')).toBeInTheDocument();
     expect(posts(calls)).toHaveLength(0);
 
     await user.type(reasonBox(), '  Applied to the wrong job ');

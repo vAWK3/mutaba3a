@@ -326,7 +326,6 @@ function StatusView({
   // Review D4: a payment covers the profiles the person created (the server's list), not every profile they co-own.
   const covered = new Set(billing.coveredProfileIds);
   const profiles: BillingProfile[] = me.profiles.map((p) => ({ id: p.id, name: p.name, owned: covered.has(p.id), billing: p.billing }));
-  const coOwnsOthers = me.profiles.some((p) => p.owned && !covered.has(p.id));
   const view = billingViewOf(billing, profiles, new Date());
   const list = profilesListOf(profiles);
   const failure = failureOf(portal.error);
@@ -373,7 +372,6 @@ function StatusView({
           <h3 ref={headline} tabIndex={-1} className="hp-billing-headline">
             {t('hosted.billing.states.confirming')}
           </h3>
-          <p>{t('hosted.billing.states.confirmingNote')}</p>
         </div>
       ) : (
         <PanelStatus panel={view.panel} renewal={renewalPriceOf(billing)} language={language} headlineRef={headline} />
@@ -391,7 +389,6 @@ function StatusView({
       {settled && <PlanChanges billing={billing} panel={view.panel} onCancelPlan={onCancelPlan} onAwait={onAwait} />}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
       {list.length > 0 && <ProfilesList profiles={list} />}
-      {coOwnsOthers && <p className="hp-billing-fine">{t('hosted.billing.coOwnedNote')}</p>}
     </div>
   );
 }
@@ -488,7 +485,7 @@ function panelCopy(
         chip: k('chip.ending'),
         tone: 'butter',
         headline: k('headline.ending', { date: day(panel.endsAt) }),
-        context: k('context.ending'),
+        context: null,
       };
     case 'pauseScheduled':
       return {
@@ -551,21 +548,21 @@ function panelCopy(
         chip: k('chip.covered'),
         tone: 'lavender',
         headline: k('headline.coveredByMalafat'),
-        context: k('context.coveredByMalafat'),
+        context: null,
       };
     case 'ownedByOthers':
       return {
         chip: k('chip.covered'),
         tone: 'lavender',
         headline: k('headline.ownedByOthers'),
-        context: k('context.ownedByOthers'),
+        context: null,
       };
     case 'none':
       return {
         chip: k('chip.readOnly'),
         tone: 'rose',
         headline: k('headline.none'),
-        context: k('context.none'),
+        context: null,
       };
   }
 }
@@ -1122,7 +1119,6 @@ function WelcomeBody({ welcome }: { welcome: TrialWelcome }) {
       </div>
       {/* AC4: no price pair, no card action, and nothing that pretends otherwise (D5). */}
       {welcome.sellable ? <p className="hp-billing-welcome-pitch">{t('hosted.billing.welcome.pitch', { date })}</p> : <Banner tone="info" text={t('hosted.billing.openSoon')} />}
-      <p className="hp-billing-fine">{t('hosted.billing.welcome.later')}</p>
     </div>
   );
 }

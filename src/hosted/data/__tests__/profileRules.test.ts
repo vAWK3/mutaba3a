@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { canCreateProfile, changedFields, coOwnsOthersProfiles, createdBy, firmRequestState, isShared, mayMoveExpensesFrom, ownerActions, ownersSectionVisible, ownsItsRecords, profileEditability, profileKindKey, sharedWith } from '../profileRules';
+import { canCreateProfile, changedFields, createdBy, firmRequestState, isShared, mayMoveExpensesFrom, ownerActions, ownersSectionVisible, ownsItsRecords, profileEditability, profileKindKey, sharedWith } from '../profileRules';
 import { canAddClient, incomeAffordancesFor } from '../incomeAffordances';
 import { me, profile } from '../../__tests__/harness';
 
@@ -123,10 +123,6 @@ describe('co-owners (MUT-373)', () => {
     expect(isShared(solo)).toBe(false);
   });
 
-  it('shows the cap hint only to someone who co-owns a profile they didn’t create (DR2)', () => {
-    expect(coOwnsOthersProfiles({ ...me([solo, iCreated]), user: { ...me().user, id: ME } })).toBe(false);
-    expect(coOwnsOthersProfiles({ ...me([solo, iCoOwn]), user: { ...me().user, id: ME } })).toBe(true);
-  });
 
   it('knows who created a profile, and treats an older server’s owned profile as yours', () => {
     expect(createdBy(iCreated, ME)).toBe(true);

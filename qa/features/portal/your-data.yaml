@@ -25,7 +25,7 @@ features:
       - Keep both profiles ticked and press Download my records
       - Watch the progress while the receipt file comes in
     expect:
-      - The drawer opens over the page (?yourData=true), both profiles ticked, and says the file is an export, not a backup
+      - The drawer opens over the page (?yourData=true), both profiles ticked, and says the file can't be restored into your account
       - A progress bar shows the receipt files arriving, and Download is disabled while it runs
       - The download is a mutaba3a-export-<date>.zip holding records.json (kind mutaba3a-local-records, origin hosted-export) with both profiles, and the receipt as its own file
       - A "Records downloaded." toast

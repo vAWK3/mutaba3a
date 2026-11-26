@@ -96,10 +96,9 @@ describe('Billing drawer: the status view (DR1)', () => {
     expect(await within(dialog).findByRole('button', { name: 'Subscribe' })).toBeInTheDocument();
   });
 
-  it('a co-owner is told shared profiles are covered by their creator’s plan (review D4)', async () => {
+  it('a co-owner’s list leaves out shared profiles (review D4)', async () => {
     portal(`/p/${ORG_B}?billing=true`, { coOwned: true });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByText("Shared profiles you co-own are covered by their creator's plan.")).toBeInTheDocument();
     // The shared profile isn't in the person's list: their payment wouldn't cover it.
     expect(within(dialog).queryByText('Shared Studio')).not.toBeInTheDocument();
   });
@@ -123,7 +122,7 @@ describe('Billing drawer: the Subscribe step (DR2, DR6, DR7, DR11)', () => {
     const country = within(step).getByRole('combobox', { name: 'Billing address country' });
     expect(country).toHaveValue('');
     expect(within(step).getByRole('button', { name: 'Continue to payment' })).toBeDisabled();
-    expect(within(step).getByText(/It's in English/)).toBeInTheDocument();
+    expect(within(step).getByText(/Next you'll enter your card on Stripe's secure page/)).toBeInTheDocument();
 
     await user.selectOptions(country, 'IL');
     expect(within(step).getByText('₪39.00')).toBeInTheDocument();
@@ -266,7 +265,7 @@ describe('Billing drawer: Manage billing (AC3, eng review D6/D7)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
     expect(await within(dialog).findByText('Billed monthly.')).toBeInTheDocument();
     const manage = within(dialog).getByRole('button', { name: 'Manage billing' });
-    expect(manage.nextElementSibling).toHaveTextContent("Change your card or see invoices, on Stripe's page (in English).");
+    expect(manage.nextElementSibling).toHaveTextContent('Change your card or see invoices.');
   });
 
   it('a first payment still pending (incomplete) is its own state, with Manage billing (review)', async () => {
@@ -803,7 +802,7 @@ describe('MUT-532: pause instead of cancel, the stay offer and MTB3A’s own can
     await user.click(within(step).getByRole('button', { name: 'Continue' }));
     await user.click(await within(step).findByRole('button', { name: 'No, keep cancelling' }));
     expect(await within(step).findByRole('heading', { name: 'Stay with 50% off for 2 months' })).toHaveFocus();
-    expect(within(step).getByText((_, el) => el?.tagName === 'P' && /a month instead of/.test(el.textContent ?? ''))).toHaveTextContent('You pay ₪19.50 a month instead of ₪39.00, then ₪39.00 a month again. You can still cancel any time.');
+    expect(within(step).getByText((_, el) => el?.tagName === 'P' && /a month instead of/.test(el.textContent ?? ''))).toHaveTextContent('You pay ₪19.50 a month instead of ₪39.00, then ₪39.00 a month again.');
     await user.click(within(step).getByRole('button', { name: 'Keep my plan at ₪19.50' }));
     expect(api.calls.find((c) => c.url.pathname === '/v1/billing/stay-offer')?.body).toEqual({ reason: 'too_expensive' });
     const back = await screen.findByRole('dialog', { name: 'Billing' });
@@ -863,7 +862,7 @@ describe('MUT-532: pause instead of cancel, the stay offer and MTB3A’s own can
   it('Manage billing no longer says you cancel on Stripe’s page', async () => {
     portal(`/p/${ORG_B}?billing=true`, { billing: () => ok(plan()), entitlement: paid });
     const dialog = await screen.findByRole('dialog', { name: 'Billing' });
-    expect(await within(dialog).findByText("Change your card or see invoices, on Stripe's page (in English).")).toBeInTheDocument();
+    expect(await within(dialog).findByText('Change your card or see invoices.')).toBeInTheDocument();
   });
 
   it('reads in Arabic first', async () => {

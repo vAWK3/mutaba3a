@@ -130,7 +130,7 @@ export function GlancePage({ search, setSearch, shell }: GlancePageProps) {
         ) : (
           <>
             {header}
-            <Empty title={t(`${K}.firstRun.title`)} body={t(`${K}.firstRun.body`)} />
+            <Empty title={t(`${K}.firstRun.title`)} />
           </>
         )}
         <div className="hp-glance">
@@ -291,7 +291,6 @@ function Ledger({ glance, period, shown, today }: { glance: Glance; period: Peri
           ))}
       </div>
       {notes.length > 0 && <p className="hp-glance-footnote hp-report-note">{notes.join(' · ')}</p>}
-      <p className="hp-glance-hint hp-report-note">{t(`${G}.hint`)}</p>
     </>
   );
 }

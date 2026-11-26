@@ -66,7 +66,6 @@ test('The PIN step names nothing, and every refusal says what happened', { tag: 
     await typePin(page, PIN);
     await page.getByRole('button', { name: 'Open' }).click();
     await expect(page.getByRole('heading', { name: 'Enter the PIN again' })).toBeVisible();
-    await expect(page.getByText('For safety, the PIN is asked for every 8 hours.')).toBeVisible();
   });
 
   await step('Paste a PIN in Arabic-Indic digits', async () => {

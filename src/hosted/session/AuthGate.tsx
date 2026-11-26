@@ -238,7 +238,6 @@ function ProfileUnavailable() {
   return (
     <div className="hp-empty">
       <h2>{t('hosted.auth.unavailable.title')}</h2>
-      <p>{t('hosted.auth.unavailable.body')}</p>
       <Button onClick={() => void navigate({ to: `/p/${first.id}` })}>{t('hosted.auth.unavailable.goTo', { name: first.name })}</Button>
     </div>
   );

@@ -106,7 +106,6 @@ test('A new person signs up in Arabic and lands signed in on their personal prof
     await page.goto('/signup');
     await expect(page.getByRole('heading', { level: 1, name: COPY.ar.title })).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByText('ستوافق على الشروط عند اختيار كلمة المرور.')).toBeVisible();
     await expect(page.getByTitle('Turnstile (QA stand-in)')).toBeVisible();
   });
   await step('Type a new business address and press Continue: "Check your email" names it', async () => {

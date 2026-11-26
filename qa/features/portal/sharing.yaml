@@ -42,7 +42,7 @@ features:
       - The title reads Sharing Studio, with the note that whoever you share with reads only and changes nothing
       - Sami Khoury is Active, "Since … · viewed 2 days ago", with Stop
       - maya@ledger.co is Pending, "Sent … · ends …", with Cancel
-      - h.audit@firm.com is Expired, "Not accepted within 14 days", with Invite again
+      - h.audit@firm.com is Expired, with Invite again
       - Under the list, "Up to 5 accountants per profile."
       - No Links column while share links are off (the list answers 404)
   - id: invite
@@ -126,7 +126,6 @@ features:
     expect:
       - The live link reads Aug – Oct 2026, 2 / 3, opened yesterday, with Turn off
       - The locked one reads Whole profile and Locked, never opened, with Turn off; the ended one reads Ended … with no action
-      - The note says what Locked means and that a link is never shown twice
       - Turn off confirms in place (Cancel focused); confirming says "Link turned off", the row reads Ended and the server got the DELETE
   - id: download-period
     title: The owner downloads a period's Excel report or receipts from the bottom of the Sharing page

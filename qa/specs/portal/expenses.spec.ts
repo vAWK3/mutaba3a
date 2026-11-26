@@ -776,12 +776,11 @@ test('On a firm, picking a vendor fills its last currency and VAT; a typed amoun
     await expect(drawer).toHaveCount(0);
   });
 
-  await step('Record another and pick Bezeq first: EUR and VAT 16% fill, "From this vendor’s last expense"', async () => {
+  await step('Record another and pick Bezeq first: EUR and VAT 16% fill', async () => {
     await page.getByRole('button', { name: 'Record expense' }).first().click();
     await pick('Bezeq');
     await expect(drawer.getByLabel(/^Currency/)).toHaveValue('EUR');
     await expect(vat.getByTestId('expense-vat-summary')).toContainText('VAT 16%');
-    await expect(drawer.getByText('From this vendor’s last expense').first()).toBeVisible();
   });
 
   await step('Save it: the server gets EUR and the 16 % rate', async () => {

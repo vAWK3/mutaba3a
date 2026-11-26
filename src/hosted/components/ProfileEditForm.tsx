@@ -248,9 +248,7 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
             <span className="form-label" id={`${FORM_ID}-type-label`}>
               {t('hosted.profiles.typeGroup')}
             </span>
-            {typeLocked ? (
-              <p className="form-hint">{t('hosted.profiles.builtInLocked')}</p>
-            ) : (
+            {typeLocked ? null : (
               <>
                 <Controller
                   name="type"
@@ -261,15 +259,11 @@ export function ProfileEditForm({ profile, footerSlot, onSaved, onLeave, onLeftP
                       value={field.value}
                       onChange={field.onChange}
                       labelledBy={`${FORM_ID}-type-label`}
-                      describedBy={`${FORM_ID}-type-hint`}
                       // MUT-373: read live, not from the opened copy, so a co-owner added meanwhile locks it at once.
-                      disabled={shared ? { value: 'PERSONAL', reason: t('hosted.profiles.owners.sharedLock') } : undefined}
+                      disabled={shared ? { value: 'PERSONAL' } : undefined}
                     />
                   )}
                 />
-                <p className="form-hint" id={`${FORM_ID}-type-hint`}>
-                  {t('hosted.profiles.typeGroupHint')}
-                </p>
               </>
             )}
           </div>

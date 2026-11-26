@@ -97,7 +97,6 @@ export function AddToGroupDrawer({ profileId, group, memberIds, onClose, onAdd }
           </div>
         )}
         {range && <p className="form-hint">{t('hosted.groups.picker.range', { from: formatDay(range.from, language), to: formatDay(range.to, language) })}</p>}
-        {!hasAfter && <p className="form-hint">{t('hosted.groups.picker.afterHint')}</p>}
         {pool.isError ? (
           <Unreachable onRetry={() => void pool.refetch()} />
         ) : pool.isPending ? (

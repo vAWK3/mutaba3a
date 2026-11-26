@@ -223,7 +223,7 @@ function ChoosePane({ banner, setBanner, onStarted, onClose }: FormPaneProps & {
           onChange={setMethod}
           options={[
             { value: 'totp', label: t('hosted.twoFactor.method.totp'), note: t('hosted.twoFactor.appNote') },
-            { value: 'email', label: t('hosted.twoFactor.method.email'), note: t('hosted.twoFactor.emailNote') },
+            { value: 'email', label: t('hosted.twoFactor.method.email') },
           ]}
         />
         {ownPassword && <CurrentPassword value={password} onChange={setPassword} disabled={pending} describedBy={banner ? `${ids}-banner` : undefined} />}
@@ -443,7 +443,6 @@ function ManagePane({ state, banner, onAction, onClose }: { state: Schemas['TwoF
   return (
     <Drawer title={t('hosted.twoFactor.title')} onClose={onClose} closeLabel={t('common.close')}>
       {banner && <DrawerBanner banner={banner} />}
-      <p className="hp-muted hp-two-factor-lead">{t('hosted.twoFactor.manageLede')}</p>
       <RowGroup>
         <RowNote label={<><b>{t('hosted.twoFactor.secondStep')}</b> · {t(app ? 'hosted.twoFactor.method.totp' : 'hosted.twoFactor.method.email')}</>} />
         <RowNote label={<><b>{t('hosted.twoFactor.codesLeftLabel')}</b> · {tp('hosted.twoFactor.codesLeft', state.recoveryCodesLeft)}</>} />

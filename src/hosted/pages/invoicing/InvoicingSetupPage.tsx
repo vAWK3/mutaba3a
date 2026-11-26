@@ -40,7 +40,6 @@ export function InvoicingSetupPage({ profile, initialStep }: { profile: HostedPr
         {t('hosted.sharing.back')}
       </Link>
       <h1 className="hp-sharing-title">{t('hosted.invoicing.title', { profile: isolate(profile.name) })}</h1>
-      <p className="hp-sharing-note">{t('hosted.invoicing.note')}</p>
       {failed ? (
         <div className="hp-setup-failed" role="alert">
           <p>{t('hosted.invoicing.loadFailed')}</p>
@@ -75,7 +74,7 @@ function Intro({ profileId }: { profileId: string }) {
   const cards = [
     ['issue', 'whatTitle', 'whatBody'],
     ['final', 'finalTitle', 'finalBody'],
-    ['allocation', 'allocationTitle', 'allocationBody'],
+    ['allocation', 'allocationTitle', null],
   ] as const;
   return (
     <section className="hp-setup-intro" aria-labelledby="hp-setup-intro-title">
@@ -85,7 +84,7 @@ function Intro({ profileId }: { profileId: string }) {
           <li key={title} className="hp-setup-card">
             <IntroArt name={art} />
             <h3>{t(`hosted.invoicing.intro.${title}`)}</h3>
-            <p>{t(`hosted.invoicing.intro.${body}`)}</p>
+            {body && <p>{t(`hosted.invoicing.intro.${body}`)}</p>}
           </li>
         ))}
       </ol>

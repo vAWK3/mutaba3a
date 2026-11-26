@@ -70,9 +70,11 @@ export function AccountantsColumn({ profile, query, flashId, writable, onInvite,
                 />
               ))}
             </ul>
-            <p className="hp-sharing-foot" id={`${ids}-limit`}>
-              {atLimit ? t('hosted.sharing.accountants.atLimit', { limit: String(list.limit) }) : t('hosted.sharing.accountants.limit', { limit: String(list.limit) })}
-            </p>
+            {atLimit && (
+              <p className="hp-sharing-foot" id={`${ids}-limit`}>
+                {t('hosted.sharing.accountants.atLimit', { limit: String(list.limit) })}
+              </p>
+            )}
           </>
         )}
       </QueryView>
@@ -157,7 +159,7 @@ function AccountantItem({ grant, profile, flash, writable, reinviting, atLimit, 
               <bdi dir="ltr">{row.email}</bdi>
             </span>
           )}
-          <span className="hp-option-sub">{row.meta.map((line) => t(line.key, line.vars)).join(' · ')}</span>
+          {row.meta.length > 0 && <span className="hp-option-sub">{row.meta.map((line) => t(line.key, line.vars)).join(' · ')}</span>}
         </span>
         {/* Under the lapse gate taking access back still works; only a new invite waits (plan › failure modes) */}
         {(writable || row.action !== 'inviteAgain') && !confirming && <RowAction row={row} name={name} triggerRef={triggerRef} busy={reinviting} blockedBy={atLimit ? limitId : null} onAsk={() => setConfirming(true)} onInviteAgain={onInviteAgain} />}

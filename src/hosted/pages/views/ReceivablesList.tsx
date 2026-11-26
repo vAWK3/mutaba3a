@@ -249,7 +249,7 @@ export function ReceivablesList({ filters, setFilters, fixedCustomerId, onRecord
           isNarrowed(filters) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.receivables.empty.title')} body={t('hosted.receivables.empty.body')} action={addAction} />
+            <Empty title={t('hosted.receivables.empty.title')} action={addAction} />
           )
         }
       >

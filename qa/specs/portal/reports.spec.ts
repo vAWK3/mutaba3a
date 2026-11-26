@@ -148,12 +148,12 @@ test('Two currencies make one ≈ total at today\'s rate, and the exact amounts 
     await expect(trigger).toHaveAccessibleName('≈ ₪1,870');
   });
 
-  await step('Tap it: the exact amount per currency, the rate line and the ECB date; Esc closes', async () => {
+  await step('Tap it: the exact amount per currency, the rate line and its date; Esc closes', async () => {
     await trigger.click();
     const panel = page.getByRole('group', { name: 'Exact amounts' });
     await expect(panel.getByRole('row', { name: /USD/ })).toContainText('$100.00');
     await expect(panel.getByRole('row', { name: /ILS/ })).toContainText('₪1,500.00');
-    await expect(panel).toContainText("ECB · Oct 17, 2026 · today's rate");
+    await expect(panel).toContainText("Today's rate · Oct 17, 2026");
     await page.keyboard.press('Escape');
     await expect(panel).toBeHidden();
   });
@@ -332,7 +332,7 @@ test('With one complete month, Lately is a factual recap of it, and the teaser n
     const lately = page.locator('section', { has: page.getByRole('heading', { name: 'Lately' }) });
     await expect(lately.getByRole('listitem')).toHaveCount(1);
     expect((await lately.getByRole('listitem').allTextContents()).map(plain)).toEqual([`In ${named(month(-1))}: ₪800.00 received, ₪250.00 spent. Most spending went to Food. Client 1 paid the most.`]);
-    await expect(lately.locator('.hp-teaser')).toContainText(`Trends, your best month and how fast clients pay unlock in ${named(month(1))}.`);
+    await expect(lately.locator('.hp-teaser')).toContainText(`More insights unlock in ${named(month(1))}.`);
   });
 });
 
@@ -373,7 +373,7 @@ test('With a rate missing, each currency stands on its own and the lists say whi
     await expect(hero(page).locator('.hp-report-currency')).toHaveCount(2);
     await expect(hero(page)).not.toContainText('≈');
     await expect(hero(page)).toContainText('$50');
-    await expect(page.getByRole('region', { name: 'Where it went' })).toContainText("In ILS only: today's rates aren't available");
+    await expect(page.getByRole('region', { name: 'Where it went' })).toContainText("In ILS only");
   });
 });
 

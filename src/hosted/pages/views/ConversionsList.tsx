@@ -114,7 +114,7 @@ export function ConversionsList({ filters, setFilters }: ConversionsListProps) {
           isNarrowed(filters, { newConversion: undefined, conversion: undefined }) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.conversions.empty.title')} body={t('hosted.conversions.empty.body')} action={recordButton} />
+            <Empty title={t('hosted.conversions.empty.title')} action={recordButton} />
           )
         }
       >

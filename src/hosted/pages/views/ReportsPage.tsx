@@ -349,7 +349,6 @@ export function FirstRun({ header, profile, writable }: { header: ReactNode; pro
       {header}
       <Empty
         title={t(`${K}.firstRun.title`)}
-        body={t(`${K}.firstRun.body`)}
         action={
           (canIncome || canExpense) && (
             <div className="hp-report-actions">

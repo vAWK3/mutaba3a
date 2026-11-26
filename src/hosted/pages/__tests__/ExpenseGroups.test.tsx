@@ -231,7 +231,7 @@ describe('Group page (2A, 4A, 5A, 6A, 7A)', () => {
     expect(headline).toHaveTextContent('4 expenses');
     expect(headline).toHaveTextContent('$40.00');
     expect(headline).toHaveTextContent('1 expense');
-    expect(await screen.findByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeInTheDocument();
+    expect(await screen.findByText(/at today's rate/)).toBeInTheDocument();
     expect(screen.getByText(/1 JOD = 5\.2239 ILS \(USD peg\)/)).toBeInTheDocument();
     expect(screen.getByRole('tab', { name: 'JOD' })).toHaveAttribute('aria-selected', 'true');
     const chart = screen.getByRole('group', { name: 'JOD per day. Arrow keys move between days.' });
@@ -393,7 +393,6 @@ describe('Edit and delete (9A)', () => {
       routes: { [`PATCH /v1/expense-groups/${G1}`]: () => ok({ ...g, name: 'Amman', version: 2 }), [`DELETE /v1/expense-groups/${G1}`]: () => new Response(null, { status: 204 }) },
     });
     const drawer = await screen.findByRole('dialog', { name: 'Edit group' });
-    expect(within(drawer).getByText('Changing dates re-checks which expenses belong; kept and left-out choices stay.')).toBeInTheDocument();
     await user.clear(within(drawer).getByLabelText('Name'));
     await user.type(within(drawer).getByLabelText('Name'), 'Amman');
     await user.click(within(drawer).getByRole('button', { name: 'Save' }));

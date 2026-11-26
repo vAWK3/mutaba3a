@@ -50,7 +50,7 @@ test('With no client books, the desk says how a client invites you', { tag: '@po
     const api = new ClientBooksApi({ clients: [] });
     await api.open(page, '/client-books');
     await expect(page.getByRole('heading', { name: 'No client books yet' })).toBeVisible();
-    await expect(page.getByText(/invite you from MTB3A › their profile › Sharing/)).toBeVisible();
+    await expect(page.getByText(/invite you from their Sharing page/)).toBeVisible();
   });
 });
 

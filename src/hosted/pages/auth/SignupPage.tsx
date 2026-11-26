@@ -64,14 +64,13 @@ function Signup() {
           onSent={(email) => setPhase({ kind: 'sent', email, sentAt: Date.now() })}
           onClosed={() => setPhase({ kind: 'closed' })}
         >
-          <p className="hp-field-hint">
-            {t('hosted.signup.terms')}{' '}
-            {termsLink && (
+          {termsLink && (
+            <p className="hp-field-hint">
               <a href={termsLink} target="_blank" rel="noopener">
                 {t('hosted.signup.termsLink')}
               </a>
-            )}
-          </p>
+            </p>
+          )}
         </EmailLinkForm>
       )}
       <HaveAnAccount />

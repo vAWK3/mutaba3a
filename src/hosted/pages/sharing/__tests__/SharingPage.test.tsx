@@ -66,7 +66,6 @@ describe('who gets the Sharing page (D8)', () => {
   it('an owner, signed in, with accountant access: the title, the scope note, the Accountants column', async () => {
     portal(`/p/${ORG_B}/you/sharing`);
     expect(await screen.findByRole('heading', { level: 1, name: `Sharing ${iso('Studio')}` })).toBeInTheDocument();
-    expect(screen.getByText("Whoever you share with reads expenses, income and receipts only. They can't add or change anything.")).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 2, name: 'Accountants' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Profiles/ })).toHaveAttribute('href', `/p/${ORG_B}/you`);
   });
@@ -140,11 +139,8 @@ describe('the Accountants column (B1)', () => {
     expect(within(maya).getByRole('button', { name: 'Cancel the invite to maya@ledger.co' })).toBeInTheDocument();
 
     const hala = row(/h\.audit@firm\.com/);
-    expect(hala).toHaveTextContent('Not accepted within 14 days');
     expect(within(hala).getByText('Expired')).toBeInTheDocument();
     expect(within(hala).getByRole('button', { name: 'Invite h.audit@firm.com again' })).toBeInTheDocument();
-
-    expect(screen.getByText('Up to 5 accountants per profile.')).toBeInTheDocument();
   });
 
   it('Stop confirms in place with focus on Cancel; confirming sends DELETE, the row goes, and it is counted', async () => {
@@ -330,7 +326,6 @@ describe('the Links column (slice B)', () => {
     expect(rows[2]).toHaveTextContent('Sep 2026');
     expect(rows[2]).toHaveTextContent('Ended Nov 6');
     expect(within(rows[2]).queryByRole('button')).not.toBeInTheDocument();
-    expect(screen.getByText(/A link is never shown twice/)).toBeInTheDocument();
   });
 
   it('Turn off confirms in place; confirming sends DELETE, the row reads Ended, and it is counted', async () => {

@@ -55,14 +55,14 @@ export function YouAccount({ profile }: { profile: HostedProfile | null }) {
         {me.user.twoFactor && <RowButton label={t('hosted.twoFactor.title')} sub={twoFactorRowSub(me.user.twoFactor, t)} onClick={drawers.openTwoFactor} />}
         {/* MUT-434: only for a person the operator gave agent_access */}
         {agentAccess && <RowButton label={t('hosted.connect.title')} sub={t('hosted.connect.rowSub')} onClick={drawers.openConnectClaude} />}
-        {connectedApps.data && <RowButton label={t('hosted.connectedApps.title')} sub={t('hosted.connectedApps.rowSub')} onClick={drawers.openConnectedApps} />}
+        {connectedApps.data && <RowButton label={t('hosted.connectedApps.title')} onClick={drawers.openConnectedApps} />}
       </RowGroup>
       {/* MUT-535: the monthly summary mail, in a group of its own (shown once the server answers) */}
       <MonthlySummarySwitchRow />
       {/* MUT-460 (6A): the operator console's way in, for operators only */}
       {operator && (
         <RowGroup>
-          <RowNavLink label={t('hosted.operator.title')} sub={t('hosted.operator.rowSub')} to="/operator/signups" />
+          <RowNavLink label={t('hosted.operator.title')} to="/operator/signups" />
         </RowGroup>
       )}
       <SignOutGroup />

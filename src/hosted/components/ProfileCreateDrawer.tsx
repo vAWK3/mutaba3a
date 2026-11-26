@@ -161,14 +161,10 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
                 value={field.value}
                 onChange={field.onChange}
                 labelledBy={`${FORM_ID}-type-label`}
-                describedBy={`${FORM_ID}-type-hint`}
                 invalid={Boolean(formState.errors.type)}
               />
             )}
           />
-          <p className="form-hint" id={`${FORM_ID}-type-hint`}>
-            {t('hosted.profiles.typeHint')}
-          </p>
           {fieldError('type')}
         </div>
 
@@ -176,7 +172,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
           <label className="form-label" htmlFor={`${FORM_ID}-currency`}>
             {t('hosted.profiles.currency')}
           </label>
-          <Select id={`${FORM_ID}-currency`} hint={t('hosted.profiles.currencyHintNew')} {...register('defaultCurrency')}>
+          <Select id={`${FORM_ID}-currency`} {...register('defaultCurrency')}>
             {HOSTED_CURRENCIES.map((code) => (
               <option key={code} value={code}>
                 {code}

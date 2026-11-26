@@ -76,18 +76,14 @@ export function MalafatOfficePage() {
               readOnly={checking}
               value={office}
               aria-invalid={problem !== null && problem !== 'unreachable'}
-              aria-describedby={problem && problem !== 'unreachable' ? errorId : `${ids}-hint`}
+              aria-describedby={problem && problem !== 'unreachable' ? errorId : undefined}
               onChange={(e) => setOffice(e.target.value)}
             />
             <span className="hp-office-suffix">{MALAFAT_HOST_SUFFIX}</span>
           </div>
-          {problem && problem !== 'unreachable' ? (
+          {problem && problem !== 'unreachable' && (
             <p className="hp-field-error" id={errorId}>
               {t(`hosted.malafatSignIn.${problem}`)}
-            </p>
-          ) : (
-            <p className="hp-help" id={`${ids}-hint`}>
-              {t('hosted.malafatSignIn.officeRemembered')}
             </p>
           )}
         </div>

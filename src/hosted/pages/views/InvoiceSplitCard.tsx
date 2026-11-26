@@ -23,14 +23,12 @@ export function InvoiceSplitCard({ rows }: { rows: readonly InvoiceSplitRow[] })
             <div>
               <dt>
                 {t('hosted.reports.invoiceSplit.invoice')}
-                <span className="hp-muted">{t('hosted.reports.invoiceSplit.invoiceHint')}</span>
               </dt>
               <dd>{money(r.invoiceIncome, r.currency)}</dd>
             </div>
             <div>
               <dt>
                 {t('hosted.reports.invoiceSplit.notForInvoice')}
-                <span className="hp-muted">{t('hosted.reports.invoiceSplit.notForInvoiceHint')}</span>
               </dt>
               <dd>{money(r.notForInvoice, r.currency)}</dd>
             </div>

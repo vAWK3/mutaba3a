@@ -53,7 +53,6 @@ test('A lawyer new to MTB3A signs in with Malafat; the consent creates the accou
     await expect(page.getByRole('heading', { name: 'Welcome' })).toBeVisible();
     await expect(page.getByText(OFFICE.name)).toBeVisible();
     await expect(page.getByText(new RegExp(`We'll create an MTB3A account for ${person.email}`))).toBeVisible();
-    await expect(page.getByText(/Nothing is saved until you continue/)).toBeVisible();
     await expect(page).not.toHaveURL(/result=/);
   });
   await step('Choose the currency, agree to the terms and press Create account and continue', async () => {
@@ -84,7 +83,6 @@ test('A lawyer who already has MTB3A proves their account once, then Malafat sig
   await step('Sign in with Malafat with an email that already has an MTB3A account', async () => {
     await startMalafatSignIn(page);
     await expect(page.getByRole('heading', { name: 'You already have an MTB3A account' })).toBeVisible();
-    await expect(page.getByText('We never connect two accounts by email alone.')).toBeVisible();
   });
   await step('A wrong MTB3A password is said so', async () => {
     await page.getByLabel('Your MTB3A password').fill('not the password at all');
@@ -111,7 +109,7 @@ test('Declining in Malafat changes nothing and says so', { tag: '@portal-selfser
     await startMalafatSignIn(page);
   });
   await step('"Nothing was changed", with a way back to sign in', async () => {
-    await expect(page.getByText("You didn't allow MTB3A in Malafat. Nothing was changed.")).toBeVisible();
+    await expect(page.getByText("You didn't allow MTB3A in Malafat.")).toBeVisible();
     await page.getByRole('link', { name: 'Back to sign in' }).click();
     await expect(page).toHaveURL(/\/sign-in/);
   });
@@ -169,7 +167,7 @@ test('The office’s income is Malafat’s to change; the portal says so', { tag
     await page.goto(`/p/${partner.organizationId}/receivables`);
   });
   await step('It is edited in Malafat, with nothing to record or edit here', async () => {
-    await expect(page.getByText('Malafat records income and payments for this profile. To change them, use Malafat.')).toBeVisible();
+    await expect(page.getByText('To change income here, use Malafat.')).toBeVisible();
     await expect(page.getByRole('button', { name: /Record income|Add income/ })).toHaveCount(0);
   });
 });

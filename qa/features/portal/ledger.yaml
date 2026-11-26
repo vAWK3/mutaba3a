@@ -67,6 +67,6 @@ features:
       - Open Payments with ?newIncome=received
       - Open Payments on an owned profile
     expect:
-      - The note "Malafat records income and payments for this profile. To change them, use Malafat." shows, with no Add income or Record payment
+      - The note "To change income here, use Malafat." shows, with no Add income or Record payment
       - The link opens no drawer
       - An owned profile shows no note and offers Add income

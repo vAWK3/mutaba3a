@@ -651,7 +651,6 @@ describe('a known vendor’s currency and VAT on review (MUT-303)', () => {
     await screen.findByLabelText(/Amount/);
     expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('EUR');
     expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%');
-    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From this vendor’s last expense');
     await user.type(screen.getByLabelText(/Amount/), '116');
     await user.selectOptions(screen.getByLabelText(/Category/), GROCERIES);
     await user.click(screen.getByRole('button', { name: 'Approve and file' }));
@@ -691,7 +690,6 @@ describe('a known vendor’s currency and VAT on review (MUT-303)', () => {
     await vi.advanceTimersByTimeAsync(3000);
     await waitFor(() => expect(screen.getByTestId('expense-vat-summary')).toHaveTextContent('VAT 16%'));
     expect((screen.getByLabelText(/^Currency/) as HTMLSelectElement).value).toBe('EUR');
-    expect(document.querySelector('[data-hint-for="vat"]')).toHaveTextContent('From this vendor’s last expense');
     vi.useRealTimers();
   });
 

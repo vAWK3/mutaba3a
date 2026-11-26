@@ -208,7 +208,7 @@ describe('Owners section (MUT-373)', () => {
 
   it.each([
     ['the network fails', () => Promise.reject(new TypeError('network down')), /Can't reach MTB3A/],
-    ['the creator tries to leave', () => fail(409, 'CONFLICT', { reason: 'CREATOR_CANNOT_LEAVE' }), /you can't leave it/],
+    ['the creator tries to leave', () => fail(409, 'CONFLICT', { reason: 'CREATOR_CANNOT_LEAVE' }), /can't leave a profile you created/],
   ] as const)('keeps the leave confirm open with a banner, Save still hidden, when %s', async (_label, answer, banner) => {
     const { user, router } = portal([coOwned, builtIn], { [`DELETE /v1/profiles/${STUDIO}/owners/${ME}`]: answer as Handler }, `/p/${STUDIO}?editProfile=${STUDIO}`);
     const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
@@ -257,14 +257,12 @@ describe('Owners section (MUT-373)', () => {
     portal([created, builtIn]);
     const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
     expect(within(dialog).getByRole('radio', { name: /Personal/ })).toBeDisabled();
-    expect(within(dialog).getByText('A shared profile stays Business.')).toBeInTheDocument();
   });
 
   it('offers a solo creator the add-a-partner email, prefilled, with the address to copy (AD5, DR14)', async () => {
     portal([profile({ ...base, owners: [owner(ME, 'Nour Haddad', true)] }), builtIn]);
     const dialog = await screen.findByRole('dialog', { name: 'Sader & Haddad' });
     const section = within(dialog).getByRole('region', { name: 'Owners' });
-    expect(section).toHaveTextContent('Only you own this profile.');
     const link = within(section).getByRole('link', { name: 'write to us' });
     const href = new URL(link.getAttribute('href')!);
     expect(href.protocol).toBe('mailto:');
@@ -282,11 +280,10 @@ describe('Owners section (MUT-373)', () => {
 });
 
 describe('Shared cue and cap hint (MUT-373 DR2, DR12)', () => {
-  it('names the other owners in the Manage list, and explains the count to a co-owner', async () => {
+  it('names the other owners in the Manage list', async () => {
     portal([coOwned, builtIn], {}, `/p/${ORG_B}?manageProfiles=true`);
     const dialog = await screen.findByRole('dialog', { name: 'Profiles' });
     expect(within(dialog).getByText('Business · Shared with Basel Sader')).toBeInTheDocument();
-    expect(within(dialog).getByText("Profiles shared with you don't count.")).toBeInTheDocument();
   });
 });
 
@@ -297,7 +294,7 @@ describe('Lost access (MUT-373 DR3)', () => {
     setProfiles([builtIn]);
     // Any 404 on the open profile re-reads /v1/me (QueryView); here the re-read is triggered directly.
     await queryClient.invalidateQueries({ queryKey: ['me'] });
-    expect(await screen.findByText('You no longer have access to Sader & Haddad. What you recorded stays.')).toBeInTheDocument();
+    expect(await screen.findByText('You no longer have access to Sader & Haddad.')).toBeInTheDocument();
   });
 
   it('closes the banner for good once dismissed', async () => {

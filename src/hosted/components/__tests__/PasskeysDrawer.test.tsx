@@ -64,11 +64,10 @@ describe('Passkeys drawer (MUT-115)', () => {
     expect(screen.queryByRole('dialog', { name: 'Passkeys' })).toBeNull();
   });
 
-  it('empty: explains a passkey and offers Add', async () => {
+  it('empty: offers Add', async () => {
     portal(`/p/${ORG_A}?passkeys=true`, []);
     const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
     expect(await within(dialog).findByText('No passkeys yet')).toBeInTheDocument();
-    expect(within(dialog).getByText(/Your password still works/)).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Add a passkey' })).toBeEnabled();
   });
 
@@ -129,7 +128,7 @@ describe('Passkeys drawer (MUT-115)', () => {
       const { user, api } = operatorPortal();
       const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
       await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
-      expect(await within(dialog).findByText(/As an operator, confirm it’s you with one of your passkeys first/)).toBeInTheDocument();
+      expect(await within(dialog).findByText(/Confirm it’s you with one of your passkeys first/)).toBeInTheDocument();
       expect(within(dialog).queryByLabelText('Password')).not.toBeInTheDocument();
       const confirm = within(dialog).getByRole('button', { name: 'Confirm with passkey' });
       await waitFor(() => expect(calls(api.calls, 'POST', '/v1/operator/step-up/options')).toHaveLength(1));
@@ -160,7 +159,7 @@ describe('Passkeys drawer (MUT-115)', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Passkeys' });
       await user.click(within(dialog).getByRole('button', { name: 'Add a passkey' }));
       await user.click(await within(dialog).findByRole('button', { name: 'Confirm with passkey' }));
-      expect(await within(dialog).findByText(/This browser couldn’t use your passkey \(NotSupportedError\)\. A passkey on another device works too/)).toBeInTheDocument();
+      expect(await within(dialog).findByText(/This browser couldn’t use your passkey \(NotSupportedError\)/)).toBeInTheDocument();
       expect(calls(api.calls, 'POST', '/v1/operator/step-up')).toHaveLength(0);
     });
   });
@@ -239,7 +238,7 @@ describe('Passkeys drawer (MUT-115)', () => {
     await waitFor(() => expect(within(dialog).getByRole('button', { name: 'Remove Chrome on Mac' })).toHaveFocus());
     await user.click(within(dialog).getByRole('button', { name: 'Remove Chrome on Mac' }));
     await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    expect(await screen.findByText('Passkey removed. Devices signed in with it are signed out.')).toBeInTheDocument();
+    expect(await screen.findByText('Passkey removed')).toBeInTheDocument();
     expect(calls(api.calls, 'DELETE', '/v1/passkeys/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb')).toHaveLength(1);
     expect(await within(dialog).findByText('No passkeys yet')).toBeInTheDocument();
   });

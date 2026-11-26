@@ -99,7 +99,7 @@ function ReceiptReviewBody({ receiptId, profile, back, search, setSearch }: { re
         {gone ? (
           <Empty title={t('hosted.receipts.review.notFound.title')} body={t('hosted.receipts.review.notFound.body')} />
         ) : (
-          <Empty title={t('hosted.states.unreachable.title')} body={t('hosted.states.unreachable.body')} action={<Button variant="secondary" size="sm" onClick={() => void receipt.refetch()}>{t('hosted.states.unreachable.retry')}</Button>} />
+          <Empty title={t('hosted.states.unreachable.title')} action={<Button variant="secondary" size="sm" onClick={() => void receipt.refetch()}>{t('hosted.states.unreachable.retry')}</Button>} />
         )}
       </>
     );
@@ -194,10 +194,6 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
     if (prefill.unsupported) out.amount = receiptSays(prefill.unsupported);
     // MUT-302 (D6): a VAT amount with no usable rate is only said, beside the empty rate.
     if (prefill.vatRead) out.vat = t('hosted.receipts.review.vatRead', { amount: prefill.vatRead });
-    // MUT-303: a field the vendor filled says so while it still holds the vendor's value.
-    const nowValues = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
-    if (vendorFilled.currency && nowValues.currency === vendorFilled.currency) out.currency = t('hosted.expenses.hints.fromVendor');
-    if (vendorFilled.vatTreatment && nowValues.vatTreatment === vendorFilled.vatTreatment) out.vat = t('hosted.expenses.hints.fromVendor');
     if (late) {
       // R10 #9: a hint only where the late suggestion's value is what the field holds (it filled it).
       const now = Object.fromEntries(SUGGESTED_FORM_FIELDS.map((name, i) => [name, current[i]]));
@@ -209,7 +205,7 @@ function ReviewForm({ profile, receipt }: { profile: HostedProfile; receipt: Rec
       if (late.vatRead && !out.vat && now.vatTreatment === '') out.vat = t('hosted.receipts.review.vatRead', { amount: late.vatRead });
     }
     return out;
-  }, [prefill, late, current, t, vendorFilled]);
+  }, [prefill, late, current, t]);
 
   const reviewPath = (id: string) => `/p/${profile.id}/expenses/receipts/${id}`;
 

@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Explainer lines removed or shortened, per Basel's review, 2026-11-26
+
+Basel reviewed every user-facing line that explains how the system works instead of helping the user act. His decisions are applied here, in English and Arabic.
+
+### Removed
+- Portal: 102 explainer lines (hint IDs H2-H3, H8, H13, H24, H28, H30, H35-H36, H40-H43, H47-H54, H57, H60, H64, H67-H68, H70, H72-H74, H77-H79, H82, H85-H86, H89, H94-H95, H97, H102-H104, H106-H107, H118, H128, H134-H136, H145-H146, H149, H153, H171, H189, H192, H194-H195, H205, H219, H221, H226, H228, H231, H237-H240, H245-H246, H250, H252, H258, H260-H262, H264, H266, H272, H274-H276, H279, H283-H286, H288, H296, H303-H304, H307, H309-H310, H314-H316, H321, H326, H329, H331) with their i18n keys, the unused `coOwnsOthersProfiles` rule and the `PrivateViewNote` component. Hero and Get-it notes on the landing site (H332-H333, H337-H338), plus their CSS rule.
+- Emails: H351, H354, H356, H360, H364, H370, H371 (a sentence or paragraph each).
+- Operator console: the notes on the row subtitle, signups and firms empty states, step-up QR hint, accounts search hint, enable and billing-grant subtitles, no-end-date hint, the four "You" subtitles and two usage empty-state bodies (14 keys).
+
+### Changed
+- Portal: 137 lines shortened (H4 and on; IDs in the review list), including H32, H33, H84 and H255 whose text was written here (no text came with the decision).
+- Landing: H334, H335, H340-H343. Emails: H352, H353, H357-H359, H361, H365, H368, H369, H373, H374, H376, H380, H381, H383 (the come-back mail keeps its s.30A promotional footer).
+- Operator console: 18 notes shortened (confirm texts, banners, subtitles, plan and feature notes).
+- `RadioCards` and `ProfileTypeCards` take an optional note and disabled reason; the accountant grant row and the Malafat office page drop the empty element when there is no line.
+- Where one string served two keys (`monthlySummary.rowSub` kept, `offerMail.rowSub` removed) the unsubscribe page shows the lead for the monthly summary only.
+
+### Technical
+- Specs and unit tests that asserted the old text were updated (qa/specs, qa/features, src tests); no QA video was recorded.
+
 ## [Unreleased] - 2026-11-26 — Invoicing for everyone; the Tax Authority connection on paid plans only (MUT-736, ADR-282, API 1.143.0-mut736)
 
 ### Added

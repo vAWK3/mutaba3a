@@ -49,7 +49,6 @@ export function DocumentsPreferenceField({ profileId, client, writable, profileD
       )}
       {changedElsewhere && <p className="input-error-message" role="alert">{t('hosted.client.business.changedElsewhere')}</p>}
       {update.isError && !changedElsewhere && <p className="input-error-message" role="alert">{t('hosted.client.business.saveFailed')}</p>}
-      <p className="hp-muted hp-business-docs-help">{t('hosted.client.documents.help')}</p>
       <p className="hp-business-docs-due">
         <span className="hp-muted">{t('hosted.client.documents.dueTitle')}</span> {t(`hosted.client.documents.due.${effective}`)}
       </p>

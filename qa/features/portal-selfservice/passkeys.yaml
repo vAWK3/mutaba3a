@@ -45,7 +45,7 @@ features:
       - Press Remove on it and confirm
       - Sign out and try Sign in with a passkey
     expect:
-      - '"Passkey removed. Devices signed in with it are signed out."'
+      - '"Passkey removed"'
       - The passkey sign-in is refused with "That passkey didn’t work"
   - id: password-change-keeps
     title: Changing the password keeps the passkey working
@@ -82,7 +82,7 @@ features:
       - Press Done
     expect:
       - '"Your password is changed. These passkeys still sign in to your account. Remove any you don’t recognise." with the passkey listed and no Add'
-      - '"Passkey removed. Devices signed in with it are signed out.", and the list is empty'
+      - '"Passkey removed", and the list is empty'
       - Done closes the review
   - id: review-after-recovery
     title: After a recovery, your passkeys are listed
@@ -114,7 +114,7 @@ features:
     expect:
       - The drawer reads right to left and fits the phone
       - Sign-in offers تسجيل الدخول بمفتاح المرور
-  # MUT-370 (ADR-191): Home suggests a passkey after a sign-in: "Add a passkey: the more secure way to sign in. Your
+  # MUT-370 (ADR-191): Home suggests a passkey after a sign-in: "Sign in more securely with a passkey. Your
   # password still works." Not now hides it for 30 days; three offers in all; never with a passkey.
   # MUT-619: a signup now meets the setup page's passkey step first, and its Not now is one of these three offers.
   - id: suggest-first-sign-in
@@ -172,5 +172,5 @@ features:
     steps:
       - In Arabic at phone width, sign in
     expect:
-      - '"أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول." with إضافة مفتاح مرور and ليس الآن, right to left'
+      - '"سجّل الدخول بأمان أكبر بمفتاح مرور." with إضافة مفتاح مرور and ليس الآن, right to left'
       - The card fits the phone with nothing scrolling sideways

@@ -58,7 +58,7 @@ describe('passkey review after a password change (MUT-415)', () => {
 
     await user.click(within(dialog).getByRole('button', { name: 'Remove Chrome on Mac' }));
     await user.click(within(dialog).getByRole('button', { name: 'Remove' }));
-    expect(await screen.findByText('Passkey removed. Devices signed in with it are signed out.')).toBeInTheDocument();
+    expect(await screen.findByText('Passkey removed')).toBeInTheDocument();
     expect(calls(api.calls, 'DELETE', `/v1/passkeys/${CHROME.id}`)).toHaveLength(1);
 
     await user.click(within(dialog).getByRole('button', { name: 'Done' }));

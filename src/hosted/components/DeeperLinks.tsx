@@ -11,7 +11,7 @@ import { RowNavLink } from './YouRows';
 
 export interface DeeperLink {
   to: string;
-  /** `hosted.deeper.<key>.label` and `.sub`. */
+  /** `hosted.deeper.<key>.label`. */
   key: 'receivables' | 'conversions' | 'documents';
 }
 
@@ -21,7 +21,7 @@ export function DeeperLinks({ destination, links }: { destination: Destination; 
     <nav className="hp-deeper" aria-label={t('hosted.deeper.label', { destination: t(`hosted.destinations.${destination}`) })}>
       <div className="hp-you-box">
         {links.map((link) => (
-          <RowNavLink key={link.key} to={link.to} label={t(`hosted.deeper.${link.key}.label`)} sub={t(`hosted.deeper.${link.key}.sub`)} />
+          <RowNavLink key={link.key} to={link.to} label={t(`hosted.deeper.${link.key}.label`)} />
         ))}
       </div>
     </nav>

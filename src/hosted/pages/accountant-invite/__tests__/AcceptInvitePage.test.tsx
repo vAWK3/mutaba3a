@@ -79,8 +79,7 @@ describe('signed out', () => {
     const { user, router } = renderPortal(`/accountant-invite#${TOKEN}`);
     await user.click(await screen.findByRole('button', { name: 'Create an account' }));
     expect(screen.getByLabelText('Email')).toHaveValue('s***@khoury-cpa.com');
-    expect(screen.getByText("The invite's address; it can't be changed.")).toBeInTheDocument();
-    expect(screen.getByText(/Reading up to 3 client books is always free/)).toBeInTheDocument();
+    expect(screen.getByText(/Reading up to 3 client books is free/)).toBeInTheDocument();
     await user.type(screen.getByLabelText('Name'), 'Sami Khoury');
     await user.type(screen.getByLabelText('Password'), PASSWORD);
     await user.click(screen.getByRole('checkbox'));
@@ -159,7 +158,6 @@ describe('signed in', () => {
     await user.click(await screen.findByRole('button', { name: 'Accept' }));
     expect(await screen.findByRole('heading', { name: 'This invite was sent to another address' })).toBeInTheDocument();
     expect(screen.getByText(/h\*\*\*@firm.com/)).toBeInTheDocument();
-    expect(screen.getByText(/same company domain works too/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Sign out and use another account' })).toBeInTheDocument();
   });
 
@@ -197,7 +195,7 @@ describe('the Accountant plan (MUT-565, gated on its fields)', () => {
     expect(screen.getByText('Reading up to 3 client books is free. To read Studio as well, subscribe to the Accountant plan.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).toBeNull();
     expect(await screen.findByText(/₪99\.00 a month/)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /Not now \(the invite stays open until/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Not now' })).toBeInTheDocument();
     await user.selectOptions(screen.getByLabelText('Country'), 'IL');
     await user.click(screen.getByRole('button', { name: 'Subscribe' }));
     await waitFor(() => expect(assign).toHaveBeenCalled());

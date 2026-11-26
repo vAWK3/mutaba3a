@@ -88,7 +88,7 @@ describe('grantRow', () => {
   it('expired: not accepted within 14 days, chip Expired, action Invite again', () => {
     const row = grantRow(grant({ status: 'expired', acceptedAt: null, lastViewedAt: null }), NOW, 'en', TZ);
     expect(row).toMatchObject({ chip: 'expired', action: 'inviteAgain' });
-    expect(row.meta).toEqual([{ key: 'hosted.sharing.accountants.expiredMeta' }]);
+    expect(row.meta).toEqual([]);
   });
 });
 

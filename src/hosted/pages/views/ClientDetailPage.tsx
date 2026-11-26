@@ -59,7 +59,6 @@ export function ClientDetailPage({ customerId, search, setSearch }: ClientDetail
   const notFound = (
     <Empty
       title={t('hosted.client.notFound.title')}
-      body={t('hosted.client.notFound.body')}
       action={<Link to={`/p/${profile.id}/clients`}>{t('hosted.client.back')}</Link>}
     />
   );

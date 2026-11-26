@@ -58,8 +58,6 @@ const FX_MEMORY_KEY = 'mut-local-fx';
 // Dated yesterday: the local backend refuses a snapshot older than MAX_RATE_AGE_DAYS, so a fixed date goes stale.
 const RATE_DAY = new Date(Date.now() - 24 * 60 * 60 * 1000);
 const PUBLIC_FX_SNAPSHOT = { rateDate: RATE_DAY.toISOString().slice(0, 10), perEur: { USD: 1.1208, ILS: 3.4769 }, fetchedAt: new Date().toISOString(), source: 'live' };
-/** How the ≈ line names that date in English, e.g. "Oct 17, 2026". */
-const RATE_DAY_LABEL = new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(RATE_DAY);
 
 /** One of the four destinations (MUT-424): its page is titled with the tab's word. */
 async function openSection(page: Page, destination: 'Owed' | 'Paid' | 'Spent' | 'Clients') {
@@ -424,25 +422,25 @@ test('Signed out and online, a trip group in two currencies shows the ≈ line; 
     await expect(page.getByRole('heading', { level: 1, name: 'Amman trip' })).toBeVisible();
   });
 
-  await step('The headline keeps both currencies and the ≈ line names the ECB rate date', async () => {
+  await step('The headline keeps both currencies and the ≈ line says it is at today’s rate', async () => {
     const headline = page.getByRole('group', { name: 'Total spent' });
     await expect(headline).toContainText('$40.00');
     await expect(headline).toContainText('120.00');
-    await expect(page.getByText(`at today's ECB rate (${RATE_DAY_LABEL})`, { exact: false })).toBeVisible();
+    await expect(page.getByText("at today's rate", { exact: false })).toBeVisible();
   });
 
   await step('Go offline and reload: the ≈ line stays, from the rates this device remembers', async () => {
     online = false;
     await page.reload();
     await expect(page.getByRole('group', { name: 'Total spent' })).toContainText('$40.00');
-    await expect(page.getByText(`at today's ECB rate (${RATE_DAY_LABEL})`, { exact: false })).toBeVisible();
+    await expect(page.getByText("at today's rate", { exact: false })).toBeVisible();
   });
 
   await step('On a device that remembers no rates, offline: the ≈ line hides and the totals stay', async () => {
     await page.evaluate((key) => localStorage.removeItem(key), FX_MEMORY_KEY);
     await page.reload();
     await expect(page.getByRole('group', { name: 'Total spent' })).toContainText('$40.00');
-    await expect(page.getByText(/at today's ECB rate/)).toHaveCount(0);
+    await expect(page.getByText(/at today's rate/)).toHaveCount(0);
   });
 
   await step('Only the public rates reached the server', async () => {

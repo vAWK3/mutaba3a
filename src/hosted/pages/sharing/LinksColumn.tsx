@@ -152,10 +152,11 @@ export function LinksColumn({ profile, query, onCreate }: { profile: HostedProfi
                 }
               />
             )}
-            <p className="hp-sharing-foot" id={`${ids}-limit`}>
-              {atLimit ? t('hosted.sharing.links.atLimit', { limit: String(data.limit) }) : t('hosted.sharing.links.limit', { limit: String(data.limit) })}
-            </p>
-            <p className="hp-sharing-foot">{t('hosted.sharing.links.footnote')}</p>
+            {atLimit && (
+              <p className="hp-sharing-foot" id={`${ids}-limit`}>
+                {t('hosted.sharing.links.atLimit', { limit: String(data.limit) })}
+              </p>
+            )}
           </>
         )}
       </QueryView>

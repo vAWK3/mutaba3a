@@ -164,5 +164,5 @@ features:
       - On a firm profile, open a receipt that read only the vendor Bezeq
       - Approve and file it
     expect:
-      - Currency EUR and VAT 16% come from Bezeq, marked "From this vendor’s last expense"
+      - Currency EUR and VAT 16% come from Bezeq
       - Approve sends EUR and the 16 % rate

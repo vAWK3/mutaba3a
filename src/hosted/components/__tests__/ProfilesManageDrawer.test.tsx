@@ -43,7 +43,7 @@ describe('Manage profiles list (MUT-183)', () => {
     const items = within(dialog).getAllByRole('listitem');
     expect(items.map((item) => item.textContent)).toEqual([
       'Haddad & PartnersManaged in Malafat. Change it there.ILS',
-      'Khalil AccountingSet up for you by your account administrator.ILS',
+      'Khalil AccountingILS',
       'Nour StudioOpen nowPersonalILS›',
       'PersonalYour built-in profileILS›',
     ]);
@@ -145,11 +145,10 @@ describe('Edit pane (MUT-183)', () => {
     expect(patches(api.calls)[1].headers.get('If-Match')).toBe('2');
   });
 
-  it('MG5: the built-in Personal profile has no type control and says why', async () => {
+  it('MG5: the built-in Personal profile has no type control', async () => {
     portal(`/p/${STUDIO}?editProfile=${ORG_B}`);
     const dialog = await screen.findByRole('dialog', { name: 'Personal' });
     expect(within(dialog).queryByRole('radio')).toBeNull();
-    expect(within(dialog).getByText('Your built-in Personal profile is always Personal.')).toBeInTheDocument();
   });
 
   it('MG6: in Arabic the drawer reads right to left', async () => {

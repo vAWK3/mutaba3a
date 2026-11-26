@@ -99,7 +99,6 @@ function ConsentRequest({ requestId }: { requestId: string }) {
             <li key={scope}>{t(`hosted.consent.scope.${scope}`)}</li>
           ))}
         </ul>
-        <p className="hp-muted">{t('hosted.consent.revokeAnytime')}</p>
         {failed && (
           <div className="hp-banner hp-banner-error" role="alert">
             <AlertIcon />

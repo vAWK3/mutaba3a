@@ -222,7 +222,7 @@ test('Close my account says issued invoices and receipts are kept 7 years, in En
 
   await step('Read the Kept section', async () => {
     await expect(dialog.getByRole('heading', { name: 'Kept' })).toBeVisible();
-    const line = dialog.getByText(/^If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one, as tax law requires, and then deleted\. Write to us if you need a copy\.$/);
+    const line = dialog.getByText(/^Invoices and receipts you issued are kept for 7 years, as tax law requires\.$/);
     await line.scrollIntoViewIfNeeded();
     await expect(line).toBeVisible();
   });
@@ -231,7 +231,7 @@ test('Close my account says issued invoices and receipts are kept 7 years, in En
     await api.open(page, `/p/${OFFICE_A}?closeAccount=true`, 'ar');
     const arabic = page.getByRole('dialog', { name: 'إغلاق حسابي' });
     await expect(arabic.getByRole('heading', { name: 'ما يبقى' })).toBeVisible();
-    const line = arabic.getByText(/^إن أصدرت فواتير أو إيصالات عبر متابعة، فنحتفظ بها وبتفاصيل عملك المطبوعة عليها 7 سنوات/);
+    const line = arabic.getByText(/^نحتفظ بالفواتير والإيصالات التي أصدرتها 7 سنوات/);
     await line.scrollIntoViewIfNeeded();
     await expect(line).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.dir)).toBe('rtl');

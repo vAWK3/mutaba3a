@@ -95,7 +95,6 @@ export function PeriodDownloads({ mint, viewerToken, onDownloaded }: PeriodDownl
       {TYPES.map((type) => (
         <DownloadRow key={type} type={type} slot={slots[type]} onDownload={() => void download(type)} />
       ))}
-      <p className="hp-field-hint">{t('hosted.clientBooks.download.followsPeriod')}</p>
     </section>
   );
 }

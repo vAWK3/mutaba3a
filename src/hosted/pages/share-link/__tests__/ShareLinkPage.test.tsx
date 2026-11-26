@@ -167,7 +167,6 @@ describe('the open link', () => {
     await typePin(user, '4821');
     await user.click(screen.getByRole('button', { name: 'Open' }));
     expect(await screen.findByRole('heading', { name: 'Enter the PIN again' })).toBeInTheDocument();
-    expect(screen.getByText('For safety, the PIN is asked for every 8 hours.')).toBeInTheDocument();
   });
 
   it('a signed-in owner opening a link and getting a 401 stays signed in, and the crash reporter forgets them meanwhile', async () => {

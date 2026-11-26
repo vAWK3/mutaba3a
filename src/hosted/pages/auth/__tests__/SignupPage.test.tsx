@@ -48,7 +48,6 @@ describe('/signup open', () => {
     expect(screen.getByRole('heading', { level: 1, name: 'Create your account' })).toBeInTheDocument();
     expect(view.email).toHaveFocus();
     expect(view.email).toHaveAttribute('dir', 'ltr');
-    expect(screen.getByText(/You'll accept the terms when you set your password/)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Read the terms' }).getAttribute('href')).toMatch(/^https:\/\/landing\.test\/terms/);
     expect(vi.mocked(view.turnstile.api.render).mock.calls[0]![1]).toMatchObject({ action: 'signup', language: 'en' });
 
@@ -57,7 +56,6 @@ describe('/signup open', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Check your email' })).toBeInTheDocument();
     expect(view.api.calls.find((c) => `${c.method} ${c.url.pathname}` === SIGNUP)?.body).toEqual({ email: 'rana@studio.example', locale: 'en', turnstileToken: 'token-1' });
     expect(screen.getByText('rana@studio.example')).toBeInTheDocument();
-    expect(screen.getByText(/If this address already has an account, the email says how to sign in instead/)).toBeInTheDocument();
   });
 
   it('opens in Arabic, right to left, when no language was chosen', async () => {
