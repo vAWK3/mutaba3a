@@ -247,7 +247,7 @@ import { membershipRoleOf } from '../malafat-members.js';
 import { resolveClaim } from './idempotency-claim.js';
 import { OPEN_PROPOSAL_STATUSES } from '../proposals/transitions.js';
 import { assertExpenseVatColumns } from '../expenses/vat.js';
-import { assertAllocationNumberColumn } from '../israel/allocation-number.js';
+import { assertAllocationNumberColumn } from '../jurisdictions/il/allocation-number.js';
 import { ledgerYear, paymentNumber, receivableCounterKey, receivableNumber } from '../payments/numbering.js';
 import { COPY_REPLAY_MS } from '../issuing/copies.js';
 import { creditNoteRefusal, entryAmount, fromEntryMode, fromEntryRefusal, ledgerPlan, type EntryState } from '../issuing/ledger-plan.js';

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RegistryLookup } from '../israel/registry.js';
+import { RegistryLookup } from '../jurisdictions/il/registry.js';
 import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /** MUT-642: a customer's VAT/company number and address, the registry lookup, and both on issued documents. */

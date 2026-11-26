@@ -1,6 +1,6 @@
 import type { UniformFileHouse } from '../issuing/uniform-file/export.js';
 import type { OcrClient } from '../receipts/ocr-client.js';
-import type { TaxAuthorityDeps } from '../israel/tax-authority/service.js';
+import type { TaxAuthorityDeps } from '../jurisdictions/index.js';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { AppEnv } from '../auth/middleware.js';
 import type { AttachmentStorage } from '../attachments/storage.js';

@@ -1,10 +1,10 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import type { ComposedDocument } from '../../issuing/compose.js';
-import type { IssuedDocType } from '../../issuing/types.js';
-import type { AllocationOutcome, LedgerStore, TaxAuthorityConnectionRecord } from '../../repositories/ports.js';
+import type { ComposedDocument } from '../../../issuing/compose.js';
+import type { IssuedDocType } from '../../../issuing/types.js';
+import type { AllocationOutcome, LedgerStore, TaxAuthorityConnectionRecord } from '../../../repositories/ports.js';
 import { aboveAllocationThreshold, ALLOCATION_NUMBER_DIGITS } from '../allocation-number.js';
 import type { ApprovalItem, ApprovalRequest, TaxAuthorityClient, TaxAuthorityTokens } from './client.js';
-import { authLog, type AuthLogSink } from '../../observability/auth-log.js';
+import { authLog, type AuthLogSink } from '../../../observability/auth-log.js';
 import type { TokenBox } from './token-box.js';
 
 /**

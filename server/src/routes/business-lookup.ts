@@ -1,8 +1,8 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
-import type { RegistryLookup } from '../israel/registry.js';
-import { normalizeTaxId } from '../israel/tax-id.js';
+import type { RegistryLookup } from '../jurisdictions/il/registry.js';
+import { normalizeTaxId } from '../jurisdictions/il/tax-id.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';

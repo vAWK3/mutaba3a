@@ -1,4 +1,4 @@
-import { aboveAllocationThreshold } from '../../israel/allocation-number.js';
+import { aboveAllocationThreshold } from '../../jurisdictions/il/allocation-number.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
 
 /** The fields every receipt is read for: a suggestion holding all of them is complete (`isCompleteSuggestion`). */

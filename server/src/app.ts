@@ -106,8 +106,7 @@ import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-rou
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
 import { UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFileHouse } from './issuing/uniform-file/export.js';
-import type { RegistryLookup } from './israel/registry.js';
-import type { TaxAuthorityDeps } from './israel/tax-authority/service.js';
+import type { RegistryLookup, TaxAuthorityDeps } from './jurisdictions/index.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';

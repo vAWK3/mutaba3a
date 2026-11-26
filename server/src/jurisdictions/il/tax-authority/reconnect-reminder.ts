@@ -1,8 +1,8 @@
-import { normalizeEmail } from '../../auth/users.js';
-import type { Mailer, SendResult } from '../../email/ports.js';
-import type { Logger } from '../../logger.js';
-import { taxAuthorityPlanOf } from '../../issuing/tax-authority-plan.js';
-import type { LedgerStore, TaxAuthorityConnectionRecord, UserLocale } from '../../repositories/ports.js';
+import { normalizeEmail } from '../../../auth/users.js';
+import type { Mailer, SendResult } from '../../../email/ports.js';
+import type { Logger } from '../../../logger.js';
+import { taxAuthorityPlanOf } from '../../../issuing/tax-authority-plan.js';
+import type { LedgerStore, TaxAuthorityConnectionRecord, UserLocale } from '../../../repositories/ports.js';
 
 /**
  * MUT-571 AC3: the Tax Authority's consent lasts 90 days, and only the business owner can give it again. Once a day

@@ -12,7 +12,7 @@ import { ApiError } from '../errors.js';
 import { invoicingOn } from '../issuing/invoicing-on.js';
 import { assertLive, DEFAULT_COUNTRY } from '../issuing/jurisdictions.js';
 import { taxAuthorityPlanOf } from '../issuing/tax-authority-plan.js';
-import { normalizeTaxId } from '../israel/tax-id.js';
+import { normalizeTaxId } from '../jurisdictions/il/tax-id.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
@@ -60,8 +60,8 @@ import { registerExternalInvoiceRoutes } from './external-invoices.js';
 import { registerTaxAuthorityRoutes, reportDecision } from './tax-authority.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import type { OcrClient } from '../receipts/ocr-client.js';
-import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCATION_URL, manualAllocator, needsAllocation, statusOf, type TaxAuthorityDeps } from '../israel/tax-authority/service.js';
-import { normalizeAllocationNumber } from '../israel/allocation-number.js';
+import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCATION_URL, manualAllocator, needsAllocation, statusOf, type TaxAuthorityDeps } from '../jurisdictions/il/tax-authority/service.js';
+import { normalizeAllocationNumber } from '../jurisdictions/il/allocation-number.js';
 import type { ComposedDocument } from '../issuing/compose.js';
 
 /** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */

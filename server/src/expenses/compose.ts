@@ -1,7 +1,7 @@
 import { assertIsoDate, assertNotAbsurdDate, assertNotTooOld, parseAmount, validationError } from '../agreements/compose.js';
 import type { IsoDate } from '../dates.js';
 import type { ApiError } from '../errors.js';
-import { normalizeAllocationNumber } from '../israel/allocation-number.js';
+import { normalizeAllocationNumber } from '../jurisdictions/il/allocation-number.js';
 import type { Currency } from '../money.js';
 import { ForeignKeyViolation } from '../repositories/memory.js';
 import type { CreateExpenseInput, ExpenseRecord, LedgerStore, UpdateExpensePatch, VendorLearning, VendorVat } from '../repositories/ports.js';

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { TokenBox } from '../israel/tax-authority/token-box.js';
-import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
+import { TokenBox } from '../jurisdictions/il/tax-authority/token-box.js';
+import { FakeTaxAuthority } from '../jurisdictions/il/tax-authority/__tests__/fake-client.js';
 import { ADMIN, accountantHarness, businessOf, idem, issuingHarness, json, person, read, signedIn, type AccountantHarness } from './helpers/accountants.js';
 
 /**

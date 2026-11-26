@@ -1,5 +1,5 @@
 import { createHmac, hkdfSync, randomBytes, randomInt } from 'node:crypto';
-import { TokenBox } from '../israel/tax-authority/token-box.js';
+import { TokenBox } from '../jurisdictions/index.js';
 import { sessionDigest } from './sessions.js';
 
 /**

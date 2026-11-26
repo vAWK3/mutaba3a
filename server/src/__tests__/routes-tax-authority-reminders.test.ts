@@ -3,9 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from '../app.js';
 import { createMailer } from '../email/mailer.js';
 import { MemoryMailTransport } from '../email/transports/memory.js';
-import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
-import { reconnectStageOf } from '../israel/tax-authority/reconnect-reminder.js';
-import { TokenBox } from '../israel/tax-authority/token-box.js';
+import { FakeTaxAuthority } from '../jurisdictions/il/tax-authority/__tests__/fake-client.js';
+import { reconnectStageOf } from '../jurisdictions/il/tax-authority/reconnect-reminder.js';
+import { TokenBox } from '../jurisdictions/il/tax-authority/token-box.js';
 import { SlidingWindowRateLimiter } from '../rate-limit.js';
 import { MemoryLedgerStore } from '../repositories/memory.js';
 

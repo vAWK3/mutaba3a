@@ -1,8 +1,6 @@
 import { RouteMeter } from './usage/route-meter.js';
 import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
-import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
-import { TokenBox } from './israel/tax-authority/token-box.js';
-import { RegistryLookup } from './israel/registry.js';
+import { HttpTaxAuthorityClient, RegistryLookup, TokenBox } from './jurisdictions/index.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { documentSignerFrom, signerStatus } from './issuing/pdf/sign/index.js';
 import { loadConfig, readOidcAudience } from './config.js';

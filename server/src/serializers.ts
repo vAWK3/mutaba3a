@@ -10,7 +10,7 @@ import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
-import { allocationNumberRequired } from './israel/allocation-number.js';
+import { allocationNumberRequired } from './jurisdictions/il/allocation-number.js';
 import { documentNumberLabel } from './issuing/labels.js';
 import type { PaymentRequestFacts } from './issuing/payment-request.js';
 import type { CreditReasonCode } from './payments/credit.js';

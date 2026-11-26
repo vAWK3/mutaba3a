@@ -12,7 +12,7 @@ import type { StatementLine } from '../statements/build.js';
 import { documentsDue } from '../issuing/documents-due.js';
 import { invoicingOn } from '../issuing/invoicing-on.js';
 import { ApiError } from '../errors.js';
-import { normalizeTaxId } from '../israel/tax-id.js';
+import { normalizeTaxId } from '../jurisdictions/il/tax-id.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
