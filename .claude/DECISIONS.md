@@ -7248,3 +7248,70 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** new portal components `PlanLimitNotice`, `StarterPlan` (meters, Billing body, the pick list, Continue free), `PickActiveBusinessDialog`, `UsageNotice`, `SoloTrialStep`; `data/planUsage.ts`, `data/useStarterUsage.ts`. Release-QA area `portal.starter`. The pick rows don't show each business's record count and last entry yet (TD-343).
 
 **Alternatives rejected:** a rose error banner (a limit is not a failure); a modal for the 90% nudge (it nags); a pre-selected "most recent" business (Basel Q5); showing the freelancer price as Solo's (a placeholder price).
+
+## ADR-286: Barmajiyat Ltd Owns the IP and Sells the Subscription; Narabnd Studio Ltd Is the Registered Software House and Signer (MUT-700; amends ADR-265 and the billing ADR-160's VAT wording)
+
+**Status:** Proposed (Basel's decisions, 2026-11-26; accept after the accountant and the lawyer confirm the open points). Supersedes the 2026-11-22 wording of MUT-700, which had Narabnd as owner and seller and proposed a new payment provider. Draft: `.claude/designs/entity-structure-adr.md`.
+
+**Context:**
+- Two companies, each 100% Basel's: **Barmajiyat Ltd** (UK) and **Narabnd Studio Ltd** (Israel, ח.פ. 517108775).
+- Basel: Barmajiyat Ltd is an **Israeli tax resident** for this purpose, because an Israeli resident controls it fully; **Israeli VAT applies** to its subscriptions to Israeli businesses and consumers. Narabnd can register as the software house. The intercompany licence is priced at **cost + 5%** (transfer pricing).
+- Issuing in Israel needs a registered software house, an API organization for the Tax Authority (SHAAM) and a signer for issued PDFs (ADR-260, ADR-264, ADR-265). The 2026-11-22 drafts had assumed Barmajiyat for the signer and Narabnd for ownership in different places.
+- Stripe doesn't onboard Israeli companies (to be verified), and the product is already sold through Barmajiyat's Stripe account.
+
+**Decision:**
+1. **Roles.**
+   - *Barmajiyat Ltd:* owns the IP and code; is the **seller of record of subscriptions** on **Stripe**; holds the store accounts (publisher) and the cloud billing; is an issuer in MTB3A for its own subscription invoices (MUT-639).
+   - *Narabnd Studio Ltd:* the **Tax Authority software house** (registration, MUT-567), the **Open API organization and SHAAM security appendix** (MUT-638, MUT-710) and the **signer** of issued PDFs (MUT-641). It operates the Israeli service under a licence from Barmajiyat.
+   - *Basel personally:* none of these roles.
+2. **Israeli VAT on subscriptions.** Prices are advertised **excluding VAT**. At checkout, **18% Israeli VAT is added only for a customer with an address in Israel**; no one else has VAT added by us. The rate is one configuration value, not a literal in billing code. Stripe Tax is not relied on for Israel. Ticket MUT-750.
+3. **Israeli tax documents for subscribers.** Barmajiyat Ltd is registered as an Israeli licensed dealer (MUT-749) and issues an Israeli tax invoice-receipt through MTB3A for each Stripe payment from an Israeli customer, with an allocation number where the threshold applies. A Stripe-hosted invoice is not the tax document.
+4. **Signing.** The production document-signing certificate is issued to **Narabnd Studio Ltd, company number 517108775** (amends ADR-265's context, "the software house (Barmajiyat) signs", and decision 6's interim certificate "in Barmajiyat's name"). The PDF's reason line names the business whose document it is, as now.
+5. **Licence and fee.** A written licence from Barmajiyat to Narabnd (IP stays with Barmajiyat) and an intercompany fee at **cost + 5%**, set up with the accountant (MUT-748).
+6. **Terms and privacy.** The terms keep Barmajiyat Ltd as the party to the subscription. Whether Narabnd is also named (software house, and processor or controller for issued documents) is the lawyer's answer. The 2026-11-25 drafts (MUT-732) were written for Narabnd as the party and are reconciled before publication.
+7. **Configuration, not code.** The software-house name and number (`software_house_*` in `production.tfvars`), the seller's details and the VAT rate are configuration, so a change of entity changes configuration only.
+
+**Consequences:**
+- The signing certificate command in `docs/operations/before-release.md` changes to Narabnd's name and number; the production certificate stays on hold until that is done.
+- Billing and pricing documents (`pilot-offer.md`, `billing-spike.md`, `mut-362`, `hosted-request-reply.md`) say "excluding VAT; Israeli VAT added at checkout for Israeli addresses"; the old "UK seller, no VAT" reading is retired.
+- Barmajiyat needs an Israeli VAT file and filings (MUT-749) before the first paid Israeli invoice. MUT-639 gates on the accountant's answer about issuing with software not yet registered.
+- Two related Israeli companies means transfer-pricing and VAT treatment between them (MUT-748).
+
+**Open points (accountant or lawyer):**
+- Written confirmation that Barmajiyat Ltd is an Israeli tax resident, and whether it also owes UK corporation tax or files in the UK; UK VAT registration.
+- Whether showing consumer prices excluding VAT is allowed in Israel (it may need to include VAT for consumers).
+- What counts as an "Israeli address" at checkout (billing address, card country, tax ID).
+- Invoice contents for subscribers; VAT for EU and Gulf customers of an Israeli-resident seller.
+- Whether Barmajiyat may issue its own invoices with software not yet registered (MUT-639).
+
+**Alternatives rejected:**
+- Narabnd as owner and seller (the 2026-11-22 version): moves the IP away from Barmajiyat and needs an Israeli payment provider.
+- Basel personally as the software house: puts the security obligations and liability on a person.
+- Barmajiyat Ltd as the registrant: it is not confirmed that a UK company can register; Narabnd can.
+- Relying on Stripe Tax for Israel: not supported when checked.
+
+**Overrides (log, 2026-11-26):** ADR-265 context and decision 6 (signer entity); billing ADR-160 and the pilot-offer VAT wording (Israeli VAT applies); MUT-700's 2026-11-22 owner-and-seller decision.
+
+## ADR-287: Invoicing Rules Live in Jurisdiction Packs Chosen by the Issuer's Country; Israel Is the First Pack (Epic MUT-738; amends ADR-260 decisions 3, 6 and 7)
+
+**Status:** Proposed (2026-11-26; design brief `.claude/designs/jurisdiction-packs.md`, approval is MUT-739). Israel is finished before any second country (Basel, 2026-11-26); this ADR makes Israel the first pack, not a second country.
+
+**Context:**
+- Issuing (epic MUT-566, ADR-260) is Israel-only, and Israel is built into every layer: ILS-only currency (`ISSUING_CURRENCIES`), the Israeli VAT table (`issuing/vat-rate.ts`), the Tax Authority's document codes (`DOC_TYPE_CODES`), Israeli legal forms (`DealerType`), 9-digit ID columns, the allocation number as a column of `issued_documents`, gap-free numbering, Instruction 18B signing, the uniform file, 7-year retention, `Asia/Jerusalem`.
+- Nothing records the issuer's country: `Organization` and `IssuerDetails` have none, and the issuer's `vatId` is only checked as nine digits. With `INVOICING_FOR_ALL` on (ADR-282), any business anywhere could issue an Israeli tax invoice.
+- Other countries (Saudi Arabia, Jordan) have different rules and clearance systems; the product already reads ZATCA QR codes and sells in Gulf currencies. Every open ticket (MUT-667, 656, 670, 671, 725 to 728) would add more Israel-direct code.
+
+**Decision:**
+1. **The issuer's country selects the pack.** `IssuerDetails.country` (ISO 3166-1), chosen at invoicing setup, backfilled `IL`, locked after the first issued document. Not the billing country, locale or currency. The customer's country is a separate field.
+2. **A pack owns** (in `server/src/jurisdictions/<cc>/`): supported currencies and tax conversion; tax-ID scheme and validator; issuer legal forms; document types, codes and which are tax documents; the dated VAT table and treatments (exempt, zero-rated export, reverse charge); the numbering strategy; the clearance hook (the pre-issue step ADR-264's allocation hook already is); required fields, legends and QR; signing; retention years; the export or report format; labels and default language.
+3. **The core stays country-neutral:** the immutable INSERT-only record, the transaction, idempotency, copies, the PDF engine, the retention framework, money in minor units (ADR-004).
+4. **No pack, no issuing.** `INVOICING_JURISDICTIONS` (default `IL`) lists live packs; a profile whose country is not live cannot issue and is told why. Israeli profiles' issuer VAT numbers get the Israeli checksum. This closes the any-country gap before `INVOICING_FOR_ALL` goes on in production (MUT-740).
+5. **Every document records its jurisdiction and pack version** (with `coreVersion`), so it can be reproduced under the rules in force when it was issued. The schema is generalised once, before the first real production document: wider `taxId` plus a scheme, a generic clearance record with `allocationNumber` kept as Israel's projection, country in issuer and customer snapshots (MUT-742).
+6. **Israel becomes the first pack by a behaviour-preserving move** (MUT-741): no Israeli document, number, PDF, allocation call or uniform-file byte changes; a guard fails when core code imports `jurisdictions/il` directly.
+7. **Clients read the rules from the server** (`GET /v1/issuing/rules`, MUT-743), so a pack's field change needs no portal or phone release.
+8. **Rules are dated data;** a contract test suite and per-pack golden fixtures every pack must pass (MUT-745); a review date per pack.
+9. **A second pack is not started until Israel is finished.** The paper packs for ZATCA phase 2 and JoFotara (MUT-744) only test the interface, and per-country registration is its own track (MUT-746).
+
+**Consequences:** a schema migration on INSERT-only legal tables, roll-forward only once documents exist (ADR-260's trigger and the MUT-644 bypass must be respected); the Israel rules move out of `server/src/israel/*` and the Israel parts of `server/src/issuing/*`; MUT-667 (foreign currency and export) is built on the pack interface; Israel-only backlog (MUT-651, 654, 655, 656, 696) is re-homed under the IL pack. ADR-260 decision 3 (numbering), decision 6 (the statutory VAT table) and decision 7 (ILS only) become the Israel pack's rules, not the core's.
+
+**Alternatives rejected:** a fork of the issuing core per country; deriving the country from the billing country or currency; adding country checks inline where each new ticket needs them.
