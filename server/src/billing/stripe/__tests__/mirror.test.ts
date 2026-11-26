@@ -37,6 +37,9 @@ describe('mirrorOf (MUT-360)', () => {
         pausedFrom: null,
         pauseResumesAt: null,
         endedAt: null,
+        // MUT-731: why and when Stripe ended it; an active subscription has neither.
+        endedReason: null,
+        trialEnd: null,
         currency: 'ILS',
       },
       notes: [],
