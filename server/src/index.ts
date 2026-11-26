@@ -1,3 +1,4 @@
+import { RouteMeter } from './usage/route-meter.js';
 import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
 import { HttpTaxAuthorityClient } from './israel/tax-authority/client.js';
 import { TokenBox } from './israel/tax-authority/token-box.js';
@@ -216,10 +217,13 @@ const readInvokers = [config.READ_INVOKER_SA, config.SWEEP_INVOKER_SA].filter((e
 const receiptReadVerifier = readAudience && readInvokers.length > 0 ? googleOidcVerifier({ audience: readAudience, allowedEmails: readInvokers }) : null;
 
 const documentSigner = documentSignerFrom(config);
+// MUT-735 (ADR-281): the route statistics, flushed from live requests (cpu_idle stops timers) and on shutdown.
+const routeMeter = new RouteMeter({ sink: (deltas) => store.usage.addRouteUsage(deltas), now: () => new Date(), logError: (err) => logger.error({ err }, 'route usage flush failed; batch dropped') });
 const app = createApp({
   store,
   logger,
   rateLimiter,
+  routeMeter,
   // MUT-710 (ADR-274 D4): its own key on production and staging (config refuses to start without it); elsewhere
   // derived from the session pepper, as the Tax Authority's box is.
   twoFactorKeys: new TwoFactorKeys(config.TWO_FACTOR_SEAL_KEY ?? `pepper:${config.SESSION_TOKEN_PEPPER}`),
@@ -394,7 +398,11 @@ async function shutdown(signal: string): Promise<void> {
   clearTimeout(digestTimer);
   await shutdownAndFlush({
     stopAccepting: () => server.close(),
-    disconnect: () => store.disconnect(),
+    // MUT-735: the last minute of route statistics goes in once no request is accepted, before the database goes.
+    disconnect: async () => {
+      await routeMeter.flush();
+      await store.disconnect();
+    },
     reporter,
     exit: (code) => process.exit(code),
     logError: (message, error) => logger.error({ err: error }, String(message)),

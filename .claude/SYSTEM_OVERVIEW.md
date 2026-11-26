@@ -458,30 +458,30 @@ Device-to-device sync was retired in MUT-73 (ADR-053).
 
 ## 8. Commercialization Model
 
-### Pricing Strategy: "Pay What You Want" + Premium Desktop
+*Rewritten 2026-11-25 (MUT-735). The "pay what you want + premium desktop" model this section used to describe is history: the desktop and the free local web app are retired (ADR-203).*
 
-| Tier | Price | Features |
-|------|-------|----------|
-| **Web (PWA)** | Free | Full features, browser storage |
-| **Desktop** | $0-$50 (PWYW) | Native app, file system access, auto-update |
-| **Support/Consulting** | Custom | Setup assistance, custom integrations |
+### Plans (ADR-275, MUT-702)
+A person's profiles are covered by one plan, read from their own profiles' entitlements (`currentPlanOf`, `server/src/billing/plans.ts`): an operator grant, a Stripe subscription, or the running trial (Business). Malafat-covered profiles carry no plan and are never capped (ADR-160 d4). The Accountant plan (ADR-251) is a person's plan for client books, separate from these.
 
-### Why This Model Works
-1. **Privacy-first users** willing to pay for trustworthy software
-2. **No recurring costs** for us (no servers to run)
-3. **Desktop builds add value** (offline local database, better perf, native UX)
-4. **Low barrier to entry** ensures adoption
+| Plan | Businesses | Partners | Documents / month | Scans / month |
+|---|---|---|---|---|
+| Solo | 1 | 0 | 50 | 100 |
+| Business | 3 | 2 | 250 | 500 |
+| Firm | 6 | 2 | 1000 | 2000 |
+| Freelancer (legacy, not sold) | today's limits until MUT-707 | | | |
+
+A free **Starter** plan replaces the trial (MUT-731, planned) and gets its own row there. Prices and Checkout per plan: MUT-702 Part B.
+
+### Usage metering (MUT-735, ADR-281)
+- Every issued document (any type) and every finished scan is recorded in a first-party ledger (`usage_events`) and counted on the payer's monthly counter (`usage_counters`), in the action's own transaction, once each. The payer is the profile's creator (a co-owner's act counts to the creator); the month is the Asia/Jerusalem month.
+- `GET /v1/billing.usage` reports this month's use against the plan's limits with a level per meter (ok, near 80%, nudge 90%, at_cap). Nothing is refused yet: MUT-731 (Starter) and MUT-733 (paid caps, the one-per-account over-cap gift) enforce caps by passing them to the same conditional upsert.
+- Requests per day, route template, plan and status class are aggregated from the access log (`route_usage_daily`, no person).
+- Operator › Usage (portal) reads it all: per plan, the people near or at a cap, one account's six months, the busiest routes, and a CSV export behind the passkey step-up. Server-side PostHog stays off (ADR-090); funnel events come from the portal and the phone with MUT-731's UI.
+- Retention: events 13 months, counters 25 months, route statistics 90 days (daily `/jobs/v1/usage/prune`).
 
 ### Distribution Channels
-- **Direct**: mtb3a.com website
-- **GitHub**: Releases for desktop
-- **Word of mouth**: Privacy/freelance communities
-
-### Monetization Roadmap
-1. **Phase 1 (Current)**: Free, build user base
-2. **Phase 2**: PWYW for desktop with suggested price
-3. **Phase 3**: Premium features (custom templates, advanced reports)
-4. **Phase 4**: B2B licensing for accounting firms
+- **Direct**: mtb3a.com and app.mtb3a.com; the phone app in the App Store and Google Play.
+- **Partners**: Malafat (firms whose Malafat subscription covers their MTB3A profile, ADR-160).
 
 ---
 

@@ -1,3 +1,4 @@
+import { requestUsage } from '../usage/request.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
@@ -269,7 +270,7 @@ export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, w
   return organization;
 }
 
-export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }, uniformFileHouse: UniformFileHouse = UNIFORM_FILE_HOUSE_PLACEHOLDER): OpenAPIHono<AppEnv> {
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }, uniformFileHouse: UniformFileHouse = UNIFORM_FILE_HOUSE_PLACEHOLDER, metering = false): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
@@ -337,6 +338,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         requestKey,
         requestId: c.get('requestId'),
       };
+      // MUT-735 (ADR-281): who pays for the document, recorded in the issue's transaction (a replay records nothing).
+      if (metering) input.usage = await requestUsage(store, c, organization)();
       // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
       const needs = needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null });
       if (body.manualAllocation && !needs) {

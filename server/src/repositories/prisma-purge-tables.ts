@@ -53,6 +53,8 @@ export const PURGE_PROFILE_TABLES = [
   'external_invoices',
   // MUT-571: the profile's Tax Authority tokens go with it (nothing issued depends on them).
   'tax_authority_connections',
+  // MUT-735 (ADR-281): the deleted profile's usage events (the person's own, on any profile, go by subjectKey too).
+  'usage_events',
 ] as const;
 
 /** Tables with an "organizationId" column the profile delete deliberately leaves to the database or keeps. */
@@ -146,4 +148,4 @@ export const PURGE_USER_COLUMNS: Readonly<Record<string, 'delete' | 'anonymize' 
 };
 
 /** Columns that name a person with no foreign key (R14): anonymized the same way. */
-export const PURGE_UNKEYED_USER_COLUMNS = ['receivables.createdByUserId'] as const;
+export const PURGE_UNKEYED_USER_COLUMNS = ['receivables.createdByUserId', 'usage_events.actorUserId'] as const;

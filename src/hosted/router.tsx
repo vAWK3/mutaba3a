@@ -62,6 +62,7 @@ import { OperatorAccountsPage } from './pages/operator/OperatorAccountsPage';
 import { OperatorAccountPage } from './pages/operator/OperatorAccountPage';
 import { OperatorFirmsPage } from './pages/operator/OperatorFirmsPage';
 import { OperatorYouPage } from './pages/operator/OperatorYouPage';
+import { OperatorUsagePage } from './pages/operator/OperatorUsagePage';
 
 /**
  * The portal's routes (hosted-portal.md §7.1, code-based like `src/router.tsx`).
@@ -577,6 +578,14 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
     component: () => <OperatorPage>{(heading) => <OperatorFirmsPage headingRef={heading} />}</OperatorPage>,
   });
 
+  /** MUT-735 (ADR-281): usage per plan, the people near or at a cap, and the busiest routes. */
+  const operatorUsageRoute = createRoute({
+    getParentRoute: () => authedRoute,
+    ...PAGE_CRASH,
+    path: '/operator/usage',
+    component: () => <OperatorPage>{() => <OperatorUsagePage />}</OperatorPage>,
+  });
+
   const routeTree = rootRoute.addChildren([
     signInRoute,
     setupRoute,
@@ -598,6 +607,7 @@ export function createPortalRouter(queryClient: QueryClient, history?: RouterHis
       clientBooksRoute,
       clientBookRoute,
       operatorRoute,
+      operatorUsageRoute,
       operatorSignupsRoute,
       operatorAccountsRoute,
       operatorAccountRoute,

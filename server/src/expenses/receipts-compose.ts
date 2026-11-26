@@ -7,7 +7,7 @@ import { verifyUploadedObject } from '../attachments/verify.js';
 import { ApiError } from '../errors.js';
 import type { RateLimiter } from '../rate-limit.js';
 import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
-import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion } from '../repositories/ports.js';
+import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion, UsageStamp } from '../repositories/ports.js';
 import { MAX_RECEIPTS_PER_EXPENSE, tooManyReceipts } from './compose.js';
 
 /**
@@ -40,6 +40,11 @@ export interface ReceiptActor {
   requestId: string;
   now: Date;
   audit: ReceiptAuditWriter;
+  /**
+   * MUT-735 (ADR-281): the usage stamp of a scan, asked for only when a complete is about to flip the receipt to READY
+   * (a repeat reads nothing). Absent: nothing is metered (the signed-out portal).
+   */
+  usage?: (() => Promise<UsageStamp>) | undefined;
 }
 
 export interface ReceiptFile {
@@ -194,7 +199,8 @@ export async function completeExpenseReceipt(deps: ReceiptDeps, actor: ReceiptAc
   if (receipt.status === 'READY') return receipt;
   // Storage first, outside any transaction: no network I/O under a database lock.
   await verifyUploadedObject(storage, receipt);
-  const result = await deps.store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE }, actor.now);
+  const usage = actor.usage ? await actor.usage() : null;
+  const result = await deps.store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE, usage }, actor.now);
   if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
   if (result.kind === 'receipt_not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
   if (result.kind === 'too_many_receipts') throw tooManyReceipts();
@@ -250,7 +256,8 @@ export async function completeLibraryReceipt(deps: ReceiptDeps, actor: ReceiptAc
   await verifyUploadedObject(storage, receipt);
   // MUT-441 (R10 #5): whether the server reads it is decided first and saved in the same UPDATE as READY.
   const read = deps.reading ? await deps.reading.decide(receipt) : null;
-  const ready = await deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now, read ?? undefined);
+  const usage = actor.usage ? await actor.usage() : null;
+  const ready = await deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now, read ?? undefined, usage);
   if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
   await actor.audit('expense_receipt.added', 'expense_receipt', ready.id, { expenseId: ready.expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes, ...auditMetadata });
   await deps.reading?.requested(ready, actor.now);

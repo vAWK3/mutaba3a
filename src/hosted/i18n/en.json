@@ -2036,7 +2036,8 @@
         "accounts": "Accounts",
         "firms": "Firms",
         "firmsCount": "Firms · {count}",
-        "you": "Your settings"
+        "you": "Your settings",
+        "usage": "Usage"
       },
       "signups": {
         "listLabel": "Signups waiting for review",
@@ -2296,6 +2297,79 @@
       "noPasskey": {
         "banner": "Operator changes need a passkey. Add one in You › Account › Passkeys, then come back.",
         "link": "Add a passkey"
+      },
+      "usage": {
+        "sectionTitle": "Usage",
+        "viewLabel": "Usage view",
+        "month": "Month",
+        "views": {
+          "plans": "By plan",
+          "people": "People",
+          "routes": "Routes"
+        },
+        "plansLabel": "Usage by plan",
+        "peopleLabel": "People by usage",
+        "routesLabel": "Busiest routes",
+        "filterLabel": "Show",
+        "filters": {
+          "near": "Near a cap",
+          "capped": "At a cap",
+          "over": "Over a cap",
+          "all": "Everyone"
+        },
+        "plan": {
+          "starter": "Starter",
+          "solo": "Solo",
+          "business": "Business",
+          "firm": "Firm",
+          "freelancer": "Freelancer (legacy)",
+          "malafat": "Malafat",
+          "none": "No plan"
+        },
+        "kind": {
+          "DOCUMENT_ISSUED": "Documents",
+          "SCAN": "Scans",
+          "EXTERNAL_INVOICE_READ": "Invoices read",
+          "ALLOCATION_REQUESTED": "Allocation numbers",
+          "PROFILE_CREATED": "Profiles created",
+          "PARTNER_ADDED": "Partners added",
+          "PARTNER_REMOVED": "Partners removed",
+          "RECORDS_EXPORTED": "Records exports",
+          "PERIOD_DOWNLOAD": "Period downloads",
+          "UNIFORM_FILE": "Uniform files",
+          "MCP_TOOL_CALL": "Agent calls",
+          "MAIL_SENT": "Emails"
+        },
+        "meter": {
+          "documents": "Documents",
+          "scans": "Scans"
+        },
+        "level": {
+          "ok": "OK",
+          "near": "80%",
+          "nudge": "90%",
+          "at_cap": "At cap"
+        },
+        "noCap": "no cap",
+        "payers": "Payers: {count}",
+        "near": "near a cap: {count}",
+        "capped": "at a cap: {count}",
+        "over": "over: {count}",
+        "requests": "Requests: {count}",
+        "errors": "errors {client} client, {server} server",
+        "p95": "p95 ≤ {ms} ms",
+        "p95Over": "p95 over 10 s",
+        "routesRange": "From {from} to {to} (Jerusalem days)",
+        "emptyMonthTitle": "No usage this month",
+        "emptyMonthBody": "Nothing was issued or scanned in this month yet.",
+        "emptyPeopleTitle": "Nobody here",
+        "emptyPeopleBody": "No one matches this filter in this month.",
+        "emptyRoutesTitle": "No requests counted yet",
+        "emptyRoutesBody": "Route statistics arrive about a minute after requests.",
+        "export": "Export CSV",
+        "exportWithPasskey": "Export CSV with passkey",
+        "personLevel": "Not on a profile",
+        "profileThisMonth": "This month: {documents} documents, {scans} scans"
       }
     },
     "welcome": {

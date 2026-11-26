@@ -227,6 +227,14 @@ describe('STORE_ACCESS', () => {
       'signupReviews.markNotified',
       // MUT-710: expired two-step challenges, pruned by the server's timer.
       'twoFactor.pruneChallenges',
+      // MUT-735 (ADR-281): the usage reports, the prune job and account closure's purge.
+      'usage.byProfile',
+      'usage.people',
+      'usage.prune',
+      'usage.purgeSubject',
+      'usage.rollup',
+      'usage.routeTotals',
+      'usage.standing',
       'users.create',
       // MUT-527: the operator console's account list.
       'users.listForOperator',

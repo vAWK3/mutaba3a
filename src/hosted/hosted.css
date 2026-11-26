@@ -1907,3 +1907,13 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 /* MUT-722: a save toast's second, quieter line (what its action is for: "Finish setting up invoicing…"). */
 .hp-toast-text { display: flex; flex-direction: column; gap: var(--space-0-5); min-width: 0; }
 .hp-toast-detail { color: var(--muted); font-size: var(--text-label); }
+
+/* MUT-735 (ADR-281): Operator › Usage. House recipes only: list rows, the month Select, meters as text with a badge. */
+.hp-operator-usage { display: grid; gap: var(--space-4); }
+.hp-operator-usage-bar { display: flex; flex-wrap: wrap; align-items: end; gap: var(--space-3); }
+.hp-operator-usage-bar .input-wrapper { margin: 0; min-width: 12rem; }
+.hp-operator-usage-filter { justify-self: start; }
+.hp-operator-meters { display: flex; flex-wrap: wrap; gap: var(--space-1-5) var(--space-3); }
+.hp-operator-meter { display: inline-flex; align-items: center; gap: var(--space-1); }
+.hp-operator-usage-export { display: grid; justify-items: start; gap: var(--space-2); }
+.hp-operator-usage-section .hp-you-row { cursor: default; }

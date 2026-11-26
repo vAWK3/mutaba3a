@@ -350,3 +350,36 @@ export function codeFromMail(mail: Mail): string {
   expect(code, `a 6-digit code on its own line in the ${mail.template} mail`).toBeTruthy();
   return code!;
 }
+
+/** MUT-702/735: the operator grants a person a plan (an operator grant names the tier), as /admin does. */
+export async function grantPlan(userId: string, tier: 'SOLO' | 'BUSINESS' | 'FIRM'): Promise<void> {
+  const res = await fetch(`${liveState().origin}/admin/v1/billing/grants`, {
+    method: 'POST',
+    headers: { ...admin(), 'content-type': 'application/json' },
+    body: JSON.stringify({ userId, tier, reason: 'release-QA usage plan' }),
+  });
+  expect(res.status, `grant ${tier} ${await res.clone().text()}`).toBe(201);
+}
+
+/**
+ * MUT-735 (ADR-281): this Jerusalem month's usage for a person, written into the QA database as the meters would have
+ * written it (one event per document or scan, then the counters). Real issuing needs a Tax Authority setup and scans a
+ * bucket; the live metering of a finished scan is proven by `usage.billing-usage`.
+ */
+export function seedUsage(userId: string, plan: 'solo' | 'business' | 'firm', counts: { documents: number; scans: number }): void {
+  const { container, database } = liveState();
+  const month = `to_char(now() AT TIME ZONE 'Asia/Jerusalem', 'YYYY-MM')`;
+  const events = (kind: string, detail: string, n: number) =>
+    n === 0
+      ? ''
+      : `INSERT INTO usage_events (id, "occurredAt", month, "subjectKey", "actorUserId", "organizationId", kind, detail, plan, door, "entityKey")
+         SELECT gen_random_uuid(), now() AT TIME ZONE 'UTC', ${month}, 'user:${userId}', '${userId}', NULL, '${kind}', '${detail}', '${plan}', 'PORTAL', 'qa-' || gen_random_uuid()
+         FROM generate_series(1, ${n});`;
+  const counter = (meter: string, n: number) =>
+    n === 0
+      ? ''
+      : `INSERT INTO usage_counters ("subjectKey", month, meter, count, plan, "updatedAt") VALUES ('user:${userId}', ${month}, '${meter}', ${n}, '${plan}', now() AT TIME ZONE 'UTC')
+         ON CONFLICT ("subjectKey", month, meter) DO UPDATE SET count = usage_counters.count + EXCLUDED.count, plan = EXCLUDED.plan;`;
+  const sql = [events('DOCUMENT_ISSUED', 'TAX_INVOICE', counts.documents), counter('DOCUMENTS', counts.documents), events('SCAN', 'LIBRARY', counts.scans), counter('SCANS', counts.scans)].join('\n');
+  execFileSync('docker', ['exec', container, 'psql', '-U', 'mutaba3a', '-d', database, '-v', 'ON_ERROR_STOP=1', '-c', sql], { stdio: 'ignore' });
+}

@@ -64,6 +64,8 @@ export interface PortalRouteDependencies {
    * on the hosted server unless RECEIPTS_LIBRARY is on (MUT-389).
    */
   receiptsLibrary: boolean;
+  /** MUT-735 (ADR-281): issued documents and finished scans are metered; absent (off) in the portal's signed-out mode. */
+  metering?: boolean;
   /** MUT-483: where a route writes its operational line (`summaries.period`); absent in the portal's signed-out mode. */
   logger?: Logger;
 }
@@ -75,7 +77,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => paymentRoutes(deps.store),
   (deps) => summaryRoutes(deps.store, deps.fxRates, deps.logger ?? null),
   (deps) => attachmentRoutes(deps.store, deps.attachments),
-  (deps) => expenseRoutes(deps.store, { ...deps.attachments, receiptsLibrary: deps.receiptsLibrary }),
+  (deps) => expenseRoutes(deps.store, { ...deps.attachments, receiptsLibrary: deps.receiptsLibrary, metering: deps.metering ?? false }),
   (deps) => expenseCategoryRoutes(deps.store),
   (deps) => vendorRoutes(deps.store),
   (deps) => incomeRoutes(deps.store),
@@ -83,7 +85,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => conversionRoutes(deps.store),
   // MUT-568 (ADR-260): issued documents.
   (deps) =>
-    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null, servesPortal: deps.servesPortal ?? false, manualAllocationUrl: deps.manualAllocationUrl ?? null }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }, deps.uniformFileSoftware ?? undefined),
+    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null, servesPortal: deps.servesPortal ?? false, manualAllocationUrl: deps.manualAllocationUrl ?? null }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }, deps.uniformFileSoftware ?? undefined, deps.metering ?? false),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
   // MUT-596: who is on the profile, read-only (a Malafat firm's seats).

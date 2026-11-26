@@ -28,6 +28,27 @@
 
 ---
 
+## [Unreleased] - 2026-11-25 — Usage metering and Operator › Usage (MUT-735, ADR-281, API 1.142.0-mut735)
+
+### Added
+- A first-party usage ledger: `usage_events` (one row per metered action, idempotent on `(kind, entityKey)`), `usage_counters` (the payer's monthly count per meter, written by a conditional upsert in the action's own transaction) and `route_usage_daily` (requests per Jerusalem day × route template × plan × status class, a duration histogram, no person). Migration `20261125230000_mut735_usage_metering` (additive; backfills this month's counters; three nullable `users` columns for MUT-733's one-per-account gift, unwritten).
+- Metered: every issued document type (`DOCUMENT_ISSUED`, plus `ALLOCATION_REQUESTED` when it carries an allocation number) inside `issueTx` strictly after the document row; every finished scan (`SCAN`, library or expense) with the flip to READY. A replay or a repeated complete counts nothing. The payer is the profile's creator; the plan is the payer's (`payerPlanOf`); Malafat writes are plan `malafat`. Nothing is refused (caps are MUT-731/733).
+- `GET /v1/billing.usage`: month, reset day, plan, per meter used / limit / level (ok, near 80%, nudge 90%, at_cap), businesses owned and partners allowed.
+- Route statistics in `app.ts`'s access log (`RouteMeter`): an in-memory increment, flushed by the request that finds the last flush a minute old and on SIGTERM; `/health`, `/ready` and portal files are not counted.
+- Operator API: `GET /v1/operator/usage/overview|people|routes`, `GET /v1/operator/accounts/{userId}/usage`, `GET /v1/operator/usage/export.csv` (UTF-8 with BOM, fresh passkey step-up).
+- Portal: Operator › Usage (الاستخدام) tab (by plan, People near / at / over a cap, Routes, Export CSV through the step-up) and a Usage section on the operator's account page (six months, per profile). ar + en.
+- `POST /jobs/v1/usage/prune` (job token) and the daily `usage_prune` Cloud Scheduler job: events 13 months, counters 25 months, route statistics 90 days.
+
+### Changed
+- Account closure purges the payer's usage (subjectKey), the deleted profiles' events, and nulls the person as an actor elsewhere.
+- `ReceiptActor` gains a lazy `usage` stamp; `PortalRouteDependencies.metering` (off in the signed-out portal).
+
+### Technical
+- Files: `server/src/usage/**`, `server/src/repositories/{prisma-usage,memory-usage}.ts`, `server/src/routes/{operator-usage,usage-prune}.ts`, `server/src/routes/{billing,issuing,receipts,expenses}.ts`, `server/src/app.ts`, `server/src/index.ts`, `server/infrastructure/terraform/main.tf`, `src/hosted/pages/operator/OperatorUsage{Page,Section}.tsx`, `src/hosted/data/operatorUsageQueries.ts`, `qa/{features,specs}/portal-selfservice/{operator,usage}.*`.
+- Why: caps (MUT-731/733) need one counter that cannot be raced past, and the operator needs to see who uses what on which plan.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Two-step sign-in: live QA fixes, and the phone half (MUT-710, ADR-274)
 
 ### Fixed

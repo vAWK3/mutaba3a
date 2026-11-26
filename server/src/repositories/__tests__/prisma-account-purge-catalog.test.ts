@@ -37,6 +37,8 @@ if (!url) {
     'sign_in_codes',
     // MUT-710: a person's two-step sign-in, recovery codes and challenges go with them (PURGE_USER_COLUMNS).
     'two_factor', 'two_factor_recovery_codes', 'two_factor_challenges',
+    // MUT-735 (ADR-281): a payer's counters go by subjectKey in the purge; route statistics name no person.
+    'usage_counters', 'route_usage_daily',
     // MUT-532: a person's pauses, stay offer and cancels go with them (PURGE_USER_COLUMNS).
     'billing_retention_events',
     // MUT-560: a share link's viewers name no person and no profile; they cascade with their link (share_links).
@@ -104,6 +106,10 @@ if (!url) {
       const claim = await store.idempotency.claim({ organizationId: firm.id, key: `key-${unique}`, operation: 'POST /v1/expenses', fingerprint: 'f'.repeat(64), at: T0 });
       expect(claim).toBeTruthy();
       await store.idempotency.complete({ organizationId: firm.id, key: `key-${unique}`, responseStatus: 201, responseBody: { createdByUserId: user.id }, at: T0 });
+
+      // MUT-735 (ADR-281): their usage as the payer, and as the actor on the firm (which survives): neither may name them.
+      await store.usage.record({ occurredAt: T0, month: '2026-10', subjectKey: `user:${user.id}`, actorUserId: user.id, organizationId: personalOrganization.id, kind: 'SCAN', detail: 'LIBRARY', plan: 'solo', door: 'PORTAL', entityKey: randomUUID() }, null);
+      await store.usage.record({ occurredAt: T0, month: '2026-10', subjectKey: `org:${firm.id}`, actorUserId: user.id, organizationId: firm.id, kind: 'DOCUMENT_ISSUED', detail: 'TAX_INVOICE', plan: 'none', door: 'PORTAL', entityKey: randomUUID() }, null);
 
       await store.users.requestClosure({ userId: user.id, at: T0, deleteAfter: closureDeadline(T0), endedSubscriptionIds: [], exceptSessionId: session.id, audit: [] });
       await store.accountPurge.claim(user.id, DUE);

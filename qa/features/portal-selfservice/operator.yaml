@@ -25,6 +25,8 @@ paths:
   - server/src/routes/admin.ts
   - server/src/routes/admin-users.ts
   - src/hosted/components/YouRows.tsx
+  - src/hosted/data/operatorUsageQueries.ts
+  - server/src/routes/operator-usage.ts
 features:
   - id: signups-approve
     title: From the digest mail, sign in with a passkey and approve a waiting signup
@@ -272,3 +274,66 @@ features:
       - The members are listed with the one who asked already ticked, and the confirm names the owners as they are ticked
       - The toast says firm features are on, and the row leaves the list
       - Both ticked members are owners of the firm, and the audit records firm.enabled by the operator's id
+  # MUT-735 (ADR-281): Operator › Usage, read from the usage ledger. The month's usage is written into the QA database
+  # as the meters write it (support/selfService.ts seedUsage): real issuing needs a Tax Authority setup; the live
+  # metering itself is usage.billing-usage. Starter's caps arrive with MUT-731, so the seeded people are on Solo.
+  - id: usage-overview
+    title: Operator › Usage shows this month per plan, and the Solo people near or at their cap
+    tickets: [MUT-735]
+    paths:
+      - src/hosted/pages/operator/OperatorUsagePage.tsx
+      - src/hosted/data/operatorUsageQueries.ts
+      - src/hosted/operator/usageMonths.ts
+      - server/src/routes/operator-usage.ts
+      - server/src/usage/reports.ts
+    steps:
+      - As the operator, open Operator › Usage
+      - Read the Solo row for this month
+      - Open People (near a cap), then At a cap
+    expect:
+      - The Usage tab is current and the month is this Jerusalem month
+      - The Solo row counts its payers, who is near a cap and who is at one, and the documents
+      - Near a cap lists the person at 41 of 50 marked 80%, not the one at 50
+      - At a cap lists the person at 50 of 50 marked At cap
+  - id: usage-account
+    title: An account shows six months of documents and scans against the plan's limits
+    tickets: [MUT-735]
+    paths:
+      - src/hosted/pages/operator/OperatorUsageSection.tsx
+      - src/hosted/pages/operator/OperatorAccountPage.tsx
+    steps:
+      - From Operator › Usage › People, open the person near their cap
+      - Scroll to Usage
+    expect:
+      - Six months are listed, this one first
+      - This month reads Solo, documents 41 of 50 and scans 7 of 100
+      - A month with no plan says no cap
+  - id: usage-routes
+    title: Routes lists the API routes this run called, with counts and p95
+    tickets: [MUT-735]
+    paths:
+      - server/src/usage/route-meter.ts
+      - server/src/usage/route-key.ts
+      - server/src/usage/route-buckets.ts
+      - server/src/app.ts
+      - server/src/index.ts
+    steps:
+      - As the operator, open Operator › Usage › Routes
+      - Wait up to a minute and a half, reloading
+    expect:
+      - GET /v1/me is listed with its requests and p95, never a raw path with an id
+      - The range of Jerusalem days is shown
+  - id: usage-csv
+    title: Export the overview as CSV with the passkey; it has the same totals
+    tickets: [MUT-735]
+    paths:
+      - src/hosted/pages/operator/OperatorUsagePage.tsx
+      - src/hosted/api/client.ts
+      - server/src/routes/operator-usage.ts
+    steps:
+      - Signed in with the password (the step-up is stale), open Operator › Usage
+      - Press Export CSV with passkey
+    expect:
+      - The passkey sheet answers, then a usage-overview-YYYY-MM.csv downloads
+      - The file is UTF-8 with a byte-order mark and the overview's header
+      - Its Solo row has the same payers, near, at-cap and document counts as the page

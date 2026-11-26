@@ -96,6 +96,8 @@ const DIR_SITES: Record<string, Partial<Record<Kind, number>>> = {
   'src/hosted/pages/operator/OperatorBillingSection.tsx': { ltr: 1, auto: 2 }, // MUT-462: the drawer's address; a grant's reason and the reason field
   'src/hosted/pages/operator/OperatorFirmsPage.tsx': { ltr: 2, auto: 2 }, // MUT-462: the asker's and each member's address; the profile's and a member's name
   'src/hosted/pages/operator/OperatorSignupsPage.tsx': { ltr: 4 }, // MUT-460: the signup's email (row and kept row), its domain, an unknown reason code
+  'src/hosted/pages/operator/OperatorUsagePage.tsx': { ltr: 5, auto: 1 }, // MUT-735: counts (event count, used / limit, used with no cap), the person's email and the route template; the person's name
+  'src/hosted/pages/operator/OperatorUsageSection.tsx': { auto: 1 }, // MUT-735: the profile's name
   'src/hosted/components/PasskeysDrawer.tsx': { ltr: 1, auto: 3 }, // the step-up password; passkey names in the list and the rename field (MUT-115 DR11)
   'src/hosted/twoFactor/TwoFactorDrawer.tsx': { ltr: 4 }, // MUT-710: the password, the app's key, the code fields, the recovery codes
   'src/hosted/twoFactor/TwoFactorFields.tsx': { ltr: 2 }, // MUT-710: the code and the recovery code

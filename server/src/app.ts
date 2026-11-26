@@ -1,3 +1,7 @@
+import { usagePruneRoutes } from './routes/usage-prune.js';
+import { OPERATOR_USAGE_ROUTES, operatorUsageRoutes } from './routes/operator-usage.js';
+import { routeKeyOf } from './usage/route-key.js';
+import type { RouteMeter } from './usage/route-meter.js';
 import { randomBytes } from 'node:crypto';
 import type { OpenAPIHono } from '@hono/zod-openapi';
 import type { MiddlewareHandler } from 'hono';
@@ -156,6 +160,8 @@ export interface AppDependencies {
   webauthn?: WebauthnConfig | null;
   /** MUT-115: told after a passkey is added. Absent = MUT-414's "a passkey was added" mail through `mailer`. */
   passkeyEvents?: PasskeyEvents;
+  /** MUT-735 (ADR-281): the route statistics' in-memory aggregate (index.ts flushes it on SIGTERM). Absent = not metered. */
+  routeMeter?: RouteMeter | null;
   /** Hosted-portal static build (MUT-45). Null or absent = API-only, today's behavior. */
   portal?: { distDir: string } | null;
   /** iOS/Android app-association files (MUT-111). Null or absent = neither well-known path exists. */
@@ -327,7 +333,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -363,6 +369,11 @@ const PORTAL_EXCLUDED_EXACT = new Set([
 
 function isPortalExcludedPath(path: string): boolean {
   return PORTAL_EXCLUDED_EXACT.has(path) || PORTAL_EXCLUDED_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+/** MUT-735 (ADR-281): the API's own paths are metered; health probes and the portal's files are not. */
+function isMeteredPath(path: string): boolean {
+  return path !== '/health' && path !== '/ready' && isPortalExcludedPath(path);
 }
 
 /**
@@ -409,7 +420,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.141.0-mut661';
+export const API_VERSION = '1.142.0-mut735';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -439,10 +450,11 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
     const started = Date.now();
     await next();
-    deps.logger.info(
-      { requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs: Date.now() - started },
-      'request',
-    );
+    const durationMs = Date.now() - started;
+    deps.logger.info({ requestId: c.get('requestId'), method: c.req.method, path: c.req.path, status: c.res.status, durationMs }, 'request');
+    // MUT-735 (ADR-281): the route statistics, from the final status (after onError) and the same duration. An
+    // in-memory increment; the API surfaces only (never /health, /ready or the portal's static files).
+    if (deps.routeMeter && isMeteredPath(c.req.path)) deps.routeMeter.observe({ routeKey: routeKeyOf(c), plan: c.get('meterPlan') ?? 'unknown', status: c.res.status, durationMs });
   });
 
   const passwordHasher = deps.passwordHasher ?? createArgon2Hasher(ARGON2_MINIMUMS);
@@ -646,6 +658,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     fxRates: deps.fxRates ?? null,
     terms,
     billing: true,
+    // MUT-735 (ADR-281): the hosted server meters issued documents and scans.
+    metering: true,
     receiptsLibrary: deps.receiptsLibrary ?? false,
     logger: deps.logger,
     // MUT-571/572: hosted only, like the PDF.
@@ -746,6 +760,10 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-459 (ADR-212): the portal's operator console. The unguarded base store, as /admin's: the store guard refuses
   // `operator` methods to every principal, and these routes reach them only through operatorGate.
   app.route('/', operatorRoutes({ store: deps.store, mailer, logger: deps.logger, settings: sessions, supportAddress: signupReview.supportAddress, webauthn: deps.webauthn ?? null, reporter }));
+  // MUT-735 (ADR-281): Operator › Usage, on the same unguarded store behind the same gate.
+  app.route('/', operatorUsageRoutes(deps.store));
+  // MUT-735 (ADR-281 §12): the daily usage retention job (/jobs/*, the job token), on the unguarded store.
+  app.route('/', usagePruneRoutes({ store: deps.store, logger: deps.logger }));
   app.route('/', adminBillingRoutes(store, { checkout: deps.stripe?.checkoutGateway ?? null, countries: deps.billingCountries ?? BILLING_COUNTRIES }));
   // MUT-360: outside PORTAL_ROUTES (the local app has no Stripe); the sync writes on the unguarded store (ADR-162 decision 6).
   const stripe = deps.stripe

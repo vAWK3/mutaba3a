@@ -4815,3 +4815,19 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 |---|---|---|
 | Unit (vitest) | `server/src/receipts/extract/__tests__/extract.test.ts` "MUT-586" | a single named currency takes its clearest row, not the first; two currencies, or one the API does not take, still give none however clear the rows |
 | Bench | `server/ocr/bench/run.py --rescore --compare` | 0 fields lost against main; he currency up (photos 9/12 to 10/12, real 21/53 to 29/53); wrong-and-confident unchanged |
+
+
+---
+
+## MUT-735 — usage metering and Operator › Usage (2026-11-25)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/usage/__tests__/pure.test.ts` | Jerusalem month edges (winter 21:59/22:00 UTC, summer 20:59/21:00, another server TZ), reset day, kinds → meters (every doc type), closed detail vocabulary, doors, payer key (creator, personal, owner-less firm), caps per plan and levels 80/90/at cap, buckets and p95, retention cut-offs |
+| Unit | `server/src/usage/__tests__/route-meter.test.ts` | aggregate per day/route/plan/class with buckets; due-driven flush (no timer); a failing flush never throws and is dropped; p99 < 1 ms (0.2 ms with `BENCH=1`) |
+| Contract (memory + Postgres) | `server/src/repositories/__tests__/store-contract-usage.ts` (+ `store-{memory,prisma}-usage.test.ts`) | idempotent record, unmetered kinds, cap under/at/0, race at cap − 1 ×5 (Postgres), zero rows, rollup, standing, people near/capped/over + keyset paging, byProfile, route adds, prune, purgeSubject; Postgres-only: rolled-back transaction leaves nothing, the rollup is one query |
+| Migration | `migration-mut735.test.ts` | this month's DOCUMENTS/SCANS backfilled per payer (creator, personal owner, firm), last month and unfinished uploads not; schema matches |
+| Purge | `prisma-account-purge-catalog.test.ts` | the person's usage (payer and actor) leaves no trace |
+| Routes | `usage-metering.test.ts`, `route-usage.test.ts`, `billing-routes.test.ts` (usage), `routes-operator-usage.test.ts`, `routes-usage-prune.test.ts` | issue → one event (replay none), every type counts, co-owner counts to the creator, the access log sees the plan; scans count at complete once (abandoned never); route keys (template, UNMATCHED, `app.all`), probes not counted; /v1/billing levels and limits; operator 404 for others, overview/people/account/routes, CSV needs the step-up and has a BOM; the prune job |
+| Portal (vitest + RTL) | `OperatorUsagePage.test.tsx` | the tab, by plan, month switch reads that month, empty month, People with meters/levels/links, filter, Routes, CSV through the step-up, refusal, Arabic RTL, query keys, month list; the account section (six months, no cap, per profile) |
+| QA | `portal-selfservice.operator.usage-{overview,account,routes,csv}`, `portal-selfservice.usage.billing-usage` | the live API: Usage tab, People, account section, routes after a flush, CSV with the passkey; a finished upload counts one scan in /v1/billing |

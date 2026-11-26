@@ -24,6 +24,8 @@ export function OperatorLayout({ headingRef, children }: { headingRef: RefObject
     { to: '/operator/signups', label: waiting ? t('hosted.operator.tabs.signupsCount', { count: waiting }) : t('hosted.operator.tabs.signups') },
     { to: '/operator/accounts', label: t('hosted.operator.tabs.accounts') },
     { to: '/operator/firms', label: requests ? t('hosted.operator.tabs.firmsCount', { count: requests }) : t('hosted.operator.tabs.firms') },
+    // MUT-735 (ADR-281): who uses what, on which plan.
+    { to: '/operator/usage', label: t('hosted.operator.tabs.usage') },
     { to: '/operator/you', label: t('hosted.operator.tabs.you') },
   ];
   return (
