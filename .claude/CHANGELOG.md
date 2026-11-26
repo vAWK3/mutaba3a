@@ -28,6 +28,14 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Billing drawer: drop the country-sets-the-currency hint
+
+### Removed
+- The line under the Billing address country picker in Subscribe ("Sets the currency: shekels in Israel, dollars elsewhere." / "يحدد العملة: الشيكل في فلسطين، والدولار في غيرها."), and its key `hosted.billing.subscribe.countryHint` in en and ar. It explained a mechanism the person does not need in order to choose; the price shown already carries its currency.
+- Files: `src/hosted/components/BillingDrawer.tsx`, `src/hosted/i18n/{en,ar}.json`.
+
+---
+
 ## [Unreleased] - 2026-11-25 — Usage metering and Operator › Usage (MUT-735, ADR-281, API 1.142.0-mut735)
 
 ### Added

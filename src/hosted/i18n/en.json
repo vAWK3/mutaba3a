@@ -1407,7 +1407,6 @@
         "back": "Back to Billing",
         "country": "Billing address country",
         "countryChoose": "Choose a country",
-        "countryHint": "Sets the currency: shekels in Israel, dollars elsewhere.",
         "buyer": "You're buying",
         "person": "For yourself",
         "personNote": "No tax number needed",

@@ -975,7 +975,6 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
       <Select
         label={t('hosted.billing.subscribe.country')}
         id={`${ids}-country`}
-        hint={t('hosted.billing.subscribe.countryHint')}
         value={country}
         onChange={(e) => form.setCountry(e.target.value)}
       >
