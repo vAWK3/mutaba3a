@@ -12,6 +12,7 @@ import { mayMoveExpensesFrom } from '../../data/profileRules';
 import { RECEIPT_MIME_TYPES } from '../../data/receiptFileRules';
 import { useReceiptCounts, useReceipts, useReceiptsAvailability, type PendingUpload } from '../../data/receiptQueries';
 import { useReceiptFiles } from '../../data/useReceiptFiles';
+import { PlanLimitNotice } from '../../components/PlanLimitNotice';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import type { HostedProfile } from '../../api/client';
 import { MoveExpenseDrawer } from '../../components/MoveExpenseDrawer';
@@ -143,6 +144,8 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   return (
     <>
       {fileInput}
+      {/* MUT-731 (wireframe 2): Starter's scans used up; the expense can still be added by hand. */}
+      {uploads.planLimit && <PlanLimitNotice limit={uploads.planLimit} onByHand={uploads.byHand} />}
       <div className="hp-receipts-bar">
         <SegmentedTabs<ReceiptStatusFilter>
           options={options}

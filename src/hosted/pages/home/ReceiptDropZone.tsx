@@ -3,6 +3,7 @@ import { Button } from '../../../components/ui/Button';
 import { useLanguage } from '../../../lib/i18n/core';
 import { RECEIPT_MIME_TYPES } from '../../data/receiptFileRules';
 import { useReceiptFiles } from '../../data/useReceiptFiles';
+import { PlanLimitNotice } from '../../components/PlanLimitNotice';
 
 /** The camera's own pick: a photo is a JPEG or a PNG (MUT-657). */
 const PHOTO_TYPES = 'image/jpeg,image/png';
@@ -17,7 +18,7 @@ export function ReceiptDropZone({ profileId }: { profileId: string }) {
   const pick = useRef<HTMLInputElement>(null);
   const camera = useRef<HTMLInputElement>(null);
   const [over, setOver] = useState(false);
-  const { onFiles, uploading } = useReceiptFiles(profileId);
+  const { onFiles, uploading, planLimit, byHand } = useReceiptFiles(profileId);
 
   const take = (input: HTMLInputElement) => {
     const files = Array.from(input.files ?? []);
@@ -33,6 +34,8 @@ export function ReceiptDropZone({ profileId }: { profileId: string }) {
 
   return (
     <>
+      {/* MUT-731 (wireframe 2): Starter's scans used up; the expense can still be added by hand. */}
+      {planLimit && <PlanLimitNotice limit={planLimit} onByHand={byHand} />}
       <div
         className={`hp-home-drop${over ? ' hp-home-drop-over' : ''}`}
         onDragOver={(event) => {

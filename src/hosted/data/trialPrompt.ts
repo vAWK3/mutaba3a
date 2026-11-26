@@ -21,7 +21,13 @@ export type TrialNotice =
   /** MUT-361: Stripe is retrying a failed payment; nothing is refused yet. */
   | { kind: 'grace' }
   /** MUT-361: reads and the export only. `locksAt`: the day an unpaid trial locks; null for a payer, who never locks. */
-  | { kind: 'read-only'; source: BillingEntitlement['source']; locksAt: string | null }
+  | {
+      kind: 'read-only';
+      source: BillingEntitlement['source'];
+      locksAt: string | null;
+      /** MUT-731: read-only for Starter's business count (the person keeps another business active), not a lapse. */
+      planLimit?: boolean;
+    }
   /** MUT-361: only Subscribe and Download my records. */
   | { kind: 'locked' }
   /** MUT-532: read-only because the person paused their plan, until it restarts on its own (`until`). */
@@ -57,6 +63,7 @@ export function lapseNoticeOf(me: Pick<Me, 'billingStanding'>, profile: Pick<Hos
   const gate = billingGateOf(me, profile);
   if (gate === 'locked') return { kind: 'locked' };
   if (gate === 'read-only' && billing.paused === true) return { kind: 'paused', until: billing.until };
+  if (gate === 'read-only' && billing.planLimit === true) return { kind: 'read-only', source: billing.source, locksAt: null, planLimit: true };
   if (gate === 'read-only') return { kind: 'read-only', source: billing.source, locksAt: billing.source === 'TRIAL' ? billing.until : null };
   return null;
 }

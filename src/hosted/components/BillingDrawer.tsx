@@ -63,6 +63,8 @@ import { useCancelFlow, type CancelOutcome } from './useCancelFlow';
 import { Drawer } from './Drawer';
 import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { OfferTopLine } from './OfferTopLine';
+import { activeBusinessesOf, billingStarterOf, starterUsageOf } from '../data/planUsage';
+import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
 
 /**
  * Settings › Billing (MUT-362, plan §2.7–§2.8): the account menu's drawer, Arabic first. The status view reads in one
@@ -138,6 +140,13 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
   // Render-time adjustment, not an effect (react-hooks v7): the poll ends once the mirror shows the change.
   if (awaiting !== null && billing.data && mirrored(awaiting, billing.data)) setAwaiting(null);
   usePollBilling(awaiting !== null, useCallback(() => setAwaiting(null), []));
+  // MUT-731: Billing's Change pane (the pick list), and the drawer's See plans on Starter (wireframe 1).
+  const [picking, setPicking] = useState(false);
+  const pickTitleId = useId();
+  const me = useMe();
+  const activeBusinesses = activeBusinessesOf(billing.data);
+  const pickable = activeBusinesses ? me.profiles.filter((p) => activeBusinesses.active.includes(p.id) || activeBusinesses.readOnly.includes(p.id)) : [];
+  const onStarter = billing.data?.currentPlan === 'starter' && step === undefined && !picking;
   // Review: the step is on screen (loading included), so the shell's one offer is spent: closing it while billing
   // loads never has the shell open it again on this page.
   useEffect(() => {
@@ -183,6 +192,16 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
     body = <CancelBody flow={cancelFlow} onBack={() => onStep(undefined)} />;
   } else if (subscribing) {
     body = <SubscribeBody billing={billing.data} title={title} form={subscribe} onBack={() => onStep(undefined)} />;
+  } else if (picking) {
+    // MUT-731 (wireframe 1): Change reopens the pick list as a pane of the drawer.
+    body = (
+      <div className="hp-billing">
+        <h3 id={pickTitleId} className="hp-billing-headline">
+          {t('hosted.billing.pickActive.title')}
+        </h3>
+        <PickActiveBusiness businesses={pickable} titleId={pickTitleId} onDone={() => setPicking(false)} />
+      </div>
+    );
   } else {
     body = (
       <StatusView
@@ -198,6 +217,7 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
           onStep('cancel');
         }}
         onAwait={setAwaiting}
+        onChangeActive={() => setPicking(true)}
       />
     );
   }
@@ -216,11 +236,30 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
           <SwitchFooter step={switchStep} onBack={() => onStep(undefined)} />
         ) : cancelling ? (
           <CancelFooter flow={cancelFlow} />
+        ) : onStarter && billing.data && isSellable(billing.data) ? (
+          <StarterFooter billing={billing.data} onClose={onClose} onSeePlans={() => onStep('subscribe')} />
         ) : undefined
       }
     >
       {body}
     </Drawer>
+  );
+}
+
+/** MUT-731 (wireframe 1): Close and See plans; See plans is secondary once the Upgrade button shows from 90%. */
+function StarterFooter({ billing, onClose, onSeePlans }: { billing: BillingOverview; onClose: () => void; onSeePlans: () => void }) {
+  const t = useT();
+  const usage = starterUsageOf(billing);
+  const nudge = usage ? [usage.documents, usage.scans].some((m) => m.level === 'nudge' || m.level === 'at_cap') : false;
+  return (
+    <div className="drawer-footer-right">
+      <Button variant="secondary" onClick={onClose}>
+        {t('common.close')}
+      </Button>
+      <Button variant={nudge ? 'secondary' : 'primary'} onClick={onSeePlans}>
+        {t('hosted.billing.starter.seePlans')}
+      </Button>
+    </div>
   );
 }
 
@@ -306,6 +345,7 @@ function StatusView({
   onSwitch,
   onCancelPlan,
   onAwait,
+  onChangeActive,
 }: {
   billing: BillingOverview;
   phase: Phase;
@@ -316,6 +356,7 @@ function StatusView({
   onSwitch: () => void;
   onCancelPlan: () => void;
   onAwait: (awaiting: Awaiting) => void;
+  onChangeActive: () => void;
 }) {
   const t = useT();
   const { language } = useLanguage();
@@ -333,6 +374,7 @@ function StatusView({
   const settled = phase !== 'confirming' && phase !== 'slow';
   const offer = eligibleOfferOf(billing);
   const switchLine = yearlySwitchLineOf(billing);
+  const starterUsage = starterUsageOf(billing);
   // MUT-525 DD10b: the subscription says when the launch offer was applied to it.
   // MUT-534: only the launch offer says so here; a come-back Checkout (or a server older than 1.99.0) reads by its kind.
   const subscribed = billing.subscription?.offer && billing.subscription.offer.kind !== 'comeback' ? t('hosted.billing.done.offerApplied') : t('hosted.billing.states.subscribed');
@@ -387,8 +429,18 @@ function StatusView({
       {settled && !switched && switchLine && <SwitchLine yearlySwitch={switchLine} language={language} onSwitch={onSwitch} />}
       {/* MUT-532: the plan's own changes, in MTB3A: undo a pause or resume, take a cancel back, or cancel. */}
       {settled && <PlanChanges billing={billing} panel={view.panel} onCancelPlan={onCancelPlan} onAwait={onAwait} />}
+      {/* MUT-731 (wireframe 4): read-only after a cancel offers the free plan beside Subscribe. */}
+      {settled && view.panel.kind === 'lapsed' && billingStarterOf(billing)?.canContinueFree && (
+        <div>
+          <ContinueFreeOnStarter />
+        </div>
+      )}
+      {/* MUT-731 (wireframe 1): Starter's month, its lines, and the active business (Change opens the pick pane). */}
+      {view.panel.kind === 'starter' && starterUsage && (
+        <StarterBilling usage={starterUsage} activeBusinesses={activeBusinessesOf(billing)} canUpgrade={isSellable(billing)} onChangeActive={onChangeActive} />
+      )}
       {view.action === 'subscribe' && !view.openSoon && phase === null && <PlanLines catalog={billing.catalog} offer={offer} language={language} />}
-      {list.length > 0 && <ProfilesList profiles={list} />}
+      {list.length > 0 && view.panel.kind !== 'starter' && <ProfilesList profiles={list} />}
     </div>
   );
 }
@@ -562,6 +614,13 @@ function panelCopy(
         chip: k('chip.readOnly'),
         tone: 'rose',
         headline: k('headline.none'),
+        context: null,
+      };
+    case 'starter':
+      return {
+        chip: k('chip.active'),
+        tone: 'mint',
+        headline: k('headline.starter'),
         context: null,
       };
   }

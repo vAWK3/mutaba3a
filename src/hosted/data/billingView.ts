@@ -32,6 +32,8 @@ export type BillingPanel =
   | { kind: 'coveredByGrant'; until: string | null }
   | { kind: 'coveredByMalafat' }
   | { kind: 'ownedByOthers' }
+  /** MUT-731 (ADR-284): the free Starter plan (nothing else covers the person's own profiles). */
+  | { kind: 'starter' }
   | { kind: 'none' };
 
 export interface BillingView {
@@ -117,7 +119,7 @@ function profilePanel(profiles: readonly BillingProfile[], billing: BillingOverv
   if (paying.length === 0) return { panel: { kind: 'coveredByMalafat' }, action: null };
   // Eng review D5: a grant with no end means the operator decides when this person starts paying.
   if (paying.every((e) => e.source === 'OPERATOR' && e.until === null)) return { panel: { kind: 'coveredByGrant', until: null }, action: null };
-  const e = paying.find((x) => x.source === 'OPERATOR') ?? paying.find((x) => x.source === 'TRIAL') ?? paying[0]!;
+  const e = paying.find((x) => x.source === 'OPERATOR') ?? paying.find((x) => x.source === 'TRIAL') ?? paying.find((x) => x.source === 'STRIPE') ?? paying[0]!;
   switch (e.source) {
     case 'OPERATOR':
       return { panel: { kind: 'coveredByGrant', until: e.until }, action: 'subscribe' };
@@ -132,6 +134,9 @@ function profilePanel(profiles: readonly BillingProfile[], billing: BillingOverv
       if (e.state === 'ACTIVE') return { panel: { kind: 'active', renewsAt: e.until ?? now.toISOString(), interval: null }, action: 'manage' };
       if (e.state === 'GRACE') return { panel: { kind: 'grace' }, action: 'updateCard' };
       return { panel: { kind: e.state === 'READ_ONLY' ? 'lapsed' : 'none' }, action: 'subscribe' };
+    case 'STARTER':
+      // MUT-731: Starter is a normal state (Active chip, one headline); See plans is the drawer's footer.
+      return { panel: { kind: 'starter' }, action: null };
     default:
       return { panel: { kind: 'none' }, action: 'subscribe' };
   }

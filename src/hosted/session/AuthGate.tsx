@@ -17,6 +17,8 @@ import { useIsLocalMode, useMode } from './mode';
 import { WelcomePage } from '../pages/auth/WelcomePage';
 import { ProfileBanner } from '../components/ProfileBanner';
 import { LapseBanner, LockedScreen } from '../components/LapseGate';
+import { PickActiveBusinessDialog } from '../components/PickActiveBusinessDialog';
+import { SOLO_TRIAL_CHECKOUT, SoloTrialStep } from '../pages/onboarding/SoloTrialStep';
 import { IssueOfferProvider } from '../components/IssueOffer';
 import { billingGateOf } from '../data/trialPrompt';
 import { pickShellOverlay } from '../data/filters';
@@ -67,11 +69,15 @@ export function AuthGate() {
   // MUT-346: once the portal has been open, terms that change ask in a dialog above it instead, so an open drawer
   // and its draft survive. Before that (boot, sign-in) the step stays the page, with nothing loading behind it.
   if (me.data?.terms?.accepted === false && !shellShown) return <TermsUpdatePage version={me.data.terms.version} />;
+  // MUT-731 (Basel Q7): the one-time Solo trial step, before the shell, once (dark until Solo can be bought).
+  if (me.data?.plan?.soloTrialOffer && SOLO_TRIAL_CHECKOUT && !shellShown) return <SoloTrialStep />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>
         <Outlet />
         {me.data.terms?.accepted === false && <TermsUpdateDialog version={me.data.terms.version} />}
+        {/* MUT-731 (Basel Q5): on Starter with more than one business, the person picks the active one first (after the terms). */}
+        {me.data.terms?.accepted !== false && <PickActiveBusinessDialog />}
       </MeProvider>
     );
   }

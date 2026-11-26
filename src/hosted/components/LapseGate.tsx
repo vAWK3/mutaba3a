@@ -5,12 +5,14 @@ import type { BillingOffer, HostedProfile } from '../api/client';
 import { billingQuery } from '../data/billingQueries';
 import { eligibleOfferOf, isSellable } from '../data/billingView';
 import { lapseNoticeOf, type LapseNotice } from '../data/trialPrompt';
+import { billingStarterOf } from '../data/planUsage';
 import { formatInstant } from '../format/dates';
 import { browserTimezone } from '../format/timezones';
 import { useMe } from '../session/me';
 import { useAccountDrawers } from '../shell/AccountDrawers';
 import { AlertIcon, LockIcon } from './Icons';
 import { OfferTopLine } from './OfferTopLine';
+import { ContinueFreeOnStarter } from './StarterPlan';
 
 /**
  * MUT-361 (ADR-181): what the portal shows when the open profile's plan isn't running. `LapseBanner` sits above every
@@ -21,7 +23,7 @@ import { OfferTopLine } from './OfferTopLine';
  * ask the profile's creator. Every action opens a drawer the shell already has: Billing, or Your data.
  */
 
-type Coverage = { covered: boolean; sellable: boolean; offer: BillingOffer | null };
+type Coverage = { covered: boolean; sellable: boolean; offer: BillingOffer | null; continueFree: boolean };
 
 /**
  * Whether this person's payment would cover the profile, whether a price can be bought, and the launch offer they'd
@@ -31,7 +33,13 @@ function useCoverage(profileId: string): Coverage | null {
   const billing = useQuery(billingQuery);
   if (!billing.data) return null;
   // A server older than MUT-362 sends no list: then nobody's payment is known to cover it, so no Subscribe.
-  return { covered: (billing.data.coveredProfileIds ?? []).includes(profileId), sellable: isSellable(billing.data), offer: eligibleOfferOf(billing.data) };
+  return {
+    covered: (billing.data.coveredProfileIds ?? []).includes(profileId),
+    sellable: isSellable(billing.data),
+    offer: eligibleOfferOf(billing.data),
+    // MUT-731: a server older than 1.145.0, or Starter off, sends no `starter`: no Continue free.
+    continueFree: billingStarterOf(billing.data)?.canContinueFree === true,
+  };
 }
 
 /** MUT-525 DD13: the offer's line above Subscribe, only where Subscribe itself opens the Subscribe step. */
@@ -97,6 +105,10 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
   }
 
   if (notice.kind === 'paused') return <PausedNote notice={notice} resumable={coverage?.covered !== false} />;
+  // MUT-731 (Basel Q5): read-only because the person keeps another business active on Starter; Change is in Billing.
+  if (notice.planLimit) return <PlanLimitNote />;
+  // MUT-731 (wireframe 4, 13540 Q3): read-only after a cancel offers the free plan beside Subscribe.
+  if (notice.source === 'STRIPE' && coverage?.covered && coverage.continueFree) return <CancelledNote coverage={coverage} />;
 
   const body =
     notice.source === 'TRIAL' && notice.locksAt
@@ -113,6 +125,54 @@ function LapseNote({ profile, notice }: { profile: HostedProfile; notice: Exclud
           <SubscribeAction coverage={coverage} size="sm" />
           <Button variant="secondary" size="sm" onClick={drawers.openYourData}>
             {t('hosted.billing.gate.download')}
+          </Button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * MUT-731 (wireframe 4): the lapse banner keeps its place and lock icon; Starter's limits in one line right above the
+ * choice, Continue free on Starter as the second button, Download my records as a text button (three equal buttons
+ * would compete).
+ */
+function CancelledNote({ coverage }: { coverage: Coverage }) {
+  const t = useT();
+  const drawers = useAccountDrawers();
+  return (
+    <section className="hp-banner hp-banner-info hp-lapse-banner" aria-label={t('hosted.billing.gate.label')} data-testid="lapse-cancelled">
+      <LockIcon />
+      <div className="hp-lapse-banner-body">
+        <p className="hp-lapse-banner-title">{t('hosted.billing.gate.readOnlyEndedTitle')}</p>
+        <p>{t('hosted.billing.gate.readOnlyPaidStarter')}</p>
+        <p className="hp-starter-fine">{t('hosted.billing.gate.starterLimits')}</p>
+        <OfferAboveSubscribe coverage={coverage} />
+        <div className="hp-lapse-banner-actions">
+          <SubscribeAction coverage={coverage} size="sm" />
+          <ContinueFreeOnStarter size="sm" />
+          <button type="button" className="hp-link-button" onClick={drawers.openYourData}>
+            {t('hosted.billing.gate.download')}
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** MUT-731 (Basel Q5): a business kept read-only for Starter's count; Billing's Active business row switches it. */
+function PlanLimitNote() {
+  const t = useT();
+  const drawers = useAccountDrawers();
+  return (
+    <section className="hp-banner hp-banner-info hp-lapse-banner" aria-label={t('hosted.billing.gate.label')} data-testid="lapse-plan-limit">
+      <LockIcon />
+      <div className="hp-lapse-banner-body">
+        <p className="hp-lapse-banner-title">{t('hosted.billing.gate.readOnlyTitle')}</p>
+        <p>{t('hosted.billing.pickActive.body')}</p>
+        <div className="hp-lapse-banner-actions">
+          <Button variant="secondary" size="sm" onClick={() => drawers.openBilling()}>
+            {t('hosted.billing.starter.changeActive')}
           </Button>
         </div>
       </div>

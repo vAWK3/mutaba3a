@@ -1310,7 +1310,8 @@
         "pending": "Your first payment hasn't gone through yet",
         "activeTrial": "Card added. Your first charge is on {date}",
         "pauseScheduled": "Your plan pauses on {date}",
-        "paused": "Paused until {date}"
+        "paused": "Paused until {date}",
+        "starter": "You're on Starter, free"
       },
       "context": {
         "trial": "After that you can't add records until you subscribe.",
@@ -1424,7 +1425,10 @@
         "drawerNote": "This profile is read-only.",
         "refused": "This profile is read-only now. Subscribe to add or change records.",
         "newProfileBlocked": "Subscribe to add a profile: your plan has ended.",
-        "readOnlyPaused": "Your plan is paused until {date}."
+        "readOnlyPaused": "Your plan is paused until {date}.",
+        "readOnlyEndedTitle": "Your plan has ended",
+        "readOnlyPaidStarter": "Everything is here to see and download. Subscribe, or continue free on Starter.",
+        "starterLimits": "Starter: 1 business, 3 documents and 12 scans a month, no Tax Authority connection."
       },
       "switch": {
         "line": "Switch to yearly and save {amount} a year",
@@ -1504,6 +1508,40 @@
         "accept": "Keep my plan at {price}",
         "decline": "No, cancel my plan",
         "done": "Done. Your next 2 months are {price} each."
+      },
+      "usage": {
+        "title": "This month",
+        "documents": "{used} of {cap} documents",
+        "scans": "{used} of {cap} scans",
+        "thisMonth": "{usage} this month",
+        "resets": "Resets on {date}",
+        "documentsLeft": {
+          "one": "{count} document left this month",
+          "other": "{count} documents left this month"
+        },
+        "scansLeft": {
+          "one": "{count} scan left this month",
+          "other": "{count} scans left this month"
+        },
+        "documentsUsedUp": "No documents left this month",
+        "scansUsedUp": "No scans left this month",
+        "hide": "Hide"
+      },
+      "starter": {
+        "activeBusiness": "Active business",
+        "changeActive": "Change",
+        "seePlans": "See plans",
+        "chosen": "You're on Starter now."
+      },
+      "pickActive": {
+        "title": "Choose your active business",
+        "body": "Starter includes one business. The others stay read-only.",
+        "carried": "{count} businesses came over from the free app.",
+        "personal": "Your personal profile stays active.",
+        "later": "You can switch later in Billing.",
+        "meta": "{count} records · last entry {date}",
+        "choose": "Choose a business",
+        "confirm": "Keep {name} active"
       }
     },
     "selfService": {
@@ -3489,7 +3527,45 @@
       "name": {
         "solo": "Solo",
         "business": "Business",
-        "firm": "Firm"
+        "firm": "Firm",
+        "starter": "Starter"
+      },
+      "starter": {
+        "includes": "1 business and your personal profile",
+        "monthly": "3 documents and 12 scans a month",
+        "taxAuthority": "Tax Authority connection: Solo and above"
+      }
+    },
+    "lapse": {
+      "continueStarter": "Continue free on Starter"
+    },
+    "planLimit": {
+      "upgradeSolo": "Upgrade to Solo",
+      "documents": {
+        "title": "You've issued Starter's 3 documents this month",
+        "body": "You can issue more on {date}."
+      },
+      "scans": {
+        "title": "You've used Starter's 12 scans this month",
+        "body": "You can scan again on {date}.",
+        "byHand": "Add the expense by hand"
+      },
+      "businesses": {
+        "title": "Starter includes one business"
+      }
+    },
+    "onboarding": {
+      "trial": {
+        "title": "Choose how to start",
+        "businesses": "Businesses",
+        "documents": "Documents a month",
+        "scans": "Scans a month",
+        "taxAuthority": "Tax Authority connection",
+        "card": "Card needed. Nothing is charged before {date}; cancel any time before then.",
+        "then": "Then {price} a month",
+        "once": "Offered only now.",
+        "start": "Try Solo free for 14 days",
+        "skip": "Continue on Starter"
       }
     }
   }

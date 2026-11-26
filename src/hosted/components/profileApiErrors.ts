@@ -1,4 +1,5 @@
 import { ApiError, apiErrorReason } from '../api/client';
+import { planLimitOf, type PlanLimit } from '../data/planUsage';
 
 /**
  * Maps the profile API's refusals (MUT-182) onto the profile drawers, in
@@ -26,6 +27,8 @@ export interface MappedProfileError {
   /** The profile changed elsewhere: offer Reload. */
   conflict?: boolean;
   refetchMe?: boolean;
+  /** MUT-731: Starter's one business; the drawer shows the plan's notice (with Upgrade to Solo), not a banner. */
+  planLimit?: PlanLimit;
   /** The edit pane can't continue: go back to the list. */
   backToList?: boolean;
 }
@@ -69,6 +72,8 @@ function validation(error: ApiError): MappedProfileError {
 /** `shared` (MUT-373): the profile has other owners, so a version conflict names them (DR7). */
 export function mapProfileError(error: unknown, shared = false): MappedProfileError {
   if (!(error instanceof ApiError) || error.code === 'NETWORK') return banner('hosted.profiles.errors.network');
+  const limit = planLimitOf(error);
+  if (limit) return { planLimit: limit, capReached: true, refetchMe: true };
   switch (error.code) {
     case 'CONFLICT':
       return conflict(error, shared);
