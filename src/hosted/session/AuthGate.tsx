@@ -55,7 +55,9 @@ export function AuthGate() {
   const [shownFor, setShownFor] = useState<string | null>(null);
   const userId = me.data?.user.id ?? null;
   if (!me.data && shownFor !== null) setShownFor(null);
-  if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && shownFor !== userId) setShownFor(userId);
+  // MUT-731: the Solo trial step, like the terms, comes before the shell; marking it shown would skip the step.
+  const soloTrialStep = !!me.data?.plan?.soloTrialOffer && SOLO_TRIAL_CHECKOUT;
+  if (me.data && !me.data.user.closure && me.data.terms?.accepted !== false && !soloTrialStep && shownFor !== userId) setShownFor(userId);
   const shellShown = userId !== null && shownFor === userId;
 
   // MUT-513 (ADR-230): nobody is signed in and this browser hasn't chosen. `/` is the front door; any other page here
@@ -70,7 +72,7 @@ export function AuthGate() {
   // and its draft survive. Before that (boot, sign-in) the step stays the page, with nothing loading behind it.
   if (me.data?.terms?.accepted === false && !shellShown) return <TermsUpdatePage version={me.data.terms.version} />;
   // MUT-731 (Basel Q7): the one-time Solo trial step, before the shell, once (dark until Solo can be bought).
-  if (me.data?.plan?.soloTrialOffer && SOLO_TRIAL_CHECKOUT && !shellShown) return <SoloTrialStep />;
+  if (soloTrialStep && !shellShown) return <SoloTrialStep />;
   if (me.data) {
     return (
       <MeProvider me={me.data}>
