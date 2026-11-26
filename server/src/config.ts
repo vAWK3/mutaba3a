@@ -1,3 +1,4 @@
+import { parseLiveJurisdictions } from './issuing/jurisdictions.js';
 import { isIP } from 'node:net';
 import { dirname, isAbsolute, resolve } from 'node:path';
 import { webauthnConfigOf } from './auth/webauthn.js';
@@ -127,6 +128,22 @@ const envSchema = z.object({
    * on. Off is the kill switch: the operator's per-person `invoicing` grant decides again.
    */
   INVOICING_FOR_ALL: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-740 (ADR-287 D4): the countries whose invoicing rules are live here, a comma list of ISO 3166-1 alpha-2 codes.
+   * A profile whose issuer country isn't listed cannot save issuer details or issue. Default Israel, the only pack
+   * there is; anything that isn't a code refuses the boot.
+   */
+  INVOICING_JURISDICTIONS: z
+    .string()
+    .default('IL')
+    .transform((value, ctx) => {
+      const live = parseLiveJurisdictions(value);
+      if (!live) {
+        ctx.addIssue({ code: 'custom', message: 'must be a comma list of two-letter country codes, e.g. IL or IL,SA' });
+        return z.NEVER;
+      }
+      return live;
+    }),
   /**
    * MUT-731 (ADR-284): the free Starter plan. Only exactly "true" turns it on: anyone with nothing else covering them is
    * ACTIVE on Starter (instead of read-only or locked), new sign-ups get no trial, and Starter's hard caps refuse with

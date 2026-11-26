@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MUT-740 wireframe: issuer country</title>
+<style>
+  :root { --bg:#f6f4ef; --card:#fff; --ink:#1b1b1b; --muted:#6b6b6b; --line:#d9d5cc; --accent:#1f5f4a; --butter:#fff3c4; --butter-ink:#5c4a00; }
+  body { margin:0; font:15px/1.5 system-ui, sans-serif; background:var(--bg); color:var(--ink); padding:24px 16px; }
+  h1 { font-size:18px; margin:0 0 4px } p.sub { margin:0 0 20px; color:var(--muted) }
+  .row { display:flex; flex-wrap:wrap; gap:24px; align-items:flex-start }
+  .state { flex:1 1 320px; max-width:420px }
+  .state h2 { font-size:14px; margin:0 0 8px }
+  .frame { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px; }
+  .frame[dir=rtl] { text-align:right }
+  label { display:block; font-size:13px; color:var(--muted); margin:12px 0 4px }
+  .field { border:1px solid var(--line); border-radius:10px; padding:10px 12px; background:#fff; display:flex; justify-content:space-between; }
+  .field.locked { background:#f0eee8; color:var(--muted) }
+  .field.empty { color:var(--muted) }
+  .hint { font-size:12px; color:var(--muted); margin-top:4px }
+  .notice { margin-top:8px; background:var(--butter); color:var(--butter-ink); border-radius:10px; padding:8px 12px; font-size:13px }
+  .btn { margin-top:16px; border-radius:10px; padding:10px 14px; text-align:center; background:var(--accent); color:#fff }
+  .btn.off { background:#c9c6bd; color:#f5f5f5 }
+  .phone { max-width:340px }
+</style>
+</head>
+<body>
+<h1>Business details step: Country (MUT-740)</h1>
+<p class="sub">Select above the VAT number. No default (billing's rule: nobody is put on the wrong tax rules by a guess). List = the billing countries, Israel first. Arabic first below; English for reading.</p>
+
+<div class="row">
+  <div class="state">
+    <h2>1. Israel chosen (as today)</h2>
+    <div class="frame" dir="rtl">
+      <label>الدولة</label><div class="field"><span>إسرائيل</span><span>▾</span></div>
+      <label>رقم الترخيص / رقم الشركة</label><div class="field"><span dir="ltr">517108775</span></div>
+      <div class="hint">٩ أرقام</div>
+      <label>الاسم القانوني</label><div class="field"><span>…</span></div>
+      <div class="btn">حفظ والمتابعة</div>
+    </div>
+  </div>
+
+  <div class="state">
+    <h2>2. Another country chosen</h2>
+    <div class="frame" dir="rtl">
+      <label>الدولة</label><div class="field"><span>الأردن</span><span>▾</span></div>
+      <div class="notice">إصدار الفواتير غير متاح بعد للأعمال في الأردن.</div>
+      <label>رقم الترخيص / رقم الشركة</label><div class="field empty"><span>—</span></div>
+      <div class="btn off">حفظ والمتابعة</div>
+    </div>
+    <p class="hint">EN: “Invoicing isn't available for businesses in Jordan yet.” Save disabled; nothing is stored.</p>
+  </div>
+
+  <div class="state phone">
+    <h2>3. After the first document (phone width)</h2>
+    <div class="frame" dir="rtl">
+      <label>الدولة</label><div class="field locked"><span>إسرائيل</span><span>🔒</span></div>
+      <div class="hint">لا يمكن تغيير الدولة بعد إصدار أول مستند.</div>
+      <div class="btn">حفظ</div>
+    </div>
+    <p class="hint">EN: “The country can't be changed after the first document.”</p>
+  </div>
+</div>
+</body>
+</html>

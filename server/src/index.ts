@@ -257,6 +257,7 @@ const app = createApp({
   billingGate: config.BILLING_GATE,
   twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   invoicingForAll: config.INVOICING_FOR_ALL,
+  invoicingJurisdictions: config.INVOICING_JURISDICTIONS,
   soloTrialOfferSince: config.SOLO_TRIAL_OFFER_SINCE ?? null,
   // MUT-702 Part B: the plans on sale; a limit refusal offers the upgrade only while they are.
   planSales: config.PLAN_CHECKOUT,

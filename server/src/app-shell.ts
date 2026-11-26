@@ -4,6 +4,7 @@ import { HTTPException } from 'hono/http-exception';
 import type { AppEnv } from './auth/middleware.js';
 import { ACCOUNTANT_PLAN_OFF, type AccountantPlanConfig } from './billing/accountant-plan.js';
 import { ApiError } from './errors.js';
+import { DEFAULT_LIVE_JURISDICTIONS } from './issuing/jurisdictions.js';
 import type { Logger } from './logger.js';
 import { NOOP_REPORTER, type ErrorReporter } from './observability/reporter.js';
 import { SENTRY_RULES } from './observability/sentry-rules.js';
@@ -28,6 +29,8 @@ export interface ApiShellDependencies {
   twoFactorIssuingGate?: boolean;
   /** MUT-736 (ADR-282, INVOICING_FOR_ALL): every business profile issues, no operator grant. Absent = off (the grant decides). */
   invoicingForAll?: boolean;
+  /** MUT-740 (ADR-287, INVOICING_JURISDICTIONS): the countries whose invoicing rules are live. Absent = Israel only. */
+  invoicingJurisdictions?: readonly string[];
   /** MUT-731: a paid plan can be bought here (Checkout configured): PLAN_LIMIT's `canUpgrade`. Absent = false. */
   planCheckout?: boolean;
   /** MUT-731 (Basel Q7, SOLO_TRIAL_OFFER_SINCE): accounts created from this instant are offered the Solo trial once. Absent = off. */
@@ -64,6 +67,7 @@ export function createApiShell(deps: ApiShellDependencies): { app: OpenAPIHono<A
     c.set('passkeys', deps.passkeys ?? false);
     c.set('twoFactorIssuingGate', deps.twoFactorIssuingGate ?? false);
     c.set('invoicingForAll', deps.invoicingForAll ?? false);
+    c.set('invoicingJurisdictions', deps.invoicingJurisdictions ?? DEFAULT_LIVE_JURISDICTIONS);
     c.set('planCheckout', deps.planCheckout ?? false);
     c.set('soloTrialOfferSince', deps.soloTrialOfferSince ?? null);
     c.set('maxOwnedProfiles', deps.maxOwnedProfiles);

@@ -6,7 +6,7 @@ import { ADMIN, accountantHarness, businessOf, json, person, read, signedIn, typ
  * MUT-710 (ADR-274 D8, D9, AC1): turning two-step sign-in on (app or email), the proof it needs, the recovery codes,
  * switching, new codes and turning it off, with the notice mailed each time.
  */
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 
 const enrol = (h: AccountantHarness, p: Person, body: Record<string, unknown>) => h.app.request('/v1/me/two-factor/enrolment', json(body, p.auth));
 const confirm = (h: AccountantHarness, p: Person, body: Record<string, unknown>) => h.app.request('/v1/me/two-factor/enrolment/confirm', json(body, p.auth));

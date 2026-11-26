@@ -8,7 +8,7 @@ import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, ty
  * MUT-647: an invoice issued elsewhere, attached to an Owed or a Received. Read (number, date, total), confirmed,
  * kept as the entry's INVOICE attachment, never numbered here; while attached, MTB3A issues no document for the entry.
  */
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 const PDF = new TextEncoder().encode('%PDF-1.4\n% an invoice issued elsewhere\n%%EOF');
 const line = (text: string, y: number) => ({ text, conf: 0.99, box: [10, y, 400, y + 20] as [number, number, number, number] });
 

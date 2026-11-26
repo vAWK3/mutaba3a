@@ -7,7 +7,7 @@ import { ADMIN, accountantHarness, businessOf, idem, issuingHarness, json, perso
  * MUT-710 (ADR-274 D10, AC4): issuing and the Tax Authority need two-step sign-in on and a session that passed it;
  * the refusal comes before the idempotency layer, so it is never replayed; disconnecting always works.
  */
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 const TAX = { client: new FakeTaxAuthority(), box: new TokenBox('gate-secret-with-at-least-32-characters!'), stateSecret: 'gate-state', accountingSoftwareNumber: 987654321 };
 
 async function refusal(res: Response) {

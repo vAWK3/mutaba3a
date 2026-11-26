@@ -12,6 +12,7 @@ export function describeLedgerStoreTwoFactorContract(name: string, makeStore: ()
   const digest = () => unique().padEnd(64, '0').slice(0, 64);
   const POLICY = { lockAfter: 5, windowMs: 15 * 60_000, lockMs: 15 * 60_000 };
   const ISSUER = {
+    country: 'IL',
     legalName: 'Rana Saleh',
     vatId: '123456789',
     dealerType: 'COMPANY' as const,

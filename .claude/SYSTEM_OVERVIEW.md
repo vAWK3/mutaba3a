@@ -491,6 +491,7 @@ A person's profiles are covered by one plan, read from their own profiles' entit
 - Retention: events 13 months, counters 25 months, route statistics 90 days (daily `/jobs/v1/usage/prune`).
 
 ### Invoicing for everyone; the Tax Authority connection on paid plans (MUT-736, ADR-282)
+- **The issuer's country (MUT-740, ADR-287):** `issuer_details.country` (IL by default) decides whose invoicing rules apply; only countries in `INVOICING_JURISDICTIONS` (default `IL`) can save issuer details or issue, the country is locked after the first document, and an Israeli issuer's VAT number must pass its check digit. `GET /v1/issuing/setup` tells the clients `country`, `countryLocked` and `liveJurisdictions`.
 - With `INVOICING_FOR_ALL` on, every business profile issues invoices, receipts and credit notes with no operator grant, and `/v1/me` names `invoicing` for everyone (shipped phone builds open issuing). Off, the operator's per-person `invoicing` grant decides (the kill switch). Two-step sign-in is still required to issue where MUT-710's gate is on.
 - The automatic Tax Authority connection (allocation numbers requested by MTB3A) is on Solo and above (`PLAN_FEATURES`). On Starter (MUT-731) connect refuses with 409 `PLAN_LIMIT`, a kept connection is `suspended` (kept, resumes on upgrade), and invoices at or over the threshold take a number typed by hand (MUT-711's panel, unchanged). The portal's step 5 offers Upgrade to Solo instead of Connect.
 

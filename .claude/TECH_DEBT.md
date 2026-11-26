@@ -3414,6 +3414,10 @@ When resolving debt:
 - **What:** ADR-284 decision 10 warns earlier on a small cap (Starter's 1 of 3 is `near`), but the operator report's near/at-cap SQL (`prisma-usage.ts`, `memory-usage.ts`) still uses `count >= cap × 0.8`, so a Starter person at 1 or 2 of 3 documents isn't listed as near.
 - **When to pay:** move the operator filter onto `levelOf`'s thresholds (min(80%, cap − 2)).
 
+### TD-347: The phone has no country field for the issuer's details (MUT-740)
+- **What:** `PUT /v1/issuer` takes an optional `country` and the setup status carries `country`, `countryLocked` and `liveJurisdictions`; only the portal asks for it. A shipped phone build sends none and gets `IL`, which is right while Israel is the only live country.
+- **When to pay:** before a second country goes into `INVOICING_JURISDICTIONS`, in the phone's issuing session (MUT-573's screens), with the same copy as the portal (wireframe `.claude/designs/MUT-740-wireframe.html`).
+
 ### TD-346: The Flutter copy of the analytics contract is behind (MUT-731)
 - **What:** `docs/analytics/events.json` 2.12.0 adds four portal-only plan events; the Flutter repo's byte-identical copy (`test/fixtures/analytics/events.json`) and its sha256 must follow (README "Changing the contract", step 3).
 - **When to pay:** in the phone half's session (MUT-731 phone), with the same file and hash.

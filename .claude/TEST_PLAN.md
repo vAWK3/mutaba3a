@@ -4869,6 +4869,18 @@ Written with the build; the full suites, `test:db` and the QA recordings run onc
 | QA (written, not run) | `qa/specs/portal/starter.spec.ts` (`portal.starter.*`, FakeApi `starter` seed) | Billing month (en/ar, 375 overflow), Issue drawer at 3/3, 13th scan before upload + by hand, second business, Continue free, pick dialog, Home notices; the trial step is declared hidden |
 | Postgres (to add with the final run) | `test:db` | the migration round trip (`uuid[]`), the documents cap race in `issueTx` at 2/3 (one 201, one PLAN_LIMIT, no number gap) and the scan complete at 11/12 |
 
+
+## MUT-740 — the issuer's country, and no issuing where no pack is live (2026-11-26, ADR-287)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/issuing/__tests__/jurisdictions.test.ts` | default IL; comma list upper-cased, trimmed, de-duplicated; junk is null; `isLive`; `assertLive` names the reason, country and live list |
+| Config | `config.test.ts` | `INVOICING_JURISDICTIONS` default IL, a list, junk refuses the boot |
+| Routes | `routes-issuing-setup.test.ts` | first save is IL and the setup status says so; AC1 a non-live country 422 and nothing saved; malformed country; a live non-Israeli country saves with no Israeli check digit and keeps its country on replace; AC4 wrong check digit 422, right one kept; AC3 the country changes until the first document then 409 `COUNTRY_LOCKED` (`countryLocked` true); a stored country no longer live can't issue or preview |
+| Store contract | `store-contract-issuing.ts` | `country` round trip, IL on create (memory, and Postgres in `test:db`) |
+| Portal (vitest + RTL) | `InvoicingSteps.test.tsx` | no default and a required choice; Jordan shows the notice and disables Next; a saved profile shows its country, locked after the first document; Arabic notice; the server's `VAT_ID_INVALID` reads as an invalid number |
+| Terraform | `tests/invoicing_jurisdictions.tftest.hcl` | default sets no env; a wider list reaches Cloud Run upper-cased; junk refused at plan |
+| QA | `portal.invoicing.setup` (country chosen first), `country-not-live`, `country-locked` (FakeApi) | the three scenarios; "an invalid Israeli number is refused" is route- and unit-tested, not recorded (the FakeApi has no check digit) |
 ## MUT-702 Part B — buying a plan (2026-11-26, ADR-288)
 
 Written with the build. Full suites, `test:db` and QA recordings wait for Basel's final run.

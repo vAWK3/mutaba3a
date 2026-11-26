@@ -154,7 +154,7 @@ function Workspace({ profile, setup, issuer, owner, initialStep }: { profile: Ho
         {!writable ? (
           <p className="hp-muted">{t('hosted.invoicing.readOnly')}</p>
         ) : current === 'details' ? (
-          <DetailsStep {...stepProps} issuer={issuer} />
+          <DetailsStep {...stepProps} issuer={issuer} setup={setup} />
         ) : current === 'logo' ? (
           <LogoStep {...stepProps} hasLogo={setup.hasLogo} />
         ) : current === 'defaults' ? (

@@ -544,6 +544,17 @@ variable "two_factor_issuing_gate_enabled" {
   default     = false
 }
 
+variable "invoicing_jurisdictions" {
+  description = "MUT-740 (ADR-287 D4): sets INVOICING_JURISDICTIONS, a comma list of ISO 3166-1 alpha-2 countries whose invoicing rules are live. A profile whose issuer country is not listed cannot save issuer details or issue. Default IL (Israel, the only pack there is); the variable sets the env only when it differs, so the deploy changes nothing today."
+  type        = string
+  default     = "IL"
+
+  validation {
+    condition     = can(regex("^[A-Za-z]{2}( *, *[A-Za-z]{2})*$", var.invoicing_jurisdictions))
+    error_message = "invoicing_jurisdictions must be a comma list of two-letter country codes, e.g. \"IL\" or \"IL,SA\"."
+  }
+}
+
 variable "starter_plan" {
   description = "MUT-731 (ADR-284): sets STARTER_PLAN=true: a person nothing else covers is ACTIVE on the free Starter plan, new sign-ups get no trial, and Starter's hard caps refuse with 409 PLAN_LIMIT. false (default) = today's read-only and locked states. Turn on with MUT-702 Part B, after the phone build that parses PLAN_LIMIT is live."
   type        = bool

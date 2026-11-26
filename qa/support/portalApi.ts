@@ -534,6 +534,8 @@ export interface FakeApiSeed {
   periodDownloads?: boolean;
   /** MUT-646: issuing on for every business profile (the invoicing setup answers); off, every issuing call is 404. */
   invoicing?: boolean | 'ready' | 'details';
+  /** MUT-740: a document has been issued, so the issuer's country is locked (the setup status says `countryLocked`). */
+  countryLocked?: boolean;
   /** MUT-647: what reading an invoice issued elsewhere answers (default: a read invoice 3381 of 1,500.00). */
   externalReading?: { read: boolean; number: string | null; documentDate: string | null; amount: string | null };
   /** MUT-648: the business's "offer to issue after saving" (on unless false). */
@@ -599,7 +601,7 @@ interface StubIssuing {
   /** MUT-647: invoices issued elsewhere, attached to an Owed or a Received; a removed one leaves the list. */
   external: (Record<string, Json> & { id: string; entryKind: string; entryId: string })[];
 }
-const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
+const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', pricesIncludeVat: false, paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true };
 const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST'] as const;
 
 /** MUT-561: one share link as GET /v1/profiles/{id}/share-links lists it (no URL: the server never shows it again). */
@@ -905,6 +907,8 @@ export class FakeApi {
   private readonly invoicingReady: boolean;
   /** MUT-722: the details saved and the introduction read, the numbering still unanswered (the setup can't issue). */
   private readonly invoicingDetailsOnly: boolean;
+  /** MUT-740: the setup status's `countryLocked`. */
+  private readonly countryLocked: boolean;
   private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
   private readonly offerAfterSave: boolean;
   private readonly manualAllocation: boolean;
@@ -951,6 +955,7 @@ export class FakeApi {
     this.issuing = seed.invoicing ? new Map() : null;
     this.invoicingReady = seed.invoicing === 'ready';
     this.invoicingDetailsOnly = seed.invoicing === 'details';
+    this.countryLocked = seed.countryLocked ?? false;
     this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
     this.manualAllocation = seed.manualAllocation ?? false;
@@ -1564,6 +1569,9 @@ export class FakeApi {
         missing,
         introSeen: state.introSeen,
         hasLogo: !!state.logo,
+        country: (state.issuer?.country as string | undefined) ?? null,
+        countryLocked: this.countryLocked,
+        liveJurisdictions: ['IL'],
       });
     };
     const { method } = e;

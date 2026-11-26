@@ -6,7 +6,7 @@ import { checkSignedPdf } from '../issuing/pdf/sign/verify.js';
 import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /** MUT-640: the PDF routes. A view copy (GET) counts nothing; a produced copy (POST) is counted, the first the original. */
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 
 async function invoicing(h: AccountantHarness) {
   const owner = await person(h);
@@ -92,7 +92,7 @@ describe('issued-document PDFs are signed (MUT-641, ADR-265)', () => {
       const check = signedWhole(await bytesOf(res));
       expect(check.problems).toEqual([]);
       expect(check.subFilter).toBe('ETSI.CAdES.detached');
-      expect(check.reason).toBe('נחתם דיגיטלית על ידי MTB3A בשם Barmajiyat Ltd. (123456789)');
+      expect(check.reason).toBe('נחתם דיגיטלית על ידי MTB3A בשם Barmajiyat Ltd. (123456782)');
       expect(check.timestampedAt).not.toBeNull();
     }
     const preview = await h.app.request('/v1/issued-documents/preview/pdf', json(w.body, w.on));

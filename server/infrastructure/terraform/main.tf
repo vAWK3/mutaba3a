@@ -809,6 +809,14 @@ resource "google_cloud_run_v2_service" "api" {
             value = env.value
           }
         }
+        # MUT-740 (ADR-287 D4): the countries whose invoicing rules are live; unset = Israel only (the server's default).
+        dynamic "env" {
+          for_each = upper(replace(var.invoicing_jurisdictions, " ", "")) == "IL" ? {} : { INVOICING_JURISDICTIONS = upper(replace(var.invoicing_jurisdictions, " ", "")) }
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-736 (ADR-282): invoicing for every business profile; off = the operator grant decides (the kill switch).
         dynamic "env" {
           for_each = var.invoicing_for_all ? { INVOICING_FOR_ALL = "true" } : {}

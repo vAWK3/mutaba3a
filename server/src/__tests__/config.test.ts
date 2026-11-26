@@ -212,6 +212,14 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...base, INVOICING_FOR_ALL: 'yes' })).toThrow(/INVOICING_FOR_ALL/);
   });
 
+  it('INVOICING_JURISDICTIONS (MUT-740): Israel by default; a comma list of ISO codes; junk refuses the boot', () => {
+    expect(loadConfig(base).INVOICING_JURISDICTIONS).toEqual(['IL']);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).INVOICING_JURISDICTIONS).toEqual(['IL']);
+    expect(loadConfig({ ...base, INVOICING_JURISDICTIONS: 'il, sa' }).INVOICING_JURISDICTIONS).toEqual(['IL', 'SA']);
+    expect(() => loadConfig({ ...base, INVOICING_JURISDICTIONS: 'ISR' })).toThrow(/INVOICING_JURISDICTIONS/);
+    expect(() => loadConfig({ ...base, INVOICING_JURISDICTIONS: '' })).toThrow(/INVOICING_JURISDICTIONS/);
+  });
+
   it('STARTER_PLAN (MUT-731): off unless exactly "true", production included', () => {
     expect(loadConfig(base).STARTER_PLAN).toBe(false);
     expect(loadConfig({ ...base, NODE_ENV: 'production' }).STARTER_PLAN).toBe(false);

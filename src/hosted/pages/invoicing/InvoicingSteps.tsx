@@ -4,8 +4,10 @@ import { useQuery } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
 import { Input, Select, Textarea } from '../../../components/ui/Input';
 import { SegmentedControl } from '../../../components/ui/SegmentedControl';
-import { useT } from '../../../lib/i18n/core';
-import { ApiError, api, apiErrorReason, type IssuerDetails, type IssuingSettings } from '../../api/client';
+import { useLanguage, useT } from '../../../lib/i18n/core';
+import { ApiError, api, apiErrorReason, type IssuerDetails, type IssuingSettings, type IssuingSetup } from '../../api/client';
+import { countryName, countryOptions } from '../../data/countries';
+import { AlertIcon } from '../../components/Icons';
 import { profileKey } from '../../session/me';
 import { completeNumber, useBusinessLookup } from '../../data/customerQueries';
 import { useIssuingStyles } from '../../data/issuedQueries';
@@ -42,19 +44,20 @@ function SaveError({ error }: { error: unknown }) {
   if (!error) return null;
   // MUT-710 (D10): the business details sent to the Tax Authority need two-step sign-in first.
   if (isTwoFactorRefusal(error)) return <TwoFactorIssuingPrompt error={error} />;
-  const changed = error instanceof ApiError && apiErrorReason(error) === 'VERSION_MISMATCH';
+  const reason = error instanceof ApiError ? apiErrorReason(error) : null;
+  const key = reason === 'VERSION_MISMATCH' ? 'hosted.invoicing.changedElsewhere' : reason === 'VAT_ID_INVALID' ? 'hosted.invoicing.details.invalid' : reason === 'COUNTRY_LOCKED' ? 'hosted.invoicing.details.countryLocked' : 'hosted.invoicing.saveFailed';
   return (
     <p className="input-error-message" role="alert">
-      {t(changed ? 'hosted.invoicing.changedElsewhere' : 'hosted.invoicing.saveFailed')}
+      {t(key)}
     </p>
   );
 }
 
-function StepActions({ pending, onLater }: { pending: boolean; onLater?: () => void }) {
+function StepActions({ pending, blocked = false, onLater }: { pending: boolean; blocked?: boolean; onLater?: () => void }) {
   const t = useT();
   return (
     <div className="hp-setup-actions">
-      <Button type="submit" variant="primary" disabled={pending}>
+      <Button type="submit" variant="primary" disabled={pending || blocked}>
         {pending ? t('common.saving') : t('hosted.invoicing.next')}
       </Button>
       {onLater && (
@@ -67,9 +70,13 @@ function StepActions({ pending, onLater }: { pending: boolean; onLater?: () => v
 }
 
 /** Step 1: the details every document prints. A company or nonprofit number fills the name and address from the registry. */
-export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps & { issuer: IssuerDetails | null }) {
+export function DetailsStep({ profileId, issuer, setup, onPreview, onDone }: StepProps & { issuer: IssuerDetails | null; setup: Pick<IssuingSetup, 'liveJurisdictions' | 'countryLocked'> }) {
   const t = useT();
+  const { language } = useLanguage();
   const save = useSaveIssuer(profileId);
+  // MUT-740 (ADR-287): the country picks the rules; no default (billing's DR11), only a live one saves, and the first document locks it.
+  const [country, setCountry] = useState(issuer?.country ?? '');
+  const countryLive = country !== '' && setup.liveJurisdictions.includes(country);
   const [form, setForm] = useState({
     vatId: issuer?.vatId ?? '',
     legalName: issuer?.legalName ?? '',
@@ -113,14 +120,16 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
   };
   const invalid = lookup.error instanceof ApiError && apiErrorReason(lookup.error) === 'TAX_ID_INVALID';
   const numberError = (tried && !number) || invalid ? t('hosted.invoicing.details.invalid') : undefined;
+  const countryError = tried && !country ? t('hosted.invoicing.details.countryRequired') : undefined;
   const nameError = tried && !form.legalName.trim() ? t('hosted.invoicing.details.legalNameRequired') : undefined;
   const emailError = tried && form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) ? t('hosted.invoicing.details.emailInvalid') : undefined;
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     setTried(true);
-    if (!number || invalid || !form.legalName.trim() || emailError || (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))) return;
+    if (!countryLive || !number || invalid || !form.legalName.trim() || emailError || (form.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()))) return;
     const body = {
+      country,
       vatId: number,
       legalName: form.legalName.trim(),
       dealerType: form.dealerType,
@@ -134,6 +143,28 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
 
   return (
     <form className="hp-setup-form" onSubmit={submit} noValidate>
+      <Select
+        id="issuer-country"
+        label={t('hosted.invoicing.details.country')}
+        value={country}
+        disabled={setup.countryLocked}
+        error={countryError}
+        hint={setup.countryLocked ? t('hosted.invoicing.details.countryLocked') : undefined}
+        onChange={(event) => setCountry(event.target.value)}
+      >
+        <option value="">{t('hosted.invoicing.details.countryPlaceholder')}</option>
+        {countryOptions(language).map((o) => (
+          <option key={o.code} value={o.code}>
+            {o.name}
+          </option>
+        ))}
+      </Select>
+      {country !== '' && !countryLive && (
+        <div className="hp-banner hp-banner-warning" role="status" data-testid="country-not-live">
+          <AlertIcon />
+          <span>{t('hosted.invoicing.details.countryNotLive', { country: countryName(country, language) })}</span>
+        </div>
+      )}
       <Input
         id="issuer-vat-id"
         label={t('hosted.invoicing.details.vatId')}
@@ -166,7 +197,7 @@ export function DetailsStep({ profileId, issuer, onPreview, onDone }: StepProps 
         <Input id="issuer-email" label={t('hosted.invoicing.details.email')} value={form.email} dir="ltr" type="email" maxLength={200} onChange={set('email')} error={emailError} />
       </div>
       <SaveError error={save.error} />
-      <StepActions pending={save.isPending} />
+      <StepActions pending={save.isPending} blocked={country !== '' && !countryLive} />
     </form>
   );
 }

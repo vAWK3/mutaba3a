@@ -15,7 +15,7 @@ import { provisionUser } from './helpers/provision.js';
  * ever refused here (caps are MUT-731's).
  */
 
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 
 async function invoicing(h: AccountantHarness, owner?: Person) {
   const who = owner ?? (await person(h));
