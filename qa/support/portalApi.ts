@@ -1063,6 +1063,8 @@ export class FakeApi {
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
       ...(this.starter ? { plan: this.starterPlan() } : {}),
+      // MUT-731: the server publishes Starter's one business plus the personal profile as the owned-profile cap (me.ts).
+      ...(this.starter && !this.starter.cancelled ? { limits: { ...body.limits, maxOwnedProfiles: Math.min(body.limits.maxOwnedProfiles, 2) } } : {}),
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
         const withState = state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
