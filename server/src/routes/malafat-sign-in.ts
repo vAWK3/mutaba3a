@@ -152,7 +152,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
     const sessionKind = kind === 'app' ? 'device' : 'cookie';
     const { user: person, token } = await beginOrIssue(c, signInDeps, user, { sessionKind, method: 'malafat' }, sessionLifetime(sessionKind, settings));
     if (kind === 'web') setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
+    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince'));
     return { state: 'signed_in' as const, me, ...(kind === 'app' ? { token } : {}) };
   }
 
@@ -393,7 +393,8 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
           personal: personalProfileFor(locale, { defaultCurrency: body.defaultCurrency!, timezone: body.timezone! }),
           at: now,
         });
-        await store.billing.setTrialStart(created.user.id, now);
+        // MUT-731 (ADR-284): with Starter on, a new Malafat sign-in account starts on Starter, with no trial.
+        if (!store.billing.starterPlan) await store.billing.setTrialStart(created.user.id, now);
         user = created.user;
       } else {
         user = flow.userId ? await store.users.getById(flow.userId) : null;

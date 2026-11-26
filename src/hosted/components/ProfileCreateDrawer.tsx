@@ -15,6 +15,9 @@ import { browserTimezone } from '../format/timezones';
 import { ME_KEY, useMe } from '../session/me';
 import { Drawer } from './Drawer';
 import { ProfileBanner } from './ProfileBanner';
+import { PlanLimitNotice } from './PlanLimitNotice';
+import type { PlanLimit } from '../data/planUsage';
+import { useStarterUsage } from '../data/useStarterUsage';
 import { ProfileTypeCards } from './ProfileTypeCards';
 import { mapProfileError, type ProfileBanner as Banner } from './profileApiErrors';
 import { createProfileSchema, type CreateProfileFormValues } from './profileFormSchema';
@@ -46,6 +49,9 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
   const attempt = useProfileCreateAttempt();
   const [banner, setBanner] = useState<Banner | null>(null);
   const [capReached, setCapReached] = useState(false);
+  // MUT-731 (ADR-284): on Starter the cap is its one business (/v1/me publishes personal + 1); the plan's notice says so.
+  const [serverLimit, setServerLimit] = useState<PlanLimit | null>(null);
+  const starter = useStarterUsage();
   const [zoneOpen, setZoneOpen] = useState(false);
   const zoneRef = useRef<HTMLSelectElement | null>(null);
   // Synchronous: two quick clicks both pass validation before the mutation reports pending (CR9).
@@ -54,6 +60,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
   const zone = useMemo(browserTimezone, []);
   const atCap = capReached || !canCreateProfile(me);
   const capBanner: Banner = { tone: 'info', key: 'hosted.profiles.errors.limit', count: me.limits.maxOwnedProfiles };
+  const planLimit: PlanLimit | null = serverLimit ?? (me.plan?.current === 'starter' ? { limit: 'businesses', cap: 1, nextPlan: 'solo', canUpgrade: starter.canUpgrade } : null);
 
   const form = useForm<CreateProfileFormValues>({
     resolver: zodResolver(createProfileSchema) as never,
@@ -93,6 +100,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
       const mapped = mapProfileError(error);
       if (mapped.refetchMe) void queryClient.invalidateQueries({ queryKey: ME_KEY });
       if (mapped.capReached) setCapReached(true);
+      if (mapped.planLimit) setServerLimit(mapped.planLimit);
       if (mapped.field) {
         if (mapped.field.field === 'timezone') setZoneOpen(true);
         setError(mapped.field.field, { type: 'server', message: mapped.field.key });
@@ -129,7 +137,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
       }
     >
       <form id={FORM_ID} onSubmit={handleSubmit(onSubmit)} noValidate>
-        {atCap && <ProfileBanner banner={capBanner} />}
+        {atCap && planLimit ? <PlanLimitNotice limit={planLimit} /> : atCap && <ProfileBanner banner={capBanner} />}
         {banner && <ProfileBanner banner={banner} />}
 
         <div className="form-group">
@@ -161,14 +169,10 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
                 value={field.value}
                 onChange={field.onChange}
                 labelledBy={`${FORM_ID}-type-label`}
-                describedBy={`${FORM_ID}-type-hint`}
                 invalid={Boolean(formState.errors.type)}
               />
             )}
           />
-          <p className="form-hint" id={`${FORM_ID}-type-hint`}>
-            {t('hosted.profiles.typeHint')}
-          </p>
           {fieldError('type')}
         </div>
 
@@ -176,7 +180,7 @@ export function ProfileCreateDrawer({ active, onClose }: ProfileCreateDrawerProp
           <label className="form-label" htmlFor={`${FORM_ID}-currency`}>
             {t('hosted.profiles.currency')}
           </label>
-          <Select id={`${FORM_ID}-currency`} hint={t('hosted.profiles.currencyHintNew')} {...register('defaultCurrency')}>
+          <Select id={`${FORM_ID}-currency`} {...register('defaultCurrency')}>
             {HOSTED_CURRENCIES.map((code) => (
               <option key={code} value={code}>
                 {code}

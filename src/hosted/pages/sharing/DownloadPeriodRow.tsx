@@ -110,7 +110,6 @@ function DownloadPeriodBody({ profile }: { profile: HostedProfile }) {
   return (
     <section className="hp-sharing-download" aria-labelledby={`${ids}-title`}>
       <h2 id={`${ids}-title`}>{t('hosted.sharing.download.title')}</h2>
-      <p className="hp-sharing-note">{t('hosted.sharing.download.note')}</p>
       <div className="hp-sharing-download-range">
         <div className="form-group">
           <label className="form-label" htmlFor={`${ids}-from`}>

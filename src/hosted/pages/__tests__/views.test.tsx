@@ -174,7 +174,7 @@ describe('Client detail', () => {
     expect(await screen.findAllByTestId('ledger-line')).toHaveLength(1);
     expect(api.calls.some((c) => c.url.pathname === `/v1/customers/${C1}/statement` && c.url.searchParams.get('order') === 'desc')).toBe(true);
     await user.click(screen.getByRole('tab', { name: 'Details' }));
-    expect(screen.getByRole('note')).toHaveTextContent('Malafat records income and payments for this profile.');
+    expect(screen.getByRole('note')).toHaveTextContent('To change income here, use Malafat.');
   });
 
   it('says the client is not on this profile on a 404', async () => {
@@ -202,7 +202,7 @@ describe('Receivables', () => {
   it('explains the read-only reason and offers no edit affordance', async () => {
     portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(RECEIVABLES)) });
     await screen.findByRole('table', { name: 'Receivables' });
-    expect(screen.getByRole('note')).toHaveTextContent('Malafat records income and payments for this profile. To change them, use Malafat.');
+    expect(screen.getByRole('note')).toHaveTextContent('To change income here, use Malafat.');
     // queryAll: since MUT-425 the shell's way to the You page is a link, so this page may have no button at all
     const actionable = screen.queryAllByRole('button').map((b) => b.textContent ?? '');
     expect(actionable.filter((label) => /\b(record|edit|add|new|mark|delete|pay)\b|payment/i.test(label))).toEqual([]);
@@ -210,7 +210,7 @@ describe('Receivables', () => {
 
   it('gives the expenses-only reason on a profile Malafat does not feed', async () => {
     portal(`/p/${ORG_A}/receivables`, {}, [profile({ writerOfRecord: null })]);
-    expect(await screen.findByRole('note')).toHaveTextContent("Income isn't recorded on hosted profiles yet. This profile is for expenses.");
+    expect(await screen.findByRole('note')).toHaveTextContent('This profile is for expenses.');
   });
 
   it('keeps the phone-app sentence, reworded, for a personal profile whose rules offer no income writes (MUT-93 fallback)', async () => {
@@ -316,7 +316,6 @@ describe('Profile switcher (You › Profiles)', () => {
     expect(first).toHaveAttribute('aria-current', 'true');
     expect(first).toHaveTextContent('Haddad & PartnersHostedIncome recorded by Malafat');
     expect(second).toHaveTextContent('Nour — personalHostedExpenses only');
-    expect(screen.getByRole('main')).toHaveTextContent('Your local profiles stay in the MTB3A app on your device.');
   });
 
   it('lands on the new profile home (MUT-657), sends its header, and never shows the old figures', async () => {
@@ -532,7 +531,7 @@ describe('Income writes stay off everywhere else (MUT-133 regression contract)',
 
   it('keeps the Malafat notice byte for byte', async () => {
     portal(`/p/${ORG_A}/receivables`, { 'GET /v1/receivables': () => ok(page(OPEN_OWED)) }, [profile()]);
-    expect(await screen.findByRole('note')).toHaveTextContent('Malafat records income and payments for this profile. To change them, use Malafat.');
+    expect(await screen.findByRole('note')).toHaveTextContent('To change income here, use Malafat.');
   });
 });
 

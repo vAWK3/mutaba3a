@@ -355,10 +355,7 @@ function GroupBody({ group, summary: served, members: servedMembers, today, sear
             )}
             {perDayValue && currency && (
               <p className="hp-perday">
-                {t('hosted.groups.detail.perDay')} <DecimalAmount value={perDayValue} currency={currency} />{' '}
-                <span className="hp-hint-icon" role="img" aria-label={t('hosted.groups.detail.perDayHint')} title={t('hosted.groups.detail.perDayHint')}>
-                  ⓘ
-                </span>
+                {t('hosted.groups.detail.perDay')} <DecimalAmount value={perDayValue} currency={currency} />
               </p>
             )}
           </div>

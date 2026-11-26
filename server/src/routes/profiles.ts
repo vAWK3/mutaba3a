@@ -1,3 +1,7 @@
+import { ENFORCED_BUSINESS_CAPS } from '../billing/plans.js';
+import { nextPlanFor, planLimitError } from '../billing/plan-limit.js';
+import { stockLimitOf } from '../usage/caps.js';
+import { personPlanOf } from '../usage/plan-of.js';
 import { randomUUID } from 'node:crypto';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
@@ -93,7 +97,7 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       path: '/v1/profiles',
       tags: ['Profiles'],
       summary: 'Create a standalone profile you own',
-      description: `Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to ${MAX_OWNED_PROFILES} owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories.`,
+      description: `Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to ${MAX_OWNED_PROFILES} owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories. MUT-731: on Starter, one business beside the personal profile (409 PLAN_LIMIT, details.limit businesses), unless \`carriedOver\`.`,
       security: SESSION_ONLY,
       middleware: [identityIdempotent(store, 'profiles.create')] as const,
       request: { headers: IdempotencyHeaderSchema, body: jsonBody(CreateProfileRequestSchema) },
@@ -102,6 +106,15 @@ export function profileRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
     async (c) => {
       const { user } = c.get('identity');
       const body = c.req.valid('json');
+      const now = c.get('now')();
+      // MUT-731 (ADR-284): Starter includes one business beside the personal profile; a carried-over business is never
+      // refused for it (Basel Q9: the extras arrive read-only and the person picks).
+      const plan = body.carriedOver ? null : await personPlanOf(store, user.id, now);
+      const planCap = plan ? stockLimitOf(plan, 'businesses') : null;
+      if (plan && planCap !== null && ENFORCED_BUSINESS_CAPS.has(plan)) {
+        const businesses = (await store.organizations.countOwnedBy(user.id)) - 1;
+        if (businesses >= planCap) throw planLimitError({ limit: 'businesses', plan, nextPlan: nextPlanFor(plan), canUpgrade: c.get('planCheckout'), used: businesses, cap: planCap });
+      }
       const cap = ownedProfileCap(c);
       const result = await store.organizations.createOwned(
         user.id,

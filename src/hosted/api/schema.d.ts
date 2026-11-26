@@ -17659,7 +17659,7 @@ export interface paths {
         put?: never;
         /**
          * Create a standalone profile you own
-         * @description Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories.
+         * @description Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories. MUT-731: on Starter, one business beside the personal profile (409 PLAN_LIMIT, details.limit businesses), unless `carriedOver`.
          */
         post: {
             parameters: {
@@ -19705,6 +19705,181 @@ export interface paths {
                 };
                 /** @description BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET */
                 503: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/starter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Continue free on Starter
+         * @description MUT-731 (ADR-284, Basel 13540 Q3): after a paid plan was cancelled (read-only), the person moves to the free Starter plan: their own profiles are ACTIVE on Starter at once. Idempotent: a choice already made since the latest plan began is kept (`changed: false`). 409 CONFLICT `details.reason` NOTHING_TO_LEAVE while a plan covers them (change plans instead, MUT-734). Audited `billing.starter_chosen` on each profile the person created. 404 with STARTER_PLAN off. Additive since 1.145.0-mut731.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description On Starter */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["StarterChoice"];
+                    };
+                };
+                /** @description NOT_FOUND: Starter is off on this server */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason NOTHING_TO_LEAVE: a plan covers the person now */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/active-businesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose which business stays active on Starter
+         * @description MUT-731 (ADR-284, Basel Q5): someone on Starter with more businesses than it includes picks the one that stays active; the others are read-only (visible, exportable, never deleted) until they switch or upgrade. Exactly the plan’s count of businesses, each one the person created and still on Starter (422 VALIDATION_FAILED `details.reason` WRONG_COUNT; 404 NOT_FOUND for another’s). 409 CONFLICT `details.reason` NOTHING_TO_CHOOSE when the person isn’t over the count. Audited `billing.active_businesses_chosen`. 404 with STARTER_PLAN off. Additive since 1.145.0-mut731.
+         */
+        put: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["ActiveBusinessesRequest"];
+                };
+            };
+            responses: {
+                /** @description The businesses now */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ActiveBusinesses"];
+                    };
+                };
+                /** @description NOT_FOUND: Starter is off, or a business that isn’t one the person created */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description CONFLICT, details.reason NOTHING_TO_CHOOSE */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+                /** @description VALIDATION_FAILED, details.reason WRONG_COUNT */
+                422: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
+            };
+        };
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v1/billing/solo-trial/offered": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * The one-time Solo trial step was shown
+         * @description MUT-731 (ADR-284, Basel Q7 and 13554 #2): the portal calls this when web onboarding shows the 14-day Solo trial. It is offered once: from here `GET /v1/me` `plan.soloTrialOffer` is false, whatever the person chose. Idempotent (the first date is kept). 404 with STARTER_PLAN off. Additive since 1.145.0-mut731.
+         */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Recorded */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SoloTrialOffer"];
+                    };
+                };
+                /** @description NOT_FOUND: Starter is off on this server */
+                404: {
                     headers: {
                         [name: string]: unknown;
                     };
@@ -28681,6 +28856,17 @@ export interface components {
             billingStanding: "open" | "read-only" | "locked" | null;
             clients?: components["schemas"]["AccountantClient"][];
             clientBooks?: components["schemas"]["ClientBooksSummary"];
+            plan?: {
+                /** @enum {string|null} */
+                current: "starter" | "solo" | "business" | "firm" | "freelancer" | null;
+                businesses: {
+                    cap: number;
+                    active: string[];
+                    readOnly: string[];
+                    mustChoose: boolean;
+                } | null;
+                soloTrialOffer: boolean;
+            };
         };
         /** @enum {string} */
         UserLocale: "en" | "ar";
@@ -28756,12 +28942,13 @@ export interface components {
                 /** @enum {string} */
                 state: "ACTIVE" | "GRACE" | "READ_ONLY" | "LOCKED";
                 /** @enum {string} */
-                source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
+                source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "STARTER" | "NONE";
                 /** @enum {string|null} */
-                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
+                tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | "STARTER" | null;
                 /** Format: date-time */
                 until: string | null;
                 paused?: boolean;
+                planLimit?: boolean;
             } | null;
         };
         /** @enum {string} */
@@ -32834,6 +33021,19 @@ export interface components {
                 document: components["schemas"]["IssuedDocument"] & unknown;
             }[];
             issued: number;
+            limit?: components["schemas"]["PlanLimitDetails"];
+        };
+        PlanLimitDetails: {
+            /** @enum {string} */
+            limit: "documents" | "scans" | "businesses" | "partners" | "taxAuthority";
+            plan: string;
+            /** @enum {string|null} */
+            nextPlan: "solo" | "business" | "firm" | null;
+            canUpgrade: boolean;
+            used?: number;
+            cap?: number;
+            /** @description YYYY-MM-DD, the 1st of the next Asia/Jerusalem month */
+            resetsOn?: string;
         };
         IssueDueRequest: {
             /** Format: uuid */
@@ -32917,6 +33117,7 @@ export interface components {
             type: components["schemas"]["ProfileType"];
             defaultCurrency: components["schemas"]["Currency"];
             timezone: string;
+            carriedOver?: boolean;
         };
         /** @enum {string} */
         ProfileType: "PERSONAL" | "BUSINESS";
@@ -33066,8 +33267,19 @@ export interface components {
             comeback: components["schemas"]["BillingComeback"] | unknown;
             accountantPlan: components["schemas"]["BillingAccountantPlan"] | unknown;
             /** @enum {string|null} */
-            currentPlan: "solo" | "business" | "firm" | "freelancer" | null;
+            currentPlan: "starter" | "solo" | "business" | "firm" | "freelancer" | null;
             usage: components["schemas"]["BillingUsage"];
+            starter?: {
+                /** Format: date-time */
+                chosenAt: string | null;
+                canContinueFree: boolean;
+            } | unknown;
+            activeBusinesses?: {
+                cap: number;
+                active: string[];
+                readOnly: string[];
+                mustChoose: boolean;
+            } | unknown;
         };
         BillingOffer: {
             id: string;
@@ -33286,6 +33498,25 @@ export interface components {
         StayOfferRequest: {
             /** @enum {string} */
             reason: "too_expensive" | "unused" | "missing_features" | "switched_service" | "too_complex" | "low_quality" | "customer_service" | "other";
+        };
+        StarterChoice: {
+            /** Format: date-time */
+            starterChosenAt: string;
+            /** @description False when Starter was already chosen since the latest plan began. */
+            changed: boolean;
+        };
+        ActiveBusinesses: {
+            cap: number;
+            active: string[];
+            readOnly: string[];
+            mustChoose: boolean;
+        };
+        ActiveBusinessesRequest: {
+            organizationIds: string[];
+        };
+        SoloTrialOffer: {
+            /** Format: date-time */
+            offeredAt: string;
         };
         ReceiptReadJobResult: {
             /**
@@ -33812,12 +34043,13 @@ export interface components {
             /** @enum {string} */
             state: "ACTIVE" | "GRACE" | "READ_ONLY" | "LOCKED";
             /** @enum {string} */
-            source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "NONE";
+            source: "MALAFAT" | "OPERATOR" | "STRIPE" | "TRIAL" | "STARTER" | "NONE";
             /** @enum {string|null} */
-            tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | null;
+            tier: "FREELANCER" | "SOLO" | "BUSINESS" | "FIRM" | "STARTER" | null;
             /** Format: date-time */
             until: string | null;
             paused: boolean;
+            planLimit?: boolean;
         };
         OperatorAccountStatusResponse: components["schemas"]["UserStatusResponse"] & {
             sessionsRevoked: number;

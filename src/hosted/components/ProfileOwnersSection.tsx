@@ -139,7 +139,6 @@ export function ProfileOwnersSection({ profileId, onLeft, onBusyChange, onLeaveC
       <h3 id={`${ids}-heading`} ref={headingRef} tabIndex={-1} className="form-label">
         {t('hosted.profiles.owners.title')}
       </h3>
-      <p className="form-hint">{owners.length > 1 ? t('hosted.profiles.owners.caption') : t('hosted.profiles.owners.solo')}</p>
       {banner && <ProfileBanner banner={banner} />}
       <ul className="hp-profile-list hp-owner-list" aria-labelledby={`${ids}-heading`}>
         {owners.map((owner) => {

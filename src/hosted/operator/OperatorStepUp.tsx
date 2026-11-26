@@ -98,12 +98,12 @@ export function StepUpFailureBanner({ failure, error }: { failure: RunFailure; e
       <span>
         {failure === 'refused' && (
           <>
-            {t('hosted.operator.stepUp.refused')} {t('hosted.operator.stepUp.otherDevice')}
+            {t('hosted.operator.stepUp.refused')}
           </>
         )}
         {failure === 'browser' && (
           <>
-            {t('hosted.operator.stepUp.browser', { error: error ?? 'Error' })} {t('hosted.operator.stepUp.otherDevice')}
+            {t('hosted.operator.stepUp.browser', { error: error ?? 'Error' })}
           </>
         )}
         {failure === 'noPasskey' && (

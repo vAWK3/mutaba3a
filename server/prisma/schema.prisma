@@ -337,6 +337,14 @@ model User {
   overCapGiftUsedAt  DateTime?
   overCapGiftMeter   String?    @db.VarChar(16)
   overCapGiftMonth   String?    @db.Char(7)
+  /// MUT-731 (ADR-284): when the person chose "Continue free on Starter" after a cancel; NULL = never.
+  starterChosenAt    DateTime?
+  /// MUT-731 (ADR-284, Basel Q5): the business profiles kept active while the person owns more than their plan allows.
+  /// Empty = not chosen yet (every business past the cap is read-only until they pick).
+  activeBusinessIds  String[]   @db.Uuid
+  /// MUT-731 (ADR-284, Basel Q7): the one-time 14-day Solo trial: when web onboarding showed it, and when one started.
+  paidTrialOfferedAt DateTime?
+  paidTrialUsedAt    DateTime?
   createdAt          DateTime
   updatedAt          DateTime
 
@@ -1763,6 +1771,11 @@ model BillingSubscription {
   pauseResumesAt       DateTime?
   /// MUT-534: when Stripe ended it (`ended_at`); null while it runs. A lapse is timed from here, not the period end.
   endedAt              DateTime?
+  /// MUT-731 (ADR-284): Stripe's `cancellation_details.reason` (cancellation_requested, payment_failed,
+  /// payment_disputed); null while it runs, and on rows the reconcile hasn't refreshed (read as a deliberate cancel).
+  endedReason          String?        @db.VarChar(32)
+  /// MUT-731: Stripe's `trial_end`, so a trial cancelled before paying is told apart from a paid plan cancelled.
+  trialEnd             DateTime?
   /// Stripe's own last-change time, so an older event never overwrites a newer state (MUT-360).
   stripeUpdatedAt      DateTime
   createdAt            DateTime       @default(now())

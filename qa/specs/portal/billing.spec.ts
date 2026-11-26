@@ -79,14 +79,14 @@ test('A profile whose trial ended is read-only, with Subscribe, the lock date an
   const banner = page.getByRole('region', { name: 'Your plan' });
   await step('Open Expenses on day 20 of a trial that never got a card', async () => {
     await expect(banner.getByText('This profile is read-only')).toBeVisible();
-    await expect(banner.getByText(/Your free trial has ended\..*the profile locks until you subscribe\./)).toBeVisible();
+    await expect(banner.getByText(/Your free trial has ended\..*the profile locks\./)).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Download my records' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Record expense' })).toHaveCount(0);
   });
   await step('Open an expense', async () => {
     await page.getByRole('table', { name: 'Expenses' }).getByText('Office supplies').click();
     const drawer = page.getByRole('dialog');
-    await expect(drawer.getByText('This profile is read-only, so nothing here can be changed.')).toBeVisible();
+    await expect(drawer.getByText('This profile is read-only.')).toBeVisible();
     await expect(drawer.getByRole('button', { name: 'Save' })).toHaveCount(0);
     await expect(drawer.getByRole('button', { name: 'Delete' })).toHaveCount(0);
     await expect(drawer.getByRole('button', { name: 'Add receipt' })).toHaveCount(0);
@@ -172,7 +172,7 @@ test('A cancelled subscription leaves the profile read-only for good, and says i
 
   await step('Open Receivables after the subscription ended', async () => {
     const banner = page.getByRole('region', { name: 'Your plan' });
-    await expect(banner.getByText(/Your subscription has ended\..*Nothing is deleted\./)).toBeVisible();
+    await expect(banner.getByText(/^Your subscription has ended\. Subscribe again to keep going\.$/)).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Subscribe' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add income' })).toHaveCount(0);
   });
@@ -249,7 +249,7 @@ test('A paused plan’s profile says it is paused until it restarts, with Resume
 
   await step('Open Expenses while the plan is paused', async () => {
     await expect(banner.getByText('Paused', { exact: true })).toBeVisible();
-    await expect(banner.getByText(/^Your plan is paused until .+\. You can see and download everything; adding and changing come back when it restarts\.$/)).toBeVisible();
+    await expect(banner.getByText(/^Your plan is paused until .+\.$/)).toBeVisible();
     await expect(banner.getByText(/has ended/)).toHaveCount(0);
     await expect(banner.getByRole('button', { name: 'Subscribe' })).toHaveCount(0);
     await expect(banner.getByRole('button', { name: 'Download my records' })).toBeVisible();

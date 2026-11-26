@@ -48,8 +48,7 @@ test('Create an account from the invite: the address is fixed, then sign-in and 
     await openInvite(page, api);
     await page.getByRole('button', { name: 'Create an account' }).click();
     await expect(page.getByLabel('Email')).toHaveValue('s***@khoury-cpa.com');
-    await expect(page.getByText("The invite's address; it can't be changed.")).toBeVisible();
-    await expect(page.getByText(/Reading up to 3 client books is always free/)).toBeVisible();
+    await expect(page.getByText(/Reading up to 3 client books is free/)).toBeVisible();
   });
 
   await step('Fill in a name and password, agree and submit', async () => {
@@ -92,7 +91,6 @@ test('An invite refuses another address, an existing account, one already read, 
     await page.getByRole('button', { name: 'Accept' }).click();
     await expect(page.getByRole('heading', { name: 'This invite was sent to another address' })).toBeVisible();
     await expect(page.getByText(/h\*\*\*@firm.com/)).toBeVisible();
-    await expect(page.getByText(/same company domain works too/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign out and use another account' })).toBeVisible();
   });
 
@@ -130,7 +128,7 @@ test('With the free client books used, the Accountant plan takes Accept’s plac
     await expect(page.getByText('Reading up to 3 client books is free. To read Studio as well, subscribe to the Accountant plan.')).toBeVisible();
     await expect(page.getByText(/₪99\.00 \/ \$29\.00 a month/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Accept' })).toHaveCount(0);
-    await expect(page.getByRole('link', { name: /Not now \(the invite stays open until/ })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Not now' })).toBeVisible();
   });
 
   await step('Pick a country and Subscribe', async () => {

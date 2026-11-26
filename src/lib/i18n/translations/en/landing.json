@@ -24,9 +24,7 @@
       "ctaSignIn": "Sign in",
       "ctaIos": "iPhone, on the App Store",
       "ctaAndroid": "Android, on Google Play",
-      "altNote": "Accounts are set up for your organization — there's no public sign-up.",
-      "altNoteStarter": "Free on Starter — sign up with your email address, no card needed.",
-      "altNoteOpen": "Sign up with your email address, or ask us to set an account up for your organization."
+      "altNoteStarter": "Free on Starter — sign up with your email address, no card needed."
     },
     "chapters": {
       "clients": {
@@ -39,7 +37,7 @@
       },
       "businesses": {
         "title": "Every business you run.",
-        "body": "Give each business its own profile, with its own clients and numbers, and switch between them in one click. Dollars, shekels and euros stay apart — never quietly added together."
+        "body": "Give each business its own profile, with its own clients and numbers, and switch between them in one click."
       }
     },
     "sample": {
@@ -56,7 +54,7 @@
     },
     "privacy": {
       "title": "Your records, on every device you sign in on.",
-      "body": "An MTB3A account keeps everything behind your sign-in — the same numbers on your phone and in the portal, backed up every day and restorable to any point in the last week."
+      "body": "The same numbers on your phone and in the portal, backed up every day."
     },
     "getIt": {
       "title": "Get MTB3A",
@@ -69,9 +67,7 @@
       "appsLabel": "Already set up? Get the app",
       "appsIos": "iPhone, on the App Store",
       "appsAndroid": "Android, on Google Play",
-      "note": "Accounts are set up for your organization — there's no public sign-up.",
-      "noteStarter": "Start free on Starter with your email address — no card. Move to Solo, Business or Firm when you need more. Want help setting up your organization? Ask us below.",
-      "noteOpen": "Sign up with your email address. Want help setting up your organization? Ask us below."
+      "noteStarter": "Start free on Starter with your email address — no card."
     },
     "phone": {
       "title": "Log it on your phone. See it all in your hosted account.",
@@ -94,14 +90,14 @@
     },
     "malafat": {
       "title": "Run a law firm or accounting office on Malafat? MTB3A connects to it.",
-      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. Link your firm's Malafat to your account, and a payment you log in the MTB3A phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
+      "body": "Link your firm's Malafat to your account, and payments you log in the MTB3A app show up there under the right client.",
       "link": "See Malafat"
     },
     "faq": {
       "headline": "Questions",
       "free": {
         "q": "Is there a free plan?",
-        "a": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
+        "a": "No. Request an account and we'll reply with an offer.",
         "aOpen": "No. You can create an account with your email address, or request one and we'll reply with an offer for your organization.",
         "aStarter": "Yes. Starter is free, with no card: one business besides your personal profile, and 3 issued invoices and 12 receipt scans each month. Solo, Business and Firm give you more room, and connect to the Tax Authority for your allocation numbers."
       },
@@ -128,11 +124,11 @@
       },
       "currencies": {
         "q": "Which currencies does it support?",
-        "a": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back."
+        "a": "{currencies}."
       },
       "data": {
         "q": "Where is my data stored?",
-        "a": "With an account, on MTB3A's servers in the EU (Belgium), behind your sign-in — not only on one device. We back up every day and can restore your records to any moment in the last 7 days. If you try it without an account, your records stay in that browser only."
+        "a": "On MTB3A's servers, behind your sign-in, backed up every day."
       },
       "backup": {
         "q": "How do I back up, or move to another device?",

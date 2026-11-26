@@ -47,7 +47,7 @@ features:
       - Tap the ≈ figure
     expect:
       - Received reads ≈ in ILS at today's rate
-      - The breakdown lists the exact amount per currency, the rate line and "ECB · date · today's rate"; Esc closes it
+      - The breakdown lists the exact amount per currency, the rate line and "Today's rate · date"; Esc closes it
   - id: period-step
     title: Week, Month and Year, and ‹ › step through time without changing what Lately says
     tier: secondary

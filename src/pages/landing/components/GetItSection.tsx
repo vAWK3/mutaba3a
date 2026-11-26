@@ -55,7 +55,7 @@ export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?
       )}
     </div>
   );
-  const note = <p className="landing-get-it-note">{t(starter ? 'landing.getIt.noteStarter' : open ? 'landing.getIt.noteOpen' : 'landing.getIt.note')}</p>;
+  const note = starter ? <p className="landing-get-it-note">{t('landing.getIt.noteStarter')}</p> : null;
 
   return (
     <section id="get-it" data-part="get-it" aria-labelledby="get-it-title" className="landing-section landing-get-it">
@@ -67,7 +67,6 @@ export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?
 
         <div className="landing-get-it-body">
           {open && options}
-          {open && note}
 
           <div className="landing-get-it-request" data-part="get-it-request">
             <h3 id="get-it-request-title" className="landing-get-it-request-title">
@@ -78,7 +77,6 @@ export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?
           </div>
 
           {!open && options}
-          {!open && note}
         </div>
       </div>
     </section>

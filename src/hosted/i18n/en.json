@@ -29,7 +29,7 @@
       "emailRequired": "Enter your email.",
       "emailInvalid": "Enter an email address, like name@firm.ps.",
       "passwordRequired": "Enter your password.",
-      "invalid": "That email and password don't match. After 5 tries, sign-in pauses for 15 minutes.",
+      "invalid": "That email and password don't match.",
       "rateLimited": {
         "one": "Too many attempts from this network. Try again in {count} minute.",
         "other": "Too many attempts from this network. Try again in {count} minutes."
@@ -46,7 +46,6 @@
       "connectingSlow": "Still connecting…",
       "boot": {
         "title": "Can't reach MTB3A right now",
-        "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
         "retry": "Try again"
       },
       "noProfiles": {
@@ -55,13 +54,12 @@
       },
       "unavailable": {
         "title": "This profile isn't available",
-        "body": "It may have been removed from your account.",
         "goTo": "Go to {name}"
       },
       "signOut": "Sign out",
       "signOutFailed": "Couldn't sign out. Check your connection and try again.",
       "changePassword": "Change password",
-      "lostAccess": "You no longer have access to {profile}. What you recorded stays.",
+      "lostAccess": "You no longer have access to {profile}.",
       "forgot": "Forgot your password?",
       "create": {
         "lead": "No account?",
@@ -86,23 +84,22 @@
       "passkeys": {
         "title": "Passkeys",
         "rowSub": "Sign in with Face ID, Touch ID or your screen lock",
-        "intro": "Sign in with Face ID, Touch ID or your device’s screen lock. Your password still works.",
+        "intro": "Sign in with Face ID, Touch ID or your screen lock.",
         "add": "Add a passkey",
         "continue": "Continue",
         "stepUp": "For your security, enter your password to add a passkey.",
         "added": "Passkey added",
         "addFailed": "Couldn’t add the passkey. Try again.",
-        "operatorConfirm": "As an operator, confirm it’s you with one of your passkeys first. No passkey on this device? Choose the QR code option and use your phone.",
+        "operatorConfirm": "Confirm it’s you with one of your passkeys first. No passkey on this device? Choose the QR code option and use your phone.",
         "operatorConfirmed": "Confirmed. Now add your new passkey.",
         "limit": "You can have up to {limit} passkeys. Remove one to add another.",
         "emptyTitle": "No passkeys yet",
-        "emptyBody": "A passkey lets you sign in with Face ID, Touch ID or your device’s screen lock instead of typing your password.",
         "rename": "Rename",
         "renameLabel": "Rename {name}",
         "remove": "Remove",
         "removeLabel": "Remove {name}",
-        "confirm": "Remove “{name}”? You won’t be able to sign in with it, and devices signed in with it will be signed out.",
-        "removed": "Passkey removed. Devices signed in with it are signed out.",
+        "confirm": "Remove “{name}”? You won’t be able to sign in with it.",
+        "removed": "Passkey removed",
         "removeFailed": "Couldn’t remove the passkey. Try again.",
         "renamed": "Name saved",
         "renameFailed": "Couldn’t save the name. Try again.",
@@ -128,22 +125,21 @@
       "lead": "Your account will be deleted 30 days from now, with the profiles you own and everything in them.",
       "deletesHeading": "Deleted",
       "deletesProfiles": "These profiles, with every record and receipt in them: {names}.",
-      "deletesSessions": "Your sign-ins on the web and on your phones. You'll stay signed in here only to keep your account.",
-      "deletesSubscription": "Any subscription you pay for is cancelled: it won't renew, and it ends for good when your account is deleted.",
+      "deletesSessions": "Your sign-ins on the web and on your phones.",
+      "deletesSubscription": "Your subscription is cancelled.",
       "staysHeading": "Kept",
       "passesOn": "{profile} passes to {people}, with everything in it.",
       "leaves": "{profile} keeps the records you added, without your name. Only your access ends.",
-      "keepsIssued": "If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one, as tax law requires, and then deleted. Write to us if you need a copy.",
+      "keepsIssued": "Invoices and receipts you issued are kept for 7 years, as tax law requires.",
       "downloadLead": "Want a copy first? Download your records before you close.",
       "download": "Download my records",
-      "grace": "For 30 days you can sign in and keep your account. After that it can't be recovered, and the copies in our backups expire two weeks later.",
+      "grace": "For 30 days you can sign in and keep your account. After that it can't be recovered.",
       "closingAs": "Closing {email}",
       "password": "Your password",
-      "passwordHint": "Type your password to confirm.",
       "submit": "Close my account",
       "submitting": "Closing…",
       "wrongPassword": "That password is wrong.",
-      "stripeDown": "We couldn't reach our payment provider, so nothing changed. Try again in a minute.",
+      "stripeDown": "Nothing changed. Try again in a minute.",
       "closingTitle": "Your account is closing",
       "closingBody": "We'll delete your account and its records on {date}.",
       "closingNothingYet": "Nothing has been deleted yet. Until then you can keep your account.",
@@ -151,7 +147,7 @@
       "keeping": "Keeping…",
       "kept": "Your account stays open.",
       "keptBilling": "Your account stays open. Your subscription is still set to end: open Billing to keep it.",
-      "billingMissing": "Your subscription can't be ended from here right now, so nothing changed. Write to us and we'll close your account.",
+      "billingMissing": "Nothing changed. Write to us and we'll close your account.",
       "blocked": "{profiles} has other people working in it and no co-owner. Make one of them a co-owner, or remove them, before you close your account."
     },
     "setup": {
@@ -162,9 +158,7 @@
         "signup": "Finish creating your account"
       },
       "lead": {
-        "setup": "You'll use it to sign in to MTB3A on the web and in the phone app.",
-        "reset": "Saving it signs this account out everywhere else. You'll use it on the web and in the phone app.",
-        "signup": "Choose a password. You'll use it to sign in to MTB3A on the web and in the phone app."
+        "reset": "Saving it signs you out everywhere else."
       },
       "account": "Account",
       "password": "New password",
@@ -187,13 +181,13 @@
         },
         "expired": {
           "title": "This link has expired",
-          "body": "Setup links work for a limited time. Ask the person who set up your account for a new link.",
-          "bodySelf": "Links work for a limited time. Ask for a new one."
+          "body": "Ask the person who set up your account for a new link.",
+          "bodySelf": "Ask for a new one."
         },
         "used": {
           "title": "This link has been used",
-          "body": "Each link works once. If you set your password with it, sign in. If not, ask the person who set up your account for a new link.",
-          "bodySelf": "Each link works once. If you set your password with it, sign in. If not, ask for a new link."
+          "body": "If you set your password with it, sign in. If not, ask the person who set up your account for a new link.",
+          "bodySelf": "If you set your password with it, sign in. If not, ask for a new link."
         },
         "superseded": {
           "title": "A newer link replaced this one",
@@ -203,7 +197,7 @@
       },
       "usedAfterRetry": {
         "title": "Your password is probably saved",
-        "body": "Your first try most likely went through. Sign in with the password you just chose."
+        "body": "Sign in with the password you just chose."
       },
       "saved": {
         "title": "Your password is saved",
@@ -217,13 +211,11 @@
       },
       "submitSignup": "Create account",
       "name": "Your name (optional)",
-      "nameHint": "How MTB3A greets you. Leave it empty to use your email's name.",
       "currency": "Main currency",
-      "currencyHint": "Your personal profile's currency. You can record other currencies too.",
       "sendNew": "Send a new link",
       "passkey": {
         "title": "Create a passkey",
-        "lead": "Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.",
+        "lead": "Your password is set. Create a passkey so you won’t need to type it.",
         "create": "Create a passkey",
         "notNow": "Not now",
         "cancelled": "No passkey was created. You can try again, or add one later in You › Account › Passkeys.",
@@ -232,7 +224,7 @@
     },
     "terms": {
       "title": "We've updated our terms",
-      "lead": "Read the new terms of service. Accept them to keep using your hosted account.",
+      "lead": "Read the new terms of service and accept them to continue.",
       "read": "Read the terms",
       "agree": "I agree",
       "agreeing": "Saving…",
@@ -247,7 +239,6 @@
         "hosted": "Hosted",
         "sourceMalafat": "Income recorded by Malafat",
         "sourceExpensesOnly": "Expenses only",
-        "localFooter": "Your local profiles stay in the MTB3A app on your device. They aren't shown here and never leave it.",
         "newProfile": "+ New profile",
         "manage": "Manage profiles"
       },
@@ -264,16 +255,13 @@
     "deeper": {
       "label": "More in {destination}",
       "receivables": {
-        "label": "Receivables",
-        "sub": "Every open entry, with filters"
+        "label": "Receivables"
       },
       "conversions": {
-        "label": "Currency conversions",
-        "sub": "Money moved from one currency to another"
+        "label": "Currency conversions"
       },
       "documents": {
-        "label": "Documents",
-        "sub": "Every invoice and receipt, including ones with no client"
+        "label": "Documents"
       }
     },
     "you": {
@@ -291,7 +279,6 @@
     "states": {
       "unreachable": {
         "title": "Can't reach MTB3A right now",
-        "body": "Figures aren't stored on this device, so nothing is shown until the connection is back.",
         "retry": "Try again"
       },
       "loading": "Loading",
@@ -301,9 +288,9 @@
       "noMatch": "Nothing matches these filters."
     },
     "readOnly": {
-      "malafat": "Malafat records income and payments for this profile. To change them, use Malafat.",
+      "malafat": "To change income here, use Malafat.",
       "personal": "Income on this profile is recorded from the phone app.",
-      "none": "Income isn't recorded on hosted profiles yet. This profile is for expenses."
+      "none": "This profile is for expenses."
     },
     "filters": {
       "client": "Client",
@@ -366,8 +353,7 @@
         "status": "Status"
       },
       "empty": {
-        "title": "No money recorded on this profile yet",
-        "body": "Fees and payments recorded for this profile appear here."
+        "title": "No money recorded on this profile yet"
       }
     },
     "clients": {
@@ -381,8 +367,7 @@
         "status": "Status"
       },
       "empty": {
-        "title": "No clients on this profile yet",
-        "body": "Clients recorded for this profile appear here."
+        "title": "No clients on this profile yet"
       },
       "noMatch": "No clients match \"{query}\".",
       "add": "Add client",
@@ -391,8 +376,7 @@
     "client": {
       "back": "All clients",
       "notFound": {
-        "title": "This client isn't on this profile",
-        "body": "It may have been archived or belong to another profile."
+        "title": "This client isn't on this profile"
       },
       "tabs": {
         "ledger": "Ledger card",
@@ -421,14 +405,14 @@
         "add": "Add business details",
         "edit": "Edit",
         "taxId": "VAT or company number",
-        "taxIdHint": "9 digits. A company or nonprofit fills in from the registry.",
+        "taxIdHint": "9 digits.",
         "address": "Address",
         "invalid": "This number is not valid. Check the digits.",
         "looking": "Looking it up in the registry…",
         "foundCompany": "Registrar of Companies: {name}",
         "foundNonprofit": "Registrar of Nonprofits: {name}",
         "inactive": "The registry lists this business as “{status}”. Check before you issue it an invoice.",
-        "notInRegistry": "Not in the companies or nonprofits registry. For a licensed or exempt dealer, enter the details yourself.",
+        "notInRegistry": "Not found in the registry. Enter the details yourself.",
         "registryDown": "The registry did not answer. Enter the details yourself, or try again later.",
         "saveFailed": "The details were not saved. Try again.",
         "useName": "Rename this client to the registered name, “{name}”",
@@ -443,14 +427,13 @@
           "ON_PAYMENT": "On payment",
           "NO_DOCUMENT": "No document"
         },
-        "help": "Sets which documents are due for this client, and how their past income counts in the books.",
         "dueTitle": "What's due:",
         "saved": "Saved",
         "due": {
           "TAX_INVOICE_FIRST": "a tax invoice when an amount is owed, then a receipt for each payment.",
           "PAYMENT_REQUEST_FIRST": "a payment request when an amount is owed, then a tax invoice-receipt for each payment.",
           "ON_PAYMENT": "a tax invoice-receipt for each payment, partial ones included.",
-          "NO_DOCUMENT": "nothing. Their income stays in All income, the accountant's view and exports, and counts as not for invoice."
+          "NO_DOCUMENT": "nothing."
         }
       },
       "documentsTab": {
@@ -489,8 +472,7 @@
       "dueFrom": "Due from",
       "dueTo": "Due to",
       "empty": {
-        "title": "Nothing is owed on this profile right now",
-        "body": "Receivables recorded for this profile appear here."
+        "title": "Nothing is owed on this profile right now"
       }
     },
     "payments": {
@@ -520,8 +502,7 @@
         "none": "Not applied to any receivable yet."
       },
       "empty": {
-        "title": "No payments recorded on this profile yet",
-        "body": "Payments recorded for this profile appear here."
+        "title": "No payments recorded on this profile yet"
       }
     },
     "documents": {
@@ -545,8 +526,7 @@
       "downloadFailed": "Couldn't prepare the download. Try again.",
       "uploading": "Still uploading",
       "empty": {
-        "title": "No documents on this profile yet",
-        "body": "Invoices and receipts recorded for this profile appear here."
+        "title": "No documents on this profile yet"
       }
     },
     "expenses": {
@@ -560,8 +540,7 @@
         "amount": "Amount"
       },
       "empty": {
-        "title": "No expenses recorded on this profile yet",
-        "body": "Expenses recorded for this profile appear here."
+        "title": "No expenses recorded on this profile yet"
       },
       "drawer": {
         "newTitle": "Record expense",
@@ -620,7 +599,7 @@
         "dateTooOld": "The date can't be more than ten years ago",
         "dateTooFar": "The date can't be more than ten years ahead",
         "conflict": "This expense changed elsewhere — showing the latest version",
-        "network": "Couldn't reach the server. Try again."
+        "network": "Couldn't connect. Try again."
       },
       "vat": {
         "row": "VAT",
@@ -643,9 +622,6 @@
           "rateInvalid": "Enter a rate above 0 and up to 100, with at most 2 decimals"
         }
       },
-      "hints": {
-        "fromVendor": "From this vendor’s last expense"
-      },
       "allocation": {
         "label": "Allocation number",
         "placeholder": "9 digits",
@@ -661,10 +637,9 @@
         "onProfile": "now on {profile}",
         "checking": "Checking what changes there…",
         "changesTitle": "What changes on {name}",
-        "noChanges": "Nothing else changes. The amount, currency, date, title and notes stay as they are.",
+        "noChanges": "Nothing else changes.",
         "was": "was",
         "removed": "Removed",
-        "keeps": "The amount, currency, date, title and notes never change.",
         "receipts": {
           "one": "Its receipt moves with it.",
           "other": "Its {count} receipts move with it."
@@ -682,7 +657,7 @@
           "lapsed": "{name} can't take expenses right now: it's read-only until it's paid. The expense stays here.",
           "noAccess": "You're no longer on {name}. The expense stays here.",
           "notOwner": "Only an owner of this profile can move its expenses.",
-          "malafat": "Malafat keeps the books of one of these profiles, so the expense can't move between them.",
+          "malafat": "This expense can't move to a profile linked to Malafat.",
           "changed": "This expense or {name} changed meanwhile. Check what changes now, then move it again.",
           "notReady": "A receipt on this expense hasn't finished uploading. Try again once it has.",
           "gone": "This expense isn't here any more. It may have been moved or deleted.",
@@ -700,8 +675,7 @@
         "notes": "Notes"
       },
       "empty": {
-        "title": "No conversions logged on this profile yet",
-        "body": "Currency conversions logged for this profile appear here."
+        "title": "No conversions logged on this profile yet"
       },
       "drawer": {
         "newTitle": "Log conversion",
@@ -725,7 +699,7 @@
         "dateTooOld": "The date can't be more than ten years ago",
         "sameCurrency": "Choose a different currency to convert to",
         "conflict": "This conversion changed elsewhere — showing the latest version",
-        "network": "Couldn't reach the server. Try again."
+        "network": "Couldn't connect. Try again."
       }
     },
     "income": {
@@ -779,7 +753,7 @@
         "matterMismatch": "This matter belongs to another client",
         "matterCurrency": "This matter is in {currency}. Record it in {currency}, or choose another matter.",
         "saveFailed": "Couldn't save this entry. Try again.",
-        "network": "Couldn't reach the server. Try again."
+        "network": "Couldn't connect. Try again."
       }
     },
     "settle": {
@@ -794,9 +768,7 @@
       "paidInFull": "Paid in full",
       "stillOwed": "{amount} still owed",
       "exceeds": "Exceeds what's left ({amount})",
-      "honest": "You can change the date or reverse the payment later.",
       "nothingLeft": "Nothing left to pay on this entry",
-      "nothingLeftBody": "It was paid or removed since this page loaded.",
       "saved": "Payment recorded · {amount} from {client}",
       "savedNoClient": "Payment recorded · {amount}",
       "errors": {
@@ -808,9 +780,8 @@
         "RECEIPT": "Issue a receipt for this payment",
         "TAX_INVOICE_RECEIPT": "Issue a tax invoice-receipt for this payment",
         "issued": "Document {number} issued.",
-        "held": "The document wasn't issued: the Tax Authority is holding its allocation number. It is waiting in To issue.",
-        "failed": "The document couldn't be issued, so it is waiting in To issue.",
-        "required": "(the receipt records the payment)"
+        "held": "The document wasn't issued yet. It is waiting in To issue.",
+        "failed": "The document couldn't be issued, so it is waiting in To issue."
       }
     },
     "savedFlash": {
@@ -835,16 +806,13 @@
       },
       "name": "Name",
       "type": "Type",
-      "typeHint": "Sets the starting expense categories. Changing it later replaces them.",
       "seed": {
         "personal": "Groceries, rent, car, health…",
         "business": "Office rent, software, travel, taxes…"
       },
       "currency": "Currency",
-      "currencyHintNew": "New records start in this currency.",
-      "currencyHintEdit": "Only new records use it. Existing ones keep their currency.",
+      "currencyHintEdit": "Only new records use it.",
       "timezone": "Time zone",
-      "timezoneFromBrowser": "(this browser)",
       "timezoneChange": "Change",
       "timezoneHint": "It can't be changed later.",
       "create": "Create profile",
@@ -854,13 +822,10 @@
       "saved": "Profile saved",
       "openNow": "Open now",
       "readOnly": {
-        "malafat": "Managed in Malafat. Change it there.",
-        "operator": "Set up for you by your account administrator."
+        "malafat": "Managed in Malafat. Change it there."
       },
       "back": "All profiles",
       "typeGroup": "Profile type",
-      "typeGroupHint": "Changing it replaces this profile's expense categories.",
-      "builtInLocked": "Your built-in Personal profile is always Personal.",
       "confirm": {
         "title": "Switch to {type}?",
         "body": "This profile's expense categories will be replaced with the {type} set.",
@@ -900,20 +865,18 @@
       },
       "firm": {
         "title": "Use this profile for a firm",
-        "body": "Firm features are tools for running an office's books with its team. We turn them on for each profile on request.",
+        "body": "Tools for running an office's books with its team.",
         "request": "Request firm features",
         "requesting": "Sending request…",
-        "requested": "Requested on {date}. Firm features show up here once they're turned on.",
+        "requested": "Requested on {date}.",
         "error": "Your request didn't go through. Try again.",
-        "requestedBy": "Requested by {name} on {date}. Firm features show up here once they're turned on.",
-        "requestedByYou": "You requested this on {date}. Firm features show up here once they're turned on."
+        "requestedBy": "Requested by {name} on {date}.",
+        "requestedByYou": "You requested this on {date}."
       },
       "owners": {
         "title": "Owners",
-        "caption": "Everyone here can record, edit and settle.",
         "you": "You",
         "creator": "Created this profile",
-        "solo": "Only you own this profile.",
         "addPartnerLead": "To add a partner,",
         "addPartnerLink": "write to us",
         "mailSubject": "Add a partner to {profile}",
@@ -932,16 +895,14 @@
         "leaving": "Leaving…",
         "removed": "{name} removed from {profile}",
         "left": "You left {profile}",
-        "creatorCannotLeave": "You created this profile, so you can't leave it. Write to us to hand it over.",
-        "notCreator": "Only the person who created this profile can remove someone.",
-        "capHint": "Profiles shared with you don't count.",
-        "sharedLock": "A shared profile stays Business."
+        "creatorCannotLeave": "You can't leave a profile you created. Write to us to hand it over.",
+        "notCreator": "Only the person who created this profile can remove someone."
       },
       "shared": "Shared with {names}"
     },
     "usage": {
       "title": "Share anonymous usage?",
-      "body": "Help us see which parts of MTB3A people use. We never send amounts, names or anything you type, and it isn't linked to your account. You can turn it off any time.",
+      "body": "Help us see which parts of MTB3A people use. Nothing you type is sent.",
       "turnOn": "Share anonymous usage",
       "decline": "Not now",
       "toggle": "Share anonymous usage"
@@ -1008,7 +969,7 @@
       "reachedYear": "This group reached a year — new expenses no longer join",
       "empty": {
         "title": "Group a trip's spending",
-        "body": "Pick the dates and every expense in them lands here. See what the trip cost, day by day."
+        "body": "See what a trip cost, day by day."
       },
       "created": "{name} created",
       "saved": "{name} saved",
@@ -1022,8 +983,6 @@
         "to": "To",
         "maxEnd": "Up to {date}",
         "stillGoing": "Still going (no end date yet)",
-        "autoJoin": "Expenses dated in these days join automatically, including ones you log later. You can leave any out.",
-        "editHint": "Changing dates re-checks which expenses belong; kept and left-out choices stay.",
         "notes": "Notes",
         "optional": "(optional)",
         "create": "Create group",
@@ -1057,13 +1016,12 @@
         "moreActions": "More actions",
         "totalLabel": "Total spent",
         "converted": "≈ {amount}",
-        "convertedNote": "at today's ECB rate ({date})",
+        "convertedNote": "at today's rate",
         "convertedStale": "rate from {date}",
         "rateLine": "1 {from} = {rate} {to}",
         "peg": "USD peg",
         "currencyTabs": "Currency for chart and categories",
         "perDay": "Per day",
-        "perDayHint": "Excludes expenses kept from outside the dates",
         "dayByDay": "Day by day",
         "weekByWeek": "Week by week",
         "chartLabel": "{currency} per day. Arrow keys move between days.",
@@ -1105,7 +1063,7 @@
           "emptyTitle": "Nothing dated in these days yet",
           "emptyBody": "Log an expense in these dates, or pull one in from before.",
           "upcomingTitle": "{name} starts {date}",
-          "upcomingBody": "Expenses you log from then on join this group. Booked something already?",
+          "upcomingBody": "Booked something already?",
           "allOutTitle": "Everything here is left out",
           "allOutBody": "Bring back what belongs to this trip from the list below.",
           "deletedTitle": "This group was deleted",
@@ -1120,7 +1078,6 @@
         "before": "30 days before",
         "after": "30 days after",
         "range": "{from} – {to}, not already in this group.",
-        "afterHint": "\"30 days after\" appears once the group has an end date.",
         "emptyBefore": "Nothing in the 30 days before",
         "emptyAfter": "Nothing in the 30 days after",
         "add": "Add ({count})",
@@ -1162,21 +1119,18 @@
       "open": "Open {name}",
       "empty": {
         "to_review": {
-          "title": "Nothing to review",
-          "body": "Receipts you share from your phone or upload here wait in To review until you file them."
+          "title": "Nothing to review"
         },
         "filed": {
-          "title": "No filed receipts yet",
-          "body": "A receipt moves here once you approve it into an expense."
+          "title": "No filed receipts yet"
         },
         "all": {
           "title": "No receipts yet",
-          "body": "Share a receipt from your phone, or upload a PDF, JPEG or PNG here."
+          "body": "Share a receipt from your phone, or upload one here."
         }
       },
       "unavailable": {
-        "title": "Receipts aren't available here",
-        "body": "The receipts library isn't turned on for this account."
+        "title": "Receipts aren't available here"
       },
       "uploaded": {
         "one": "{count} receipt added to To review",
@@ -1231,7 +1185,6 @@
         "moveTo": "Move to {name}",
         "lead": "Received {day} · now on {profile}",
         "pick": "The profile to move it to",
-        "reading": "Still being read. The reading finishes on the profile you choose.",
         "noneTitle": "No other profile can take it.",
         "noneBody": "Your other profiles can only be read until they're paid.",
         "billing": "Billing",
@@ -1254,7 +1207,7 @@
     },
     "firm": {
       "banner": {
-        "text": "Firm features are on for {profile}. New tools show up here as they're released.",
+        "text": "Firm features are on for {profile}.",
         "dismiss": "Dismiss"
       }
     },
@@ -1266,7 +1219,7 @@
       "yourData": "Your data",
       "tooNew": {
         "title": "Reload to continue",
-        "body": "Another tab saved the records on this device with a newer version of MTB3A. Reload to keep working."
+        "body": "MTB3A was updated. Reload to keep working."
       },
       "data": {
         "title": "Your data",
@@ -1286,12 +1239,12 @@
         "notAFile": "This isn't an MTB3A records file.",
         "tooNew": "This file was saved by a newer version of MTB3A. Reload and try again.",
         "failed": "Couldn't restore the file. Nothing was changed.",
-        "fromAccount": "This file was downloaded from your MTB3A account on {date}. It's an export: restoring it here doesn't change the account."
+        "fromAccount": "This file came from your MTB3A account ({date}). Restoring it here doesn't change the account."
       },
       "reload": "Reload",
       "saveFailed": {
         "title": "Couldn't save on this device",
-        "body": "This browser stopped saving MTB3A's records here, perhaps because it's out of space. Reload to continue. Everything you saw saved before this is safe."
+        "body": "Reload to continue. Everything saved before this is safe."
       },
       "unavailable": {
         "title": "This browser won't let MTB3A save here",
@@ -1301,8 +1254,8 @@
     },
     "yourData": {
       "title": "Your data",
-      "body": "Download a copy of your records: clients, matters, income, payments, expenses, groups, conversions and receipt files. You can open it in MTB3A without an account: signed out, choose Your data › Restore from file.",
-      "notBackup": "It's an export, not a backup: it can't be restored into your account. Profiles that Malafat fills come with their income as your own records, without Malafat's documents.",
+      "body": "Download a copy of all your records and receipt files.",
+      "notBackup": "It can't be restored into your account.",
       "profiles": "Profiles to include",
       "download": "Download my records",
       "cancel": "Cancel",
@@ -1357,30 +1310,27 @@
         "pending": "Your first payment hasn't gone through yet",
         "activeTrial": "Card added. Your first charge is on {date}",
         "pauseScheduled": "Your plan pauses on {date}",
-        "paused": "Paused until {date}"
+        "paused": "Paused until {date}",
+        "starter": "You're on Starter, free"
       },
       "context": {
-        "trial": "After that your records stay readable and downloadable, but you can't add new ones until you subscribe.",
-        "trialEnded": "Subscribe to add records again. Everything stays readable and downloadable. From {date} only Subscribe and Download stay open.",
-        "trialEndedNoDate": "Subscribe to add records again. Everything stays readable and downloadable.",
+        "trial": "After that you can't add records until you subscribe.",
+        "trialEnded": "Subscribe to add records again. From {date} only Subscribe and Download stay open.",
+        "trialEndedNoDate": "Subscribe to add records again.",
         "locked": "Only Subscribe and Download my records are open. Nothing has been deleted.",
-        "ending": "Until then nothing changes. After it, your records stay readable and downloadable.",
-        "grace": "Stripe will try your card again over the next days. Check it in Manage billing.",
-        "unpaid": "Pay the open invoice to keep adding records. Your records are safe.",
+        "grace": "Check your card in Manage billing.",
+        "unpaid": "Pay the open invoice to keep adding records.",
         "needsHelp": "Write to us and we'll sort it out.",
-        "lapsed": "Your records stay readable and downloadable. Subscribe to add new ones.",
-        "coveredByGrant": "There's nothing to pay. We'll write to you before that changes.",
+        "lapsed": "Subscribe to add new records.",
+        "coveredByGrant": "There's nothing to pay.",
         "coveredUntil": "After that, subscribe to keep adding records.",
-        "coveredByMalafat": "MTB3A never asks you to pay for it twice.",
-        "ownedByOthers": "Each profile's billing is handled by the person who created it.",
-        "none": "Your records stay readable and downloadable.",
-        "pending": "If your bank asked you to approve it, finish it in Manage billing. You're not subscribed until it does.",
+        "pending": "If your bank asked you to approve it, finish it in Manage billing.",
         "activeMonth": "Billed monthly.",
         "activeYear": "Billed yearly.",
-        "activeTrial": "Your free trial continues until then. Cancel any time before it from Manage billing.",
+        "activeTrial": "Cancel any time before then from Manage billing.",
         "renewsAt": "Renews at {list} on {date}.",
         "pauseScheduled": "Billing restarts on its own on {until}.",
-        "paused": "Your records are read-only until then: you can see and download everything. Billing restarts on its own on {date}."
+        "paused": "Billing restarts on {date}."
       },
       "action": {
         "subscribe": "Subscribe",
@@ -1391,7 +1341,7 @@
         "dontPause": "Don't pause",
         "resumeNow": "Resume now"
       },
-      "manageNote": "Change your card or see invoices, on Stripe's page (in English).",
+      "manageNote": "Change your card or see invoices.",
       "plan": {
         "name": "Freelancer",
         "or": "or",
@@ -1411,7 +1361,6 @@
         "person": "For yourself",
         "personNote": "No tax number needed",
         "business": "For a business",
-        "businessNote": "Your invoices carry its tax number",
         "interval": "Pay",
         "monthly": "Monthly",
         "yearly": "Yearly",
@@ -1423,20 +1372,19 @@
         "summary": "You'll pay",
         "perMonth": "a month + VAT where it applies",
         "perYear": "a year + VAT where it applies",
-        "contactUs": "We can't sell to individuals in {country} yet. A business with a tax number can subscribe now, or write to us and we'll tell you when we open.",
-        "headsUp": "Next you'll enter your card on Stripe's secure page. It's in English; you'll come back here when you're done.",
+        "contactUs": "We can't sell to individuals in {country} yet. Subscribe as a business, or write to us.",
+        "headsUp": "Next you'll enter your card on Stripe's secure page.",
         "continue": "Continue to payment",
         "firstCharge": "Your free trial continues: the first charge is on {date}.",
-        "personNoteEverywhere": "No tax number needed, in any country"
+        "personNoteEverywhere": "No tax number needed"
       },
       "states": {
         "loadFailed": "Couldn't load your billing. Check your connection and try again.",
         "retry": "Try again",
         "sessionFailed": "We couldn't reach the payment page. Try again in a moment.",
         "confirming": "Confirming your payment…",
-        "confirmingNote": "This usually takes a few seconds.",
         "subscribed": "You're subscribed. Thank you.",
-        "slow": "Your payment went through. It can take a minute to show here; you can keep working.",
+        "slow": "Your payment went through.",
         "cancelled": "Nothing was charged.",
         "needsHelp": "We couldn't open billing for your account. Write to us and we'll fix it.",
         "alreadySubscribed": "You already have a subscription. Change it from Manage billing.",
@@ -1444,16 +1392,14 @@
         "changed": "Your billing changed since you opened this. Go back to see where you stand."
       },
       "mailSubject": "MTB3A billing",
-      "coOwnedNote": "Shared profiles you co-own are covered by their creator's plan.",
       "welcome": {
         "title": "Your free trial",
         "headline": "Your 14-day free trial has started",
         "endsOn": "It ends on {date}.",
-        "pitch": "Add a card now so nothing stops when it ends. You won't be charged until {date}. Cancel any time before then.",
+        "pitch": "Add a card now so nothing stops. You won't be charged until {date}.",
         "addCard": "Add a card now (recommended)",
         "notNow": "Not now",
-        "continue": "Continue",
-        "later": "Your trial stays the same either way. You can add a card any time from Billing in the account menu."
+        "continue": "Continue"
       },
       "trialBanner": {
         "label": "Your free trial",
@@ -1464,28 +1410,31 @@
       "gate": {
         "label": "Your plan",
         "graceTitle": "We couldn't take your last payment",
-        "graceBody": "Everything still works while we try again. Update your card so nothing stops.",
+        "graceBody": "Update your card so nothing stops.",
         "updateCard": "Update your card",
         "readOnlyTitle": "This profile is read-only",
-        "readOnlyTrial": "Your free trial has ended. You can see and download everything, but not add or change anything. Subscribe to keep going. On {date} the profile locks until you subscribe.",
-        "readOnlyPaid": "Your subscription has ended. You can see and download everything, but not add or change anything. Subscribe again to keep going. Nothing is deleted.",
-        "readOnlyNone": "This profile has no plan. You can see and download everything, but not add or change anything. Subscribe to keep going.",
+        "readOnlyTrial": "Your free trial has ended. Subscribe to keep going. On {date} the profile locks.",
+        "readOnlyPaid": "Your subscription has ended. Subscribe again to keep going.",
+        "readOnlyNone": "This profile has no plan. Subscribe to keep going.",
         "notYours": "The person who created this profile pays for it. Ask them to subscribe so it can be changed again.",
         "subscribe": "Subscribe",
         "download": "Download my records",
         "lockedTitle": "Subscribe or download your records",
-        "lockedBody": "Your free trial ended more than two weeks ago, so this profile is locked. Nothing is deleted: subscribe to pick up where you left off, or download all your records.",
-        "lockedNotYours": "This profile is locked because the person who created it hasn't subscribed. Nothing is deleted, and you can still download its records.",
-        "drawerNote": "This profile is read-only, so nothing here can be changed.",
+        "lockedBody": "Nothing is deleted: subscribe to pick up where you left off, or download all your records.",
+        "lockedNotYours": "Its creator hasn't subscribed. You can still download its records.",
+        "drawerNote": "This profile is read-only.",
         "refused": "This profile is read-only now. Subscribe to add or change records.",
         "newProfileBlocked": "Subscribe to add a profile: your plan has ended.",
-        "readOnlyPaused": "Your plan is paused until {date}. You can see and download everything; adding and changing come back when it restarts."
+        "readOnlyPaused": "Your plan is paused until {date}.",
+        "readOnlyEndedTitle": "Your plan has ended",
+        "readOnlyPaidStarter": "Everything is here to see and download. Subscribe, or continue free on Starter.",
+        "starterLimits": "Starter: 1 business, 3 documents and 12 scans a month, no Tax Authority connection."
       },
       "switch": {
         "line": "Switch to yearly and save {amount} a year",
         "action": "Switch to yearly",
         "title": "Switch to yearly",
-        "body": "You'll pay {yearly} a year, renewing on {date}. What's left of this month comes off today's charge.",
+        "body": "You'll pay {yearly} a year, renewing on {date}.",
         "dueToday": "You pay {due} today, including VAT where it applies",
         "confirm": "Pay {due} and switch",
         "notNow": "Not now",
@@ -1519,7 +1468,6 @@
       "cancel": {
         "action": "Cancel plan",
         "whyTitle": "Why are you cancelling?",
-        "whyHint": "Your answer helps us make MTB3A better.",
         "reason": {
           "too_expensive": "It costs too much",
           "unused": "I don't use it enough",
@@ -1533,13 +1481,13 @@
         "comment": "Anything else you'd like to tell us? (optional)",
         "continue": "Continue",
         "confirmTitle": "Cancel your plan?",
-        "confirmBody": "Your plan stays on until {date}. After that your records stay readable and downloadable. Nothing is deleted.",
+        "confirmBody": "Your plan stays on until {date}. Nothing is deleted.",
         "confirm": "Cancel plan",
         "keep": "Keep my plan"
       },
       "pause": {
         "title": "Pause instead of cancelling?",
-        "body": "Take 1 to 3 months off and pay nothing. Everything stays readable and downloadable, and your plan restarts on its own on the date you pick.",
+        "body": "Take 1 to 3 months off and pay nothing. Your plan restarts on the date you pick.",
         "option": {
           "one": "1 month, restarts on {date}",
           "other": "{count} months, restarts on {date}"
@@ -1555,11 +1503,45 @@
           "one": "Stay with {percent}% off for 1 month",
           "other": "Stay with {percent}% off for {count} months"
         },
-        "body": "You pay {price} a month instead of {list}, then {list} a month again. You can still cancel any time.",
+        "body": "You pay {price} a month instead of {list}, then {list} a month again.",
         "onceNote": "A one-time offer. If you cancel, your plan ends on {date}.",
         "accept": "Keep my plan at {price}",
         "decline": "No, cancel my plan",
         "done": "Done. Your next 2 months are {price} each."
+      },
+      "usage": {
+        "title": "This month",
+        "documents": "{used} of {cap} documents",
+        "scans": "{used} of {cap} scans",
+        "thisMonth": "{usage} this month",
+        "resets": "Resets on {date}",
+        "documentsLeft": {
+          "one": "{count} document left this month",
+          "other": "{count} documents left this month"
+        },
+        "scansLeft": {
+          "one": "{count} scan left this month",
+          "other": "{count} scans left this month"
+        },
+        "documentsUsedUp": "No documents left this month",
+        "scansUsedUp": "No scans left this month",
+        "hide": "Hide"
+      },
+      "starter": {
+        "activeBusiness": "Active business",
+        "changeActive": "Change",
+        "seePlans": "See plans",
+        "chosen": "You're on Starter now."
+      },
+      "pickActive": {
+        "title": "Choose your active business",
+        "body": "Starter includes one business. The others stay read-only.",
+        "carried": "{count} businesses came over from the free app.",
+        "personal": "Your personal profile stays active.",
+        "later": "You can switch later in Billing.",
+        "meta": "{count} records · last entry {date}",
+        "choose": "Choose a business",
+        "confirm": "Keep {name} active"
       }
     },
     "selfService": {
@@ -1598,13 +1580,12 @@
     },
     "signup": {
       "title": "Create your account",
-      "lead": "Enter your email. We'll send you a link to finish creating your account.",
-      "terms": "You'll accept the terms when you set your password.",
+      "lead": "Enter your email.",
       "termsLink": "Read the terms",
       "submit": "Continue",
       "sent": {
         "title": "Check your email",
-        "body": "We sent a link to {email}. Open it within 24 hours to finish creating your account. If this address already has an account, the email says how to sign in instead."
+        "body": "We sent a link to {email}. Open it within 24 hours."
       },
       "closed": {
         "title": "Accounts are by request for now",
@@ -1614,11 +1595,11 @@
     },
     "recover": {
       "title": "Reset your password",
-      "lead": "Enter your account's email. We'll send you a link to choose a new password.",
+      "lead": "Enter your account's email.",
       "submit": "Send link",
       "sent": {
         "title": "Check your email",
-        "body": "If {email} has an account, we've sent it a link to choose a new password. Open it soon: it works for a short time."
+        "body": "If {email} has an account, we've sent it a link to choose a new password."
       },
       "unavailable": {
         "title": "Resetting by email isn't available yet",
@@ -1636,7 +1617,7 @@
         "checking": "Checking your records: {done} of {total}",
         "titleFreeApp": "Your records from the old app",
         "titleOldAddress": "Your records from the old address",
-        "lead": "Check what came over before you save it on this device.",
+        "lead": "Check what came over before you save it.",
         "counts": {
           "businesses": "Businesses",
           "clients": "Clients",
@@ -1731,7 +1712,7 @@
       },
       "send": {
         "title": "Your records are moving",
-        "lead": "MTB3A has a new address. The records in this browser stay here until you carry them over.",
+        "lead": "MTB3A has a new address.",
         "carry": "Carry my records over",
         "download": "Download my records file",
         "waiting": "Finish on the new page that opened…",
@@ -1777,7 +1758,7 @@
         "converted": "≈ {amount}",
         "breakdownOpen": "Show the exact amount in each currency",
         "breakdownTitle": "Exact amounts",
-        "rateFooter": "ECB · {date} · today's rate"
+        "rateFooter": "Today's rate · {date}"
       },
       "owed": {
         "label": "Owed to you now",
@@ -1801,7 +1782,7 @@
       },
       "insights": {
         "heading": "Lately",
-        "singleCurrency": "In {currency} only: today's rates aren't available",
+        "singleCurrency": "In {currency} only",
         "recap": {
           "base": "In {month}: {received} received, {spent} spent.",
           "topCategory": "Most spending went to {category}.",
@@ -1826,13 +1807,12 @@
       },
       "teaser": {
         "stage1": "Your first monthly recap arrives in {month}.",
-        "stage2": "Trends, your best month and how fast clients pay unlock in {month}.",
-        "scope": "{profile} started in {month}; insights unlock in {unlock}.",
+        "stage2": "More insights unlock in {month}.",
+        "scope": "Insights for {profile} unlock in {unlock}.",
         "seeAll": "See insights across all profiles"
       },
       "firstRun": {
-        "title": "Your reports start with your first payment or expense",
-        "body": "Log what came in or what you spent, and this page fills in day by day."
+        "title": "Your reports start with your first payment or expense"
       },
       "empty": {
         "period": "Nothing logged in {period}",
@@ -1898,27 +1878,24 @@
           "shared": "Includes shared businesses in full",
           "omitted": "Leaves out records in {currencies}"
         },
-        "hint": "Open a profile for its charts",
         "refreshFailed": "Couldn't refresh",
         "profilesLabel": "Your profiles",
         "outside": {
           "label": "Not in this total",
-          "note": "Your Reports total counts the profiles you own. These aren't yours, so open one for its own Reports.",
+          "note": "These profiles aren't yours. Open one for its Reports.",
           "linkName": "{name}, not in this total"
         }
       },
       "invoiceSplit": {
         "title": "Income and invoices",
         "invoice": "Invoice income",
-        "invoiceHint": "Has its document, or is due one",
         "notForInvoice": "Not for invoice",
-        "notForInvoiceHint": "Marked, or a No document client",
         "all": "All income"
       }
     },
     "passkeys": {
       "suggest": {
-        "title": "Add a passkey: the more secure way to sign in.",
+        "title": "Sign in more securely with a passkey.",
         "note": "Your password still works.",
         "add": "Add a passkey",
         "notNow": "Not now"
@@ -1933,8 +1910,8 @@
       "title": "Connect Claude",
       "rowSub": "Let your own Claude read and add your records",
       "notEnabled": "Connecting Claude isn’t turned on for your account. Ask MTB3A support.",
-      "notAvailable": "Connecting Claude isn’t switched on for MTB3A yet. It will show here once it is.",
-      "intro": "Your own Claude can read your records and, when you approve it in the chat, add expenses. MTB3A sends nothing to any AI itself.",
+      "notAvailable": "Connecting Claude isn’t available yet.",
+      "intro": "Your own Claude can read your records and, when you approve it in the chat, add expenses.",
       "urlLabel": "MCP address",
       "howTitle": "How to connect",
       "howClaudeAi": "Claude.ai: Settings › Connectors › Add custom connector, then paste this address.",
@@ -1953,7 +1930,7 @@
       "scopeWrite": "Can read and add",
       "revoke": "Disconnect",
       "revokeLabel": "Disconnect {name}",
-      "confirm": "Disconnect {name}? It loses access right away. You can connect it again later.",
+      "confirm": "Disconnect {name}? It loses access right away.",
       "revoked": "{name} disconnected",
       "revokeFailed": "Couldn’t disconnect. Check your connection and try again."
     },
@@ -1969,7 +1946,6 @@
         "read": "See your profiles, clients, categories, vendors and expenses",
         "write": "Add expenses to your inbox or to a profile you choose, after you approve them in the chat"
       },
-      "revokeAnytime": "You can disconnect it any time from You › Account › Connect Claude.",
       "allow": "Allow",
       "deny": "Deny",
       "startAgain": "Go back to your app and start connecting again.",
@@ -1984,7 +1960,7 @@
       },
       "refused": {
         "title": "Connecting apps isn’t on for you",
-        "body": "Connecting Claude isn’t turned on for your account yet. Ask MTB3A support to turn it on, then try again.",
+        "body": "Ask MTB3A support to turn it on.",
         "back": "Back to {name}"
       }
     },
@@ -2000,8 +1976,8 @@
       "amount": "Reduce by ({currency})",
       "left": "{amount} left after this",
       "reason": "Reason",
-      "reasonHint": "Shown in the history, e.g. “Applied to the wrong job”.",
-      "reasonRequired": "Say why, so the history makes sense later.",
+      "reasonHint": "e.g. “Applied to the wrong job”",
+      "reasonRequired": "Say why.",
       "confirmReverse": "Reverse payment",
       "confirmReduce": "Reduce",
       "confirmCancel": "Cancel amount owed",
@@ -2023,7 +1999,7 @@
       "owedTitle": "Amount owed",
       "paymentTitle": "Payment",
       "actions": "Correct this entry",
-      "cancelledPart": "Cancelled {amount}; {left} is still owed, because it changed while you were cancelling."
+      "cancelledPart": "Cancelled {amount}; {left} is still owed."
     },
     "operator": {
       "title": "Operator",
@@ -2047,7 +2023,7 @@
         "approveWithPasskey": "Approve with passkey",
         "declineWithPasskey": "Decline with passkey",
         "confirmApprove": "{email} can sign in. We'll email them now.",
-        "confirmDecline": "{email}'s account will be deleted. We'll email them; they can sign up again.",
+        "confirmDecline": "{email}'s account will be deleted. We'll email them.",
         "approved": "{email} approved · email sent",
         "declined": "{email} declined · email sent",
         "emptyTitle": "No one is waiting",
@@ -2121,17 +2097,17 @@
           "other": "{count} connected apps"
         },
         "signOut": "Sign out everywhere",
-        "signOutSub": "{devices} · the password still works",
+        "signOutSub": "{devices}",
         "disable": "Disable account",
         "disableSub": "Signs out {devices}, disconnects {agents}, blocks sign-in",
         "enable": "Enable account",
         "enableSub": "They can sign in again",
         "reset": "Send reset link",
         "resetSub": "A one-time link to set a new password, for 24 hours",
-        "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected. Their password still works.",
-        "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and they can't sign in until you enable the account.",
+        "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected.",
+        "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and sign-in blocked.",
         "confirmEnable": "{email} can sign in again.",
-        "confirmReset": "Make a one-time reset link for {email}. Any earlier link stops working.",
+        "confirmReset": "Make a one-time reset link for {email}.",
         "lock": "Lock the current password",
         "lockHint": "For a suspected takeover: the password stops working and they're signed out everywhere now.",
         "signOutAction": "Sign out",
@@ -2185,7 +2161,7 @@
         "noMatchBody": "Try part of the email or the name.",
         "loadMore": "Load more",
         "featuresOn": "On: {features}",
-        "ownNote": "This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.",
+        "ownNote": "This is your account. Sign-in and security are in You › Account.",
         "ownLink": "Open You › Account"
       },
       "billing": {
@@ -2202,7 +2178,7 @@
         "noEndHint": "It lasts until you revoke it.",
         "revokedOn": "Revoked {date}",
         "endedOn": "Ended {date}",
-        "confirmRevoke": "{email} loses this {tier} coverage. Their profiles go back to their own plan or trial.",
+        "confirmRevoke": "{email} loses this {tier} coverage.",
         "revoked": "Coverage revoked for {email}",
         "granted": "Coverage granted to {email}",
         "drawerTitle": "Grant coverage",
@@ -2241,8 +2217,8 @@
         },
         "accountant_access": {
           "label": "Accountant access",
-          "sub": "As an owner, they can invite an accountant to read a profile and make share links.",
-          "confirmOff": "{email} can't invite accountants or make new links; the ones they already shared keep working until they revoke them."
+          "sub": "They can invite an accountant and make share links.",
+          "confirmOff": "{email} can't invite accountants or make new links."
         }
       },
       "firms": {
@@ -2377,7 +2353,7 @@
       "illustration": "An open doorway with a dotted path leading in",
       "account": {
         "eyebrow": "With an account",
-        "line": "Your records on your phone and on any browser, kept safe on our servers.",
+        "line": "Your records on your phone and on any browser.",
         "signIn": "Sign in",
         "create": "Create an account"
       },
@@ -2386,7 +2362,7 @@
       "retrying": "Trying…",
       "local": {
         "eyebrow": "On this device only",
-        "point1": "Stays in this browser only. No account, and nothing is sent to us.",
+        "point1": "Stays in this browser only. No account needed.",
         "point2": "Clearing this site's data erases it.",
         "point3Lead": "Back it up from ",
         "point3Path": "Your data › Download my records",
@@ -2422,7 +2398,7 @@
       "open": "Open {profile}",
       "empty": {
         "title": "No client books yet",
-        "body": "Ask your client to invite you from MTB3A › their profile › Sharing. You'll get an email to accept."
+        "body": "Ask your client to invite you from their Sharing page."
       },
       "readOnly": "Read-only · since {date}",
       "back": "Client books",
@@ -2478,7 +2454,6 @@
         "label": "Download",
         "report": "Excel report",
         "receipts": "Receipts (zip)",
-        "followsPeriod": "For the period above. The report always has the Expenses, Income and Summary sheets.",
         "entries": {
           "one": "{count} entry",
           "other": "{count} entries"
@@ -2497,8 +2472,8 @@
       },
       "gone": {
         "title": "No longer shared",
-        "body": "{owner} stopped sharing {profile} with you. Anything you downloaded before stays with you.",
-        "bodyNoOwner": "{profile} is no longer shared with you. Anything you downloaded before stays with you.",
+        "body": "{owner} stopped sharing {profile} with you.",
+        "bodyNoOwner": "{profile} is no longer shared with you.",
         "back": "Back to Client books"
       },
       "free": "{readable} of {freeLimit} free client books",
@@ -2508,7 +2483,6 @@
       "planPrompt": "Reading up to {count} client books is free. Subscribe to the Accountant plan to read more."
     },
     "shareLink": {
-      "privateView": "A private, read-only view. No names or numbers show before the right PIN.",
       "enterPin": "Enter the PIN you were given",
       "open": "Open",
       "opening": "Opening…",
@@ -2522,19 +2496,18 @@
       "retry": "Press Open again.",
       "locked": {
         "title": "This link is locked",
-        "body": "A wrong PIN was entered 5 times, so the link is locked for everyone. Ask whoever sent it for a new one."
+        "body": "Ask whoever sent it for a new one."
       },
       "gone": {
         "title": "This link is no longer available",
-        "body": "It ended or was turned off. Ask for a new one if you need it."
+        "body": "Ask for a new one if you need it."
       },
       "limit": {
         "title": "This link has reached its viewer limit",
-        "body": "Only 3 people can open it, and 3 already have. Ask for a link of your own."
+        "body": "Ask for a link of your own."
       },
       "again": {
-        "title": "Enter the PIN again",
-        "body": "For safety, the PIN is asked for every 8 hours."
+        "title": "Enter the PIN again"
       },
       "unreachable": "Couldn't reach MTB3A. Check your connection and try again.",
       "retryButton": "Try again",
@@ -2565,8 +2538,8 @@
       "until": "Up to {month}"
     },
     "accountantInvite": {
-      "about": "MTB3A helps business owners log their expenses and income. {owner} wants you to read their profile, without changing anything.",
-      "aboutNoOwner": "MTB3A helps business owners log their expenses and income. You're invited to read a profile, without changing anything.",
+      "about": "{owner} wants you to read their profile.",
+      "aboutNoOwner": "You're invited to read a profile.",
       "invited": "{owner} invited you to read {profile}",
       "invitedNoOwner": "You're invited to read {profile}",
       "forAddress": "For {email} · ends {date}",
@@ -2576,10 +2549,9 @@
       "signup": {
         "title": "Create an account to accept",
         "email": "Email",
-        "emailFixed": "The invite's address; it can't be changed.",
         "name": "Name",
         "password": "Password",
-        "freeNote": "An account for reading your clients' books. Reading up to 3 client books is always free.",
+        "freeNote": "Reading up to 3 client books is free.",
         "submit": "Create account and accept",
         "creating": "Creating your account…",
         "signingIn": "Signing in…",
@@ -2598,16 +2570,15 @@
       "accept": {
         "title": "Accept {owner}'s invite?",
         "titleNoOwner": "Accept this invite?",
-        "body": "You'll read {profile} under Client books. You're signed in as {email}.",
+        "body": "You're signed in as {email}.",
         "accept": "Accept",
         "accepting": "Accepting…",
         "notNow": "Not now"
       },
       "mismatch": {
-        "context": "An invite to read a profile.",
         "title": "This invite was sent to another address",
         "body": "It was sent to {invited}, and you're signed in as {email}.",
-        "domainHint": "Sign in with that address, or ask the sender to invite this one. An address on the same company domain works too (not Gmail or similar).",
+        "domainHint": "Sign in with that address, or ask the sender to invite this one.",
         "signOut": "Sign out and use another account",
         "back": "Back to MTB3A"
       },
@@ -2617,13 +2588,13 @@
       },
       "gone": {
         "title": "This invite is no longer available",
-        "body": "It was used, withdrawn or ended. Ask whoever sent it for a new one."
+        "body": "Ask whoever sent it for a new one."
       },
       "failed": "Couldn't reach MTB3A. Check your connection and try again.",
       "fourth": {
         "title": "Your free client books are used",
         "body": "Reading up to {count} client books is free. To read {profile} as well, subscribe to the Accountant plan.",
-        "notNow": "Not now (the invite stays open until {date})",
+        "notNow": "Not now",
         "confirming": "Confirming your Accountant plan…",
         "slow": "Your payment is still being confirmed. Press Accept again in a minute."
       },
@@ -2652,21 +2623,17 @@
     "sharing": {
       "title": "Sharing {profile}",
       "back": "Profiles",
-      "scopeNote": "Whoever you share with reads expenses, income and receipts only. They can't add or change anything.",
       "entryRow": "Share with your accountant",
       "manageRow": "Sharing",
-      "manageSub": "Who reads this profile",
       "accountants": {
         "heading": "Accountants",
         "invite": "Invite by email",
-        "limit": "Up to {limit} accountants per profile.",
         "atLimit": "This profile has {limit}, the most it can. Stop one to invite someone else.",
         "since": "Since {date}",
         "viewed": "viewed {when}",
         "notViewed": "not viewed yet",
         "sent": "Sent {date}",
         "ends": "ends {date}",
-        "expiredMeta": "Not accepted within 14 days",
         "chip": {
           "active": "Active",
           "pending": "Pending",
@@ -2674,11 +2641,11 @@
         },
         "stop": "Stop",
         "stopAria": "Stop {name}'s access",
-        "stopConfirm": "Stop {name}'s access to {profile}? {name} won't be able to open it any more. You can send a new invite later.",
+        "stopConfirm": "Stop {name}'s access to {profile}?",
         "stopAction": "Stop access",
         "cancel": "Cancel",
         "cancelAria": "Cancel the invite to {name}",
-        "cancelConfirm": "Cancel the invite to {name}? The link in the invite email stops working.",
+        "cancelConfirm": "Cancel the invite to {name}?",
         "cancelAction": "Cancel invite",
         "keep": "Keep invite",
         "inviteAgain": "Invite again",
@@ -2689,7 +2656,7 @@
       },
       "invite": {
         "title": "Invite an accountant",
-        "intro": "They'll get an email to accept. It ends after 14 days.",
+        "intro": "They'll get an email to accept.",
         "email": "Email",
         "send": "Send invite",
         "sent": "Invite sent to {email}",
@@ -2732,8 +2699,6 @@
         "turnOffConfirm": "Turn off the link for {period}? Anyone using it is cut off at once.",
         "turnOffAction": "Turn off link",
         "turnedOff": "Link turned off",
-        "footnote": "“Locked”: a wrong PIN was entered 5 times, and even people already in are cut off. A link is never shown twice; if it's lost or locked, turn it off and make a new one. No emails about link activity.",
-        "limit": "Up to {limit} live links per profile.",
         "atLimit": "This profile has {limit} live links, the most it can. Turn one off to make another.",
         "none": "No links yet."
       },
@@ -2750,7 +2715,7 @@
         "days30": "30 days",
         "pin": "PIN (4–8 digits)",
         "pinHint": "Send it separately from the link.",
-        "summary": "{period} · shows expenses, income and receipts only; nothing can be changed. Up to {viewers} viewers.",
+        "summary": "{period} · up to {viewers} viewers",
         "create": "Create link",
         "errors": {
           "pin": "The PIN is 4 to 8 digits.",
@@ -2777,7 +2742,6 @@
       },
       "download": {
         "title": "Download a period",
-        "note": "For your own records: whole months, up to 24. The report is an Excel file with Expenses, Income and a Summary; the receipts come as a zip.",
         "from": "From",
         "to": "To",
         "report": "Excel report",
@@ -2800,67 +2764,60 @@
     "malafatSignIn": {
       "button": "Sign in with Malafat",
       "officeTitle": "Your Malafat office",
-      "officeLead": "Type your office's Malafat address, as it shows in your browser when you open Malafat.",
+      "officeLead": "Type your office's Malafat address.",
       "officeLabel": "Your Malafat office address",
-      "officeRemembered": "We remember it on this device.",
       "officeRequired": "Type your office address.",
       "officeNotFound": "There's no Malafat office at that address. Check it and try again.",
       "continue": "Continue to Malafat",
       "back": "Back",
       "startAgain": "Back to sign in",
       "error": {
-        "access_denied": "You didn't allow MTB3A in Malafat. Nothing was changed.",
+        "access_denied": "You didn't allow MTB3A in Malafat.",
         "malafat_unavailable": "Malafat didn't answer. Try again in a moment.",
         "state_invalid": "This sign-in has expired. Start again.",
         "office_not_found": "There's no Malafat office at that address.",
         "identityElsewhere": "This Malafat account is already connected to another MTB3A account.",
         "emailTaken": "An MTB3A account already has this email. Sign in to it to connect Malafat.",
         "unreachable": "We couldn't reach MTB3A. Check your connection and try again.",
-        "twoFactorLink": "Your MTB3A account has two-step sign-in on, so connecting Malafat to it isn’t available yet. Sign in with your password instead."
+        "twoFactorLink": "Connecting Malafat isn’t available yet. Sign in with your password."
       },
       "consent": {
         "title": "Welcome",
-        "createLead": "We'll create an MTB3A account for {email}. After this, you sign in to it from Malafat.",
-        "linkLead": "We'll connect your MTB3A account to Malafat. Next time, you sign in from Malafat directly.",
+        "createLead": "We'll create an MTB3A account for {email}.",
+        "linkLead": "We'll connect your MTB3A account to Malafat.",
         "firmBooks": "You'll see the office's books in MTB3A, as your role in Malafat allows.",
         "ownProfile": "Your own personal profile stays yours. Neither the office nor Malafat sees it.",
         "currency": "Base currency",
         "create": "Create account and continue",
         "connect": "Connect and continue",
-        "cancel": "Cancel",
-        "nothingYet": "Nothing is saved until you continue. You can disconnect Malafat at any time from You › Connected apps."
+        "cancel": "Cancel"
       },
       "link": {
         "title": "You already have an MTB3A account",
-        "lead": "{email} has an MTB3A account. Sign in to it once to connect it to Malafat. After that, you sign in from Malafat directly.",
+        "lead": "{email} has an MTB3A account. Sign in once to connect it to Malafat.",
         "password": "Your MTB3A password",
         "submit": "Connect the accounts",
         "passkey": "Connect with a passkey",
-        "notByEmail": "We never connect two accounts by email alone.",
         "invalid": "That password doesn't match this account.",
         "passkeyRefused": "That passkey isn't this account's. Try another one, or your password."
       }
     },
     "connectedApps": {
       "title": "Connected apps",
-      "rowSub": "Malafat acting for you in your offices",
-      "lead": "These apps act for you in your offices. They don't see your own profiles.",
       "since": "Connected {date}",
       "lastUsed": "last used {date}",
       "disconnect": "Disconnect",
-      "confirm": "Disconnect Malafat from {firm}? Malafat stops acting for you in this office at once. What it recorded stays.",
+      "confirm": "Disconnect Malafat from {firm}?",
       "keep": "Keep",
       "disconnected": "Malafat is disconnected from {firm}.",
       "unknownFirm": "an office no longer connected",
-      "empty": "No apps act for you.",
-      "agentsHint": "AI agents (like Claude) are in Connect Claude."
+      "empty": "No apps act for you."
     },
     "members": {
       "title": "Members",
       "managed": "This office's name and members are managed in Malafat.",
       "you": "(you)",
       "pending": "hasn't signed in yet",
-      "changeHint": "To add a member or change a role, use the office's settings in Malafat.",
       "role": {
         "PARTNER": "Partner",
         "OFFICE_ADMIN": "Office admin",
@@ -2876,17 +2833,17 @@
     "viaMalafat": "via {malafat}",
     "secondWayIn": {
       "title": "Add a second way to sign in",
-      "lead": "Another secure way into MTB3A, next to Malafat: a passkey (your face or fingerprint) or a password.",
+      "lead": "A passkey or a password, next to Malafat.",
       "addPasskey": "Add a passkey",
       "setPassword": "Set a password",
       "notNow": "Not now",
-      "signInAgain": "For your security, sign in with Malafat again, then add your passkey.",
-      "signInAgainPassword": "For your security, sign in with Malafat again, then set your password."
+      "signInAgain": "Sign in with Malafat again, then add your passkey.",
+      "signInAgainPassword": "Sign in with Malafat again, then set your password."
     },
     "signInCode": {
       "link": "Email me a sign-in code",
       "title": "Check your email",
-      "lead": "If {email} has an MTB3A account, we’ve sent it a 6-digit code. It works once, for 10 minutes.",
+      "lead": "If {email} has an MTB3A account, we’ve sent it a 6-digit code.",
       "sending": "Sending a code to",
       "code": "Sign-in code",
       "codeRequired": "Enter the 6-digit code from the email.",
@@ -2923,7 +2880,6 @@
     },
     "offerMail": {
       "offAsk": "Stop offers from MTB3A?",
-      "rowSub": "Emails about your account still reach you.",
       "offButton": "Unsubscribe",
       "offDone": "You won't get offers from MTB3A.",
       "onButton": "Send me offers again",
@@ -2933,8 +2889,8 @@
     "invoicing": {
       "uniformFile": {
         "title": "Uniform file (מבנה אחיד)",
-        "lead": "For the Tax Authority and your auditor: every document you issued between two dates, in format 1.31.",
-        "leadReader": "For the Tax Authority and an audit: every document this profile issued between two dates, in format 1.31.",
+        "lead": "Every document issued between two dates.",
+        "leadReader": "Every document issued between two dates.",
         "rangeLabel": "Which dates",
         "lastYear": "Last year",
         "thisYear": "This year",
@@ -2947,27 +2903,20 @@
         "done": "Downloaded",
         "counts": "Documents: {documents} · Records: {records}",
         "emptyTitle": "No documents in these dates.",
-        "emptyBody": "The file is still valid: it holds only the opening and closing records.",
         "failed": "Couldn’t prepare the file.",
-        "retry": "Try again",
-        "insideTitle": "What’s in the file?",
-        "insideIni": "the file’s summary and record counts",
-        "insideBkmv": "the documents, their lines and payments",
-        "insideReport": "a summary to print: count and total per document type"
+        "retry": "Try again"
       },
       "entryRow": "Invoicing",
       "entrySub": "Set up issuing tax invoices and receipts",
       "entryReady": "Ready to issue documents",
       "title": "Invoicing · {profile}",
-      "note": "The details printed on every document this profile issues.",
       "intro": {
         "title": "Issuing documents from MTB3A",
         "whatTitle": "What you can issue",
-        "whatBody": "Tax invoices, tax invoice-receipts, receipts and credit notes, each type numbered in its own sequence.",
+        "whatBody": "Tax invoices, invoice-receipts, receipts and credit notes.",
         "finalTitle": "Issued documents are final",
         "finalBody": "A document cannot be edited or deleted once issued. A tax invoice is corrected by issuing a credit note.",
         "allocationTitle": "Allocation numbers",
-        "allocationBody": "Once the profile is connected to the Tax Authority, each invoice that requires an allocation number receives one.",
         "begin": "Begin setup"
       },
       "progress": "{done} of 5 complete",
@@ -2992,7 +2941,7 @@
       "retry": "Try again",
       "details": {
         "vatId": "VAT file or company number",
-        "vatIdHint": "9 digits. A company or nonprofit is looked up in the public registry.",
+        "vatIdHint": "9 digits.",
         "invalid": "This number is not valid. Please check the digits.",
         "found": "Found in the registry: {name}",
         "legalName": "Legal name",
@@ -3017,7 +2966,6 @@
         "remove": "Remove the logo",
         "tooLarge": "The file is larger than 256 KB.",
         "notImage": "This file is not a PNG or JPEG image that can be printed.",
-        "kept": "Documents already issued keep the logo they were issued with.",
         "uploading": "Uploading…"
       },
       "defaults": {
@@ -3043,19 +2991,16 @@
         "yes": "Yes",
         "no": "No",
         "paymentTerms": "Payment terms, in days",
-        "paymentTermsHint": "The due date a new tax invoice suggests.",
         "paymentTermsInvalid": "Enter a number of days from 0 to 365.",
         "bankDetails": "Bank details",
         "footerNote": "Footer note",
         "offerAfterSave": "After saving income, offer to issue its document",
-        "documentsPreference": "Documents for clients with no preference",
-        "documentsPreferenceHint": "Clients with a preference of their own follow it."
+        "documentsPreference": "Documents for clients with no preference"
       },
       "numbering": {
         "question": "Are you already issuing documents from another system?",
         "no": "No, start from 1",
         "yes": "Yes, continue my numbering",
-        "fromOne": "Each document type is numbered in its own sequence, starting from 1.",
         "nextOf": "{type}: next number",
         "atLeastOne": "Enter the next number for at least one document type.",
         "fixed": "Documents of this type were already issued here; their numbering is fixed.",
@@ -3069,23 +3014,22 @@
         "PAYMENT_REQUEST": "Payment request"
       },
       "taxAuthority": {
-        "body": "The connection to the Tax Authority, for allocation numbers, will be available here. Until then, documents are issued without it.",
         "status": "When needed",
-        "connectBody": "Connect this profile to the Tax Authority so invoices that require an allocation number receive one. You sign in at the Tax Authority's own site; MTB3A never sees your password.",
+        "connectBody": "Connect this profile to receive allocation numbers.",
         "connect": "Connect to the Tax Authority",
         "connected": "Connected to the Tax Authority until {until}.",
         "expired": "The connection to the Tax Authority has ended. Connect again to keep receiving allocation numbers.",
         "disconnect": "Disconnect",
         "returnedFailed": "The connection was not completed. Please try again.",
-        "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
-        "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
+        "returnedRefused": "The connection wasn't approved. Try again.",
+        "endingSoon": "The connection to the Tax Authority ends on {until}. Connect again now.",
         "reconnect": "Connect again",
         "upgrade": "Upgrade to {plan}",
         "returnedPlan": "Nothing was connected."
       },
       "ready": {
         "title": "Your letterhead is ready",
-        "body": "You can change any part later. Documents already issued stay as they were issued."
+        "body": "You can change any part later."
       },
       "blocked": "Issuing opens once these are complete: {steps}",
       "paper": {
@@ -3180,7 +3124,7 @@
       },
       "backToList": "Issued documents",
       "issuedTitle": "{document} was issued",
-      "issuedBody": "Its number is final. Download the original to send it to the client.",
+      "issuedBody": "Download the original to send it to the client.",
       "outstanding": "Still owed",
       "allocationNumber": "Allocation number",
       "downloadPdf": "Download the original",
@@ -3189,7 +3133,6 @@
       "creditNote": "Issue a credit note",
       "similar": "Issue a similar document",
       "receiptLine": "Payment for {document}",
-      "finalNote": "This document stays as it was issued. A credit note corrects it.",
       "pdfFailed": "The PDF could not be prepared. Please try again.",
       "notFound": "This document could not be found.",
       "creditLine": "Credit for {document}",
@@ -3198,7 +3141,6 @@
         "choice": "What happened to the money they paid",
         "refunded": "Refunded to the client",
         "kept": "Kept as their credit",
-        "keptNote": "It stays on the client's account as credit toward what they owe next.",
         "refundedOn": "Refunded on",
         "required": "Choose whether the money was refunded or kept as credit."
       },
@@ -3216,7 +3158,7 @@
         "finish": "Finish setup to issue"
       },
       "colStatus": "Status",
-      "paymentRequestNote": "Not a tax document · no allocation number · not counted in VAT. Each payment gets its own invoice-receipt.",
+      "paymentRequestNote": "Not a tax document.",
       "paymentRequest": {
         "issued": "Issued",
         "status": {
@@ -3226,12 +3168,11 @@
           "CANCELLED": "Cancelled"
         },
         "covered": "{covered} of {gross}",
-        "notTax": "A payment request is not a tax document. The invoice-receipts that follow it are.",
         "linkedTitle": "Documents for its payments",
         "cancelledLine": "Cancelled {number} on {date}",
         "cancel": "Cancel payment request…",
         "cancelTitle": "Cancel {document}?",
-        "cancelBody": "The request is kept and marked cancelled with a number of its own. What the client owes doesn’t change. This can’t be undone.",
+        "cancelBody": "This can’t be undone.",
         "reason": "Reason (optional)",
         "cancelConfirm": "Cancel payment request",
         "cancelled": "{number} cancelled ({cancellation})",
@@ -3239,7 +3180,7 @@
       },
       "allocation": {
         "title": "This invoice needs an allocation number",
-        "why": "Its amount before VAT reaches the threshold and the client is VAT-registered. MTB3A can't request the number for this profile, so request it on the Tax Authority's site and enter it here.",
+        "why": "Request it on the Tax Authority's site and enter it here.",
         "details": "The details the Tax Authority asks for",
         "invoiceNumber": "Invoice number",
         "date": "Date",
@@ -3249,14 +3190,14 @@
         "copyAll": "Copy all",
         "open": "Open the Tax Authority's allocation page",
         "label": "Allocation number (9 digits)",
-        "hint": "Request it for invoice number {number}. The number isn't held: if another document is issued first, you'll be asked to request it again.",
+        "hint": "Request it for invoice number {number}.",
         "invalid": "An allocation number is 9 digits.",
         "orChange": "Or",
         "changeAmount": "change the amount"
       },
       "ask": {
         "title": "How do you issue documents to {client}?",
-        "body": "Asked once for each client. You can change it later on the client's page.",
+        "body": "You can change it later on the client's page.",
         "later": "Not now",
         "failed": "Couldn't save your choice. Try again.",
         "hint": {
@@ -3302,8 +3243,7 @@
         "late": "Late"
       },
       "clear": {
-        "title": "Nothing needs you right now.",
-        "body": "New receipts and late payments will show up here."
+        "title": "Nothing needs you right now."
       },
       "view": {
         "label": "View",
@@ -3329,7 +3269,7 @@
       "owed": "Owed",
       "received": "Received",
       "drop": "Drop the invoice here",
-      "dropHint": "A PDF, JPEG or PNG, up to 10 MB. MTB3A reads its number, date and total.",
+      "dropHint": "A PDF, JPEG or PNG, up to 10 MB.",
       "choose": "Choose a file",
       "wrongType": "Choose a PDF, JPEG or PNG file.",
       "tooLarge": "The file is larger than 10 MB.",
@@ -3341,7 +3281,6 @@
       "dateInvalid": "Enter the date as YYYY-MM-DD.",
       "amountMatches": "The total matches this entry.",
       "amountDiffers": "The total differs from this entry's {amount}. You can still attach it.",
-      "staysExternal": "MTB3A keeps the file with this entry. It does not number this invoice or include it in the uniform file.",
       "attach": "Attach",
       "exists": "This entry already has an invoice issued elsewhere.",
       "issuedHere": "MTB3A issued this entry's document; nothing to attach.",
@@ -3351,7 +3290,6 @@
       "open": "Open the file",
       "openFailed": "The file could not be opened. Try again.",
       "remove": "Remove",
-      "noIssueWhileAttached": "While this invoice is attached, MTB3A does not issue a document for this entry.",
       "column": "Document",
       "attachRow": "Attach an invoice for {client}",
       "attachShort": "Attach",
@@ -3414,10 +3352,10 @@
       "forOwed": "For Owed {number}",
       "forReceived": "For payment {number}",
       "reasons": {
-        "PAYMENT_REQUEST_PENDING": "Payment requests can't be issued here yet. Attach one issued elsewhere, or mark it not for invoice.",
-        "CURRENCY_NOT_ILS": "Documents are issued in shekels only. Attach an invoice issued elsewhere, or mark it not for invoice.",
-        "MIXED_ALLOCATION": "This payment covers entries that need different documents. Attach one issued elsewhere, or mark it not for invoice.",
-        "RECORDED_ELSEWHERE": "Recorded through a connected app. Attach its invoice, or mark it not for invoice."
+        "PAYMENT_REQUEST_PENDING": "Attach an invoice issued elsewhere, or mark it not for invoice.",
+        "CURRENCY_NOT_ILS": "Attach an invoice issued elsewhere, or mark it not for invoice.",
+        "MIXED_ALLOCATION": "Attach an invoice issued elsewhere, or mark it not for invoice.",
+        "RECORDED_ELSEWHERE": "Attach its invoice, or mark it not for invoice."
       },
       "selected": {
         "one": "{count} selected",
@@ -3430,12 +3368,11 @@
         "one": "Mark {count} entry not for invoice?",
         "other": "Mark {count} entries not for invoice?"
       },
-      "markConfirmBody": "They leave To issue and count outside Invoice income. You can bring them back.",
+      "markConfirmBody": "You can bring them back.",
       "backConfirm": {
         "one": "Bring {count} entry back to invoice?",
         "other": "Bring {count} entries back to invoice?"
       },
-      "backConfirmBody": "They return to To issue if they need a document.",
       "markN": {
         "one": "Mark {count}",
         "other": "Mark {count}"
@@ -3455,9 +3392,7 @@
       "creditNoteFirst": "This entry has a tax invoice. Issue a credit note first, then mark it not for invoice.",
       "markFailed": "That didn't save. Check your connection and try again.",
       "emptyTitle": "Nothing to issue.",
-      "emptyBody": "Every income that needs a document has one.",
       "emptyNfiTitle": "Nothing marked not for invoice.",
-      "emptyNfiBody": "Entries you mark not for invoice show here.",
       "rowMarked": "Marked not for invoice",
       "rowBack": "Back to invoice",
       "markRow": "Mark the entry for {client} not for invoice",
@@ -3499,18 +3434,17 @@
         "TAX_INVOICE_RECEIPT": "Invoice-receipt due"
       },
       "empty": {
-        "title": "No movements yet",
-        "body": "Owed amounts, payments and credits for this client will show here with a running balance."
+        "title": "No movements yet"
       }
     },
     "twoFactor": {
       "title": "Two-step sign-in",
       "enterApp": "Enter the 6-digit code from your authenticator app.",
-      "enterEmail": "We emailed a 6-digit code to {email}. It works for 10 minutes.",
+      "enterEmail": "We emailed a 6-digit code to {email}.",
       "code": "Code",
       "codeRequired": "Enter the 6-digit code.",
       "recoveryLabel": "Recovery code",
-      "recoveryHint": "One of the 10 codes you saved when you turned this on. Each works once.",
+      "recoveryHint": "One of the codes you saved.",
       "recoveryRequired": "Enter a recovery code, like k7mq-2xdp.",
       "useRecovery": "Use a recovery code instead",
       "useCode": "Use the code instead",
@@ -3531,24 +3465,22 @@
       "expired": "This step has expired. Start signing in again.",
       "startAgain": "That step has expired. Start again.",
       "newCodeAsked": "That step has expired. Enter the new code.",
-      "usePassword": "Your account asks for a code by email after your password. Sign in with your password instead.",
+      "usePassword": "Sign in with your password instead.",
       "recoveryUsed": {
         "one": "You signed in with a recovery code. {count} is left. If you lost your phone, set two-step sign-in up again in You › Account.",
         "other": "You signed in with a recovery code. {count} are left. If you lost your phone, set two-step sign-in up again in You › Account."
       },
       "setupStep": "First, confirm it’s you",
-      "setupLede": "Your account uses two-step sign-in, so this needs the code too.",
-      "rowOff": "Off. A code after your password, from an app or by email.",
+      "rowOff": "Off",
       "rowOnApp": "On · authenticator app",
       "rowOnEmail": "On · code by email",
       "chooseTitle": "Turn on two-step sign-in",
-      "chooseLede": "After your password, MTB3A will ask for a one-time code. Pick where it comes from.",
+      "chooseLede": "Pick where your code comes from.",
       "method": {
         "totp": "Authenticator app",
         "email": "Code by email"
       },
-      "appNote": "Recommended. Authy, Google Authenticator, 1Password and others. Works without signal.",
-      "emailNote": "Sent to your email each time you sign in.",
+      "appNote": "Recommended",
       "next": "Next",
       "scan": "Scan this with your authenticator app.",
       "qrAlt": "QR code for your authenticator app",
@@ -3558,7 +3490,7 @@
       "copyFailed": "Couldn’t copy. Select the text and copy it.",
       "openApp": "Open in authenticator app",
       "appCodeLabel": "Code the app shows",
-      "emailSent": "We sent a code to {email} to check it reaches you.",
+      "emailSent": "We sent a code to {email}.",
       "emailCodeLabel": "Code from the email",
       "turnOn": "Turn on",
       "codesTitle": "Save your recovery codes",
@@ -3571,7 +3503,6 @@
       "onToast": "Two-step sign-in is on. Your other sessions were signed out.",
       "renewedToast": "New recovery codes are ready. The old ones no longer work.",
       "offToast": "Two-step sign-in is off.",
-      "manageLede": "Your account asks for a code after your password.",
       "secondStep": "Second step",
       "codesLeftLabel": "Recovery codes",
       "codesLeft": {
@@ -3588,7 +3519,6 @@
       "confirmCode": "Code from your app",
       "issuing": {
         "title": "Two-step sign-in is required to issue documents.",
-        "body": "It keeps your Tax Authority connection safe if someone learns your password. It takes about a minute.",
         "setUp": "Set up two-step sign-in",
         "signInAgain": "Two-step sign-in is on, but this session started before it. Sign out and sign in again to issue."
       }
@@ -3597,7 +3527,45 @@
       "name": {
         "solo": "Solo",
         "business": "Business",
-        "firm": "Firm"
+        "firm": "Firm",
+        "starter": "Starter"
+      },
+      "starter": {
+        "includes": "1 business and your personal profile",
+        "monthly": "3 documents and 12 scans a month",
+        "taxAuthority": "Tax Authority connection: Solo and above"
+      }
+    },
+    "lapse": {
+      "continueStarter": "Continue free on Starter"
+    },
+    "planLimit": {
+      "upgradeSolo": "Upgrade to Solo",
+      "documents": {
+        "title": "You've issued Starter's 3 documents this month",
+        "body": "You can issue more on {date}."
+      },
+      "scans": {
+        "title": "You've used Starter's 12 scans this month",
+        "body": "You can scan again on {date}.",
+        "byHand": "Add the expense by hand"
+      },
+      "businesses": {
+        "title": "Starter includes one business"
+      }
+    },
+    "onboarding": {
+      "trial": {
+        "title": "Choose how to start",
+        "businesses": "Businesses",
+        "documents": "Documents a month",
+        "scans": "Scans a month",
+        "taxAuthority": "Tax Authority connection",
+        "card": "Card needed. Nothing is charged before {date}; cancel any time before then.",
+        "then": "Then {price} a month",
+        "once": "Offered only now.",
+        "start": "Try Solo free for 14 days",
+        "skip": "Continue on Starter"
       }
     }
   }

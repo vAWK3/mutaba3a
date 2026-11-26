@@ -123,17 +123,12 @@ function ShareLink({ token }: { token: string }) {
         }} />;
   if (state.kind === 'locked' || state.kind === 'gone' || state.kind === 'limit') return <Ended state={state} />;
   return (
-    <TwoPanelLayout context={<PrivateViewNote />}>
+    <TwoPanelLayout context={null}>
       <div className="loading loading--section">
         <BrandLoader size={40} />
       </div>
     </TwoPanelLayout>
   );
-}
-
-function PrivateViewNote() {
-  const t = useT();
-  return <p className="hp-two-panel-lead">{t('hosted.shareLink.privateView')}</p>;
 }
 
 function PinStep({
@@ -176,10 +171,9 @@ function PinStep({
   }
 
   return (
-    <TwoPanelLayout context={<PrivateViewNote />}>
+    <TwoPanelLayout context={null}>
       <form className="hp-two-panel-form" noValidate onSubmit={(event) => void onSubmit(event)}>
         <h1>{t(state.again ? 'hosted.shareLink.again.title' : 'hosted.shareLink.enterPin')}</h1>
-        {state.again && <p className="hp-setup-lead">{t('hosted.shareLink.again.body')}</p>}
         <PinBoxes
           value={pin}
           onChange={(next) => {
@@ -220,7 +214,7 @@ function ProblemLine({ problem }: { problem: PinProblem }) {
 function Ended({ state }: { state: Extract<ShareLinkState, { kind: 'locked' | 'gone' | 'limit' }> }) {
   const t = useT();
   return (
-    <TwoPanelLayout context={<PrivateViewNote />}>
+    <TwoPanelLayout context={null}>
       <section className="hp-two-panel-ended" role="status" data-state={state.kind}>
         <Scene name="link-closed" motion="drop-in" />
         <h1>{t(`hosted.shareLink.${state.kind}.title`)}</h1>
@@ -234,7 +228,7 @@ function Unreachable({ minutes, onRetry }: { minutes?: number; onRetry: () => vo
   const t = useT();
   const tp = useTp();
   return (
-    <TwoPanelLayout context={<PrivateViewNote />}>
+    <TwoPanelLayout context={null}>
       <section className="hp-two-panel-ended" role="alert">
         <p className="hp-banner hp-banner-error">
           <AlertIcon />

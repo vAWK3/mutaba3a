@@ -4940,6 +4940,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 
 **Status:** Accepted for the build (2026-10-24, MUT-361, unattended run on Basel's "go"). Decisions D1–D12 and review amendments R1–R9 in `.claude/designs/mut-361-lapse-gate.md` are **pending Basel's confirmation**. Builds on ADR-160 (states), ADR-162 (the resolver) and ADR-180.
 
+**Amended by ADR-284 (MUT-731, 2026-11-26):** while `STARTER_PLAN` is on, nothing is LOCKED and an unpaid trial or a failed payment past grace resolves ACTIVE on Starter; a deliberate cancel after paying stays READ_ONLY until the person continues free on Starter.
+
 **Context:** `/v1/me` reported each profile's entitlement (ACTIVE, GRACE, READ_ONLY, LOCKED) but nothing enforced it. ADR-160 decision 4 put the rule "in `store-guard.ts` and `authenticate()`".
 
 **Override log (ADR-160 decision 4):** *what changed:* the rule lives only at the door (`authenticate()` → `server/src/auth/billing-gate.ts`, rules in `server/src/billing/gate.ts`); the store guard is untouched. *Why:* the store guard sees only repository calls, so a READ_ONLY session could still do work that touches no write method (a presigned upload URL), and it refuses mid-route after the idempotency claim; the door refuses before any work, for cookie and device sessions alike, and is also where LOCKED reads must be refused. *Date:* 2026-10-24.
@@ -4988,6 +4990,8 @@ pass and a red team) found that billing could fail open. Accepted fixes:
 ## ADR-184: Trial Reminder Mails Are Daily Stage Windows, Sent Only Where the Trial Alone Decides the Account (MUT-419)
 
 **Status:** Accepted for the build (2026-10-24, MUT-419, unattended run on Basel's "go"). Decisions D1–D16 and review amendments R1–R12 in `.claude/designs/mut-419-trial-emails.md` are **pending Basel's confirmation**. Builds on ADR-159 §5 (the mailer), ADR-160 D3 (the timeline), ADR-165 (the `/jobs` door) and ADR-181 (the gate).
+
+**Amended by ADR-284 (MUT-731, 2026-11-26):** while `STARTER_PLAN` is on, the day-27 "locking soon" stage is never due and the day-11 and end mails say the trial ends on the free Starter plan.
 
 **Context:** ADR-160's trial ends at day 14 (read-only) and locks at day 30 whether or not the person opens the portal; nothing told someone who stayed away.
 
@@ -7011,6 +7015,8 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Status:** Accepted (2026-11-22; plan `.claude/designs/mut-702-three-plans-plan.md`, section "Split after MUT-700 and the eng review", Part A). Amends ADR-160 point 2's tier list (Freelancer and Firm) and ADR-162's "Firm includes Freelancer" ranking.
 
+**Amended by ADR-284 (MUT-731, 2026-11-26):** Starter is rank 0 with its own limits row (1, 0, 3, 12) and the only hard-capped plan; it is never stored as a tier.
+
 **Context:** Epic MUT-701 (Basel, 2026-11-22) sells three plans: Solo, Business and Firm. Who sells them, and through which payment provider, is open until MUT-700's decision 1 (Narabnd Studio Ltd owns Mutaba3a; MUT-701 comment 13467: no new Stripe or "Barmajiyat sells" assumptions, and plan logic stays apart from the provider). So the plans are built in two parts: Part A, provider-neutral, now; Part B (per-plan prices, Checkout per plan, plan change, the catalog script, the mirror's product tags, offers and retention per plan) held for MUT-700.
 
 **Decision:**
@@ -7138,6 +7144,8 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Status:** Accepted (2026-11-25; brief `.claude/designs/mut-735-usage-metering.md`, Basel's answers §11a). Metering and reports only: nothing is refused (caps are MUT-731/733).
 
+**Amended by ADR-284 (MUT-731, 2026-11-26):** decision 10's levels never come later than two steps (near) and one step (nudge) before the cap, so a 3-document cap warns at 1 and 2. Starter's caps are now passed to the conditional upsert (`hardCapOf`).
+
 **Context:** nothing was metered and `PLAN_LIMITS` (ADR-275) was read nowhere. Caps on documents and scans need one counter that cannot be raced past; the operator needs to see who uses what, on which plan.
 
 **Decision:**
@@ -7195,3 +7203,48 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** `STARTER_PLAN` exists before MUT-731; until MUT-731 is live it must stay unset in production (before-release note). The live privacy policy says the home page asks "whether sign-up is open"; the same request now also reads `starterPlan`, which carries nothing about the visitor; the held-back drafts (`docs/legal/drafts/privacy-policy-2026-11-25.*.json`) now say "sign-up and the free plan", and publish with MUT-732 (Basel, 2026-11-26).
 
 **Alternatives rejected:** writing the Starter copy unconditionally and holding the web release until MUT-731 (it would block every other landing change); a build-time flag (a web release to turn it on, and it could drift from the server); leaving Starter out (Basel asked for it).
+
+
+---
+
+## ADR-284: Starter Is the Fallback Plan: a Free, Hard-Capped Tier Anyone Uncovered Is On; a Deliberate Cancel Stays Read-Only Until the Person Chooses It (MUT-731)
+
+**Status:** Accepted (2026-11-26; brief `.claude/designs/mut-731-736-starter-plan.md` §2–§4, §11a; Basel's comments 13532, 13534, 13540, 13549, 13554; wireframes approved 2026-11-26). Amends ADR-160 point 3 and ADR-181 (an unpaid trial no longer locks; a failed payment past grace drops to Starter), ADR-275 (Starter is rank 0 with a limits row), ADR-281 decision 10 (levels on a small cap). Supersedes ADR-184's day-27 "locking soon" stage while Starter is on. Built dark behind `STARTER_PLAN`.
+
+**Context:** there was no free state: with nothing covering a person, `resolveEntitlement` said READ_ONLY (source NONE), and an unpaid trial ended READ_ONLY then LOCKED. Basel wants a free door that drives sign-ups and usage (13534), with every Starter limit a hard cap that offers the upgrade, and paid plans keeping a one-time Solo trial with a card.
+
+**Decision:**
+1. **A tier, never stored.** `plans.ts`: `starter` / `STARTER`, `RANK.STARTER = 0`, `PLAN_LIMITS.starter = 1 business, 0 partners, 3 documents, 12 scans`, `PLAN_FEATURES.starter.taxAuthority = false`, `HARD_CAP_PLANS = ENFORCED_BUSINESS_CAPS = {starter}`. No Prisma enum value: STARTER is the resolver's fallback, never a subscription's or a grant's tier (the stored `BillingTier` excludes it). Not on sale (`PLAN_NAMES` unchanged).
+2. **The rule (`STARTER_PLAN` on).** After Malafat, a live grant, a covering subscription, a running legacy trial and a running pause: an owner's profile is **ACTIVE on Starter**, unless the **most recent** lapse (by `endedAt`, not rank) was a deliberate cancel after paying (`endedReason` null or `cancellation_requested`, not `unpaid`, not Stripe's native `paused`, ended more than a day after `trialEnd`) and the person hasn't chosen Starter since that subscription's `createdAt`: then READ_ONLY STRIPE, as before. No owner (an operator firm): READ_ONLY NONE. LOCKED is never produced while it's on. Off: today's rules, unchanged (the option defaults to off).
+3. **The flag belongs to the store.** `BillingRepository.starterPlan` (set from config when the store is built: `PrismaLedgerStore.connect(url, { starterPlan })`, `new MemoryLedgerStore({ starterPlan })`), and `coverage.ts` passes it to the pure resolver. So every reader of an entitlement (the gate, `/v1/me`, `/v1/billing`, the agents, the mail jobs, `billing:uncovered`) resolves the same way with no flag threaded through each call; the signed-out local app's store has it off.
+4. **The business count is a post-pass in `coverage.ts`** (`billing/business-cap.ts`, pure): an owner's own businesses that resolve to Starter, beyond the cap, are READ_ONLY with `planLimit`. Their other businesses are read (one `billing.ownedBusinessesOf` query, Starter owners only) so the single-profile gate and `/v1/me` agree. Which stays active: `users.activeBusinessIds`, still theirs and still on Starter; **nothing chosen = every one read-only until the person picks** (Basel Q5: no default). The personal profile never counts; a business covered by something else (Malafat, a grant or subscription tied to it) isn't counted. A write on one answers the lapse gate's 402 `SUBSCRIPTION_LAPSED` with `details.reason: PLAN_LIMIT` and its own message, so every client's read-only handling applies; `billing:uncovered` leaves them out.
+5. **Hard caps at one door each, 409 `PLAN_LIMIT`** (`billing/plan-limit.ts`, the one builder: limit, plan, nextPlan, canUpgrade, and used/cap/resetsOn for the monthly meters). Documents: `hardCapOf(plan, DOCUMENTS)` passed to MUT-735's conditional upsert in `issueTx` (the memory store checks before writing); a receipt applying an already-issued document passes no cap (counted, never refused; Basel 2026-11-25). Issue all stops at the first refusal and returns `limit`. Scans: refused at the start (an unlocked pre-check) and at the complete (the counter; `UsageCapReached` rolls the flip back). Businesses: `POST /v1/profiles` refuses past personal + 1 unless `carriedOver` (Basel Q9: carry-over brings every business, the extras arrive read-only); `/v1/me` publishes personal + 1. Partners: the operator's grant-owner refuses a new partner on a Starter creator's business (CONFLICT, reason PLAN_LIMIT); existing partners stay (Q3). Malafat's writes have no plan and no cap.
+6. **The idempotency key is released on `PLAN_LIMIT`** (TD-340): nothing was done, so the same request succeeds after an upgrade or the reset.
+7. **No new no-card trials** while it's on: sign-up (`signupAccountOutcome`), sign-up approval and Malafat sign-in start none. Running legacy trials finish, then resolve to Starter; their mails say "then you move to the free Starter plan" and the day-27 stage is never due; an ended trial resolving to Starter still counts as "decided by the trial alone". The card-failed reminder says the plan drops to Starter. The monthly summary asks everyone (Q8; entitlement decides per profile).
+8. **The person's choices:** `POST /v1/billing/starter` ("Continue free on Starter", sets `starterChosenAt`; 409 NOTHING_TO_LEAVE while a plan covers them); `PUT /v1/billing/active-businesses` (exactly the cap, own Starter businesses; audited); `POST /v1/billing/solo-trial/offered` (Q7: the onboarding step was shown, so it never shows again). All three are 'open' in the lapse gate and 404 with Starter off. `GET /v1/billing` gains `starter` and `activeBusinesses`; `/v1/me` gains `plan { current, businesses, soloTrialOffer }`.
+9. **The one-time Solo trial** (Q7, 13554 #2) is offered on the web only, once, to an account created at or after `SOLO_TRIAL_OFFER_SINCE` that is on Starter and never offered or used one; a phone sign-up sees it on its first web visit. Unset (until MUT-702 Part B makes Solo buyable with a card-up-front trial) = never offered.
+10. **Levels on a small cap** (Basel 13554 #1): `levelOf` is 80%/90% but never later than two steps and one step before the cap, so Starter's 3 documents warn at 1 and 2; 12 scans are exactly 80% and 90%.
+
+**Consequences:** migration `20261126120000_mut731_starter` (additive, nullable: `billing_subscriptions.endedReason`, `trialEnd` mirrored from Stripe; `users.starterChosenAt`, `activeBusinessIds uuid[]`, `paidTrialOfferedAt`, `paidTrialUsedAt`). Merging it restarts the shared dev API. API 1.145.0-mut731, additive. Config `STARTER_PLAN`, `SOLO_TRIAL_OFFER_SINCE` (Terraform `starter_plan`, `solo_trial_offer_since`). Release order (brief §5): API with both off → web → the phone build that parses `PLAN_LIMIT` → run `billing:reconcile` (fills `endedReason`, `trialEnd`) → `STARTER_PLAN` on with MUT-702 Part B and MUT-705. The cleanup ticket removes the legacy trial rows, LOCKED, the trial mail job and the banner once no legacy trial is left, and drops the flag.
+
+**Alternatives rejected:** a STARTER Prisma tier or a materialized "Starter grant" (a migration of every account, and nothing to undo when the flag goes off); threading the flag through every coverage call (a missed caller would disagree with the gate); "most recently used" as the default active business (Basel Q5: they must pick); refusing at the start only for scans (two uploads racing at 11 of 12 would both land); 402 for a cap (402 is "plan ended" on every client).
+
+---
+
+## ADR-285: Starter in the Portal: Butter Notices at the Point of Use, a Blocking Business Pick, and the Upgrade Only Where a Plan Can Be Bought (MUT-731)
+
+**Status:** Accepted (2026-11-26; wireframes `mut731-wireframes.html` approved with Basel's answers 13554). Extends ADR-282 decision 8 (no explanatory copy) and DESIGN.md's banner and BlockingDialog rules.
+
+**Decision:**
+1. **A limit is not an error:** `PlanLimitNotice` uses the warning (butter) `hp-banner` recipe: the limit, the day it resets, and Upgrade to Solo (opens Billing's Subscribe step until MUT-705's plan picker) only when the server says a plan can be bought (`canUpgrade`) / the catalog is sellable. No explainer lines: limit, number, date, action.
+2. **Known before the person types:** the portal reads this month's meters (`GET /v1/billing.usage`, only for someone on Starter) and opens the Issue drawer refused at 3 of 3 (fields dimmed, Upgrade in Issue's place; a receipt paying an issued document is never refused), and refuses a scan at 12 of 12 before the upload with "Add the expense by hand". The server's `PLAN_LIMIT` shows the same notice when it races.
+3. **Each meter speaks where it's used:** the Issue drawer's footer names the documents left; Home shows only the fuller meter: from 80% one quiet line, from 90% an info banner with Upgrade to Solo and Hide (hidden until the limit, per browser), at the limit a fixed line that can't be hidden.
+4. **Pick your active business** is DESIGN.md's one BlockingDialog, before anything else, nothing pre-selected, "Choose a business" until one is picked then "Keep ‹name› active", and "See plans" (Business keeps 3; Upgrade to Solo everywhere else). It steps aside while Billing's Subscribe step is open. Billing's Active business row re-opens the list as a pane (Change).
+5. **Read-only after a cancel** keeps the lapse banner's place and lock icon and adds Starter's limits in one line and "Continue free on Starter" as the second button; Download my records becomes a text button.
+6. **Starter in Billing is a normal state** (Active chip, «أنت على خطة البداية المجانية»), with "This month" meters, the plan's three lines, the active business, and See plans in the footer.
+7. **The Solo trial step** is built and dark (`SOLO_TRIAL_CHECKOUT`, TODO MUT-702 Part B): its price line reads the live price list and is left out until Solo has a price (13554 #7: no placeholder prices).
+8. **Funnel events are the portal's** (ADR-090; contract 2.12.0): `plan_cap_reached`, `plan_upgrade_offered` (once per page view per limit), `plan_upgrade_chosen`, `starter_continue_chosen`.
+
+**Consequences:** new portal components `PlanLimitNotice`, `StarterPlan` (meters, Billing body, the pick list, Continue free), `PickActiveBusinessDialog`, `UsageNotice`, `SoloTrialStep`; `data/planUsage.ts`, `data/useStarterUsage.ts`. Release-QA area `portal.starter`. The pick rows don't show each business's record count and last entry yet (TD-343).
+
+**Alternatives rejected:** a rose error banner (a limit is not a failure); a modal for the 90% nudge (it nags); a pre-selected "most recent" business (Basel Q5); showing the freelancer price as Solo's (a placeholder price).

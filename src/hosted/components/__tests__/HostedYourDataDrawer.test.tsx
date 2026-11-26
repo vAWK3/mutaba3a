@@ -35,7 +35,7 @@ describe('Your data, signed in (MUT-325)', () => {
     expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?yourData=true`);
     expect(within(dialog).getByRole('checkbox', { name: 'Personal' })).toBeChecked();
     expect(within(dialog).getByRole('checkbox', { name: 'Haddad & Partners' })).toBeChecked();
-    expect(within(dialog).getByText(/an export, not a backup/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/It can't be restored into your account/)).toBeInTheDocument();
     expect(within(dialog).queryByRole('button', { name: 'Restore from file' })).not.toBeInTheDocument();
   });
 

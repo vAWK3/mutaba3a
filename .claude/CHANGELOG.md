@@ -28,6 +28,64 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — MUT-731 final checks: fixes found running the full suites
+
+### Fixed
+- The Solo trial step could never show: AuthGate marked the shell as shown in the same render `/v1/me` first answered. The step now holds the shell back as the terms step does (`session/AuthGate.tsx`, test `AuthGate.soloTrial.test.tsx`).
+- Operator console copy: the hint cleanup (8d1a2705, 62ae966c) updated the tests and the operator QA spec but not `en.json`/`ar.json`; the shorter lines are now in both languages (step-up, Decline, Sign out everywhere, Disable, reset link, own-account note, Revoke, accountant access).
+- The FakeApi publishes Starter's owned-profile cap of 2 as the server's `/v1/me` does, so New profile shows "Starter includes one business" (`qa/support/portalApi.ts`).
+- "You're on Starter now." showed as an error alert (the toast's default tone); it is an info toast now. A refused Issue drawer offered Upgrade to Solo twice (footer button and usage-line link); the line leaves it to the button.
+- Release-QA: specs updated for the cleanup's copy (billing paid-lapse, reports teaser, sharing, live stay offer) and Starter's UI; the FakeApi gives Starter people the lapse gate's verdict; `redeemSetupLink` sends its own client address so long operator runs don't hit the setup door's per-address 429.
+
+### Technical
+- Server tests: the store-guard test classifies repository flags (`billing.starterPlan`); the mirror test expects `endedReason`/`trialEnd`.
+- Postgres contract (`test:db`): `migration-mut731.test.ts` (old rows null, uuid[] round trip, schema diff) and `store-prisma-starter.test.ts` (documents race at 2 of 3: one issued, one plan_limit, no numbering gap; scan at 11 of 12 then refused at 12).
+- `qa/features/portal/starter.yaml` maps `data/starterQueries.ts`.
+
+## [Unreleased] - 2026-11-26 — The free Starter plan «البداية», server and portal (MUT-731, ADR-284, ADR-285, API 1.145.0-mut731)
+
+Built dark behind `STARTER_PLAN` (and the Solo trial behind `SOLO_TRIAL_OFFER_SINCE` / `SOLO_TRIAL_CHECKOUT`), to go on with MUT-702 Part B. The phone half is a separate session.
+
+### Added
+- Starter as a tier (`plans.ts`: rank 0, 1 business, no partners, 3 documents and 12 scans a month, no Tax Authority connection; the only hard-capped plan). With `STARTER_PLAN` on, a person nothing else covers is ACTIVE on Starter; a deliberate cancel after paying stays read-only until they choose Continue free on Starter; legacy trials and failed cards past grace end on Starter; nothing locks.
+- The business count (`billing/business-cap.ts`): a Starter owner's businesses past one are read-only (`planLimit`) until the person picks the active one (no default, Basel Q5); `PUT /v1/billing/active-businesses`.
+- 409 `PLAN_LIMIT` at Starter's doors (`billing/plan-limit.ts`): the 4th document (a receipt paying an issued document is never refused), the 13th scan (start and complete), a second business (unless carried over), a new partner (operator). Issue all stops at the first refusal and returns `limit`. The idempotency key is released on `PLAN_LIMIT` (TD-340).
+- `POST /v1/billing/starter`, `POST /v1/billing/solo-trial/offered`; `GET /v1/billing` `starter` and `activeBusinesses`; `/v1/me` `plan { current, businesses, soloTrialOffer }` and Starter's `maxOwnedProfiles` (personal + 1); `BillingEntitlement.planLimit`, source and tier `STARTER`.
+- Config `STARTER_PLAN`, `SOLO_TRIAL_OFFER_SINCE` (`.env.example`, Terraform `starter_plan`, `solo_trial_offer_since`, a tftest).
+- Portal (wireframes 1–5, 7): Billing on Starter (meters, plan lines, active business, See plans); `PlanLimitNotice` in the Issue drawer (opens refused at 3 of 3), receipts upload (refused before the upload, Add the expense by hand) and New profile; the blocking pick-your-business dialog; Continue free on Starter on the read-only banner; a business read-only for the count says so with Change; Home's 80% line, 90% nudge (Hide) and fixed limit line; the Issue drawer's documents-left footer; the dark Solo trial step. 48 strings, ar + en. Analytics contract 2.12.0 (four plan events).
+- Release-QA area `portal.starter` (7 automated features on the FakeApi, which learns a `starter` seed; the Solo trial step declared hidden).
+
+### Changed
+- Sign-up, sign-up approval and Malafat sign-in start no trial while Starter is on. Trial mails drop the day-27 stage and say the trial ends on Starter; the card-failed reminder says the plan drops to Starter; the monthly summary asks everyone.
+- `levelOf`: never later than two steps / one step before the cap (Starter's 1 and 2 of 3 documents warn).
+- The Stripe mirror keeps `cancellation_details.reason` and `trial_end`; `billing:uncovered` leaves businesses read-only for the count out.
+- Terms drafts (unpublished, MUT-732): §4 Plans (Starter, the one-time Solo trial, a failed payment → Starter) and §5 (after a cancel: read-only until subscribing again or continuing free).
+
+### Technical
+- Migration `20261126120000_mut731_starter` (additive, nullable). `BillingRepository.starterPlan` carries the flag from config (`PrismaLedgerStore.connect(url, { starterPlan })`), so every entitlement reader agrees. TD-340 resolved; TD-342 to TD-346 added.
+
+## [Unreleased] - 2026-11-26 — Explainer lines removed or shortened, per Basel's review, 2026-11-26
+
+Basel reviewed every user-facing line that explains how the system works instead of helping the user act. His decisions are applied here, in English and Arabic.
+
+### Removed
+- Portal: 102 explainer lines (hint IDs H2-H3, H8, H13, H24, H28, H30, H35-H36, H40-H43, H47-H54, H57, H60, H64, H67-H68, H70, H72-H74, H77-H79, H82, H85-H86, H89, H94-H95, H97, H102-H104, H106-H107, H118, H128, H134-H136, H145-H146, H149, H153, H171, H189, H192, H194-H195, H205, H219, H221, H226, H228, H231, H237-H240, H245-H246, H250, H252, H258, H260-H262, H264, H266, H272, H274-H276, H279, H283-H286, H288, H296, H303-H304, H307, H309-H310, H314-H316, H321, H326, H329, H331) with their i18n keys, the unused `coOwnsOthersProfiles` rule and the `PrivateViewNote` component. Hero and Get-it notes on the landing site (H332-H333, H337-H338), plus their CSS rule.
+- Emails: H351, H354, H356, H360, H364, H370, H371 (a sentence or paragraph each).
+- Operator console: the notes on the row subtitle, signups and firms empty states, step-up QR hint, accounts search hint, enable and billing-grant subtitles, no-end-date hint, the four "You" subtitles and two usage empty-state bodies (14 keys).
+
+### Changed
+- Portal: 137 lines shortened (H4 and on; IDs in the review list), including H32, H33, H84 and H255 whose text was written here (no text came with the decision).
+- Landing: H334, H335, H340-H343. Emails: H352, H353, H357-H359, H361, H365, H368, H369, H373, H374, H376, H380, H381, H383 (the come-back mail keeps its s.30A promotional footer).
+- Operator console: 18 notes shortened (confirm texts, banners, subtitles, plan and feature notes).
+- `RadioCards` and `ProfileTypeCards` take an optional note and disabled reason; the accountant grant row and the Malafat office page drop the empty element when there is no line.
+- Where one string served two keys (`monthlySummary.rowSub` kept, `offerMail.rowSub` removed) the unsubscribe page shows the lead for the monthly summary only.
+
+### Technical
+- Specs and unit tests that asserted the old text were updated (qa/specs, qa/features, src tests); no QA video was recorded.
+
+
+---
+
 ## [Unreleased] - 2026-11-26 — The landing and its FAQ catch up with the month; Starter copy behind the server's switch (ADR-283, API 1.144.0-landing)
 
 ### Added

@@ -7,7 +7,7 @@
 export interface RadioCardOption<T extends string> {
   value: T;
   label: string;
-  note: string;
+  note?: string;
 }
 
 export interface RadioCardsProps<T extends string> {
@@ -20,7 +20,7 @@ export interface RadioCardsProps<T extends string> {
   describedBy?: string;
   invalid?: boolean;
   /** A card that can't be chosen here, explained at the card itself in place of its note. */
-  disabled?: { value: T; reason: string };
+  disabled?: { value: T; reason?: string };
 }
 
 export function RadioCards<T extends string>({ name, options, value, onChange, labelledBy, describedBy, invalid, disabled }: RadioCardsProps<T>) {
@@ -33,7 +33,7 @@ export function RadioCards<T extends string>({ name, options, value, onChange, l
             <input type="radio" name={name} value={option.value} checked={value === option.value} disabled={off} onChange={() => onChange(option.value)} />
             <span className="hp-type-card-text">
               <span className="hp-type-card-label">{option.label}</span>
-              <span className="hp-type-card-seed">{off ? disabled.reason : option.note}</span>
+              {(off ? disabled.reason : option.note) && <span className="hp-type-card-seed">{off ? disabled.reason : option.note}</span>}
             </span>
           </label>
         );

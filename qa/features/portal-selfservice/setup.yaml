@@ -25,7 +25,7 @@ features:
       - On "Create a passkey" press Create a passkey; the device confirms
       - Sign out, then Sign in with a passkey
     expect:
-      - The step says the passkey saves typing the password and syncs through iCloud Keychain or Google Password Manager, with Create a passkey and Not now
+      - The step says the passkey saves typing the password, with Create a passkey and Not now
       - '"Passkey added", Home, and no "Add a passkey" card'
       - The passkey signs in to Home
   - id: passkey-not-now

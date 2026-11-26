@@ -171,12 +171,6 @@ describe('the Move drawer (MUT-503 DR3, DR6, AC2)', () => {
     expect(within(dialog).getByRole('button', { name: 'Billing' })).toBeInTheDocument();
   });
 
-  it('a receipt still being read says the reading finishes on the profile chosen (DR9)', async () => {
-    portal(`${gallery}?move=${R2}`);
-    const dialog = await screen.findByRole('dialog', { name: 'Move receipt' });
-    expect(within(dialog).getByText('Still being read. The reading finishes on the profile you choose.')).toBeInTheDocument();
-  });
-
   it('a refusal shows in the drawer and the receipt stays (402 lapsed meanwhile)', async () => {
     const { user } = portal(`${gallery}?move=${R1}`, { routes: { [`POST /v1/receipts/${R1}/move`]: () => fail(402, 'SUBSCRIPTION_LAPSED', { profileId: ORG_A, state: 'READ_ONLY' }) } });
     const dialog = await screen.findByRole('dialog', { name: 'Move receipt' });

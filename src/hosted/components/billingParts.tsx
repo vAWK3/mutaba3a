@@ -40,7 +40,7 @@ export function BuyerChoice({ idPrefix, value, onChange, consumerEverywhere }: {
         onChange={onChange}
         options={[
           { value: 'person', label: t('hosted.billing.subscribe.person'), note: t(consumerEverywhere ? 'hosted.billing.subscribe.personNoteEverywhere' : 'hosted.billing.subscribe.personNote') },
-          { value: 'business', label: t('hosted.billing.subscribe.business'), note: t('hosted.billing.subscribe.businessNote') },
+          { value: 'business', label: t('hosted.billing.subscribe.business') },
         ]}
       />
     </div>

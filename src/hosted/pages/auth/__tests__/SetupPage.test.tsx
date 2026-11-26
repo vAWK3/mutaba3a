@@ -95,7 +95,7 @@ describe('a valid link', () => {
   it('words a reset link as a new password that signs the account out elsewhere', async () => {
     await openForm({ [CHECK]: valid({ purpose: 'RESET' }) });
     expect(screen.getByRole('heading', { level: 1, name: 'Choose a new password' })).toBeInTheDocument();
-    expect(screen.getByText(/signs this account out everywhere else/)).toBeInTheDocument();
+    expect(screen.getByText(/signs you out everywhere else/)).toBeInTheDocument();
   });
 
   it('hands password managers a visible read-only username and a new-password field, with the rule shown (D2)', async () => {

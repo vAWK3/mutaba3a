@@ -60,7 +60,8 @@ const reporter = createSentryReporter({
   environment: config.SENTRY_ENVIRONMENT,
   release: apiRelease(serverPackageVersion(), config.SERVICE_VERSION),
 });
-const store = PrismaLedgerStore.connect(config.DATABASE_URL);
+// MUT-731 (ADR-284): STARTER_PLAN is the store's, so every entitlement reader (routes and jobs) resolves the same way.
+const store = PrismaLedgerStore.connect(config.DATABASE_URL, { starterPlan: config.STARTER_PLAN });
 const rateLimiter = new SlidingWindowRateLimiter(config.RATE_LIMIT_PER_MINUTE);
 const signInThrottle = new SignInThrottle();
 const signInIpLimiter = new SlidingWindowRateLimiter(SIGN_IN_POLICY.ipPerMinute);
@@ -256,6 +257,7 @@ const app = createApp({
   billingGate: config.BILLING_GATE,
   twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   invoicingForAll: config.INVOICING_FOR_ALL,
+  soloTrialOfferSince: config.SOLO_TRIAL_OFFER_SINCE ?? null,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },

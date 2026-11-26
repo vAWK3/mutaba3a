@@ -74,7 +74,6 @@ export function YouProfiles({ active }: { active: HostedProfile | null }) {
         <RowButton tone="action" inert={!canCreate} label={t('hosted.shell.switcher.newProfile')} sub={newProfileSub} onClick={drawers.openNew} />
         <RowButton tone="action" label={t('hosted.shell.switcher.manage')} onClick={drawers.openManage} />
       </RowGroup>
-      {!local && <p className="hp-you-foot">{t('hosted.shell.switcher.localFooter')}</p>}
     </>
   );
 }

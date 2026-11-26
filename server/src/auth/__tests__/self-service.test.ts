@@ -87,6 +87,11 @@ describe('recoveryPurposeOf (MUT-366, D5)', () => {
 });
 
 describe('signupAccountOutcome (MUT-366 D1, MUT-367)', () => {
+  it('MUT-731: with Starter on no branch starts a trial (a new account is on Starter)', () => {
+    expect(signupAccountOutcome(signupLink(), NOW, { starter: true })).toEqual({ status: 'ACTIVE', trialStartsAt: null, review: null });
+    expect(signupAccountOutcome(signupLink({ domainClass: 'WEBMAIL', domainReasons: ['webmail'] }), NOW, { starter: true }).trialStartsAt).toBeNull();
+  });
+
   it('opens a BUSINESS address at once and starts the trial at the redeem', () => {
     expect(signupAccountOutcome(signupLink(), NOW)).toEqual({ status: 'ACTIVE', trialStartsAt: NOW, review: null });
   });

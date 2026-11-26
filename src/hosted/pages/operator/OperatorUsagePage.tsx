@@ -80,7 +80,7 @@ function PlansView({ month }: { month: string }) {
       data={query.data}
       isEmpty={(o) => o.plans.length === 0}
       loading={<Skeleton rows={SKELETON_ROWS} />}
-      empty={<Empty title={t('hosted.operator.usage.emptyMonthTitle')} body={t('hosted.operator.usage.emptyMonthBody')} />}
+      empty={<Empty title={t('hosted.operator.usage.emptyMonthTitle')} />}
     >
       {(overview) => (
         <ul className="hp-passkey-list hp-operator-list" aria-label={t('hosted.operator.usage.plansLabel')} aria-busy={query.isPlaceholderData || undefined}>
@@ -232,7 +232,7 @@ function RoutesView() {
       data={query.data}
       isEmpty={(r) => r.routes.length === 0}
       loading={<Skeleton rows={SKELETON_ROWS} />}
-      empty={<Empty title={t('hosted.operator.usage.emptyRoutesTitle')} body={t('hosted.operator.usage.emptyRoutesBody')} />}
+      empty={<Empty title={t('hosted.operator.usage.emptyRoutesTitle')} />}
     >
       {(report) => (
         <>

@@ -53,7 +53,7 @@ describe('Firm request in the edit pane (MUT-300)', () => {
     await user.click(within(section).getByRole('button', { name: 'Request firm features' }));
     await waitFor(() => expect(requests(api.calls)).toHaveLength(1));
     expect(requests(api.calls)[0].headers.get('Idempotency-Key')).toMatch(/.+/);
-    expect(await within(section).findByText(/^Requested on .*Firm features show up here once they're turned on\.$/)).toBeInTheDocument();
+    expect(await within(section).findByText(/^Requested on .*\.$/)).toBeInTheDocument();
     expect(within(section).queryByRole('button', { name: 'Request firm features' })).toBeNull();
   });
 

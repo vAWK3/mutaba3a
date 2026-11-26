@@ -49,7 +49,7 @@ export function OperatorFirmsPage({ headingRef }: { headingRef: RefObject<HTMLHe
       data={query.data}
       isEmpty={(list) => list.data.length === 0}
       loading={<Skeleton rows={SKELETON_ROWS} />}
-      empty={<Empty title={t('hosted.operator.firms.emptyTitle')} body={t('hosted.operator.firms.emptyBody')} />}
+      empty={<Empty title={t('hosted.operator.firms.emptyTitle')} />}
     >
       {(list) => (
         <ul ref={listRef} className="hp-passkey-list hp-operator-list" aria-label={t('hosted.operator.firms.listLabel')}>

@@ -68,7 +68,7 @@ test('Signed in, download my records from Your data, with progress, as one expor
     await expect(page).toHaveURL(/yourData=true/);
     await expect(dialog.getByRole('checkbox', { name: 'Nour Studio' })).toBeChecked();
     await expect(dialog.getByRole('checkbox', { name: 'Haddad Law' })).toBeChecked();
-    await expect(dialog.getByText(/an export, not a backup/)).toBeVisible();
+    await expect(dialog.getByText(/It can't be restored into your account/)).toBeVisible();
   });
 
   const downloading = page.waitForEvent('download');

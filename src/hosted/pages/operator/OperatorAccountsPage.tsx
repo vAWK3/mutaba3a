@@ -52,7 +52,6 @@ export function OperatorAccountsPage({ q, onSearch }: { q: string; onSearch: (q:
       <form className="hp-operator-search" role="search" onSubmit={submit}>
         <Input
           label={t('hosted.operator.accounts.searchLabel')}
-          hint={t('hosted.operator.accounts.searchHint')}
           type="search"
           dir="auto"
           autoCapitalize="none"

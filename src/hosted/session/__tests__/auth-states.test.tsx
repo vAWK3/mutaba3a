@@ -191,7 +191,7 @@ describe('S6 did not match', () => {
     const { user } = await onSignIn({ 'POST /v1/sessions': () => fail(401, 'INVALID_CREDENTIALS') });
     await submit(user);
     expect(await screen.findByRole('alert')).toHaveTextContent(
-      "That email and password don't match. After 5 tries, sign-in pauses for 15 minutes.",
+      "That email and password don't match.",
     );
     expect(screen.getByLabelText('Password')).toHaveValue('');
     expect(screen.getByLabelText('Password')).toHaveFocus();

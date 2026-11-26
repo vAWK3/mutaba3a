@@ -29,7 +29,8 @@ import { firstYearOf, OFFERS, offerEligible, offerView, type Offer, type OfferEn
 import { offerOrNothing } from '../billing/offer-read.js';
 import { comebackRefusalOf, comebackSubscriptionRefusalOf, type ComebackOffer } from '../billing/comeback.js';
 import { comebackFactsOf, comebackOfferOrNothing } from '../billing/comeback-read.js';
-import { entitlementsFor } from '../billing/coverage.js';
+import { entitlementsWithFactsFor } from '../billing/coverage.js';
+import { businessCapView as viewOf } from '../billing/business-cap.js';
 import { profilePlanSubscriptions, trialTimelineOf } from '../billing/entitlement.js';
 import { currentPlanOf } from '../billing/plans.js';
 import { accountantPlanSubscriptions, resolveAccountantPlan } from '../billing/accountant-plan.js';
@@ -159,6 +160,8 @@ export function billingRoutes(store: LedgerStore, options: BillingRouteOptions):
           currentPlan: currentPlanOf(owned.entitlements),
           // MUT-735 (ADR-281): one primary-key read of this month's counters.
           usage: await billingUsage(store, user.id, owned, now),
+          // MUT-731 (ADR-284): Starter's choice and the pick-your-business state, from the same coverage read.
+          ...starterView(store, user.id, owned),
         },
         200,
       );
@@ -394,8 +397,22 @@ async function ownedWithEntitlements(store: LedgerStore, userId: string, now: Da
   const withMalafat = await Promise.all(
     profiles.map(async (organization) => ({ organization, malafatConnected: (await store.integrations.findByOrganizationAndProvider(organization.id, 'MALAFAT'))?.status === 'CONNECTED' })),
   );
-  const entitlements = await entitlementsFor(store, withMalafat, now);
-  return { profiles, entitlements: profiles.map((p) => entitlements.get(p.id)!) };
+  const { entitlements, facts, businessCaps } = await entitlementsWithFactsFor(store, withMalafat, now, userId);
+  return { profiles, entitlements: profiles.map((p) => entitlements.get(p.id)!), facts, businessCaps };
+}
+
+/**
+ * MUT-731 (ADR-284): GET /v1/billing's `starter` and `activeBusinesses`. `canContinueFree`: a profile the person
+ * created is read-only from a lapsed paid plan (the cancel row), so "Continue free on Starter" would open it.
+ */
+function starterView(store: LedgerStore, userId: string, owned: Awaited<ReturnType<typeof ownedWithEntitlements>>) {
+  if (!store.billing.starterPlan) return { starter: null, activeBusinesses: null };
+  const canContinueFree = owned.entitlements.some((e) => e.state === 'READ_ONLY' && e.source === 'STRIPE' && !e.paused && !e.planLimit);
+  const caps = owned.businessCaps.get(userId);
+  return {
+    starter: { chosenAt: owned.facts.starterChosen?.get(userId)?.toISOString() ?? null, canContinueFree },
+    activeBusinesses: caps && caps.businesses.length > caps.cap ? viewOf(caps) : null,
+  };
 }
 
 

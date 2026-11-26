@@ -496,6 +496,12 @@ export interface FakeApiSeed {
   billingStanding?: 'open' | 'read-only' | 'locked' | null;
   /** MUT-361: GET /v1/billing's answer (Settings › Billing, and whether a payment would cover a profile). */
   billing?: Json;
+  /**
+   * MUT-731 (ADR-284): the person is on the free Starter plan (the server's STARTER_PLAN on). GET /v1/billing, /v1/me
+   * `plan` and every owned profile's billing follow it; issuing, library scans and New profile refuse at Starter's
+   * limits (409 PLAN_LIMIT, as the server does); Continue free and the active business answer. Overrides `billing`.
+   */
+  starter?: StarterSeed;
   /** MUT-175: each profile's money for GET /v1/summaries/activity; a profile not named reads the shared payments and expenses. */
   reports?: Record<string, StubReportRecords>;
   /**
@@ -778,6 +784,35 @@ export interface StubSetupLink {
   purpose?: 'SETUP' | 'RESET';
 }
 
+/** MUT-731: a Starter person's month and choices, as the fake server holds them. */
+export interface StarterSeed {
+  /** Documents issued this month (cap 3) and scans finished (cap 12). */
+  documents?: number;
+  scans?: number;
+  /** Read-only after cancelling a paid plan; Continue free on Starter moves them to Starter. */
+  cancelled?: boolean;
+  /** The businesses over Starter's count: none kept active until the person picks (Basel Q5). */
+  businesses?: { active: string[]; readOnly: string[] };
+  /** Whether a paid plan can be bought here (Upgrade to Solo shows). Default true. */
+  sellable?: boolean;
+}
+
+const STARTER_CAPS = { documents: 3, scans: 12 } as const;
+
+/** The server's levelOf (usage/caps.ts): at least two steps and one step before the cap, else 80% and 90%. */
+function starterLevel(used: number, cap: number): 'ok' | 'near' | 'nudge' | 'at_cap' {
+  if (used >= cap) return 'at_cap';
+  if (used >= Math.min(cap * 0.9, cap - 1)) return 'nudge';
+  if (used >= Math.min(cap * 0.8, cap - 2)) return 'near';
+  return 'ok';
+}
+
+/** The 1st of next month (Asia/Jerusalem is close enough for the fake), as GET /v1/billing's `resetsOn`. */
+function nextMonthStart(): string {
+  const now = new Date();
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)).toISOString().slice(0, 10);
+}
+
 /** GET /v1/billing on a server with Stripe off and a person with no trial or plan (every field the schema requires). */
 const BILLING_OFF: Json = {
   configured: false,
@@ -802,6 +837,8 @@ export class FakeApi {
   /** MUT-361: what /v1/me says about the lapse gate. */
   billingStanding: 'open' | 'read-only' | 'locked' | null;
   private readonly billingOverview: Json | null;
+  /** MUT-731: the Starter state (null: the person isn't on Starter). */
+  starter: (StarterSeed & { documents: number; scans: number }) | null;
   private profiles: ProfileState[];
   private readonly customers;
   private readonly projects;
@@ -869,8 +906,10 @@ export class FakeApi {
     this.reports = { ...(seed.reports ?? {}) };
     this.verdicts = { ...(seed.verdicts ?? {}) };
     this.signedIn = seed.signedIn ?? true;
-    this.billingStanding = seed.billingStanding ?? null;
+    // MUT-731: Starter runs with the lapse gate on (a business over the count is READ_ONLY), so /v1/me has a verdict.
+    this.billingStanding = seed.billingStanding ?? (seed.starter ? 'open' : null);
     this.billingOverview = seed.billing ?? null;
+    this.starter = seed.starter ? { ...seed.starter, documents: seed.starter.documents ?? 0, scans: seed.starter.scans ?? 0 } : null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
     this.customers = Array.from({ length: seed.clients ?? 0 }, (_, i) => ({ ...customer(i), ...(seed.clientPreference ? { documentsPreference: seed.clientPreference } : {}) }));
     this.projects = [...(seed.projects ?? [])];
@@ -1024,11 +1063,87 @@ export class FakeApi {
       // MUT-559: present only while the server has accountant access on (the portal's gate, MUT-561 D8)
       ...(this.accountants ? { clients: [] } : {}),
       billingStanding: this.billingStanding,
+      ...(this.starter ? { plan: this.starterPlan() } : {}),
+      // MUT-731: the server publishes Starter's one business plus the personal profile as the owned-profile cap (me.ts).
+      ...(this.starter && !this.starter.cancelled ? { limits: { ...body.limits, maxOwnedProfiles: Math.min(body.limits.maxOwnedProfiles, 2) } } : {}),
       profiles: body.profiles.map((p) => {
         const state = this.profiles.find((s) => s.stub.id === p.id);
-        return state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
+        const withState = state ? { ...p, defaultCurrency: state.defaultCurrency, version: state.version } : p;
+        return this.starter && withState.owned ? { ...withState, billing: this.starterBilling(withState.id) } : withState;
       }),
     };
+  }
+
+  /** MUT-731: /v1/me `plan`. */
+  private starterPlan() {
+    const s = this.starter!;
+    const b = s.businesses;
+    const cap = 1;
+    const businesses = b && b.active.length + b.readOnly.length > cap ? { cap, active: b.active, readOnly: b.readOnly, mustChoose: b.active.length === 0 } : null;
+    return { current: s.cancelled ? null : 'starter', businesses, soloTrialOffer: false };
+  }
+
+  /** MUT-731: each owned profile's entitlement: Starter, read-only for the count, or read-only after a cancel. */
+  private starterBilling(profileId: string) {
+    const s = this.starter!;
+    if (s.cancelled) return { state: 'READ_ONLY', source: 'STRIPE', tier: 'FREELANCER', until: null, paused: false };
+    if (s.businesses?.readOnly.includes(profileId)) return { state: 'READ_ONLY', source: 'STARTER', tier: 'STARTER', until: null, paused: false, planLimit: true };
+    return { state: 'ACTIVE', source: 'STARTER', tier: 'STARTER', until: null, paused: false };
+  }
+
+  /** MUT-731: GET /v1/billing, Continue free and the active business, for a Starter person. */
+  private starterAnswer(e: Logged, id?: string, sub?: string) {
+    const s = this.starter!;
+    if (e.method === 'GET' && !id) {
+      const meters = (['documents', 'scans'] as const).map((meter) => ({ meter, used: s[meter], limit: STARTER_CAPS[meter], level: starterLevel(s[meter], STARTER_CAPS[meter]) }));
+      const plan = this.starterPlan();
+      return json({
+        ...BILLING_OFF,
+        configured: s.sellable !== false,
+        catalog: s.sellable === false ? { ILS: null, USD: null } : { ILS: { month: 2900, year: 29000 }, USD: null },
+        coveredProfileIds: this.profiles.filter((p) => p.stub.owned).map((p) => p.stub.id),
+        currentPlan: plan.current,
+        usage: { month: nextMonthStart().slice(0, 7), resetsOn: nextMonthStart(), plan: s.cancelled ? 'none' : 'starter', meters, businesses: { used: 1, limit: 1 }, partners: { limit: 0 } },
+        starter: { chosenAt: null, canContinueFree: s.cancelled === true },
+        activeBusinesses: plan.businesses,
+      });
+    }
+    if (e.method === 'POST' && id === 'starter') {
+      s.cancelled = false;
+      return json({ starterChosenAt: new Date().toISOString(), changed: true });
+    }
+    if (e.method === 'PUT' && id === 'active-businesses' && s.businesses) {
+      const [chosen] = ((e.body ?? {}) as { organizationIds?: string[] }).organizationIds ?? [];
+      const all = [...s.businesses.active, ...s.businesses.readOnly];
+      if (!chosen || !all.includes(chosen)) return notFound();
+      s.businesses = { active: [chosen], readOnly: all.filter((x) => x !== chosen) };
+      return json({ cap: 1, active: s.businesses.active, readOnly: s.businesses.readOnly, mustChoose: false });
+    }
+    if (e.method === 'POST' && id === 'solo-trial' && sub === 'offered') return json({ offeredAt: new Date().toISOString() });
+    return null;
+  }
+
+  /** MUT-731: the server's 409 PLAN_LIMIT at Starter's doors, and the counters moving on success. */
+  private starterRefusal(e: Logged, resource?: string, id?: string) {
+    const s = this.starter!;
+    const limit = (kind: 'documents' | 'scans' | 'businesses') =>
+      json({ error: { code: 'PLAN_LIMIT', message: 'limit', details: { limit: kind, plan: 'starter', nextPlan: 'solo', canUpgrade: s.sellable !== false, ...(kind === 'businesses' ? { used: 1, cap: 1 } : { used: s[kind], cap: STARTER_CAPS[kind], resetsOn: nextMonthStart() }) } } }, 409);
+    if (resource === 'issued-documents' && e.method === 'POST' && !id) {
+      const body = (e.body ?? {}) as { docType?: string; appliesToDocumentId?: string };
+      const exempt = body.docType === 'RECEIPT' && Boolean(body.appliesToDocumentId);
+      if (!exempt && s.documents >= STARTER_CAPS.documents) return limit('documents');
+      s.documents += 1;
+    }
+    if (resource === 'receipts' && id === 'uploads' && e.method === 'POST') {
+      if (s.scans >= STARTER_CAPS.scans) return limit('scans');
+      s.scans += 1;
+    }
+    if (resource === 'profiles' && e.method === 'POST' && !id) {
+      const body = (e.body ?? {}) as { carriedOver?: boolean };
+      const businesses = this.profiles.filter((p) => p.stub.owned && p.stub.type === 'BUSINESS').length;
+      if (!body.carriedOver && businesses >= 1) return limit('businesses');
+    }
+    return null;
   }
 
   /** Sign in with every /v1 call answered by this API (and openSignedInPortal's defaults behind it). */
@@ -1127,7 +1242,14 @@ export class FakeApi {
     if (resource === 'me' && id === 'closure' && method === 'POST') return this.closeAnswer(e.body as { password?: string } | null);
     // Unseeded, the real API's shape with Stripe off: no subscription, no trial, nothing sellable. (Falling through
     // answered something without `subscription`, which Billing reads as a plan and crashed on, MUT-532.)
+    if (resource === 'billing' && this.starter) {
+      const answered = this.starterAnswer(e, id, sub);
+      if (answered) return answered;
+    }
     if (resource === 'billing' && method === 'GET' && !id) return json(this.billingOverview ?? BILLING_OFF);
+    // MUT-731: Starter's limits at their doors, as the server refuses them (409 PLAN_LIMIT; nothing done).
+    const refusal = this.starter ? this.starterRefusal(e, resource, id) : null;
+    if (refusal) return refusal;
     if (resource === 'me' && id === 'terms-acceptance' && method === 'POST') {
       const { version } = (e.body ?? {}) as { version?: string };
       if (version !== this.termsVersion) return json({ error: { code: 'TERMS_VERSION_STALE', message: 'changed', details: { current: this.termsVersion } } }, 409);

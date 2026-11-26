@@ -67,7 +67,6 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
   // The address is LTR inside a sentence that may be RTL, so the sentence is split at its {email} (TermsUpdatePage).
   const [beforeEmail, afterEmail = ''] = t('hosted.closeAccount.closingAs').split('{email}');
   const bannerId = `${ids}-banner`;
-  const hintId = `${ids}-hint`;
 
   return (
     <Drawer
@@ -153,16 +152,13 @@ export function CloseAccountDrawer({ onClose, onDownload }: { onClose: () => voi
               dir="ltr"
               readOnly={pending}
               value={password}
-              aria-describedby={[hintId, banner ? bannerId : null].filter(Boolean).join(' ')}
+              aria-describedby={banner ? bannerId : undefined}
               onChange={(e) => setPassword(e.target.value)}
             />
             <button type="button" className="hp-password-toggle press" aria-pressed={shown} aria-controls={`${ids}-password`} onClick={() => setShown((s) => !s)}>
               {t(shown ? 'hosted.auth.hide' : 'hosted.auth.show')}
             </button>
           </div>
-          <p className="form-hint" id={hintId}>
-            {t('hosted.closeAccount.passwordHint')}
-          </p>
         </div>
       </form>
     </Drawer>

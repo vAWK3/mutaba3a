@@ -22,7 +22,13 @@ export const USAGE_RECORD_KEY = 'mutaba3a-portal-usage';
 
 export type UsageChoice = 'on' | 'off';
 export type UsagePrompt = 'first_run' | 'settings';
-type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown';
+type PortalEvent = 'income_recorded' | 'expense_recorded' | 'payment_recorded' | 'report_viewed' | TrialCardPromptEvent | BillingOfferEvent | AccountantEvent | SetupPasskeyEvent | 'accountant_plan_offer_shown' | PlanEvent;
+/**
+ * MUT-731 (ADR-284): Starter's limits (MUT-735 §2.9: the funnel is the clients', never the server's). A limit reached
+ * (`plan_cap_reached`, `limit`), Upgrade shown (`plan_upgrade_offered`, `limit`) and pressed (`plan_upgrade_chosen`,
+ * `from`, `to`), and Continue free on Starter after a cancel (`starter_continue_chosen`).
+ */
+export type PlanEvent = 'plan_cap_reached' | 'plan_upgrade_offered' | 'plan_upgrade_chosen' | 'starter_continue_chosen';
 /**
  * MUT-561: an owner invited an accountant (`accountant_invited`), stopped one or cancelled an invite (`accountant_revoked`,
  * `was`), made a share link (`share_link_created`: period, expires_in_days) or turned one off (`share_link_revoked`); and the owner's Download a period (`period_downloaded`, MUT-314). Definitions:
@@ -319,6 +325,18 @@ export async function trackPortal(event: PortalEvent, properties: Record<string,
   }
 }
 
+/** The plan events already counted on this page: each limit's notice counts once per page view (a re-render isn't a new one). */
+const planEventsCounted = new Set<string>();
+
+/** MUT-731: counts a plan event (anonymous, opt-in); the notices' two once per page view per limit. */
+export function trackPlanEvent(event: PlanEvent, properties: Record<string, string> = {}): void {
+  const once = event === 'plan_cap_reached' || event === 'plan_upgrade_offered';
+  const key = `${event}|${JSON.stringify(properties)}`;
+  if (once && planEventsCounted.has(key)) return;
+  if (once) planEventsCounted.add(key);
+  void trackPortal(event, properties);
+}
+
 /** The offer/place pairs already counted on this page: `billing_offer_shown` is once per page view per place (D10). */
 const offersShown = new Set<string>();
 
@@ -332,6 +350,7 @@ export function trackOfferShown(offer: string, place: OfferPlace): void {
 
 export function resetPortalUsageForTests() {
   offersShown.clear();
+  planEventsCounted.clear();
   sdk = null;
   loading = null;
   welcomeLoading = null;

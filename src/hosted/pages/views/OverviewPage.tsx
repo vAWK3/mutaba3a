@@ -61,7 +61,7 @@ export function OverviewPage({ filters, setFilters }: OverviewPageProps) {
         data={data}
         loading={<Skeleton strip />}
         isEmpty={({ summary: s }) => !s.currencies.some(hasFigures)}
-        empty={<Empty title={t('hosted.overview.empty.title')} body={t('hosted.overview.empty.body')} />}
+        empty={<Empty title={t('hosted.overview.empty.title')} />}
       >
         {({ summary: s, names }) => (
           <OverviewBody summary={s} names={names} currency={filters.currency} onCurrency={(currency) => setFilters({ ...filters, currency })} />

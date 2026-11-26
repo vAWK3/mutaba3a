@@ -23,7 +23,7 @@ const DUE: PasskeyPrompt = { due: true, notNowCount: 0, hiddenUntil: null };
 const PASSKEY = { id: 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', name: 'iCloud Keychain', createdAt: '2026-10-25T09:00:00.000Z', lastUsedAt: null, deviceType: 'multiDevice', backedUp: true };
 const OPTIONS = { challengeId: 'cccccccc-cccc-4ccc-8ccc-cccccccccccc', publicKey: { challenge: 'abc', rp: { id: 'localhost', name: 'MTB3A' }, user: { id: 'dQ', name: 'n@firm.ps', displayName: 'Nour' }, pubKeyCredParams: [{ type: 'public-key', alg: -7 }] } };
 const REGISTRATION = { id: 'cred', rawId: 'cred', type: 'public-key', response: { clientDataJSON: 'e30', attestationObject: 'e30' }, clientExtensionResults: {} };
-const TITLE = 'Add a passkey: the more secure way to sign in.';
+const TITLE = 'Sign in more securely with a passkey.';
 const BILLING = {
   configured: true,
   subscription: null,
@@ -88,7 +88,7 @@ describe('the "Add a passkey" card on Home (MUT-370)', () => {
 
   it('reads in Arabic', async () => {
     portal({ locale: 'ar' });
-    const region = await screen.findByRole('region', { name: 'أضف مفتاح مرور: الطريقة الأكثر أمانًا لتسجيل الدخول.' });
+    const region = await screen.findByRole('region', { name: 'سجّل الدخول بأمان أكبر بمفتاح مرور.' });
     expect(within(region).getByText('وتبقى كلمة المرور صالحة.')).toBeInTheDocument();
     expect(within(region).getByRole('button', { name: 'إضافة مفتاح مرور' })).toBeInTheDocument();
     expect(within(region).getByRole('button', { name: 'ليس الآن' })).toBeInTheDocument();

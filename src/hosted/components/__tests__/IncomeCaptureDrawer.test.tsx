@@ -330,7 +330,7 @@ describe('IncomeCaptureDrawer (MUT-133)', () => {
     const { user } = renderDrawer({ defaultCustomerId: C1 });
     await user.type(screen.getByLabelText('Amount'), '100');
     await user.click(screen.getByRole('button', { name: 'Save income' }));
-    await screen.findByText("Couldn't reach the server. Try again.");
+    await screen.findByText("Couldn't connect. Try again.");
     await user.click(screen.getByRole('button', { name: 'Save income' }));
     await waitFor(() => expect(posts).toHaveLength(2));
     expect(posts[1].headers.get('Idempotency-Key')).toBe(posts[0].headers.get('Idempotency-Key'));

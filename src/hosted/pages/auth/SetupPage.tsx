@@ -426,7 +426,7 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
     <SetupLayout>
       <form className="hp-card hp-signin-card" noValidate onSubmit={onSubmit}>
         <h1>{t(`hosted.setup.title.${variant}`)}</h1>
-        <p className="hp-setup-lead">{t(`hosted.setup.lead.${variant}`)}</p>
+        {variant === 'reset' && <p className="hp-setup-lead">{t('hosted.setup.lead.reset')}</p>}
 
         {/* MUT-710 (D11, wireframe "Reset password"): the second step first, sent with the new password */}
         {twoFactor && (
@@ -434,7 +434,6 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
             <h2 className="hp-setup-step-title" id={`${ids}-second-step`}>
               {t('hosted.twoFactor.setupStep')}
             </h2>
-            <p className="hp-setup-lead">{t('hosted.twoFactor.setupLede')}</p>
             {secondStepFailure && (
               <div className="hp-banner hp-banner-error" role="alert" id={`${ids}-second-banner`}>
                 <AlertIcon />
@@ -511,12 +510,8 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
               maxLength={NAME_MAX_LENGTH}
               readOnly={pending}
               value={account.name}
-              aria-describedby={`${ids}-name-hint`}
               onChange={(e) => setAccount((current) => ({ ...current, name: e.target.value }))}
             />
-            <p className="hp-field-hint" id={`${ids}-name-hint`}>
-              {t('hosted.setup.nameHint')}
-            </p>
           </div>
         )}
 
@@ -565,7 +560,6 @@ function SetupForm({ token, email, purpose, termsVersion: checkedTermsVersion, t
               <Select
                 id={`${ids}-currency`}
                 name="currency"
-                hint={t('hosted.setup.currencyHint')}
                 disabled={pending}
                 value={account.currency}
                 onChange={(e) => setAccount((current) => ({ ...current, currency: e.target.value as HostedCurrency }))}

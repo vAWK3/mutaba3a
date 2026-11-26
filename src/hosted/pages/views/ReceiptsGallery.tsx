@@ -12,6 +12,7 @@ import { mayMoveExpensesFrom } from '../../data/profileRules';
 import { RECEIPT_MIME_TYPES } from '../../data/receiptFileRules';
 import { useReceiptCounts, useReceipts, useReceiptsAvailability, type PendingUpload } from '../../data/receiptQueries';
 import { useReceiptFiles } from '../../data/useReceiptFiles';
+import { PlanLimitNotice } from '../../components/PlanLimitNotice';
 import { useMe, useProfile, useWriteGate } from '../../session/me';
 import type { HostedProfile } from '../../api/client';
 import { MoveExpenseDrawer } from '../../components/MoveExpenseDrawer';
@@ -37,7 +38,7 @@ export interface ReceiptsGalleryProps {
 
 export function ReceiptsUnavailable() {
   const { t } = useLanguage();
-  return <Empty title={t('hosted.receipts.unavailable.title')} body={t('hosted.receipts.unavailable.body')} />;
+  return <Empty title={t('hosted.receipts.unavailable.title')} />;
 }
 
 export function ReceiptsGallery({ search, setSearch }: ReceiptsGalleryProps) {
@@ -143,6 +144,8 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
   return (
     <>
       {fileInput}
+      {/* MUT-731 (wireframe 2): Starter's scans used up; the expense can still be added by hand. */}
+      {uploads.planLimit && <PlanLimitNotice limit={uploads.planLimit} onByHand={uploads.byHand} />}
       <div className="hp-receipts-bar">
         <SegmentedTabs<ReceiptStatusFilter>
           options={options}
@@ -156,7 +159,7 @@ function GalleryBody({ search, setSearch }: ReceiptsGalleryProps) {
         data={list.data}
         loading={<Skeleton rows={SKELETON_ROWS} />}
         isEmpty={(items) => items.length === 0 && uploads.pending.length === 0}
-        empty={<Empty title={t(`hosted.receipts.empty.${status}.title`)} body={t(`hosted.receipts.empty.${status}.body`)} action={uploadButton} />}
+        empty={<Empty title={t(`hosted.receipts.empty.${status}.title`)} body={status === 'all' ? t('hosted.receipts.empty.all.body') : undefined} action={uploadButton} />}
       >
         {(items) => (
           <>

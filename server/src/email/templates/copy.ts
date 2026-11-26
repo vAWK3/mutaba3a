@@ -57,8 +57,8 @@ function arDays(n: number): string {
 }
 
 const IGNORE: Record<UserLocale, string> = {
-  en: "If you didn't ask for this, you can ignore this email. Nothing changes until the link is used.",
-  ar: 'إذا لم تطلب ذلك، يمكنك تجاهل هذه الرسالة. لن يتغير شيء ما لم يُستخدم الرابط.',
+  en: "Didn't ask for this? Ignore this email.",
+  ar: 'لم تطلب ذلك؟ تجاهل هذه الرسالة.',
 };
 
 const finishSignup: Copy<'finish-signup'> = {
@@ -67,22 +67,20 @@ const finishSignup: Copy<'finish-signup'> = {
     preheader: 'Set a password and your account is ready.',
     headline: 'One step left: set your password',
     intro: [
-      ['Someone, hopefully you, asked to create an MTB3A account with this email address.'],
       [`Set your password to finish. The link works once and expires in ${enHours(validHours)}.`],
     ],
     action: { label: 'Set your password', href: link },
-    outro: [["Didn't sign up? You can ignore this email. Nothing happens until the link is used."]],
+    outro: [["Didn't sign up? Ignore this email."]],
   }),
   ar: ({ link, validHours }) => ({
     subject: 'أكمل إنشاء حسابك في متابعة',
     preheader: 'عيّن كلمة المرور ويصبح حسابك جاهزًا.',
     headline: 'خطوة أخيرة: عيّن كلمة المرور',
     intro: [
-      ['طلب أحدهم، ونأمل أن تكون أنت، إنشاء حساب في متابعة بعنوان البريد هذا.'],
       [`عيّن كلمة المرور لإكمال الحساب. يعمل الرابط مرة واحدة وتنتهي صلاحيته بعد ${arHours(validHours)}.`],
     ],
     action: { label: 'تعيين كلمة المرور', href: link },
-    outro: [['لم تطلب إنشاء حساب؟ يمكنك تجاهل هذه الرسالة. لن يحدث شيء ما لم يُستخدم الرابط.']],
+    outro: [['لم تطلب إنشاء حساب؟ تجاهل هذه الرسالة.']],
   }),
 };
 
@@ -113,7 +111,7 @@ const resetPassword: Copy<'reset-password'> = {
     preheader: `The link works once, for ${enHours(validHours)}.`,
     headline: 'Set a new password',
     intro: [
-      ['Someone asked to set a new password for the MTB3A account with this email address. Your current password keeps working until the new one is set.'],
+      ['Someone asked to set a new password for the MTB3A account with this email address.'],
       [`The link works once and expires in ${enHours(validHours)}.`],
     ],
     action: { label: 'Set a new password', href: link },
@@ -124,7 +122,7 @@ const resetPassword: Copy<'reset-password'> = {
     preheader: `يعمل الرابط مرة واحدة، لمدة ${arHours(validHours)}.`,
     headline: 'عيّن كلمة مرور جديدة',
     intro: [
-      ['طلب أحدهم تعيين كلمة مرور جديدة لحساب متابعة المرتبط بعنوان البريد هذا. تبقى كلمة مرورك الحالية صالحة حتى تُعيَّن الجديدة.'],
+      ['طلب أحدهم تعيين كلمة مرور جديدة لحساب متابعة المرتبط بعنوان البريد هذا.'],
       [`يعمل الرابط مرة واحدة وتنتهي صلاحيته بعد ${arHours(validHours)}.`],
     ],
     action: { label: 'تعيين كلمة مرور جديدة', href: link },
@@ -188,8 +186,8 @@ const accountUnderReview: Copy<'account-under-review'> = {
     preheader: "We'll email you within two working days.",
     headline: "We're reviewing your account",
     intro: [
-      ['Thanks for creating an MTB3A account. We review new accounts that use a personal email address before they open.'],
-      ["We'll email you within two working days. There's nothing you need to do in the meantime."],
+      ['Thanks for creating an MTB3A account.'],
+      ["We'll email you within two working days."],
     ],
   }),
   ar: () => ({
@@ -197,8 +195,8 @@ const accountUnderReview: Copy<'account-under-review'> = {
     preheader: 'سنراسلك خلال يومَي عمل.',
     headline: 'نراجع حسابك',
     intro: [
-      ['شكرًا لإنشاء حساب في متابعة. نراجع الحسابات الجديدة التي تستخدم بريدًا إلكترونيًا شخصيًا قبل تفعيلها.'],
-      ['سنراسلك خلال يومَي عمل، ولا يلزمك فعل أي شيء حتى ذلك الحين.'],
+      ['شكرًا لإنشاء حساب في متابعة.'],
+      ['سنراسلك خلال يومَي عمل.'],
     ],
   }),
 };
@@ -223,19 +221,19 @@ const accountReady: Copy<'account-ready'> = {
 const accountDeclined: Copy<'account-declined'> = {
   en: ({ supportAddress }) => ({
     subject: 'About your MTB3A account request',
-    preheader: 'We removed the request and kept no data.',
+    preheader: "We couldn't approve your account request.",
     headline: "We couldn't approve your account",
     intro: [
-      ["We couldn't approve your account request, so we removed it. No data was kept."],
+      ["We couldn't approve your account request."],
       ['If you think this is a mistake, write to us at ', { mailto: supportAddress }, '.'],
     ],
   }),
   ar: ({ supportAddress }) => ({
     subject: 'بخصوص طلب حسابك في متابعة',
-    preheader: 'أزلنا الطلب ولم نحتفظ بأي بيانات.',
+    preheader: 'لم نتمكن من الموافقة على طلب حسابك.',
     headline: 'لم نتمكن من الموافقة على حسابك',
     intro: [
-      ['لم نتمكن من الموافقة على طلب حسابك، فأزلناه. لم نحتفظ بأي بيانات.'],
+      ['لم نتمكن من الموافقة على طلب حسابك.'],
       ['إذا كنت ترى أن هذا خطأ، راسلنا على ', { mailto: supportAddress }, '.'],
     ],
   }),
@@ -284,54 +282,74 @@ function withOffer<B extends { intro: Inline[][]; action?: { label: string; href
 }
 
 const trialEndingSoon: Copy<'trial-ending-soon'> = {
-  en: ({ daysLeft, subscribeLink, offer }) =>
+  en: ({ daysLeft, subscribeLink, offer, starterAfter }) =>
     withOffer({
       subject: `Your MTB3A free trial ends within ${enDays(daysLeft)}`,
       preheader: 'Add a card so nothing stops.',
       headline: `Your free trial ends within ${enDays(daysLeft)}`,
       intro: [
-        ["After that your account becomes read-only: you can still see and download everything, but you can't add or change anything until you subscribe."],
+        // MUT-731 (ADR-284): with Starter on, the trial ends on the free plan.
+        [starterAfter ? 'After that you move to the free Starter plan.' : 'After that your account becomes read-only until you subscribe.'],
         ['Add a card now so nothing stops.'],
       ],
       action: { label: 'Add a card', href: subscribeLink },
-      outro: [['Your records stay safe whatever you decide.']],
     }, offer, 'en'),
-  ar: ({ daysLeft, subscribeLink, offer }) =>
+  ar: ({ daysLeft, subscribeLink, offer, starterAfter }) =>
     withOffer({
       subject: `تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}`,
       preheader: 'أضف بطاقة كي لا يتوقف شيء.',
       headline: `تنتهي تجربتك المجانية خلال ${arDays(daysLeft)}`,
       intro: [
-        ['بعدها يصبح حسابك للقراءة فقط: يمكنك رؤية كل شيء وتنزيله، لكن لا يمكنك إضافة أي شيء أو تعديله إلى أن تشترك.'],
+        [starterAfter ? 'بعدها تنتقل إلى خطة البداية المجانية.' : 'بعدها يصبح حسابك للقراءة فقط إلى أن تشترك.'],
         ['أضف بطاقة الآن كي لا يتوقف شيء.'],
       ],
       action: { label: 'أضف بطاقة', href: subscribeLink },
-      outro: [['سجلاتك في أمان مهما قررت.']],
     }, offer, 'ar'),
 };
 
 const trialEnded: Copy<'trial-ended'> = {
-  en: ({ subscribeLink, exportLink, offer }) =>
-    withOffer({
+  en: ({ subscribeLink, exportLink, offer, starterAfter }) =>
+    withOffer(starterAfter ? {
+      // MUT-731 (ADR-284): the trial ended on the free Starter plan; nothing is read-only.
+      subject: 'Your MTB3A trial has ended',
+      preheader: 'You’re on the free Starter plan now.',
+      headline: 'You’re on the free Starter plan',
+      intro: [
+        ['Your free trial has ended, and your account is on the free Starter plan.'],
+        ['Subscribe to get your full plan back.'],
+      ],
+      action: { label: 'Subscribe', href: subscribeLink },
+      outro: [[NOTHING_DELETED.en]],
+    } : {
       subject: 'Your MTB3A account is read-only',
       preheader: 'You can still see and download everything.',
       headline: 'Your account is read-only',
       intro: [
         ['Your free trial has ended, so your MTB3A account is now read-only.'],
-        ['Your records are safe: you can see and download all of them. Subscribe to keep adding them.'],
+        ['Subscribe to keep adding records.'],
       ],
       action: { label: 'Subscribe', href: subscribeLink },
       secondary: { label: 'Download my records', href: exportLink },
       outro: [[NOTHING_DELETED.en]],
     }, offer, 'en'),
-  ar: ({ subscribeLink, exportLink, offer }) =>
-    withOffer({
+  ar: ({ subscribeLink, exportLink, offer, starterAfter }) =>
+    withOffer(starterAfter ? {
+      subject: 'انتهت تجربتك في متابعة',
+      preheader: 'أنت الآن على خطة البداية المجانية.',
+      headline: 'أنت على خطة البداية المجانية',
+      intro: [
+        ['انتهت تجربتك المجانية، وأصبح حسابك على خطة البداية المجانية.'],
+        ['اشترك لتستعيد خطتك الكاملة.'],
+      ],
+      action: { label: 'اشترك', href: subscribeLink },
+      outro: [[NOTHING_DELETED.ar]],
+    } : {
       subject: 'حسابك في متابعة للقراءة فقط',
       preheader: 'ما زال بإمكانك رؤية كل شيء وتنزيله.',
       headline: 'حسابك للقراءة فقط',
       intro: [
         ['انتهت تجربتك المجانية، لذلك أصبح حسابك في متابعة للقراءة فقط.'],
-        ['سجلاتك محفوظة: يمكنك رؤيتها كلها وتنزيلها. اشترك لتواصل إضافتها.'],
+        ['اشترك لتواصل إضافة سجلاتك.'],
       ],
       action: { label: 'اشترك', href: subscribeLink },
       secondary: { label: 'نزّل سجلاتي', href: exportLink },
@@ -347,7 +365,6 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
       headline: `Your account locks within ${enDays(daysLeft)}`,
       intro: [
         ['After that you can only subscribe or download your records.'],
-        ['You can still download all your records, now or after the lock.'],
       ],
       action: { label: 'Subscribe', href: subscribeLink },
       secondary: { label: 'Download my records', href: exportLink },
@@ -360,7 +377,6 @@ const trialLockingSoon: Copy<'trial-locking-soon'> = {
       headline: `يُقفَل حسابك خلال ${arDays(daysLeft)}`,
       intro: [
         ['بعدها لا يمكنك إلا الاشتراك أو تنزيل سجلاتك.'],
-        ['ما زال بإمكانك تنزيل كل سجلاتك، الآن أو بعد الإقفال.'],
       ],
       action: { label: 'اشترك', href: subscribeLink },
       secondary: { label: 'نزّل سجلاتي', href: exportLink },
@@ -383,7 +399,7 @@ const accountClosing: Copy<'account-closing'> = {
     headline: `Your account will be deleted on ${mailDay(deleteOn, 'en')}`,
     intro: [
       ["You closed your MTB3A account. We'll delete it, with all its records and receipts, on that day."],
-      ["Until then you can sign in and keep it. After that it can't be recovered, and the copies in our backups expire two weeks later."],
+      ["Until then you can sign in and keep it. After that it can't be recovered."],
     ],
     details: [{ label: 'Deletion day', value: mailDay(deleteOn, 'en') }],
     action: { label: 'Sign in to keep my account', href: signInLink },
@@ -395,7 +411,7 @@ const accountClosing: Copy<'account-closing'> = {
     headline: `سيُحذف حسابك بتاريخ ${mailDay(deleteOn, 'ar')}`,
     intro: [
       ['أغلقتَ حسابك في متابعة. سنحذفه مع كل سجلاته وإيصالاته في ذلك اليوم.'],
-      ['حتى ذلك الحين يمكنك تسجيل الدخول والإبقاء عليه. بعدها لا يمكن استعادته، وتنتهي النسخ الموجودة في نسخنا الاحتياطية بعد أسبوعين.'],
+      ['حتى ذلك الحين يمكنك تسجيل الدخول والإبقاء عليه. بعدها لا يمكن استعادته.'],
     ],
     details: [{ label: 'يوم الحذف', value: mailDay(deleteOn, 'ar') }],
     action: { label: 'سجّل الدخول للإبقاء على حسابي', href: signInLink },
@@ -469,7 +485,7 @@ const twoFactorCode: Copy<'two-factor-code'> = {
     subject: `${code} is your MTB3A two-step code`,
     preheader: `It works once, for ${enMinutes(validMinutes)}.`,
     headline: 'Your two-step code',
-    intro: [[`Your password was just entered. Enter this code to finish signing in to MTB3A. It works once and expires in ${enMinutes(validMinutes)}.`]],
+    intro: [[`Enter this code to finish signing in. It expires in ${enMinutes(validMinutes)}.`]],
     code,
     outro: [["If you didn't just sign in, someone may know your password: change it right away."], ['Never share this code. MTB3A will never ask you for it.']],
   }),
@@ -477,7 +493,7 @@ const twoFactorCode: Copy<'two-factor-code'> = {
     subject: `رمز التحقق بخطوتين في متابعة: ${code}`,
     preheader: `يعمل مرة واحدة، لمدة ${arMinutes(validMinutes)}.`,
     headline: 'رمز التحقق بخطوتين',
-    intro: [[`أُدخلت كلمة مرورك للتو. أدخل هذا الرمز لإكمال تسجيل الدخول إلى متابعة. يعمل مرة واحدة وتنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
+    intro: [[`أدخل هذا الرمز لإكمال تسجيل الدخول. تنتهي صلاحيته بعد ${arMinutes(validMinutes)}.`]],
     code,
     outro: [['إذا لم تسجّل الدخول للتو، فقد يعرف أحدٌ كلمة مرورك: غيّرها فورًا.'], ['لا تشارك هذا الرمز مع أحد. لن تطلبه منك متابعة أبدًا.']],
   }),
@@ -486,14 +502,14 @@ const twoFactorCode: Copy<'two-factor-code'> = {
 const TWO_FACTOR_EN = {
   enabled: { subject: 'Two-step sign-in is on for your MTB3A account', headline: 'Two-step sign-in is on', body: 'Two-step sign-in was just turned on for your MTB3A account, and your other devices were signed out.' },
   switched: { subject: 'Your MTB3A two-step sign-in method changed', headline: 'Your two-step method changed', body: 'The second step for your MTB3A account was just changed, and your other devices were signed out.' },
-  disabled: { subject: 'Two-step sign-in is off for your MTB3A account', headline: 'Two-step sign-in is off', body: 'Two-step sign-in was just turned off for your MTB3A account. Signing in now needs only your password or passkey.' },
+  disabled: { subject: 'Two-step sign-in is off for your MTB3A account', headline: 'Two-step sign-in is off', body: 'Two-step sign-in was just turned off for your MTB3A account.' },
   recovery_codes: { subject: 'New MTB3A recovery codes were made', headline: 'New recovery codes', body: 'New recovery codes were just made for your MTB3A account. The old ones no longer work.' },
   reset: { subject: 'Two-step sign-in was reset on your MTB3A account', headline: 'Two-step sign-in was reset', body: 'At your request, our support team turned off two-step sign-in for your MTB3A account and signed out every device.' },
 } as const;
 const TWO_FACTOR_AR = {
   enabled: { subject: 'تم تفعيل التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين مفعّل', body: 'تم للتو تفعيل التحقق بخطوتين لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
   switched: { subject: 'تغيّرت طريقة التحقق بخطوتين في متابعة', headline: 'تغيّرت طريقة الخطوة الثانية', body: 'تم للتو تغيير الخطوة الثانية لحسابك في متابعة، وتم تسجيل خروج أجهزتك الأخرى.' },
-  disabled: { subject: 'تم إيقاف التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين متوقف', body: 'تم للتو إيقاف التحقق بخطوتين لحسابك في متابعة. يكفي الآن لتسجيل الدخول كلمة المرور أو مفتاح المرور.' },
+  disabled: { subject: 'تم إيقاف التحقق بخطوتين لحسابك في متابعة', headline: 'التحقق بخطوتين متوقف', body: 'تم للتو إيقاف التحقق بخطوتين لحسابك في متابعة.' },
   recovery_codes: { subject: 'أُنشئت رموز استرداد جديدة في متابعة', headline: 'رموز استرداد جديدة', body: 'أُنشئت للتو رموز استرداد جديدة لحسابك في متابعة. الرموز القديمة لم تعد تعمل.' },
   reset: { subject: 'أُعيد ضبط التحقق بخطوتين لحسابك في متابعة', headline: 'أُعيد ضبط التحقق بخطوتين', body: 'بناءً على طلبك، أوقف فريق الدعم التحقق بخطوتين لحسابك في متابعة وسجّل خروج كل الأجهزة.' },
 } as const;
@@ -504,7 +520,7 @@ const twoFactorChanged: Copy<'two-factor-changed'> = {
     subject: TWO_FACTOR_EN[change].subject,
     preheader: "If this was you, there's nothing to do.",
     headline: TWO_FACTOR_EN[change].headline,
-    intro: [[TWO_FACTOR_EN[change].body], [`Method: ${method === 'totp' ? 'authenticator app' : 'code by email'}.`], ['If this was you, there is nothing else to do.']],
+    intro: [[TWO_FACTOR_EN[change].body], [`Method: ${method === 'totp' ? 'authenticator app' : 'code by email'}.`]],
     action: { label: 'Sign in', href: signInLink },
     outro: [["If this wasn't you, set a new password from the sign-in page right away, then reply to this email so we can help."]],
   }),
@@ -512,7 +528,7 @@ const twoFactorChanged: Copy<'two-factor-changed'> = {
     subject: TWO_FACTOR_AR[change].subject,
     preheader: 'إن كنت أنت، فلا حاجة لأي إجراء.',
     headline: TWO_FACTOR_AR[change].headline,
-    intro: [[TWO_FACTOR_AR[change].body], [`الطريقة: ${method === 'totp' ? 'تطبيق المصادقة' : 'رمز بالبريد الإلكتروني'}.`], ['إذا كنت أنت من قام بذلك، فلا حاجة لأي إجراء آخر.']],
+    intro: [[TWO_FACTOR_AR[change].body], [`الطريقة: ${method === 'totp' ? 'تطبيق المصادقة' : 'رمز بالبريد الإلكتروني'}.`]],
     action: { label: 'تسجيل الدخول', href: signInLink },
     outro: [['إذا لم تكن أنت، عيّن كلمة مرور جديدة من صفحة تسجيل الدخول فورًا، ثم ردّ على هذه الرسالة لنساعدك.']],
   }),
@@ -521,24 +537,18 @@ const twoFactorChanged: Copy<'two-factor-changed'> = {
 const passkeyAdded: Copy<'passkey-added'> = {
   en: ({ passkeyName, signInLink }) => ({
     subject: 'A passkey was added to your MTB3A account',
-    preheader: 'It can sign in without your password.',
+    preheader: 'A passkey was just added to your account.',
     headline: 'A passkey was added',
-    intro: [
-      ['A passkey was just added to your MTB3A account. It can sign in without your password.'],
-      ['If this was you, there is nothing else to do.'],
-    ],
+    intro: [['A passkey was just added to your MTB3A account.']],
     details: [{ label: 'Passkey', value: passkeyName }],
     action: { label: 'Sign in', href: signInLink },
     outro: [["Not you? Sign in, change your password, then remove this passkey from Passkeys in your account. Reply to this email if you need help."]],
   }),
   ar: ({ passkeyName, signInLink }) => ({
     subject: 'أُضيف مفتاح مرور إلى حسابك في متابعة',
-    preheader: 'يمكنه تسجيل الدخول دون كلمة المرور.',
+    preheader: 'أُضيف للتو مفتاح مرور إلى حسابك.',
     headline: 'أُضيف مفتاح مرور',
-    intro: [
-      ['أُضيف للتو مفتاح مرور إلى حسابك في متابعة. يمكنه تسجيل الدخول دون كلمة المرور.'],
-      ['إذا كنت أنت من قام بذلك، فلا حاجة لأي إجراء آخر.'],
-    ],
+    intro: [['أُضيف للتو مفتاح مرور إلى حسابك في متابعة.']],
     details: [{ label: 'مفتاح المرور', value: passkeyName }],
     action: { label: 'تسجيل الدخول', href: signInLink },
     outro: [['لم تكن أنت؟ سجّل الدخول وغيّر كلمة المرور، ثم احذف مفتاح المرور هذا من «مفاتيح المرور» في حسابك. ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
@@ -599,14 +609,14 @@ const cardFailed: Copy<'card-failed'> = {
     intro: accountantFreeClients
       ? [
           ['Your bank declined the payment for your MTB3A Accountant plan.'],
-          ['Nothing stops: all your client books stay open while Stripe tries the card again over the next few days.'],
+          ['All your client books stay open while we try again over the next few days.'],
         ]
       : [
           ['Your bank declined the payment for your MTB3A plan.'],
-          ['Nothing stops: your account stays fully open while Stripe tries the card again over the next few days.'],
+          ['Your account stays open while we try again over the next few days.'],
         ],
     action: { label: 'Update card', href: updateLink },
-    outro: [["Already updated it? Then there's nothing to do, and the next try will go through. Reply to this email if you need help."]],
+    outro: [["Already updated it? There's nothing else to do."]],
   }),
   ar: ({ updateLink, accountantFreeClients }) => ({
     subject: 'لم تنجح عملية الدفع ببطاقتك',
@@ -615,20 +625,20 @@ const cardFailed: Copy<'card-failed'> = {
     intro: accountantFreeClients
       ? [
           ['رفض البنك دفعة خطة المحاسب في متابعة.'],
-          ['لن يتوقف شيء: تبقى كل دفاتر عملائك مفتوحة بينما يحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة.'],
+          ['تبقى كل دفاتر عملائك مفتوحة بينما نحاول مجددًا خلال الأيام القادمة.'],
         ]
       : [
           ['رفض البنك دفعة اشتراكك في متابعة.'],
-          ['لن يتوقف شيء: يبقى حسابك مفتوحًا بالكامل بينما يحاول Stripe خصم البطاقة مجددًا خلال الأيام القادمة.'],
+          ['يبقى حسابك مفتوحًا بينما نحاول مجددًا خلال الأيام القادمة.'],
         ],
     action: { label: 'حدّث البطاقة', href: updateLink },
-    outro: [['حدّثتها بالفعل؟ فلا حاجة لأي إجراء، وستنجح المحاولة القادمة. ردّ على هذه الرسالة إن احتجت إلى مساعدة.']],
+    outro: [['حدّثتها بالفعل؟ لا حاجة لأي إجراء آخر.']],
   }),
 };
 
 /** MUT-533: the one reminder. "At most": Stripe may give up before the window ends. Read-only only while the gate is on. */
 const cardFailedReminder: Copy<'card-failed-reminder'> = {
-  en: ({ daysLeft, readOnlyAfter, updateLink, accountantFreeClients }) => ({
+  en: ({ daysLeft, readOnlyAfter, starterAfter, updateLink, accountantFreeClients }) => ({
     subject: 'Your card still isn’t going through',
     preheader: accountantFreeClients ? 'Update it to keep all your client books open.' : 'Update it to keep your account open.',
     headline: 'Your payment still hasn’t gone through',
@@ -637,6 +647,8 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
       [
         accountantFreeClients
           ? `If it isn't updated, your Accountant plan ends within ${enDays(daysLeft)} at most. Your ${accountantFreeClients} oldest client books stay open; the others lock until you subscribe again. Your own records aren't affected.`
+          : starterAfter
+          ? `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most, and you move to the free Starter plan. Your records stay.`
           : readOnlyAfter
           ? `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most, and your account becomes read-only. Your records stay, and you can download them any time.`
           : `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most. Your records stay, and you can download them any time.`,
@@ -645,7 +657,7 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
     action: { label: 'Update card', href: updateLink },
     outro: [['Reply to this email if you need help.']],
   }),
-  ar: ({ daysLeft, readOnlyAfter, updateLink, accountantFreeClients }) => ({
+  ar: ({ daysLeft, readOnlyAfter, starterAfter, updateLink, accountantFreeClients }) => ({
     subject: 'ما زالت عملية الدفع ببطاقتك لا تنجح',
     preheader: accountantFreeClients ? 'حدّث البطاقة لتبقى كل دفاتر عملائك مفتوحة.' : 'حدّث البطاقة ليبقى حسابك مفتوحًا.',
     headline: 'لم تُحصَّل دفعتك بعد',
@@ -654,6 +666,8 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
       [
         accountantFreeClients
           ? `إن لم تُحدَّث، تنتهي خطة المحاسب خلال ${arDays(daysLeft)} على الأكثر. تبقى أقدم ${accountantFreeClients} دفاتر عملاء مفتوحة، وتُقفل البقية حتى تشترك مجددًا. لا تتأثر سجلاتك أنت.`
+          : starterAfter
+          ? `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر وتنتقل إلى خطة البداية المجانية. تبقى سجلاتك.`
           : readOnlyAfter
           ? `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر ويصبح حسابك للقراءة فقط. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`
           : `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`,
@@ -688,7 +702,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
         { label: 'Then', value: `${month} a month, plus VAT where it applies` },
       ],
       action: { label: 'Come back to MTB3A', href: subscribeLink },
-      outro: [["The price applies on its own when you subscribe; there's no code to enter. This offer is one time only."]],
+      outro: [['This offer is one time only.']],
       // ADR-279: a promotional mail always offers its way out
       optOut: { text: "Don't want offers from MTB3A?", label: 'Unsubscribe.', href: offLink, after: 'Emails about your account still reach you.' },
       sender: 'Sent by Narabnd Studio Ltd, Az-Zahra St. 18, Jerusalem, Israel. Contact: info@mtb3a.com.',
@@ -711,7 +725,7 @@ const comebackOffer: Copy<'comeback-offer'> = {
         { label: 'بعد ذلك', value: `${month} شهريًا، وتُضاف ضريبة القيمة المضافة حيث تنطبق` },
       ],
       action: { label: 'عُد إلى متابعة', href: subscribeLink },
-      outro: [['يُطبَّق السعر تلقائيًا عند الاشتراك، دون أي رمز. هذا العرض مرة واحدة فقط.']],
+      outro: [['هذا العرض مرة واحدة فقط.']],
       optOut: { text: 'لا تريد عروضًا من متابعة؟', label: 'ألغِ الاشتراك.', href: offLink, after: 'وتبقى الرسائل المتعلقة بحسابك تصلك.' },
       sender: 'أرسلتها Narabnd Studio Ltd (نارابند ستوديو م.ض.)، شارع الزهراء 18، القدس، إسرائيل. للتواصل: info@mtb3a.com.',
     };
@@ -774,10 +788,10 @@ const monthlySummary: Copy<'monthly-summary'> = {
       subject: `Your ${name} in MTB3A`,
       preheader: "What came in, what's still owed, and what's overdue.",
       headline: `${monthName(month, 'en', true)} at a glance`,
-      intro: [["Here's last month in your books, as MTB3A shows it today."]],
+      intro: [["Here's last month in your books."]],
       sections: profiles.map(panel),
       ...(yearly ? { secondary: { label: `Switch to yearly and save ${summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) })} a year`, href: yearly.link } } : {}),
-      outro: [[`Amounts stay in the currency you recorded them in; nothing is converted. Still owed and overdue are as of ${mailDay(asOf, 'en')}.`]],
+      outro: [[`Still owed and overdue as of ${mailDay(asOf, 'en')}.`]],
       optOut: { text: "Don't want this monthly email?", label: 'Turn it off.', href: offLink, after: 'You can turn it back on in You › Account.' },
     };
   },
@@ -804,10 +818,10 @@ const monthlySummary: Copy<'monthly-summary'> = {
       subject: `${name} في متابعة`,
       preheader: 'ما وصلك، وما زال مستحقًا لك، وما تأخّر.',
       headline: `${monthName(month, 'ar', true)} باختصار`,
-      intro: [['هذا ما جرى في دفاترك الشهر الماضي، كما تعرضه متابعة اليوم.']],
+      intro: [['هذا ما جرى في دفاترك الشهر الماضي.']],
       sections: profiles.map(panel),
       ...(yearly ? { secondary: { label: `انتقل إلى الاشتراك السنوي ووفّر ${isolate(summaryMoney({ currency: yearly.currency, amount: (yearly.savings / 100).toFixed(2) }))} في السنة`, href: yearly.link } } : {}),
-      outro: [[`تبقى المبالغ بالعملة التي سجّلتها بها، دون أي تحويل. المستحق والمتأخر كما هما في ${mailDay(asOf, 'ar')}.`]],
+      outro: [[`المستحق والمتأخر كما في ${mailDay(asOf, 'ar')}.`]],
       optOut: { text: 'لا تريد هذه الرسالة الشهرية؟', label: 'أوقفها.', href: offLink, after: 'ويمكنك إعادتها من أنت › الحساب.' },
     };
   },
@@ -826,7 +840,7 @@ const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
           headline: 'Approve the Tax Authority connection again',
           intro: [
             [`The connection between “${profileName}” and the Tax Authority ends within ${enDays(daysLeft)}.`],
-            ['The Tax Authority asks the business owner to approve it again every 90 days. It takes a minute: sign in on the Tax Authority’s site and approve.'],
+            ['Sign in on the Tax Authority’s site and approve; it takes a minute.'],
           ],
           action: { label: 'Connect again', href: link },
           outro: [['Once it ends, invoices that need an allocation number wait until you connect again.']],
@@ -850,7 +864,7 @@ const taxAuthorityReconnect: Copy<'tax-authority-reconnect'> = {
           headline: 'جدّد الموافقة على الربط بسلطة الضرائب',
           intro: [
             [`ينتهي ربط ملف «${profileName}» بسلطة الضرائب خلال ${arDays(daysLeft)}.`],
-            ['تطلب سلطة الضرائب من صاحب العمل تجديد موافقته كل 90 يومًا. لا يستغرق ذلك سوى دقيقة: سجّل الدخول في موقع سلطة الضرائب ووافق.'],
+            ['سجّل الدخول في موقع سلطة الضرائب ووافق، ولا يستغرق ذلك سوى دقيقة.'],
           ],
           action: { label: 'إعادة الربط', href: link },
           outro: [['بعد انتهائه، تنتظر الفواتير التي تتطلّب رقم تخصيص حتى تعيد الربط.']],

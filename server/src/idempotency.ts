@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import type { Context, MiddlewareHandler, Next } from 'hono';
 import type { AppEnv, AuthContext } from './auth/middleware.js';
+import { isPlanLimitBody } from './billing/plan-limit.js';
 import { ApiError } from './errors.js';
 import type { IdempotencyClaim, LedgerStore, UserIdempotencyClaim } from './repositories/ports.js';
 
@@ -47,7 +48,7 @@ export interface IdempotentOutcome {
  * The claim → run → complete-or-fail state machine, free of any framework (MUT-436, review R4/OV4): the Hono
  * middlewares below and the MCP write tools both run it. `fingerprints` are tried in order, the first being the
  * current one; a later one only matches a key stored under it (the pre-MUT-199 byte fingerprint).
- *   new         → run; a 5xx or a 429 releases the key (nothing was done), any other status is stored and replays
+ *   new         → run; a 5xx, a 429 or a 409 PLAN_LIMIT releases the key (nothing was done), any other status is stored and replays
  *   replay      → the stored outcome, `replayed: true`
  *   mismatch    → 422 IDEMPOTENCY_KEY_REUSED
  *   in_progress → 409 OPERATION_IN_PROGRESS
@@ -86,7 +87,9 @@ export async function runIdempotent(
   }
   // A 5xx or a 429 means nothing was done: release the key so the same request can be sent again with it (MUT-255
   // review). Every other answer, 4xx included, is the request's final one and replays as such.
-  if (outcome.status >= 500 || outcome.status === 429) {
+  // MUT-731 (TD-340): a plan's refusal (409 PLAN_LIMIT) did nothing either: released, so the same key succeeds after an
+  // upgrade or the monthly reset instead of replaying the refusal for ever.
+  if (outcome.status >= 500 || outcome.status === 429 || (outcome.status === 409 && isPlanLimitBody(outcome.body))) {
     await ops.fail({ key, at: now });
   } else {
     await ops.complete({ key, responseStatus: outcome.status, responseBody: outcome.body, at: (input.completedAt ?? (() => now))() });

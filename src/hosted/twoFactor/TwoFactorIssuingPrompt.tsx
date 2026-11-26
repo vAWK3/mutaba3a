@@ -39,7 +39,7 @@ function Prompt({ enrolled }: { enrolled: boolean }) {
       <AlertIcon />
       <div>
         <p>
-          <b>{t('hosted.twoFactor.issuing.title')}</b> {t('hosted.twoFactor.issuing.body')}
+          <b>{t('hosted.twoFactor.issuing.title')}</b>
         </p>
         <Button type="button" size="sm" onClick={drawers.openTwoFactor}>
           {t('hosted.twoFactor.issuing.setUp')}

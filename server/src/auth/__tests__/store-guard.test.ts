@@ -47,7 +47,9 @@ describe('STORE_ACCESS', () => {
     const store = new MemoryLedgerStore() as unknown as Record<string, unknown>;
     for (const [repo, methods] of Object.entries(STORE_ACCESS)) {
       const live = Object.entries(store[repo] as Record<string, unknown>)
-        .filter(([, v]) => typeof v === 'function')
+        // MUT-731: a repository's flag (billing.starterPlan, a value the guard passes through) is classified too, as
+        // StoreAccess's type requires every member.
+        .filter(([, v]) => typeof v === 'function' || typeof v === 'boolean')
         .map(([k]) => k)
         .sort();
       expect(Object.keys(methods).sort(), repo).toEqual(live);

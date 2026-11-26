@@ -156,7 +156,6 @@ export function AttachExternalInvoiceDrawer({ profile, entry, existing, initialF
               {t(openFailed ? 'hosted.external.openFailed' : 'hosted.external.removeFailed')}
             </p>
           )}
-          <p className="hp-muted">{t('hosted.external.noIssueWhileAttached')}</p>
         </section>
       ) : !file ? (
         <div
@@ -201,7 +200,6 @@ export function AttachExternalInvoiceDrawer({ profile, entry, existing, initialF
               {mismatch ? t('hosted.external.amountDiffers', { amount: formatDecimal(entry.amount, entry.currency, language) }) : t('hosted.external.amountMatches')}
             </p>
           )}
-          <p className="hp-muted">{t('hosted.external.staysExternal')}</p>
           {refusal && (
             <p className="input-error-message" role="alert">
               {refusal}

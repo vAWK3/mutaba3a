@@ -45,6 +45,8 @@ const PINNED_VERSIONS: Record<string, string> = {
   '2.10.0': '1d80cbd6d894887dc9297358a7a16beba84f65a8f62ea5b3220e1644d212b77d',
   // MUT-627: save_moment_closed (kind, outcome, entry_point), ios and android: the phone's full-screen save moment.
   '2.11.0': '49edf9ea7495dabe5e05a73da23cc4a17ccfb754b1e726d5f0dbeb0e56dd1b61',
+  // MUT-731: plan_cap_reached, plan_upgrade_offered (limit), plan_upgrade_chosen (from, to), starter_continue_chosen; portal only.
+  '2.12.0': 'bcaf1dfb50ebfa3d396cb137c5c7d8a24e40d1b2a9a7273e6309742151fff827',
 };
 
 const SURFACES = ['landing', 'portal', 'ios', 'android'] as const;
@@ -255,6 +257,11 @@ describe('docs/analytics/events.json (ADR-090)', () => {
       share_link_opened: ['portal'],
       period_downloaded: ['portal', 'ios', 'android'],
       accountant_plan_offer_shown: ['portal', 'ios', 'android'],
+      // MUT-731: Starter's limits and the free choice after a cancel (portal only; the phone sells nothing).
+      plan_cap_reached: ['portal'],
+      plan_upgrade_offered: ['portal'],
+      plan_upgrade_chosen: ['portal'],
+      starter_continue_chosen: ['portal'],
     });
   });
 

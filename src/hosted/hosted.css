@@ -1917,3 +1917,36 @@ p.hp-offer-line { color: var(--text); font-size: var(--text-body); }
 .hp-operator-meter { display: inline-flex; align-items: center; gap: var(--space-1); }
 .hp-operator-usage-export { display: grid; justify-items: start; gap: var(--space-2); }
 .hp-operator-usage-section .hp-you-row { cursor: default; }
+
+/* MUT-731 (ADR-284): the free Starter plan. Meters reuse .hp-progress; notices reuse the .hp-banner recipe. */
+.hp-starter-heading { margin: 0; font-size: var(--text-label); font-weight: var(--weight-medium); color: var(--text-secondary); }
+.hp-starter-fine { margin: 0; font-size: var(--text-label); color: var(--muted); }
+.hp-plan-meter { display: grid; gap: var(--space-1); font-size: var(--text-label); }
+.hp-plan-meter-left { margin: 0; font-weight: var(--weight-medium); color: var(--warning); }
+.hp-plan-meter[data-level="near"] .hp-progress > span,
+.hp-plan-meter[data-level="nudge"] .hp-progress > span,
+.hp-plan-meter[data-level="at_cap"] .hp-progress > span { background: var(--warning); }
+.hp-starter-active-name { font-weight: var(--weight-medium); }
+.hp-pick-business { display: grid; gap: var(--space-3); }
+.hp-pick-business p { margin: 0; }
+.hp-pick-list { display: grid; gap: var(--space-2); }
+.hp-pick-row { display: flex; align-items: center; gap: var(--space-3); min-block-size: 44px; padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-card); cursor: pointer; }
+.hp-pick-row:has(input:checked) { border-color: var(--accent); background: var(--accent-subtle); }
+.hp-pick-name { font-weight: var(--weight-medium); }
+.hp-pick-actions { display: flex; justify-content: space-between; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.hp-usage-line { margin: 0 0 var(--space-4); }
+.hp-usage-line p { margin: 0; color: var(--muted); font-size: var(--text-label); }
+.hp-usage-line[data-level="at_cap"] p { color: var(--warning); font-weight: var(--weight-medium); }
+.hp-issue-usage { margin: 0; font-size: var(--text-label); color: var(--muted); }
+.hp-issue-usage[data-level="near"],
+.hp-issue-usage[data-level="nudge"],
+.hp-issue-usage[data-level="at_cap"] { color: var(--warning); font-weight: var(--weight-medium); }
+.hp-issue-form[data-refused="true"] .hp-issue-field { opacity: 0.5; pointer-events: none; }
+.hp-trial-step { display: grid; gap: var(--space-4); max-inline-size: 30rem; margin-inline: auto; }
+.hp-trial-step h1 { margin: 0; }
+.hp-trial-step p { margin: 0; }
+.hp-trial-compare { inline-size: 100%; border-collapse: collapse; font-size: var(--text-body); }
+.hp-trial-compare th, .hp-trial-compare td { padding: var(--space-2); border-block-end: 1px solid var(--border); text-align: start; }
+.hp-trial-compare td { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+.hp-trial-actions { display: grid; gap: var(--space-2); }
+.hp-trial-once { font-weight: var(--weight-medium); }

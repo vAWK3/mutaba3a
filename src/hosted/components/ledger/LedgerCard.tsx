@@ -34,7 +34,7 @@ export function LedgerCard({ profileId, customerId, currencies, currency, period
   const { t, language } = useLanguage();
   const active = currency && currencies.includes(currency) ? currency : currencies[0];
   const statement = useCustomerStatement(profileId, customerId, active, period);
-  if (!active) return <Empty title={t('hosted.ledger.empty.title')} body={t('hosted.ledger.empty.body')} />;
+  if (!active) return <Empty title={t('hosted.ledger.empty.title')} />;
 
   const balance = (value: string) => {
     const b = formatBalance(value, active, language);
@@ -69,7 +69,7 @@ export function LedgerCard({ profileId, customerId, currencies, currency, period
       <QueryView queries={[statement]} data={statement.data} loading={<Skeleton />}>
         {({ head, lines }) =>
           lines.length === 0 ? (
-            <Empty title={t('hosted.ledger.empty.title')} body={t('hosted.ledger.empty.body')} />
+            <Empty title={t('hosted.ledger.empty.title')} />
           ) : (
             <>
               <p className="hp-ledger-closing" data-testid="ledger-closing">

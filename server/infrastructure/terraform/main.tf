@@ -785,6 +785,22 @@ resource "google_cloud_run_v2_service" "api" {
           }
         }
 
+        # MUT-731 (ADR-284): the free Starter plan; off = today's read-only and locked states.
+        dynamic "env" {
+          for_each = var.starter_plan ? { STARTER_PLAN = "true" } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
+        # MUT-731 (Basel Q7): the one-time Solo trial in onboarding, for accounts created from this instant.
+        dynamic "env" {
+          for_each = var.solo_trial_offer_since != "" ? { SOLO_TRIAL_OFFER_SINCE = var.solo_trial_offer_since } : {}
+          content {
+            name  = env.key
+            value = env.value
+          }
+        }
         # MUT-736 (ADR-282): invoicing for every business profile; off = the operator grant decides (the kill switch).
         dynamic "env" {
           for_each = var.invoicing_for_all ? { INVOICING_FOR_ALL = "true" } : {}

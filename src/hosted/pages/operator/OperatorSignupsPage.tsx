@@ -75,7 +75,7 @@ export function OperatorSignupsPage({ headingRef }: { headingRef: RefObject<HTML
         data={query.data}
         isEmpty={() => waiting.length === 0}
         loading={<Skeleton rows={SKELETON_ROWS} />}
-        empty={<Empty title={t('hosted.operator.signups.emptyTitle')} body={t('hosted.operator.signups.emptyBody')} />}
+        empty={<Empty title={t('hosted.operator.signups.emptyTitle')} />}
       >
         {(list) => (
           <ul ref={listRef} className="hp-passkey-list hp-operator-list" aria-label={t('hosted.operator.signups.listLabel')}>

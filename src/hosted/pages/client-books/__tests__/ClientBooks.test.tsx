@@ -139,7 +139,7 @@ describe('the desk list (AC1)', () => {
   it('with none, says how a client invites you (AW5)', async () => {
     portal('/client-books', {}, []);
     expect(await screen.findByRole('heading', { name: 'No client books yet' })).toBeInTheDocument();
-    expect(screen.getByText(/invite you from MTB3A › their profile › Sharing/)).toBeInTheDocument();
+    expect(screen.getByText(/invite you from their Sharing page/)).toBeInTheDocument();
   });
 });
 

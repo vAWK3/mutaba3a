@@ -13,7 +13,7 @@ import { openYou, youRow } from '../../support/you';
 
 const PASSWORD = 'the first long passphrase';
 const HOME = /\/p\/[0-9a-f-]{36}$/;
-const SUGGESTION = 'Add a passkey: the more secure way to sign in.';
+const SUGGESTION = 'Sign in more securely with a passkey.';
 const COPY = {
   en: { password: 'New password', terms: /terms of service/, save: 'Save and sign in', home: 'Home' },
   ar: { password: 'كلمة المرور الجديدة', terms: /شروط الخدمة/, save: 'احفظ وسجّل الدخول', home: 'الرئيسية' },
@@ -52,7 +52,7 @@ test('After setting a password, Create a passkey registers one, lands on Home, a
   });
   await step('Signed in, the page offers a passkey before Home, with Create a passkey and Not now', async () => {
     await expect(stepHeading(page)).toBeVisible();
-    await expect(page.getByText('Your password is set. Create a passkey so you won’t need to type it. It syncs to your phone through iCloud Keychain or Google Password Manager.')).toBeVisible();
+    await expect(page.getByText('Your password is set. Create a passkey so you won’t need to type it.')).toBeVisible();
     await expect(page.getByRole('button', { name: SETUP_PASSKEY.en.create })).toBeVisible();
     await expect(page.getByRole('button', { name: SETUP_PASSKEY.en.notNow })).toBeVisible();
     await expect(page).toHaveURL(/\/setup$/);
@@ -127,7 +127,6 @@ test('The passkey step in Arabic on a 375 px phone, right to left', { tag: '@por
   await step('أنشئ مفتاح مرور, right to left, fitting the phone', async () => {
     await expect(stepHeading(page, 'ar')).toBeVisible();
     await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
-    await expect(page.getByText(/سلسلة مفاتيح iCloud أو مدير كلمات المرور من Google/)).toBeVisible();
     await expect(page.getByRole('button', { name: SETUP_PASSKEY.ar.notNow })).toBeVisible();
     await expectNoHorizontalOverflow(page, 'the setup passkey step at 375 px');
   });

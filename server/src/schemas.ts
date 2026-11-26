@@ -307,6 +307,14 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
  */
 const ProfilePlanTierSchema = z.enum(['FREELANCER', 'SOLO', 'BUSINESS', 'FIRM']);
 
+/**
+ * MUT-731 (ADR-284): the tiers an entitlement can carry: the stored ones plus STARTER, the free fallback plan (never a
+ * subscription's or a grant's). Inline everywhere, like ProfilePlanTierSchema. Additive since 1.145.0-mut731.
+ */
+const EntitledTierSchema = z.enum([...ProfilePlanTierSchema.options, 'STARTER']);
+/** MUT-731: what decides an entitlement; STARTER is the free plan (with STARTER_PLAN on). Additive since 1.145.0-mut731. */
+const EntitlementSourceSchema = z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'STARTER', 'NONE']);
+
 /** MUT-565 (ADR-251): ACCOUNTANT is the person's Accountant plan (client books), only ever on a person, never a profile. */
 const BillingTierSchema = z.enum([...ProfilePlanTierSchema.options, 'ACCOUNTANT']).openapi('BillingTier');
 
@@ -378,12 +386,14 @@ export const BillingAccountListSchema = z.object({ accounts: z.array(BillingAcco
 const BillingEntitlementSchema = z
   .object({
     state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
-    source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
+    source: EntitlementSourceSchema,
     /** MUT-702: a running trial (and its read-only and locked ends) is BUSINESS from 1.136.0-mut702 (FREELANCER before). */
-    tier: ProfilePlanTierSchema.nullable(),
+    tier: EntitledTierSchema.nullable(),
     until: z.string().datetime().nullable(),
     /** MUT-532: READ_ONLY because the person paused their plan; `until` is when it restarts on its own (null: no end set). */
     paused: z.boolean(),
+    /** MUT-731: READ_ONLY because the owner is on Starter and keeps another business active. Absent is false. Additive since 1.145.0-mut731. */
+    planLimit: z.boolean().optional(),
   })
   .openapi('BillingEntitlement');
 
@@ -679,9 +689,22 @@ export const BillingOverviewSchema = z
      * running trial, which is business): the highest-ranked one that covers any of them. `freelancer` is the legacy plan.
      * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.136.0-mut702.
      */
-    currentPlan: z.enum(['solo', 'business', 'firm', 'freelancer']).nullable(),
+    currentPlan: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer']).nullable(),
     /** MUT-735 (ADR-281). Additive since 1.142.0-mut735. */
     usage: BillingUsageSchema,
+    /**
+     * MUT-731 (ADR-284): the free plan. `chosenAt`: when the person chose "Continue free on Starter" (null: never).
+     * `canContinueFree`: they are read-only after cancelling a paid plan and may move to Starter now (POST
+     * /v1/billing/starter). Null where Starter is off. Additive since 1.145.0-mut731.
+     */
+    starter: z.union([z.object({ chosenAt: z.string().datetime().nullable(), canContinueFree: z.boolean() }), z.null()]).optional(),
+    /**
+     * MUT-731 (Basel Q5): on Starter with more businesses than it keeps active: the cap, the chosen one(s) and the
+     * read-only rest (`mustChoose` until they pick). Null otherwise. Additive since 1.145.0-mut731.
+     */
+    activeBusinesses: z
+      .union([z.object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() }), z.null()])
+      .optional(),
   })
   .openapi('BillingOverview');
 
@@ -1159,10 +1182,13 @@ export const HostedProfileSchema = z
       .object({
         /** ACTIVE: full use. GRACE: a payment failed and Stripe is retrying. READ_ONLY: reads and export only. LOCKED: an unpaid trial past day 30. */
         state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
-        /** What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, or nothing. */
-        source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). */
-        tier: ProfilePlanTierSchema.nullable(),
+        /**
+         * What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, the free Starter
+         * plan (MUT-731, since 1.145.0-mut731, with STARTER_PLAN on), or nothing.
+         */
+        source: EntitlementSourceSchema,
+        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). MUT-731: STARTER. */
+        tier: EntitledTierSchema.nullable(),
         /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
         until: z.string().datetime().nullable(),
         /**
@@ -1170,6 +1196,11 @@ export const HostedProfileSchema = z
          * from 1.97.0-mut532; an older server omits it (read it as false).
          */
         paused: z.boolean().optional(),
+        /**
+         * MUT-731 (ADR-284): READ_ONLY because the owner is on Starter with more businesses than it allows and this isn't
+         * the one they keep active (`PUT /v1/billing/active-businesses`). Absent is false. Additive since 1.145.0-mut731.
+         */
+        planLimit: z.boolean().optional(),
       })
       .nullable()
       .optional(),
@@ -1422,6 +1453,22 @@ export const MeSchema = z
      * Additive since 1.108.0-mut565.
      */
     clientBooks: ClientBooksSummarySchema.optional(),
+    /**
+     * MUT-731 (ADR-284): the person's plan as the portal's first screens need it. `current` is `currentPlan` (GET
+     * /v1/billing). `businesses` is set while the person is on Starter and owns more businesses than it keeps active:
+     * with `mustChoose` the portal opens the blocking "Choose your active business" dialog before anything else (Basel
+     * Q5: no default; every business is read-only until they pick). `soloTrialOffer`: show the one-time Solo trial step
+     * now (a new account's first web visit; Basel Q7). Absent where billing is off. Additive since 1.145.0-mut731.
+     */
+    plan: z
+      .object({
+        current: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer']).nullable(),
+        businesses: z
+          .object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() })
+          .nullable(),
+        soloTrialOffer: z.boolean(),
+      })
+      .optional(),
   })
   .openapi('Me');
 
@@ -1434,6 +1481,12 @@ export const CreateProfileRequestSchema = z
     type: ProfileTypeSchema,
     defaultCurrency: CurrencySchema,
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }),
+    /**
+     * MUT-731 (ADR-284, Basel Q9): a business carried over from the free app. It is never refused for the plan's business
+     * count (only the 6-profile limit): on Starter the extras arrive read-only and the person picks the active one.
+     * Additive since 1.145.0-mut731.
+     */
+    carriedOver: z.boolean().optional(),
   })
   .strict()
   .openapi('CreateProfileRequest');
@@ -5642,6 +5695,22 @@ export const IssueDueRequestSchema = z
   .object({ customerId: uuid.nullable(), items: z.array(DueEntryRefSchema).min(1).max(25) })
   .strict()
   .openapi('IssueDueRequest');
+/**
+ * MUT-731 (ADR-284): the details of a 409 PLAN_LIMIT (billing/plan-limit.ts). `used`, `cap` and `resetsOn` come with the
+ * monthly meters (documents, scans); `cap` with businesses and partners. Additive since 1.145.0-mut731.
+ */
+export const PlanLimitDetailsSchema = z
+  .object({
+    limit: z.enum(['documents', 'scans', 'businesses', 'partners', 'taxAuthority']),
+    plan: z.string(),
+    nextPlan: z.enum(['solo', 'business', 'firm']).nullable(),
+    canUpgrade: z.boolean(),
+    used: z.number().int().optional(),
+    cap: z.number().int().optional(),
+    resetsOn: z.string().optional().openapi({ description: 'YYYY-MM-DD, the 1st of the next Asia/Jerusalem month' }),
+  })
+  .openapi('PlanLimitDetails');
+
 export const IssueDueResultSchema = z
   .object({
     results: z.array(
@@ -5653,6 +5722,11 @@ export const IssueDueResultSchema = z
       }),
     ),
     issued: z.number().int(),
+    /**
+     * MUT-731: the plan's monthly documents ran out partway (reason PLAN_LIMIT on that item and every one after it, which
+     * were not tried). Absent otherwise. Additive since 1.145.0-mut731.
+     */
+    limit: PlanLimitDetailsSchema.optional(),
   })
   .openapi('IssueDueResult');
 export const SettleAndIssueResponseSchema = z

@@ -4852,3 +4852,20 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Unit | `signupDoor.test.ts`, `landingCopy.test.ts` | `starterPlan` only on a clear true; Starter only while signup is open; `faqFor` picks the answer per state; every FAQ key in ar + en |
 | Page (RTL) | `LandingPage.test.tsx` | 9 questions, 10 with Starter; Starter copy in hero, Get it and FAQ; no price, checkout or trial; nothing names Starter or invoicing while it is off or the server is older |
 | QA | `web.landing.starter-free-plan`, `web.landing.faq-month` | the Starter page in ar then en, and back off; the month's answers in en and ar |
+
+
+## MUT-731 — the free Starter plan, server and portal (2026-11-26, ADR-284, ADR-285)
+
+Written with the build; the full suites, `test:db` and the QA recordings run once at the end with the copy cleanup.
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit | `server/src/billing/__tests__/entitlement-starter.test.ts` | rows 6–8 on and off: nothing at all, legacy trial ended (day 15, day 31), failed / disputed / unpaid / trial cancelled before paying / 30 s after trial_end / native paused → Starter; deliberate cancel → read-only; null reason → read-only; Starter chosen after vs before the subscription; latest lapse decides (not rank); no owner → NONE; pause and covering subscriptions win |
+| Unit | `billing/__tests__/business-cap.test.ts`, `plans.test.ts`, `usage/__tests__/pure.test.ts` | the cap state (no default, choice kept, stale or oversize choice), other coverage not counted, owners independent; Starter rank/limits/next plan/hard-cap sets; `hardCapOf`; small-cap levels 1/2/3 of 3 and 10/11/12 of 12 |
+| Unit | `auth/__tests__/self-service.test.ts`, `billing/__tests__/trial-mail.test.ts`, `config.test.ts` | no trial on any sign-up branch; no day-27 stage; `STARTER_PLAN`, `SOLO_TRIAL_OFFER_SINCE` |
+| Routes | `server/src/__tests__/starter-caps.test.ts` | 4th document 409 with details; canUpgrade false without Checkout; receipt on an issued invoice at 3/3 → 201 and counted; credit note refused; next Jerusalem month opens; refused → Solo grant → same key → 201; replay at 3/3 → original; co-owner capped by the creator; off → nothing refused; scans 13th start refused, race at 11/12 (second complete refused, receipt unfinished), expense receipt capped; second business refused / carried over created / `maxOwnedProfiles` 2 (6 off); partner refused; Issue all stops with `limit` |
+| Routes | `server/src/__tests__/starter-plan.test.ts` | Starter ACTIVE and writable, `/v1/billing` usage limits 3/12; off → NONE; legacy trial → Starter; Continue free (read-only → Starter, idempotent, 409 NOTHING_TO_LEAVE, 404 off); two businesses: all read-only with reason PLAN_LIMIT until picked, PUT keeps one, gate and `/v1/me` agree, switch later, audit; WRONG_COUNT / not theirs / nothing to choose; a paid grant opens both; `billing:uncovered` empty; Solo trial offered once to new accounts, never to older ones, never while unset |
+| Portal | `src/hosted/data/__tests__/planUsage.test.ts`, `components/__tests__/StarterPlan.test.tsx` | meters and levels; PLAN_LIMIT parsing; receipt exemption; Home's fuller meter, hide until the limit, per month/meter; Billing on Starter (en, ar), Upgrade from 90%, active business rows; Continue free (POST, toast); planLimit banner; the blocking pick dialog (nothing chosen, button label, PUT); Home 80/90/limit; nothing for a paid plan (no billing read) |
+| QA (written, not run) | `qa/specs/portal/starter.spec.ts` (`portal.starter.*`, FakeApi `starter` seed) | Billing month (en/ar, 375 overflow), Issue drawer at 3/3, 13th scan before upload + by hand, second business, Continue free, pick dialog, Home notices; the trial step is declared hidden |
+| Postgres (to add with the final run) | `test:db` | the migration round trip (`uuid[]`), the documents cap race in `issueTx` at 2/3 (one 201, one PLAN_LIMIT, no number gap) and the scan complete at 11/12 |
+

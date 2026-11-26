@@ -27,7 +27,6 @@ export function ConnectedAppsDrawer({ onClose }: { onClose: () => void }) {
       <QueryView queries={[apps]} data={apps.data}>
         {(data) => (
           <>
-            <p className="hp-muted hp-passkey-intro">{t('hosted.connectedApps.lead')}</p>
             {failed && (
               <div className="hp-banner hp-banner-error" role="alert">
                 <AlertIcon />
@@ -43,7 +42,6 @@ export function ConnectedAppsDrawer({ onClose }: { onClose: () => void }) {
                 ))}
               </ul>
             )}
-            <p className="hp-help">{t('hosted.connectedApps.agentsHint')}</p>
           </>
         )}
       </QueryView>

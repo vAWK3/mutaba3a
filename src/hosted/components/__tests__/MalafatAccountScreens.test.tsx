@@ -152,7 +152,7 @@ describe('the second way in', () => {
     vi.mocked(addPasskeyFlow).mockResolvedValue({ kind: 'stepUp' });
     const { user } = portal(`/p/${ORG_A}`, {}, malafatMade());
     await user.click(await screen.findByRole('button', { name: 'Add a passkey' }));
-    expect(await screen.findByRole('alert')).toHaveTextContent('For your security, sign in with Malafat again, then add your passkey.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Sign in with Malafat again, then add your passkey.');
     vi.mocked(passkeySupport).mockReturnValue(false);
   });
 
@@ -162,7 +162,7 @@ describe('the second way in', () => {
     const drawer = await screen.findByRole('dialog', { name: 'Set a password' });
     await user.type(within(drawer).getByLabelText('New password'), 'a long enough passphrase');
     await user.click(within(drawer).getByRole('button', { name: 'Save' }));
-    expect(await within(drawer).findByRole('alert')).toHaveTextContent('For your security, sign in with Malafat again, then set your password.');
+    expect(await within(drawer).findByRole('alert')).toHaveTextContent('Sign in with Malafat again, then set your password.');
   });
 
   it('Not now hides it on this device', async () => {

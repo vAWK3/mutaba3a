@@ -27,6 +27,20 @@ export async function payerPlanOf(store: PlanStore, organization: Organization, 
 }
 
 /**
+ * MUT-731 (ADR-284): a person's own plan (`currentPlanOf` over the profiles they created), for the stock limits they
+ * hit as themselves: a new business, a partner. `none` when nothing covers them.
+ */
+export async function personPlanOf(store: PlanStore, userId: string, now: Date): Promise<UsagePlan> {
+  const owned = await ownedProfilesOf(store, userId);
+  if (owned.length === 0) return 'none';
+  const withMalafat = await Promise.all(
+    owned.map(async (p) => ({ organization: p, malafatConnected: (await store.integrations.findByOrganizationAndProvider(p.id, 'MALAFAT'))?.status === 'CONNECTED' })),
+  );
+  const entitlements = await entitlementsFor(store, withMalafat, now);
+  return currentPlanOf([...entitlements.values()]) ?? 'none';
+}
+
+/**
  * The stamp a metered action carries: who pays, their plan, the door, the actor. Anything Malafat writes (an API key,
  * a delegated call, a profile whose writer of record is Malafat) is plan `malafat`, never capped (eng review #7).
  */

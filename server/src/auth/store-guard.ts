@@ -456,7 +456,16 @@ export const STORE_ACCESS: StoreAccess = {
    * operator and, from MUT-360, the webhook, both on the unguarded store.
    */
   billing: {
+    // MUT-731 (ADR-284): the server's STARTER_PLAN, a value, not a call (the guard never sees it called).
+    starterPlan: 'read',
     factsFor: 'sessionOnly',
+    // MUT-731: the owner's businesses for the Starter business cap, read beside factsFor (coverage.ts).
+    ownedBusinessesOf: 'sessionOnly',
+    // MUT-731: the person's own Starter choices and the one-time Solo trial; the routes pass the session's user.
+    chooseStarter: 'sessionOnly',
+    setActiveBusinesses: 'sessionOnly',
+    paidTrialOf: 'sessionOnly',
+    markPaidTrialOffered: 'sessionOnly',
     // MUT-362: Settings › Billing reads the person's own account; the route passes the session's user, never a parameter.
     summaryOf: 'sessionOnly',
     // MUT-532: the person's own pause, stay offer and cancel; the route passes the session's user, never a parameter.
@@ -697,7 +706,7 @@ export const PROFILE_FEED_READS: ReadonlySet<string> = new Set(['entries.list', 
  * MUT-736 (ADR-282): the Tax Authority status and the invoicing setup read whether the payer's plan includes the
  * connection (`taxAuthorityPlanOf`), so the owner's billing facts are read too; only allowed/next plan is answered.
  */
-export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor', 'billing.factsFor']);
+export const ACCOUNTANT_EXTRA_READS: ReadonlySet<string> = new Set([...PROFILE_FEED_READS, 'features.activeFor', 'billing.factsFor', 'billing.ownedBusinessesOf']);
 
 export function accountantStoreGuard(): StoreGuard {
   return { ...readOnlyStoreGuard(ACCOUNTANT_EXTRA_READS, accountantReadOnly), narrow: accountantExpenseView };

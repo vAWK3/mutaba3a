@@ -143,7 +143,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll')), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince')), 201);
     },
   );
 
@@ -186,7 +186,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
         sessionLifetime('cookie', settings),
       );
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll')), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince')), 201);
     },
   );
 
@@ -221,7 +221,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       const { email, code } = c.req.valid('json');
       const { user, token } = await signInWithCode(c, signInDeps, { email, code }, 'cookie', sessionLifetime('cookie', settings));
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll')), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince')), 201);
     },
   );
 
@@ -250,7 +250,7 @@ export function sessionRoutes(options: SessionRouteOptions): OpenAPIHono<AppEnv>
       await signInLimit(c);
       const { user, token } = await finishTwoFactor(c, signInDeps, c.req.valid('json'), 'cookie', sessionLifetime('cookie', settings));
       setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll')), 201);
+      return c.json(await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince')), 201);
     },
   );
 

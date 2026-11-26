@@ -20,6 +20,10 @@ import { Drawer } from './Drawer';
 import { Skeleton } from './QueryView';
 import { useToast } from './Toast';
 import { TwoFactorIssuingPrompt } from '../twoFactor/TwoFactorIssuingPrompt';
+import { documentRefusedNow, limitFromUsage, planLimitOf, upgradeOffered, type StarterMeter } from '../data/planUsage';
+import { useStarterUsage } from '../data/useStarterUsage';
+import { PlanLimitNotice, UpgradeToSolo } from './PlanLimitNotice';
+import { LeftLine } from './StarterPlan';
 import { isTwoFactorRefusal } from '../twoFactor/twoFactor';
 
 /**
@@ -187,8 +191,14 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
     issue.reset();
   }
   const refusal = issue.error ?? preview.error;
+  // MUT-731 (wireframe 2): Starter's 3 documents a month. Known before the person types (the month's usage), so the
+  // drawer opens with the notice in the banner slot, its fields dimmed, and Upgrade to Solo in Issue's place; the
+  // server's PLAN_LIMIT shows the same notice if it races. A receipt paying an issued document is never refused.
+  const starter = useStarterUsage();
+  const knownLimit = starter.usage && documentRefusedNow(starter.usage, docType, start.appliesToDocumentId) && starter.billing ? limitFromUsage(starter.usage, 'documents', starter.billing) : null;
+  const planLimit = planLimitOf(issue.error) ?? knownLimit;
   // MUT-710 (D10): the two-step refusal is the prompt at the top, never the general failure.
-  const refusalText = isTwoFactorRefusal(refusal) ? null : refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
+  const refusalText = isTwoFactorRefusal(refusal) || planLimitOf(refusal) ? null : refusal instanceof ApiError ? refusalMessage(refusal, t) : refusal ? t('hosted.issue.failed') : null;
 
   // MUT-711 (ADR-273): the preview says the invoice needs an allocation number MTB3A can't request. Issue waits for a
   // well-formed number, sent with the invoice number it was requested for (a preview, never a reservation).
@@ -254,6 +264,16 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
         blocked ? undefined : (
           <div className="hp-issue-footer">
             <p className="hp-issue-final">{t('hosted.issue.final')}</p>
+            {/* Refused, the footer's own Upgrade to Solo button is the one offer; the line doesn't repeat it as a link. */}
+            {starter.usage && <DocumentsLeftLine meter={starter.usage.documents} canUpgrade={starter.canUpgrade && !planLimit} />}
+            {planLimit ? (
+              <div className="drawer-footer-right">
+                <Button type="button" variant="secondary" onClick={onClose}>
+                  {t('common.cancel')}
+                </Button>
+                {upgradeOffered(planLimit) && <UpgradeToSolo />}
+              </div>
+            ) : (
             <div className="drawer-footer-right">
               <Button type="button" variant="secondary" onClick={() => void draftPdf()} disabled={!body || drafting}>
                 {t('hosted.issue.draftPdf')}
@@ -270,6 +290,7 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
                 {t('hosted.issue.issueAs', { type: typeLabel(docType) })}
               </Button>
             </div>
+            )}
           </div>
         )
       }
@@ -282,7 +303,8 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
           </Link>
         </div>
       ) : (
-        <form id={formId} className="hp-issue-form" onSubmit={submit} noValidate>
+        <form id={formId} className="hp-issue-form" onSubmit={submit} noValidate data-refused={planLimit ? 'true' : undefined}>
+          {planLimit && <PlanLimitNotice limit={planLimit} withUpgrade={false} />}
           <TwoFactorIssuingPrompt error={issue.error} />
           {needsCustomer && (
             <div className="hp-issue-field">
@@ -436,7 +458,6 @@ function IssueForm({ profile, start = {}, onClose, onIssued }: { profile: Hosted
                 ]}
                 onChange={(value) => setPaidChoice(value as 'REFUND' | 'KEEP')}
               />
-              {paidChoice === 'KEEP' && <p className="hp-muted">{t('hosted.issue.creditPaid.keptNote')}</p>}
               {paidChoice === 'REFUND' && (
                 <>
                   <SegmentedControl
@@ -532,4 +553,23 @@ function refusalMessage(error: ApiError, t: (key: string, vars?: Record<string, 
   ];
   if (reason && known.includes(reason)) return t(`hosted.issue.refusals.${reason}`);
   return t('hosted.issue.failed');
+}
+
+/**
+ * MUT-731 (wireframe 7): the documents meter speaks where it's used, in the Issue drawer's footer: "1 of 3 documents
+ * this month" at ok, then what's left (butter), with Upgrade to Solo from 90%.
+ */
+function DocumentsLeftLine({ meter, canUpgrade }: { meter: StarterMeter; canUpgrade: boolean }) {
+  const { t } = useLanguage();
+  return (
+    <p className="hp-issue-usage" data-level={meter.level} data-testid="issue-usage">
+      {meter.level === 'ok' ? t('hosted.billing.usage.thisMonth', { usage: t('hosted.billing.usage.documents', { used: String(meter.used), cap: String(meter.limit) }) }) : <LeftLine meter={meter} />}
+      {(meter.level === 'nudge' || meter.level === 'at_cap') && canUpgrade && (
+        <>
+          {' · '}
+          <UpgradeToSolo asLink />
+        </>
+      )}
+    </p>
+  );
 }

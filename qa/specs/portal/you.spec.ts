@@ -78,7 +78,6 @@ test('signed out on this device, the You page shows only what needs no account',
   await step('You › Profiles: no Hosted chip, no note about the local app, and nothing that needs an account', async () => {
     await openYou(page, 'profiles');
     await expect(main.getByText('Hosted', { exact: true })).toHaveCount(0);
-    await expect(main.getByText(/stay in the MTB3A app on your device/)).toHaveCount(0);
     await expect(main.getByText(/Billing|Change password|Sign out|Malafat|iPhone|Android|Share anonymous usage/)).toHaveCount(0);
   });
 });

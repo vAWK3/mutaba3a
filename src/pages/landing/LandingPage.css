@@ -795,13 +795,6 @@ html:has(.landing-header) {
   text-align: start;
 }
 
-.landing-get-it-note {
-  margin: calc(-1 * var(--space-4)) 0 0;
-  font-size: var(--text-label);
-  color: var(--muted);
-  text-align: center;
-}
-
 /* Ways in: horizontal tiles, two app tiles side by side */
 .landing-get-it-options {
   display: grid;

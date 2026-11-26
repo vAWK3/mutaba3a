@@ -60,7 +60,7 @@ features:
       - Choose Jordan and For yourself
       - Continue to Stripe's page
     expect:
-      - '"No tax number needed, in any country", the summary shows $9.00 a month, and Continue to payment is enabled (MUT-418 comment 12451)'
+      - '"No tax number needed", the summary shows $9.00 a month, and Continue to payment is enabled (MUT-418 comment 12451)'
       - Stripe's page charges $9.00 a month and asks for no business tax number
   - id: trial-start
     title: A new signup lands on "Your 14-day free trial has started"; adding a card keeps the trial and the first charge is its end
@@ -82,7 +82,7 @@ features:
       - Fill in the test card and an Israeli address, then add it (through Stripe's API with the trial's end, TD-201)
       - Go back to Home
     expect:
-      - The first sign-in lands on "Your 14-day free trial has started" with its end date, "You won't be charged until <date>. Cancel any time before then.", Add a card now (recommended) and Not now (AC1)
+      - The first sign-in lands on "Your 14-day free trial has started" with its end date, "You won't be charged until <date>.", Add a card now (recommended) and Not now (AC1)
       - 'The Subscribe step shows ₪29.00 and "Your free trial continues: the first charge is on <date>"; Stripe''s page shows the free days first and asks a person for no tax number'
       - Back in the portal, "You're subscribed. Thank you." and "Card added. Your first charge is on <trial end>"; Stripe holds a trialing subscription whose trial_end is the trial end, and /v1/me says ACTIVE paid by Stripe (AC2)
       - Home shows neither the step nor the trial banner again
@@ -117,7 +117,7 @@ features:
       - In Stripe's portal, look for a way to cancel, then return to MTB3A
     expect:
       - The drawer shows Active and the renewal date before, and Stripe's Customer Portal opens on Manage billing (AC3)
-      - "Stripe's portal offers no cancel (MUT-532 D8: off in its configuration); the note under Manage billing reads \"Change your card or see invoices, on Stripe's page (in English).\""
+      - "Stripe's portal offers no cancel (MUT-532 D8: off in its configuration); the note under Manage billing reads \"Change your card or see invoices.\""
       - Back in the portal (?portal=returned) the plan is still Active; /v1/me still reports the profile ACTIVE, paid by Stripe
   - id: manage-ended
     title: After the cancelled period ends the account is read-only and Subscribe comes back

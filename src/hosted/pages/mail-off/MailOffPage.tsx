@@ -59,7 +59,7 @@ export function MailOffPage() {
         {stage === 'ask' && (
           <>
             <h1>{copy('offAsk')}</h1>
-            <p className="hp-setup-lead">{copy('rowSub')}</p>
+            {mail === 'monthlySummary' && <p className="hp-setup-lead">{copy('rowSub')}</p>}
             {button(false, copy('offButton'), true)}
           </>
         )}

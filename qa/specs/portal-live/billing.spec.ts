@@ -58,7 +58,7 @@ test('Subscribe in shekels from Israel as a business, pay with a test card, and 
     await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('IL');
     await form.getByRole('radio', { name: /For a business/ }).check();
     await expect(form.getByText('₪29.00')).toBeVisible();
-    await expect(form.getByText(/It's in English; you'll come back here/)).toBeVisible();
+    await expect(form.getByText(/Next you'll enter your card on Stripe's secure page/)).toBeVisible();
   });
   await step('Continue to Stripe’s payment page', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
@@ -119,7 +119,7 @@ test('A person in any country goes straight on to the card; a business still giv
   });
   await step('Choose Jordan, for myself', async () => {
     await form.getByRole('combobox', { name: 'Billing address country' }).selectOption('JO');
-    await expect(form.getByText('No tax number needed, in any country')).toBeVisible();
+    await expect(form.getByText('No tax number needed')).toBeVisible();
     await expect(form.getByText(/We can't sell to individuals/)).toHaveCount(0);
     await expect(form.getByText('$9.00')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Continue to payment' })).toBeEnabled();
@@ -143,7 +143,7 @@ test('Manage billing opens Stripe’s Customer Portal for the card and invoices;
     const d = await openBilling(page, person.personalId);
     await expect(d.getByText('Active')).toBeVisible({ timeout: 45_000 });
     await expect(d.getByRole('heading', { name: /^Freelancer, renews/ })).toBeVisible();
-    await expect(d.getByText("Change your card or see invoices, on Stripe's page (in English).")).toBeVisible();
+    await expect(d.getByText("Change your card or see invoices.")).toBeVisible();
     return d;
   });
   await step('Press Manage billing and land in Stripe’s Customer Portal', async () => {
@@ -228,7 +228,7 @@ test('A new signup lands on the trial step; adding a card keeps the trial and th
     await expect(page).toHaveURL(new RegExp(`/p/${person.personalId}\\?billing=true&step=welcome$`));
     await expect(welcome.getByRole('heading', { name: 'Your 14-day free trial has started' })).toBeVisible({ timeout: 30_000 });
     await expect(welcome.getByText(/^It ends on /)).toBeVisible();
-    await expect(welcome.getByText(/You won't be charged until .+\. Cancel any time before then\./)).toBeVisible();
+    await expect(welcome.getByText(/You won't be charged until .+\./)).toBeVisible();
     await expect(welcome.getByRole('button', { name: 'Not now' })).toBeVisible();
   });
   const billing = await (await page.request.get('/v1/billing')).json();
@@ -240,7 +240,7 @@ test('A new signup lands on the trial step; adding a card keeps the trial and th
     await expect(form.getByRole('radio', { name: /For yourself/ })).toBeChecked();
     await expect(form.getByText('₪29.00')).toBeVisible();
     await expect(form.getByText(/Your free trial continues: the first charge is on /)).toBeVisible();
-    await expect(form.getByText(/It's in English; you'll come back here/)).toBeVisible();
+    await expect(form.getByText(/Next you'll enter your card on Stripe's secure page/)).toBeVisible();
   });
   await step('Continue to Stripe’s page: it shows the free days before the first ₪29.00', async () => {
     await page.getByRole('button', { name: 'Continue to payment' }).click();
@@ -347,7 +347,7 @@ test('After the trial the API refuses writes and the portal is read-only; from d
     setTrialStartedDaysAgo(person.userId, 20);
     await page.goto(`/p/${person.personalId}/expenses`);
     await expect(banner.getByText('This profile is read-only')).toBeVisible();
-    await expect(banner.getByText(/the profile locks until you subscribe/)).toBeVisible();
+    await expect(banner.getByText(/the profile locks/)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Record expense' })).toHaveCount(0);
     const refused = await page.request.post('/v1/expenses', {
       headers: { ...asPerson, 'idempotency-key': crypto.randomUUID() },
@@ -689,7 +689,7 @@ test('Pause instead of cancelling - booked from the paid month’s end, read-onl
   await step('The profile is read-only while paused: the banner says so, adding is refused, the export still answers', async () => {
     await page.goto(`/p/${person.personalId}/expenses`);
     const banner = page.getByRole('region', { name: 'Your plan' });
-    await expect(banner.getByText(/^Your plan is paused until .+\. You can see and download everything; adding and changing come back when it restarts\.$/)).toBeVisible({ timeout: 45_000 });
+    await expect(banner.getByText(/^Your plan is paused until .+\.$/)).toBeVisible({ timeout: 45_000 });
     await expect(banner.getByRole('button', { name: 'Resume now' })).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Subscribe' })).toHaveCount(0);
     const refused = await writeExpense(page, person.personalId);
@@ -787,7 +787,7 @@ test('The stay offer - half price for 2 months, once per person ever', { tag: '@
   });
   await step('The stay offer: 50% off for 2 months, ₪14.50 instead of ₪29.00', async () => {
     await expect(flow.getByRole('heading', { name: 'Stay with 50% off for 2 months' })).toBeVisible();
-    await expect(flow.getByText(/^You pay ₪14\.50 a month instead of ₪29\.00, then ₪29\.00 a month again\. You can still cancel any time\.$/)).toBeVisible();
+    await expect(flow.getByText(/^You pay ₪14\.50 a month instead of ₪29\.00, then ₪29\.00 a month again\.$/)).toBeVisible();
     await expect(flow.getByText(/^A one-time offer\. If you cancel, your plan ends on .+\.$/)).toBeVisible();
   });
   await step('Press Keep my plan at ₪14.50: done, and Stripe holds the stay coupon', async () => {
@@ -869,7 +869,7 @@ test('A declined renewal - one Arabic mail within the hour, no amount or card; U
     const [m] = (await outboxOf(person.email)).filter((x) => x.template === 'card-failed');
     expect(m!.locale).toBe('ar');
     expect(m!.subject).toBe('لم تنجح عملية الدفع ببطاقتك');
-    expect(m!.text).toContain('يبقى حسابك مفتوحًا بالكامل');
+    expect(m!.text).toContain('يبقى حسابك مفتوحًا بينما نحاول مجددًا');
     // No amount, currency or card digits; the links (which carry this env's port) aside.
     expect(m!.text.replace(/https?:\/\/\S+/g, '')).not.toMatch(/₪|\$|\d{4}/);
     return m!;

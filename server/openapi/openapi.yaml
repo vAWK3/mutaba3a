@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.144.0-landing
+  version: 1.145.0-mut731
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -296,6 +296,48 @@ components:
             $ref: "#/components/schemas/AccountantClient"
         clientBooks:
           $ref: "#/components/schemas/ClientBooksSummary"
+        plan:
+          type: object
+          properties:
+            current:
+              type: string
+              nullable: true
+              enum:
+                - starter
+                - solo
+                - business
+                - firm
+                - freelancer
+                - null
+            businesses:
+              type: object
+              nullable: true
+              properties:
+                cap:
+                  type: integer
+                active:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                readOnly:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                mustChoose:
+                  type: boolean
+              required:
+                - cap
+                - active
+                - readOnly
+                - mustChoose
+            soloTrialOffer:
+              type: boolean
+          required:
+            - current
+            - businesses
+            - soloTrialOffer
       required:
         - user
         - profiles
@@ -499,6 +541,7 @@ components:
                 - OPERATOR
                 - STRIPE
                 - TRIAL
+                - STARTER
                 - NONE
             tier:
               type: string
@@ -508,12 +551,15 @@ components:
                 - SOLO
                 - BUSINESS
                 - FIRM
+                - STARTER
                 - null
             until:
               type: string
               nullable: true
               format: date-time
             paused:
+              type: boolean
+            planLimit:
               type: boolean
           required:
             - state
@@ -11223,9 +11269,46 @@ components:
               - document
         issued:
           type: integer
+        limit:
+          $ref: "#/components/schemas/PlanLimitDetails"
       required:
         - results
         - issued
+    PlanLimitDetails:
+      type: object
+      properties:
+        limit:
+          type: string
+          enum:
+            - documents
+            - scans
+            - businesses
+            - partners
+            - taxAuthority
+        plan:
+          type: string
+        nextPlan:
+          type: string
+          nullable: true
+          enum:
+            - solo
+            - business
+            - firm
+            - null
+        canUpgrade:
+          type: boolean
+        used:
+          type: integer
+        cap:
+          type: integer
+        resetsOn:
+          type: string
+          description: YYYY-MM-DD, the 1st of the next Asia/Jerusalem month
+      required:
+        - limit
+        - plan
+        - nextPlan
+        - canUpgrade
     IssueDueRequest:
       type: object
       properties:
@@ -11410,6 +11493,8 @@ components:
         timezone:
           type: string
           minLength: 1
+        carriedOver:
+          type: boolean
       required:
         - name
         - type
@@ -11802,6 +11887,7 @@ components:
           type: string
           nullable: true
           enum:
+            - starter
             - solo
             - business
             - firm
@@ -11809,6 +11895,44 @@ components:
             - null
         usage:
           $ref: "#/components/schemas/BillingUsage"
+        starter:
+          anyOf:
+            - type: object
+              properties:
+                chosenAt:
+                  type: string
+                  nullable: true
+                  format: date-time
+                canContinueFree:
+                  type: boolean
+              required:
+                - chosenAt
+                - canContinueFree
+            - nullable: true
+        activeBusinesses:
+          anyOf:
+            - type: object
+              properties:
+                cap:
+                  type: integer
+                active:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                readOnly:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                mustChoose:
+                  type: boolean
+              required:
+                - cap
+                - active
+                - readOnly
+                - mustChoose
+            - nullable: true
       required:
         - configured
         - subscription
@@ -12431,6 +12555,61 @@ components:
       required:
         - reason
       additionalProperties: false
+    StarterChoice:
+      type: object
+      properties:
+        starterChosenAt:
+          type: string
+          format: date-time
+        changed:
+          type: boolean
+          description: False when Starter was already chosen since the latest plan began.
+      required:
+        - starterChosenAt
+        - changed
+    ActiveBusinesses:
+      type: object
+      properties:
+        cap:
+          type: integer
+        active:
+          type: array
+          items:
+            type: string
+            format: uuid
+        readOnly:
+          type: array
+          items:
+            type: string
+            format: uuid
+        mustChoose:
+          type: boolean
+      required:
+        - cap
+        - active
+        - readOnly
+        - mustChoose
+    ActiveBusinessesRequest:
+      type: object
+      properties:
+        organizationIds:
+          type: array
+          items:
+            type: string
+            format: uuid
+          minItems: 1
+          maxItems: 6
+      required:
+        - organizationIds
+      additionalProperties: false
+    SoloTrialOffer:
+      type: object
+      properties:
+        offeredAt:
+          type: string
+          format: date-time
+      required:
+        - offeredAt
     ReceiptReadJobResult:
       type: object
       properties:
@@ -13784,6 +13963,7 @@ components:
             - OPERATOR
             - STRIPE
             - TRIAL
+            - STARTER
             - NONE
         tier:
           type: string
@@ -13793,12 +13973,15 @@ components:
             - SOLO
             - BUSINESS
             - FIRM
+            - STARTER
             - null
         until:
           type: string
           nullable: true
           format: date-time
         paused:
+          type: boolean
+        planLimit:
           type: boolean
       required:
         - state
@@ -28684,7 +28867,7 @@ paths:
       tags:
         - Profiles
       summary: Create a standalone profile you own
-      description: "Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories."
+      description: "Hosted entirely on MTB3A: never a Malafat organization, never keyed or shared. Fully writable by its owner, like the personal profile. Up to 6 owned profiles per person, the personal one included (409 CONFLICT, details.reason PROFILE_LIMIT). The type picks the expense categories. MUT-731: on Starter, one business beside the personal profile (409 PLAN_LIMIT, details.limit businesses), unless `carriedOver`."
       security:
         - session: []
         - deviceSession: []
@@ -29996,6 +30179,96 @@ paths:
                 $ref: "#/components/schemas/ErrorEnvelope"
         "503":
           description: "BILLING_NOT_CONFIGURED: no Stripe on this server, or `details.reason` PRICES_NOT_SET"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/starter:
+    post:
+      tags:
+        - Billing
+      summary: Continue free on Starter
+      description: "MUT-731 (ADR-284, Basel 13540 Q3): after a paid plan was cancelled (read-only), the person moves to the free Starter plan: their own profiles are ACTIVE on Starter at once. Idempotent: a choice already made since the latest plan began is kept (`changed: false`). 409 CONFLICT `details.reason` NOTHING_TO_LEAVE while a plan covers them (change plans instead, MUT-734). Audited `billing.starter_chosen` on each profile the person created. 404 with STARTER_PLAN off. Additive since 1.145.0-mut731."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: On Starter
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StarterChoice"
+        "404":
+          description: "NOT_FOUND: Starter is off on this server"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: "CONFLICT, details.reason NOTHING_TO_LEAVE: a plan covers the person now"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/active-businesses:
+    put:
+      tags:
+        - Billing
+      summary: Choose which business stays active on Starter
+      description: "MUT-731 (ADR-284, Basel Q5): someone on Starter with more businesses than it includes picks the one that stays active; the others are read-only (visible, exportable, never deleted) until they switch or upgrade. Exactly the plan’s count of businesses, each one the person created and still on Starter (422 VALIDATION_FAILED `details.reason` WRONG_COUNT; 404 NOT_FOUND for another’s). 409 CONFLICT `details.reason` NOTHING_TO_CHOOSE when the person isn’t over the count. Audited `billing.active_businesses_chosen`. 404 with STARTER_PLAN off. Additive since 1.145.0-mut731."
+      security:
+        - session: []
+        - deviceSession: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActiveBusinessesRequest"
+      responses:
+        "200":
+          description: The businesses now
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActiveBusinesses"
+        "404":
+          description: "NOT_FOUND: Starter is off, or a business that isn’t one the person created"
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "409":
+          description: CONFLICT, details.reason NOTHING_TO_CHOOSE
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+        "422":
+          description: VALIDATION_FAILED, details.reason WRONG_COUNT
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+  /v1/billing/solo-trial/offered:
+    post:
+      tags:
+        - Billing
+      summary: The one-time Solo trial step was shown
+      description: "MUT-731 (ADR-284, Basel Q7 and 13554 #2): the portal calls this when web onboarding shows the 14-day Solo trial. It is offered once: from here `GET /v1/me` `plan.soloTrialOffer` is false, whatever the person chose. Idempotent (the first date is kept). 404 with STARTER_PLAN off. Additive since 1.145.0-mut731."
+      security:
+        - session: []
+        - deviceSession: []
+      responses:
+        "200":
+          description: Recorded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SoloTrialOffer"
+        "404":
+          description: "NOT_FOUND: Starter is off on this server"
           content:
             application/json:
               schema:

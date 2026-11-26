@@ -52,7 +52,7 @@ features:
       - Sign in with the password on a 375 px phone in Arabic
       - Find the signup, press رفض and confirm with the passkey
     expect:
-      - The confirm says the account will be deleted and they can sign up again
+      - The confirm says the account will be deleted and they will be emailed
       - The toast says the signup was declined and the mail went
       - The person gets the decline mail and can no longer sign in
       - The page reads right to left with no sideways scroll
@@ -157,7 +157,7 @@ features:
       - Turn Accountant access on for yourself, confirming with the passkey
       - Press Manage passkeys
     expect:
-      - It says Operator since <date>, 1 passkey, and Not confirmed (changes will ask for your passkey), with no sideways scroll
+      - It says Operator since <date>, 1 passkey, and Not confirmed, with no sideways scroll
       - After the passkey the switch reads on and the page says Confirmed with your passkey until <time>
       - Manage passkeys opens You › Account with the Passkeys drawer
   - id: account-revoke-sessions
@@ -173,7 +173,7 @@ features:
       - Open their account and press Sign out everywhere
       - Confirm with the passkey
     expect:
-      - The confirm says how many devices will be signed out and that the password still works
+      - The confirm says how many devices will be signed out
       - The toast says the person was signed out on 1 device
       - Their other device is signed out, and their password still signs in
   - id: account-disable-enable

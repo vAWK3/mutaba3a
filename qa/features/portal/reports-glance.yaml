@@ -67,7 +67,6 @@ features:
     expect:
       - With reduced motion the kept figure shows its final value at once
       - The ledger is at most 560px wide and centred
-      - '"Open a profile for its charts" sits under it'
   - id: first-run
     title: With nothing on record, the Glance starts the first payment or expense
     tier: secondary

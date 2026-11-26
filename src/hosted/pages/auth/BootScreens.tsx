@@ -47,7 +47,6 @@ export function BootUnreachable({ onRetry, retrying }: { onRetry: () => void; re
       <Wordmark />
       <div className="hp-card hp-boot-card" role="alert">
         <h2>{t('hosted.auth.boot.title')}</h2>
-        <p>{t('hosted.auth.boot.body')}</p>
         <Button variant="secondary" onClick={onRetry} disabled={retrying}>
           {t('hosted.auth.boot.retry')}
         </Button>

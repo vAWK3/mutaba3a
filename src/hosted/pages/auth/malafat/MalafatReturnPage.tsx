@@ -225,7 +225,6 @@ function MalafatLink({ state, onLinked, onFailed }: StepProps & { onLinked: (sta
             )}
           </>
         )}
-        <p className="hp-help">{t('hosted.malafatSignIn.link.notByEmail')}</p>
       </form>
     </AuthLayout>
   );
@@ -349,7 +348,6 @@ function MalafatConsent({ state, onDone, onFailed }: StepProps & { onDone: (stat
             <span>{t(creates ? 'hosted.malafatSignIn.consent.create' : 'hosted.malafatSignIn.consent.connect')}</span>
           </button>
         </div>
-        <p className="hp-help">{t('hosted.malafatSignIn.consent.nothingYet')}</p>
       </form>
     </AuthLayout>
   );

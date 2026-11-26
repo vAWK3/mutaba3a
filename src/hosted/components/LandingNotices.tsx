@@ -4,6 +4,7 @@ import { MalafatCreatedNote } from './MalafatPortal';
 import { PasskeySuggestion } from './PasskeySuggestion';
 import { SecondWayIn } from './SecondWayIn';
 import { TrialBanner } from './TrialBanner';
+import { UsageNotice } from './UsageNotice';
 
 /**
  * The one-time notices a visit lands on (MUT-657: moved from Owed's overview to home, where every visit now starts),
@@ -13,6 +14,8 @@ import { TrialBanner } from './TrialBanner';
 export function LandingNotices({ heading }: { heading: RefObject<HTMLHeadingElement | null> }) {
   return (
     <>
+      {/* MUT-731 (wireframe 7): Starter's fuller meter, from 80% (a quiet line), 90% (a banner) and at the limit */}
+      <UsageNotice />
       {/* MUT-418: the free trial's days left, until a card is on file */}
       <TrialBanner />
       {/* MUT-370: suggest a passkey, after the trial's first-run step and under its banner (D4) */}

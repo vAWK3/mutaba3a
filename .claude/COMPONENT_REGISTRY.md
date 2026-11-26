@@ -2568,3 +2568,25 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `server/src/issuing/invoicing-on.ts` | `invoicingOn(store, org, forAll)` (the one issuing rule) | `issuingProfileOf`, books split, profile figures, period pack, statement tags |
 | `server/src/routes/me.ts` | `withInvoicingForAll(features, on)` | `buildMe` |
 | `src/hosted` i18n | `hosted.plan.name.{solo,business,firm}` | step 5's Upgrade button; MUT-731's plan copy |
+
+## MUT-731 — the free Starter plan (ADR-284, ADR-285)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `server/src/billing/plans.ts` | `starter` tier, `RANK.STARTER`, `PLAN_LIMITS.starter`, `HARD_CAP_PLANS`, `ENFORCED_BUSINESS_CAPS` | caps, entitlement, business cap |
+| `server/src/billing/entitlement.ts` | `resolveEntitlement(…, { starter })`, `STARTER_ENTITLEMENT`, `Entitlement.planLimit` | `billing/coverage.ts` |
+| `server/src/billing/business-cap.ts` | `applyBusinessCap`, `businessCapStateOf`, `enforcedBusinessCapOf`, `businessCapView` | `coverage.ts` (post-pass), `/v1/billing`, `/v1/me`, `routes/billing-starter.ts` |
+| `server/src/billing/plan-limit.ts` | `planLimitError(details)`, `nextPlanFor(plan)`, `isPlanLimitBody` | issuing, receipts, profiles, tax authority, `idempotency.ts` |
+| `server/src/usage/caps.ts` | `hardCapOf(plan, meter)`; `levelOf` small-cap rule | `issueTx`, receipt completes, `receipts-compose.ts` |
+| `server/src/usage/issue-events.ts` | `documentCapOf(stamp, input)` (receipt-on-issued exemption) | both stores' issue |
+| `server/src/usage/plan-of.ts` | `personPlanOf(store, userId, now)` | `POST /v1/profiles`, admin grant-owner |
+| `server/src/usage/cap-reached.ts` | `UsageCapReached` | both stores, `receipts-compose.ts` |
+| `server/src/routes/billing-starter.ts` | `billingStarterRoutes`, `BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES` | `app.ts` |
+| `src/hosted/data/planUsage.ts` | `starterUsageOf`, `planLimitOf`, `documentRefusedNow`, `limitFromUsage`, `homeNoticeOf`, `billingStarterOf`, `activeBusinessesOf`, nudge hide helpers | the components below |
+| `src/hosted/data/useStarterUsage.ts` | `useStarterUsage()` (Billing's query only for Starter people) | Issue drawer, receipts, New profile |
+| `src/hosted/components/PlanLimitNotice.tsx` | `PlanLimitNotice`, `UpgradeToSolo` | Issue drawer, receipts gallery, Home drop zone, expense receipts, New profile, Home notices, Billing |
+| `src/hosted/components/StarterPlan.tsx` | `UsageMeter`, `LeftLine`, `StarterBilling`, `PickActiveBusiness`, `ContinueFreeOnStarter` (with `data/starterQueries.ts` `useChooseActiveBusiness`) | Billing drawer, the pick dialog, `LapseGate` |
+| `src/hosted/components/PickActiveBusinessDialog.tsx` | `PickActiveBusinessDialog` (BlockingDialog) | `AuthGate` |
+| `src/hosted/components/UsageNotice.tsx` | `UsageNotice` (Home's 80/90/limit) | `LandingNotices` |
+| `src/hosted/pages/onboarding/SoloTrialStep.tsx` | `SoloTrialStep`, `SOLO_TRIAL_CHECKOUT` (dark) | `AuthGate` |
+

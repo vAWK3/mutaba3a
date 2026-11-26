@@ -44,7 +44,7 @@ export function TimezoneChoice({ id, browserZone, value, onChange, onBlur, name,
         <>
           <span className="form-label">{t('hosted.profiles.timezone')}</span>
           <p className="hp-fact-row">
-            <bdi dir="ltr">{browserZone}</bdi> <span className="hp-muted">{t('hosted.profiles.timezoneFromBrowser')}</span> ·{' '}
+            <bdi dir="ltr">{browserZone}</bdi> ·{' '}
             <button type="button" className="hp-link-button" onClick={onOpen}>
               {t('hosted.profiles.timezoneChange')}
             </button>

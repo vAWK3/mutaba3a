@@ -157,7 +157,7 @@ test('Totals never add currencies; ≈ names the profile currency and rate date;
     await api.open(page, groupPath(jordan.id));
     await expect(headline).toContainText('JOD 114.000');
     await expect(headline).toContainText('$40.00');
-    await expect(page.getByText(/at today's ECB rate \(Oct 17, 2026\)/)).toBeVisible();
+    await expect(page.getByText(/at today's rate/)).toBeVisible();
     await expect(page.getByText(/1 JOD = 5\.2239 ILS \(USD peg\)/)).toBeVisible();
     await expect(page.getByRole('tab', { name: 'JOD' })).toHaveAttribute('aria-selected', 'true');
   });

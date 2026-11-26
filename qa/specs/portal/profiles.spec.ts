@@ -229,13 +229,12 @@ test('The owner of a Business profile asks for firm features; it reads Requested
   await step('Go back and choose the Business profile: it offers firm features', async () => {
     await page.getByRole('button', { name: 'All profiles' }).click();
     await list.getByRole('button', { name: /^Khatib Law/ }).click();
-    await expect(section).toContainText('Firm features are tools for running an office');
+    await expect(section).toContainText('Tools for running an office');
     await expect(section.getByRole('button', { name: 'Request firm features' })).toBeVisible();
   });
 
   await step('Request firm features: sent once with an Idempotency-Key, then Requested', async () => {
     await section.getByRole('button', { name: 'Request firm features' }).click();
-    await expect(section).toContainText("Firm features show up here once they're turned on.");
     await expect(section).toContainText('Requested on');
     await expect(section.getByRole('button', { name: 'Request firm features' })).toHaveCount(0);
     const requests = api.calls('POST', new RegExp(`^/v1/profiles/${OFFICE_A}/firm-request$`));
@@ -284,7 +283,6 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
   await step('Open Manage profiles: the list explains the count, and the shared profile reads the same', async () => {
     await openManage(page);
     const list = page.getByRole('dialog', { name: 'Profiles' });
-    await expect(list).toContainText("Profiles shared with you don't count.");
     await expect(list.getByRole('button', { name: /^Sader & Haddad/ })).toContainText('Business · Shared with Basel Sader');
     await list.getByRole('button', { name: /^Sader & Haddad/ }).click();
   });
@@ -298,7 +296,6 @@ test('A co-owner sees the shared profile named for their partner, owns it fully,
     await expect(owners.getByRole('button', { name: /^Remove/ })).toHaveCount(0);
     await expect(owners.getByRole('button', { name: 'Leave Sader & Haddad' })).toBeVisible();
     await expect(pane.getByRole('radio', { name: /Personal/ })).toBeDisabled();
-    await expect(pane).toContainText('A shared profile stays Business.');
   });
 
   await step('Close the drawer and add a received income on the shared profile', async () => {
@@ -336,7 +333,6 @@ test('The creator removes a co-owner after an in-place confirm; the row goes and
   await step('The removal goes once with an Idempotency-Key; the toast says so and her row is gone', async () => {
     await expect(page.getByTestId('toast-live')).toHaveText('Lina Saleh removed from Sader & Haddad');
     await expect(owners.getByRole('listitem')).toHaveCount(1);
-    await expect(owners).toContainText('Only you own this profile.');
     const deletes = api.calls('DELETE', new RegExp(`^/v1/profiles/${OFFICE_A}/owners/${LINA}$`));
     expect(deletes).toHaveLength(1);
     expect(deletes[0]?.headers['idempotency-key']).toBeTruthy();
@@ -385,7 +381,7 @@ test('Someone removed while working on the shared profile lands on their persona
   });
 
   await step('The portal moves to the personal profile with a banner naming the shared one; Close dismisses it', async () => {
-    const banner = page.getByText('You no longer have access to Sader & Haddad. What you recorded stays.');
+    const banner = page.getByText('You no longer have access to Sader & Haddad.');
     await expect(banner).toBeVisible();
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_B}`));
     await page.getByRole('button', { name: 'Close' }).click();

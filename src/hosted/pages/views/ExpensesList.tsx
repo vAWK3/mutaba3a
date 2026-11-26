@@ -177,7 +177,7 @@ export function ExpensesList({ filters, setFilters }: ExpensesListProps) {
           isNarrowed(filters, { newExpense: undefined, expense: undefined, moveExpense: undefined }) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.expenses.empty.title')} body={t('hosted.expenses.empty.body')} action={recordButton} />
+            <Empty title={t('hosted.expenses.empty.title')} action={recordButton} />
           )
         }
       >

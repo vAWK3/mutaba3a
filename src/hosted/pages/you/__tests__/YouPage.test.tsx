@@ -35,14 +35,13 @@ describe('the You page (MUT-425)', () => {
     expect(part('Profiles')).toBe(true);
   });
 
-  it('Profiles lists each profile with its kind and Hosted, marks the open one, and keeps the local note', async () => {
+  it('Profiles lists each profile with its kind and Hosted, and marks the open one', async () => {
     portal(`/p/${ORG_B}/you`);
     const open = await screen.findByRole('button', { name: /Nour Studio/ });
     expect(open).toHaveAttribute('aria-current', 'true');
     expect(open).toHaveTextContent('Hosted');
     expect(open).toHaveTextContent('Business');
     expect(screen.getByRole('button', { name: /^Personal/ })).not.toHaveAttribute('aria-current');
-    expect(screen.getByText(/Your local profiles stay in the MTB3A app/)).toBeInTheDocument();
   });
 
   it.each([

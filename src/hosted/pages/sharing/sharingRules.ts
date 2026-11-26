@@ -95,7 +95,7 @@ export interface GrantRow {
 const ACTION: Record<AccountantGrant['status'], GrantAction> = { active: 'stop', pending: 'cancel', expired: 'inviteAgain' };
 
 function metaOf(grant: AccountantGrant, now: Date, language: Language, timeZone: string): Line[] {
-  if (grant.status === 'expired') return [{ key: 'hosted.sharing.accountants.expiredMeta' }];
+  if (grant.status === 'expired') return [];
   if (grant.status === 'pending') {
     return [
       { key: 'hosted.sharing.accountants.sent', vars: { date: shortDay(grant.invitedAt, language, timeZone) } },

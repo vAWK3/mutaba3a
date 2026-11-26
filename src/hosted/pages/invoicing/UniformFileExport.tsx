@@ -102,25 +102,10 @@ export function UniformFileExport({ profile }: { profile: HostedProfile }) {
           ) : (
             <>
               {t('hosted.invoicing.uniformFile.emptyTitle')}
-              <small>{t('hosted.invoicing.uniformFile.emptyBody')}</small>
             </>
           )}
         </p>
       )}
-      <details className="hp-uniform-file-inside">
-        <summary>{t('hosted.invoicing.uniformFile.insideTitle')}</summary>
-        <ul>
-          <li>
-            <bdi dir="ltr">INI.TXT</bdi> · {t('hosted.invoicing.uniformFile.insideIni')}
-          </li>
-          <li>
-            <bdi dir="ltr">BKMVDATA.zip</bdi> · {t('hosted.invoicing.uniformFile.insideBkmv')}
-          </li>
-          <li>
-            <bdi dir="ltr">report.html</bdi> · {t('hosted.invoicing.uniformFile.insideReport')}
-          </li>
-        </ul>
-      </details>
     </section>
   );
 }

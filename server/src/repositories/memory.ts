@@ -1,4 +1,7 @@
-import { issueUsageEvents } from '../usage/issue-events.js';
+import { documentCapOf, issueUsageEvents } from '../usage/issue-events.js';
+import { usageMonthOf } from '../usage/month.js';
+import { hardCapOf } from '../usage/caps.js';
+import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
 import { randomUUID } from 'node:crypto';
@@ -109,6 +112,7 @@ import type {
   CreateOwnedOrganizationInput,
   ProfileTypeChange,
   UpdateOwnedOrganizationPatch,
+  UsageStamp,
   CreateProjectInput,
   CreateUserInput,
   CreateSessionInput,
@@ -336,6 +340,16 @@ export interface LocalSnapshot {
  * here for the same reasons it would fail in Postgres.
  */
 export class MemoryLedgerStore implements LedgerStore {
+  /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
+  constructor(options: { starterPlan?: boolean } = {}) {
+    if (options.starterPlan) this.setStarterPlan(true);
+  }
+
+  /** MUT-731: turns STARTER_PLAN on or off for this store (tests switch it on an existing store). */
+  setStarterPlan(on: boolean): void {
+    (this.billing as { starterPlan: boolean }).starterPlan = on;
+  }
+
   private readonly orgs = new Map<string, Organization>();
   private readonly keys = new Map<string, ApiKeyRecord>();
   private readonly ints = new Map<string, IntegrationRecord>();
@@ -444,6 +458,10 @@ export class MemoryLedgerStore implements LedgerStore {
   /** MUT-593: confidential clients' assertion ids, keyed `clientId NUL jti`. */
   private readonly oauthAssertions = new Map<string, { expiresAt: Date; createdAt: Date }>();
   private readonly trialStarts = new Map<string, Date>();
+  /** MUT-731 (ADR-284): `users.starterChosenAt`, `activeBusinessIds` and the Solo trial's two dates, by person. */
+  private readonly starterChoices = new Map<string, Date>();
+  private readonly activeBusinessChoices = new Map<string, string[]>();
+  private readonly paidTrials = new Map<string, { offeredAt: Date | null; usedAt: Date | null }>();
   /** MUT-359: the mail send log by key digest, and the suppression list by address; outside the snapshot too. */
   private readonly emailDeliveries = new Map<string, { id: string; recipientDigest: string; status: 'PENDING' | 'SENT' | 'FAILED' | 'UNCERTAIN'; createdAt: Date }>();
   private readonly emailSuppressions = new Map<string, { reason: string; eventId: string; createdAt: Date }>();
@@ -1330,15 +1348,46 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-660: a linked document: numbered and written like any other, linked to its entry, posting nothing. The entry's
    * version moves so a stale edit of it is caught.
    */
+  /**
+   * MUT-731 (ADR-284): the memory store has no rollback, so the documents cap is checked before anything is written;
+   * `meterIssued` then records with the same cap (Postgres does both in the issue's transaction).
+   */
+  private documentCapRefusal(input: IssueDocumentInput, at: Date): IssueResult | null {
+    if (!input.usage) return null;
+    const cap = documentCapOf(input.usage, input);
+    if (cap === null) return null;
+    const used = this.usage.countNow(input.usage.subjectKey, usageMonthOf(at), 'DOCUMENTS');
+    return used >= cap ? { kind: 'plan_limit', used, cap } : null;
+  }
+
+  /** MUT-731: the memory store's scan cap, checked before the flip (Postgres rolls the flip back instead). */
+  private refuseAtScanCap(usage: UsageStamp, at: Date): void {
+    const cap = hardCapOf(usage.plan, 'SCANS');
+    if (cap === null) return;
+    const used = this.usage.countNow(usage.subjectKey, usageMonthOf(at), 'SCANS');
+    if (used >= cap) throw new UsageCapReached(used, cap);
+  }
+
+  private meterIssued(input: IssueDocumentInput, id: string, document: IssuedDocumentRecord, at: Date): void {
+    if (!input.usage) return;
+    const cap = documentCapOf(input.usage, input);
+    for (const event of issueUsageEvents(input.usage, input, id, document.allocationSource, at)) this.usage.recordNow(event, event.kind === 'DOCUMENT_ISSUED' ? cap : null);
+  }
+
   private issueLinked(input: IssueDocumentInput, at: Date, entry: EntryState): IssueResult {
     const refusal = fromEntryRefusal({ ok: true, customerId: entry.customerId, currency: entry.currency, amountMinor: entryAmount(entry) }, input);
     if (refusal) return refusal;
+    const capped = this.documentCapRefusal(input, at);
+    if (capped) return capped;
     const from = input.fromEntry!;
     const record = from.kind === 'receivable' ? this.recs.get(from.id)! : this.pays.get(from.id)!;
     record.version += 1;
     if ('updatedAt' in record) record.updatedAt = at;
     const number = this.takeIssuedNumber(input);
-    return { kind: 'issued', document: this.writeIssued(input, at, randomUUID(), number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null }), created: true };
+    const id = randomUUID();
+    const document = this.writeIssued(input, at, id, number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null });
+    this.meterIssued(input, id, document, at);
+    return { kind: 'issued', document, created: true };
   }
 
   private takeIssuedNumber(input: IssueDocumentInput): number {
@@ -1387,6 +1436,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (refusal) return refusal;
       if (linked) return this.issueLinked(input, at, entry!);
     }
+    const capped = this.documentCapRefusal(input, at);
+    if (capped) return capped;
     // Every check passed: from here on nothing refuses, so the number is never wasted.
     const number = this.takeIssuedNumber(input);
     const plan = ledgerPlan(input, number);
@@ -1444,7 +1495,7 @@ export class MemoryLedgerStore implements LedgerStore {
     }
     const document = this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId });
     // MUT-735 (ADR-281): metered after the document, with no await in between (the memory store's transaction).
-    if (input.usage) for (const event of issueUsageEvents(input.usage, input, id, document.allocationSource, at)) this.usage.recordNow(event, null);
+    this.meterIssued(input, id, document, at);
     return { kind: 'issued', document, created: true };
   }
 
@@ -4111,10 +4162,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.expReceipts.get(id);
       if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'READY') {
+        // MUT-731 (ADR-284): at Starter's cap nothing flips (the memory store refuses before writing).
+        if (usage) this.refuseAtScanCap(usage, at);
         r.status = 'READY';
         r.completedAt = at;
         // MUT-735 (ADR-281): only the call that flips it counts the scan.
-        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), null);
+        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS'));
         // MUT-441 (R10 #5): with the flip, never on its own.
         if (read) Object.assign(r, { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) });
       }
@@ -4301,9 +4354,10 @@ export class MemoryLedgerStore implements LedgerStore {
         if (other.organizationId === params.organizationId && other.expenseId === expense.id && other.status === 'READY' && !other.deletedAt) held += 1;
       }
       if (held >= params.maxReceipts) return { kind: 'too_many_receipts' };
+      if (params.usage) this.refuseAtScanCap(params.usage, at);
       r.status = 'READY';
       r.completedAt = at;
-      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), null);
+      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS'));
       return { kind: 'completed', receipt: { ...r } };
     },
     editRates: async (range) =>
@@ -4685,10 +4739,12 @@ export class MemoryLedgerStore implements LedgerStore {
       if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided', review: cloneReview(review) };
       const personal = [...this.orgs.values()].find((o) => o.personalOwnerUserId === userId);
       Object.assign(person, { status: 'ACTIVE', updatedAt: at });
-      this.trialStarts.set(userId, at);
+      // MUT-731 (eng review #5): no new trial with Starter on.
+      const trialStartedAt = this.billing.starterPlan ? null : at;
+      if (trialStartedAt) this.trialStarts.set(userId, trialStartedAt);
       Object.assign(review, { decision: 'APPROVED', decidedAt: at, decidedBy });
       if (personal) for (const event of auditFor(personal.id)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
-      return { kind: 'approved', review: cloneReview(review), user: { ...person }, trialStartedAt: at };
+      return { kind: 'approved', review: cloneReview(review), user: { ...person }, trialStartedAt };
     },
     decline: async ({ userId, at, decidedBy }) => {
       const review = [...this.reviews.values()].find((r) => r.userId === userId);
@@ -4732,6 +4788,7 @@ export class MemoryLedgerStore implements LedgerStore {
   }
 
   readonly billing: BillingRepository = {
+    starterPlan: false,
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = new Set(ownerUserIds);
       const orgs = new Set(organizationIds);
@@ -4743,8 +4800,39 @@ export class MemoryLedgerStore implements LedgerStore {
       const grants = [...this.grants.values()]
         .filter((g) => (g.userId !== null && owners.has(g.userId)) || (g.organizationId !== null && orgs.has(g.organizationId)))
         .map((g) => ({ ...g }));
-      const trialStarts = new Map([...owners].filter((id) => this.people.has(id)).map((id) => [id, this.trialStarts.get(id) ?? null] as const));
-      return { subscriptions, grants, trialStarts };
+      const known = [...owners].filter((id) => this.people.has(id));
+      const trialStarts = new Map(known.map((id) => [id, this.trialStarts.get(id) ?? null] as const));
+      const starterChosen = new Map(known.map((id) => [id, this.starterChoices.get(id) ?? null] as const));
+      const activeBusinesses = new Map<string, string[]>(known.map((id) => [id, [...(this.activeBusinessChoices.get(id) ?? [])]]));
+      return { subscriptions, grants, trialStarts, starterChosen, activeBusinesses };
+    },
+    ownedBusinessesOf: async (ownerUserIds) => {
+      const owners = new Set(ownerUserIds);
+      const connected = (id: string) => [...this.ints.values()].some((i) => i.organizationId === id && i.provider === 'MALAFAT' && i.status === 'CONNECTED');
+      return [...this.orgs.values()]
+        .filter((o) => o.ownerUserId !== null && owners.has(o.ownerUserId) && o.personalOwnerUserId === null)
+        .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime() || a.id.localeCompare(b.id))
+        .map((o) => ({ organization: { id: o.id, ownerUserId: o.ownerUserId, personalOwnerUserId: o.personalOwnerUserId }, ownerUserId: o.ownerUserId!, malafatConnected: connected(o.id) }));
+    },
+    chooseStarter: async (userId, at, audit) => {
+      if (!this.people.has(userId)) return false;
+      this.starterChoices.set(userId, at);
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return true;
+    },
+    setActiveBusinesses: async (userId, organizationIds, at, audit) => {
+      if (!this.people.has(userId)) return false;
+      this.activeBusinessChoices.set(userId, [...organizationIds]);
+      for (const event of audit) this.events.push({ id: randomUUID(), createdAt: at, ...event });
+      return true;
+    },
+    paidTrialOf: async (userId) => (this.people.has(userId) ? { ...(this.paidTrials.get(userId) ?? { offeredAt: null, usedAt: null }) } : null),
+    markPaidTrialOffered: async (userId, at) => {
+      if (!this.people.has(userId)) return null;
+      const current = this.paidTrials.get(userId) ?? { offeredAt: null, usedAt: null };
+      const next = { ...current, offeredAt: current.offeredAt ?? at };
+      this.paidTrials.set(userId, next);
+      return { ...next };
     },
     setTrialStart: async (userId, at) => {
       if (!this.people.has(userId)) return null;
@@ -4782,7 +4870,7 @@ export class MemoryLedgerStore implements LedgerStore {
             ? [{ stripeSubscriptionId: sub.stripeSubscriptionId, endedAt: sub.endedAt!, tier: sub.tier, currency: account.currency as 'ILS' | 'USD', userId: account.userId!, email: person.email, locale: person.locale }]
             : [];
         }),
-    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit, everyone }) => {
       const covering = new Set(['active', 'trialing', 'past_due']);
       const payers = new Set(
         [...this.billingSubs.values()].filter((s) => s.tier !== 'ACCOUNTANT' && covering.has(s.status)).flatMap((s) => this.billingAccounts.get(s.billingAccountId)?.userId ?? []),
@@ -4792,7 +4880,7 @@ export class MemoryLedgerStore implements LedgerStore {
       const malafatOwners = new Set([...this.members.values()].filter((m) => m.role === 'OWNER' && malafatOrgs.has(m.organizationId)).map((m) => m.userId));
       return [...this.people.values()]
         .filter((p) => p.status === 'ACTIVE' && !p.closure && (after === null || p.id > after))
-        .filter((p) => payers.has(p.id) || granted.has(p.id) || malafatOwners.has(p.id) || (this.trialStarts.get(p.id) ?? new Date(0)) > trialStartedAfter)
+        .filter((p) => everyone === true || payers.has(p.id) || granted.has(p.id) || malafatOwners.has(p.id) || (this.trialStarts.get(p.id) ?? new Date(0)) > trialStartedAfter)
         .sort((a, b) => a.id.localeCompare(b.id))
         .slice(0, limit)
         .map((p) => ({ userId: p.id, email: p.email, locale: p.locale, choice: p.monthlySummaryMail }));
@@ -4908,7 +4996,7 @@ export class MemoryLedgerStore implements LedgerStore {
       if (input.organizationId !== null && !this.orgs.has(input.organizationId)) throw new ForeignKeyViolation('billing_subscriptions.organizationId');
       const { stripeCustomerId, at, audit, ...given } = input;
       void stripeCustomerId; // matched above; the subscription row stores the account id instead
-      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null, endedReason: given.endedReason?.slice(0, 32) ?? null, trialEnd: given.trialEnd ?? null };
       const existing = [...this.billingSubs.values()].find((s) => s.stripeSubscriptionId === input.stripeSubscriptionId);
       if (existing && existing.stripeUpdatedAt > input.stripeUpdatedAt) return { subscription: { ...existing }, outcome: 'stale' as const };
       const before = existing ? { ...existing } : null;

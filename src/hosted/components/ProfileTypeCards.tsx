@@ -23,7 +23,7 @@ export interface ProfileTypeCardsProps {
   describedBy?: string;
   invalid?: boolean;
   /** MUT-373: a card that can't be chosen here (a shared profile stays Business), explained at the card, not after Save. */
-  disabled?: { value: ProfileType; reason: string };
+  disabled?: { value: ProfileType; reason?: string };
 }
 
 export function ProfileTypeCards(props: ProfileTypeCardsProps) {

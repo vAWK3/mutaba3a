@@ -66,7 +66,7 @@ describe('the first-run trial step (AC1, AC2, AC4)', () => {
     expect(locationOf(router)).toBe(`/p/${ORG_B}?billing=true&step=welcome`);
     expect(await within(dialog).findByRole('heading', { name: 'Your 14-day free trial has started' })).toHaveFocus();
     expect(within(dialog).getByText(/^It ends on /)).toBeInTheDocument();
-    expect(within(dialog).getByText(/You won't be charged until .+\. Cancel any time before then\./)).toBeInTheDocument();
+    expect(within(dialog).getByText(/You won't be charged until .+\./)).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Add a card now (recommended)' })).toBeInTheDocument();
     expect(within(dialog).getByRole('button', { name: 'Not now' })).toBeInTheDocument();
     expect(trackPortal).toHaveBeenCalledWith('trial_card_prompt_shown', { prompt: 'first_run' });

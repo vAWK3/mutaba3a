@@ -1,0 +1,143 @@
+import { ApiError, type BillingOverview, type IssuedDocType } from '../api/client';
+import { isSellable } from './billingView';
+
+/**
+ * MUT-731 (ADR-284): the free Starter plan's limits as the portal reads them. Pure. The server decides (GET /v1/billing
+ * `usage`, and 409 PLAN_LIMIT at each door); this only says what to show, so a refusal the portal already knows about
+ * is shown before the person types (the Issue drawer at 3 of 3) and the same words show when the server refuses.
+ */
+
+export type MeterKey = 'documents' | 'scans';
+export type UsageLevel = 'ok' | 'near' | 'nudge' | 'at_cap';
+
+export interface StarterMeter {
+  meter: MeterKey;
+  used: number;
+  limit: number;
+  level: UsageLevel;
+  /** What is left this month (never below 0). */
+  left: number;
+}
+
+export interface StarterUsage {
+  /** YYYY-MM-DD: the 1st of the next Asia/Jerusalem month. */
+  resetsOn: string;
+  documents: StarterMeter;
+  scans: StarterMeter;
+}
+
+export type PlanLimitKind = 'documents' | 'scans' | 'businesses' | 'partners' | 'taxAuthority';
+
+/** A 409 PLAN_LIMIT's details (server billing/plan-limit.ts), or the same built from the usage the portal holds. */
+export interface PlanLimit {
+  limit: PlanLimitKind;
+  used?: number;
+  cap?: number;
+  resetsOn?: string;
+  nextPlan: string | null;
+  canUpgrade: boolean;
+}
+
+const LEVELS: readonly UsageLevel[] = ['ok', 'near', 'nudge', 'at_cap'];
+
+/** GET /v1/billing `starter` (a nullable union the generator types loosely); null where Starter is off. */
+export interface BillingStarter {
+  chosenAt: string | null;
+  canContinueFree: boolean;
+}
+
+/** GET /v1/billing `activeBusinesses`: on Starter with more businesses than it keeps active; null otherwise. */
+export interface ActiveBusinesses {
+  cap: number;
+  active: string[];
+  readOnly: string[];
+  mustChoose: boolean;
+}
+
+export function billingStarterOf(billing: Pick<BillingOverview, 'starter'> | null | undefined): BillingStarter | null {
+  return (billing?.starter as BillingStarter | null | undefined) ?? null;
+}
+
+export function activeBusinessesOf(billing: Pick<BillingOverview, 'activeBusinesses'> | null | undefined): ActiveBusinesses | null {
+  return (billing?.activeBusinesses as ActiveBusinesses | null | undefined) ?? null;
+}
+
+/** This month's Starter meters, or null when the person isn't on Starter (or the server is older than MUT-731). */
+export function starterUsageOf(billing: Pick<BillingOverview, 'usage'> | null | undefined): StarterUsage | null {
+  const usage = billing?.usage;
+  if (!usage || usage.plan !== 'starter') return null;
+  const meter = (key: MeterKey): StarterMeter | null => {
+    const m = usage.meters.find((x) => x.meter === key);
+    if (!m || m.limit === null) return null;
+    return { meter: key, used: m.used, limit: m.limit, level: m.level, left: Math.max(0, m.limit - m.used) };
+  };
+  const documents = meter('documents');
+  const scans = meter('scans');
+  return documents && scans ? { resetsOn: usage.resetsOn, documents, scans } : null;
+}
+
+/** The details of a 409 PLAN_LIMIT, or null for any other answer. */
+export function planLimitOf(error: unknown): PlanLimit | null {
+  if (!(error instanceof ApiError) || error.code !== 'PLAN_LIMIT') return null;
+  const details = (error.details ?? {}) as Partial<PlanLimit>;
+  if (!details.limit) return null;
+  return { limit: details.limit, used: details.used, cap: details.cap, resetsOn: details.resetsOn, nextPlan: details.nextPlan ?? 'solo', canUpgrade: details.canUpgrade === true };
+}
+
+/**
+ * Basel (2026-11-25): every document counts, but a receipt for a payment on a document already issued is never
+ * refused. So the Issue drawer opens refused at the cap for anything but that receipt.
+ */
+export function documentRefusedNow(usage: StarterUsage | null, docType: IssuedDocType, appliesToDocumentId: string | null | undefined): boolean {
+  if (!usage || usage.documents.level !== 'at_cap') return false;
+  return !(docType === 'RECEIPT' && appliesToDocumentId);
+}
+
+/** The refusal the server would answer, built from the usage the portal holds (shown before the person types). */
+export function limitFromUsage(usage: StarterUsage, meter: MeterKey, billing: Pick<BillingOverview, 'configured' | 'catalog'>): PlanLimit {
+  const m = usage[meter];
+  return { limit: meter, used: m.used, cap: m.limit, resetsOn: usage.resetsOn, nextPlan: 'solo', canUpgrade: isSellable(billing) };
+}
+
+/** Whether a Starter refusal may offer Upgrade to Solo: the server says so, and a plan can be bought here. */
+export function upgradeOffered(limit: PlanLimit): boolean {
+  return limit.canUpgrade && limit.nextPlan !== null;
+}
+
+/**
+ * Wireframe 7: Home speaks for the fuller meter only (the other speaks where it's used: the Issue drawer for
+ * documents). Nothing at `ok`; a hidden nudge stays hidden until the meter reaches its limit.
+ */
+export function homeNoticeOf(usage: StarterUsage | null, nudgeHidden: (key: string) => boolean): StarterMeter | null {
+  if (!usage) return null;
+  const rank = (m: StarterMeter) => LEVELS.indexOf(m.level);
+  const fuller = rank(usage.scans) >= rank(usage.documents) ? usage.scans : usage.documents;
+  if (fuller.level === 'ok') return null;
+  if (fuller.level === 'nudge' && nudgeHidden(nudgeHideKey(usage.resetsOn, fuller.meter))) return null;
+  return fuller;
+}
+
+/** One nudge per meter per month: hiding it keeps it away until the limit (or the next month). */
+export function nudgeHideKey(resetsOn: string, meter: MeterKey): string {
+  return `mut731-nudge:${resetsOn}:${meter}`;
+}
+
+const HIDE_STORE = 'mutaba3a-plan-nudges';
+
+/** Per-viewer convenience (DESIGN: never state that must persist): which nudges this browser hid. */
+export function nudgeHidden(key: string): boolean {
+  try {
+    return (JSON.parse(localStorage.getItem(HIDE_STORE) ?? '[]') as string[]).includes(key);
+  } catch {
+    return false;
+  }
+}
+
+export function hideNudge(key: string): void {
+  try {
+    const keys = JSON.parse(localStorage.getItem(HIDE_STORE) ?? '[]') as string[];
+    localStorage.setItem(HIDE_STORE, JSON.stringify([...keys.filter((k) => k !== key), key].slice(-12)));
+  } catch {
+    // A blocked store only means the nudge comes back on the next visit.
+  }
+}

@@ -212,6 +212,19 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(() => loadConfig({ ...base, INVOICING_FOR_ALL: 'yes' })).toThrow(/INVOICING_FOR_ALL/);
   });
 
+  it('STARTER_PLAN (MUT-731): off unless exactly "true", production included', () => {
+    expect(loadConfig(base).STARTER_PLAN).toBe(false);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).STARTER_PLAN).toBe(false);
+    expect(loadConfig({ ...base, STARTER_PLAN: 'true' }).STARTER_PLAN).toBe(true);
+    expect(() => loadConfig({ ...base, STARTER_PLAN: 'yes' })).toThrow(/STARTER_PLAN/);
+  });
+
+  it('SOLO_TRIAL_OFFER_SINCE (MUT-731): unset = off; an RFC 3339 instant; anything else refused', () => {
+    expect(loadConfig(base).SOLO_TRIAL_OFFER_SINCE).toBeUndefined();
+    expect(loadConfig({ ...base, SOLO_TRIAL_OFFER_SINCE: '2027-01-15T00:00:00Z' }).SOLO_TRIAL_OFFER_SINCE).toEqual(new Date('2027-01-15T00:00:00Z'));
+    expect(() => loadConfig({ ...base, SOLO_TRIAL_OFFER_SINCE: 'soon' })).toThrow(/SOLO_TRIAL_OFFER_SINCE/);
+  });
+
   it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {
     expect(loadConfig(base).QA_READ_DELAY_MS).toBeUndefined();
     expect(loadConfig({ ...base, QA_READ_DELAY_MS: '5000' }).QA_READ_DELAY_MS).toBe(5000);

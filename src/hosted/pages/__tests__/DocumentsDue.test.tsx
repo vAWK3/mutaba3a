@@ -69,7 +69,7 @@ describe('Documents › To issue (MUT-660)', () => {
     const groups = await screen.findAllByTestId(/^due-group-/);
     expect(groups.map((g) => within(g).getByRole('heading', { level: 3 }).textContent)).toEqual(['Al-Quds Bakery', 'Nablus Trading', 'No client']);
     const nablus = screen.getByTestId(`due-group-${C2}`);
-    expect(within(nablus).getByText(/Payment requests can't be issued here yet/)).toBeInTheDocument();
+    expect(within(nablus).getByText(/Attach an invoice issued elsewhere/)).toBeInTheDocument();
     expect(within(nablus).getByRole('button', { name: 'Attach' })).toBeInTheDocument();
     expect(within(nablus).getByTestId(`due-nfi-${E3}`)).toBeInTheDocument();
     expect(within(nablus).queryByTestId(`due-issue-all-${C2}`)).toBeNull();

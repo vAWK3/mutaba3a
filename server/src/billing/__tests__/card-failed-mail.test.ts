@@ -143,7 +143,7 @@ describe('runCardFailedMail (MUT-533)', () => {
     expect(mail!.template).toBe('card-failed');
     expect(mail!.locale).toBe('ar');
     expect(mail!.subject).toBe('لم تنجح عملية الدفع ببطاقتك');
-    expect(mail!.text).toContain('يبقى حسابك مفتوحًا بالكامل');
+    expect(mail!.text).toContain('يبقى حسابك مفتوحًا بينما نحاول مجددًا');
     expect(mail!.html).toContain(`${ORIGIN}/?billing=true`);
     expect(mail!.text).not.toMatch(/₪|\$|\d{4}/);
 

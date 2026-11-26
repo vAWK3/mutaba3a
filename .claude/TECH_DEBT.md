@@ -3388,10 +3388,32 @@ When resolving debt:
 - **What:** `payerPlanOf` reads the payer's owned profiles, their Malafat integrations and one `billing.factsFor` on each issue and each finished scan (and on an issue that turns out to be a replay). A few small reads per action, fine at today's volume.
 - **When to pay:** if issue or scan latency shows it, reuse the lapse gate's entitlement on gated servers (`personEntitlements`) or cache the plan per request.
 
-### TD-340: `PLAN_LIMIT` does not release the idempotency key yet (MUT-736)
+### TD-340: `PLAN_LIMIT` does not release the idempotency key yet (MUT-736) — RESOLVED 2026-11-26 (MUT-731)
+- **Resolved:** `idempotency.ts` releases the key on 409 `PLAN_LIMIT`; `starter-caps.test.ts` covers "refused at 3/3, upgrade, same key → 201".
 - **What:** brief §3.3 has `idempotency.ts` release the key on 409 `PLAN_LIMIT` so the same request succeeds after an upgrade. MUT-736's refusals (Tax Authority connect, allocation decisions) aren't idempotent routes, so nothing needs it yet.
 - **When to pay:** with MUT-731's capped doors (issue, scans), which are idempotent: release on `PLAN_LIMIT` there, with the "refused at 3/3, upgrade, same key → 201" test.
 
 ### TD-341: Starter's Tax Authority paths are tested with the plan scripted, and recorded on the FakeApi only (MUT-736)
 - **What:** no entitlement resolves to Starter before MUT-731, so `routes-tax-authority-plan.test.ts` mocks `payerPlanOf`, the portal flows (`portal.invoicing.starter-*`) run on the FakeApi, and the phone has no recorded iOS flow for a Starter issue.
 - **When to pay:** with MUT-731: add a live-API flow (a Starter person on the self-service stack issuing ₪6,000 with a typed number) and the iOS recording of the card on Starter.
+
+### TD-342: The legacy trial code stays while Starter is dark (MUT-731)
+- **What:** with `STARTER_PLAN` on nothing starts a no-card trial and nothing locks, but the TRIAL rows of `resolveEntitlement`, LOCKED, the trial mail job, the Home trial banner, MUT-418's welcome step and the flag itself stay so the flag can go off.
+- **When to pay:** once the flag is permanent and no legacy trial is left (14 days after it goes on): one cleanup ticket removes them.
+
+### TD-343: The pick-your-business rows show no record count or last entry (MUT-731)
+- **What:** wireframe 3 shows "{count} records · last entry {date}" under each business so the person can tell them apart. No endpoint returns those per business without a read per profile, so the rows show the name only (the string `hosted.billing.pickActive.meta` is in place).
+- **When to pay:** add the count and the last entry date to `activeBusinesses` (one grouped read) when the phone half builds the same screen.
+
+### TD-344: Starter's portal flows run on the FakeApi; the Solo trial step and `trial: true` Checkout wait for MUT-702 Part B (MUT-731)
+- **What:** `portal.starter.*` runs on the FakeApi (the server's Starter paths are route-tested); TD-341's live flow still waits for a self-service stack with `STARTER_PLAN` on. The Solo trial step is dark (`SOLO_TRIAL_CHECKOUT`, `SOLO_TRIAL_OFFER_SINCE` unset): Try Solo opens Billing's Subscribe step, Checkout has no `plan: solo, trial: true`, and nothing sets `users.paidTrialUsedAt`.
+- **When to pay:** with MUT-702 Part B: Checkout's `trial: true` (14 days, card always, `TRIAL_USED`), the mirror setting `paidTrialUsedAt` on the first `trialing` row, the step's price line from Solo's catalog, a live-API QA flow, then `SOLO_TRIAL_OFFER_SINCE`.
+
+### TD-345: Operator › Usage's "near" filter is a plain 80% (MUT-731)
+- **What:** ADR-284 decision 10 warns earlier on a small cap (Starter's 1 of 3 is `near`), but the operator report's near/at-cap SQL (`prisma-usage.ts`, `memory-usage.ts`) still uses `count >= cap × 0.8`, so a Starter person at 1 or 2 of 3 documents isn't listed as near.
+- **When to pay:** move the operator filter onto `levelOf`'s thresholds (min(80%, cap − 2)).
+
+### TD-346: The Flutter copy of the analytics contract is behind (MUT-731)
+- **What:** `docs/analytics/events.json` 2.12.0 adds four portal-only plan events; the Flutter repo's byte-identical copy (`test/fixtures/analytics/events.json`) and its sha256 must follow (README "Changing the contract", step 3).
+- **When to pay:** in the phone half's session (MUT-731 phone), with the same file and hash.
+

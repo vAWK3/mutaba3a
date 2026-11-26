@@ -1,5 +1,6 @@
 import { profileOwnerOf } from '../personal-profile.js';
 import type { BillingFactsRecord, LedgerStore, MembershipRecord, Organization } from '../repositories/ports.js';
+import { applyBusinessCap, type BusinessCapState } from './business-cap.js';
 import { resolveEntitlement, type Entitlement } from './entitlement.js';
 import { personStanding, type Standing } from './gate.js';
 
@@ -22,10 +23,55 @@ export async function entitlementsFor(store: Pick<LedgerStore, 'billing'>, profi
  * plan from them with no query of its own. `personUserId` joins the owners asked about (always already there through
  * the personal profile; the set keeps it to one read either way).
  */
-export async function entitlementsWithFactsFor(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date, personUserId?: string): Promise<{ entitlements: Map<string, Entitlement>; facts: BillingFactsRecord }> {
+export async function entitlementsWithFactsFor(
+  store: Pick<LedgerStore, 'billing'>,
+  profiles: readonly ProfileForBilling[],
+  now: Date,
+  personUserId?: string,
+): Promise<{ entitlements: Map<string, Entitlement>; facts: BillingFactsRecord; businessCaps: Map<string, BusinessCapState> }> {
   const facts = await factsOf(store, profiles, personUserId);
-  return { entitlements: new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now)])), facts };
+  const starter = starterOn(store);
+  const entitlements = new Map(profiles.map((profile) => [profile.organization.id, resolve(profile, facts, now, starter)]));
+  const businessCaps = starter ? await applyStarterBusinessCap(store, profiles, entitlements, facts, now) : new Map<string, BusinessCapState>();
+  return { entitlements, facts, businessCaps };
 }
+
+/** MUT-731 (ADR-284): the server's STARTER_PLAN, as the store was built with it. */
+function starterOn(store: Pick<LedgerStore, 'billing'>): boolean {
+  return store.billing.starterPlan === true;
+}
+
+/**
+ * MUT-731 (brief §2 post-pass, eng review #6): an owner on Starter keeps one business active. The owners whose business
+ * resolved to Starter here have all their created businesses read (one extra query, Starter owners only), the ones not
+ * asked about resolved too (their own grants and subscriptions with them), and the cap applied over the whole set, so a
+ * single-profile gate and /v1/me give the same answer. Only the profiles asked about change in `entitlements`.
+ */
+async function applyStarterBusinessCap(
+  store: Pick<LedgerStore, 'billing'>,
+  profiles: readonly ProfileForBilling[],
+  entitlements: Map<string, Entitlement>,
+  facts: BillingFactsRecord,
+  now: Date,
+): Promise<Map<string, BusinessCapState>> {
+  const owners = new Set<string>();
+  for (const { organization } of profiles) {
+    const isBusiness = organization.ownerUserId !== null && organization.personalOwnerUserId === null;
+    if (isBusiness && entitlements.get(organization.id)?.source === 'STARTER') owners.add(organization.ownerUserId!);
+  }
+  if (owners.size === 0) return new Map();
+  const owned = await store.billing.ownedBusinessesOf([...owners]);
+  const missing = owned.filter((b) => !entitlements.has(b.organization.id));
+  const all = new Map(entitlements);
+  if (missing.length > 0) {
+    const more = await store.billing.factsFor({ ownerUserIds: [...owners], organizationIds: missing.map((b) => b.organization.id) });
+    for (const b of missing) all.set(b.organization.id, resolve({ organization: b.organization, malafatConnected: b.malafatConnected }, more, now, true));
+  }
+  const states = applyBusinessCap(all, owned.map((b) => ({ organizationId: b.organization.id, ownerUserId: b.ownerUserId })), facts.activeBusinesses ?? new Map());
+  for (const id of entitlements.keys()) entitlements.set(id, all.get(id)!);
+  return states;
+}
+
 
 /** A profile the person belongs to, with what billing needs to resolve it. */
 export interface MemberProfile extends ProfileForBilling {
@@ -63,11 +109,12 @@ export async function standingOfPerson(
  * operator grants left out, so the operator can see Stripe covering before revoking a pilot grant.
  */
 export async function billingStatusOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly ProfileForBilling[], now: Date) {
-  const facts = await factsOf(store, profiles);
+  const { entitlements: current, facts } = await entitlementsWithFactsFor(store, profiles, now);
   const withoutGrants = { ...facts, grants: [] };
+  const starter = starterOn(store);
   return {
     subscriptions: facts.subscriptions,
-    entitlements: new Map(profiles.map((profile) => [profile.organization.id, { current: resolve(profile, facts, now), withoutGrants: resolve(profile, withoutGrants, now) }])),
+    entitlements: new Map(profiles.map((profile) => [profile.organization.id, { current: current.get(profile.organization.id)!, withoutGrants: resolve(profile, withoutGrants, now, starter) }])),
   };
 }
 
@@ -80,11 +127,19 @@ async function factsOf(store: Pick<LedgerStore, 'billing'>, profiles: readonly P
   return store.billing.factsFor({ ownerUserIds: [...owners], organizationIds: profiles.map((p) => p.organization.id) });
 }
 
-function resolve({ organization, malafatConnected }: ProfileForBilling, facts: BillingFactsRecord, now: Date): Entitlement {
-  return resolveEntitlement({ organizationId: organization.id, ownerUserId: profileOwnerOf(organization), malafatConnected }, facts, now);
+function resolve({ organization, malafatConnected }: ProfileForBilling, facts: BillingFactsRecord, now: Date, starter = false): Entitlement {
+  return resolveEntitlement({ organizationId: organization.id, ownerUserId: profileOwnerOf(organization), malafatConnected }, facts, now, { starter });
 }
 
 /** The wire shape on `/v1/me` (BillingEntitlementSchema): ISO timestamps. */
 export function serializeEntitlement(entitlement: Entitlement) {
-  return { state: entitlement.state, source: entitlement.source, tier: entitlement.tier, until: entitlement.until?.toISOString() ?? null, paused: entitlement.paused === true };
+  return {
+    state: entitlement.state,
+    source: entitlement.source,
+    tier: entitlement.tier,
+    until: entitlement.until?.toISOString() ?? null,
+    paused: entitlement.paused === true,
+    // MUT-731: read-only for the plan's business count (the person picks the active one); absent otherwise (additive).
+    ...(entitlement.planLimit ? { planLimit: true } : {}),
+  };
 }

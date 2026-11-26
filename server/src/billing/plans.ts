@@ -10,26 +10,39 @@
  * ACCOUNTANT (ADR-251) is a person's plan for client books, never a profile's, so it has no rank here.
  */
 
+/**
+ * MUT-731 (ADR-284): Starter «البداية» is rank 0, the free plan everyone with nothing else falls back to (with
+ * STARTER_PLAN on). Never sold: it isn't in PLAN_NAMES, so Checkout, the catalog and the offers never see it.
+ */
+
 /** The plans on sale, cheapest first. */
 export const PLAN_NAMES = ['solo', 'business', 'firm'] as const;
 export type PlanName = (typeof PLAN_NAMES)[number];
 /** Not sold: the plan of the ₪29 payers and the ₪21 founders until MUT-707 moves them. */
 export type LegacyPlanName = 'freelancer';
-export type AnyPlanName = PlanName | LegacyPlanName;
+/**
+ * MUT-736 (ADR-282) named it; MUT-731 (ADR-284) makes it a tier: rank 0, its limits, the hard caps.
+ */
+export const FREE_PLAN = 'starter' as const;
+export type FreePlanName = typeof FREE_PLAN;
+export type AnyPlanName = PlanName | LegacyPlanName | FreePlanName;
 
-/** The tiers a profile can be entitled by (Prisma `BillingTier` less ACCOUNTANT). */
-export type ProfilePlanTier = 'SOLO' | 'BUSINESS' | 'FIRM' | 'FREELANCER';
+/**
+ * The tiers a profile can be entitled by (Prisma `BillingTier` less ACCOUNTANT, plus STARTER). STARTER is never stored
+ * as a subscription's or a grant's tier: it is the resolver's fallback (billing/entitlement.ts), so Prisma has no value.
+ */
+export type ProfilePlanTier = 'STARTER' | 'SOLO' | 'BUSINESS' | 'FIRM' | 'FREELANCER';
 
-export const TIER_OF: Readonly<Record<AnyPlanName, ProfilePlanTier>> = { solo: 'SOLO', business: 'BUSINESS', firm: 'FIRM', freelancer: 'FREELANCER' };
+export const TIER_OF: Readonly<Record<AnyPlanName, ProfilePlanTier>> = { starter: 'STARTER', solo: 'SOLO', business: 'BUSINESS', firm: 'FIRM', freelancer: 'FREELANCER' };
 
-const PLAN_OF: Readonly<Record<ProfilePlanTier, AnyPlanName>> = { SOLO: 'solo', BUSINESS: 'business', FIRM: 'firm', FREELANCER: 'freelancer' };
+const PLAN_OF: Readonly<Record<ProfilePlanTier, AnyPlanName>> = { STARTER: 'starter', SOLO: 'solo', BUSINESS: 'business', FIRM: 'firm', FREELANCER: 'freelancer' };
 
 export function planOfTier(tier: ProfilePlanTier): AnyPlanName {
   return PLAN_OF[tier];
 }
 
-/** Higher covers more. Solo and legacy Freelancer share a rank: moving between them is never an upgrade. */
-export const RANK: Readonly<Record<ProfilePlanTier, number>> = { SOLO: 1, FREELANCER: 1, BUSINESS: 2, FIRM: 3 };
+/** Higher covers more. Solo and legacy Freelancer share a rank: moving between them is never an upgrade. Starter is 0. */
+export const RANK: Readonly<Record<ProfilePlanTier, number>> = { STARTER: 0, SOLO: 1, FREELANCER: 1, BUSINESS: 2, FIRM: 3 };
 
 export type PlanChangeTiming = 'now' | 'period_end' | 'same';
 
@@ -57,21 +70,15 @@ export interface PlanLimits {
 }
 
 /**
- * Defined here, enforced by MUT-704. Legacy Freelancer has no row on purpose: MUT-704 decides whether it keeps today's
- * limits until MUT-707 moves it (plan §Part A 7).
+ * Defined here; Starter's are enforced by MUT-731 (HARD_CAP_PLANS), the paid plans' by MUT-704/733. Legacy Freelancer
+ * has no row on purpose: MUT-704 decides whether it keeps today's limits until MUT-707 moves it (plan §Part A 7).
  */
-export const PLAN_LIMITS: Readonly<Record<PlanName, Readonly<PlanLimits>>> = {
+export const PLAN_LIMITS: Readonly<Record<PlanName | FreePlanName, Readonly<PlanLimits>>> = {
+  starter: { businesses: 1, partners: 0, documentsPerMonth: 3, scansPerMonth: 12 },
   solo: { businesses: 1, partners: 0, documentsPerMonth: 50, scansPerMonth: 100 },
   business: { businesses: 3, partners: 2, documentsPerMonth: 250, scansPerMonth: 500 },
   firm: { businesses: 6, partners: 2, documentsPerMonth: 1000, scansPerMonth: 2000 },
 };
-
-/**
- * MUT-736 (ADR-282): the free plan's name. MUT-731 makes it a tier (rank 0, its limits); until then no entitlement
- * resolves to it, but the plan features below already name it, so turning Starter on needs no change here.
- */
-export const FREE_PLAN = 'starter' as const;
-export type FreePlanName = typeof FREE_PLAN;
 
 /** What a plan includes beyond its limits. */
 export interface PlanFeatures {
@@ -79,7 +86,7 @@ export interface PlanFeatures {
   taxAuthority: boolean;
 }
 
-export const PLAN_FEATURES: Readonly<Record<AnyPlanName | FreePlanName, Readonly<PlanFeatures>>> = {
+export const PLAN_FEATURES: Readonly<Record<AnyPlanName, Readonly<PlanFeatures>>> = {
   starter: { taxAuthority: false },
   solo: { taxAuthority: true },
   business: { taxAuthority: true },
@@ -111,3 +118,15 @@ export function currentPlanOf(entitlements: readonly CoveringFact[]): AnyPlanNam
   }
   return best === null ? null : planOfTier(best);
 }
+
+/**
+ * MUT-731 (ADR-284): the plans whose limits refuse at the cap (409 PLAN_LIMIT): Starter only. The paid plans join with
+ * MUT-733 (a heads-up, the one-time gift, then the cap); until then their monthly meters count and never refuse.
+ */
+export const HARD_CAP_PLANS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);
+
+/**
+ * MUT-731: the plans whose business count is enforced by making the businesses past the cap read-only (billing/
+ * business-cap.ts). Starter only; MUT-704 adds the paid plans.
+ */
+export const ENFORCED_BUSINESS_CAPS: ReadonlySet<string> = new Set<AnyPlanName>([FREE_PLAN]);

@@ -1,5 +1,5 @@
 {
-  "version": "2.11.0",
+  "version": "2.12.0",
   "currencies": ["EUR", "ILS", "JOD", "USD"],
   "sharedProperties": {
     "surface": {
@@ -255,6 +255,32 @@
         "outcome": { "type": "enum", "values": ["confirmed", "auto_confirmed", "undone", "backgrounded"], "description": "confirmed = Confirm or back; auto_confirmed = the 6-second countdown ran out; undone = Undo (nothing was sent); backgrounded = the app left the foreground mid-countdown (kept)." },
         "entry_point": { "type": "enum", "values": ["keypad", "details", "quick_action", "convert", "share", "receipt_review"], "description": "Where it was saved. receipt_review shows a Done-only moment, so its outcome is always confirmed." }
       }
+    },
+    "plan_cap_reached": {
+      "emitters": ["portal"],
+      "description": "MUT-731: a Starter limit was reached: the portal showed its notice (from a 409 PLAN_LIMIT, or from the month's usage before the person typed). Once per page view per limit.",
+      "properties": {
+        "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners", "tax_authority"], "description": "Which limit: the monthly documents or scans, the businesses count, partners, or the Tax Authority connection." }
+      }
+    },
+    "plan_upgrade_offered": {
+      "emitters": ["portal"],
+      "description": "MUT-731: Upgrade to Solo was shown with a limit's notice (only where a paid plan can be bought on the server). Once per page view per limit.",
+      "properties": {
+        "limit": { "type": "enum", "values": ["documents", "scans", "businesses", "partners", "tax_authority"], "description": "The limit whose notice offered it." }
+      }
+    },
+    "plan_upgrade_chosen": {
+      "emitters": ["portal"],
+      "description": "MUT-731: Upgrade to Solo was pressed (it opens Billing's Subscribe step until MUT-705's plan picker). Never an amount.",
+      "properties": {
+        "from": { "type": "enum", "values": ["starter"], "description": "The plan the person was on." },
+        "to": { "type": "enum", "values": ["solo"], "description": "The plan offered." }
+      }
+    },
+    "starter_continue_chosen": {
+      "emitters": ["portal"],
+      "description": "MUT-731: after a cancel, the person chose Continue free on Starter on the read-only banner or in Billing."
     }
   }
 }

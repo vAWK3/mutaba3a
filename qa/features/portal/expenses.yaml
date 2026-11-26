@@ -281,7 +281,7 @@ features:
       - Save it
       - Record a third, type an amount first, then pick Bezeq
     expect:
-      - The second opens in EUR with VAT 16%, marked "From this vendor’s last expense"
+      - The second opens in EUR with VAT 16%
       - Saving sends EUR and the 16 % rate
       - With an amount typed first, the currency stays and only the VAT fills
   - id: allocation-number

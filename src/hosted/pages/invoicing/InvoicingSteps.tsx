@@ -220,7 +220,6 @@ export function LogoStep({ profileId, hasLogo, onPreview, onDone }: StepProps & 
       ) : (
         <SaveError error={save.error} />
       )}
-      {hasLogo && <p className="hp-muted">{t('hosted.invoicing.logo.kept')}</p>}
       <StepActions pending={save.isPending} onLater={hasLogo ? undefined : onDone} />
     </form>
   );
@@ -294,7 +293,6 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
       <Input
         id="issuer-payment-terms"
         label={t('hosted.invoicing.defaults.paymentTerms')}
-        hint={t('hosted.invoicing.defaults.paymentTermsHint')}
         value={form.paymentTermsDays}
         dir="ltr"
         inputMode="numeric"
@@ -325,7 +323,6 @@ export function DefaultsStep({ profileId, issuer, onPreview, onDone }: StepProps
           </option>
         ))}
       </Select>
-      <p className="hp-muted">{t('hosted.invoicing.defaults.documentsPreferenceHint')}</p>
       <SaveError error={save.error} />
       <StepActions pending={save.isPending} onLater={onDone} />
     </form>
@@ -371,9 +368,7 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
           onPreview({ nextNumber: value === 'yes' ? wholeNumber(starts.TAX_INVOICE ?? '') || 1 : 1 });
         }}
       />
-      {already === 'no' ? (
-        <p className="hp-muted">{t('hosted.invoicing.numbering.fromOne')}</p>
-      ) : (
+      {already === 'no' ? null : (
         DOC_TYPES.map((type) => (
           <Input
             key={type}
@@ -456,9 +451,7 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
   if (plan && !plan.allowed) return <NotOnPlan state={state} nextPlan={plan.nextPlan} returned={returned} busy={busy} onDisconnect={() => void disconnect()} onDone={onDone} />;
   return (
     <div className="hp-setup-form" data-testid="tax-authority-step">
-      {status.error ? (
-        <p>{t('hosted.invoicing.taxAuthority.body')}</p>
-      ) : ending ? (
+      {status.error ? null : ending ? (
         <p role="status" data-testid="tax-authority-ending">
           {t('hosted.invoicing.taxAuthority.endingSoon', { until })}
         </p>

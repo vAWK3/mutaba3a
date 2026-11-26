@@ -544,6 +544,18 @@ variable "two_factor_issuing_gate_enabled" {
   default     = false
 }
 
+variable "starter_plan" {
+  description = "MUT-731 (ADR-284): sets STARTER_PLAN=true: a person nothing else covers is ACTIVE on the free Starter plan, new sign-ups get no trial, and Starter's hard caps refuse with 409 PLAN_LIMIT. false (default) = today's read-only and locked states. Turn on with MUT-702 Part B, after the phone build that parses PLAN_LIMIT is live."
+  type        = bool
+  default     = false
+}
+
+variable "solo_trial_offer_since" {
+  description = "MUT-731 (ADR-284, Basel Q7): accounts created at or after this RFC 3339 instant are offered the one-time 14-day Solo trial in web onboarding (SOLO_TRIAL_OFFER_SINCE). Empty (default) = the step is off, until Solo can be bought (MUT-702 Part B)."
+  type        = string
+  default     = ""
+}
+
 variable "invoicing_for_all" {
   description = "MUT-736 (ADR-282): sets INVOICING_FOR_ALL=true, so every business profile issues invoices with no operator grant and /v1/me names `invoicing` for everyone (shipped phone builds open issuing with no update). false (default) = the operator's per-person `invoicing` grant decides (the kill switch). Starter's Tax Authority rule does not depend on it."
   type        = bool

@@ -130,7 +130,7 @@ export function DocumentsList({ filters, setFilters, fixedCustomerId }: Document
           isNarrowed(filters) ? (
             <NoMatch onClear={() => setFilters({})} />
           ) : (
-            <Empty title={t('hosted.documents.empty.title')} body={t('hosted.documents.empty.body')} />
+            <Empty title={t('hosted.documents.empty.title')} />
           )
         }
       >

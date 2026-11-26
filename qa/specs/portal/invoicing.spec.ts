@@ -339,7 +339,6 @@ test('attach an invoice issued elsewhere to an Owed and, by dropping it on its r
     await expect(drawer.getByLabel('Invoice date')).toHaveValue('2026-10-12');
     await expect(drawer.getByLabel('Total on the invoice')).toHaveValue('1500.00');
     await expect(drawer.getByTestId('external-amount-note')).toHaveText('The total matches this entry.');
-    await expect(drawer).toContainText('It does not number this invoice or include it in the uniform file.');
     await drawer.getByLabel('Invoice number').fill('3382');
   });
 
@@ -368,7 +367,6 @@ test('attach an invoice issued elsewhere to an Owed and, by dropping it on its r
   });
 
   await step('AC3 While it is attached, MTB3A issues no document for this entry: the drawer says so and the row no longer offers Issue a tax invoice', async () => {
-    await expect(attached).toContainText('While this invoice is attached, MTB3A does not issue a document for this entry.');
     await attached.getByRole('button', { name: 'Close' }).first().click();
     await expect(page.getByTestId(`issue-from-${owed.id}`)).toHaveCount(0);
   });
@@ -550,9 +548,8 @@ test('a range with no documents still downloads a valid file, and the card says 
     await download;
   });
 
-  await step('The card says there are no documents in these dates, and that the file is still valid', async () => {
+  await step('The card says there are no documents in these dates', async () => {
     await expect(card.getByRole('status')).toContainText('No documents in these dates.');
-    await expect(card.getByRole('status')).toContainText('The file is still valid');
     expect(api.last('GET', /^\/v1\/issuing\/uniform-file$/)?.query.get('to')).toMatch(/-12-31$/);
   });
 });
@@ -583,7 +580,7 @@ test('Home’s To issue opens the documents due by client; Issue all issues one 
     await expect(page).toHaveURL(new RegExp(`${toIssuePath}$`));
     await expect(page.getByTestId(/^due-group-/).first()).toContainText('Client 1');
     const other = page.getByTestId(`due-group-${C2}`);
-    await expect(other).toContainText("Payment requests can't be issued here yet");
+    await expect(other).toContainText('Attach an invoice issued elsewhere');
     await expect(other.getByRole('button', { name: 'Attach' })).toBeVisible();
   });
 
@@ -755,7 +752,6 @@ test('a paid tax invoice credited in part keeps the paid part as the client\'s c
 
   await step('AC3 Kept as their credit: issued with KEEP and no refund', async () => {
     await paidPart.getByRole('radio', { name: 'Kept as their credit' }).click();
-    await expect(paidPart.getByText("It stays on the client's account as credit toward what they owe next.")).toBeVisible();
     await page.getByTestId('issue-submit').click();
     await expect(page.getByTestId('issued-doc-title')).toContainText('Credit note 1');
     expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ docType: 'CREDIT_NOTE', paidPart: { mode: 'KEEP' } });

@@ -69,7 +69,7 @@ export function ClientsPage({ filters, setFilters }: { filters: ClientsFilters; 
         queries={[directory, summary]}
         data={data}
         isEmpty={({ customers }) => customers.size === 0}
-        empty={<Empty title={t('hosted.clients.empty.title')} body={t('hosted.clients.empty.body')} />}
+        empty={<Empty title={t('hosted.clients.empty.title')} />}
       >
         {({ customers, summary: s }) => (
           <>

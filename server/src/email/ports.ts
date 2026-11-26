@@ -108,8 +108,9 @@ export interface TemplateVars {
    * MUT-419: the trial reminders. `daysLeft` is whole days left, rounded up (1-3), always worded "within N days" (D2).
    * `subscribeLink` opens Billing's Subscribe step; `exportLink` opens Your data (the records export).
    */
-  'trial-ending-soon': { daysLeft: number; subscribeLink: string; offer?: MailOffer | null };
-  'trial-ended': { subscribeLink: string; exportLink: string; offer?: MailOffer | null };
+  /** MUT-731 (ADR-284): `starterAfter` (STARTER_PLAN on): the trial ends on the free Starter plan, not read-only. */
+  'trial-ending-soon': { daysLeft: number; subscribeLink: string; offer?: MailOffer | null; starterAfter?: boolean };
+  'trial-ended': { subscribeLink: string; exportLink: string; offer?: MailOffer | null; starterAfter?: boolean };
   'trial-locking-soon': { daysLeft: number; subscribeLink: string; exportLink: string; offer?: MailOffer | null };
   /**
    * MUT-333 (D10): the account was closed; it is deleted on `deleteOn` (a calendar day in the person's zone,
@@ -144,7 +145,7 @@ export interface TemplateVars {
    * MUT-533: the one reminder, from the retry window's midpoint. `daysLeft` is an upper bound (Stripe may give up
    * sooner), worded "within N days at most"; `readOnlyAfter` says the lapse gate is on, so an ended plan is read-only.
    */
-  'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; updateLink: string; /** MUT-565: the Accountant plan's card: only client books past this many lock, never the account. */ accountantFreeClients?: number };
+  'card-failed-reminder': { daysLeft: number; readOnlyAfter: boolean; /** MUT-731: an ended plan drops to the free Starter plan. */ starterAfter?: boolean; updateLink: string; /** MUT-565: the Accountant plan's card: only client books past this many lock, never the account. */ accountantFreeClients?: number };
   /**
    * MUT-534 (ADR-243 overrides ADR-159 §5 for this mail): 30 or 90 days after a paid plan ended. The prices are minor
    * units of `currency` (the person's last subscription's), the catalog's less the come-back coupon's amount;

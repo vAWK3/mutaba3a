@@ -90,7 +90,7 @@ describe('ClientBusinessDetails', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Add business details' }));
     const field = screen.getByLabelText('VAT or company number');
     await userEvent.type(field, '000000018');
-    expect(await screen.findByText(/Not in the companies or nonprofits registry/)).toBeInTheDocument();
+    expect(await screen.findByText(/Not found in the registry/)).toBeInTheDocument();
     api.lookup.mockRejectedValueOnce(refused(422, 'VALIDATION_FAILED', 'TAX_ID_INVALID'));
     await userEvent.clear(field);
     await userEvent.type(field, '516123458');

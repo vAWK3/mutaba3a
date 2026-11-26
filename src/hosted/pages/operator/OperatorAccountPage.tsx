@@ -232,14 +232,14 @@ function AccessGroup({ account, stepUpUntil }: { account: OperatorAccount; stepU
     }
   }
 
-  const rows: Record<Action, { label: string; sub: string; tone?: 'danger' }> = {
+  const rows: Record<Action, { label: string; sub?: string; tone?: 'danger' }> = {
     signOut: { label: t('hosted.operator.accounts.signOut'), sub: t('hosted.operator.accounts.signOutSub', { devices: devices(account.activeSessionCount) }) },
     disable: {
       label: t('hosted.operator.accounts.disable'),
       sub: t('hosted.operator.accounts.disableSub', { devices: devices(account.activeSessionCount), agents: agents(account.agentGrantCount) }),
       tone: 'danger',
     },
-    enable: { label: t('hosted.operator.accounts.enable'), sub: t('hosted.operator.accounts.enableSub') },
+    enable: { label: t('hosted.operator.accounts.enable') },
     reset: { label: t('hosted.operator.accounts.reset'), sub: t('hosted.operator.accounts.resetSub') },
   };
 

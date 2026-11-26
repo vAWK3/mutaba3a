@@ -73,7 +73,7 @@ describe('Close my account drawer (MUT-333)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
     const kept = within(dialog).getByRole('heading', { name: 'Kept' });
     expect(kept).toBeInTheDocument();
-    expect(within(dialog).getByText(/If you issued invoices or receipts with MTB3A, they and the business details printed on them are kept for 7 years from the date of each one/)).toBeInTheDocument();
+    expect(within(dialog).getByText(/Invoices and receipts you issued are kept for 7 years/)).toBeInTheDocument();
   });
 
   it('Download my records opens Your data in its place', async () => {
@@ -115,7 +115,7 @@ describe('Close my account drawer (MUT-333)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
     await user.type(within(dialog).getByLabelText('Your password'), 'the password');
     await user.click(within(dialog).getByRole('button', { name: 'Close my account' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent("Your subscription can't be ended from here right now, so nothing changed.");
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent("Nothing changed. Write to us and we'll close your account.");
   });
 
   it('when Stripe can’t be reached, says nothing changed', async () => {
@@ -123,7 +123,7 @@ describe('Close my account drawer (MUT-333)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Close my account' });
     await user.type(within(dialog).getByLabelText('Your password'), 'the password');
     await user.click(within(dialog).getByRole('button', { name: 'Close my account' }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent("We couldn't reach our payment provider, so nothing changed.");
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent("Nothing changed. Try again in a minute.");
   });
 
   it('closes with the password, and the closing page takes over', async () => {

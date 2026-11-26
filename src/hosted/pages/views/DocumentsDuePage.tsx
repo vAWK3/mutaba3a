@@ -207,7 +207,6 @@ export function DocumentsDuePage({ profile }: { profile: HostedProfile }) {
       ) : groups.length === 0 ? (
         <div className="hp-due-empty" data-testid="due-empty">
           <p className="hp-due-empty-title">{view === 'to-issue' ? t('hosted.documentsDue.emptyTitle') : t('hosted.documentsDue.emptyNfiTitle')}</p>
-          <p className="hp-muted">{view === 'to-issue' ? t('hosted.documentsDue.emptyBody') : t('hosted.documentsDue.emptyNfiBody')}</p>
         </div>
       ) : (
         groups.map((g) => {
@@ -290,7 +289,7 @@ export function DocumentsDuePage({ profile }: { profile: HostedProfile }) {
               onCancel={() => setBulkConfirm(false)}
               onConfirm={runBulk}
             >
-              <p className="hp-muted">{view === 'to-issue' ? t('hosted.documentsDue.markConfirmBody') : t('hosted.documentsDue.backConfirmBody')}</p>
+              {view === 'to-issue' && <p className="hp-muted">{t('hosted.documentsDue.markConfirmBody')}</p>}
             </InPlaceConfirm>
           ) : (
             <>

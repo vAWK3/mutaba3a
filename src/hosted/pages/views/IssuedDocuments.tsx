@@ -305,7 +305,6 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
       {d.paymentRequest && (
         <section className="hp-issued-request" aria-labelledby="hp-issued-request-title" data-testid="payment-request-block">
           <progress className="hp-issued-request-bar" max={100} value={coveredPercent(d.paymentRequest.covered, d.gross)} aria-label={t('hosted.issue.colStatus')} />
-          <p className="hp-muted">{t('hosted.issue.paymentRequest.notTax')}</p>
           {d.paymentRequest.linked.length > 0 && (
             <>
               <h2 id="hp-issued-request-title">{t('hosted.issue.paymentRequest.linkedTitle')}</h2>
@@ -406,7 +405,6 @@ export function IssuedDocumentPage({ profile, documentId, justIssued }: { profil
           )}
         </section>
       )}
-      <p className="hp-muted">{t('hosted.issue.finalNote')}</p>
       {drawer && (
         <IssueDocumentDrawer
           profile={profile}

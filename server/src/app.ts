@@ -55,6 +55,7 @@ import { BILLING_COUNTRIES, type BillingCountries } from './billing/checkout.js'
 import { createStripeSync } from './billing/stripe/sync.js';
 import { BILLING_ORGANIZATION_INDEPENDENT_ROUTES, BILLING_SESSION_POLICY, billingRoutes } from './routes/billing.js';
 import { BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, billingPlanRoutes } from './routes/billing-plan.js';
+import { BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, billingStarterRoutes } from './routes/billing-starter.js';
 import { adminUserRoutes } from './routes/admin-users.js';
 import { agentAuditFor } from './oauth/audit.js';
 import { OAuthService } from './oauth/service.js';
@@ -226,6 +227,8 @@ export interface AppDependencies {
   invoicingForAll?: boolean;
   /** MUT-736: overrides whether a paid plan can be bought here (PLAN_LIMIT's `canUpgrade`). Absent = Checkout is configured. */
   planCheckout?: boolean;
+  /** MUT-731 (Basel Q7): SOLO_TRIAL_OFFER_SINCE; accounts created from it are offered the one-time Solo trial. Absent = off. */
+  soloTrialOfferSince?: Date | null;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -340,7 +343,7 @@ export interface AppDependencies {
  * Session routes that act on the person, not on an organization (no X-Mutaba3a-Profile). authenticate() selects a
  * profile for every other session route; exported so a test can walk the profile-scoped ones (MUT-559's matrix).
  */
-export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
+export const SESSION_ORGANIZATION_INDEPENDENT_ROUTES: ReadonlySet<string> = new Set([...ORGANIZATION_INDEPENDENT_ROUTES, ...ME_ORGANIZATION_INDEPENDENT_ROUTES, ...DEVICE_SESSION_ORGANIZATION_INDEPENDENT_ROUTES, ...INBOX_ORGANIZATION_INDEPENDENT_ROUTES, ...PROFILE_ORGANIZATION_INDEPENDENT_ROUTES, ...FX_ORGANIZATION_INDEPENDENT_ROUTES, ...ENTRIES_ORGANIZATION_INDEPENDENT_ROUTES, ...SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_PLAN_ORGANIZATION_INDEPENDENT_ROUTES, ...BILLING_STARTER_ORGANIZATION_INDEPENDENT_ROUTES, ...CLOSURE_ORGANIZATION_INDEPENDENT_ROUTES, ...PASSKEY_ORGANIZATION_INDEPENDENT_ROUTES, ...OAUTH_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_ORGANIZATION_INDEPENDENT_ROUTES, ...OPERATOR_USAGE_ROUTES, ...ACCOUNTANT_ORGANIZATION_INDEPENDENT_ROUTES, ...SHARE_LINK_ORGANIZATION_INDEPENDENT_ROUTES, ...CONNECTED_APPS_ORGANIZATION_INDEPENDENT_ROUTES, ...MONTHLY_SUMMARY_ORGANIZATION_INDEPENDENT_ROUTES, ...TWO_FACTOR_ORGANIZATION_INDEPENDENT_ROUTES]);
 
 /** MUT-434: requests per minute one agent grant may make on /mcp. */
 export const AGENT_REQUESTS_PER_MINUTE = 120;
@@ -427,7 +430,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.144.0-landing';
+export const API_VERSION = '1.145.0-mut731';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -441,7 +444,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, planCheckout: deps.planCheckout ?? Boolean(deps.stripe?.checkoutGateway), soloTrialOfferSince: deps.soloTrialOfferSince ?? null, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -735,6 +738,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
       ...(deps.offers ? { offers: deps.offers } : {}),
     }),
   );
+  // MUT-731 (ADR-284): the person's Starter choices (continue free, the active business, the trial step shown).
+  app.route('/', billingStarterRoutes(store));
   // MUT-441: the server's reader, on the unguarded store (a job, and the uploader's grant, act for no principal).
   const receiptReader =
     deps.receiptReading && deps.attachments

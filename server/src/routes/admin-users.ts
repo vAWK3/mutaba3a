@@ -1,3 +1,7 @@
+import { HARD_CAP_PLANS } from '../billing/plans.js';
+import { nextPlanFor } from '../billing/plan-limit.js';
+import { stockLimitOf } from '../usage/caps.js';
+import { personPlanOf } from '../usage/plan-of.js';
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import type { AppEnv, SessionSettings } from '../auth/middleware.js';
@@ -111,10 +115,28 @@ export function adminUserRoutes(options: AdminUserOptions): OpenAPIHono<AppEnv> 
   const audit = (c: Context<AppEnv>, organizationIds: string[], userId: string, action: AccountAuditAction, metadata?: JsonObject) => accounts.audit(ctxOf(c), organizationIds, userId, action, metadata);
   const mustGetUser = accounts.mustGet;
 
+  /**
+   * MUT-731 (ADR-284, eng review #22, Basel Q3): Starter includes no partners. A new co-owner on a business whose creator
+   * is on Starter is refused (CONFLICT, reason PLAN_LIMIT, limit partners: the operator reads it, so no upgrade button);
+   * partners already there keep their place, and re-granting one of them is not a new partner.
+   */
+  async function refuseOnPartnerlessPlan(c: Context<AppEnv>, user: UserRecord, organizationId: string) {
+    const organization = await store.organizations.getById(organizationId);
+    const creator = organization?.ownerUserId ?? null;
+    if (!organization || !creator || organization.personalOwnerUserId !== null || creator === user.id) return;
+    if ((await store.memberships.find(user.id, organizationId))?.role === 'OWNER') return;
+    const plan = await personPlanOf(store, creator, c.get('now')());
+    const cap = HARD_CAP_PLANS.has(plan) ? stockLimitOf(plan, 'partners') : null;
+    if (cap === null) return;
+    const partners = (await store.memberships.listOwnersOf([organizationId])).filter((o) => o.userId !== creator).length;
+    if (partners >= cap) throw new ApiError('CONFLICT', 'The creator’s plan includes no more partners', { reason: 'PLAN_LIMIT', limit: 'partners', plan, cap, nextPlan: nextPlanFor(plan) });
+  }
+
   /** MUT-373 (ADR-163): the pilot's one way to add a co-owner (design review DR11: at most MAX_PROFILE_OWNERS). */
   async function grantCoOwner(c: Context<AppEnv>, user: UserRecord, organizationId: string) {
     // Basel (qa-reconcile D2): a disabled account can't sign in, so it never takes one of the profile's owner places.
     if (user.status !== 'ACTIVE') throw new ApiError('CONFLICT', 'Only an active account can be made a co-owner (enable it, or approve its signup, first)', { reason: 'USER_DISABLED' });
+    await refuseOnPartnerlessPlan(c, user, organizationId);
     // The audit commits with the membership (adversarial review 1): pre-roll recognizes a co-owner by this row.
     const [grantAudit] = auditEvents(c, [organizationId], user.id, 'membership.granted', { role: 'OWNER' }) as [AuditEventInput];
     const result = await store.memberships.grantOwner(user.id, organizationId, c.get('now')(), MAX_PROFILE_OWNERS, grantAudit);

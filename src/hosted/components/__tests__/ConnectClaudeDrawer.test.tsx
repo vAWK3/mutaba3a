@@ -55,7 +55,7 @@ describe('Connect Claude (MUT-434)', () => {
   it('while the server has OAuth off (503 OAUTH_NOT_CONFIGURED), says it isn’t switched on yet instead of an error', async () => {
     portal(`/p/${ORG_A}/you/account?connectClaude=true`, { routes: { 'GET /v1/oauth/grants': () => fail(503, 'OAUTH_NOT_CONFIGURED') } });
     const dialog = await screen.findByRole('dialog', { name: 'Connect Claude' });
-    expect(await within(dialog).findByText(/Connecting Claude isn’t switched on for MTB3A yet/, {}, { timeout: 10_000 })).toBeInTheDocument();
+    expect(await within(dialog).findByText(/Connecting Claude isn’t available yet/, {}, { timeout: 10_000 })).toBeInTheDocument();
     expect(within(dialog).queryByLabelText('MCP address')).toBeNull();
   });
 

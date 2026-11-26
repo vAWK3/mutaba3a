@@ -56,7 +56,7 @@ describe('InviteAccountantDrawer (MUT-561)', () => {
   it('opens by its URL key with the intro and the four scope points', async () => {
     portal(() => ok(pending('x@y.co'), 201));
     const dialog = await screen.findByRole('dialog', { name: 'Invite an accountant' });
-    expect(within(dialog).getByText("They'll get an email to accept. It ends after 14 days.")).toBeInTheDocument();
+    expect(within(dialog).getByText("They'll get an email to accept.")).toBeInTheDocument();
     expect(within(within(dialog).getByRole('list')).getAllByRole('listitem')).toHaveLength(4);
     expect(within(dialog).getByLabelText('Email')).toHaveAttribute('dir', 'ltr');
   });

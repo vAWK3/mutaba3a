@@ -821,6 +821,12 @@ export const api = {
   cancelPlan: (body: Schemas['CancellationRequest']) => request<CancellationResult>('POST', '/v1/billing/cancellation', { body }),
   keepPlan: () => request<CancellationResult>('DELETE', '/v1/billing/cancellation'),
   takeStayOffer: (body: Schemas['StayOfferRequest']) => request<StayOfferResult>('POST', '/v1/billing/stay-offer', { body }),
+  /** MUT-731 (ADR-284): Continue free on Starter after a cancel. */
+  chooseStarter: () => request<Schemas['StarterChoice']>('POST', '/v1/billing/starter'),
+  /** MUT-731 (Basel Q5): the business kept active on Starter. */
+  setActiveBusinesses: (organizationIds: string[]) => request<Schemas['ActiveBusinesses']>('PUT', '/v1/billing/active-businesses', { body: { organizationIds } }),
+  /** MUT-731 (Basel Q7): the one-time Solo trial step was shown (shown = gone). */
+  soloTrialOffered: () => request<Schemas['SoloTrialOffer']>('POST', '/v1/billing/solo-trial/offered'),
 
   organizationSummary: (profileId: string, query: Query<'/v1/summaries/organization'> = {}) =>
     request<Get<'/v1/summaries/organization'>>('GET', '/v1/summaries/organization', { profileId, query }),

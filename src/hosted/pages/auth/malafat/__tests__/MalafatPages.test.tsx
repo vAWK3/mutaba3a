@@ -80,7 +80,7 @@ describe('the return', () => {
   it('shows what Malafat said when the person declined, and exchanges nothing', async () => {
     const api = stubApi(routes());
     renderPortal('/malafat/return#error=access_denied');
-    expect(await screen.findByText("You didn't allow MTB3A in Malafat. Nothing was changed.")).toBeInTheDocument();
+    expect(await screen.findByText("You didn't allow MTB3A in Malafat.")).toBeInTheDocument();
     expect(callsTo(api, EXCHANGE)).toHaveLength(0);
     expect(screen.getByRole('link', { name: 'Back to sign in' })).toHaveAttribute('href', '/sign-in');
   });

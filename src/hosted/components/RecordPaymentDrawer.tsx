@@ -58,7 +58,7 @@ export function RecordPaymentDrawer({ profile, receivableId, onClose, onSettled 
       ? t('hosted.settle.titleLeft', { amount: isolateAmount(formatDecimal(receivable.outstanding, receivable.currency, language)) })
       : t('hosted.settle.record');
 
-  const nothingLeft = <Empty title={t('hosted.settle.nothingLeft')} body={t('hosted.settle.nothingLeftBody')} />;
+  const nothingLeft = <Empty title={t('hosted.settle.nothingLeft')} />;
 
   return (
     <Drawer
@@ -241,11 +241,9 @@ function SettleForm({ profile, receivable, amount, onAmountChange, onSettled, re
             <input type="checkbox" checked={issueNow} disabled={documentRequired} onChange={(e) => setIssueChoice(e.target.checked)} data-testid="settle-issue" />
             <span>
               {documentLabel}
-              {documentRequired && <span className="hp-muted"> {t('hosted.settle.issue.required')}</span>}
             </span>
           </label>
         )}
-      <p className="hp-settle-note">{t('hosted.settle.honest')}</p>
     </form>
   );
 }

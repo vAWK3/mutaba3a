@@ -136,11 +136,6 @@ export function ownersSectionVisible(profile: HostedProfile): boolean {
   return ownsItsRecords(profile) && profile.type === 'BUSINESS' && !profile.isPersonalDefault;
 }
 
-/** The cap hint (DR2): only for someone who co-owns a profile they didn't create, which their count leaves out. */
-export function coOwnsOthersProfiles(me: Me): boolean {
-  return me.profiles.some((profile) => profile.owned && !createdBy(profile, me.user.id));
-}
-
 /**
  * MUT-589 (ADR-255, Basel 2026-11-12): whether the portal offers to move this profile's expenses elsewhere. Only an
  * owner (creator or co-owner, `owned`) of a profile Malafat doesn't feed; anyone else sees no Move at all (the server's

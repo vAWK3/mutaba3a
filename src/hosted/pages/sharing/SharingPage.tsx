@@ -103,7 +103,6 @@ function SharingBody({ profile, search }: { profile: HostedProfile; search: Shar
         {t('hosted.sharing.back')}
       </Link>
       <h1 className="hp-sharing-title">{t('hosted.sharing.title', { profile: isolate(profile.name) })}</h1>
-      <p className="hp-sharing-note">{t('hosted.sharing.scopeNote')}</p>
 
       {deciding ? (
         <Skeleton />

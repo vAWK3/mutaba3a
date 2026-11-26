@@ -132,7 +132,7 @@ describe('LandingPage honesty', () => {
     renderLanding('en');
     expect(part('faq')).toHaveTextContent('Is there a free plan?');
     fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
-    expect(part('faq')).toHaveTextContent("accounts are set up for your organization");
+    expect(part('faq')).toHaveTextContent("Request an account and we'll reply with an offer");
   });
 });
 
@@ -384,11 +384,10 @@ describe('LandingPage Malafat (MUT-174)', () => {
     expect(link().getAttribute('rel')).toContain('noopener');
   });
 
-  it("ties the capture claim to the firm's Malafat linked to the account and the phone app, so it never implies Mutaba3a is part of Malafat", () => {
+  it("ties the capture claim to the firm's Malafat linked to the account, so it never implies Mutaba3a is part of Malafat", () => {
     renderLanding('en');
     expect(part('malafat')).toHaveTextContent("Link your firm's Malafat to your account");
-    expect(part('malafat')).toHaveTextContent('phone app');
-    expect(part('malafat')).toHaveTextContent('unallocated');
+    expect(part('malafat')).toHaveTextContent('MTB3A app');
   });
 
   it('says the link opens in a new tab', () => {
@@ -403,8 +402,6 @@ describe('LandingPage Malafat (MUT-174)', () => {
     expect(title).toHaveTextContent('محاماة');
     expect(title).toHaveTextContent('محاسبة');
     expect(band).toHaveTextContent('اربط Malafat مكتبك بحسابك في متابعة');
-    expect(band).toHaveTextContent('تطبيق الهاتف');
-    expect(band).toHaveTextContent('غير مخصّصة');
     expect(link()).toHaveAccessibleName('اطّلع على Malafat (يُفتح في علامة تبويب جديدة)');
     expect(link()).toHaveAttribute('href', malafatUrl({ locale: 'ar', medium: 'landing', content: 'landing-section' }));
   });
@@ -475,10 +472,10 @@ describe('LandingPage self-service signup (MUT-369)', () => {
     expect(within(getIt).getByRole('heading', { name: 'Want us to set it up for you?' })).toBeInTheDocument();
     expect(within(getIt).getByRole('form')).toBeInTheDocument();
     expect(getIt).not.toHaveTextContent(/no public sign-up/);
-    // The note says "ask us below": the options and note sit above the form
+    // The options sit above the form
     const request = getIt.querySelector('[data-part="get-it-request"]')!;
-    const note = getIt.querySelector('.landing-get-it-note')!;
-    expect(note.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    const optionsBlock = getIt.querySelector('.landing-get-it-options')!;
+    expect(optionsBlock.compareDocumentPosition(request) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('points the phone chapter and the free-plan answer at signing up', async () => {
@@ -498,7 +495,7 @@ describe('LandingPage self-service signup (MUT-369)', () => {
     await renderOpen('en');
     // The words signup brings (the mocks' sample amounts are not prices): no price or checkout (MUT-365 is v3)
     fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
-    const signupCopy = ['.hero-cta', '.hero-cta-note', '.landing-get-it-options', '.landing-get-it-note', '#get-it-request-title', '.landing-phone-hint', '.landing-faq-answer:not([hidden])']
+    const signupCopy = ['.hero-cta', '.landing-get-it-options', '#get-it-request-title', '.landing-phone-hint', '.landing-faq-answer:not([hidden])']
       .map((selector) => document.querySelector(selector)?.textContent ?? '')
       .join(' ');
     expect(signupCopy).toContain('Create an account');
@@ -524,7 +521,6 @@ describe('LandingPage self-service signup (MUT-369)', () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(document.querySelector('.hero-cta-primary')).toHaveAttribute('href', '#get-it');
     expect(part('hero')).toHaveTextContent('Request an account');
-    expect(part('hero')).toHaveTextContent("there's no public sign-up");
     expect(within(part('get-it')).getByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
     expect(within(part('phone')).getByRole('link', { name: 'Request an account' })).toHaveAttribute('href', '#get-it');
     expect(document.querySelector('main')?.textContent).not.toContain('Create an account');

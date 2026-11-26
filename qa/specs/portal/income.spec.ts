@@ -193,7 +193,7 @@ test('Add income, Owed: what is missing is said at the field, a refusal or a dro
     await pickClient(page, 'Client', 'Client 2');
     api.once('POST', /^\/v1\/income$/, 'abort');
     await drawer.getByRole('button', { name: 'Save income' }).click();
-    await expect(page.getByRole('alert')).toContainText("Couldn't reach the server. Try again.");
+    await expect(page.getByRole('alert')).toContainText("Couldn't connect. Try again.");
     await expect(drawer.getByLabel('Amount')).toHaveValue('750');
   });
 

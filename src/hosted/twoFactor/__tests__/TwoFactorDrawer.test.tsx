@@ -26,7 +26,7 @@ describe('Two-step sign-in drawer (MUT-710)', () => {
   it('You › Account shows it off with what it does, and opens the drawer', async () => {
     const { user, router } = portal(`/p/${ORG_A}/you/account`, OFF);
     const row = await screen.findByRole('button', { name: /^Two-step sign-in/ });
-    expect(row).toHaveTextContent('Off. A code after your password, from an app or by email.');
+    expect(row).toHaveTextContent('Off');
     await user.click(row);
     expect(await screen.findByRole('dialog', { name: 'Turn on two-step sign-in' })).toBeInTheDocument();
     expect(locationOf(router)).toBe(`/p/${ORG_A}/you/account?twoFactor=true`);

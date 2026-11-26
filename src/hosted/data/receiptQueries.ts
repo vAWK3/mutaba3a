@@ -5,6 +5,7 @@ import { profileKey } from '../session/me';
 import { useCursorList } from './queries';
 import { expenseKey, invalidateExpenses } from './expenseQueries';
 import { uploadExpenseReceipt, uploadLibraryReceipt } from './receiptUpload';
+import { BILLING_KEY } from './billingQueries';
 import type { ReceiptStatusFilter } from './filters';
 
 /**
@@ -220,9 +221,13 @@ export function useUploadReceipts(profileId: string) {
         await uploadLibraryReceipt(profileId, file, key);
         outcomes.push({ file, error: null });
         invalidateReceipts(queryClient, profileId);
+        // MUT-731: a finished scan moves Starter's meter (Home's notice and Billing read it).
+        void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
       } catch (error) {
         outcomes.push({ file, error });
-        if (error instanceof ApiError && error.status === 429) refused = error;
+        // MUT-731: Starter's 12 scans are used up; the rest would be refused the same way, so none is sent.
+        if (error instanceof ApiError && (error.status === 429 || error.code === 'PLAN_LIMIT')) refused = error;
+        if (error instanceof ApiError && error.code === 'PLAN_LIMIT') void queryClient.invalidateQueries({ queryKey: BILLING_KEY });
         // A refused start never made a row, but a failed PUT/complete may have left one behind if its delete failed.
         else invalidateReceipts(queryClient, profileId);
       } finally {

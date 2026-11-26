@@ -225,4 +225,4 @@ features:
       - With sign-up closed, open the landing page in English
       - Again with the portal unreachable
     expect:
-      - The hero's "Request an account" scrolls to the request form; the hero says there's no public sign-up; nothing says "Create an account"
+      - The hero's "Request an account" scrolls to the request form; nothing says "Create an account"

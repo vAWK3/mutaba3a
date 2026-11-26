@@ -2971,3 +2971,12 @@ Rows kept past an account's deletion carry no foreign key to the profile, so "cl
 ## Pattern: request statistics are an in-memory aggregate flushed by a live request (MUT-735, ADR-281)
 **Where**: `server/src/usage/route-meter.ts`, fed by `app.ts`'s access log.
 **Rule**: on Cloud Run with `cpu_idle`, a `setInterval` doesn't fire between requests (TD-215). Count in memory on the request path (no I/O), and let the request that finds the last flush a minute old start one, fire and forget; flush once more between stop-accepting and disconnect on SIGTERM. A failed flush is logged and its batch dropped (statistics, not money). Key by the route template (`routeKeyOf`), never the raw path.
+
+## Pattern: a server flag every entitlement reader must agree on rides the store, not the request (MUT-731, ADR-284)
+**Where**: `BillingRepository.starterPlan`, set when the store is built (`PrismaLedgerStore.connect(url, { starterPlan })`, `new MemoryLedgerStore({ starterPlan })`), read by `billing/coverage.ts`.
+**Rule**: when a config value changes what an entitlement *is* (not what one route does), put it on the repository that answers the facts, so the gate, `/v1/me`, `/v1/billing`, agents, jobs and operator scripts can't disagree and no call site has to remember to pass it. Pure functions still take it as an option (`resolveEntitlement(…, { starter })`) so both paths are unit-tested; tests flip it with `setStarterPlan`. A flag that changes one route's behaviour stays on the request context (`c.get('invoicingForAll')`).
+
+## Pattern: a plan's refusal is a 409 the clients can show before asking (MUT-731, ADR-285)
+**Where**: `billing/plan-limit.ts` (server), `src/hosted/data/planUsage.ts` + `PlanLimitNotice` (portal).
+**Rule**: one builder for `PLAN_LIMIT` details (limit, plan, nextPlan, canUpgrade, used/cap/resetsOn), released by idempotency. The portal reads the month's meters and shows the same notice before the person types (`limitFromUsage`), and maps the server's refusal onto it when it races (`planLimitOf`), so both paths render one component.
+

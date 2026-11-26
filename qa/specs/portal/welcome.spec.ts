@@ -36,7 +36,7 @@ test('A first visit with nobody signed in shows the welcome in Arabic, not the a
   await step('The this-device door says plainly what this browser keeps, and promises no phone', async () => {
     const device = page.getByRole('region', { name: 'على هذا الجهاز فقط' });
     await expect(device.getByRole('listitem')).toHaveText([
-      'تبقى في هذا المتصفح فقط. بلا حساب، ولا يُرسَل إلينا شيء.',
+      'تبقى في هذا المتصفح فقط، بلا حساب.',
       'مسح بيانات هذا الموقع يمحوها.',
       'احفظ نسخة منها من بياناتك › تنزيل سجلاتي.',
       'لا تنتقل إلى حساب لاحقًا.',

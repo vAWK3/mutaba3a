@@ -281,7 +281,8 @@ export function adminBillingRoutes(store: LedgerStore, options: AdminBillingOpti
       const integrations = await Promise.all(organizations.map((o) => store.integrations.findByOrganizationAndProvider(o.id, 'MALAFAT')));
       const profiles = organizations.map((organization, i) => ({ organization, malafatConnected: integrations[i]?.status === 'CONNECTED' }));
       const entitlements = await entitlementsFor(store, profiles, c.get('now')());
-      const lapsed = organizations.filter((o) => ['READ_ONLY', 'LOCKED'].includes(entitlements.get(o.id)!.state));
+      // MUT-731 (eng review #21): a business read-only for Starter's count is the person's choice to make, not a lapse.
+      const lapsed = organizations.filter((o) => ['READ_ONLY', 'LOCKED'].includes(entitlements.get(o.id)!.state) && !entitlements.get(o.id)!.planLimit);
       const rows = await Promise.all(
         lapsed.map(async (organization) => {
           const members = await store.memberships.listByOrganization(organization.id);

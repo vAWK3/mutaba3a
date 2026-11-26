@@ -97,7 +97,6 @@ test("the Accountants column shows each accountant's state and one action", { ta
   await step('Open Sharing on Studio, which has an active, a pending and an expired accountant', async () => {
     await openSharing(page, seeded());
     await expect(page.getByRole('heading', { level: 1 })).toHaveText(`Sharing ${iso('Studio')}`);
-    await expect(page.getByText("Whoever you share with reads expenses, income and receipts only. They can't add or change anything.")).toBeVisible();
 
     const sami = row(page, 'Sami Khoury');
     await expect(sami).toContainText('Active');
@@ -111,10 +110,8 @@ test("the Accountants column shows each accountant's state and one action", { ta
 
     const hala = row(page, 'h.audit@firm.com');
     await expect(hala).toContainText('Expired');
-    await expect(hala).toContainText('Not accepted within 14 days');
     await expect(hala.getByRole('button', { name: 'Invite h.audit@firm.com again' })).toBeVisible();
 
-    await expect(page.getByText('Up to 5 accountants per profile.')).toBeVisible();
     await expect(page.getByRole('heading', { name: /Links/ })).toHaveCount(0);
   });
 });
@@ -170,7 +167,7 @@ test('stop an accountant, cancel an invite, or invite an expired one again', { t
   await step('Open Sharing and press Stop on Sami Khoury', async () => {
     await openSharing(page, api);
     await row(page, 'Sami Khoury').getByRole('button', { name: "Stop Sami Khoury's access" }).click();
-    const confirm = page.getByRole('group', { name: `Stop ${iso('Sami Khoury')}'s access to ${iso('Studio')}? ${iso('Sami Khoury')} won't be able to open it any more. You can send a new invite later.` });
+    const confirm = page.getByRole('group', { name: `Stop ${iso('Sami Khoury')}'s access to ${iso('Studio')}?` });
     await expect(confirm).toBeVisible();
     await expect(confirm.getByRole('button', { name: 'Cancel' })).toBeFocused();
   });
@@ -320,7 +317,6 @@ test('link rows show each state, and a live link can be turned off', { tag: '@po
     const ended = linkRow(page, 'Sep 2026');
     await expect(ended).toContainText(/Ended \w{3} \d{1,2}/);
     await expect(ended.getByRole('button')).toHaveCount(0);
-    await expect(page.getByText(/A link is never shown twice/)).toBeVisible();
   });
 
   await step('Turn off the live link', async () => {

@@ -5,6 +5,9 @@ import { useAddReceipt, useDeleteReceipt } from '../data/receiptQueries';
 import { useToast } from './Toast';
 import { downloadNavigator } from '../data/download';
 import { api, type ExpenseReceipt } from '../api/client';
+import { limitFromUsage } from '../data/planUsage';
+import { useStarterUsage } from '../data/useStarterUsage';
+import { PlanLimitNotice } from './PlanLimitNotice';
 import { MAX_RECEIPTS_PER_EXPENSE, ReceiptPickButton } from './ReceiptPickButton';
 
 /**
@@ -49,6 +52,9 @@ export function ReceiptUploader({ profileId, expenseId, receipts, readOnly = fal
 
   const uploads = useUploadQueue(addReceipt.mutateAsync, receipts, incoming, onIncomingSettled);
 
+  // MUT-731 (wireframe 2): at Starter's 12 scans nothing more is uploaded; the expense itself is already saved here.
+  const starter = useStarterUsage();
+  const scanLimit = starter.usage && starter.billing && starter.usage.scans.level === 'at_cap' ? limitFromUsage(starter.usage, 'scans', starter.billing) : null;
   const ready = receipts.filter((r) => r.status === 'READY');
   const room = MAX_RECEIPTS_PER_EXPENSE - ready.length - uploads.active;
   const atCap = ready.length >= MAX_RECEIPTS_PER_EXPENSE;
@@ -130,7 +136,8 @@ export function ReceiptUploader({ profileId, expenseId, receipts, readOnly = fal
           ))}
         </ul>
       )}
-      {!readOnly && <ReceiptPickButton room={room} busy={uploads.active > 0} onPick={uploads.add} />}
+      {!readOnly && scanLimit && <PlanLimitNotice limit={scanLimit} />}
+      {!readOnly && !scanLimit && <ReceiptPickButton room={room} busy={uploads.active > 0} onPick={uploads.add} />}
       {!readOnly && atCap && <p className="hp-muted">{t('hosted.expenses.drawer.receipts.atCap')}</p>}
     </div>
   );

@@ -184,7 +184,6 @@ test('switching profile from You › Profiles lands on that profile’s home, an
     await expect(main.getByRole('button', { name: /Nour Studio/ })).toHaveAttribute('aria-current', 'true');
     await expect(main.getByRole('button', { name: /Nour Accounting/ })).toContainText('Business');
     await expect(main.getByRole('button', { name: /Haddad & Partners/ })).toContainText('Income recorded by Malafat');
-    await expect(main).toContainText('Your local profiles stay in the MTB3A app on your device.');
   });
 
   await step('Switch to Nour Accounting: on its home (MUT-657), its figures read for that profile', async () => {
@@ -325,7 +324,7 @@ test('a client’s VAT or company number fills its name and address from the reg
     await number.fill('510000045');
     await expect(card.getByRole('alert')).toContainText('“מחוקה”');
     await number.fill('000000018');
-    await expect(card.getByText(/Not in the companies or nonprofits registry/)).toBeVisible();
+    await expect(card.getByText(/Not found in the registry/)).toBeVisible();
     await card.getByRole('button', { name: 'Cancel' }).click();
   });
 
@@ -361,7 +360,7 @@ test('an account with no profile yet is offered New profile and Sign out', { tag
 });
 
 test('once firm features are on, home shows one note that Dismiss keeps gone, in English and Arabic', { tag: '@portal.shell.firm-enabled-banner' }, async ({ page, step }) => {
-  const TEXT = "Firm features are on for Khatib Law. New tools show up here as they're released.";
+  const TEXT = "Firm features are on for Khatib Law.";
   const api = new FakeApi({ profiles: [{ ...office(OFFICE_A, 'Khatib Law'), firm: true }, { ...office(OFFICE_B, 'Sader Office'), firm: true }] });
 
   await step('Sign in to the firm profile: home shows the note', async () => {

@@ -193,7 +193,6 @@ test('On a desktop the Glance is one centred column with a hint toward each prof
     const main = (await page.getByRole('main').boundingBox())!;
     expect(box.width).toBeLessThanOrEqual(560);
     expect(Math.abs(box.x - main.x - (main.x + main.width - (box.x + box.width)))).toBeLessThan(2);
-    await expect(page.getByText('Open a profile for its charts')).toBeVisible();
   });
 });
 

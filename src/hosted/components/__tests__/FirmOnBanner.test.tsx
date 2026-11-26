@@ -15,7 +15,7 @@ import { firmBannerKey } from '../../data/firmBanner';
 const STUDIO = 'd1111111-1111-4111-8111-111111111111';
 const USER_ID = me().user.id;
 const studio = profile({ id: STUDIO, name: 'Khatib Law', writerOfRecord: null, owned: true, type: 'BUSINESS', firm: true, role: 'OWNER' });
-const TEXT = "Firm features are on for Khatib Law. New tools show up here as they're released.";
+const TEXT = "Firm features are on for Khatib Law.";
 
 function portal(profiles: HostedProfile[] = [studio]) {
   stubApi({ 'GET /v1/me': () => ok(me(profiles)), ...emptyProfileRoutes() });
@@ -74,7 +74,7 @@ describe('FirmOnBanner (MUT-300, DR5)', () => {
   it('reads in Arabic', async () => {
     localStorage.setItem(PORTAL_LANGUAGE_KEY, 'ar');
     portal();
-    expect(await screen.findByText('ميزات المكتب مفعّلة لملف Khatib Law. تظهر الأدوات الجديدة هنا عند إصدارها.')).toBeInTheDocument();
+    expect(await screen.findByText('ميزات المكتب مفعّلة لملف Khatib Law.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'إغلاق' })).toBeInTheDocument();
   });
 });

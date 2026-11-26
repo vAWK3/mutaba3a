@@ -80,7 +80,7 @@ features:
     expect:
       - The Personal profile's pane has no firm request
       - The Business profile's pane offers "Use this profile for a firm" with Request firm features
-      - POST /v1/profiles/{id}/firm-request goes once with an Idempotency-Key, and the pane reads "Requested on … Firm features show up here once they're turned on." with no button
+      - POST /v1/profiles/{id}/firm-request goes once with an Idempotency-Key, and the pane reads "Requested on …" with no button
       - After the reload it still reads Requested
   - id: co-owner-write
     title: A co-owner sees the shared profile named for their partner, owns it fully, and its Owners section lists both; the Personal type stays locked (MUT-373)
@@ -95,10 +95,10 @@ features:
       - Open Manage profiles and the shared profile
       - Add a received income on the shared profile
     expect:
-      - You › Profiles and the list read "Business · Shared with Basel Sader", and the list explains the count ("Profiles shared with you don't count.")
+      - You › Profiles and the list read "Business · Shared with Basel Sader"
       - You › Profiles lists only the shared profile and your own personal profile, never your partner's
       - The Owners section lists Basel Sader (Created this profile) and you (You); there is no Remove, and Leave sits at its foot
-      - The Personal card is disabled with "A shared profile stays Business."
+      - The Personal card is disabled
       - The income drawer offers Received and the save is sent for the shared profile
   - id: co-owner-remove
     title: The creator removes a co-owner after an in-place confirm; the row goes and a toast says so (MUT-373)
@@ -113,7 +113,7 @@ features:
       - The creator's Owners section offers Remove and never Leave
       - The confirm reads "Lina Saleh loses access to Sader & Haddad. What they recorded stays."
       - DELETE /v1/profiles/{id}/owners/{lina} goes once with an Idempotency-Key
-      - The toast reads "Lina Saleh removed from Sader & Haddad", her row is gone, and the section reads Only you own this profile
+      - The toast reads "Lina Saleh removed from Sader & Haddad" and her row is gone
   - id: co-owner-leave
     title: A co-owner leaves the open shared profile, lands on their personal profile with a toast, and the drawer closes (MUT-373)
     tier: secondary
@@ -136,7 +136,7 @@ features:
       - Work on the shared profile's Clients
       - Meanwhile the creator removes you; open Expenses
     expect:
-      - The portal moves to the personal profile and shows "You no longer have access to Sader & Haddad. What you recorded stays."
+      - The portal moves to the personal profile and shows "You no longer have access to Sader & Haddad."
       - Close dismisses the banner
   - id: co-owner-full-rights
     title: A co-owner adds a client, records a payment and an expense, and renames the shared profile — the rights its creator has (MUT-373)

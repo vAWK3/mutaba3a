@@ -1,5 +1,4 @@
 import { cheapestPlanWith, PLAN_FEATURES, type PlanName } from '../billing/plans.js';
-import { ApiError } from '../errors.js';
 import type { Organization } from '../repositories/ports.js';
 import type { UsagePlan } from '../usage/kinds.js';
 import { payerPlanOf } from '../usage/plan-of.js';
@@ -28,11 +27,5 @@ export async function taxAuthorityPlanOf(store: Parameters<typeof payerPlanOf>[0
   return { plan, ...taxAuthorityPlanFor(plan) };
 }
 
-/**
- * MUT-736 (brief §3.3): the plan's limit refuses the action, 409 PLAN_LIMIT (not 402: that is the lapse gate's "plan
- * ended"). `canUpgrade`: a paid plan can be bought on this server now (Checkout configured); without it the clients
- * show no Upgrade button. MUT-731 adds the monthly meters' `used`, `cap` and `resetsOn`.
- */
-export function planLimitError(details: { limit: 'taxAuthority'; plan: UsagePlan; nextPlan: PlanName | null; canUpgrade: boolean }): ApiError {
-  return new ApiError('PLAN_LIMIT', 'The Tax Authority connection is on Solo and above', details);
-}
+/** MUT-736 (brief §3.3): the shared PLAN_LIMIT builder (billing/plan-limit.ts), re-exported for the Tax Authority routes. */
+export { planLimitError } from '../billing/plan-limit.js';
