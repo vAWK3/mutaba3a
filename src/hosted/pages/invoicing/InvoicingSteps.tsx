@@ -13,6 +13,7 @@ import { useAnswerNumbering, useSaveIssuer, useSaveIssuerDefaults, useSaveIssuer
 import { DEFAULT_INK, INKS, endsSoon, wholeNumber, type PaperModel } from './setupSteps';
 import { TwoFactorIssuingPrompt } from '../../twoFactor/TwoFactorIssuingPrompt';
 import { isTwoFactorRefusal } from '../../twoFactor/twoFactor';
+import { useAccountDrawers } from '../../shell/AccountDrawers';
 
 /** MUT-660: the documents preference choices, in the order the client page offers them. */
 const DOCUMENTS_PREFERENCES: readonly DocumentsPreference[] = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'];
@@ -414,6 +415,9 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
  * own sign-in (the business owner signs in there; MTB3A never sees the password) and comes back here. A server without
  * the connection configured answers 404: the step then says it will be available. Ten days before the consent ends the
  * step says so and offers Connect again (the reminder mail links here); after, it reads as ended.
+ * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step says so and offers the
+ * upgrade (Billing) instead of Connect; a kept connection reads as paused (`suspended`), coming back on Solo with no new
+ * setup, and can still be disconnected. A PLAN_LIMIT on Connect (the plan changed meanwhile) reads the status again.
  */
 export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const t = useT();
@@ -431,6 +435,7 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
       window.location.assign((await api.taxAuthorityConnect(profileId)).authorizeUrl);
     } catch (error) {
       if (isTwoFactorRefusal(error)) setRefusedForTwoFactor(error);
+      else if (error instanceof ApiError && error.code === 'PLAN_LIMIT') void status.refetch();
       else setFailed(true);
       setBusy(false);
     }
@@ -447,6 +452,8 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
   const state = status.data?.state;
   const until = status.data?.until?.slice(0, 10) ?? '';
   const ending = state === 'connected' && endsSoon(status.data?.until);
+  const plan = status.data?.plan;
+  if (plan && !plan.allowed) return <NotOnPlan state={state} nextPlan={plan.nextPlan} returned={returned} busy={busy} onDisconnect={() => void disconnect()} onDone={onDone} />;
   return (
     <div className="hp-setup-form" data-testid="tax-authority-step">
       {status.error ? (
@@ -462,6 +469,7 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
       ) : (
         <p>{t(state === 'expired' ? 'hosted.invoicing.taxAuthority.expired' : 'hosted.invoicing.taxAuthority.connectBody')}</p>
       )}
+      {status.data && <p className="hp-muted">{t('hosted.invoicing.taxAuthority.plans')}</p>}
       {(returned === 'failed' || returned === 'refused') && state !== 'connected' && (
         <p className="input-error-message" role="alert" data-testid="tax-authority-returned">
           {t(returned === 'refused' ? 'hosted.invoicing.taxAuthority.returnedRefused' : 'hosted.invoicing.taxAuthority.returnedFailed')}
@@ -486,6 +494,42 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
         )}
         <Button type="button" variant="secondary" onClick={onDone}>
           {t(state === 'connected' ? 'hosted.invoicing.next' : 'hosted.invoicing.later')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * MUT-736: the step on a plan without the connection. What the plan means (or that a kept connection is paused), the
+ * upgrade to the plan that has it, and Disconnect for a kept one. Issuing still works: numbers are typed by hand.
+ */
+function NotOnPlan(props: { state: string | undefined; nextPlan: string | null; returned: string | null; busy: boolean; onDisconnect: () => void; onDone: () => void }) {
+  const t = useT();
+  const drawers = useAccountDrawers();
+  const plan = t(`hosted.plan.name.${props.nextPlan ?? 'solo'}`);
+  const suspended = props.state === 'suspended';
+  return (
+    <div className="hp-setup-form" data-testid="tax-authority-step">
+      <p role="status" data-testid="tax-authority-plan">
+        {t(suspended ? 'hosted.invoicing.taxAuthority.suspended' : 'hosted.invoicing.taxAuthority.notOnPlan', { plan })}
+      </p>
+      {props.returned === 'plan' && (
+        <p className="input-error-message" role="alert" data-testid="tax-authority-returned">
+          {t('hosted.invoicing.taxAuthority.returnedPlan', { plan })}
+        </p>
+      )}
+      <div className="hp-setup-actions">
+        <Button type="button" onClick={() => drawers.openBilling()} data-testid="tax-authority-upgrade">
+          {t('hosted.invoicing.taxAuthority.upgrade', { plan })}
+        </Button>
+        {suspended && (
+          <Button type="button" variant="ghost" onClick={props.onDisconnect} disabled={props.busy}>
+            {t('hosted.invoicing.taxAuthority.disconnect')}
+          </Button>
+        )}
+        <Button type="button" variant="secondary" onClick={props.onDone}>
+          {t('hosted.invoicing.later')}
         </Button>
       </div>
     </div>

@@ -18,6 +18,8 @@ function allocationDate(isoDate: string): string {
  * request it. The panel lists what the Tax Authority's page asks for, each with Copy (and Copy all), links to that page
  * and takes the 9-digit number. The invoice number is the next one, shown as a preview: nothing is reserved, and the
  * server refuses the issue if another document takes it first. Digits read left to right in either language (ADR-101).
+ * MUT-736 (ADR-282): when the plan is why (Starter has no Tax Authority connection), one line says on which plan the
+ * numbers come automatically (`automaticOn`). No button here: the person is mid-invoice.
  */
 export function ManualAllocationPanel(props: {
   allocation: ManualAllocation;
@@ -44,6 +46,11 @@ export function ManualAllocationPanel(props: {
     <section className="hp-issue-allocation" aria-labelledby={`${props.inputId}-title`} data-testid="issue-allocation">
       <h3 id={`${props.inputId}-title`}>{t('hosted.issue.allocation.title')}</h3>
       <p className="hp-issue-allocation-why">{t('hosted.issue.allocation.why')}</p>
+      {allocation.automaticOn && (
+        <p className="form-hint" data-testid="issue-allocation-automatic-on">
+          {t('hosted.issue.allocation.automaticOn', { plan: t(`hosted.plan.name.${allocation.automaticOn}`) })}
+        </p>
+      )}
       <p className="hp-issue-allocation-label">{t('hosted.issue.allocation.details')}</p>
       <dl className="hp-issue-allocation-details">
         {rows.map((r) => (

@@ -332,6 +332,53 @@ features:
       - The server refuses with "This invoice's number is now 2", the entered number is cleared and the panel now shows invoice number 2
       - Tax invoice 2 is issued with the number (manualAllocation for 2) and its page shows the allocation number
       - The panel reads right to left in formal Arabic
+  - id: starter-manual-allocation
+    title: On Starter (no Tax Authority connection) a 6,000 invoice is issued with an allocation number typed by hand; the panel says numbers come automatically on Solo (MUT-736)
+    tier: secondary
+    tickets: [MUT-736]
+    paths:
+      - src/hosted/components/ManualAllocationPanel.tsx
+    steps:
+      - As a Starter person on Nour Studio, open Issue a document, choose Client 1 and a line of 6,000
+      - Read the allocation panel
+      - Type 123-456-789 and Issue
+      - Open the drawer again in Arabic with the same line
+    expect:
+      - The panel asks for the allocation number and says "Connect to the Tax Authority to get numbers automatically, on Solo."; Issue waits for the number
+      - Tax invoice 1 is issued with manualAllocation for number 1, and its page shows the allocation number 123456789
+      - In Arabic the line names the plan «مستقل», right to left
+  - id: starter-connect-refused
+    title: On Starter the Tax Authority step says the connection is on Solo and above and offers the upgrade; a kept connection is paused, not deleted (MUT-736)
+    tier: secondary
+    tickets: [MUT-736]
+    paths:
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+    steps:
+      - As a Starter person, open You › Profiles › Invoicing on Nour Studio and choose step 5, the Tax Authority
+      - Choose Upgrade to Solo
+      - As a Starter person whose connection was made on a paid plan, open step 5 again
+      - Choose Disconnect
+      - Open step 5 in Arabic
+    expect:
+      - The step says the Tax Authority connection is on Solo and above and invoices can still be issued with a number typed by hand; there is no Connect
+      - Billing opens
+      - The step says the connection is paused on this plan, nothing was deleted, and it comes back on Solo with no new setup
+      - DELETE /v1/issuing/tax-authority is sent and the step reads as not connected
+      - In Arabic the step names «مستقل» and offers «الترقية إلى «مستقل»»
+  - id: solo-automatic-allocation
+    title: On Solo the profile connects to the Tax Authority and a 6,000 invoice gets its allocation number by itself (MUT-736)
+    tier: secondary
+    tickets: [MUT-736, MUT-572]
+    paths:
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+    steps:
+      - As a Solo person, open You › Profiles › Invoicing on Nour Studio and choose step 5, the Tax Authority
+      - Choose Connect to the Tax Authority and approve on its site
+      - Open Issue a document, choose Client 1 and a line of 6,000, and Issue
+    expect:
+      - The step says the connection is included on Solo and above and offers Connect
+      - Back from the Tax Authority the step says connected until a date, and region 5 of the letterhead is ticked
+      - No allocation panel asks for a number; tax invoice 1 is issued and its page shows the number the Tax Authority gave
   - id: issue-as-you-record
     title: The first income for a client asks how documents are issued, once; a payment issues its document in the same step (MUT-661)
     tier: secondary

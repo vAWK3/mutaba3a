@@ -1032,3 +1032,124 @@ test('the first Owed for a client asks how documents are issued, once; a payment
     await expect(toast).not.toContainText('issued');
   });
 });
+
+/** MUT-736 (ADR-282): the Tax Authority connection is on Solo and above; Starter types allocation numbers by hand. */
+const issueSixThousand = async (page: import('@playwright/test').Page, language: 'en' | 'ar' = 'en') => {
+  const drawer = page.getByRole('dialog', { name: language === 'ar' ? 'إصدار مستند' : 'Issue a document' });
+  await page.getByTestId('issue-open').click();
+  await drawer.getByLabel(language === 'ar' ? 'العميل' : 'Client').fill('Client 1');
+  await page.getByRole('option', { name: /Client 1/ }).click();
+  await drawer.getByLabel(language === 'ar' ? 'الوصف' : 'Description').fill('Annual retainer');
+  await drawer.getByRole('textbox', { name: language === 'ar' ? 'السعر' : 'Price', exact: true }).fill('6000');
+  return drawer;
+};
+
+test('on Starter a 6,000 invoice is issued with a number typed by hand; numbers come automatically on Solo (MUT-736)', { tag: '@portal.invoicing.starter-manual-allocation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', taxAuthority: { plan: 'starter', connected: true } });
+  let drawer = page.getByRole('dialog', { name: 'Issue a document' });
+
+  await step('As a Starter person on Nour Studio, open Issue a document, choose Client 1 and a line of 6,000', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    drawer = await issueSixThousand(page);
+  });
+
+  await step('AC10 The panel asks for the number and says numbers come automatically on Solo; Issue waits', async () => {
+    const panel = drawer.getByTestId('issue-allocation');
+    await expect(panel.getByRole('heading', { name: 'This invoice needs an allocation number' })).toBeVisible();
+    await expect(panel.getByTestId('issue-allocation-automatic-on')).toHaveText('Connect to the Tax Authority to get numbers automatically, on Solo.');
+    await expect(page.getByTestId('issue-submit')).toBeDisabled();
+  });
+
+  await step('AC10 Type 123-456-789 and Issue: tax invoice 1 carries the number typed, stored as an automatic one would be', async () => {
+    await drawer.getByLabel('Allocation number (9 digits)').fill('123-456-789');
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).toMatchObject({ manualAllocation: { number: '123456789', forNumber: 1 } });
+    await expect(page.getByText('123456789')).toBeVisible();
+  });
+
+  await step('AC12 In Arabic the line names «مستقل», right to left', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`, 'ar');
+    const ar = await issueSixThousand(page, 'ar');
+    await expect(ar.getByTestId('issue-allocation-automatic-on')).toContainText('في خطة «مستقل»');
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+test('on Starter the Tax Authority step offers the upgrade; a kept connection is paused, never deleted (MUT-736)', { tag: '@portal.invoicing.starter-connect-refused' }, async ({ page, step }) => {
+  const region5 = () => page.getByTestId('letterhead').getByRole('button', { name: /^(Step 5:|الخطوة 5)/ });
+  const taStep = page.getByTestId('tax-authority-step');
+
+  await step('As a Starter person, open Invoicing on Nour Studio and choose step 5, the Tax Authority', async () => {
+    const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], invoicing: 'ready', taxAuthority: { plan: 'starter' } });
+    await api.open(page, setupPath);
+    await region5().click();
+  });
+
+  await step('AC9 It says the connection is on Solo and above and numbers can still be typed by hand; no Connect', async () => {
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('The Tax Authority connection is on Solo and above');
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('type it in when you issue');
+    await expect(taStep.getByTestId('tax-authority-connect')).toHaveCount(0);
+  });
+
+  await step('AC9 Upgrade to Solo opens Billing', async () => {
+    await taStep.getByRole('button', { name: 'Upgrade to Solo' }).click();
+    await expect(page.getByRole('dialog', { name: 'Billing' })).toBeVisible();
+  });
+
+  const kept = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], invoicing: 'ready', taxAuthority: { plan: 'starter', connected: true } });
+  await step('AC11 A connection made on a paid plan: the step says it is paused, nothing deleted, back on Solo with no new setup', async () => {
+    await kept.open(page, setupPath);
+    await region5().click();
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('paused on your plan');
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('Nothing was deleted');
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('with no new setup');
+  });
+
+  await step('Disconnect still works: DELETE is sent and the step reads as not connected', async () => {
+    await taStep.getByRole('button', { name: 'Disconnect' }).click();
+    await expect.poll(() => kept.last('DELETE', /^\/v1\/issuing\/tax-authority$/)).toBeTruthy();
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('The Tax Authority connection is on Solo and above');
+  });
+
+  await step('AC12 In Arabic the step names «مستقل»', async () => {
+    await kept.open(page, setupPath, 'ar');
+    await region5().click();
+    await expect(taStep.getByTestId('tax-authority-plan')).toContainText('«مستقل»');
+    await expect(taStep.getByRole('button', { name: 'الترقية إلى «مستقل»' })).toBeVisible();
+    await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
+    await expectNoHorizontalOverflow(page);
+  });
+});
+
+test('on Solo the profile connects and a 6,000 invoice gets its allocation number by itself (MUT-736)', { tag: '@portal.invoicing.solo-automatic-allocation' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], clients: 1, invoicing: 'ready', taxAuthority: { plan: 'solo' } });
+  const taStep = page.getByTestId('tax-authority-step');
+  const region5 = () => page.getByTestId('letterhead').getByRole('button', { name: /^Step 5:/ });
+
+  await step('As a Solo person, open Invoicing on Nour Studio and choose step 5: the connection is included on Solo and above', async () => {
+    await api.open(page, setupPath);
+    await region5().click();
+    await expect(taStep.getByText('The connection is included on Solo and above.')).toBeVisible();
+    await expect(taStep.getByTestId('tax-authority-plan')).toHaveCount(0);
+  });
+
+  await step('AC9 Connect to the Tax Authority and approve: back on the step it says connected, and region 5 is ticked', async () => {
+    await taStep.getByTestId('tax-authority-connect').click();
+    await expect(page).toHaveURL(/taxAuthority=connected/);
+    await expect(page.getByTestId('tax-authority-connected')).toContainText('Connected to the Tax Authority until');
+    await expect(region5()).toHaveAttribute('data-done', 'true');
+  });
+
+  await step('A 6,000 tax invoice to Client 1: no panel asks for a number; it is issued with the number the Tax Authority gave', async () => {
+    await api.open(page, `/p/${OFFICE_A}/documents/issued`);
+    const drawer = await issueSixThousand(page);
+    await expect(drawer.getByLabel('Description')).toHaveValue('Annual retainer');
+    await expect(drawer.getByTestId('issue-allocation')).toHaveCount(0);
+    await page.getByTestId('issue-submit').click();
+    await expect(page.getByTestId('issued-doc-title')).toContainText('Tax invoice 1');
+    expect(api.last('POST', /^\/v1\/issued-documents$/)?.body).not.toHaveProperty('manualAllocation');
+    await expect(page.getByText('100000001')).toBeVisible();
+  });
+});

@@ -10,7 +10,7 @@ vi.mock('../../../lib/utils', async (importOriginal) => ({ ...(await importOrigi
 /** MUT-711 (AC1): the manual allocation panel — the Tax Authority's details with Copy, the link, the input, a way out. */
 afterEach(() => localStorage.clear());
 
-const ALLOCATION: ManualAllocation = { mode: 'MANUAL', nextNumber: 14, documentDate: '2026-11-22', net: '6000.00', customerTaxId: '516123452', requestUrl: 'https://example.test/allocation' };
+const ALLOCATION: ManualAllocation = { mode: 'MANUAL', nextNumber: 14, documentDate: '2026-11-22', net: '6000.00', customerTaxId: '516123452', requestUrl: 'https://example.test/allocation', automaticOn: null };
 
 function renderPanel(props: Partial<Parameters<typeof ManualAllocationPanel>[0]> = {}, language: 'en' | 'ar' = 'en') {
   localStorage.setItem(PORTAL_LANGUAGE_KEY, language);
@@ -61,5 +61,20 @@ describe('ManualAllocationPanel', () => {
   it('reads in formal Arabic', () => {
     renderPanel({}, 'ar');
     expect(screen.getByRole('heading', { name: 'تحتاج هذه الفاتورة إلى رقم تخصيص' })).toBeVisible();
+  });
+
+  it('MUT-736: on a plan without the Tax Authority connection it says numbers come automatically on Solo', () => {
+    renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } });
+    expect(screen.getByTestId('issue-allocation-automatic-on')).toHaveTextContent('Connect to the Tax Authority to get numbers automatically, on Solo.');
+  });
+
+  it('MUT-736: in Arabic, «مستقل»; and no such line when the plan is not why', () => {
+    renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } }, 'ar');
+    expect(screen.getByTestId('issue-allocation-automatic-on')).toHaveTextContent('في خطة «مستقل»');
+  });
+
+  it('MUT-736: no line when automaticOn is null', () => {
+    renderPanel();
+    expect(screen.queryByTestId('issue-allocation-automatic-on')).toBeNull();
   });
 });

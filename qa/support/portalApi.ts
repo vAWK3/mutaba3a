@@ -542,6 +542,13 @@ export interface FakeApiSeed {
    * 516123452) and is issued only with `manualAllocation` for the number it takes.
    */
   manualAllocation?: boolean;
+  /**
+   * MUT-736 (ADR-282): the Tax Authority is on here, and the payer's plan is `plan`. Starter has no connection: the step
+   * offers the upgrade, Connect answers 409 PLAN_LIMIT, a kept connection (`connected`) reads `suspended`, and a tax
+   * invoice of 5,000.00 or more previews MANUAL with `automaticOn: 'solo'`. Solo connects (the stand-in sign-in comes
+   * straight back with `taxAuthority=connected`) and, connected, such an invoice gets its number by itself.
+   */
+  taxAuthority?: { plan: 'starter' | 'solo'; connected?: boolean };
 }
 
 /** MUT-660: one due document as the server lists it. `hasTaxDocument` makes marking it answer 409 HAS_TAX_DOCUMENT. */
@@ -852,6 +859,8 @@ export class FakeApi {
   private readonly externalReading: NonNullable<FakeApiSeed['externalReading']>;
   private readonly offerAfterSave: boolean;
   private readonly manualAllocation: boolean;
+  /** MUT-736: the Tax Authority here, per the payer's plan; `connected` per profile. */
+  private readonly taxAuthority: { plan: 'starter' | 'solo'; connected: Set<string>; initiallyConnected: boolean } | null;
   /** MUT-660: what is due, and what was marked not for invoice. */
   private readonly due: { items: DueSeed[]; marked: DueSeed[] };
   private readonly invoiceSplit: FakeApiSeed['invoiceSplit'] | null;
@@ -894,6 +903,7 @@ export class FakeApi {
     this.externalReading = seed.externalReading ?? { read: true, number: '3381', documentDate: '2026-10-12', amount: '1500.00' };
     this.offerAfterSave = seed.offerAfterSave ?? true;
     this.manualAllocation = seed.manualAllocation ?? false;
+    this.taxAuthority = seed.taxAuthority ? { plan: seed.taxAuthority.plan, connected: new Set(), initiallyConnected: seed.taxAuthority.connected ?? false } : null;
     this.due = { items: [...(seed.documentsDue ?? [])], marked: [] };
     this.invoiceSplit = seed.invoiceSplit ?? null;
     this.shareLinks = seed.shareLinks ? new Map(Object.entries(seed.shareLinks).map(([id, links]) => [id, [...links]])) : null;
@@ -1411,7 +1421,7 @@ export class FakeApi {
       const missing = missingOf();
       const done = (ok: boolean) => (ok ? 'done' : 'todo');
       return json({
-        steps: { details: done(!!state.issuer), logo: done(!!state.logo), defaults: done(state.defaults), numbering: done(state.numbering), taxAuthority: 'later' },
+        steps: { details: done(!!state.issuer), logo: done(!!state.logo), defaults: done(state.defaults), numbering: done(state.numbering), taxAuthority: this.automaticAllocation(profileId!) ? 'done' : 'later' },
         canIssue: missing.length === 0,
         missing,
         introSeen: state.introSeen,
@@ -1444,6 +1454,7 @@ export class FakeApi {
         const filename = `OPENFRMT-${String(state.issuer.vatId)}-${from}_${to}.zip`;
         return { status: 200, contentType: 'application/zip', headers: { 'Content-Disposition': `attachment; filename="${filename}"`, 'X-Uniform-File-Documents': String(docs.length), 'X-Uniform-File-Records': String(records) }, body: 'PK qa' };
       }
+      if (id === 'tax-authority') return this.taxAuthorityAnswer(e, profileId!, sub);
       if (id === 'settings' && method === 'GET') {
         return json({ counters: ISSUED_DOC_TYPES.map((docType) => ({ docType, start: state.starts[docType] ?? 1, next: state.starts[docType] ?? 1, hasDocuments: false })) });
       }
@@ -1511,7 +1522,8 @@ export class FakeApi {
       const totals = this.composeDoc(body);
       const facts = body.docType === 'CREDIT_NOTE' ? this.creditFacts(state, body.originalId as string | undefined, toMinor(totals.gross)) : null;
       const creditNote = facts ? { outstanding: toDecimal(facts.outstanding), paid: toDecimal(facts.paid), maximum: toDecimal(facts.maximum) } : null;
-      return json({ ...totals, creditNote, allocation: this.needsManualAllocation(body, totals.net) ? { mode: 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page' } : null });
+      const automatic = this.automaticAllocation(String(e.headers['x-mutaba3a-profile']));
+      return json({ ...totals, creditNote, allocation: this.needsAllocation(body, totals.net) ? { mode: automatic ? 'AUTOMATIC' : 'MANUAL', nextNumber: this.nextNumber(state, String(body.docType)), documentDate: body.documentDate, net: totals.net, customerTaxId: '516123452', requestUrl: 'https://www.gov.il/he/departments/israel_tax_authority/govil-landing-page', automaticOn: this.automaticOn() } : null });
     }
     if (method === 'GET' && id && !sub) {
       const d = state.docs.find((x) => x.id === id);
@@ -1526,13 +1538,19 @@ export class FakeApi {
       const number = this.nextNumber(state, docType);
       // MUT-711 (ADR-273): the number is only a preview; a manual allocation number must be for the number this one takes.
       let allocationNumber: string | null = null;
-      if (this.needsManualAllocation(body, totals.net)) {
+      let allocationSource: 'API' | 'MANUAL' | null = null;
+      if (this.needsAllocation(body, totals.net) && this.automaticAllocation(String(e.headers['x-mutaba3a-profile'])) && !body.manualAllocation) {
+        // MUT-572: connected on a paid plan, the Tax Authority answers the number (its stand-in: 9 digits from the number).
+        allocationNumber = String(100_000_000 + number);
+        allocationSource = 'API';
+      } else if (this.needsAllocation(body, totals.net)) {
         const manual = body.manualAllocation as { number?: string; forNumber?: number } | undefined;
-        if (!manual) return json({ error: { code: 'CONFLICT', message: 'needs a number', details: { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next: number } } }, 409);
+        if (!manual) return json({ error: { code: 'CONFLICT', message: 'needs a number', details: { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next: number, automaticOn: this.automaticOn() } } }, 409);
         const digits = String(manual.number ?? '').replace(/[\s-]/g, '');
         if (!/^\d{9}$/.test(digits)) return json({ error: { code: 'VALIDATION_FAILED', message: 'nine digits', details: { reason: 'ALLOCATION_NUMBER_INVALID', field: 'allocationNumber' } } }, 422);
         if (manual.forNumber !== number) return json({ error: { code: 'CONFLICT', message: `now ${number}`, details: { reason: 'ALLOCATION_NUMBER_MOVED', field: 'manualAllocation', requestedFor: manual.forNumber ?? null, next: number } } }, 409);
         allocationNumber = digits;
+        allocationSource = 'MANUAL';
       }
       const customer = this.customers.find((c) => c.id === body.customerId);
       const docId = uid(0xd0, state.docs.length + 1);
@@ -1568,7 +1586,7 @@ export class FakeApi {
           owed.outstanding -= gross;
         }
       }
-      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource: allocationNumber ? 'MANUAL' : null, receivableId, paymentId: null, refundId, coreVersion: '1.0.0' };
+      const doc = { ...totals, id: docId, docType, number, documentDate: body.documentDate, issuedAt: '2026-11-22T10:00:00.000Z', currency: 'ILS', language: body.language, style: 'PROFESSIONAL', ink: 'BLACK', customerId: body.customerId ?? null, customer: customer ? { name: customer.name } : {}, issuer: state.issuer ?? {}, notes: body.notes ?? null, originalId: target ?? null, paymentDetails: body.payment ?? null, allocationNumber, allocationSource, receivableId, paymentId: null, refundId, coreVersion: '1.0.0' };
       state.docs.unshift(doc);
       return json(withFacts(doc), 201);
     }
@@ -1590,9 +1608,48 @@ export class FakeApi {
     return (state.starts[docType] ?? 1) + state.docs.filter((d) => d.docType === docType).length;
   }
 
-  /** MUT-711: a tax invoice of 5,000.00 or more before VAT to a client, while MTB3A can't request the number. */
-  private needsManualAllocation(body: Record<string, Json>, net: string): boolean {
-    return this.manualAllocation && (body.docType === 'TAX_INVOICE' || body.docType === 'TAX_INVOICE_RECEIPT') && !!body.customerId && toMinor(net) >= 500_000;
+  /** MUT-711: a tax invoice of 5,000.00 or more before VAT to a client, where allocation numbers are in play here. */
+  private needsAllocation(body: Record<string, Json>, net: string): boolean {
+    return (this.manualAllocation || !!this.taxAuthority) && (body.docType === 'TAX_INVOICE' || body.docType === 'TAX_INVOICE_RECEIPT') && !!body.customerId && toMinor(net) >= 500_000;
+  }
+
+  /** MUT-736: MTB3A requests the number itself: the Tax Authority is on, the plan includes it and the profile is connected. */
+  private automaticAllocation(profileId: string): boolean {
+    return !!this.taxAuthority && this.taxAuthority.plan !== 'starter' && this.isConnected(profileId);
+  }
+
+  /** MUT-736: the plan on which numbers would come automatically, when the plan is why they don't. */
+  private automaticOn(): 'solo' | null {
+    return this.taxAuthority?.plan === 'starter' ? 'solo' : null;
+  }
+
+  private isConnected(profileId: string): boolean {
+    return !!this.taxAuthority && (this.taxAuthority.connected.has(profileId) || this.taxAuthority.initiallyConnected);
+  }
+
+  /** MUT-571 + MUT-736: the Tax Authority step's routes. 404 where the Tax Authority isn't on here (no seed). */
+  private taxAuthorityAnswer(e: Logged, profileId: string, sub: string | undefined) {
+    const ta = this.taxAuthority;
+    if (!ta) return json({ error: { code: 'NOT_FOUND', message: 'Not found', details: { reason: 'TAX_AUTHORITY_OFF' } } }, 404);
+    const allowed = ta.plan !== 'starter';
+    const plan = { allowed, nextPlan: allowed ? null : 'solo' };
+    if (!sub && e.method === 'GET') {
+      const connected = this.isConnected(profileId);
+      if (!connected) return json({ state: 'none', connectedAt: null, until: null, environment: null, plan });
+      return json({ state: allowed ? 'connected' : 'suspended', connectedAt: '2026-11-01T10:00:00.000Z', until: '2027-01-30T10:00:00.000Z', environment: 'sandbox', plan });
+    }
+    if (sub === 'connect' && e.method === 'POST') {
+      if (!allowed) return json({ error: { code: 'PLAN_LIMIT', message: 'The Tax Authority connection is on Solo and above', details: { limit: 'taxAuthority', plan: 'starter', nextPlan: 'solo', canUpgrade: true } } }, 409);
+      // The stand-in sign-in: the owner approves at once and the browser comes back to the setup, as the callback sends it.
+      ta.connected.add(profileId);
+      return json({ authorizeUrl: `/p/${profileId}/you/invoicing?taxAuthority=connected` });
+    }
+    if (!sub && e.method === 'DELETE') {
+      ta.connected.delete(profileId);
+      ta.initiallyConnected = false;
+      return { status: 204, body: '' };
+    }
+    return notFound();
   }
 
   /** MUT-711 (AC3): another session issues a tax invoice now, taking the number a preview showed. */
