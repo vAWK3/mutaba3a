@@ -90,7 +90,7 @@
         "stepUp": "For your security, enter your password to add a passkey.",
         "added": "Passkey added",
         "addFailed": "Couldn’t add the passkey. Try again.",
-        "operatorConfirm": "As an operator, confirm it’s you with one of your passkeys first. No passkey on this device? Choose the QR code option and use your phone.",
+        "operatorConfirm": "Confirm it’s you with one of your passkeys first. No passkey on this device? Choose the QR code option and use your phone.",
         "operatorConfirmed": "Confirmed. Now add your new passkey.",
         "limit": "You can have up to {limit} passkeys. Remove one to add another.",
         "emptyTitle": "No passkeys yet",
@@ -2023,7 +2023,7 @@
         "approveWithPasskey": "Approve with passkey",
         "declineWithPasskey": "Decline with passkey",
         "confirmApprove": "{email} can sign in. We'll email them now.",
-        "confirmDecline": "{email}'s account will be deleted. We'll email them; they can sign up again.",
+        "confirmDecline": "{email}'s account will be deleted. We'll email them.",
         "approved": "{email} approved · email sent",
         "declined": "{email} declined · email sent",
         "emptyTitle": "No one is waiting",
@@ -2097,17 +2097,17 @@
           "other": "{count} connected apps"
         },
         "signOut": "Sign out everywhere",
-        "signOutSub": "{devices} · the password still works",
+        "signOutSub": "{devices}",
         "disable": "Disable account",
         "disableSub": "Signs out {devices}, disconnects {agents}, blocks sign-in",
         "enable": "Enable account",
         "enableSub": "They can sign in again",
         "reset": "Send reset link",
         "resetSub": "A one-time link to set a new password, for 24 hours",
-        "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected. Their password still works.",
-        "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and they can't sign in until you enable the account.",
+        "confirmSignOut": "{email} will be signed out on {devices}, and {agents} disconnected.",
+        "confirmDisable": "{email} will be signed out on {devices}, {agents} disconnected, and sign-in blocked.",
         "confirmEnable": "{email} can sign in again.",
-        "confirmReset": "Make a one-time reset link for {email}. Any earlier link stops working.",
+        "confirmReset": "Make a one-time reset link for {email}.",
         "lock": "Lock the current password",
         "lockHint": "For a suspected takeover: the password stops working and they're signed out everywhere now.",
         "signOutAction": "Sign out",
@@ -2161,7 +2161,7 @@
         "noMatchBody": "Try part of the email or the name.",
         "loadMore": "Load more",
         "featuresOn": "On: {features}",
-        "ownNote": "This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.",
+        "ownNote": "This is your account. Sign-in and security are in You › Account.",
         "ownLink": "Open You › Account"
       },
       "billing": {
@@ -2178,7 +2178,7 @@
         "noEndHint": "It lasts until you revoke it.",
         "revokedOn": "Revoked {date}",
         "endedOn": "Ended {date}",
-        "confirmRevoke": "{email} loses this {tier} coverage. Their profiles go back to their own plan or trial.",
+        "confirmRevoke": "{email} loses this {tier} coverage.",
         "revoked": "Coverage revoked for {email}",
         "granted": "Coverage granted to {email}",
         "drawerTitle": "Grant coverage",
@@ -2217,8 +2217,8 @@
         },
         "accountant_access": {
           "label": "Accountant access",
-          "sub": "As an owner, they can invite an accountant to read a profile and make share links.",
-          "confirmOff": "{email} can't invite accountants or make new links; the ones they already shared keep working until they revoke them."
+          "sub": "They can invite an accountant and make share links.",
+          "confirmOff": "{email} can't invite accountants or make new links."
         }
       },
       "firms": {
