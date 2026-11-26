@@ -26,17 +26,17 @@
       ]
     },
     {
-      "title": "4. Free trial, fees and payment",
+      "title": "4. Plans, trial, fees and payment",
       "body": [
-        "A new account may start with a free trial, for the period shown when you sign up. Nothing is charged during the trial. If it ends without a subscription, your account becomes read-only for a further period and is then locked; even then, you can still subscribe or download your records.",
+        "Every account can use the free Starter plan: one business beside your personal profile, 3 issued documents and 12 receipt scans a month, without the Tax Authority connection. A new account may be offered, once, a 14-day trial of the Solo plan, with a card: nothing is charged before the trial ends, you can cancel any time before then, and if you don't continue, your account moves to Starter.",
         "The price is the one shown when you subscribe, or the one in the offer we sent you. Prices exclude VAT, which we add where the law requires. You pay monthly or yearly in advance, by card through our payment provider, and your subscription renews for the same period until you cancel it. Before a price change for your plan takes effect, we'll tell you in advance, and you can cancel before then. [TODO(MUT-700 D1): Narabnd's VAT file and payment provider (today Stripe, on an account Barmajiyat Ltd holds); whether prices shown to consumers in Israel must include VAT; the notice period for a price change.]",
-        "If a payment fails and stays unpaid after we have reminded you, your account becomes read-only: you can still see and download everything, but you can't add or change records until you pay. We never delete your records because a payment lapsed."
+        "If a payment fails and stays unpaid after we have reminded you, your plan ends and your account moves to the free Starter plan. Businesses beyond Starter's limits stay available to read and download. We never delete your records because a payment lapsed."
       ]
     },
     {
       "title": "5. Cancelling and refunds",
       "body": [
-        "You can cancel your subscription at any time in the web portal (Billing › Cancel plan), or by writing to info@mtb3a.com. Cancelling stops the next renewal. You keep full use of MTB3A until the end of the period you have paid for; after that, your account becomes read-only as section 4 describes, and your records stay available to read and download.",
+        "You can cancel your subscription at any time in the web portal (Billing › Cancel plan), or by writing to info@mtb3a.com. Cancelling stops the next renewal. You keep full use of MTB3A until the end of the period you have paid for; after that, your account becomes read-only and your records stay available to read and download, until you subscribe again or continue free on the Starter plan.",
         "If you are a consumer, you may also cancel in any way the Consumer Protection Law, 5741-1981, allows. You may cancel a new subscription within 14 days of the transaction and get your money back, less any cancellation fee the law permits, but only if you have not used MTB3A since you subscribed: once you have added or changed records, issued a document or downloaded your data under the subscription, the service has been supplied to you and this 14-day right no longer applies. During the free trial nothing is charged: your paid subscription starts only after the 14-day trial, so cancelling during the trial costs nothing.",
         "Fees for a period that has already started are not refunded, except where the law requires a refund, which we will then make."
       ]

@@ -28,6 +28,28 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — The free Starter plan «البداية», server and portal (MUT-731, ADR-284, ADR-285, API 1.145.0-mut731)
+
+Built dark behind `STARTER_PLAN` (and the Solo trial behind `SOLO_TRIAL_OFFER_SINCE` / `SOLO_TRIAL_CHECKOUT`), to go on with MUT-702 Part B. The phone half is a separate session.
+
+### Added
+- Starter as a tier (`plans.ts`: rank 0, 1 business, no partners, 3 documents and 12 scans a month, no Tax Authority connection; the only hard-capped plan). With `STARTER_PLAN` on, a person nothing else covers is ACTIVE on Starter; a deliberate cancel after paying stays read-only until they choose Continue free on Starter; legacy trials and failed cards past grace end on Starter; nothing locks.
+- The business count (`billing/business-cap.ts`): a Starter owner's businesses past one are read-only (`planLimit`) until the person picks the active one (no default, Basel Q5); `PUT /v1/billing/active-businesses`.
+- 409 `PLAN_LIMIT` at Starter's doors (`billing/plan-limit.ts`): the 4th document (a receipt paying an issued document is never refused), the 13th scan (start and complete), a second business (unless carried over), a new partner (operator). Issue all stops at the first refusal and returns `limit`. The idempotency key is released on `PLAN_LIMIT` (TD-340).
+- `POST /v1/billing/starter`, `POST /v1/billing/solo-trial/offered`; `GET /v1/billing` `starter` and `activeBusinesses`; `/v1/me` `plan { current, businesses, soloTrialOffer }` and Starter's `maxOwnedProfiles` (personal + 1); `BillingEntitlement.planLimit`, source and tier `STARTER`.
+- Config `STARTER_PLAN`, `SOLO_TRIAL_OFFER_SINCE` (`.env.example`, Terraform `starter_plan`, `solo_trial_offer_since`, a tftest).
+- Portal (wireframes 1–5, 7): Billing on Starter (meters, plan lines, active business, See plans); `PlanLimitNotice` in the Issue drawer (opens refused at 3 of 3), receipts upload (refused before the upload, Add the expense by hand) and New profile; the blocking pick-your-business dialog; Continue free on Starter on the read-only banner; a business read-only for the count says so with Change; Home's 80% line, 90% nudge (Hide) and fixed limit line; the Issue drawer's documents-left footer; the dark Solo trial step. 48 strings, ar + en. Analytics contract 2.12.0 (four plan events).
+- Release-QA area `portal.starter` (7 automated features on the FakeApi, which learns a `starter` seed; the Solo trial step declared hidden).
+
+### Changed
+- Sign-up, sign-up approval and Malafat sign-in start no trial while Starter is on. Trial mails drop the day-27 stage and say the trial ends on Starter; the card-failed reminder says the plan drops to Starter; the monthly summary asks everyone.
+- `levelOf`: never later than two steps / one step before the cap (Starter's 1 and 2 of 3 documents warn).
+- The Stripe mirror keeps `cancellation_details.reason` and `trial_end`; `billing:uncovered` leaves businesses read-only for the count out.
+- Terms drafts (unpublished, MUT-732): §4 Plans (Starter, the one-time Solo trial, a failed payment → Starter) and §5 (after a cancel: read-only until subscribing again or continuing free).
+
+### Technical
+- Migration `20261126120000_mut731_starter` (additive, nullable). `BillingRepository.starterPlan` carries the flag from config (`PrismaLedgerStore.connect(url, { starterPlan })`), so every entitlement reader agrees. TD-340 resolved; TD-342 to TD-346 added.
+
 ## [Unreleased] - 2026-11-26 — Explainer lines removed or shortened, per Basel's review, 2026-11-26
 
 Basel reviewed every user-facing line that explains how the system works instead of helping the user act. His decisions are applied here, in English and Arabic.

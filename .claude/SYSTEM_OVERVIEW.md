@@ -470,7 +470,14 @@ A person's profiles are covered by one plan, read from their own profiles' entit
 | Firm | 6 | 2 | 1000 | 2000 |
 | Freelancer (legacy, not sold) | today's limits until MUT-707 | | | |
 
-A free **Starter** plan replaces the trial (MUT-731, planned) and gets its own row there. Prices and Checkout per plan: MUT-702 Part B.
+| **Starter** (free, MUT-731) | 1 | 0 | 3 | 12 |
+
+### Starter (MUT-731, ADR-284/285; dark behind `STARTER_PLAN` until MUT-702 Part B)
+- Anyone with nothing else covering them is ACTIVE on Starter (rank 0, never stored, never sold). Legacy trials and failed cards past grace end on Starter; nothing locks. A deliberate cancel after paying stays read-only and offers "Continue free on Starter" (`POST /v1/billing/starter`). No new no-card trials; the one-time 14-day Solo trial with a card is offered once on the web to new accounts (`SOLO_TRIAL_OFFER_SINCE`, off until Solo can be bought).
+- Every Starter limit is a hard cap: 409 `PLAN_LIMIT` at its door (documents in the issue transaction, scans at start and complete, a second business, a new partner); a receipt paying an issued document is never refused; the key is released. More than one business: all read-only until the person picks the active one (`PUT /v1/billing/active-businesses`; the portal's blocking dialog), the rest stay read-only (402 reason PLAN_LIMIT).
+- The flag lives on the store (`BillingRepository.starterPlan`), so the gate, `/v1/me`, `/v1/billing`, agents and mail jobs read one answer. Portal: Billing's month and plan lines, `PlanLimitNotice` where a limit is met, Home's 80%/90%/limit notices, the Issue drawer's documents left.
+
+Prices and Checkout per plan: MUT-702 Part B.
 
 ### Usage metering (MUT-735, ADR-281)
 - Every issued document (any type) and every finished scan is recorded in a first-party ledger (`usage_events`) and counted on the payer's monthly counter (`usage_counters`), in the action's own transaction, once each. The payer is the profile's creator (a co-owner's act counts to the creator); the month is the Asia/Jerusalem month.
