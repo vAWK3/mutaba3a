@@ -1,0 +1,289 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Accountant channel wireframes (desktop, phone, claim)</title>
+<style>
+/* Tokens copied from src/styles/brand/mutaba3a-theme.css (brand v2), as in mut-299-firm-books-wireframe.html. Fonts fall back to system here; the app ships Thmanyah and IBM Plex Mono. */
+:root {
+  --m-canvas: oklch(0.975 0.014 80); --m-surface: oklch(0.993 0.008 80); --m-line: oklch(0.92 0.015 300);
+  --m-field-bg: oklch(0.965 0.012 300); --m-ink: oklch(0.33 0.05 300); --m-ink2: oklch(0.442 0.043 298.7);
+  --m-primary: oklch(0.55 0.14 295); --m-primary-hover: oklch(0.5 0.14 295); --m-on-primary: oklch(0.98 0.012 80); --m-focus: oklch(0.6 0.13 295);
+  --m-lavender: oklch(0.9 0.06 295); --m-lavender-ink: oklch(0.401 0.114 294.5);
+  --m-mint: oklch(0.9 0.06 165); --m-mint-ink: oklch(0.387 0.076 170.2);
+  --m-rose: oklch(0.9 0.06 10); --m-rose-ink: oklch(0.398 0.103 14.8);
+  --m-butter: oklch(0.93 0.07 95); --m-butter-ink: oklch(0.419 0.083 74.8);
+  --m-font-body: "Thmanyah Sans", system-ui, sans-serif; --m-font-num: "IBM Plex Mono", ui-monospace, monospace;
+  --m-radius-sm: 12px; --m-radius-md: 14px; --m-radius-lg: 18px; --m-radius-pill: 999px;
+  --text-micro: 0.6875rem; --text-label: 0.8125rem; --text-body: 1rem; --text-headline: 1.25rem; --text-title: 2rem; --text-figure: 2.5rem;
+  --shadow: 0 1px 2px color-mix(in oklch, oklch(0.45 0.08 300) 6%, transparent), 0 12px 40px color-mix(in oklch, oklch(0.45 0.08 300) 9%, transparent);
+}
+:root[data-theme="dark"] {
+  --m-canvas: oklch(0.24 0.035 300); --m-surface: oklch(0.29 0.04 300); --m-line: oklch(0.4 0.04 300);
+  --m-field-bg: oklch(0.34 0.045 300); --m-ink: oklch(0.95 0.015 80); --m-ink2: oklch(0.78 0.03 300);
+  --m-primary: oklch(0.78 0.11 295); --m-primary-hover: oklch(0.84 0.1 295); --m-on-primary: oklch(0.27 0.06 300); --m-focus: oklch(0.75 0.12 295);
+  --m-lavender: oklch(0.38 0.07 295); --m-lavender-ink: oklch(0.88 0.08 295);
+  --m-mint: oklch(0.38 0.07 165); --m-mint-ink: oklch(0.88 0.08 165);
+  --m-rose: oklch(0.38 0.07 10); --m-rose-ink: oklch(0.88 0.08 10);
+  --m-butter: oklch(0.4 0.06 85); --m-butter-ink: oklch(0.9 0.09 95);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--m-canvas); color: var(--m-ink); font: var(--text-body)/1.5 var(--m-font-body); }
+:focus-visible { outline: 2px solid var(--m-focus); outline-offset: 2px; }
+button, input, select { font: inherit; color: inherit; }
+.top { position: sticky; top: 0; z-index: 20; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 10px 16px; background: var(--m-surface); border-bottom: 1px solid var(--m-line); }
+.top h1 { font-size: var(--text-body); margin: 0; margin-inline-end: auto; }
+.tb { min-height: 36px; padding: 4px 14px; border-radius: var(--m-radius-pill); border: 1px solid var(--m-line); background: var(--m-field-bg); cursor: pointer; font-size: var(--text-label); }
+.tb[aria-pressed="true"] { background: var(--m-lavender); color: var(--m-lavender-ink); border-color: transparent; }
+main { max-width: 1280px; margin: 0 auto; padding: 20px 16px 64px; }
+.note { font-size: var(--text-label); color: var(--m-ink2); max-width: 78ch; margin: 0 0 14px; }
+.frame { position: relative; overflow: hidden; background: var(--m-canvas); border: 1px solid var(--m-line); border-radius: var(--m-radius-lg); box-shadow: var(--shadow); }
+.desk { min-height: 640px; padding: 28px 32px; }
+.hdr { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+.hdr h2 { font-size: var(--text-title); margin: 0; margin-inline-end: auto; font-weight: 700; }
+.btn { min-height: 44px; padding: 8px 18px; border-radius: var(--m-radius-md); border: 1px solid transparent; background: var(--m-primary); color: var(--m-on-primary); cursor: pointer; font-weight: 600; }
+.btn:hover { background: var(--m-primary-hover); }
+.btn.sec { background: var(--m-field-bg); color: var(--m-ink); border-color: var(--m-line); }
+.btn.full { width: 100%; min-height: 52px; }
+.lb { min-height: 44px; padding: 0 8px; background: none; border: 0; color: var(--m-lavender-ink); cursor: pointer; font-size: var(--text-label); font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
+.search { min-height: 44px; width: 240px; max-width: 100%; padding: 6px 14px; border-radius: var(--m-radius-md); border: 1px solid var(--m-line); background: var(--m-field-bg); }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { min-height: 44px; padding: 4px 16px; border-radius: var(--m-radius-pill); border: 1px solid var(--m-line); background: var(--m-surface); cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--m-lavender); color: var(--m-lavender-ink); border-color: transparent; }
+.chip .n { font-family: var(--m-font-num); font-size: var(--text-micro); margin-inline-start: 6px; opacity: .8; }
+table { width: 100%; border-collapse: collapse; background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); overflow: hidden; }
+th { text-align: start; font-size: var(--text-label); font-weight: 500; color: var(--m-ink2); padding: 10px 14px; border-bottom: 1px solid var(--m-line); }
+td { padding: 6px 14px; border-bottom: 1px solid var(--m-line); min-height: 56px; vertical-align: middle; }
+tr:last-child td { border-bottom: 0; }
+tr.row { cursor: pointer; } tr.row:hover { background: var(--m-field-bg); } tr.ended { opacity: .55; }
+.name { font-weight: 600; } .sub { font-size: var(--text-label); color: var(--m-ink2); }
+.badge { display: inline-block; padding: 2px 10px; border-radius: 8px; font-size: var(--text-label); font-weight: 500; }
+.b-neutral { background: var(--m-field-bg); color: var(--m-ink2); border: 1px solid var(--m-line); } .b-warning { background: var(--m-butter); color: var(--m-butter-ink); }
+.b-info { background: var(--m-lavender); color: var(--m-lavender-ink); } .b-success { background: var(--m-mint); color: var(--m-mint-ink); }
+.overlay { position: absolute; inset: 0; background: color-mix(in oklch, var(--m-ink) 35%, transparent); z-index: 5; }
+.drawer { position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(480px, 100%); background: var(--m-surface); z-index: 6; display: flex; flex-direction: column; box-shadow: var(--shadow); animation: slide .18s ease-out; }
+@keyframes slide { from { transform: translateX(calc(24px * var(--dir, 1))); opacity: .6; } }
+[dir="rtl"] .drawer { --dir: -1; } [dir="ltr"] .drawer { --dir: 1; }
+.dh { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid var(--m-line); }
+.dh h3 { margin: 0; font-size: var(--text-body); font-weight: 700; }
+.x { min-width: 44px; min-height: 44px; border: 0; background: none; font-size: 20px; cursor: pointer; }
+.db { padding: 18px 20px; overflow: auto; flex: 1; }
+.df { display: flex; gap: 10px; justify-content: flex-end; padding: 14px 20px; border-top: 1px solid var(--m-line); background: var(--m-canvas); }
+.fg { margin-bottom: 14px; } .fg label { display: block; font-size: var(--text-label); color: var(--m-ink2); margin-bottom: 4px; }
+.fg input, .fg select { width: 100%; min-height: 44px; padding: 6px 12px; border-radius: var(--m-radius-sm); border: 1px solid var(--m-line); background: var(--m-field-bg); }
+.two { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.banner { display: flex; gap: 10px; padding: 12px 14px; border-radius: var(--m-radius-sm); margin-bottom: 14px; font-size: var(--text-label); }
+.ban-err { background: var(--m-rose); color: var(--m-rose-ink); } .ban-warn { background: var(--m-butter); color: var(--m-butter-ink); } .ban-info { background: var(--m-lavender); color: var(--m-lavender-ink); }
+.code { direction: ltr; text-align: center; font-family: var(--m-font-num); font-size: var(--text-figure); font-weight: 500; letter-spacing: .12em; padding: 22px 12px; border-radius: var(--m-radius-md); background: var(--m-field-bg); border: 1px solid var(--m-line); margin: 12px 0; }
+.confirm { border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); padding: 12px; margin-top: 10px; background: var(--m-canvas); }
+.empty { text-align: center; padding: 60px 20px; background: var(--m-surface); border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); }
+.nuqta { width: 46px; height: 46px; border-radius: 50%; background: var(--m-lavender); margin: 0 auto 12px; display: grid; place-items: center; color: var(--m-lavender-ink); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+.phones { display: flex; flex-wrap: wrap; gap: 28px; justify-content: center; }
+.phone { width: 375px; height: 720px; position: relative; overflow: hidden; background: var(--m-canvas); border: 8px solid var(--m-ink); border-radius: 36px; box-shadow: var(--shadow); display: flex; flex-direction: column; }
+.pcap { text-align: center; font-size: var(--text-label); color: var(--m-ink2); margin: 8px 0 0; }
+.pbar { padding: 52px 16px 10px; display: flex; align-items: center; gap: 8px; } .pbar h2 { margin: 0; font-size: var(--text-headline); margin-inline-end: auto; }
+.prow { display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 6px 16px; border-bottom: 1px solid var(--m-line); background: var(--m-surface); cursor: pointer; }
+.prow .grow { flex: 1; min-width: 0; } .prow .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pbtn { width: 48px; height: 48px; border: 0; border-radius: 50%; background: none; font-size: 18px; cursor: pointer; }
+.sheet { position: absolute; inset-inline: 0; bottom: 0; top: 70px; background: var(--m-surface); border-radius: 24px 24px 0 0; z-index: 6; display: flex; flex-direction: column; animation: up .2s ease-out; box-shadow: var(--shadow); }
+@keyframes up { from { transform: translateY(30px); opacity: .6; } }
+.sheet .sb { padding: 8px 16px 12px; overflow: auto; flex: 1; } .sheet .sf { padding: 10px 16px 18px; border-top: 1px solid var(--m-line); }
+.grab { width: 40px; height: 4px; background: var(--m-line); border-radius: 2px; margin: 10px auto; }
+.claim { width: 375px; max-width: 100%; margin: 0 auto; min-height: 700px; padding: 28px 20px; }
+.brand { font-weight: 700; font-size: var(--text-headline); color: var(--m-lavender-ink); margin-bottom: 18px; }
+.who { background: var(--m-lavender); color: var(--m-lavender-ink); padding: 12px 14px; border-radius: var(--m-radius-sm); margin-bottom: 16px; font-size: var(--text-label); }
+.pin { display: flex; gap: 8px; direction: ltr; justify-content: center; margin: 12px 0; }
+.pin input { width: 46px; height: 56px; text-align: center; font-family: var(--m-font-num); font-size: 24px; border-radius: var(--m-radius-sm); border: 1px solid var(--m-line); background: var(--m-field-bg); }
+.steps { display: flex; gap: 6px; margin-bottom: 14px; } .steps i { flex: 1; height: 4px; border-radius: 2px; background: var(--m-line); } .steps i.on { background: var(--m-primary); }
+.plan { border: 1px solid var(--m-line); border-radius: var(--m-radius-sm); padding: 14px; background: var(--m-surface); margin: 12px 0; display: flex; justify-content: space-between; }
+.num { font-family: var(--m-font-num); direction: ltr; unicode-bidi: isolate; }
+.legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 18px; }
+@media (max-width: 760px) { .desk { padding: 16px; } th:nth-child(3), td:nth-child(3) { display: none; } .hdr h2 { font-size: 1.5rem; } }
+@media (prefers-reduced-motion: reduce) { .drawer, .sheet { animation: none; } }
+</style>
+</head>
+<body>
+<div class="top" role="toolbar" aria-label="Wireframe controls">
+  <h1 id="ttl"></h1>
+  <button class="tb" data-tab="desk">Desktop portal</button>
+  <button class="tb" data-tab="phone">Phone (Flutter)</button>
+  <button class="tb" data-tab="claim">Customer claim (375)</button>
+  <button class="tb" data-lang="ar">العربية RTL</button>
+  <button class="tb" data-lang="en">English LTR</button>
+  <button class="tb" id="theme">Dark</button>
+</div>
+<main id="app"></main>
+<div class="sr" aria-live="polite" id="live"></div>
+<script>
+const T = {
+ar: {
+ wf:'مخططات: قناة المحاسب', title:'العملاء', add:'إضافة عميل', search:'بحث', all:'الكل', awaiting:'بانتظار التفعيل', needcard:'بحاجة إلى بطاقة', active:'نشط',
+ cust:'العميل', state:'الحالة', last:'آخر نشاط', next:'الإجراء',
+ b_await:'لم يُفعَّل بعد', b_expired:'انتهى الرابط', b_card:'بحاجة إلى بطاقة', b_act:'جارٍ التفعيل', b_active:'نشط', b_ended:'لم يعد مشتركًا',
+ a_newcode:'رمز جديد', a_resend:'إعادة إرسال الرابط', a_take:'أخذ البطاقة', a_open:'فتح',
+ addTitle:'إضافة عميل', f_name:'اسم العميل', f_biz:'اسم النشاط', f_email:'البريد الإلكتروني', f_lang:'لغة الرسالة', f_plan:'الخطة', f_country:'الدولة', f_buyer:'نوع العميل',
+ o_ar:'العربية', o_en:'English', o_free:'مجانية', o_paid:'مدفوعة (تحتاج بطاقة)', o_ps:'فلسطين', o_il:'إسرائيل', o_jo:'الأردن', o_person:'فرد', o_company:'شركة (برقم ضريبي)',
+ cancel:'إلغاء', addBtn:'إضافة', added:'تمت إضافة العميل', codeNote:'أخبر العميل بهذا الرمز. يظهر مرة واحدة.', sent:'أُرسل الرابط إلى', done:'تم',
+ e_exists:'هذا البريد لديه حساب بالفعل. اطلب من العميل مشاركة دفاتره معك من حسابه.', e_limit:'وصلت إلى حد اليوم. جرّب غدًا أو تواصل معنا.', e_na:'إضافة العملاء غير مفعّلة لحسابك. تواصل معنا.', e_mail:'أُضيف العميل لكن لم يُرسل الرابط.', resend:'إعادة الإرسال',
+ demo:'عرض خطأ:', d_none:'بدون', d_exists:'حساب قائم', d_limit:'حد اليوم', d_na:'غير مفعّل', d_mail:'فشل الإرسال',
+ cd_title:'العميل', claimedNote:'فعّل العميل حسابه. لم تعد إجراءات الإعداد متاحة، وتبقى لك القراءة فقط.', simClaim:'محاكاة: العميل فعّل الحساب', chEmail:'تغيير البريد', chWarn:'سيتوقف الرابط والرمز القديمان وسنراسل العنوان القديم.', chDo:'تغيير', stripe:'المتابعة إلى Stripe', stripeNote:'ستُفتح صفحة Stripe الآمنة لأخذ البطاقة.', simReturn:'محاكاة: العودة من Stripe',
+ actNote:'جارٍ تفعيل الاشتراك. ستتحدث القائمة تلقائيًا.', liveActive:'أصبح الاشتراك نشطًا', empty:'لا يوجد عملاء بعد', emptyBody:'أضف عميلًا، أو اطلب من عميل مشاركة دفاتره معك.', showEmpty:'عرض الحالة الفارغة', hideEmpty:'عرض القائمة',
+ more:'أكثر', ctx:'أعدّ لك {a} من {b} حساب متابعة لنشاط {n}.', codeP:'أدخل الرمز الذي أعطاك إياه محاسبك', verify:'تحقق', wrong:'الرمز غير صحيح. تبقّت محاولتان.', locked:'محاولات كثيرة. اطلب من محاسبك رمزًا جديدًا.', expired:'هذا الرابط لم يعد صالحًا. اطلب من محاسبك رابطًا جديدًا.',
+ pw:'اختر كلمة مرور', pwL:'كلمة المرور', terms:'أوافق على الشروط وسياسة الخصوصية', cont:'متابعة', pk:'ادخل بمفتاح المرور', pkB:'مفتاح المرور أسرع وأكثر أمانًا من كلمة المرور.', pkDo:'إنشاء مفتاح مرور', skip:'لاحقًا',
+ cardT:'الخطة والبطاقة', cardB:'خطتك مدفوعة. أضف بطاقة لتتابع.', price:'فريلانسر شهريًا', welcome:'أهلًا بك في متابعة', welcomeB:'محاسبك يستطيع الاطلاع على الفواتير والإيصالات فقط.', step:'الخطوة',
+ sCode:'الرمز', sPw:'كلمة المرور', sPk:'مفتاح المرور', sCard:'البطاقة', sDone:'الدخول', err:'حالات الخطأ:', e0:'بدون', e1:'رمز خاطئ', e2:'قُفل', e3:'رابط منتهٍ',
+ ph1:'الشاشة: القائمة', ph2:'نافذة: إضافة عميل', ph3:'نافذة: الرمز', ph4:'نافذة: العميل', intro:'تفاعلية: انقر على صف، أو «إضافة عميل». الصف الأول يظهر «حالة»، والأزرار تغيّر الحالات كما في التقرير.'
+},
+en: {
+ wf:'Wireframes: accountant channel', title:'Clients', add:'Add customer', search:'Search', all:'All', awaiting:'Awaiting claim', needcard:'Needs card', active:'Active',
+ cust:'Customer', state:'State', last:'Last activity', next:'Next action',
+ b_await:'Awaiting claim', b_expired:'Link expired', b_card:'Needs card', b_act:'Activating', b_active:'Active', b_ended:'No longer shared',
+ a_newcode:'New code', a_resend:'Resend link', a_take:'Take card', a_open:'Open',
+ addTitle:'Add customer', f_name:'Customer name', f_biz:'Business name', f_email:'Email', f_lang:'Language of the mail', f_plan:'Plan', f_country:'Country', f_buyer:'Customer type',
+ o_ar:'Arabic', o_en:'English', o_free:'Free', o_paid:'Paid (needs a card)', o_ps:'Palestine', o_il:'Israel', o_jo:'Jordan', o_person:'Person', o_company:'Company (tax ID)',
+ cancel:'Cancel', addBtn:'Add', added:'Customer added', codeNote:'Tell the customer this code. It is shown once.', sent:'Link sent to', done:'Done',
+ e_exists:'This address already has an account. Ask the customer to share their books with you from their account.', e_limit:"You've reached today's limit. Try tomorrow or contact us.", e_na:"Adding customers isn't enabled for your account. Contact us.", e_mail:'Customer added, but the link was not sent.', resend:'Resend',
+ demo:'Show error:', d_none:'None', d_exists:'Existing account', d_limit:'Daily limit', d_na:'Not approved', d_mail:'Mail failed',
+ cd_title:'Customer', claimedNote:'The customer claimed the account. Setup actions are gone; you keep read-only access.', simClaim:'Simulate: customer claimed', chEmail:'Change email', chWarn:'The old link and code stop working and the old address is mailed.', chDo:'Change', stripe:'Continue to Stripe', stripeNote:"Stripe's secure page opens to take the card.", simReturn:'Simulate: back from Stripe',
+ actNote:'Activating the subscription. The list updates by itself.', liveActive:'The subscription is now active', empty:'No clients yet', emptyBody:'Add a customer, or ask a client to share their books with you.', showEmpty:'Show empty state', hideEmpty:'Show list',
+ more:'More', ctx:'{a} of {b} set up MTB3A for {n}.', codeP:'Enter the code your accountant gave you', verify:'Verify', wrong:'That code is not right. 2 tries left.', locked:'Too many tries. Ask your accountant for a new code.', expired:'This link is no longer valid. Ask your accountant for a new one.',
+ pw:'Choose a password', pwL:'Password', terms:'I agree to the terms and privacy policy', cont:'Continue', pk:'Sign in with a passkey', pkB:'A passkey is faster and safer than a password.', pkDo:'Create a passkey', skip:'Later',
+ cardT:'Plan and card', cardB:'Your plan is paid. Add a card to continue.', price:'Freelancer, monthly', welcome:'Welcome to MTB3A', welcomeB:'Your accountant can see issued invoices and scanned receipts only.', step:'Step',
+ sCode:'Code', sPw:'Password', sPk:'Passkey', sCard:'Card', sDone:'In', err:'Error states:', e0:'None', e1:'Wrong code', e2:'Locked', e3:'Expired link',
+ ph1:'Screen: list', ph2:'Sheet: add customer', ph3:'Sheet: the code', ph4:'Sheet: customer', intro:'Interactive: click a row, or "Add customer". Buttons move states as in the review.'
+}};
+const S = { lang:'ar', theme:'light', tab:'desk', filter:'all', empty:false, drawer:null, banner:'none', sheet:null, step:0, cerr:'none', activeTimer:null,
+  rows:[
+   {id:1,n:'مقهى نور',nn:'Café Nour',o:'سامر حداد',on:'Samer Haddad',st:'await',last:'—',em:'samer@cafenour.ps'},
+   {id:2,n:'دار السلام',nn:'Dar Al-Salam',o:'ليلى منصور',on:'Layla Mansour',st:'card',last:'—',em:'layla@daralsalam.ps'},
+   {id:3,n:'صيدلية القدس',nn:'Al-Quds Pharmacy',o:'خالد جابر',on:'Khaled Jaber',st:'activating',last:'—',em:'k@quds-pharm.ps'},
+   {id:4,n:'جابر وأولاده',nn:'Jaber & Sons',o:'محمود جابر',on:'Mahmoud Jaber',st:'active',last:'2026-11-24',em:'m@jaber.ps'},
+   {id:5,n:'استوديو ليلى',nn:'Layla Studio',o:'ليلى سعيد',on:'Layla Saeed',st:'expired',last:'—',em:'layla@studio.ps'},
+   {id:6,n:'عميل سابق',nn:'Former client',o:'نبيل عودة',on:'Nabil Odeh',st:'ended',last:'2026-09-02',em:'n@old.ps'}]};
+const t = k => T[S.lang][k];
+const nm = r => S.lang==='ar' ? r.n : r.nn, ow = r => S.lang==='ar' ? r.o : r.on;
+const BADGE = {await:['neutral','b_await'],expired:['warning','b_expired'],card:['warning','b_card'],activating:['info','b_act'],active:['success','b_active'],ended:['neutral','b_ended']};
+const NEXT = {await:'a_newcode',expired:'a_resend',card:'a_take'};
+const badge = st => `<span class="badge b-${BADGE[st][0]}">${t(BADGE[st][1])}</span>`;
+const live = m => { document.getElementById('live').textContent = m; };
+const bannerHtml = b => ({none:'',exists:`<div class="banner ban-err" role="alert">${t('e_exists')}</div>`,limit:`<div class="banner ban-warn" role="alert">${t('e_limit')}</div>`,na:`<div class="banner ban-info" role="note">${t('e_na')}</div>`,mail:`<div class="banner ban-warn" role="alert">${t('e_mail')} <button class="lb">${t('resend')}</button></div>`})[b];
+const field = (l,inner) => `<div class="fg"><label>${t(l)}</label>${inner}</div>`;
+const sel = (opts) => `<select>${opts.map(o=>`<option>${t(o)}</option>`).join('')}</select>`;
+const formHtml = () => `
+  ${field('f_name','<input value="'+(S.lang==='ar'?'سامر حداد':'Samer Haddad')+'" dir="auto">')}
+  ${field('f_biz','<input value="'+(S.lang==='ar'?'مقهى نور':'Café Nour')+'" dir="auto">')}
+  ${field('f_email','<input value="samer@cafenour.ps" dir="ltr" inputmode="email">')}
+  <div class="two">${field('f_lang',sel(['o_ar','o_en']))}${field('f_plan',sel(['o_paid','o_free']))}</div>
+  <div class="two">${field('f_country',sel(['o_ps','o_il','o_jo']))}${field('f_buyer',sel(['o_company','o_person']))}</div>
+  <div class="legend"><span class="sub">${t('demo')}</span>${['none','exists','limit','na','mail'].map(b=>`<button class="tb" data-banner="${b}" aria-pressed="${S.banner===b}">${t('d_'+(b==='na'?'na':b==='none'?'none':b))}</button>`).join('')}</div>`;
+const codeHtml = () => `<h3 tabindex="-1" id="paneH" style="margin:0 0 4px">${t('added')}</h3><p class="sub">${t('sent')} <bdi class="num">samer@cafenour.ps</bdi></p>
+  <div class="code" role="img" aria-label="4 8 1 7 0 2">481 702</div><p class="note">${t('codeNote')}</p>`;
+function custDrawerBody(r){
+  const D = S.drawer || {};
+  const claimed = D.claimed;
+  let h = `<p><span class="name">${nm(r)}</span><br><span class="sub">${ow(r)} · <bdi class="num">${r.em}</bdi></span></p><p>${badge(claimed?'active':r.st)}</p>`;
+  if (claimed) return h + `<div class="banner ban-info" role="note">${t('claimedNote')}</div>`;
+  if (r.st==='activating') h += `<div class="banner ban-info" role="status">${t('actNote')}</div>`;
+  h += `<div style="display:flex;flex-direction:column;align-items:flex-start">
+    <button class="lb" data-act="resend">${t('a_resend')}</button><button class="lb" data-act="newcode">${t('a_newcode')}</button>
+    <button class="lb" data-act="chem">${t('chEmail')}</button>${r.st==='card'||r.st==='await'||r.st==='expired'?`<button class="lb" data-act="take">${t('a_take')}</button>`:''}</div>`;
+  if (D.confirm) h += `<div class="confirm" role="group"><p style="margin:0 0 8px">${t('chWarn')}</p><button class="btn sec" data-act="cc">${t('cancel')}</button> <button class="btn" data-act="cdo">${t('chDo')}</button></div>`;
+  if (D.taking) h += `<div class="confirm"><p style="margin:0 0 8px">${t('stripeNote')}</p><button class="btn" data-act="ret">${t('simReturn')}</button></div>`;
+  h += `<p style="margin-top:18px"><button class="tb" data-act="simclaim">${t('simClaim')}</button></p>`;
+  return h;
+}
+function drawerHtml(){
+  const d = S.drawer; if(!d) return '';
+  if (d.kind==='add') return `<div class="overlay" data-act="close"></div><section class="drawer" role="dialog" aria-modal="true" aria-label="${t('addTitle')}">
+    <div class="dh"><h3>${t('addTitle')}</h3><button class="x" data-act="close" aria-label="${t('cancel')}">✕</button></div>
+    <div class="db">${d.pane===1?bannerHtml(S.banner)+formHtml():codeHtml()}</div>
+    <div class="df">${d.pane===1?`<button class="btn sec" data-act="close">${t('cancel')}</button><button class="btn" data-act="submit">${t('addBtn')}</button>`:`<button class="btn" data-act="close">${t('done')}</button>`}</div></section>`;
+  const r = S.rows.find(x=>x.id===d.id);
+  return `<div class="overlay" data-act="close"></div><section class="drawer" role="dialog" aria-modal="true" aria-label="${t('cd_title')}">
+    <div class="dh"><h3>${t('cd_title')}</h3><button class="x" data-act="close" aria-label="${t('cancel')}">✕</button></div><div class="db">${custDrawerBody(r)}</div></section>`;
+}
+const count = f => f==='all'?S.rows.length:S.rows.filter(r=>f==='awaiting'?['await','expired'].includes(r.st):f==='needcard'?r.st==='card':r.st==='active').length;
+function desk(){
+  const rows = S.rows.filter(r=> S.filter==='all' || (S.filter==='awaiting'&&['await','expired'].includes(r.st)) || (S.filter==='needcard'&&r.st==='card') || (S.filter==='active'&&r.st==='active'));
+  const list = S.empty ? `<div class="empty"><div class="nuqta">•</div><h3 style="margin:0 0 6px">${t('empty')}</h3><p class="sub">${t('emptyBody')}</p><button class="btn" data-act="add">${t('add')}</button></div>` :
+   `<table><thead><tr><th>${t('cust')}</th><th>${t('state')}</th><th>${t('last')}</th><th>${t('next')}</th></tr></thead><tbody>${rows.map(r=>`
+    <tr class="row ${r.st==='ended'?'ended':''}" data-row="${r.id}"><td><div class="name" dir="auto">${nm(r)}</div><div class="sub" dir="auto">${ow(r)}</div></td><td>${badge(r.st)}</td><td class="sub num">${r.last}</td>
+    <td>${NEXT[r.st]?`<button class="lb" data-take="${r.id}">${t(NEXT[r.st])}</button>`:r.st==='ended'?'':`<span class="sub">${t('a_open')} ›</span>`}</td></tr>`).join('')}</tbody></table>`;
+  return `<p class="note">${t('intro')}</p><div class="frame"><div class="desk" id="desk">
+    <div class="hdr"><h2>${t('title')}</h2><input class="search" placeholder="${t('search')}" aria-label="${t('search')}"><button class="btn" data-act="add">${t('add')}</button></div>
+    <div class="chips" role="group">${['all','awaiting','needcard','active'].map(f=>`<button class="chip" data-f="${f}" aria-pressed="${S.filter===f}">${t(f)}<span class="n">${count(f)}</span></button>`).join('')}</div>
+    ${list}<p style="margin-top:14px"><button class="tb" data-act="toggleEmpty">${S.empty?t('hideEmpty'):t('showEmpty')}</button></p>${drawerHtml()}</div></div>`;
+}
+function phone(){
+  const rows = S.rows.slice(0,5).map(r=>`<div class="prow" data-row="${r.id}"><div class="grow"><div class="name" dir="auto">${nm(r)}</div><div class="sub">${ow(r)}</div></div>${badge(r.st)}<button class="pbtn" aria-label="${t('cd_title')}" data-pc="${r.id}">${S.lang==='ar'?'‹':'›'}</button></div>`).join('');
+  const list = `<div class="phone"><div class="pbar"><h2>${t('title')}</h2><button class="btn" style="min-height:44px;padding:4px 14px" data-ps="s1">${t('add')}</button></div>
+    <div class="chips" style="padding:0 16px">${['all','awaiting','needcard'].map(f=>`<button class="chip" data-f="${f}" aria-pressed="${S.filter===f}">${t(f)}</button>`).join('')}</div><div style="overflow:auto">${rows}</div>${sheetHtml()}</div>`;
+  const s1 = `<div class="phone"><div class="pbar"><h2>${t('title')}</h2></div><div class="sheet"><div class="grab"></div><div class="sb"><h3 style="margin:4px 0 10px">${t('addTitle')}</h3>${formHtml().replace(/<div class="legend">.*<\/div>$/s,'')}</div>
+    <div class="sf">${bannerHtml('exists')}<button class="btn full">${t('addBtn')}</button></div></div></div>`;
+  const s2 = `<div class="phone"><div class="pbar"><h2>${t('title')}</h2></div><div class="sheet"><div class="grab"></div><div class="sb">${codeHtml()}</div><div class="sf"><button class="btn full">${t('done')}</button></div></div></div>`;
+  const s3 = `<div class="phone"><div class="pbar"><h2>${t('title')}</h2></div><div class="sheet"><div class="grab"></div><div class="sb">${custDrawerBody({...S.rows[1], st:'card'}).replace('data-act','data-x')}</div><div class="sf"><button class="btn full">${t('stripe')}</button><p class="note" style="margin:8px 0 0">${t('stripeNote')}</p></div></div></div>`;
+  return `<p class="note">${t('intro')} 48 pt rows, trailing 48 pt button opens the customer, pinned 52 pt primary with the banner above it (phone DESIGN.md).</p>
+   <div class="phones"><div><div class="pcap">${t('ph1')}</div>${list}</div><div><div class="pcap">${t('ph2')}</div>${s1}</div><div><div class="pcap">${t('ph3')}</div>${s2}</div><div><div class="pcap">${t('ph4')}</div>${s3}</div></div>`;
+}
+function sheetHtml(){
+  if(!S.sheet) return '';
+  if(S.sheet==='s1') return `<div class="sheet"><div class="grab"></div><div class="sb"><h3 style="margin:4px 0 10px">${t('addTitle')}</h3>${formHtml().replace(/<div class="legend">.*<\/div>$/s,'')}</div><div class="sf"><button class="btn full" data-ps="s2">${t('addBtn')}</button></div></div>`;
+  return `<div class="sheet"><div class="grab"></div><div class="sb">${codeHtml()}</div><div class="sf"><button class="btn full" data-ps="">${t('done')}</button></div></div>`;
+}
+function claim(){
+  const st=S.step, n=5; const stepsBar = `<div class="steps" aria-label="${t('step')} ${st+1}/${n}">${[0,1,2,3,4].map(i=>`<i class="${i<=st?'on':''}"></i>`).join('')}</div>`;
+  let body='';
+  const ctx = t('ctx').replace('{a}','<b>'+(S.lang==='ar'?'هادي الخطيب':'Hadi Khatib')+'</b>').replace('{b}',S.lang==='ar'?'دفاتر الخطيب':'Khatib Books').replace('{n}','<b>'+(S.lang==='ar'?'مقهى نور':'Café Nour')+'</b>');
+  if (S.cerr==='expired') body = `<div class="banner ban-err" role="alert">${t('expired')}</div>`;
+  else if (st===0) body = `<div class="who">${ctx}</div><p>${t('codeP')}</p><div class="pin" role="group" aria-label="${t('codeP')}">${[1,2,3,4,5,6].map(i=>`<input inputmode="numeric" autocomplete="one-time-code" maxlength="1" aria-label="${S.lang==='ar'?'الرقم':'Digit'} ${i}/6" value="${S.cerr==='wrong'?String(i):''}">`).join('')}</div>
+    ${S.cerr==='wrong'?`<div class="banner ban-err" role="alert">${t('wrong')}</div>`:''}${S.cerr==='locked'?`<div class="banner ban-err" role="alert">${t('locked')}</div>`:''}<button class="btn full" data-step="1">${t('verify')}</button>`;
+  else if (st===1) body = `<h2 style="margin:0 0 10px;font-size:var(--text-headline)">${t('pw')}</h2><div class="fg"><label>${t('pwL')}</label><input type="password" value="••••••••••••" dir="ltr"></div><label class="sub" style="display:flex;gap:8px;min-height:44px;align-items:center"><input type="checkbox" checked> ${t('terms')}</label><button class="btn full" data-step="2">${t('cont')}</button>`;
+  else if (st===2) body = `<h2 style="margin:0 0 6px;font-size:var(--text-headline)">${t('pk')}</h2><p class="sub">${t('pkB')}</p><button class="btn full" data-step="3">${t('pkDo')}</button><p style="text-align:center"><button class="lb" data-step="3">${t('skip')}</button></p>`;
+  else if (st===3) body = `<h2 style="margin:0 0 6px;font-size:var(--text-headline)">${t('cardT')}</h2><p class="sub">${t('cardB')}</p><div class="plan"><span>${t('price')}</span><span class="num">₪ 29</span></div><button class="btn full" data-step="4">${t('stripe')}</button><p class="note" style="margin-top:8px">${t('stripeNote')}</p>`;
+  else body = `<div class="nuqta">•</div><h2 style="text-align:center;margin:0 0 6px;font-size:var(--text-headline)">${t('welcome')}</h2><p class="sub" style="text-align:center">${t('welcomeB')}</p>`;
+  const nav = ['sCode','sPw','sPk','sCard','sDone'].map((k,i)=>`<button class="tb" data-step="${i}" aria-pressed="${st===i}">${t(k)}</button>`).join('');
+  const errs = ['none','wrong','locked','expired'].map((e,i)=>`<button class="tb" data-cerr="${e}" aria-pressed="${S.cerr===e}">${t('e'+i)}</button>`).join('');
+  return `<p class="note">${t('intro')} The page is the existing /setup with a context line and a code step (DR-1); order: code, password, passkey, card, app (DR-7).</p><div class="legend">${nav}</div><div class="legend"><span class="sub">${t('err')}</span>${errs}</div>
+   <div class="frame"><div class="claim"><div class="brand">متابعة · MTB3A</div>${stepsBar}${body}</div></div>`;
+}
+function render(){
+  document.documentElement.lang = S.lang; document.documentElement.dir = S.lang==='ar'?'rtl':'ltr';
+  document.documentElement.dataset.theme = S.theme; document.getElementById('ttl').textContent = t('wf');
+  document.querySelectorAll('[data-tab]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.tab===S.tab));
+  document.querySelectorAll('[data-lang]').forEach(b=>b.setAttribute('aria-pressed',b.dataset.lang===S.lang));
+  document.getElementById('theme').textContent = S.theme==='dark'?'Light':'Dark';
+  document.getElementById('app').innerHTML = S.tab==='desk'?desk():S.tab==='phone'?phone():claim();
+  const h=document.getElementById('paneH'); if(h) h.focus();
+}
+function setState(id,st){ S.rows.find(r=>r.id===id).st=st; }
+document.addEventListener('click', e=>{
+  const g = s => e.target.closest(s);
+  if (g('[data-tab]')) { S.tab=g('[data-tab]').dataset.tab; S.drawer=null; return render(); }
+  if (g('[data-lang]')) { S.lang=g('[data-lang]').dataset.lang; return render(); }
+  if (g('#theme')) { S.theme=S.theme==='dark'?'light':'dark'; return render(); }
+  if (g('[data-f]')) { S.filter=g('[data-f]').dataset.f; return render(); }
+  if (g('[data-banner]')) { S.banner=g('[data-banner]').dataset.banner; return render(); }
+  if (g('[data-ps]')) { S.sheet=g('[data-ps]').dataset.ps||null; return render(); }
+  if (g('[data-step]')) { S.step=+g('[data-step]').dataset.step; S.cerr= S.cerr==='expired'?'expired':'none'; return render(); }
+  if (g('[data-cerr]')) { S.cerr=g('[data-cerr]').dataset.cerr; S.step=0; return render(); }
+  if (g('[data-take]')) { e.stopPropagation(); const id=+g('[data-take]').dataset.take; const r=S.rows.find(x=>x.id===id); S.drawer={kind:'cust',id,claimed:false,confirm:false,taking:r.st==='card'}; return render(); }
+  const a = g('[data-act]'); const row = g('[data-row]');
+  if (!a && row && S.tab==='desk') { S.drawer={kind:'cust',id:+row.dataset.row,claimed:false,confirm:false,taking:false}; return render(); }
+  if (!a) return;
+  const k = a.dataset.act;
+  if (k==='add') { S.drawer={kind:'add',pane:1}; S.banner='none'; }
+  else if (k==='close') S.drawer=null;
+  else if (k==='submit') { if (S.banner==='none'||S.banner==='mail') S.drawer.pane=2; }
+  else if (k==='toggleEmpty') S.empty=!S.empty;
+  else if (k==='chem') S.drawer.confirm=true; else if (k==='cc'||k==='cdo') S.drawer.confirm=false;
+  else if (k==='take') S.drawer.taking=true;
+  else if (k==='simclaim') S.drawer.claimed=true;
+  else if (k==='ret') { const id=S.drawer.id; setState(id,'activating'); S.drawer=null; live(t('actNote')); clearTimeout(S.activeTimer); S.activeTimer=setTimeout(()=>{setState(id,'active'); live(t('liveActive')); render();},2500); }
+  render();
+});
+render();
+</script>
+</body>
+</html>
