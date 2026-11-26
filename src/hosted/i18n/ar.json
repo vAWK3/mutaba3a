@@ -1618,6 +1618,48 @@
         "meta": "{count} سجلًا · آخر إدخال {date}",
         "choose": "اختر ملفًا",
         "confirm": "أبقِ «{name}» فعّالًا"
+      },
+      "plans": {
+        "title": "اشترك",
+        "label": "الخطة",
+        "perMonth": "{price} شهريًا",
+        "perMonthBoth": "{ils} أو {usd} شهريًا",
+        "plusVat": "+ ضريبة القيمة المضافة",
+        "limits": "{businesses} · {documents} · {scans} شهريًا",
+        "businesses": {
+          "zero": "{count} ملف تجاري",
+          "one": "ملف تجاري واحد",
+          "two": "ملفان تجاريان",
+          "few": "{count} ملفات تجارية",
+          "many": "{count} ملفًا تجاريًا",
+          "other": "{count} ملف تجاري"
+        },
+        "documents": {
+          "zero": "{count} مستند",
+          "one": "مستند واحد",
+          "two": "مستندان",
+          "few": "{count} مستندات",
+          "many": "{count} مستندًا",
+          "other": "{count} مستند"
+        },
+        "scans": {
+          "zero": "{count} مسح",
+          "one": "مسح واحد",
+          "two": "مسحان",
+          "few": "{count} مسوحات",
+          "many": "{count} مسحًا",
+          "other": "{count} مسح"
+        },
+        "aMonth": "شهريًا",
+        "aYear": "سنويًا"
+      },
+      "address": {
+        "title": "عنوان الفوترة",
+        "country": "البلد",
+        "line1": "العنوان",
+        "city": "المدينة",
+        "postalCode": "الرمز البريدي",
+        "noMatch": "لا يوجد تطابق"
       }
     },
     "selfService": {
@@ -3808,7 +3850,8 @@
         "then": "ثم {price} في الشهر",
         "once": "هذا العرض متاح الآن فقط.",
         "start": "جرّب خطة مستقل مجانًا 14 يومًا",
-        "skip": "تابع على خطة البداية"
+        "skip": "تابع على خطة البداية",
+        "back": "رجوع"
       }
     }
   }

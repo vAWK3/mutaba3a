@@ -64,6 +64,8 @@ import { Drawer } from './Drawer';
 import { InPlaceConfirm, useConfirmStep } from './InPlaceConfirm';
 import { OfferTopLine } from './OfferTopLine';
 import { activeBusinessesOf, billingStarterOf, starterUsageOf } from '../data/planUsage';
+import { BillingAddressFields, PlanRow } from './BillingPlanPicker';
+import { addressOf, draftOf, EMPTY_ADDRESS, plansOnOffer, savedAddressOf, type AddressDraft, type PlanName } from '../data/billingPlans';
 import { ContinueFreeOnStarter, PickActiveBusiness, StarterBilling } from './StarterPlan';
 
 /**
@@ -154,7 +156,7 @@ export function BillingDrawer({ step, checkout, portalReturned = false, cardUpda
   }, [step]);
   const title =
     step === 'subscribe'
-      ? t('hosted.billing.subscribe.title')
+      ? t(subscribe.plan ? 'hosted.billing.plans.title' : 'hosted.billing.subscribe.title')
       : step === 'switch'
         ? t('hosted.billing.switch.title')
         : step === 'cancel'
@@ -867,7 +869,16 @@ function entitlementPanel(profile: BillingProfile): BillingPanel {
  */
 function useSubscribeForm(billing: BillingOverview | undefined) {
   const { pathname } = useLocation();
-  const [country, setCountry] = useState('');
+  const { language } = useLanguage();
+  const [legacyCountry, setCountry] = useState('');
+  // MUT-702 Part B (ADR-286): with plans on sale, a plan row and the billing address (prefilled once from the last one).
+  const onOffer = plansOnOffer(billing);
+  const [chosenPlan, setPlan] = useState<PlanName | null>(null);
+  const plan = onOffer.find((p) => p.plan === chosenPlan) ?? onOffer[0] ?? null;
+  const [draft, setDraft] = useState<AddressDraft | null>(null);
+  if (draft === null && billing) setDraft(draftOf(savedAddressOf(billing), language));
+  const address = draft ?? EMPTY_ADDRESS;
+  const country = plan ? (address.country ?? '') : legacyCountry;
   const [buyer, setBuyer] = useState<'person' | 'business'>('person');
   const [chosen, setBillingInterval] = useState<'month' | 'year' | null>(null);
   /** The offer the drawer opened with (DD5: its disappearing while open is said). */
@@ -876,7 +887,8 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const [refusedOffer, setRefusedOffer] = useState<string | null>(null);
   // Render-time adjustment, not an effect (react-hooks v7): set once, on the first render with billing data.
   if (chosen === null && billing) {
-    const opening = eligibleOfferOf(billing);
+    // MUT-703 makes the offers per plan; until then a plan Checkout carries none.
+    const opening = plansOnOffer(billing).length > 0 ? null : eligibleOfferOf(billing);
     setBillingInterval(opening ? 'year' : 'month');
     setOpenedWith(opening?.id ?? null);
   }
@@ -884,8 +896,8 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const checkout = useStartCheckout();
   const route = billing ? checkoutRouteOf(country || null, buyer, billing.countries) : null;
   const currency = country ? currencyOfCountry(country) : null;
-  const pair = billing && currency ? billing.catalog[currency] : null;
-  const eligible = billing ? eligibleOfferOf(billing) : null;
+  const pair = billing && currency ? (plan ? plan.catalog[currency] : billing.catalog[currency]) : null;
+  const eligible = billing && !plan ? eligibleOfferOf(billing) : null;
   const activeOffer = eligible && eligible.id !== refusedOffer ? eligible : null;
   const offer = billing && activeOffer ? offerFor(billing, currency, new Date()) : null;
   /** The offer is on screen: before a country is picked, or in the chosen currency. */
@@ -896,7 +908,7 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
    * MUT-534 (D14): the come-back price for the chosen interval and currency, when the server says the person may have it
    * and the launch offer isn't what this Continue carries. Its amounts come from the server (ADR-004).
    */
-  const offeredBack = comebackOfferOf(billing);
+  const offeredBack = plan ? null : comebackOfferOf(billing);
   const comeback = offeredBack && offeredBack.id !== refusedOffer && !applied ? offeredBack : null;
   const comebackPrice =
     comeback && currency
@@ -905,7 +917,8 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   const comebackShown = comeback !== null && comebackPrice !== null && comebackPrice.first !== null && comebackPrice.list !== null;
   const comebackEnded = refusedOffer !== null && refusedOffer === offeredBack?.id;
   const offerEnded: 'withPrice' | 'whileOpen' | null = refusedOffer !== null && !comebackEnded ? 'withPrice' : openedWith !== null && activeOffer === null ? 'whileOpen' : null;
-  const canContinue = route !== null && route !== 'contact-us' && pair !== null && !checkout.isPending;
+  const billingAddress = plan ? addressOf(address) : null;
+  const canContinue = route !== null && route !== 'contact-us' && pair !== null && (!plan || billingAddress !== null) && !checkout.isPending;
   const submit = () => {
     if (!canContinue || !currency) return;
     const expectedOffer = applied?.id ?? (comebackShown ? comeback!.id : null);
@@ -916,9 +929,10 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
         buyer,
         returnPath: billingReturnPath(pathname),
         ...(expectedOffer ? { expectedOffer } : {}),
+        ...(plan && billingAddress ? { plan: plan.plan, address: billingAddress } : {}),
       },
       {
-        onSuccess: () => void trackPortal('billing_checkout_started', { plan: 'freelancer', interval, currency, offer: expectedOffer ? offerAnalyticsName(expectedOffer) : null }),
+        onSuccess: () => void trackPortal('billing_checkout_started', { plan: plan?.plan ?? 'freelancer', interval, currency, offer: expectedOffer ? offerAnalyticsName(expectedOffer) : null }),
         onError: (error) => {
           if (expectedOffer && error instanceof ApiError && apiErrorReason(error) === 'OFFER_ENDED') setRefusedOffer(expectedOffer);
         },
@@ -928,6 +942,11 @@ function useSubscribeForm(billing: BillingOverview | undefined) {
   return {
     country,
     setCountry,
+    plan,
+    plans: onOffer,
+    setPlan,
+    address,
+    setAddress: setDraft,
     buyer,
     setBuyer,
     interval,
@@ -1028,19 +1047,27 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
         />
       )}
 
-      <Select
-        label={t('hosted.billing.subscribe.country')}
-        id={`${ids}-country`}
-        value={country}
-        onChange={(e) => form.setCountry(e.target.value)}
-      >
-        <option value="">{t('hosted.billing.subscribe.countryChoose')}</option>
-        {countryOptions(language).map((o) => (
-          <option key={o.code} value={o.code}>
-            {o.name}
-          </option>
-        ))}
-      </Select>
+      {form.plan ? (
+        <>
+          {/* MUT-702 Part B (wireframes v3): the plan, then the billing address; its country sets the currency and VAT. */}
+          <PlanRow idPrefix={ids} plans={form.plans} value={form.plan.plan} country={form.address.country} onChange={form.setPlan} />
+          <BillingAddressFields idPrefix={ids} draft={form.address} onChange={form.setAddress} />
+        </>
+      ) : (
+        <Select
+          label={t('hosted.billing.subscribe.country')}
+          id={`${ids}-country`}
+          value={country}
+          onChange={(e) => form.setCountry(e.target.value)}
+        >
+          <option value="">{t('hosted.billing.subscribe.countryChoose')}</option>
+          {countryOptions(language).map((o) => (
+            <option key={o.code} value={o.code}>
+              {o.name}
+            </option>
+          ))}
+        </Select>
+      )}
 
       <BuyerChoice idPrefix={ids} value={buyer} onChange={form.setBuyer} consumerEverywhere={billing.countries.consumerEverywhere === true} />
 
@@ -1089,7 +1116,9 @@ function SubscribeBody({ billing, title, form, onBack }: { billing: BillingOverv
               ) : (
                 <>
                   <Amount minor={pair[interval]} currency={currency} language={language} />{' '}
-                  {t(interval === 'month' ? 'hosted.billing.subscribe.perMonth' : 'hosted.billing.subscribe.perYear')}
+                  {form.plan
+                    ? `${t(interval === 'month' ? 'hosted.billing.plans.aMonth' : 'hosted.billing.plans.aYear')}${country === 'IL' ? ` ${t('hosted.billing.plans.plusVat')}` : ''}`
+                    : t(interval === 'month' ? 'hosted.billing.subscribe.perMonth' : 'hosted.billing.subscribe.perYear')}
                 </>
               )}
             </span>
