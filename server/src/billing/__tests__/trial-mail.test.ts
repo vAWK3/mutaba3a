@@ -124,6 +124,13 @@ describe('trialMailStageOf (MUT-419 D1, D2)', () => {
     expect(trialMailStageOf(START, now)).toEqual(expected);
   });
 
+  it('MUT-731: with Starter on, the day-27 "locking soon" stage is never due (nothing locks); the earlier ones are', () => {
+    expect(trialMailStageOf(START, at(27), { starter: true })).toBeNull();
+    expect(trialMailStageOf(START, at(29, 22), { starter: true })).toBeNull();
+    expect(trialMailStageOf(START, at(14), { starter: true })).toEqual({ stage: 'ended', daysLeft: null });
+    expect(trialMailStageOf(START, at(12), { starter: true })).toEqual({ stage: 'ending-soon', daysLeft: 2 });
+  });
+
   it('R3: a daily run never says more days than are left (job at 10:00, trial started at 10:30)', () => {
     // Day 11's run is half an hour before the window opens; day 12's has 2 days and 30 minutes left: "within 3 days".
     expect(trialMailStageOf(START, jobAt(11))).toBeNull();

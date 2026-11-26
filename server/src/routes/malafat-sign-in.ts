@@ -393,7 +393,8 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
           personal: personalProfileFor(locale, { defaultCurrency: body.defaultCurrency!, timezone: body.timezone! }),
           at: now,
         });
-        await store.billing.setTrialStart(created.user.id, now);
+        // MUT-731 (ADR-284): with Starter on, a new Malafat sign-in account starts on Starter, with no trial.
+        if (!store.billing.starterPlan) await store.billing.setTrialStart(created.user.id, now);
         user = created.user;
       } else {
         user = flow.userId ? await store.users.getById(flow.userId) : null;

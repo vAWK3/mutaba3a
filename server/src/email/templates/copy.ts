@@ -282,24 +282,25 @@ function withOffer<B extends { intro: Inline[][]; action?: { label: string; href
 }
 
 const trialEndingSoon: Copy<'trial-ending-soon'> = {
-  en: ({ daysLeft, subscribeLink, offer }) =>
+  en: ({ daysLeft, subscribeLink, offer, starterAfter }) =>
     withOffer({
       subject: `Your MTB3A free trial ends within ${enDays(daysLeft)}`,
       preheader: 'Add a card so nothing stops.',
       headline: `Your free trial ends within ${enDays(daysLeft)}`,
       intro: [
-        ['After that your account becomes read-only until you subscribe.'],
+        // MUT-731 (ADR-284): with Starter on, the trial ends on the free plan.
+        [starterAfter ? 'After that you move to the free Starter plan.' : 'After that your account becomes read-only until you subscribe.'],
         ['Add a card now so nothing stops.'],
       ],
       action: { label: 'Add a card', href: subscribeLink },
     }, offer, 'en'),
-  ar: ({ daysLeft, subscribeLink, offer }) =>
+  ar: ({ daysLeft, subscribeLink, offer, starterAfter }) =>
     withOffer({
       subject: `تنتهي تجربتك المجانية في متابعة خلال ${arDays(daysLeft)}`,
       preheader: 'أضف بطاقة كي لا يتوقف شيء.',
       headline: `تنتهي تجربتك المجانية خلال ${arDays(daysLeft)}`,
       intro: [
-        ['بعدها يصبح حسابك للقراءة فقط إلى أن تشترك.'],
+        [starterAfter ? 'بعدها تنتقل إلى خطة البداية المجانية.' : 'بعدها يصبح حسابك للقراءة فقط إلى أن تشترك.'],
         ['أضف بطاقة الآن كي لا يتوقف شيء.'],
       ],
       action: { label: 'أضف بطاقة', href: subscribeLink },
@@ -307,8 +308,19 @@ const trialEndingSoon: Copy<'trial-ending-soon'> = {
 };
 
 const trialEnded: Copy<'trial-ended'> = {
-  en: ({ subscribeLink, exportLink, offer }) =>
-    withOffer({
+  en: ({ subscribeLink, exportLink, offer, starterAfter }) =>
+    withOffer(starterAfter ? {
+      // MUT-731 (ADR-284): the trial ended on the free Starter plan; nothing is read-only.
+      subject: 'Your MTB3A trial has ended',
+      preheader: 'You’re on the free Starter plan now.',
+      headline: 'You’re on the free Starter plan',
+      intro: [
+        ['Your free trial has ended, and your account is on the free Starter plan.'],
+        ['Subscribe to get your full plan back.'],
+      ],
+      action: { label: 'Subscribe', href: subscribeLink },
+      outro: [[NOTHING_DELETED.en]],
+    } : {
       subject: 'Your MTB3A account is read-only',
       preheader: 'You can still see and download everything.',
       headline: 'Your account is read-only',
@@ -320,8 +332,18 @@ const trialEnded: Copy<'trial-ended'> = {
       secondary: { label: 'Download my records', href: exportLink },
       outro: [[NOTHING_DELETED.en]],
     }, offer, 'en'),
-  ar: ({ subscribeLink, exportLink, offer }) =>
-    withOffer({
+  ar: ({ subscribeLink, exportLink, offer, starterAfter }) =>
+    withOffer(starterAfter ? {
+      subject: 'انتهت تجربتك في متابعة',
+      preheader: 'أنت الآن على خطة البداية المجانية.',
+      headline: 'أنت على خطة البداية المجانية',
+      intro: [
+        ['انتهت تجربتك المجانية، وأصبح حسابك على خطة البداية المجانية.'],
+        ['اشترك لتستعيد خطتك الكاملة.'],
+      ],
+      action: { label: 'اشترك', href: subscribeLink },
+      outro: [[NOTHING_DELETED.ar]],
+    } : {
       subject: 'حسابك في متابعة للقراءة فقط',
       preheader: 'ما زال بإمكانك رؤية كل شيء وتنزيله.',
       headline: 'حسابك للقراءة فقط',
@@ -616,7 +638,7 @@ const cardFailed: Copy<'card-failed'> = {
 
 /** MUT-533: the one reminder. "At most": Stripe may give up before the window ends. Read-only only while the gate is on. */
 const cardFailedReminder: Copy<'card-failed-reminder'> = {
-  en: ({ daysLeft, readOnlyAfter, updateLink, accountantFreeClients }) => ({
+  en: ({ daysLeft, readOnlyAfter, starterAfter, updateLink, accountantFreeClients }) => ({
     subject: 'Your card still isn’t going through',
     preheader: accountantFreeClients ? 'Update it to keep all your client books open.' : 'Update it to keep your account open.',
     headline: 'Your payment still hasn’t gone through',
@@ -625,6 +647,8 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
       [
         accountantFreeClients
           ? `If it isn't updated, your Accountant plan ends within ${enDays(daysLeft)} at most. Your ${accountantFreeClients} oldest client books stay open; the others lock until you subscribe again. Your own records aren't affected.`
+          : starterAfter
+          ? `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most, and you move to the free Starter plan. Your records stay.`
           : readOnlyAfter
           ? `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most, and your account becomes read-only. Your records stay, and you can download them any time.`
           : `If it isn't updated, your plan ends within ${enDays(daysLeft)} at most. Your records stay, and you can download them any time.`,
@@ -633,7 +657,7 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
     action: { label: 'Update card', href: updateLink },
     outro: [['Reply to this email if you need help.']],
   }),
-  ar: ({ daysLeft, readOnlyAfter, updateLink, accountantFreeClients }) => ({
+  ar: ({ daysLeft, readOnlyAfter, starterAfter, updateLink, accountantFreeClients }) => ({
     subject: 'ما زالت عملية الدفع ببطاقتك لا تنجح',
     preheader: accountantFreeClients ? 'حدّث البطاقة لتبقى كل دفاتر عملائك مفتوحة.' : 'حدّث البطاقة ليبقى حسابك مفتوحًا.',
     headline: 'لم تُحصَّل دفعتك بعد',
@@ -642,6 +666,8 @@ const cardFailedReminder: Copy<'card-failed-reminder'> = {
       [
         accountantFreeClients
           ? `إن لم تُحدَّث، تنتهي خطة المحاسب خلال ${arDays(daysLeft)} على الأكثر. تبقى أقدم ${accountantFreeClients} دفاتر عملاء مفتوحة، وتُقفل البقية حتى تشترك مجددًا. لا تتأثر سجلاتك أنت.`
+          : starterAfter
+          ? `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر وتنتقل إلى خطة البداية المجانية. تبقى سجلاتك.`
           : readOnlyAfter
           ? `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر ويصبح حسابك للقراءة فقط. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`
           : `إن لم تُحدَّث، ينتهي اشتراكك خلال ${arDays(daysLeft)} على الأكثر. تبقى سجلاتك، ويمكنك تنزيلها في أي وقت.`,

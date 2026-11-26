@@ -4261,13 +4261,15 @@ export class PrismaLedgerStore implements LedgerStore {
           const review = await tx.signupReview.findUnique({ where: { userId } });
           if (!person || !review) return { kind: 'not_found' as const };
           if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided' as const, review: toSignupReview(review) };
-          // D1: the trial starts at approval, in this transaction (the column billing.setTrialStart writes).
-          const user = await tx.user.update({ where: { id: userId }, data: { status: 'ACTIVE', trialStartedAt: at, updatedAt: at } });
+          // D1: the trial starts at approval, in this transaction (the column billing.setTrialStart writes). MUT-731: no new
+          // trial with Starter on (eng review #5): the person is on Starter.
+          const trialStartedAt = this.billing.starterPlan ? null : at;
+          const user = await tx.user.update({ where: { id: userId }, data: { status: 'ACTIVE', trialStartedAt, updatedAt: at } });
           const decided = await tx.signupReview.update({ where: { id: review.id }, data: { decision: 'APPROVED', decidedAt: at, decidedBy } });
           const personal = await tx.organization.findFirst({ where: { personalOwnerUserId: userId }, select: { id: true } });
           const audit = personal ? auditFor(personal.id) : [];
           if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
-          return { kind: 'approved' as const, review: toSignupReview(decided), user: toUser(user), trialStartedAt: at };
+          return { kind: 'approved' as const, review: toSignupReview(decided), user: toUser(user), trialStartedAt };
         }),
       ),
     decline: async ({ userId, at, decidedBy }) => {

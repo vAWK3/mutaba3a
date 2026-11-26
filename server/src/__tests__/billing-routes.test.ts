@@ -127,6 +127,9 @@ describe('GET /v1/billing (MUT-362)', () => {
         businesses: { used: 0, limit: null },
         partners: { limit: null },
       },
+      // MUT-731 (ADR-284): Starter is off on this server.
+      starter: null,
+      activeBusinesses: null,
     });
   });
 

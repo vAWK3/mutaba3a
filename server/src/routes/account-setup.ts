@@ -247,7 +247,7 @@ export function accountSetupRoutes(options: AccountSetupRouteOptions): OpenAPIHo
     const acceptance = termsAcceptanceOf(terms, body.termsLocale ?? link.locale, 'cookie', body.clientRelease);
     const requestId = c.get('requestId');
     const at = c.get('now')();
-    const outcome = signupAccountOutcome(link, at);
+    const outcome = signupAccountOutcome(link, at, { starter: store.billing.starterPlan });
     const created = await store.accountSetup.redeemSignup({
       tokenDigest: link.tokenDigest,
       passwordHash,

@@ -113,7 +113,8 @@ export async function runMonthlySummaryMail(options: MonthlySummaryRunOptions): 
   let incomplete = false;
   let after: string | null = null;
   pages: for (;;) {
-    const page = await store.billing.monthlySummaryCandidates({ trialStartedAfter: new Date(now.getTime() - TRIAL_DAYS * DAY_MS), now, after, limit: PAGE });
+    // MUT-731 (Basel Q8): with Starter on, anyone may be covered, so everyone is asked (entitlement still decides).
+    const page = await store.billing.monthlySummaryCandidates({ trialStartedAfter: new Date(now.getTime() - TRIAL_DAYS * DAY_MS), now, after, limit: PAGE, everyone: store.billing.starterPlan === true });
     for (const candidate of page) {
       const sent = rows.filter((r) => r.outcome === 'sent').length;
       if (elapsed() > budget || (!dryRun && sent >= sendBudget)) {

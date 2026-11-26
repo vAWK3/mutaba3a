@@ -2433,7 +2433,8 @@ export interface SignupReviewRow extends SignupReviewRecord {
 export type SignupReviewState = 'pending' | 'decided';
 
 export type ApproveSignupResult =
-  | { kind: 'approved'; review: SignupReviewRecord; user: UserRecord; trialStartedAt: Date }
+  /** MUT-731: `trialStartedAt` null with STARTER_PLAN on (no new trials: the person is on Starter). */
+  | { kind: 'approved'; review: SignupReviewRecord; user: UserRecord; trialStartedAt: Date | null }
   | { kind: 'not_found' }
   | { kind: 'already_decided'; review: SignupReviewRecord };
 

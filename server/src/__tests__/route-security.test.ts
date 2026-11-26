@@ -192,6 +192,9 @@ const BILLING_OPERATIONS = [
   'POST /v1/billing/cancellation',
   'DELETE /v1/billing/cancellation',
   'POST /v1/billing/stay-offer',
+  'POST /v1/billing/starter',
+  'PUT /v1/billing/active-businesses',
+  'POST /v1/billing/solo-trial/offered',
 ];
 
 /** MUT-434: the consent page and Connected apps — the portal's cookie session only (no device session, no key). */

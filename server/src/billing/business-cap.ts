@@ -79,3 +79,8 @@ export function applyBusinessCap(
   }
   return states;
 }
+
+/** The wire shape (GET /v1/billing `activeBusinesses`, PUT /v1/billing/active-businesses). */
+export function businessCapView(state: BusinessCapState) {
+  return { cap: state.cap, active: state.active, readOnly: state.readOnly, mustChoose: state.mustChoose };
+}

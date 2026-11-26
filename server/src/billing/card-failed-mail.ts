@@ -164,7 +164,7 @@ function send(options: CardFailedRunOptions, row: CardFailedMailRow, due: Exclud
   // MUT-565 review: the Accountant plan's copy says what its end means (client books past the free ones lock), never read-only.
   const plan = accountant ? { accountantFreeClients: options.accountantFreeClients ?? ACCOUNTANT_FREE_CLIENTS_DEFAULT } : {};
   if (due.stage === 'first') return options.mailer.send({ ...base, template: 'card-failed', vars: { updateLink: options.updateLink, ...plan } });
-  return options.mailer.send({ ...base, template: 'card-failed-reminder', vars: { daysLeft: due.daysLeft, readOnlyAfter: options.readOnlyAfter, updateLink: options.updateLink, ...plan } });
+  return options.mailer.send({ ...base, template: 'card-failed-reminder', vars: { daysLeft: due.daysLeft, readOnlyAfter: options.readOnlyAfter, starterAfter: options.store.billing.starterPlan === true, updateLink: options.updateLink, ...plan } });
 }
 
 function summarize(rows: readonly CardFailedMailRow[], dryRun: boolean, incomplete: boolean): CardFailedMailSummary {

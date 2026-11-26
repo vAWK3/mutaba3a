@@ -4739,10 +4739,12 @@ export class MemoryLedgerStore implements LedgerStore {
       if (review.decision !== null || person.status !== 'PENDING_REVIEW') return { kind: 'already_decided', review: cloneReview(review) };
       const personal = [...this.orgs.values()].find((o) => o.personalOwnerUserId === userId);
       Object.assign(person, { status: 'ACTIVE', updatedAt: at });
-      this.trialStarts.set(userId, at);
+      // MUT-731 (eng review #5): no new trial with Starter on.
+      const trialStartedAt = this.billing.starterPlan ? null : at;
+      if (trialStartedAt) this.trialStarts.set(userId, trialStartedAt);
       Object.assign(review, { decision: 'APPROVED', decidedAt: at, decidedBy });
       if (personal) for (const event of auditFor(personal.id)) this.events.push({ id: randomUUID(), createdAt: at, ...event });
-      return { kind: 'approved', review: cloneReview(review), user: { ...person }, trialStartedAt: at };
+      return { kind: 'approved', review: cloneReview(review), user: { ...person }, trialStartedAt };
     },
     decline: async ({ userId, at, decidedBy }) => {
       const review = [...this.reviews.values()].find((r) => r.userId === userId);

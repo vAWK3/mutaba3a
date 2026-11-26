@@ -692,6 +692,19 @@ export const BillingOverviewSchema = z
     currentPlan: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer']).nullable(),
     /** MUT-735 (ADR-281). Additive since 1.142.0-mut735. */
     usage: BillingUsageSchema,
+    /**
+     * MUT-731 (ADR-284): the free plan. `chosenAt`: when the person chose "Continue free on Starter" (null: never).
+     * `canContinueFree`: they are read-only after cancelling a paid plan and may move to Starter now (POST
+     * /v1/billing/starter). Null where Starter is off. Additive since 1.145.0-mut731.
+     */
+    starter: z.union([z.object({ chosenAt: z.string().datetime().nullable(), canContinueFree: z.boolean() }), z.null()]).optional(),
+    /**
+     * MUT-731 (Basel Q5): on Starter with more businesses than it keeps active: the cap, the chosen one(s) and the
+     * read-only rest (`mustChoose` until they pick). Null otherwise. Additive since 1.145.0-mut731.
+     */
+    activeBusinesses: z
+      .union([z.object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() }), z.null()])
+      .optional(),
   })
   .openapi('BillingOverview');
 

@@ -45,8 +45,11 @@ export interface TrialMailStageNow {
   daysLeft: number | null;
 }
 
-/** The stage a trial that started at `trialStartedAt` is in at `now`, or null when no reminder is due. Pure. */
-export function trialMailStageOf(trialStartedAt: Date, now: Date): TrialMailStageNow | null {
+/**
+ * The stage a trial that started at `trialStartedAt` is in at `now`, or null when no reminder is due. Pure. MUT-731
+ * (ADR-284, supersedes ADR-184's day-27 stage while Starter is on): nothing locks, so `locking-soon` is never due.
+ */
+export function trialMailStageOf(trialStartedAt: Date, now: Date, options: { starter: boolean } = { starter: false }): TrialMailStageNow | null {
   const { endsAt, lockAt } = trialTimelineOf(trialStartedAt);
   const lead = TRIAL_REMINDER_DAYS * DAY_MS;
   const t = now.getTime();
@@ -54,6 +57,7 @@ export function trialMailStageOf(trialStartedAt: Date, now: Date): TrialMailStag
   if (t < endsAt.getTime() - lead || t >= lockAt.getTime()) return null;
   if (t < endsAt.getTime()) return { stage: 'ending-soon', daysLeft: daysUntil(endsAt) };
   if (t < lockAt.getTime() - lead) return { stage: 'ended', daysLeft: null };
+  if (options.starter) return null;
   return { stage: 'locking-soon', daysLeft: daysUntil(lockAt) };
 }
 
@@ -125,7 +129,7 @@ export async function runTrialMail(options: TrialMailRunOptions): Promise<{ summ
       incomplete = true;
       break;
     }
-    const stage = trialMailStageOf(candidate.trialStartedAt, now);
+    const stage = trialMailStageOf(candidate.trialStartedAt, now, { starter: store.billing.starterPlan === true });
     if (!stage) continue;
     const row: TrialMailRow = { userId: candidate.userId, email: candidate.email, locale: candidate.locale, ...stage, action: 'send', skip: null, outcome: null };
     try {
@@ -154,7 +158,9 @@ async function skipReason(options: TrialMailRunOptions, userId: string, email: s
   const own = profiles.filter((p) => profileOwnerOf(p.organization) === userId).map((p) => entitlements.get(p.organization.id)!);
   if (own.some((e) => e.source === 'STRIPE')) return 'paying';
   if (own.some((e) => e.source === 'MALAFAT' || e.source === 'OPERATOR')) return 'covered';
-  if (profiles.length === 0 || own.length !== profiles.length || own.some((e) => e.source !== 'TRIAL')) return 'other-profiles';
+  // MUT-731 (eng review #12): an ended trial resolves to Starter, still decided by the trial alone.
+  const trialAlone = (e: Entitlement) => e.source === 'TRIAL' || (store.billing.starterPlan === true && e.source === 'STARTER');
+  if (profiles.length === 0 || own.length !== profiles.length || !own.every(trialAlone)) return 'other-profiles';
   if (!options.gateOn) return 'gate-off';
   if (await store.email.isSuppressed(normalizeEmail(email))) return 'suppressed';
   return null;
@@ -165,12 +171,13 @@ function send(options: TrialMailRunOptions, row: TrialMailRow): Promise<SendResu
   const offer = options.offer ?? null;
   const to = row.email;
   const base = { to, locale: row.locale, idempotencyKey: `trial:${row.userId}:${row.stage}` };
+  const starterAfter = options.store.billing.starterPlan === true;
   const daysLeft = row.daysLeft ?? TRIAL_REMINDER_DAYS;
   switch (row.stage) {
     case 'ending-soon':
-      return options.mailer.send({ ...base, template: 'trial-ending-soon', vars: { daysLeft, subscribeLink: links.subscribe, offer } });
+      return options.mailer.send({ ...base, template: 'trial-ending-soon', vars: { daysLeft, subscribeLink: links.subscribe, offer, starterAfter } });
     case 'ended':
-      return options.mailer.send({ ...base, template: 'trial-ended', vars: { subscribeLink: links.subscribe, exportLink: links.export, offer } });
+      return options.mailer.send({ ...base, template: 'trial-ended', vars: { subscribeLink: links.subscribe, exportLink: links.export, offer, starterAfter } });
     case 'locking-soon':
       return options.mailer.send({ ...base, template: 'trial-locking-soon', vars: { daysLeft, subscribeLink: links.subscribe, exportLink: links.export, offer } });
   }
