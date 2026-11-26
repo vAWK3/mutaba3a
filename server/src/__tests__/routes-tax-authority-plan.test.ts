@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
 import { TokenBox } from '../israel/tax-authority/token-box.js';
 import type { UsagePlan } from '../usage/kinds.js';
+import type * as PlanOf from '../usage/plan-of.js';
 import { ADMIN, ORIGIN, businessOf, idem, issuingHarness, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
 /**
@@ -11,7 +12,7 @@ import { ADMIN, ORIGIN, businessOf, idem, issuingHarness, json, person, read, sh
  * on Solo" hint; an existing connection reads `suspended`, is never deleted, and works again on a paid plan.
  */
 let payerPlan: UsagePlan = 'starter';
-vi.mock('../usage/plan-of.js', async (original) => ({ ...(await original<typeof import('../usage/plan-of.js')>()), payerPlanOf: vi.fn(async () => payerPlan) }));
+vi.mock('../usage/plan-of.js', async (original) => ({ ...(await original<typeof PlanOf>()), payerPlanOf: vi.fn(async () => payerPlan) }));
 afterEach(() => void (payerPlan = 'starter'));
 
 const box = new TokenBox('route-test-secret-with-at-least-32-characters');
