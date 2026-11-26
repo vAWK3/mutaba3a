@@ -17,13 +17,15 @@
     "hero": {
       "headlineLine1": "Log it before",
       "headlineLine2": "you forget it.",
-      "subheadline": "Every client, every payment, every expense — captured in seconds on your phone, visible instantly in your hosted portal. Built for growing businesses that move fast.",
+      "subheadline": "Every client, every payment, every expense — logged in seconds on your phone, receipts read for you, and all of it in your portal on any computer.",
+      "subheadlineStarter": "Every client, every payment, every expense, and the invoices you issue — on your phone and in your portal. Start free.",
       "ctaRequest": "Request an account",
       "ctaCreate": "Create an account",
       "ctaSignIn": "Sign in",
       "ctaIos": "iPhone, on the App Store",
       "ctaAndroid": "Android, on Google Play",
       "altNote": "Accounts are set up for your organization — there's no public sign-up.",
+      "altNoteStarter": "Free on Starter — sign up with your email address, no card needed.",
       "altNoteOpen": "Sign up with your email address, or ask us to set an account up for your organization."
     },
     "chapters": {
@@ -68,11 +70,12 @@
       "appsIos": "iPhone, on the App Store",
       "appsAndroid": "Android, on Google Play",
       "note": "Accounts are set up for your organization — there's no public sign-up.",
+      "noteStarter": "Start free on Starter with your email address — no card. Move to Solo, Business or Firm when you need more. Want help setting up your organization? Ask us below.",
       "noteOpen": "Sign up with your email address. Want help setting up your organization? Ask us below."
     },
     "phone": {
       "title": "Log it on your phone. See it all in your hosted account.",
-      "body": "The phone app is for logging: an income or an expense in seconds, even with no signal. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they’ve paid, on any computer.",
+      "body": "The phone app is for logging: an income or an expense in seconds, even with no signal, or a photo of a receipt that we read for you. The portal, your hosted account in a browser, is where you see it all: every client, what they owe and what they’ve paid, on any computer.",
       "hint": "Both come with the same account.",
       "hintLink": "Request an account",
       "hintLinkOpen": "Create an account",
@@ -96,19 +99,49 @@
     },
     "faq": {
       "headline": "Questions",
-      "q1": "Is there a free plan?",
-      "a1": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
-      "a1Open": "No. You can create an account with your email address, or request one and we'll reply with an offer for your organization.",
-      "q2": "Where is my data stored?",
-      "a2": "On MTB3A's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
-      "q3": "How do I back up, or move to another device?",
-      "a3": "Nothing to do — your account is the backup. Sign in on a new device and everything you've logged is already there.",
-      "q4": "Can I track more than one business?",
-      "a4": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click.",
-      "q5": "Which currencies does it support?",
-      "a5": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back.",
-      "q6": "Does it work offline, or on my phone?",
-      "a6": "The hosted portal works in any browser — sign in and your records are there. The phone app is built for offline capture: log an expense with no signal, and it uploads the moment you're back online."
+      "free": {
+        "q": "Is there a free plan?",
+        "a": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
+        "aOpen": "No. You can create an account with your email address, or request one and we'll reply with an offer for your organization.",
+        "aStarter": "Yes. Starter is free, with no card: one business besides your personal profile, and 3 issued invoices and 12 receipt scans each month. Solo, Business and Firm give you more room, and connect to the Tax Authority for your allocation numbers."
+      },
+      "try": {
+        "q": "Can I try it without an account?",
+        "a": "Yes. Open the portal and choose Try it on this device. Your records stay in that browser only and nothing is sent to us, so download a copy from Your data. They don't move into an account later."
+      },
+      "invoices": {
+        "q": "Can I issue invoices and receipts?",
+        "a": "Yes, on every plan: tax invoices, receipts, tax invoice-receipts, credit notes and payment requests, as PDFs in Hebrew, Arabic or English. On Solo and above we get the allocation number from the Tax Authority for you; on Starter you type it in when an invoice needs one."
+      },
+      "receipts": {
+        "q": "Can it read my receipts?",
+        "a": "Yes. Take a photo on your phone, or upload a photo or PDF in the portal. Software we run on our own servers reads the vendor, date, amount and currency, and you check them before the expense is saved. No outside company sees your receipts."
+      },
+      "accountant": {
+        "q": "Can my accountant see my books?",
+        "a": "Yes, without being able to change anything. Invite them by email to read a profile, and end their access whenever you like. Or create a share link with a PIN, for the months you choose, that works for 1, 7 or 30 days."
+      },
+      "businesses": {
+        "q": "Can I track more than one business?",
+        "a": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click.",
+        "aStarter": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click. Starter includes one business besides your personal profile; the paid plans include more."
+      },
+      "currencies": {
+        "q": "Which currencies does it support?",
+        "a": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back."
+      },
+      "data": {
+        "q": "Where is my data stored?",
+        "a": "With an account, on MTB3A's servers in the EU (Belgium), behind your sign-in — not only on one device. We back up every day and can restore your records to any moment in the last 7 days. If you try it without an account, your records stay in that browser only."
+      },
+      "backup": {
+        "q": "How do I back up, or move to another device?",
+        "a": "With an account, there's nothing to do — your account is the backup. Sign in on a new device and everything you've logged is already there. Without an account, download your records from Your data and restore the file on the other device."
+      },
+      "phone": {
+        "q": "Does it work offline, or on my phone?",
+        "a": "The portal works in any browser — sign in and your records are there. The phone app is built for offline capture: log an expense with no signal, and it uploads the moment you're back online."
+      }
     },
     "currency": {
       "USD": "US dollars",

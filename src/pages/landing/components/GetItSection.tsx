@@ -35,7 +35,7 @@ function OptionTile({ href, icon, label, primary = false }: { href: string; icon
  * and the ways in for existing users follow it. DOM order is the visual order,
  * so focus follows the page.
  */
-export function GetItSection({ signupUrl = null }: { signupUrl?: string | null }) {
+export function GetItSection({ signupUrl = null, starter = false }: { signupUrl?: string | null; starter?: boolean }) {
   const t = useT();
   const portalUrl = hostedPortalUrl();
   const iosUrl = storeLinkUrl(MOBILE_APP_LINKS.ios, 'mutaba3a-landing');
@@ -55,7 +55,7 @@ export function GetItSection({ signupUrl = null }: { signupUrl?: string | null }
       )}
     </div>
   );
-  const note = <p className="landing-get-it-note">{t(open ? 'landing.getIt.noteOpen' : 'landing.getIt.note')}</p>;
+  const note = <p className="landing-get-it-note">{t(starter ? 'landing.getIt.noteStarter' : open ? 'landing.getIt.noteOpen' : 'landing.getIt.note')}</p>;
 
   return (
     <section id="get-it" data-part="get-it" aria-labelledby="get-it-title" className="landing-section landing-get-it">

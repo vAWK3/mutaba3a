@@ -1,11 +1,6 @@
 import { useCallback, useId, useMemo, useState } from 'react';
 import { getLocale, useLanguage, useT } from '../../../lib/i18n';
-import {
-  CURRENCY_NAME_KEYS,
-  FAQ_COUNT,
-  FAQ_CURRENCY_INDEX,
-  formatCurrencyList,
-} from '../landingCopy';
+import { CURRENCY_NAME_KEYS, FAQ_CURRENCY_ID, faqFor, formatCurrencyList } from '../landingCopy';
 import './FAQSection.css';
 
 const ChevronDownIcon = () => (
@@ -56,10 +51,8 @@ function FAQItem({ id, question, answer, isOpen, onToggle }: FAQItemProps) {
   );
 }
 
-/** The free-plan answer while self-service signup is open (MUT-369). */
-const FREE_PLAN_INDEX = 1;
-
-export function FAQSection({ signupUrl = null }: { signupUrl?: string | null }) {
+/** The answers follow signup (MUT-369) and the free Starter plan (MUT-731); see `faqFor`. */
+export function FAQSection({ signupUrl = null, starter = false }: { signupUrl?: string | null; starter?: boolean }) {
   const t = useT();
   const { language } = useLanguage();
   const baseId = useId();
@@ -74,14 +67,12 @@ export function FAQSection({ signupUrl = null }: { signupUrl?: string | null }) 
       Object.values(CURRENCY_NAME_KEYS).map((key) => t(key)),
       getLocale(language)
     );
-    return Array.from({ length: FAQ_COUNT }, (_, i) => {
-      const n = i + 1;
-      return {
-        question: t(`landing.faq.q${n}`),
-        answer: t(n === FREE_PLAN_INDEX && signupUrl ? 'landing.faq.a1Open' : `landing.faq.a${n}`, n === FAQ_CURRENCY_INDEX ? { currencies } : undefined),
-      };
-    });
-  }, [t, language, signupUrl]);
+    return faqFor({ signupOpen: Boolean(signupUrl), starter }).map((item) => ({
+      id: item.id,
+      question: t(item.questionKey),
+      answer: t(item.answerKey, item.id === FAQ_CURRENCY_ID ? { currencies } : undefined),
+    }));
+  }, [t, language, signupUrl, starter]);
 
   return (
     <section data-part="faq" aria-labelledby="faq-title" className="landing-section landing-faq">
@@ -92,8 +83,8 @@ export function FAQSection({ signupUrl = null }: { signupUrl?: string | null }) 
         <div className="landing-faq-list">
           {items.map((item, index) => (
             <FAQItem
-              key={index}
-              id={`${baseId}-faq-${index}`}
+              key={item.id}
+              id={`${baseId}-faq-${item.id}`}
               question={item.question}
               answer={item.answer}
               isOpen={openIndex === index}

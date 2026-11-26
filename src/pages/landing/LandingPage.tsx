@@ -4,7 +4,7 @@ import { useLanguage, useT } from '../../lib/i18n';
 import { useInView } from '../../hooks/useInView';
 import { useDocumentTitle } from '../../hooks/useDocumentTitle';
 import { useLandingAnalytics } from './analytics/landingAnalytics';
-import { useSignupUrl } from './signupDoor';
+import { useLandingDoors } from './signupDoor';
 import {
   LandingHeader,
   HeroSection,
@@ -35,9 +35,10 @@ export function LandingPage() {
   const heroCtaGone = useInView(heroCtaRef, { rootMargin: HERO_CTA_ROOT_MARGIN }) === false;
   useDocumentTitle(t('landing.meta.title'));
   useLandingAnalytics();
-  // MUT-369: null (today's page) until the portal says signup is open; then every way in leads to /signup
+  // MUT-369: null (today's page) until the portal says signup is open; then every way in leads to /signup.
+  // MUT-731: `starter` once the portal also says the free Starter plan is on.
   const { language } = useLanguage();
-  const signupUrl = useSignupUrl(language);
+  const { signupUrl, starter } = useLandingDoors(language);
 
   return (
     <div className="landing-page">
@@ -46,7 +47,7 @@ export function LandingPage() {
       </a>
       <LandingHeader showCta={heroCtaGone} signupUrl={signupUrl} />
       <main id="main-content">
-        <HeroSection ctaRef={heroCtaRef} signupUrl={signupUrl} />
+        <HeroSection ctaRef={heroCtaRef} signupUrl={signupUrl} starter={starter} />
         <ChapterSection
           part="chapter-clients"
           title={t('landing.chapters.clients.title')}
@@ -69,10 +70,10 @@ export function LandingPage() {
           visual={<ProfileSwitcherMock />}
         />
         <PrivacyBand />
-        <GetItSection signupUrl={signupUrl} />
+        <GetItSection signupUrl={signupUrl} starter={starter} />
         <PhoneSection signupUrl={signupUrl} />
         <MalafatSection />
-        <FAQSection signupUrl={signupUrl} />
+        <FAQSection signupUrl={signupUrl} starter={starter} />
       </main>
       <LandingFooter />
     </div>

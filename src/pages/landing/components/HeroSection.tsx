@@ -11,6 +11,8 @@ interface HeroSectionProps {
   ctaRef?: Ref<HTMLAnchorElement>;
   /** MUT-369: the portal's signup page while signup is open; null keeps "Request an account". */
   signupUrl?: string | null;
+  /** MUT-731: the free Starter plan is on, so the hero says it. */
+  starter?: boolean;
 }
 
 /**
@@ -20,7 +22,7 @@ interface HeroSectionProps {
  * (MUT-369) the primary action is "Create an account" on the portal; otherwise
  * it is "Request an account". Never a direct download.
  */
-export function HeroSection({ ctaRef, signupUrl = null }: HeroSectionProps) {
+export function HeroSection({ ctaRef, signupUrl = null, starter = false }: HeroSectionProps) {
   const t = useT();
   const portalUrl = hostedPortalUrl();
   const iosUrl = storeLinkUrl(MOBILE_APP_LINKS.ios, 'mutaba3a-landing');
@@ -35,7 +37,7 @@ export function HeroSection({ ctaRef, signupUrl = null }: HeroSectionProps) {
               <span className="hero-headline-line">{t('landing.hero.headlineLine1')}</span>{' '}
               <span className="hero-headline-line">{t('landing.hero.headlineLine2')}</span>
             </h1>
-            <p className="landing-subheadline-large">{t('landing.hero.subheadline')}</p>
+            <p className="landing-subheadline-large">{t(starter ? 'landing.hero.subheadlineStarter' : 'landing.hero.subheadline')}</p>
 
             <div className="hero-cta">
               {signupUrl ? (
@@ -66,7 +68,7 @@ export function HeroSection({ ctaRef, signupUrl = null }: HeroSectionProps) {
                 </a>
               )}
             </div>
-            <p className="hero-cta-note">{t(signupUrl ? 'landing.hero.altNoteOpen' : 'landing.hero.altNote')}</p>
+            <p className="hero-cta-note">{t(starter ? 'landing.hero.altNoteStarter' : signupUrl ? 'landing.hero.altNoteOpen' : 'landing.hero.altNote')}</p>
           </div>
 
           <div className="hero-visual">

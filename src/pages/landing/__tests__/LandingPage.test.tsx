@@ -265,10 +265,11 @@ describe('LandingPage phone and portal (MUT-173)', () => {
 });
 
 describe('LandingPage FAQ', () => {
-  it('asks exactly six questions, each one opening its answer', () => {
+  it('asks nine questions before the free plan is on, each one opening its answer', () => {
     renderLanding('en');
     const questions = within(part('faq')).getAllByRole('button');
-    expect(questions).toHaveLength(6);
+    expect(questions).toHaveLength(9);
+    expect(part('faq')).not.toHaveTextContent('Can I issue invoices');
 
     const first = questions[0];
     expect(first).toHaveAttribute('aria-expanded', 'false');
@@ -280,9 +281,19 @@ describe('LandingPage FAQ', () => {
 
   it('says signing in on a new device is enough — the account is the backup', () => {
     renderLanding('en');
-    const questions = within(part('faq')).getAllByRole('button');
-    fireEvent.click(questions[2]); // "How do I back up, or move to another device?"
+    fireEvent.click(screen.getByRole('button', { name: 'How do I back up, or move to another device?' }));
     expect(part('faq')).toHaveTextContent('your account is the backup');
+    expect(part('faq')).toHaveTextContent('Without an account, download your records from Your data');
+  });
+
+  it('answers what shipped this month: trying it without an account, receipts read, the accountant', () => {
+    renderLanding('en');
+    fireEvent.click(screen.getByRole('button', { name: 'Can I try it without an account?' }));
+    expect(part('faq')).toHaveTextContent('Try it on this device');
+    fireEvent.click(screen.getByRole('button', { name: 'Can it read my receipts?' }));
+    expect(part('faq')).toHaveTextContent('you check them before the expense is saved');
+    fireEvent.click(screen.getByRole('button', { name: 'Can my accountant see my books?' }));
+    expect(part('faq')).toHaveTextContent('without being able to change anything');
   });
 
   it('names every supported currency in the currency answer', () => {
@@ -517,5 +528,66 @@ describe('LandingPage self-service signup (MUT-369)', () => {
     expect(within(part('get-it')).getByRole('heading', { name: 'Request an account' })).toBeInTheDocument();
     expect(within(part('phone')).getByRole('link', { name: 'Request an account' })).toHaveAttribute('href', '#get-it');
     expect(document.querySelector('main')?.textContent).not.toContain('Create an account');
+  });
+});
+
+/**
+ * MUT-731: while the server says the free Starter plan is on (and signup is open), the page says so: the hero, Get it
+ * and the FAQ, which also asks about invoicing (MUT-736 ships with it). Before then nothing names Starter.
+ */
+describe('LandingPage free Starter plan (MUT-731)', () => {
+  const PORTAL = 'https://portal.test';
+  const doors = (body: Record<string, boolean>) =>
+    vi.fn(async () => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } }));
+
+  afterEach(() => vi.unstubAllGlobals());
+
+  async function renderWith(body: Record<string, boolean>, language: 'en' | 'ar' = 'en') {
+    vi.stubGlobal('__PORTAL_URL__', PORTAL);
+    vi.stubGlobal('fetch', doors(body));
+    renderLanding(language);
+    await waitFor(() => expect(document.querySelector('.hero-cta-primary')).toHaveAttribute('href', `${PORTAL}/signup?lang=${language}`));
+  }
+
+  it('says Starter is free, with no card, in the hero and Get it', async () => {
+    await renderWith({ signup: true, starterPlan: true });
+    expect(part('hero')).toHaveTextContent('Free on Starter');
+    expect(part('hero')).toHaveTextContent('the invoices you issue');
+    expect(part('get-it')).toHaveTextContent('Start free on Starter with your email address — no card.');
+  });
+
+  it('answers yes to the free plan, and asks about invoicing', async () => {
+    await renderWith({ signup: true, starterPlan: true });
+    expect(within(part('faq')).getAllByRole('button')).toHaveLength(10);
+    fireEvent.click(screen.getByRole('button', { name: 'Is there a free plan?' }));
+    expect(part('faq')).toHaveTextContent('Yes. Starter is free, with no card');
+    fireEvent.click(screen.getByRole('button', { name: 'Can I issue invoices and receipts?' }));
+    expect(part('faq')).toHaveTextContent('on Starter you type it in');
+  });
+
+  it('names no price, checkout or trial', async () => {
+    await renderWith({ signup: true, starterPlan: true });
+    for (const name of ['Is there a free plan?', 'Can I issue invoices and receipts?']) fireEvent.click(screen.getByRole('button', { name }));
+    const copy = ['.hero-cta-note', '.landing-subheadline-large', '.landing-get-it-note', '.landing-faq-answer:not([hidden])']
+      .flatMap((selector) => Array.from(document.querySelectorAll(selector), (el) => el.textContent ?? ''))
+      .join(' ');
+    expect(copy).toContain('Starter');
+    expect(copy).not.toMatch(/[₪$€]\s?\d|\d\s?(₪|\$|USD|ILS)|\/month|per month|checkout|trial|price/i);
+  });
+
+  it('reads the same in Arabic', async () => {
+    await renderWith({ signup: true, starterPlan: true }, 'ar');
+    expect(part('hero')).toHaveTextContent('مجانية على خطة البداية');
+    fireEvent.click(screen.getByRole('button', { name: 'هل توجد خطة مجانية؟' }));
+    expect(part('faq')).toHaveTextContent('نعم. خطة البداية مجانية');
+  });
+
+  it.each([
+    ['the server has it off', { signup: true, starterPlan: false }],
+    ['the server is older and says nothing', { signup: true }],
+  ])('names no Starter and asks nothing about invoicing while %s', async (_case, body) => {
+    await renderWith(body);
+    expect(document.querySelector('main')?.textContent).not.toMatch(/Starter|invoic/i);
+    expect(within(part('faq')).getAllByRole('button')).toHaveLength(9);
   });
 });

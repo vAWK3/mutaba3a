@@ -7180,3 +7180,18 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 **Consequences:** API 1.143.0-mut736, additive (`TaxAuthorityStatus.state` gains `suspended` and `plan`; `IssueAllocation.automaticOn`; reminders' `skip: plan`). No migration. Release: API with `invoicing_for_all = false`, then turn it on in `production.tfvars` (Basel's call; before Starter per Q6). The operator console keeps the `invoicing` toggle, now labelled as the kill switch's grant.
 
 **Alternatives rejected:** a Prisma STARTER tier now (MUT-731's S1); a test-only plan override for live QA (the portal flows run on the FakeApi; the server's Starter paths are route-tested with the plan scripted); `unguarded()` for the plan read (a second escape hatch).
+## ADR-283: The Landing Names the Free Starter Plan and Invoicing Only While the Server's STARTER_PLAN Is On; the FAQ Is a Keyed List
+
+**Status:** Accepted (2026-11-26; Basel asked for the landing and FAQ to cover the past month, including the Starter plan, MUT-731).
+
+**Context:** the landing's FAQ was last changed on 2026-10-24 and said nothing about trying the portal without an account (MUT-513), receipts read on our servers (MUT-659), the accountant and share links (MUT-562), or issuing documents (MUT-568 and after). Starter (MUT-731) is planned, not built: it ships behind `STARTER_PLAN` once the paid plans can be bought, so a page that promised it would be wrong the day it shipped. Invoicing for everyone (MUT-736, ADR-282) is built and goes on with `INVOICING_FOR_ALL`, before Starter; the landing's invoicing answer names Starter's manual allocation number, so it waits for Starter too (a door for `INVOICING_FOR_ALL` could show an earlier answer: not done here). The web release and the API release are separate.
+
+**Decision:**
+1. **The server decides, as for signup (MUT-369 D1):** `GET /v1/self-service` gains `starterPlan` (`STARTER_PLAN`, default off; additive since 1.144.0-landing). The landing reads it with the signup door, one request per page load, and describes Starter only when signup is open **and** `starterPlan` is true. MUT-731 builds the plan behind the same switch, so turning it on changes the product and the page together, with no web release.
+2. **What only Starter turns on:** the hero's sub-headline and note, Get it's note, the FAQ's free-plan and businesses answers, and the invoicing question (its answer names Starter). No price, checkout or trial on any of it (MUT-369's rule).
+3. **What is live now ships now:** the hero and phone chapter mention receipts read for you; the FAQ adds trying it without an account, receipts, the accountant and share links, and the data and backup answers cover signed-out mode.
+4. **The FAQ is a keyed list** (`FAQ_ENTRIES` in `landingCopy.ts`, keys `landing.faq.<id>.q|a|aOpen|aStarter`) instead of numbered `q1..qN`, so a question can be added, moved or shown only with Starter without renumbering.
+
+**Consequences:** `STARTER_PLAN` exists before MUT-731; until MUT-731 is live it must stay unset in production (before-release note). The live privacy policy says the home page asks "whether sign-up is open"; the same request now also reads `starterPlan`, which carries nothing about the visitor; the held-back drafts (`docs/legal/drafts/privacy-policy-2026-11-25.*.json`) now say "sign-up and the free plan", and publish with MUT-732 (Basel, 2026-11-26).
+
+**Alternatives rejected:** writing the Starter copy unconditionally and holding the web release until MUT-731 (it would block every other landing change); a build-time flag (a web release to turn it on, and it could drift from the server); leaving Starter out (Basel asked for it).

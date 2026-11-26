@@ -4844,3 +4844,11 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Portal (vitest + RTL) | `InvoicingSteps.test.tsx`, `ManualAllocationPanel.test.tsx` | step 5 on Starter (Upgrade opens Billing, no Connect, no explanatory line), suspended + Disconnect, Arabic «مستقل», `taxAuthority=plan`, PLAN_LIMIT on Connect re-reads the status, paid plan: Connect and no upgrade; the panel unchanged with `automaticOn` set |
 | Phone (flutter test) | `issued_document_test.dart`, `issue_document_screen_test.dart` | `automaticOn` parsed (unknown = none); the card unchanged on Starter |
 | QA | `portal.invoicing.starter-manual-allocation`, `starter-connect-refused`, `solo-automatic-allocation` (FakeApi) | Starter issues ₪6,000 with a typed number; step 5 upgrade / suspended / disconnect / Arabic; Solo connects and gets a number by itself |
+### Landing copy, November 2026 (ADR-283)
+
+| Layer | Where | What |
+|---|---|---|
+| Server | `routes-self-service.test.ts` | the doors say `starterPlan` from STARTER_PLAN, false by default |
+| Unit | `signupDoor.test.ts`, `landingCopy.test.ts` | `starterPlan` only on a clear true; Starter only while signup is open; `faqFor` picks the answer per state; every FAQ key in ar + en |
+| Page (RTL) | `LandingPage.test.tsx` | 9 questions, 10 with Starter; Starter copy in hero, Get it and FAQ; no price, checkout or trial; nothing names Starter or invoicing while it is off or the server is older |
+| QA | `web.landing.starter-free-plan`, `web.landing.faq-month` | the Starter page in ar then en, and back off; the month's answers in en and ar |

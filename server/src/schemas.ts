@@ -1833,6 +1833,8 @@ export const SelfServiceDoorsSchema = z
     malafatSignIn: z.boolean(),
     /** MUT-618: "Email me a sign-in code" can mail a code (the same condition as `recovery`). Additive since 1.114.0-mut618. */
     signInCode: z.boolean(),
+    /** MUT-731: the free Starter plan is on (STARTER_PLAN), so the landing describes it. Additive since 1.144.0-landing. */
+    starterPlan: z.boolean(),
   })
   .openapi('SelfServiceDoors');
 
