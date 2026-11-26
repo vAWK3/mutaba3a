@@ -524,6 +524,9 @@ Target: this plan after the CEO and eng reviews. Mode: Operate for the desk and 
 
 Pass scores: Information architecture 3 to 8, Interaction states 2 to 9, Journey 3 to 9, AI slop 8 to 8, Design system 6 to 9, Responsive and accessibility 2 to 9. Overall 4.0 to 8.7 (shown as 4 to 9). Remaining gaps: the exact Arabic and English wording, the CodeReveal registry entry, and nothing is drawn yet (wireframes follow).
 
+### Copy rule (Basel, 2026-11-26)
+UI copy is minimal: only what the person needs to proceed (a status, a number, a label, an action). The wireframe and the plan were trimmed accordingly: the code pane says "Code", there is no Stripe, passkey or welcome explainer, and notes such as "Claimed" are one word. Errors keep only what the person must do next.
+
 ### Information hierarchy
 ```
 DESK /client-books: 1 title + Add customer + search | 2 filter chips | 3 rows (name+owner, badge, ONE next action; tap opens the book)
@@ -556,7 +559,7 @@ Accountant: opens the desk ("400 to go"; chips), adds a customer (in a hurry; on
 Desktop (760 and up): HostedTable with Customer (name and owner, dir=auto), State badge, Last activity, Next action (stickyEnd); chips above; Add customer in the page header; drawers 480 px. At 375: two-line rows (name, then badge and next action wrapping), 44 px targets, chips wrap with no horizontal scroll, drawers fill the screen, the code block scales with --text-figure-fluid, /setup one column. Phone app: Add customer is a form sheet with a pinned 52 pt primary and the banner above it; list rows 48 pt with a trailing 48 pt customer button (tap opens the book); the code pane sits inside the same sheet; iPad column 560 pt.
 
 ### Accessibility spec (DR-11)
-Code entry: PinBoxes, inputmode numeric, autocomplete one-time-code, each box "Digit n of 6", paste fills all, errors role=alert, lockout text names what to do. Code block: dir=ltr, aria-label with spaced digits. Pane swap: focus to the pane heading; Escape closes the drawer. Activating and Active: a polite live region. Card step: "Continue to Stripe" with a line that Stripe's secure page opens. Targets 44 px (48 pt on the phone), contrast from tokens, state never by colour alone, reduced motion shows the final frame.
+Code entry: PinBoxes, inputmode numeric, autocomplete one-time-code, each box "Digit n of 6", paste fills all, errors role=alert, lockout text names what to do. Code block: dir=ltr, aria-label with spaced digits. Pane swap: focus to the pane heading; Escape closes the drawer. Activating and Active: a polite live region. Card step: button "Continue to Stripe", no explanatory line. Targets 44 px (48 pt on the phone), contrast from tokens, state never by colour alone, reduced motion shows the final frame.
 
 ### NOT in scope
 - A new /claim page (DR-1 chose /setup).
