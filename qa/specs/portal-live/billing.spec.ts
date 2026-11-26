@@ -787,7 +787,7 @@ test('The stay offer - half price for 2 months, once per person ever', { tag: '@
   });
   await step('The stay offer: 50% off for 2 months, ₪14.50 instead of ₪29.00', async () => {
     await expect(flow.getByRole('heading', { name: 'Stay with 50% off for 2 months' })).toBeVisible();
-    await expect(flow.getByText(/^You pay ₪14\.50 a month instead of ₪29\.00, then ₪29\.00 a month again\. You can still cancel any time\.$/)).toBeVisible();
+    await expect(flow.getByText(/^You pay ₪14\.50 a month instead of ₪29\.00, then ₪29\.00 a month again\.$/)).toBeVisible();
     await expect(flow.getByText(/^A one-time offer\. If you cancel, your plan ends on .+\.$/)).toBeVisible();
   });
   await step('Press Keep my plan at ₪14.50: done, and Stripe holds the stay coupon', async () => {

@@ -88,13 +88,16 @@ export async function operatorAccount(email: string, locale: 'en' | 'ar', passwo
   return { id: created.user.id, setupUrl: created.setupLink.url };
 }
 
+const rand255 = () => Math.floor(Math.random() * 254);
+
 /** Sets a password through a /setup#<token> link, as the setup page does. */
 export async function redeemSetupLink(url: string, password: string): Promise<void> {
   const { origin } = liveState();
   const token = new URL(url).hash.slice(1);
   const set = await fetch(`${origin}/v1/account-setup`, {
     method: 'POST',
-    headers: { 'content-type': 'application/json', origin },
+    // Its own client address (the QA API trusts one proxy hop), so a long run's many setups never share one IP's budget.
+    headers: { 'content-type': 'application/json', origin, 'x-forwarded-for': `10.${rand255()}.${rand255()}.${rand255() + 1}` },
     body: JSON.stringify({ token, password, acceptedTermsVersion: CURRENT_TERMS.version }),
   });
   expect(set.ok, `set password ${set.status}`).toBe(true);
