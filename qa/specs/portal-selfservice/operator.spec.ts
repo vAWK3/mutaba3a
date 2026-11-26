@@ -143,7 +143,7 @@ test('Decline a waiting signup, in Arabic on a 375 px phone', { tag: '@portal-se
   });
   await step('Press رفض: the confirm says the account will be deleted', async () => {
     await signupRow(page, waiting).getByRole('button', { name: 'رفض' }).click();
-    await expect(page.getByText(`سيُحذف حساب ${waiting}. سنراسله، ويمكنه التسجيل من جديد.`)).toBeVisible();
+    await expect(page.getByText(`سيُحذف حساب ${waiting}. سنراسله.`)).toBeVisible();
     await expectNoHorizontalOverflow(page, 'the decline confirm at 375 px');
   });
   await step('Confirm with the passkey: declined, and the mail went', async () => {
@@ -265,7 +265,7 @@ test('Opening Accounts lists every account; search narrows it, and says so when 
     await accountLink(page, email).click();
     await expect(page.getByRole('heading', { level: 2, name: email })).toBeVisible();
     await expect(page.getByText(/Last signed in \d+ minutes? ago · No passkey/)).toBeVisible();
-    await expect(accessRow(page, /Sign out everywhere/)).toContainText('1 device · the password still works');
+    await expect(accessRow(page, /Sign out everywhere/)).toContainText('1 device');
     await expect(accessRow(page, /Disable account/)).toContainText('Signs out 1 device');
     await expect(page.getByRole('region', { name: 'Profiles' })).toContainText(/Owner · (Trial|No plan|Granted|Paid) · /);
   });
@@ -282,7 +282,7 @@ test('Sign a person out everywhere; their password still works', { tag: '@portal
   await step('Open their account and press Sign out everywhere: the confirm says what it ends', async () => {
     await openAccount(page, person.email);
     await accessRow(page, /Sign out everywhere/).click();
-    await expect(page.getByRole('group')).toContainText('will be signed out on 1 device, and 0 connected apps disconnected. Their password still works.');
+    await expect(page.getByRole('group')).toContainText('will be signed out on 1 device, and 0 connected apps disconnected.');
     await expect(page.getByRole('button', { name: 'Cancel' })).toBeFocused();
   });
   await step('Confirm with the passkey: the toast says 1 device', async () => {
@@ -621,13 +621,13 @@ test('Switch accountant access on your own account with the passkey; the blocked
   const flag = () => page.getByRole('region', { name: 'Features' }).getByRole('switch', { name: /Accountant access/ });
   await step('Open your own account from the list: one note, no Access rows, no Grant row', async () => {
     await openAccount(page, me.email);
-    await expect(page.getByText('This is your account. Sign-in and security actions are in You › Account; you can switch features for yourself here.')).toBeVisible();
+    await expect(page.getByText('This is your account. Sign-in and security are in You › Account.')).toBeVisible();
     await expect(page.getByText(/This is your account/)).toHaveCount(1);
     await expect(page.getByRole('region', { name: 'Access' })).toHaveCount(0);
     await expect(page.getByRole('region', { name: 'Billing' }).getByRole('button', { name: /Grant coverage/ })).toHaveCount(0);
   });
   await step('Turn Accountant access on, confirming with the passkey: it reads on, and the CLI lists you', async () => {
-    await expect(flag()).toContainText('As an owner, they can invite an accountant to read a profile and make share links.');
+    await expect(flag()).toContainText('They can invite an accountant and make share links.');
     await expect(flag()).toHaveAttribute('aria-checked', 'false');
     await flag().click();
     await expect(flag()).toHaveAttribute('aria-checked', 'true');
@@ -647,14 +647,14 @@ test('Accountant access shows its name and explanation in Arabic, and its own tu
   const flag = () => page.getByRole('region', { name: 'الميزات' }).getByRole('switch', { name: /وصول المحاسب/ });
   await step('Open their account: وصول المحاسب is named and explained, never by its key', async () => {
     await openAccount(page, person.email, 'ar');
-    await expect(flag()).toContainText('بصفته مالكًا، يمكنه دعوة محاسب لقراءة ملف ومشاركة روابط.');
+    await expect(flag()).toContainText('يمكنه دعوة محاسب وإنشاء روابط مشاركة.');
     await expect(page.getByText('accountant_access')).toHaveCount(0);
   });
   await step('Turn it on with the passkey, then off: it asks first, in its own words', async () => {
     await flag().click();
     await expect(flag()).toHaveAttribute('aria-checked', 'true');
     await flag().click();
-    await expect.poll(() => confirmText(page)).toContain(`لن يستطيع ${person.email} دعوة محاسبين أو إنشاء روابط جديدة؛ وما شاركه من قبل يبقى يعمل حتى يلغيه.`);
+    await expect.poll(() => confirmText(page)).toContain(`لن يستطيع ${person.email} دعوة محاسبين أو إنشاء روابط جديدة.`);
     await page.getByRole('button', { name: 'إيقاف', exact: true }).click();
     await expect(flag()).toHaveAttribute('aria-checked', 'false');
     expect(await featureHolders('accountant_access')).not.toContain(person.id);
@@ -674,7 +674,6 @@ test('Your settings shows you’re an operator, your passkeys, the step-up, and 
     await expect(page.getByRole('region', { name: 'Passkeys' })).toContainText('1 passkey');
     const confirmation = page.getByRole('region', { name: 'Confirmation' });
     await expect(confirmation).toContainText('Not confirmed');
-    await expect(confirmation).toContainText('Changes will ask for your passkey.');
     await expectNoHorizontalOverflow(page, 'Your settings at 375 px');
   });
   await step('Turn Accountant access on for yourself with the passkey: on, and confirmed until a time', async () => {

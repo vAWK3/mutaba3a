@@ -152,7 +152,6 @@ describe('the list (AC3, design 7A, 13A, 18A)', () => {
   it('says so when no one is waiting', async () => {
     portal({ reviews: [] });
     expect(await screen.findByRole('heading', { name: 'No one is waiting' })).toBeInTheDocument();
-    expect(screen.getByText('The digest emails you when someone signs up.')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Signups' })).toBeInTheDocument();
   });
 
@@ -197,7 +196,7 @@ describe('approving and declining (AC1, AC2, AC3, design 8A, 11A)', () => {
   it('Decline confirms as danger, deletes and mails, and the last decision leaves the empty state', async () => {
     const { user, api } = portal({ reviews: [OLD] });
     await user.click(await within(await screen.findByRole('listitem', { name: 'rana@gmail.com' })).findByRole('button', { name: 'Decline' }));
-    expect(screen.getByText("rana@gmail.com's account will be deleted. We'll email them; they can sign up again.")).toBeInTheDocument();
+    expect(screen.getByText("rana@gmail.com's account will be deleted. We'll email them.")).toBeInTheDocument();
     const confirm = within(row('rana@gmail.com')).getByRole('button', { name: 'Decline' });
     expect(confirm).toHaveClass('btn-danger');
     await user.click(confirm);

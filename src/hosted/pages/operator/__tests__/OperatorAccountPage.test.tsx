@@ -194,8 +194,8 @@ describe('the account page (design 5A, 4A)', () => {
     expect(screen.getByText('Active')).toHaveClass('badge-success');
     expect(screen.getByText(/Last signed in 3 hours ago · Has a passkey/)).toBeInTheDocument();
     const rows = await access();
-    expect(rows.getByRole('button', { name: /Sign out everywhere/ })).toHaveTextContent('2 devices · the password still works');
-    expect(rows.getByRole('button', { name: /Disable account/ })).toHaveTextContent('Signs out 2 devices, disconnects 1 connected app, blocks sign-in');
+    expect(rows.getByRole('button', { name: /Sign out everywhere/ })).toHaveTextContent('2 devices');
+    expect(rows.getByRole('button', { name: /Disable account/ })).toHaveTextContent('Signs out 2 devices, disconnects 1 connected app');
     expect(rows.getByRole('button', { name: /Send reset link/ })).toBeInTheDocument();
     expect(rows.queryByRole('button', { name: /Enable account/ })).toBeNull();
     const profiles = within(screen.getByRole('region', { name: 'Profiles' }));
@@ -230,7 +230,7 @@ describe('the account page (design 5A, 4A)', () => {
 
   it('the operator’s own account says once why Access is missing, and shows no Access rows (E10, MUT-527)', async () => {
     const { api } = portal({ view: account({ id: OPERATOR_ID, operator: true }), path: `/operator/accounts/${OPERATOR_ID}` });
-    const note = await screen.findByText(/This is your account\. Sign-in and security actions are in You › Account; you can switch features for yourself here\./);
+    const note = await screen.findByText(/This is your account\. Sign-in and security are in You › Account\./);
     expect(within(note.closest('.hp-banner') as HTMLElement).getByRole('link', { name: 'Open You › Account' })).toHaveAttribute('href', '/you/account');
     expect(screen.getAllByText(/This is your account/)).toHaveLength(1);
     expect(screen.queryByRole('region', { name: 'Access' })).toBeNull();
@@ -248,7 +248,7 @@ describe('the account page (design 5A, 4A)', () => {
       extra: { [`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`]: () => ok({ feature: 'accountant_access', grantedAt: NOW.toISOString(), granted: true }) },
     });
     const flag = (await features()).getByRole('switch', { name: /Accountant access/ });
-    expect(flag).toHaveTextContent('As an owner, they can invite an accountant to read a profile and make share links.');
+    expect(flag).toHaveTextContent('They can invite an accountant and make share links.');
     expect(flag).not.toHaveAttribute('aria-disabled');
     await user.click(flag);
     await waitFor(() => expect(api.count(`PUT /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`)).toBe(1));
@@ -272,7 +272,7 @@ describe('acting on the account (AC1, design 4A, 11A)', () => {
   it('Disable confirms in its row with what it ends; Cancel and Escape put the row back, focused', async () => {
     const { user, api } = portal();
     await user.click((await access()).getByRole('button', { name: /Disable account/ }));
-    expect(screen.getByText(sentence("sara@studio.example will be signed out on 2 devices, 1 connected app disconnected, and they can't sign in until you enable the account."))).toBeInTheDocument();
+    expect(screen.getByText(sentence("sara@studio.example will be signed out on 2 devices, 1 connected app disconnected, and sign-in blocked."))).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toHaveFocus();
     expect(screen.getByRole('button', { name: 'Disable' })).toHaveClass('btn-danger');
     await user.keyboard('{Escape}');
@@ -321,7 +321,7 @@ describe('the reset link (AC2, design 12A)', () => {
   it('locks the password by default, shows the link once with a copy field, and never anywhere else', async () => {
     const { user, api, queryClient } = portal();
     await user.click((await access()).getByRole('button', { name: /Send reset link/ }));
-    expect(screen.getByText(sentence('Make a one-time reset link for sara@studio.example. Any earlier link stops working.'))).toBeInTheDocument();
+    expect(screen.getByText(sentence('Make a one-time reset link for sara@studio.example.'))).toBeInTheDocument();
     expect(screen.getByRole('switch', { name: 'Lock the current password' })).toHaveAttribute('aria-checked', 'true');
     await user.click(screen.getByRole('button', { name: 'Make link' }));
 
@@ -434,7 +434,6 @@ describe('billing grants (MUT-462, design 14A)', () => {
     expect(drawer.getByText('Choose a day after today, or No end date.')).toBeInTheDocument();
     expect(api.count(`POST /v1/operator/accounts/${SARA}/billing-grants`)).toBe(0);
     await user.click(drawer.getByRole('button', { name: 'No end date' }));
-    expect(drawer.getByText('It lasts until you revoke it.')).toBeInTheDocument();
     await user.click(drawer.getByRole('button', { name: 'Grant' }));
     await toasted('Coverage granted to sara@studio.example');
     expect(api.calls.find((c) => c.method === 'POST' && c.url.pathname.endsWith('/billing-grants'))!.body).toEqual({ tier: 'SOLO', reason: 'Pilot comp' });
@@ -454,7 +453,7 @@ describe('billing grants (MUT-462, design 14A)', () => {
     const { user, api } = portal({ grants: [grantOf()] });
     const rows = await billing();
     await user.click(await rows.findByRole('button', { name: 'Revoke' }));
-    expect(screen.getByText(sentence('sara@studio.example loses this Freelancer (legacy) coverage. Their profiles go back to their own plan or trial.'))).toBeInTheDocument();
+    expect(screen.getByText(sentence('sara@studio.example loses this Freelancer (legacy) coverage.'))).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     await user.click(rows.getByRole('button', { name: 'Revoke' }));
     await user.click(within(screen.getByRole('group')).getByRole('button', { name: 'Revoke' }));
@@ -477,7 +476,7 @@ describe('feature flags (MUT-462, design 15A)', () => {
     const { user, api } = portal();
     const flag = (await features()).getByRole('switch', { name: /Connect Claude/ });
     expect(flag).toHaveAttribute('aria-checked', 'false');
-    expect(flag).toHaveTextContent('They can connect their own Claude to log receipts and statements');
+    expect(flag).toHaveTextContent('They can connect their own Claude');
     await user.click(flag);
     await waitFor(() => expect((within(screen.getByRole('region', { name: 'Features' })).getByRole('switch', { name: /Connect Claude/ }))).toHaveAttribute('aria-checked', 'true'));
     expect(api.count(`PUT /v1/operator/accounts/${SARA}/features/agent_access`)).toBe(1);

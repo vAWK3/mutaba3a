@@ -42,7 +42,6 @@ function YouSettings({ account, stepUpUntil }: { account: OperatorAccount; stepU
       <RowGroup label={t('hosted.operator.you.title')}>
         <StaticRow
           label={account.operatorSince ? t('hosted.operator.you.operatorSince', { date: dayText(account.operatorSince, language) }) : t('hosted.operator.you.operator')}
-          sub={t('hosted.operator.you.operatorSub')}
         />
       </RowGroup>
       <RowGroup label={t('hosted.operator.you.passkeys')}>
@@ -50,13 +49,12 @@ function YouSettings({ account, stepUpUntil }: { account: OperatorAccount; stepU
           label={account.passkeyCount > 0 ? tp('hosted.operator.you.passkeyCount', account.passkeyCount) : t('hosted.operator.you.noPasskeys')}
           sub={account.passkeyCount > 0 ? passkeyUse : undefined}
         />
-        <RowNavLink label={t('hosted.operator.you.managePasskeys')} sub={t('hosted.operator.you.managePasskeysSub')} to="/you/account" search={{ passkeys: true }} />
+        <RowNavLink label={t('hosted.operator.you.managePasskeys')} to="/you/account" search={{ passkeys: true }} />
       </RowGroup>
       <RowGroup label={t('hosted.operator.you.confirmation')}>
         <div data-step-up={confirmed ? 'confirmed' : 'not-confirmed'}>
           <StaticRow
             label={confirmedUntil ? t('hosted.operator.you.confirmedUntil', { time: clockText(confirmedUntil, language) }) : t('hosted.operator.you.notConfirmed')}
-            sub={confirmed ? t('hosted.operator.you.confirmedSub') : t('hosted.operator.you.notConfirmedSub')}
           />
         </div>
       </RowGroup>

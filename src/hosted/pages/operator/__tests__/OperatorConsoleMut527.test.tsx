@@ -204,7 +204,6 @@ describe('Your settings (the You tab)', () => {
     portal({ path: '/operator/you', stepUpUntil: STALE });
     const confirmation = within(await screen.findByRole('region', { name: 'Confirmation' }));
     expect(confirmation.getByText('Not confirmed')).toBeInTheDocument();
-    expect(confirmation.getByText('Changes will ask for your passkey.')).toBeInTheDocument();
   });
 
   it('your own features switch here, after the passkey step-up; then the session reads as confirmed', async () => {
@@ -222,7 +221,7 @@ describe('Your settings (the You tab)', () => {
   it('turning your own feature off confirms first, in its own words', async () => {
     const { user, api } = portal({ path: '/operator/you', own: mine({ features: ['accountant_access'] }) });
     await user.click(within(await screen.findByRole('region', { name: 'Your features' })).getByRole('switch', { name: /Accountant access/ }));
-    expect(screen.getByText((_, el) => el?.tagName === 'P' && plain(el.textContent) === "basel@studio.example can't invite accountants or make new links; the ones they already shared keep working until they revoke them.")).toBeInTheDocument();
+    expect(screen.getByText((_, el) => el?.tagName === 'P' && plain(el.textContent) === "basel@studio.example can't invite accountants or make new links.")).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Turn off' }));
     await waitFor(() => expect(api.count(`DELETE /v1/operator/accounts/${OPERATOR_ID}/features/accountant_access`)).toBe(1));
   });
@@ -238,7 +237,7 @@ describe('Your settings (the You tab)', () => {
     localStorage.clear();
     portal({ who: operator('ar'), path: '/operator/you' });
     const yours = within(await screen.findByRole('region', { name: 'ميزاتك' }));
-    expect(yours.getByRole('switch', { name: /وصول المحاسب/ })).toHaveTextContent('بصفته مالكًا، يمكنه دعوة محاسب لقراءة ملف ومشاركة روابط.');
+    expect(yours.getByRole('switch', { name: /وصول المحاسب/ })).toHaveTextContent('يمكنه دعوة محاسب وإنشاء روابط مشاركة.');
     expect(screen.getByText(/^مشغّل منذ .*2026/)).toBeInTheDocument();
   });
 });

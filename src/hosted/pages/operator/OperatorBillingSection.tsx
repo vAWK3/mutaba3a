@@ -80,7 +80,7 @@ export function OperatorBillingSection({ account, stepUpUntil: viewStepUpUntil, 
       {/* MUT-527: the page's own-account note says why; no row repeats it. */}
       {!own && (
         <div ref={openerRef}>
-          <RowButton label={t('hosted.operator.billing.grant')} sub={t('hosted.operator.billing.grantSub')} onClick={() => onGrantOpen(true)} />
+          <RowButton label={t('hosted.operator.billing.grant')} onClick={() => onGrantOpen(true)} />
         </div>
       )}
       {grantOpen && !own && <GrantDrawer account={account} stepUpUntil={stepUpUntil} onClose={closeDrawer} />}
@@ -256,7 +256,6 @@ function GrantDrawer({ account, stepUpUntil, onClose }: { account: OperatorAccou
               setErrors((e) => ({ ...e, day: undefined }));
             }}
           />
-          {day === '' && <p className="form-hint">{t('hosted.operator.billing.noEndHint')}</p>}
           {errors.day && <p className="form-error">{errors.day}</p>}
         </div>
         {run.failure && <StepUpFailureBanner failure={run.failure} error={run.failureError} />}
