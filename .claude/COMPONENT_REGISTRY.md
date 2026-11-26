@@ -2585,7 +2585,7 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/data/planUsage.ts` | `starterUsageOf`, `planLimitOf`, `documentRefusedNow`, `limitFromUsage`, `homeNoticeOf`, `billingStarterOf`, `activeBusinessesOf`, nudge hide helpers | the components below |
 | `src/hosted/data/useStarterUsage.ts` | `useStarterUsage()` (Billing's query only for Starter people) | Issue drawer, receipts, New profile |
 | `src/hosted/components/PlanLimitNotice.tsx` | `PlanLimitNotice`, `UpgradeToSolo` | Issue drawer, receipts gallery, Home drop zone, expense receipts, New profile, Home notices, Billing |
-| `src/hosted/components/StarterPlan.tsx` | `UsageMeter`, `LeftLine`, `StarterBilling`, `PickActiveBusiness`, `useChooseActiveBusiness`, `ContinueFreeOnStarter` | Billing drawer, the pick dialog, `LapseGate` |
+| `src/hosted/components/StarterPlan.tsx` | `UsageMeter`, `LeftLine`, `StarterBilling`, `PickActiveBusiness`, `ContinueFreeOnStarter` (with `data/starterQueries.ts` `useChooseActiveBusiness`) | Billing drawer, the pick dialog, `LapseGate` |
 | `src/hosted/components/PickActiveBusinessDialog.tsx` | `PickActiveBusinessDialog` (BlockingDialog) | `AuthGate` |
 | `src/hosted/components/UsageNotice.tsx` | `UsageNotice` (Home's 80/90/limit) | `LandingNotices` |
 | `src/hosted/pages/onboarding/SoloTrialStep.tsx` | `SoloTrialStep`, `SOLO_TRIAL_CHECKOUT` (dark) | `AuthGate` |

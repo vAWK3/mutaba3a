@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
 import { Button } from '../../../components/ui/Button';
@@ -35,7 +35,8 @@ export function SoloTrialStep({ soloMonthly }: { soloMonthly?: string | null }) 
     recorded.current = true;
     void api.soloTrialOffered().catch(() => undefined);
   }, []);
-  const firstCharge = new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // The first charge falls on the trial's end; read once when the step shows.
+  const [firstCharge] = useState(() => new Date(Date.now() + TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
   const done = () => queryClient.invalidateQueries({ queryKey: ME_KEY });
   const rows: Array<[string, string, string]> = [
     ['hosted.onboarding.trial.businesses', '1', '1'],

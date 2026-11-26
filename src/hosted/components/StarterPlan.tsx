@@ -1,5 +1,6 @@
 import { useId, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useChooseActiveBusiness } from '../data/starterQueries';
 import { Button } from '../../components/ui/Button';
 import { useLanguage, useT } from '../../lib/i18n/core';
 import { useTp } from '../../lib/i18n/plural';
@@ -113,15 +114,6 @@ function ActiveBusinessRows({ activeBusinesses, onChange }: { activeBusinesses: 
       </ul>
     </section>
   );
-}
-
-/** Choosing the active business: refetches /v1/me and Billing, so the gate's answer and the screens agree. */
-export function useChooseActiveBusiness() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (organizationId: string) => api.setActiveBusinesses([organizationId]),
-    onSuccess: () => Promise.all([queryClient.invalidateQueries({ queryKey: ME_KEY }), queryClient.invalidateQueries({ queryKey: BILLING_KEY })]),
-  });
 }
 
 /**
