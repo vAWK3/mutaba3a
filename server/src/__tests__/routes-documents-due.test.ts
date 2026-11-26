@@ -12,7 +12,7 @@ async function invoicing(h: AccountantHarness) {
   expect((await grantInvoicing(h, owner)).status).toBe(200);
   const profileId = await businessOf(h, owner, 'Barmajiyat');
   const on = owner.on(profileId);
-  expect((await h.app.request('/v1/issuer', json({ legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY' }, on, 'PUT'))).status).toBe(200);
+  expect((await h.app.request('/v1/issuer', json({ legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY' }, on, 'PUT'))).status).toBe(200);
   expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
   const client = async (name: string) => (await read(await h.app.request('/v1/customers', json({ name }, { ...on, ...idem() })))) as { id: string; version: number };
   const rami = await client('Rami Haddad');

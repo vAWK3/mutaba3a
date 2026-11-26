@@ -6,7 +6,7 @@ import { ledgerEntries } from '../../statements/lines.js';
 import { summarizePeriod } from '../../statements/period.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
 
-const ISSUER_DEFAULTS = { ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
+const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
 /** MUT-568 (ADR-260) storage contract: issued documents, gap-free numbers, their ledger rows, copies and gaps. */
 export function describeLedgerStoreIssuingContract(name: string, makeStore: () => Promise<LedgerStore>): void {
@@ -387,6 +387,15 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
         kind: 'updated',
         record: { ink: 'BLUE', documentStyle: 'MINIMAL', defaultLanguage: 'ar', paymentTermsDays: 30, bankDetails: 'Bank Leumi 10-800-123456', footerNote: 'Thank you', version: 3 },
       });
+    });
+
+    it('MUT-740: keeps the issuer country with the details, IL by default, and replaces it with them', async () => {
+      const store = await makeStore();
+      const w = await world(store);
+      const input = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ...ISSUER_DEFAULTS };
+      expect(await store.issuing.putIssuer(w.a.id, input, null, at(1))).toMatchObject({ kind: 'created', record: { country: 'IL' } });
+      expect(await store.issuing.putIssuer(w.a.id, { ...input, country: 'JO' }, 1, at(2))).toMatchObject({ kind: 'updated', record: { country: 'JO', version: 2 } });
+      expect(await store.issuing.getIssuer(w.a.id)).toMatchObject({ country: 'JO' });
     });
 
     it('MUT-646: stamps each setup step once, per profile', async () => {

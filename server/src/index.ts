@@ -257,6 +257,7 @@ const app = createApp({
   billingGate: config.BILLING_GATE,
   twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
   invoicingForAll: config.INVOICING_FOR_ALL,
+  invoicingJurisdictions: config.INVOICING_JURISDICTIONS,
   soloTrialOfferSince: config.SOLO_TRIAL_OFFER_SINCE ?? null,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.

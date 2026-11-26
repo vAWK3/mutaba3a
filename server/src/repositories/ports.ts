@@ -4725,6 +4725,8 @@ export interface InboxEntryRepository {
 export interface IssuerDetailsInput {
   legalName: string;
   vatId: string;
+  /** MUT-740 (ADR-287 D1): ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Locked after the first document. */
+  country: string;
   dealerType: DealerType;
   address: string | null;
   city: string | null;

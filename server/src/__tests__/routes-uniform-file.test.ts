@@ -7,7 +7,7 @@ import { ADMIN, accountantHarness, businessOf, idem, json, person, read, shared,
  * OPENFRMT zip with its report. Same gate as the other issuing reads: the owner's `invoicing` feature on a business
  * profile; an accountant with a grant reads it too.
  */
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '515151515', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '515151512', dealerType: 'COMPANY', city: 'Nazareth' };
 
 async function invoicing(h: AccountantHarness) {
   const owner = await person(h);
@@ -49,7 +49,7 @@ describe('GET /v1/issuing/uniform-file (MUT-569)', () => {
     const res = await download(h, w.on, 'from=2026-11-01&to=2026-11-06&lang=en');
     expect(res.status, await res.clone().text()).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/zip');
-    expect(res.headers.get('content-disposition')).toBe('attachment; filename="OPENFRMT-515151515-2026-11-01_2026-11-06.zip"');
+    expect(res.headers.get('content-disposition')).toBe('attachment; filename="OPENFRMT-515151512-2026-11-01_2026-11-06.zip"');
     expect(res.headers.get('x-uniform-file-documents')).toBe('4');
     const file = await entries(res);
     expect(file.names.sort()).toEqual(['OPENFRMT/51515151.26/11061100/BKMVDATA.zip', 'OPENFRMT/51515151.26/11061100/INI.TXT', 'report.html']);

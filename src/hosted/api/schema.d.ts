@@ -32487,6 +32487,8 @@ export interface components {
         IssuerDetails: {
             legalName: string;
             vatId: string;
+            /** @description MUT-740: ISO 3166-1 alpha-2; IL on every profile saved before it. Additive since 1.146.0-mut740. */
+            country: string;
             dealerType: components["schemas"]["DealerType"];
             address: string | null;
             city: string | null;
@@ -32512,8 +32514,10 @@ export interface components {
         DealerType: "LICENSED" | "EXEMPT" | "COMPANY" | "NONPROFIT";
         IssuerDetailsRequest: {
             legalName: string;
-            /** @description VAT file number or company number (ח.פ./ע.מ.), 9 digits */
+            /** @description VAT file number or company number (ח.פ./ע.מ.), 9 digits. For an Israeli business the check digit must be right (422 VAT_ID_INVALID). */
             vatId: string;
+            /** @description MUT-740: ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Absent: the current country, or IL on first save. A country that is not live (see /v1/issuing/setup liveJurisdictions) is 422 JURISDICTION_NOT_LIVE; changing it after the first document is 409 COUNTRY_LOCKED. Additive since 1.146.0-mut740. */
+            country?: string;
             dealerType: components["schemas"]["DealerType"];
             address?: string | null;
             city?: string | null;
@@ -32567,6 +32571,12 @@ export interface components {
             missing: ("DETAILS" | "NUMBERING")[];
             introSeen: boolean;
             hasLogo: boolean;
+            /** @description MUT-740: the issuer details’ country; null before they are saved */
+            country: string | null;
+            /** @description MUT-740: a document has been issued, so the country can no longer change (409 COUNTRY_LOCKED). Additive since 1.146.0-mut740. */
+            countryLocked: boolean;
+            /** @description MUT-740: the countries whose invoicing rules are live on this server; clients offer issuing only for these. Additive since 1.146.0-mut740. */
+            liveJurisdictions: string[];
         };
         IssuingNumberingRequest: {
             alreadyIssuing: boolean;

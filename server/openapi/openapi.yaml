@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.145.0-mut731
+  version: 1.146.0-mut740
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -9970,6 +9970,9 @@ components:
           type: string
         vatId:
           type: string
+        country:
+          type: string
+          description: "MUT-740: ISO 3166-1 alpha-2; IL on every profile saved before it. Additive since 1.146.0-mut740."
         dealerType:
           $ref: "#/components/schemas/DealerType"
         address:
@@ -10016,6 +10019,7 @@ components:
       required:
         - legalName
         - vatId
+        - country
         - dealerType
         - address
         - city
@@ -10050,7 +10054,11 @@ components:
         vatId:
           type: string
           pattern: ^\d{9}$
-          description: VAT file number or company number (ח.פ./ע.מ.), 9 digits
+          description: VAT file number or company number (ח.פ./ע.מ.), 9 digits. For an Israeli business the check digit must be right (422 VAT_ID_INVALID).
+        country:
+          type: string
+          pattern: ^[A-Z]{2}$
+          description: "MUT-740: ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Absent: the current country, or IL on first save. A country that is not live (see /v1/issuing/setup liveJurisdictions) is 422 JURISDICTION_NOT_LIVE; changing it after the first document is 409 COUNTRY_LOCKED. Additive since 1.146.0-mut740."
         dealerType:
           $ref: "#/components/schemas/DealerType"
         address:
@@ -10191,12 +10199,27 @@ components:
           type: boolean
         hasLogo:
           type: boolean
+        country:
+          type: string
+          nullable: true
+          description: "MUT-740: the issuer details’ country; null before they are saved"
+        countryLocked:
+          type: boolean
+          description: "MUT-740: a document has been issued, so the country can no longer change (409 COUNTRY_LOCKED). Additive since 1.146.0-mut740."
+        liveJurisdictions:
+          type: array
+          items:
+            type: string
+          description: "MUT-740: the countries whose invoicing rules are live on this server; clients offer issuing only for these. Additive since 1.146.0-mut740."
       required:
         - steps
         - canIssue
         - missing
         - introSeen
         - hasLogo
+        - country
+        - countryLocked
+        - liveJurisdictions
     IssuingNumberingRequest:
       type: object
       properties:

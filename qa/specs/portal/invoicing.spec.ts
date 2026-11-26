@@ -48,7 +48,9 @@ test('set up issuing: three cards, then each step saved on its own until the let
     await expect(page.getByTestId('setup-progress')).toHaveText('0 of 5 complete');
   });
 
-  await step('Business details: the registry fills the name and address, the letterhead shows them as they fill; Next saves', async () => {
+  await step('Business details: the country has no default and is chosen first; the registry fills the name and address, the letterhead shows them as they fill; Next saves', async () => {
+    await expect(page.getByLabel('Country')).toHaveValue('');
+    await page.getByLabel('Country').selectOption('IL');
     await page.getByLabel('VAT file or company number').fill('516123452');
     await expect(page.getByLabel('Legal name')).toHaveValue('נור סטודיו בע״מ');
     await expect(page.getByLabel('Address')).toHaveValue('הרמון 12, נצרת');
@@ -58,7 +60,7 @@ test('set up issuing: three cards, then each step saved on its own until the let
     await page.getByRole('button', { name: 'Next' }).click();
     await expect(region(1)).toHaveAttribute('data-done', 'true');
     const put = api.last('PUT', /^\/v1\/issuer$/);
-    expect(put?.body).toMatchObject({ vatId: '516123452', legalName: 'נור סטודיו בע״מ', dealerType: 'COMPANY', address: 'הרמון 12, נצרת', city: 'נצרת' });
+    expect(put?.body).toMatchObject({ country: 'IL', vatId: '516123452', legalName: 'נור סטודיו בע״מ', dealerType: 'COMPANY', address: 'הרמון 12, נצרת', city: 'נצרת' });
     await expect(page.getByTestId('setup-blocked')).toHaveText('Issuing opens once these are complete: Numbering');
   });
 
@@ -132,6 +134,45 @@ test('only a business profile whose owner issues documents has the way in', { ta
     const off = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')] });
     await off.open(page, setupPath);
     await expect(page).toHaveURL(new RegExp(`/p/${OFFICE_A}/you$`));
+  });
+});
+
+/** MUT-740 (ADR-287): the issuer's country. Israel is the only live pack; any other country saves nothing. */
+test('choosing a country whose invoicing is not available yet shows why and saves nothing', { tag: '@portal.invoicing.country-not-live' }, async ({ page, step }) => {
+  const api = seeded();
+
+  await step('Open the invoicing setup on Nour Studio and begin; the country is empty', async () => {
+    await api.open(page, setupPath);
+    await page.getByRole('button', { name: 'Begin setup' }).click();
+    await expect(page.getByLabel('Country')).toHaveValue('');
+  });
+
+  await step('Choose Jordan: the notice says invoicing is not available there yet, and Next is off', async () => {
+    await page.getByLabel('Country').selectOption('JO');
+    await expect(page.getByTestId('country-not-live')).toHaveText("Invoicing isn't available for businesses in Jordan yet.");
+    await expect(page.getByRole('button', { name: 'Next' })).toBeDisabled();
+    expect(api.last('PUT', /^\/v1\/issuer$/)).toBeFalsy();
+  });
+
+  await step('Choose Israel again: the notice goes and Next is on', async () => {
+    await page.getByLabel('Country').selectOption('IL');
+    await expect(page.getByTestId('country-not-live')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next' })).toBeEnabled();
+  });
+});
+
+test('after the first document the country is locked', { tag: '@portal.invoicing.country-locked' }, async ({ page, step }) => {
+  const api = new FakeApi({ profiles: [office(OFFICE_A, 'Nour Studio')], invoicing: 'ready', countryLocked: true });
+
+  await step('Open the invoicing setup on a profile that has issued a document', async () => {
+    await api.open(page, setupPath);
+    await page.getByTestId('letterhead').getByRole('button', { name: /^Step 1:/ }).click();
+  });
+
+  await step('The country shows Israel, disabled, with the reason', async () => {
+    await expect(page.getByLabel('Country')).toHaveValue('IL');
+    await expect(page.getByLabel('Country')).toBeDisabled();
+    await expect(page.getByText("The country can't be changed after the first document.")).toBeVisible();
   });
 });
 

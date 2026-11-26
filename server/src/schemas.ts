@@ -5328,7 +5328,8 @@ export const DocumentLanguageSchema = z.enum(['ar', 'he', 'en']).openapi('Docume
 export const IssuerDetailsRequestSchema = z
   .object({
     legalName: z.string().trim().min(1).max(200),
-    vatId: z.string().regex(/^\d{9}$/, '9 digits').openapi({ description: 'VAT file number or company number (ח.פ./ע.מ.), 9 digits' }),
+    vatId: z.string().regex(/^\d{9}$/, '9 digits').openapi({ description: 'VAT file number or company number (ח.פ./ע.מ.), 9 digits. For an Israeli business the check digit must be right (422 VAT_ID_INVALID).' }),
+    country: z.string().regex(/^[A-Z]{2}$/).optional().openapi({ description: 'MUT-740: ISO 3166-1 alpha-2, the country whose invoicing rules the profile follows. Absent: the current country, or IL on first save. A country that is not live (see /v1/issuing/setup liveJurisdictions) is 422 JURISDICTION_NOT_LIVE; changing it after the first document is 409 COUNTRY_LOCKED. Additive since 1.146.0-mut740.' }),
     dealerType: DealerTypeSchema,
     address: z.string().trim().max(300).nullable().optional(),
     city: z.string().trim().max(100).nullable().optional(),
@@ -5343,6 +5344,7 @@ export const IssuerDetailsSchema = z
   .object({
     legalName: z.string(),
     vatId: z.string(),
+    country: z.string().openapi({ description: 'MUT-740: ISO 3166-1 alpha-2; IL on every profile saved before it. Additive since 1.146.0-mut740.' }),
     dealerType: DealerTypeSchema,
     address: z.string().nullable(),
     city: z.string().nullable(),
@@ -5500,6 +5502,9 @@ export const IssuingSetupSchema = z
     missing: z.array(z.enum(['DETAILS', 'NUMBERING'])).openapi({ description: 'What blocks issuing (empty when canIssue)' }),
     introSeen: z.boolean(),
     hasLogo: z.boolean(),
+    country: z.string().nullable().openapi({ description: 'MUT-740: the issuer details’ country; null before they are saved' }),
+    countryLocked: z.boolean().openapi({ description: 'MUT-740: a document has been issued, so the country can no longer change (409 COUNTRY_LOCKED). Additive since 1.146.0-mut740.' }),
+    liveJurisdictions: z.array(z.string()).openapi({ description: 'MUT-740: the countries whose invoicing rules are live on this server; clients offer issuing only for these. Additive since 1.146.0-mut740.' }),
   })
   .openapi('IssuingSetup');
 

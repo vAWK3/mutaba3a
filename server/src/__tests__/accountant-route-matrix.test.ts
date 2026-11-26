@@ -159,7 +159,7 @@ beforeAll(async () => {
   ids.attachmentId = attachment.id;
   // MUT-568: the owner issues one tax invoice, so every issuing GET reads a real document.
   await h.store.features.grant({ userId: owner.userId, feature: 'invoicing', grantedBy: 'test', at: h.now(), audit: [] });
-  await h.app.request('/v1/issuer', json({ legalName: 'Sader Studio', vatId: '123456789', dealerType: 'COMPANY' }, owner.on(profileId), 'PUT'));
+  await h.app.request('/v1/issuer', json({ legalName: 'Sader Studio', vatId: '123456782', dealerType: 'COMPANY' }, owner.on(profileId), 'PUT'));
   await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, owner.on(profileId), 'PUT'));
   await h.store.issuing.addLogo(profileId, { contentType: 'image/png', bytes: new Uint8Array(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64')), sha256: '0'.repeat(64) }, h.now());
   ids.documentId = (await seed('/v1/issued-documents', { docType: 'TAX_INVOICE', documentDate: '2026-11-01', currency: 'ILS', language: 'en', customerId: customer.id, lines: [{ description: 'Logo', kind: 'SERVICE', quantity: '1', unitPrice: '100.00' }] })).id;

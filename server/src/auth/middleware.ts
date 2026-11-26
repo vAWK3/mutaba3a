@@ -97,6 +97,7 @@ export type AppEnv = {
     twoFactorIssuingGate: boolean;
     /** MUT-736 (ADR-282): whether every business profile issues (app-shell.ts, from INVOICING_FOR_ALL); off = the operator grant decides. */
     invoicingForAll: boolean;
+    invoicingJurisdictions: readonly string[];
     /** MUT-731: a paid plan can be bought on this server now (Checkout configured): PLAN_LIMIT's `canUpgrade`. */
     planCheckout: boolean;
     /** MUT-731 (Basel Q7): accounts created from this instant are offered the one-time Solo trial; null = the step is off. */

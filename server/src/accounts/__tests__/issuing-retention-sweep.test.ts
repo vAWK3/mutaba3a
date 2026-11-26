@@ -12,7 +12,7 @@ import { runAccountPurge } from '../purge-run.js';
 const T0 = new Date(Date.UTC(2026, 10, 22, 10));
 const DUE = new Date(T0.getTime() + GRACE_MS + 60_000);
 const logger = pino({ level: 'silent' });
-const ISSUER = { dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
+const ISSUER = { country: 'IL', dealerType: 'COMPANY' as const, address: null, city: null, phone: null, email: null, website: null, pricesIncludeVat: false, ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
 /** A person whose personal profile issued a receipt dated each of `dates`, closed at T0 (due for the purge at DUE). */
 async function issuerClosing(store: LedgerStore, ...dates: string[]) {

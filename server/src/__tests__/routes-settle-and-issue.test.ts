@@ -10,7 +10,7 @@ async function world(h: AccountantHarness, opts: { numbering?: boolean } = {}) {
   expect((await h.app.request(`/admin/v1/users/${owner.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN })).status).toBe(200);
   const profileId = await businessOf(h, owner, 'Barmajiyat');
   const on = owner.on(profileId);
-  expect((await h.app.request('/v1/issuer', json({ legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY' }, on, 'PUT'))).status).toBe(200);
+  expect((await h.app.request('/v1/issuer', json({ legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY' }, on, 'PUT'))).status).toBe(200);
   if (opts.numbering !== false) expect((await h.app.request('/v1/issuing/numbering', json({ alreadyIssuing: false }, on, 'PUT'))).status).toBe(200);
   const client = async (name: string) => (await read(await h.app.request('/v1/customers', json({ name }, { ...on, ...idem() })))) as { id: string; version: number };
   return { profileId, on, rami: await client('Rami Haddad'), nour: await client('Nour Design') };

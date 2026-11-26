@@ -12,7 +12,7 @@ import { ADMIN, businessOf, idem, issuingHarness, json, person, read, type Accou
  * document is never refused (Basel 2026-11-25). Nothing is refused with STARTER_PLAN off.
  */
 
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 const FILE = { filename: 'cafe.jpg', mimeType: 'image/jpeg', sizeBytes: 2048 };
 
 function starterHarness(options: { starter?: boolean; planCheckout?: boolean } = {}) {

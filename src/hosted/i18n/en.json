@@ -2957,7 +2957,12 @@
         "city": "City",
         "phone": "Phone",
         "email": "Email",
-        "emailInvalid": "Enter a valid email address."
+        "emailInvalid": "Enter a valid email address.",
+        "country": "Country",
+        "countryPlaceholder": "Choose a country",
+        "countryRequired": "Choose the country of the business.",
+        "countryNotLive": "Invoicing isn't available for businesses in {country} yet.",
+        "countryLocked": "The country can't be changed after the first document."
       },
       "logo": {
         "hint": "A PNG or JPEG file, up to 256 KB.",

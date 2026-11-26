@@ -399,3 +399,31 @@ features:
       - Open Record payment on an Owed, enter ₪1,000 with the document control on and record it
       - Record another payment with the control off
     expect: The first Owed for a client asks once and the toast then offers Issue a tax invoice; a second asks nothing; a payment with the control on says its document was issued; with it off the payment is recorded alone.
+  - id: country-not-live
+    title: A country whose invoicing is not available yet shows why and saves nothing
+    tier: secondary
+    tickets: [MUT-740]
+    paths:
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+      - src/hosted/data/countries.ts
+      - server/src/issuing/jurisdictions.ts
+      - server/src/routes/issuing.ts
+    steps:
+      - Open the invoicing setup on Nour Studio and choose Begin setup
+      - Read the Country field, which starts empty
+      - Choose Jordan
+      - Choose Israel again
+    expect:
+      - The Country field has no default; choosing Jordan says invoicing isn't available for businesses in Jordan yet, turns Next off and sends no PUT /v1/issuer; choosing Israel again removes the notice and turns Next on
+  - id: country-locked
+    title: After the first document the issuer's country is locked
+    tier: secondary
+    tickets: [MUT-740]
+    paths:
+      - src/hosted/pages/invoicing/InvoicingSteps.tsx
+      - server/src/routes/issuing.ts
+    steps:
+      - Open the invoicing setup on a profile that has issued a document
+      - Open Business details from the letterhead
+    expect:
+      - The Country field shows Israel, disabled, with the line that the country can't be changed after the first document

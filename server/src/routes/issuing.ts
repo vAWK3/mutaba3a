@@ -5,12 +5,14 @@ import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { createHash, randomBytes } from 'node:crypto';
-import { parseAmount, todayFor } from '../agreements/compose.js';
+import { parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
 import { invoicingOn } from '../issuing/invoicing-on.js';
+import { assertLive, DEFAULT_COUNTRY } from '../issuing/jurisdictions.js';
 import { taxAuthorityPlanOf } from '../issuing/tax-authority-plan.js';
+import { normalizeTaxId } from '../israel/tax-id.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
@@ -302,6 +304,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const [current, setup] = await Promise.all([store.issuing.getIssuer(organization.id), store.issuing.getSetup(organization.id)]);
       const missing = setupMissing(current, setup);
       if (missing.length > 0) throw new ApiError('CONFLICT', 'Finish the invoicing setup before issuing', { reason: 'ISSUING_SETUP_INCOMPLETE', missing });
+      // MUT-740 (ADR-287 D4): a country whose rules aren't live issues nothing.
+      assertLive(c.get('invoicingJurisdictions'), current!.country);
       // MUT-647 (AC3): an entry whose invoice was issued elsewhere gets no second document from MTB3A.
       if (body.fromEntry) {
         const [attached] = await store.issuing.liveExternal(organization.id, body.fromEntry.kind === 'owed' ? 'OWED' : 'RECEIVED', [body.fromEntry.id]);
@@ -579,8 +583,16 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const expectedVersion = ifMatch(c);
       // MUT-646: the defaults have their own step (PUT /v1/issuer/defaults); saving the details keeps them.
       const current = expectedVersion === null ? null : await store.issuing.getIssuer(organization.id);
+      // MUT-740 (ADR-287 D1, D4): the country is chosen here, live, locked after the first document; an Israeli number's check digit counts.
+      const country = body.country ?? current?.country ?? DEFAULT_COUNTRY;
+      assertLive(c.get('invoicingJurisdictions'), country);
+      if (current && country !== current.country && (await store.issuing.counters(organization.id)).some((k) => k.next > k.start)) {
+        throw new ApiError('CONFLICT', 'The country cannot be changed after the first document', { reason: 'COUNTRY_LOCKED', field: 'country' });
+      }
+      const vatId = country === 'IL' ? normalizeTaxId(body.vatId) : body.vatId;
+      if (vatId === null) throw validationError('VAT_ID_INVALID', 'This is not a valid Israeli VAT or company number', { field: 'vatId' });
       const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote, offerAfterSave: current.offerAfterSave, defaultDocumentsPreference: current.defaultDocumentsPreference } : DEFAULTS;
-      const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId: body.vatId, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
+      const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId, country, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, c.get('now')());
       if (result.kind === 'not_found') throw new ApiError('NOT_FOUND', 'No business details yet; send them without If-Match');
       if (result.kind === 'stale') throw versionMismatch(result.record.version);
@@ -607,7 +619,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const expectedVersion = ifMatch(c);
       if (expectedVersion === null) throw new ApiError('VALIDATION_FAILED', 'Send the details’ version in If-Match', { field: 'If-Match' });
       const current = await mustIssuer(organization.id);
-      const details = { legalName: current.legalName, vatId: current.vatId, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
+      const details = { legalName: current.legalName, vatId: current.vatId, country: current.country, dealerType: current.dealerType, address: current.address, city: current.city, phone: current.phone, email: current.email, website: current.website };
       const input: IssuerDetailsInput = { ...details, documentStyle: body.documentStyle, ink: body.ink, defaultLanguage: body.defaultLanguage, pricesIncludeVat: body.pricesIncludeVat, paymentTermsDays: body.paymentTermsDays ?? null, bankDetails: body.bankDetails || null, footerNote: body.footerNote || null, offerAfterSave: body.offerAfterSave ?? current.offerAfterSave, defaultDocumentsPreference: body.defaultDocumentsPreference ?? current.defaultDocumentsPreference };
       const now = c.get('now')();
       const result = await store.issuing.putIssuer(organization.id, input, expectedVersion, now);
@@ -725,14 +737,14 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       }
       await store.issuing.markSetup(organization.id, 'numberingAnsweredAt', c.get('now')());
       await audit(c, 'issuing.numbering_answered', 'issuer_details', organization.id, { alreadyIssuing, ...(entries.length ? { starts: Object.fromEntries(entries) } : {}) });
-      return c.json(await setupOf(organization), 200);
+      return c.json(await setupOf(organization, c.get('invoicingJurisdictions')), 200);
     },
   );
 
-  async function setupOf(organization: Organization) {
+  async function setupOf(organization: Organization, live: readonly string[]) {
     const organizationId = organization.id;
     const now = new Date();
-    const [issuer, setup, connection] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId), tax.deps ? store.issuing.getTaxConnection(organizationId) : null]);
+    const [issuer, setup, connection, counters] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId), tax.deps ? store.issuing.getTaxConnection(organizationId) : null, store.issuing.counters(organizationId)]);
     // MUT-571: the Tax Authority step is done while the connection is good; until then (or without one here) it waits.
     // MUT-736: a connection kept on a plan without it (Starter, `suspended`) is not done either.
     const connected = !!tax.deps && statusOf(connection, tax.deps.client.environment, now).state === 'connected' && (await taxPlanOf(organization, now)).allowed;
@@ -744,6 +756,9 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       missing,
       introSeen: !!setup?.introSeenAt,
       hasLogo: !!setup?.logoId,
+      country: issuer?.country ?? null,
+      countryLocked: counters.some((k) => k.next > k.start),
+      liveJurisdictions: [...live],
     };
   }
 
@@ -777,7 +792,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     }),
     async (c) => {
       const organization = await issuingProfile(c, false);
-      return c.json(await setupOf(organization), 200);
+      return c.json(await setupOf(organization, c.get('invoicingJurisdictions')), 200);
     },
   );
 
@@ -794,7 +809,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     async (c) => {
       const organization = await issuingProfile(c, true);
       await store.issuing.markSetup(organization.id, 'introSeenAt', c.get('now')());
-      return c.json(await setupOf(organization), 200);
+      return c.json(await setupOf(organization, c.get('invoicingJurisdictions')), 200);
     },
   );
 
@@ -862,6 +877,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     async (c) => {
       const organization = await issuingProfile(c, false);
       const issuer = await mustIssuer(organization.id);
+      assertLive(c.get('invoicingJurisdictions'), issuer.country);
       const body = c.req.valid('json');
       const now = c.get('now')();
       const original = await creditedInvoice(organization.id, body);

@@ -31,7 +31,8 @@ function wrap(children: ReactNode, language: 'en' | 'ar' = 'en') {
 }
 
 const PAPER: PaperModel = { legalName: '', vatId: '', dealerType: 'LICENSED', address: '', city: '', phone: '', email: '', style: 'PROFESSIONAL', ink: 'BLACK', language: 'he', bankDetails: '', footerNote: '', logoUrl: null, nextNumber: 1 };
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '516123452', dealerType: 'COMPANY', address: null, city: 'Nazareth', phone: null, email: null, website: null, ink: 'BLACK', documentStyle: 'PROFESSIONAL', pricesIncludeVat: false, defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, version: 1 } as IssuerDetails;
+const SETUP = { liveJurisdictions: ['IL'], countryLocked: false };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '516123452', country: 'IL', dealerType: 'COMPANY', address: null, city: 'Nazareth', phone: null, email: null, website: null, ink: 'BLACK', documentStyle: 'PROFESSIONAL', pricesIncludeVat: false, defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, version: 1 } as IssuerDetails;
 
 /** A step beside the letterhead, the way the page puts them: the paper follows the form (AC3). */
 function WithPaper({ step }: { step: (preview: (patch: Partial<PaperModel>) => void) => ReactNode }) {
@@ -61,7 +62,8 @@ describe('invoicing setup steps (MUT-646)', () => {
     api.lookup.mockResolvedValue({ taxId: '516123452', kind: 'company', name: 'ברמג׳יאת בע״מ', nameEn: null, status: 'פעילה', active: true, address: 'הרמון 12, נצרת' });
     api.saveIssuer.mockResolvedValue({ ...ISSUER, version: 1 });
     const onDone = vi.fn();
-    wrap(<WithPaper step={(preview) => <DetailsStep profileId="p1" issuer={null} onPreview={preview} onDone={onDone} />} />);
+    wrap(<WithPaper step={(preview) => <DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={preview} onDone={onDone} />} />);
+    await userEvent.selectOptions(screen.getByLabelText('Country'), 'IL');
     await userEvent.type(screen.getByLabelText('VAT file or company number'), '516123452');
     await waitFor(() => expect(screen.getByLabelText('Legal name')).toHaveValue('ברמג׳יאת בע״מ'));
     expect(screen.getByLabelText('Address')).toHaveValue('הרמון 12, נצרת');
@@ -69,18 +71,63 @@ describe('invoicing setup steps (MUT-646)', () => {
     expect(screen.getByTestId('letterhead')).toHaveTextContent('ברמג׳יאת בע״מ');
     expect(screen.getByTestId('letterhead')).toHaveTextContent('ח.פ. 516123452');
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
-    expect(api.saveIssuer).toHaveBeenCalledWith('p1', null, { vatId: '516123452', legalName: 'ברמג׳יאת בע״מ', dealerType: 'COMPANY', address: 'הרמון 12, נצרת', city: null, phone: null, email: null });
+    expect(api.saveIssuer).toHaveBeenCalledWith('p1', null, { country: 'IL', vatId: '516123452', legalName: 'ברמג׳יאת בע״מ', dealerType: 'COMPANY', address: 'הרמון 12, נצרת', city: null, phone: null, email: null });
     await waitFor(() => expect(onDone).toHaveBeenCalled());
   });
 
   it('details: refuses to save without a complete number and a legal name', async () => {
     api.lookup.mockRejectedValue(new ApiError(404, 'NOT_FOUND' as never, 'not found', { reason: 'NOT_IN_REGISTRY' }));
-    wrap(<DetailsStep profileId="p1" issuer={null} onPreview={() => undefined} onDone={() => undefined} />);
+    wrap(<DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={() => undefined} onDone={() => undefined} />);
+    await userEvent.selectOptions(screen.getByLabelText('Country'), 'IL');
     await userEvent.type(screen.getByLabelText('VAT file or company number'), '12345');
     await userEvent.click(screen.getByRole('button', { name: 'Next' }));
     expect(screen.getByText('This number is not valid. Please check the digits.')).toBeInTheDocument();
     expect(screen.getByText('Enter the legal name.')).toBeInTheDocument();
     expect(api.saveIssuer).not.toHaveBeenCalled();
+  });
+
+  it('details (MUT-740): the country has no default for a new profile, and saving asks for one', async () => {
+    wrap(<DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={() => undefined} onDone={() => undefined} />);
+    expect(screen.getByLabelText('Country')).toHaveValue('');
+    expect(screen.queryByTestId('country-not-live')).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(screen.getByText('Choose the country of the business.')).toBeInTheDocument();
+    expect(api.saveIssuer).not.toHaveBeenCalled();
+  });
+
+  it('details (MUT-740): a country that is not live shows the notice, disables Next and saves nothing', async () => {
+    wrap(<DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={() => undefined} onDone={() => undefined} />);
+    await userEvent.selectOptions(screen.getByLabelText('Country'), 'JO');
+    expect(screen.getByTestId('country-not-live')).toHaveTextContent("Invoicing isn't available for businesses in Jordan yet.");
+    expect(screen.getByRole('button', { name: 'Next' })).toBeDisabled();
+    await userEvent.selectOptions(screen.getByLabelText('Country'), 'IL');
+    expect(screen.queryByTestId('country-not-live')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Next' })).toBeEnabled();
+    expect(api.saveIssuer).not.toHaveBeenCalled();
+  });
+
+  it('details (MUT-740): a saved profile shows its country, and after the first document it is locked', () => {
+    wrap(<DetailsStep profileId="p1" issuer={ISSUER} setup={{ ...SETUP, countryLocked: true }} onPreview={() => undefined} onDone={() => undefined} />);
+    expect(screen.getByLabelText('Country')).toHaveValue('IL');
+    expect(screen.getByLabelText('Country')).toBeDisabled();
+    expect(screen.getByText("The country can't be changed after the first document.")).toBeInTheDocument();
+  });
+
+  it('details (MUT-740): the Arabic labels read right to left, with the notice in Arabic', async () => {
+    wrap(<DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={() => undefined} onDone={() => undefined} />, 'ar');
+    await userEvent.selectOptions(screen.getByLabelText('الدولة'), 'JO');
+    expect(screen.getByTestId('country-not-live')).toHaveTextContent('إصدار الفواتير غير متاح بعد للأعمال في الأردن.');
+  });
+
+  it('details (MUT-740): the server refusing the number’s check digit reads as an invalid number', async () => {
+    api.lookup.mockResolvedValue({ taxId: '516123452', kind: 'company', name: 'X', nameEn: null, status: 'פעילה', active: true, address: null });
+    api.saveIssuer.mockRejectedValue(new ApiError(422, 'VALIDATION_FAILED' as never, 'invalid', { reason: 'VAT_ID_INVALID' }));
+    wrap(<DetailsStep profileId="p1" issuer={null} setup={SETUP} onPreview={() => undefined} onDone={() => undefined} />);
+    await userEvent.selectOptions(screen.getByLabelText('Country'), 'IL');
+    await userEvent.type(screen.getByLabelText('VAT file or company number'), '516123452');
+    await waitFor(() => expect(screen.getByLabelText('Legal name')).toHaveValue('X'));
+    await userEvent.click(screen.getByRole('button', { name: 'Next' }));
+    expect(await screen.findByText('This number is not valid. Please check the digits.')).toBeInTheDocument();
   });
 
   it('defaults: style, ink and language change the paper at once (AC3), then save with the details’ version', async () => {

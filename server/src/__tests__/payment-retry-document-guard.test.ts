@@ -126,7 +126,7 @@ describe('MUT-709: a retry after a 5xx records the payment once (AC1)', () => {
   });
 });
 
-const ISSUER = { legalName: 'Nour Design Studio', vatId: '301234567', dealerType: 'LICENSED', city: 'Haifa' };
+const ISSUER = { legalName: 'Nour Design Studio', vatId: '301234563', dealerType: 'LICENSED', city: 'Haifa' };
 
 async function invoicingOwner(h: AccountantHarness): Promise<Awaited<ReturnType<typeof owner>> & { p: Person }> {
   const w = await owner(h);

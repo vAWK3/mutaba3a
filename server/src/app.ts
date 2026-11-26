@@ -225,6 +225,8 @@ export interface AppDependencies {
    * default). Absent = off: the operator's `invoicing` grant decides, as before.
    */
   invoicingForAll?: boolean;
+  /** MUT-740 (ADR-287): the countries whose invoicing rules are live (INVOICING_JURISDICTIONS). Absent = Israel only. */
+  invoicingJurisdictions?: readonly string[];
   /** MUT-736: overrides whether a paid plan can be bought here (PLAN_LIMIT's `canUpgrade`). Absent = Checkout is configured. */
   planCheckout?: boolean;
   /** MUT-731 (Basel Q7): SOLO_TRIAL_OFFER_SINCE; accounts created from it are offered the one-time Solo trial. Absent = off. */
@@ -430,7 +432,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.145.0-mut731';
+export const API_VERSION = '1.146.0-mut740';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -444,7 +446,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, planCheckout: deps.planCheckout ?? Boolean(deps.stripe?.checkoutGateway), soloTrialOfferSince: deps.soloTrialOfferSince ?? null, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, ...(deps.invoicingJurisdictions ? { invoicingJurisdictions: deps.invoicingJurisdictions } : {}), planCheckout: deps.planCheckout ?? Boolean(deps.stripe?.checkoutGateway), soloTrialOfferSince: deps.soloTrialOfferSince ?? null, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());

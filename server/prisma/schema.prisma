@@ -2297,6 +2297,8 @@ model IssuerDetails {
   organizationId             String              @id @db.Uuid
   legalName                  String
   vatId                      String              @db.VarChar(9)
+  /// MUT-740 (ADR-287 D1): ISO 3166-1 alpha-2, the jurisdiction the profile's invoicing follows; existing rows are IL.
+  country                    String              @default("IL") @db.VarChar(2)
   dealerType                 DealerType
   address                    String?
   city                       String?

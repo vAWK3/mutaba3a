@@ -28,6 +28,25 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — The issuer's country, and no issuing where no pack is live (MUT-740, ADR-287 D1 and D4, API 1.146.0-mut740)
+
+Epic MUT-738 (jurisdiction packs). Closes the gap that, with `INVOICING_FOR_ALL` on, any business anywhere could issue an Israeli tax invoice. Plan `.claude/designs/MUT-740-issuer-country.md`; the phone's country field is a follow-up (TD-347).
+
+### Added
+- `issuer_details.country` (ISO 3166-1, `VARCHAR(2)`, default and backfill `IL`, a CHECK); migration `20261126200000_mut740_issuer_country` (additive; a rollback leaves the column).
+- `INVOICING_JURISDICTIONS` (comma list, default `IL`, junk refuses the boot; Terraform `invoicing_jurisdictions` sets the env only when it differs, a tftest) and `issuing/jurisdictions.ts` (`parseLiveJurisdictions`, `isLive`, `assertLive`, `DEFAULT_COUNTRY`).
+- `PUT /v1/issuer` takes an optional `country` (absent: the current one, or `IL`): a country that isn't live is 422 `JURISDICTION_NOT_LIVE`; changing it after the first document is 409 `COUNTRY_LOCKED`; for Israel the issuer's VAT number must pass the check digit (422 `VAT_ID_INVALID`).
+- Issue and preview refuse an issuer whose stored country is no longer live (422 `JURISDICTION_NOT_LIVE`), documents-due and settle-and-issue included (one `issueOne`).
+- `GET /v1/issuing/setup` adds `country`, `countryLocked`, `liveJurisdictions`; `IssuerDetails` adds `country`.
+- Portal: a Country select above the VAT number in Business details (billing's country list, no default, wireframe `MUT-740-wireframe.html`), a notice and a disabled Next for a country that isn't live, a locked select after the first document; ar and en strings.
+- Release-QA: `portal.invoicing.country-not-live`, `country-locked`; `setup` chooses Israel first.
+
+### Changed
+- API 1.146.0-mut740, additive. Test fixtures that save issuer details through the route use check-digit-valid numbers (`123456782`, `516161619`, `515151512`, `301234563`).
+
+### Technical
+- Tests: `jurisdictions.test.ts`, `config.test.ts`, `routes-issuing-setup.test.ts` (7 new cases), `store-contract-issuing.ts` (country round trip), `InvoicingSteps.test.tsx` (5 new), `terraform/tests/invoicing_jurisdictions.tftest.hcl`.
+
 ## [Unreleased] - 2026-11-26 — MUT-731 final checks: fixes found running the full suites
 
 ### Fixed

@@ -8,7 +8,7 @@ import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, ty
  * and a business profile (D1); issued documents are immutable; the ledger rows they post are a person's to see, not edit.
  */
 const grantInvoicing = (h: AccountantHarness, p: Person) => h.app.request(`/admin/v1/users/${p.userId}/features/invoicing`, { method: 'PUT', headers: ADMIN });
-const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456789', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Barmajiyat Ltd.', vatId: '123456782', dealerType: 'COMPANY', city: 'Nazareth' };
 
 async function invoicing(h: AccountantHarness) {
   const owner = await person(h);
@@ -65,7 +65,7 @@ describe('issuing routes (MUT-568)', () => {
     const res = await issue(h, w.on, invoiceBody(w.customerId));
     expect(res.status, await res.clone().text()).toBe(201);
     const doc = await read(res);
-    expect(doc).toMatchObject({ docType: 'TAX_INVOICE', number: 1, gross: '29146.00', style: 'PROFESSIONAL', ink: 'BLACK', coreVersion: '1.0.0', customer: { name: 'Acme Digital Ltd.' }, issuer: { legalName: 'Barmajiyat Ltd.', vatId: '123456789' } });
+    expect(doc).toMatchObject({ docType: 'TAX_INVOICE', number: 1, gross: '29146.00', style: 'PROFESSIONAL', ink: 'BLACK', coreVersion: '1.0.0', customer: { name: 'Acme Digital Ltd.' }, issuer: { legalName: 'Barmajiyat Ltd.', vatId: '123456782' } });
     expect(doc.lines[0]).toMatchObject({ quantity: '40', unitPrice: '450.00', net: '18000.00' });
     const owed = await h.store.receivables.getById(w.profileId, doc.receivableId);
     expect(owed).toMatchObject({ origin: 'ISSUED_DOCUMENT', grossMinor: 2_914_600n, title: 'חשבונית מס 1' });

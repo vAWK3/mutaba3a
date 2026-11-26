@@ -6,7 +6,7 @@ import { ADMIN, accountantHarness, businessOf, DAY, idem, json, person, read, T0
  * MUT-644 (ADR-277, amended 2026-11-25): the operator's doors to a closed profile's issued documents: find it, export
  * its archive for the former owner, erase on request once the archive was handed over, and the per-document sweep.
  */
-const ISSUER = { legalName: 'Kept Studio Ltd.', vatId: '516161616', dealerType: 'COMPANY', city: 'Nazareth' };
+const ISSUER = { legalName: 'Kept Studio Ltd.', vatId: '516161619', country: 'IL', dealerType: 'COMPANY', city: 'Nazareth' };
 const line = (description: string) => ({ description, kind: 'SERVICE', quantity: '1', unitPrice: '100.00' });
 
 async function closedIssuer(h: AccountantHarness) {
@@ -45,7 +45,7 @@ describe('closed profiles’ issued documents (MUT-644)', () => {
     const { profileId } = await closedIssuer(h);
     expect((await h.app.request('/admin/v1/issuing/retained')).status).toBe(401);
     const byName = await read(await h.app.request('/admin/v1/issuing/retained?query=kept%20studio', { headers: ADMIN }));
-    expect(byName.data).toEqual([{ organizationId: profileId, legalName: 'Kept Studio Ltd.', vatId: '516161616', documents: 2, cancellations: 0, oldestDocumentDate: '2026-11-02', newestDocumentDate: '2026-11-04', nextSweepOn: '2033-11-03', retainedUntil: '2033-11-05' }]);
+    expect(byName.data).toEqual([{ organizationId: profileId, legalName: 'Kept Studio Ltd.', vatId: '516161619', documents: 2, cancellations: 0, oldestDocumentDate: '2026-11-02', newestDocumentDate: '2026-11-04', nextSweepOn: '2033-11-03', retainedUntil: '2033-11-05' }]);
     const byVat = await read(await h.app.request('/admin/v1/issuing/retained?query=5161', { headers: ADMIN }));
     expect(byVat.data.map((p: { organizationId: string }) => p.organizationId)).toEqual([profileId]);
   });
@@ -59,10 +59,10 @@ describe('closed profiles’ issued documents (MUT-644)', () => {
     expect(res.headers.get('x-archive-documents')).toBe('2');
     const files = unzipSync(new Uint8Array(await res.arrayBuffer()));
     const names = Object.keys(files).sort();
-    expect(names).toEqual(['README.txt', `copies/400-${receipt.number}.pdf`, `originals/305-${invoice.number}.pdf`, 'uniform-file/OPENFRMT-516161616-2026-11-02_2026-11-04.zip']);
+    expect(names).toEqual(['README.txt', `copies/400-${receipt.number}.pdf`, `originals/305-${invoice.number}.pdf`, 'uniform-file/OPENFRMT-516161619-2026-11-02_2026-11-04.zip']);
     expect(files[`originals/305-${invoice.number}.pdf`]).toEqual(sent);
     expect(strFromU8(files[`copies/400-${receipt.number}.pdf`]!.slice(0, 5))).toBe('%PDF-');
-    const uniform = unzipSync(files['uniform-file/OPENFRMT-516161616-2026-11-02_2026-11-04.zip']!);
+    const uniform = unzipSync(files['uniform-file/OPENFRMT-516161619-2026-11-02_2026-11-04.zip']!);
     expect(Object.keys(uniform).some((k) => k.endsWith('/INI.TXT'))).toBe(true);
     const readme = strFromU8(files['README.txt']!);
     expect(readme).toContain('the first from 2033-11-03, the last from 2033-11-05');
