@@ -184,6 +184,37 @@ features:
       - The hero, the bar's button, Get it's first option and the phone chapter all say «أنشئ حسابًا» / "Create an account" and link the portal's /signup with ?lang=ar, then ?lang=en after the switch
       - Get it keeps the request form under "Want us to set it up for you?"; no line says there's no public sign-up, and no price or checkout appears
       - Pressing it opens the portal's /signup?lang=en in a new tab
+  - id: starter-free-plan
+    title: While the portal says the free Starter plan is on, the landing says Starter is free with no card, and the FAQ answers yes and asks about invoicing (MUT-731)
+    tier: secondary
+    tickets: [MUT-731, MUT-736]
+    paths:
+      - src/pages/landing/signupDoor.ts
+      - src/pages/landing/landingCopy.ts
+      - src/pages/landing/components/HeroSection.tsx
+      - src/pages/landing/components/GetItSection.tsx
+      - src/pages/landing/components/FAQSection.tsx
+    steps:
+      - With sign-up open and the free Starter plan on, open the landing page in Arabic, its default, and look at the hero
+      - Switch to English, scroll to Get MTB3A, then open "Is there a free plan?" and "Can I issue invoices and receipts?"
+      - Open the page again with the free plan off
+    expect:
+      - The hero says «مجانية على خطة البداية», then "Free on Starter — sign up with your email address, no card needed."
+      - Get it says to start free on Starter with no card; the free-plan answer starts "Yes. Starter is free" and the invoicing answer says Starter types the allocation number in
+      - No price, checkout or trial appears; with the free plan off nothing names Starter or invoicing
+  - id: faq-month
+    title: The FAQ answers what shipped this month — trying it without an account, receipts read, the accountant — and the backup answer covers both ways (landing copy, November 2026)
+    tier: secondary
+    paths:
+      - src/pages/landing/landingCopy.ts
+      - src/pages/landing/components/FAQSection.tsx
+    steps:
+      - Open the landing page in English and scroll to Questions
+      - Open "Can I try it without an account?", "Can it read my receipts?", "Can my accountant see my books?" and "How do I back up, or move to another device?"
+      - Switch to Arabic and open «هل يمكنني تجربتها دون حساب؟»
+    expect:
+      - Nine questions; the answers name Try it on this device, checking a receipt's fields before the expense is saved, an accountant who can't change anything, and downloading records from Your data without an account
+      - The Arabic answer names «جرّبها على هذا الجهاز»
   - id: signup-closed
     title: While signup is closed, or the portal can't be asked, the landing is exactly as before, with "Request an account" (MUT-369)
     tier: secondary

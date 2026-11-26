@@ -9,7 +9,8 @@ import type { BrowserContext } from '@playwright/test';
  * the spec can check where the button led without loading production.
  */
 
-export type DoorState = 'open' | 'closed' | 'unreachable';
+/** `starter`: signup open and the free Starter plan on (MUT-731). */
+export type DoorState = 'open' | 'starter' | 'closed' | 'unreachable';
 
 export interface SignupDoor {
   set(state: DoorState): void;
@@ -34,7 +35,7 @@ export async function answerSignupDoor(context: BrowserContext, ownOrigin: strin
         status: 200,
         contentType: 'application/json',
         headers: { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-store' },
-        body: JSON.stringify({ signup: state === 'open', recovery: true }),
+        body: JSON.stringify({ signup: state === 'open' || state === 'starter', recovery: true, starterPlan: state === 'starter' }),
       });
     },
   );

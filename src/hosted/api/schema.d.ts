@@ -29124,6 +29124,7 @@ export interface components {
             recovery: boolean;
             malafatSignIn: boolean;
             signInCode: boolean;
+            starterPlan: boolean;
         };
         SelfServiceAccepted: {
             /** @enum {string} */

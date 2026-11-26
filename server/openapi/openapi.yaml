@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: MTB3A Financial API
-  version: 1.142.0-mut735
+  version: 1.143.0-landing
   description: |-
     Organization-scoped financial ledger API (MUT/MAL Money v1, Milestones 1–8).
 
@@ -1563,11 +1563,14 @@ components:
           type: boolean
         signInCode:
           type: boolean
+        starterPlan:
+          type: boolean
       required:
         - signup
         - recovery
         - malafatSignIn
         - signInCode
+        - starterPlan
     SelfServiceAccepted:
       type: object
       properties:

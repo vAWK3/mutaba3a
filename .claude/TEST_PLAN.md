@@ -4831,3 +4831,12 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Routes | `usage-metering.test.ts`, `route-usage.test.ts`, `billing-routes.test.ts` (usage), `routes-operator-usage.test.ts`, `routes-usage-prune.test.ts` | issue → one event (replay none), every type counts, co-owner counts to the creator, the access log sees the plan; scans count at complete once (abandoned never); route keys (template, UNMATCHED, `app.all`), probes not counted; /v1/billing levels and limits; operator 404 for others, overview/people/account/routes, CSV needs the step-up and has a BOM; the prune job |
 | Portal (vitest + RTL) | `OperatorUsagePage.test.tsx` | the tab, by plan, month switch reads that month, empty month, People with meters/levels/links, filter, Routes, CSV through the step-up, refusal, Arabic RTL, query keys, month list; the account section (six months, no cap, per profile) |
 | QA | `portal-selfservice.operator.usage-{overview,account,routes,csv}`, `portal-selfservice.usage.billing-usage` | the live API: Usage tab, People, account section, routes after a flush, CSV with the passkey; a finished upload counts one scan in /v1/billing |
+
+### Landing copy, November 2026 (ADR-282)
+
+| Layer | Where | What |
+|---|---|---|
+| Server | `routes-self-service.test.ts` | the doors say `starterPlan` from STARTER_PLAN, false by default |
+| Unit | `signupDoor.test.ts`, `landingCopy.test.ts` | `starterPlan` only on a clear true; Starter only while signup is open; `faqFor` picks the answer per state; every FAQ key in ar + en |
+| Page (RTL) | `LandingPage.test.tsx` | 9 questions, 10 with Starter; Starter copy in hero, Get it and FAQ; no price, checkout or trial; nothing names Starter or invoicing while it is off or the server is older |
+| QA | `web.landing.starter-free-plan`, `web.landing.faq-month` | the Starter page in ar then en, and back off; the month's answers in en and ar |

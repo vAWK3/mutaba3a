@@ -32,6 +32,8 @@ interface HarnessOptions {
   signupEnabled?: boolean;
   /** MUT-368: whether this server really mails links (a mailer and a Turnstile secret); absent = the default, off. */
   mailsLinks?: boolean;
+  /** STARTER_PLAN, published on the doors for the landing; absent = the default, off. */
+  starterPlan?: boolean;
   turnstile?: TurnstileVerifier;
   transport?: MailTransport;
   ipLimiter?: RateLimiter;
@@ -59,6 +61,7 @@ function harness(options: HarnessOptions = {}) {
     selfService: {
       signupEnabled: options.signupEnabled ?? true,
       ...(options.mailsLinks === undefined ? {} : { mailsLinks: options.mailsLinks }),
+      ...(options.starterPlan === undefined ? {} : { starterPlan: options.starterPlan }),
       turnstile: options.turnstile ?? OK_ONLY,
       ipLimiter: options.ipLimiter ?? generous(),
       addressMinuteLimiter: options.addressMinuteLimiter ?? generous(),
@@ -454,18 +457,24 @@ describe('GET /v1/self-service (MUT-368, D1)', () => {
   };
 
   it('names which doors this server really opens: signup by its switch, recovery only when it mails links', async () => {
-    expect(await doors(harness({ signupEnabled: true, mailsLinks: true }))).toEqual({ status: 200, body: { signup: true, recovery: true, malafatSignIn: false, signInCode: true } });
-    expect(await doors(harness({ signupEnabled: false, mailsLinks: true }))).toEqual({ status: 200, body: { signup: false, recovery: true, malafatSignIn: false, signInCode: true } });
-    expect(await doors(harness({ signupEnabled: false, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false, signInCode: false } });
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: true }))).toEqual({ status: 200, body: { signup: true, recovery: true, malafatSignIn: false, signInCode: true, starterPlan: false } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: true }))).toEqual({ status: 200, body: { signup: false, recovery: true, malafatSignIn: false, signInCode: true, starterPlan: false } });
+    expect(await doors(harness({ signupEnabled: false, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false, signInCode: false, starterPlan: false } });
   });
 
   it('a server that mails no links offers neither door, whatever the switch says', async () => {
-    expect(await doors(harness({ signupEnabled: true, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false, signInCode: false } });
+    expect(await doors(harness({ signupEnabled: true, mailsLinks: false }))).toEqual({ status: 200, body: { signup: false, recovery: false, malafatSignIn: false, signInCode: false, starterPlan: false } });
   });
 
   it('defaults to both doors closed (absent options are a server with mail off)', async () => {
     const h = harness({ signupEnabled: false });
-    expect((await doors(h)).body).toEqual({ signup: false, recovery: false, malafatSignIn: false, signInCode: false });
+    expect((await doors(h)).body).toEqual({ signup: false, recovery: false, malafatSignIn: false, signInCode: false, starterPlan: false });
+  });
+
+  it('says whether the free Starter plan is on (STARTER_PLAN), so the landing describes it only once it is', async () => {
+    expect((await doors(harness({ mailsLinks: true, starterPlan: true }))).body).toMatchObject({ signup: true, starterPlan: true });
+    expect((await doors(harness({ mailsLinks: true, starterPlan: false }))).body).toMatchObject({ starterPlan: false });
+    expect((await doors(harness({ mailsLinks: true }))).body).toMatchObject({ starterPlan: false });
   });
 
   it('needs no credential and no origin, and is never cached', async () => {

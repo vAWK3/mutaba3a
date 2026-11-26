@@ -685,8 +685,8 @@ test('While signup is open, the landing leads with Create an account on the port
   await step('The phone chapter and the free-plan answer point at signing up', async () => {
     await phone.scrollIntoViewIfNeeded();
     await expect(phone.getByRole('link', { name: new RegExp(`^${en.landing.phone.hintLinkOpen}`) })).toHaveAttribute('href', SIGNUP_LINK('en'));
-    await page.getByRole('button', { name: en.landing.faq.q1 }).click();
-    await expect(page.getByText(en.landing.faq.a1Open)).toBeVisible();
+    await page.getByRole('button', { name: en.landing.faq.free.q }).click();
+    await expect(page.getByText(en.landing.faq.free.aOpen)).toBeVisible();
   });
 
   await step('Press Create an account: the portal signup page opens in a new tab, in English', async () => {
@@ -715,4 +715,86 @@ test('While signup is closed, or the portal cannot be asked, the landing is toda
       await attachScreenshot(page, `signup-${state}-en`);
     });
   }
+});
+
+/** MUT-731: the doors also say whether the free Starter plan is on; only then does the page name it. */
+test('While the free Starter plan is on, the landing says it is free with no card and the FAQ asks about invoicing (MUT-731)', { tag: '@web.landing.starter-free-plan' }, async ({ page, step, signupDoor }) => {
+  const hero = page.locator('[data-part="hero"]');
+  const getIt = page.locator('[data-part="get-it"]');
+  const faq = page.locator('[data-part="faq"]');
+
+  await step('With sign-up open and Starter on, open the landing page in Arabic: the hero says it is free on Starter', async () => {
+    signupDoor!.set('starter');
+    await page.goto('/');
+    await expect(hero.getByText(ar.landing.hero.altNoteStarter)).toBeVisible();
+    await expect(hero.getByText(ar.landing.hero.subheadlineStarter)).toBeVisible();
+    await attachScreenshot(page, 'starter-hero-ar');
+  });
+
+  await step('Switch to English and scroll to Get MTB3A: start free on Starter, no card', async () => {
+    await page.locator('.landing-lang-toggle').click();
+    await expect(hero.getByText(en.landing.hero.altNoteStarter)).toBeVisible();
+    await getIt.scrollIntoViewIfNeeded();
+    await expect(getIt.getByText(en.landing.getIt.noteStarter)).toBeVisible();
+  });
+
+  await step('Open "Is there a free plan?" and "Can I issue invoices and receipts?"', async () => {
+    await expect(faq.getByRole('button')).toHaveCount(10);
+    // One answer is open at a time: check each as it opens
+    for (const [question, answer] of [[en.landing.faq.free.q, en.landing.faq.free.aStarter], [en.landing.faq.invoices.q, en.landing.faq.invoices.a]]) {
+      const button = page.getByRole('button', { name: question });
+      await button.scrollIntoViewIfNeeded();
+      await button.click();
+      await expect(page.getByText(answer)).toBeVisible();
+    }
+    // The copy, not the mocks: their sample amounts are not prices
+    for (const copy of [hero.locator('.hero-cta-note'), hero.locator('.landing-subheadline-large'), getIt.locator('.landing-get-it-note'), faq]) {
+      await expect(copy).not.toContainText(/[₪$€]\s?\d|\/month|per month|checkout|trial/i);
+    }
+    await attachScreenshot(page, 'starter-faq-en');
+  });
+
+  await step('With Starter off, open the page again: nothing names Starter or invoicing', async () => {
+    signupDoor!.set('open');
+    const before = signupDoor!.requests();
+    await openLanding(page, 'en');
+    await expect.poll(() => signupDoor!.requests()).toBe(before + 1);
+    await expect(heroCta(page)).toContainText(en.landing.hero.ctaCreate);
+    await expect(page.locator('main')).not.toContainText(/Starter|invoic/i);
+    await expect(faq.getByRole('button')).toHaveCount(9);
+  });
+});
+
+test('The FAQ answers trying it without an account, reading receipts and the accountant, and backing up both ways', { tag: '@web.landing.faq-month' }, async ({ page, step }) => {
+  const faq = page.locator('[data-part="faq"]');
+  const open = async (question: string) => {
+    const button = page.getByRole('button', { name: question });
+    await button.scrollIntoViewIfNeeded();
+    await button.click();
+  };
+
+  await step('Open the landing page in English and scroll to Questions: nine questions', async () => {
+    await openLanding(page, 'en');
+    await faq.scrollIntoViewIfNeeded();
+    await expect(faq.getByRole('button')).toHaveCount(9);
+  });
+
+  await step('Open the try, receipts, accountant and backup questions', async () => {
+    for (const entry of [en.landing.faq.try, en.landing.faq.receipts, en.landing.faq.accountant, en.landing.faq.backup]) {
+      await open(entry.q);
+      await expect(page.getByText(entry.a)).toBeVisible();
+    }
+    await expect(faq).toContainText('Try it on this device');
+    await expect(faq).toContainText('you check them before the expense is saved');
+    await expect(faq).toContainText('without being able to change anything');
+    await expect(faq).toContainText('Without an account, download your records from Your data');
+    await attachScreenshot(page, 'faq-month-en');
+  });
+
+  await step('Switch to Arabic and open «هل يمكنني تجربتها دون حساب؟»', async () => {
+    await openLanding(page, 'ar');
+    await open(ar.landing.faq.try.q);
+    await expect(page.getByText(ar.landing.faq.try.a)).toBeVisible();
+    await expect(faq).toContainText('جرّبها على هذا الجهاز');
+  });
 });

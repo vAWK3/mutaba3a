@@ -28,6 +28,20 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — The landing and its FAQ catch up with the month; Starter copy behind the server's switch (ADR-282, API 1.143.0-landing)
+
+### Added
+- `GET /v1/self-service` says `starterPlan` (`STARTER_PLAN`, default off; `config.ts`, `index.ts`, `routes/self-service.ts`, `schemas.ts`, OpenAPI, `src/hosted/api/schema.d.ts`). The portal's `CLOSED_DOORS` gains it.
+- Landing (`signupDoor.ts` → `fetchDoors`, `doorsOnce`, `useLandingDoors`): while signup is open and `starterPlan` is on, the hero, Get it and the FAQ say Starter is free with no card, and the FAQ asks "Can I issue invoices and receipts?" (ar + en).
+- FAQ questions on trying it without an account, receipts read on our servers, and the accountant and share links (ar + en).
+
+### Changed
+- The FAQ is a keyed list (`FAQ_ENTRIES`, `faqFor` in `landingCopy.ts`; keys `landing.faq.<id>.*`), 9 questions, 10 with Starter. The data and backup answers cover signed-out mode.
+- The hero's sub-headline and the phone chapter mention receipts read for you.
+
+### Technical
+- QA: `web.landing.starter-free-plan`, `web.landing.faq-month` (new, passing); the signupDoor fixture gains a `starter` state; `signup-open` reads the new keys. 55/55 web specs pass.
+
 ## [Unreleased] - 2026-11-25 — Usage metering and Operator › Usage (MUT-735, ADR-281, API 1.142.0-mut735)
 
 ### Added

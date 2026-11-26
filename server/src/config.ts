@@ -243,6 +243,12 @@ const envSchema = z.object({
    * on; Malafat's side must list this server's callback in MTB3A_SIGN_IN_REDIRECT_URIS (MAL-1539).
    */
   MALAFAT_SIGN_IN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
+   * MUT-731: the free Starter plan. Today it only tells the landing (GET /v1/self-service `starterPlan`) to describe
+   * Starter and invoicing for everyone; MUT-731/736 build the plan itself behind this same switch. Only "true" turns
+   * it on, and only once MUT-731 is live.
+   */
+  STARTER_PLAN: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /** MUT-595: a firm's own Malafat origin, `{slug}` for its address. A local tenant host in dev. */
   MALAFAT_ORIGIN_TEMPLATE: z
     .string()

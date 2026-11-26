@@ -122,6 +122,8 @@ const selfService = {
   addressMinuteLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerMinute),
   addressDayLimiter: new SlidingWindowRateLimiter(SELF_SERVICE_POLICY.addressPerDay, 24 * 3_600_000),
   signupEnabled: config.SELF_SIGNUP_ENABLED,
+  // MUT-731: the doors tell the landing whether the free Starter plan is on.
+  starterPlan: config.STARTER_PLAN,
   // MUT-368 (D1): GET /v1/self-service offers a door only where a link can really be mailed.
   mailsLinks: config.MAILER !== 'noop' && Boolean(config.TURNSTILE_SECRET),
   turnstile: config.TURNSTILE_SECRET ? createTurnstileVerifier({ secret: config.TURNSTILE_SECRET, logger }) : UNCONFIGURED_TURNSTILE,
