@@ -60,9 +60,9 @@ export async function readActivityWindow(store: LedgerStore, organizationId: str
 
 /**
  * `posting: null` reads without posting due items (an operator's dry run writes nothing); owed can then lag what the
- * overview shows by the installments not yet posted.
+ * overview shows by the installments not yet posted. `invoicingForAll`: the server's INVOICING_FOR_ALL (MUT-736).
  */
-export async function readProfileFigures(store: LedgerStore, organization: Organization, range: { from: IsoDate; to: IsoDate }, now: Date, posting: PostingDoor | null): Promise<ProfileFigures> {
+export async function readProfileFigures(store: LedgerStore, organization: Organization, range: { from: IsoDate; to: IsoDate }, now: Date, posting: PostingDoor | null, invoicingForAll: boolean): Promise<ProfileFigures> {
   const { from, to } = range;
   const today = todayFor(organization, now);
   if (posting) await postDueItems(posting.store, organization, today, now, posting.actor);
@@ -76,7 +76,7 @@ export async function readProfileFigures(store: LedgerStore, organization: Organ
     activity: summarizeActivity({ payments: window.payments, expenses: window.expenses, allocations: [], receivables: [], refunds: window.refunds, from, to, bucket: 'month' }),
     owed: owedOf(receivables, today),
     entriesInRange: entriesIn(window, receivables, from, to),
-    invoiceSplit: await invoiceSplitOf(store, organization, window.payments, window.refunds, { from, to }),
+    invoiceSplit: await invoiceSplitOf(store, organization, window.payments, window.refunds, { from, to }, invoicingForAll),
   };
 }
 

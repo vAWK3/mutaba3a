@@ -266,7 +266,7 @@ describe('MUT-535 (D5): readProfileFigures, the verdict route\'s own read', () =
     expect((await s.income(s.firm, { kind: 'owed', amount: '300.00', occurredOn: '2026-09-02', dueDate: '2026-09-10', customerId: client.id, title: 'Work' })).status).toBe(201);
     const body = await read(await s.verdict('from=2026-09-01&to=2026-09-30'));
     const organization = (await s.store.organizations.getById(s.firm))!;
-    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null);
+    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null, false);
     expect(figures.activity.currencies.map(({ currency, received }) => ({ currency, received }))).toEqual(line(body, s.firm).currencies.map(({ currency, received }: Loose) => ({ currency, received })));
     expect(figures.owed).toEqual(line(body, s.firm).owed);
     expect(figures.owed.overdueCount).toBe(1);
@@ -279,7 +279,7 @@ describe('MUT-535 (D5): readProfileFigures, the verdict route\'s own read', () =
     const client = await read(await s.app.request('/v1/customers', json({ name: 'Haddad' }, { ...s.on(s.firm), ...idem() })));
     expect((await s.income(s.firm, { kind: 'owed', amount: '300.00', occurredOn: '2026-08-02', customerId: client.id, title: 'Work' })).status).toBe(201);
     const organization = (await s.store.organizations.getById(s.firm))!;
-    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null);
+    const figures = await readProfileFigures(s.store, organization, { from: '2026-09-01', to: '2026-09-30' }, s.clock.now, null, false);
     expect(figures.entriesInRange).toBe(false);
     // Its due date defaults to 15 September (EOM_15), so on 20 October it is overdue.
     expect(figures.owed.currencies).toEqual([{ currency: 'ILS', outstanding: '300.00', overdue: '300.00' }]);

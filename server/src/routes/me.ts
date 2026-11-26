@@ -51,7 +51,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
     }),
     async (c) => {
       const { user, via } = c.get('identity');
-      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
       return c.json(via ? delegatedMe(me, via) : me, 200);
     },
   );
@@ -79,6 +79,7 @@ export async function buildMe(
   accountantAccess = false,
   accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
   twoFactorIssuingGate = false,
+  invoicingForAll = false,
 ) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
@@ -111,7 +112,7 @@ export async function buildMe(
     store.organizations.countOwnedBy(user.id),
     terms && termsStatus(store, user.id, terms),
     passkeysAt ? store.passkeys.promptOf(user.id) : null,
-    store.features.activeFor(user.id),
+    store.features.activeFor(user.id).then((granted) => withInvoicingForAll(granted, invoicingForAll)),
     // MUT-559: the profiles shared with the person as an accountant; never part of `profiles`. MUT-575: ended ones too,
     // until removed, so the clients show the tab while any row is left. No stat queries here (GET /v1/clients has them).
     accountantAccess ? clientBooksOf(store, user.id, clientCapOf(plan, accountantPlan)) : null,
@@ -136,7 +137,8 @@ export async function buildMe(
       status: user.status,
       // MUT-333: while closing, the clients show only Keep my account and Sign out.
       closure: user.closure ? { requestedAt: user.closure.requestedAt.toISOString(), deleteAfter: user.closure.deleteAfter.toISOString() } : null,
-      // MUT-433: read on every request, never cached, so an operator's revoke shows at once.
+      // MUT-433: read on every request, never cached, so an operator's revoke shows at once. MUT-736: `invoicing` for
+      // everyone while INVOICING_FOR_ALL is on, so the portal and every shipped phone build open issuing.
       features,
       // MUT-459: only an operator's /v1/me names it; the console's link and pages hang off this.
       ...(user.operatorAt ? { operator: true as const } : {}),
@@ -149,6 +151,14 @@ export async function buildMe(
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
     ...(clients ? { clients: clients.rows, clientBooks: clientBooksSummaryOf(clients.activeCount, plan, accountantPlan) } : {}),
   };
+}
+
+/**
+ * MUT-736 (ADR-282): the person's features as the clients read them. With INVOICING_FOR_ALL on, `invoicing` is named
+ * for everyone (whether a given profile issues is still the issuing routes' rule: a business profile, not Malafat's).
+ */
+export function withInvoicingForAll(granted: readonly string[], invoicingForAll: boolean): string[] {
+  return invoicingForAll && !granted.includes('invoicing') ? [...granted, 'invoicing'] : [...granted];
 }
 
 /**

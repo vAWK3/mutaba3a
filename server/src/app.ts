@@ -219,6 +219,13 @@ export interface AppDependencies {
    * TWO_FACTOR_ISSUING_GATE_ENABLED (off by default). Absent = off; issuingHarness and the gate's own suites turn it on.
    */
   twoFactorIssuingGate?: boolean;
+  /**
+   * MUT-736 (ADR-282): every business profile issues, with no operator grant. Production passes INVOICING_FOR_ALL (off by
+   * default). Absent = off: the operator's `invoicing` grant decides, as before.
+   */
+  invoicingForAll?: boolean;
+  /** MUT-736: overrides whether a paid plan can be bought here (PLAN_LIMIT's `canUpgrade`). Absent = Checkout is configured. */
+  planCheckout?: boolean;
   /** MUT-474: a dev server's owned-profile cap (QA_MAX_OWNED_PROFILES, refused in production). Absent = the product limit. */
   maxOwnedProfiles?: number | undefined;
   /** MUT-419 (R11): production refuses a real operator trial-mail run whose links would be loopback. Absent = allowed. */
@@ -420,7 +427,7 @@ function defaultSessionSettings(): SessionSettings {
 }
 
 export const API_TITLE = 'MTB3A Financial API';
-export const API_VERSION = '1.142.0-mut735';
+export const API_VERSION = '1.143.0-mut736';
 
 /**
  * Composes the HTTP application. No I/O happens here; everything it needs is
@@ -434,7 +441,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   const accountantAccess = deps.accountantAccess ?? false;
   const malafatDelegation = deps.malafatDelegation ?? false;
   const accountantPlan = deps.accountantPlan ?? ACCOUNTANT_PLAN_OFF;
-  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
+  const { app } = createApiShell({ now, logger: deps.logger, reporter, billingGate: deps.billingGate ?? false, twoFactorIssuingGate: deps.twoFactorIssuingGate ?? false, invoicingForAll: deps.invoicingForAll ?? false, passkeys: Boolean(deps.webauthn), maxOwnedProfiles: deps.maxOwnedProfiles, accountantAccess, accountantPlan });
 
   // The store guard reads the request it runs in from here (store-guard.ts).
   app.use('*', contextStorage());
@@ -665,6 +672,8 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
     // MUT-571/572: hosted only, like the PDF.
     taxAuthority: deps.taxAuthority ? { ...deps.taxAuthority, store } : null,
     manualAllocationUrl: deps.manualAllocationUrl ?? null,
+    // MUT-736: whether a paid plan can be bought here (the Upgrade on a PLAN_LIMIT refusal).
+    planCheckout: deps.planCheckout ?? Boolean(deps.stripe?.checkoutGateway),
     portalOrigin: sessions.portalOrigin ?? null,
     servesPortal: Boolean(deps.portal),
     // MUT-647: the receipts reader fills an invoice issued elsewhere, where it is configured.

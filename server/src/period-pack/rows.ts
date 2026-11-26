@@ -58,6 +58,8 @@ export interface IncomeLine {
 export interface CollectOptions {
   scope: 'report' | 'receipts';
   forLink: boolean;
+  /** MUT-736: the server's INVOICING_FOR_ALL; with the owner's grant, whether the Income sheet carries invoice status. */
+  invoicingForAll: boolean;
 }
 
 /** MUT-643: a refund on the Income sheet (ref R-n). */
@@ -149,7 +151,7 @@ export async function collectRows(store: LedgerStore, organization: Organization
       }),
     };
   });
-  const invoicing = report && (await invoicingOn(store, organization));
+  const invoicing = report && (await invoicingOn(store, organization, options.invoicingForAll));
   const ctx = invoicing ? await store.issuing.incomeContext(organization.id, sortedPayments.map((p) => p.id)) : null;
   const incomeLines = sortedPayments.map(
     (record, i): IncomeLine => ({

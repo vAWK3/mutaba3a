@@ -117,6 +117,13 @@ export const ERROR_CODES = {
   NOT_FOUND: 404,
   ORGANIZATION_MISMATCH: 409,
   CONFLICT: 409,
+  /**
+   * MUT-736/731 (ADR-282): the payer's plan doesn't include this (`details.limit`: taxAuthority; MUT-731 adds the
+   * monthly meters and counts). `details.nextPlan` names the plan that does; `details.canUpgrade` says whether it can be
+   * bought on this server now. 409, not 402: 402 is the lapse gate's "plan ended". Nothing was done, so the idempotency
+   * key is released and the same request succeeds after an upgrade.
+   */
+  PLAN_LIMIT: 409,
   OPERATION_IN_PROGRESS: 409,
   /** MUT-360: a Stripe reconcile is already running on this instance; the next one runs when it ends. */
   RECONCILE_RUNNING: 409,

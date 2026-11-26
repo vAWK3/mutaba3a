@@ -544,6 +544,12 @@ variable "two_factor_issuing_gate_enabled" {
   default     = false
 }
 
+variable "invoicing_for_all" {
+  description = "MUT-736 (ADR-282): sets INVOICING_FOR_ALL=true, so every business profile issues invoices with no operator grant and /v1/me names `invoicing` for everyone (shipped phone builds open issuing with no update). false (default) = the operator's per-person `invoicing` grant decides (the kill switch). Starter's Tax Authority rule does not depend on it."
+  type        = bool
+  default     = false
+}
+
 variable "uniform_file_registration_number" {
   description = "MUT-569 (ADR-272): UNIFORM_FILE_REGISTRATION_NUMBER, the 8-digit Instruction 36 registration certificate number in the uniform file (A000 1006). null (default) = the API's 00000000 until MUT-567 issues the certificate."
   type        = string

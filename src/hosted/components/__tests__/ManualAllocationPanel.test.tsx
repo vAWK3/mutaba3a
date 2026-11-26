@@ -10,7 +10,7 @@ vi.mock('../../../lib/utils', async (importOriginal) => ({ ...(await importOrigi
 /** MUT-711 (AC1): the manual allocation panel — the Tax Authority's details with Copy, the link, the input, a way out. */
 afterEach(() => localStorage.clear());
 
-const ALLOCATION: ManualAllocation = { mode: 'MANUAL', nextNumber: 14, documentDate: '2026-11-22', net: '6000.00', customerTaxId: '516123452', requestUrl: 'https://example.test/allocation' };
+const ALLOCATION: ManualAllocation = { mode: 'MANUAL', nextNumber: 14, documentDate: '2026-11-22', net: '6000.00', customerTaxId: '516123452', requestUrl: 'https://example.test/allocation', automaticOn: null };
 
 function renderPanel(props: Partial<Parameters<typeof ManualAllocationPanel>[0]> = {}, language: 'en' | 'ar' = 'en') {
   localStorage.setItem(PORTAL_LANGUAGE_KEY, language);
@@ -61,5 +61,11 @@ describe('ManualAllocationPanel', () => {
   it('reads in formal Arabic', () => {
     renderPanel({}, 'ar');
     expect(screen.getByRole('heading', { name: 'تحتاج هذه الفاتورة إلى رقم تخصيص' })).toBeVisible();
+  });
+
+  it('MUT-736: on Starter (automaticOn set) the panel is the same, with no explanatory line', () => {
+    renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } });
+    expect(screen.getByRole('heading', { name: 'This invoice needs an allocation number' })).toBeVisible();
+    expect(screen.queryByText(/automatically/)).toBeNull();
   });
 });

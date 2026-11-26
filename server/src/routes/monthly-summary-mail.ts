@@ -57,7 +57,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
   const app = new OpenAPIHono<AppEnv>();
   const { store, settings } = options;
 
-  const run = (requestUrl: string, now: Date, dryRun: boolean) => {
+  const run = (requestUrl: string, now: Date, dryRun: boolean, invoicingForAll: boolean) => {
     const origin = setupLinkOrigin(settings.portalOrigin, requestUrl).replace(/\/+$/, '');
     if (!dryRun && options.refuseLoopbackLinks && LOOPBACK.test(origin)) {
       throw new ApiError('LINK_ORIGIN_LOOPBACK', 'These mails would link to a local address; set PORTAL_ORIGIN or call the service by its public URL', { origin });
@@ -72,6 +72,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
       pepper: settings.pepper,
       stripe: checkout && plan ? { catalog: () => catalogOf(checkout), plan } : null,
       dryRun,
+      invoicingForAll,
       sendBudget: options.sendBudget ?? MONTHLY_SUMMARY_DAILY_SENDS,
     });
   };
@@ -106,7 +107,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
         503: errorResponse('JOBS_NOT_CONFIGURED'),
       },
     }),
-    async (c) => c.json((await run(c.req.url, c.get('now')(), false)).summary, 200),
+    async (c) => c.json((await run(c.req.url, c.get('now')(), false, c.get('invoicingForAll'))).summary, 200),
   );
 
   app.openapi(
@@ -130,7 +131,7 @@ export function monthlySummaryMailRoutes(options: MonthlySummaryMailRouteOptions
     }),
     async (c) => {
       const { dryRun } = c.req.valid('json');
-      return c.json(await run(c.req.url, c.get('now')(), dryRun), 200);
+      return c.json(await run(c.req.url, c.get('now')(), dryRun, c.get('invoicingForAll')), 200);
     },
   );
 

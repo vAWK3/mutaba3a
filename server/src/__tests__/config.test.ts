@@ -204,6 +204,14 @@ describe('loadConfig — the server reads receipts (MUT-441)', () => {
     expect(loadConfig({ ...base, TWO_FACTOR_ISSUING_GATE_ENABLED: 'false' }).TWO_FACTOR_ISSUING_GATE_ENABLED).toBe(false);
   });
 
+  it('INVOICING_FOR_ALL (MUT-736): off unless exactly "true", production included', () => {
+    expect(loadConfig(base).INVOICING_FOR_ALL).toBe(false);
+    expect(loadConfig({ ...base, NODE_ENV: 'production' }).INVOICING_FOR_ALL).toBe(false);
+    expect(loadConfig({ ...base, INVOICING_FOR_ALL: 'true' }).INVOICING_FOR_ALL).toBe(true);
+    expect(loadConfig({ ...base, INVOICING_FOR_ALL: 'false' }).INVOICING_FOR_ALL).toBe(false);
+    expect(() => loadConfig({ ...base, INVOICING_FOR_ALL: 'yes' })).toThrow(/INVOICING_FOR_ALL/);
+  });
+
   it('QA_READ_DELAY_MS: a local QA delay before an in-process read, refused in production and staging', () => {
     expect(loadConfig(base).QA_READ_DELAY_MS).toBeUndefined();
     expect(loadConfig({ ...base, QA_READ_DELAY_MS: '5000' }).QA_READ_DELAY_MS).toBe(5000);

@@ -1,6 +1,7 @@
 import { normalizeEmail } from '../../auth/users.js';
 import type { Mailer, SendResult } from '../../email/ports.js';
 import type { Logger } from '../../logger.js';
+import { taxAuthorityPlanOf } from '../../issuing/tax-authority-plan.js';
 import type { LedgerStore, TaxAuthorityConnectionRecord, UserLocale } from '../../repositories/ports.js';
 
 /**
@@ -16,13 +17,15 @@ import type { LedgerStore, TaxAuthorityConnectionRecord, UserLocale } from '../.
  * a new end, so a new key. The windows (10 days, then 7) stay inside the send log's 30 days, so no key is pruned while
  * its stage could still come round: never more than two mails per consent. The portal's setup page says the same from
  * the status's `until` (RECONNECT_NOTICE_DAYS), with or without the mail.
+ * MUT-736: a connection kept on a plan without it (Starter, `suspended`) is skipped (`plan`): there is nothing to renew
+ * until the person is on a paid plan again.
  */
 export const REMIND_DAYS_BEFORE = 10;
 export const ENDED_WINDOW_DAYS = 7;
 const DAY_MS = 86_400_000;
 
 export type ReconnectStage = 'soon' | 'ended';
-export type ReconnectSkip = 'other-environment' | 'no-refresh' | 'profile-gone' | 'owner-gone' | 'owner-inactive' | 'suppressed';
+export type ReconnectSkip = 'other-environment' | 'no-refresh' | 'profile-gone' | 'plan' | 'owner-gone' | 'owner-inactive' | 'suppressed';
 
 /** The stage due now for one consent's end, or null outside both windows. Pure. */
 export function reconnectStageOf(until: Date, now: Date): { stage: 'soon'; daysLeft: number } | { stage: 'ended' } | null {
@@ -57,7 +60,7 @@ export interface ReconnectReminderSummary {
 
 export interface ReconnectReminderOptions {
   /** The unguarded store: a job, not a principal's request. */
-  store: Pick<LedgerStore, 'issuing' | 'organizations' | 'users' | 'email'>;
+  store: Pick<LedgerStore, 'issuing' | 'organizations' | 'users' | 'email' | 'billing' | 'memberships' | 'integrations'>;
   mailer: Mailer;
   logger: Logger;
   now: Date;
@@ -111,6 +114,7 @@ async function recipientOf(
   if (connection.refreshTokenSealed === null) return { skip: 'no-refresh' };
   const profile = await options.store.organizations.getById(connection.organizationId);
   if (!profile) return { skip: 'profile-gone' };
+  if (!(await taxAuthorityPlanOf(options.store, profile, options.now)).allowed) return { skip: 'plan' };
   const owner = await options.store.users.getById(profile.ownerUserId ?? connection.connectedByUserId);
   if (!owner) return { skip: 'owner-gone' };
   if (owner.status !== 'ACTIVE') return { skip: 'owner-inactive' };

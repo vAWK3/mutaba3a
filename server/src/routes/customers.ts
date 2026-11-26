@@ -308,7 +308,7 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
       const sources = await store.receivables.statementSources(organization.id, customer.id, q.currency);
       const view = { asOf, timezone: organization.timezone, from: q.from ?? null, to: q.to ?? null, projectId: q.projectId ?? null };
       const page = buildStatement(sources, view, { limit: q.limit, cursor, order: q.order });
-      const tags = await tagsFor(store, organization, customer.id, q.currency, page.lines);
+      const tags = await tagsFor(store, organization, customer.id, q.currency, page.lines, c.get('invoicingForAll'));
       return c.json(serializeStatement({ customerId: customer.id, currency: q.currency, view, page, tags }), 200);
     },
   );
@@ -317,8 +317,8 @@ export function customerRoutes(store: LedgerStore): OpenAPIHono<AppEnv> {
 }
 
 /** MUT-664: the documents on each line of a page and the one it is due; none when invoicing is off for the profile. */
-async function tagsFor(store: LedgerStore, organization: Organization, customerId: string, currency: string, lines: readonly StatementLine[]): Promise<Map<string, StatementLineTags> | undefined> {
-  if (lines.length === 0 || !(await invoicingOn(store, organization))) return undefined;
+async function tagsFor(store: LedgerStore, organization: Organization, customerId: string, currency: string, lines: readonly StatementLine[], invoicingForAll: boolean): Promise<Map<string, StatementLineTags> | undefined> {
+  if (lines.length === 0 || !(await invoicingOn(store, organization, invoicingForAll))) return undefined;
   const issued: IssuedDocumentRecord[] = [];
   let cursor: { createdAt: Date; id: string } | null = null;
   do {

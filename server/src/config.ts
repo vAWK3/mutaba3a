@@ -122,6 +122,12 @@ const envSchema = z.object({
    */
   TWO_FACTOR_ISSUING_GATE_ENABLED: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
   /**
+   * MUT-736 (ADR-282): every business profile issues invoices, receipts and credit notes, with no operator grant; /v1/me
+   * names `invoicing` in everyone's features, so shipped phone builds open issuing too. Only exactly "true" turns it
+   * on. Off is the kill switch: the operator's per-person `invoicing` grant decides again.
+   */
+  INVOICING_FOR_ALL: z.enum(['true', 'false']).default('false').transform((v) => v === 'true'),
+  /**
    * MUT-711 (ADR-273): where a business requests an allocation number by hand when MTB3A can't (shown on the review
    * step). Read with or without TAX_AUTHORITY_ENV. The default is the Tax Authority's own site until the exact page is
    * confirmed (open item on MUT-711).

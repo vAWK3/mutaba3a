@@ -510,7 +510,7 @@ export function shareLinkRoutes(options: ShareLinkRouteOptions): OpenAPIHono<App
       // MUT-643: money credit notes gave back in the range comes off what was received.
       const refunds = await store.refunds.list(organization.id, { ...(range.from ? { from: range.from } : {}), to: range.to });
       // MUT-660: the accountant's link shows the books split too (invoicing profiles only).
-      const split = await invoiceSplitOf(store, organization, received, refunds, range);
+      const split = await invoiceSplitOf(store, organization, received, refunds, range, c.get('invoicingForAll'));
       return c.json({ from: range.from, to: range.to, expenses: visitorExpenseSummary(summarizeExpenses(expenses), ctx), received: receivedByCurrency(received, refunds), ...(split ? { invoiceSplit: serializeInvoiceSplit(split) } : {}) }, 200);
     },
   );

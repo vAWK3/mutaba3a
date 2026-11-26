@@ -9,12 +9,14 @@ import { DefaultsStep, DetailsStep, LOGO_MAX_BYTES, LogoStep, NumberingStep, Tax
 import { Letterhead } from '../Letterhead';
 import { endsSoon, wholeNumber, type PaperModel } from '../setupSteps';
 
-const api = vi.hoisted(() => ({ lookup: vi.fn(), saveIssuer: vi.fn(), saveDefaults: vi.fn(), numbering: vi.fn(), saveLogo: vi.fn(), removeLogo: vi.fn(), taxStatus: vi.fn() }));
+const api = vi.hoisted(() => ({ lookup: vi.fn(), saveIssuer: vi.fn(), saveDefaults: vi.fn(), numbering: vi.fn(), saveLogo: vi.fn(), removeLogo: vi.fn(), taxStatus: vi.fn(), taxConnect: vi.fn(), taxDisconnect: vi.fn() }));
+const drawers = vi.hoisted(() => ({ openBilling: vi.fn(), openTwoFactor: vi.fn() }));
+vi.mock('../../../shell/AccountDrawers', () => ({ useAccountDrawers: () => drawers }));
 vi.mock('../../../api/client', async (importOriginal) => {
   const real = await importOriginal<typeof import('../../../api/client')>();
   return {
     ...real,
-    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo, taxAuthorityStatus: api.taxStatus, issuingStyles: async () => ({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] }) },
+    api: { ...real.api, businessLookup: api.lookup, saveIssuer: api.saveIssuer, saveIssuerDefaults: api.saveDefaults, answerNumbering: api.numbering, saveIssuerLogo: api.saveLogo, removeIssuerLogo: api.removeLogo, taxAuthorityStatus: api.taxStatus, taxAuthorityConnect: api.taxConnect, taxAuthorityDisconnect: api.taxDisconnect, issuingStyles: async () => ({ styles: [{ key: 'PROFESSIONAL' }, { key: 'MODERN' }, { key: 'MINIMAL' }] }) },
   };
 });
 
@@ -45,6 +47,7 @@ function WithPaper({ step }: { step: (preview: (patch: Partial<PaperModel>) => v
 beforeEach(() => {
   localStorage.clear();
   Object.values(api).forEach((fn) => fn.mockReset());
+  Object.values(drawers).forEach((fn) => fn.mockReset());
 });
 
 describe('invoicing setup steps (MUT-646)', () => {
@@ -177,5 +180,63 @@ describe('the Tax Authority step (MUT-571 follow-ups)', () => {
     api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null });
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />, 'ar');
     expect(await screen.findByTestId('tax-authority-returned')).toHaveTextContent('لم تتم الموافقة على الربط');
+  });
+});
+
+/**
+ * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step offers the upgrade
+ * instead of Connect, and a kept connection can still be disconnected. No explanatory lines (Basel, 2026-11-26).
+ */
+describe('the Tax Authority step on a plan without the connection (MUT-736)', () => {
+  const NOT_ON_PLAN = { allowed: false, nextPlan: 'solo' } as const;
+  const ALLOWED = { allowed: true, nextPlan: null } as const;
+  afterEach(() => window.history.replaceState(null, '', '/'));
+
+  it('offers Upgrade to Solo (Billing) and no Connect, with no explanatory line', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await waitFor(() => expect(screen.getByTestId('tax-authority-step')).toHaveAttribute('data-plan-allowed', 'false'));
+    expect(screen.queryByTestId('tax-authority-connect')).toBeNull();
+    expect(screen.queryByText(/Solo and above/)).toBeNull();
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Upgrade to Solo' }));
+    expect(drawers.openBilling).toHaveBeenCalledWith();
+  });
+
+  it('a kept connection (suspended) can still be disconnected', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'suspended', connectedAt: new Date().toISOString(), until: null, environment: 'sandbox', plan: NOT_ON_PLAN });
+    api.taxDisconnect.mockResolvedValue(undefined);
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await waitFor(() => expect(screen.getByTestId('tax-authority-step')).toHaveAttribute('data-state', 'suspended'));
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Disconnect' }));
+    expect(api.taxDisconnect).toHaveBeenCalledWith('p1');
+  });
+
+  it('in Arabic the button names «مستقل»', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />, 'ar');
+    expect(await screen.findByRole('button', { name: 'الترقية إلى «مستقل»' })).toBeVisible();
+  });
+
+  it('back from a connect the plan no longer allowed: says nothing was connected', async () => {
+    window.history.replaceState(null, '', '/p/p1/you/invoicing?taxAuthority=plan');
+    api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByTestId('tax-authority-returned')).toHaveTextContent('Nothing was connected.');
+  });
+
+  it('a PLAN_LIMIT refusal on Connect (the plan changed meanwhile) reads the status again instead of a generic failure', async () => {
+    api.taxStatus.mockResolvedValueOnce({ state: 'none', connectedAt: null, until: null, environment: null, plan: ALLOWED }).mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
+    api.taxConnect.mockRejectedValue(new ApiError(409, 'PLAN_LIMIT', 'The Tax Authority connection is on Solo and above', { limit: 'taxAuthority', plan: 'starter', nextPlan: 'solo', canUpgrade: true }));
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    await userEvent.setup().click(await screen.findByTestId('tax-authority-connect'));
+    expect(await screen.findByRole('button', { name: 'Upgrade to Solo' })).toBeVisible();
+    expect(screen.queryByText('The changes could not be saved. Please try again.')).toBeNull();
+  });
+
+  it('on a paid plan it offers Connect and no upgrade', async () => {
+    api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: ALLOWED });
+    wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
+    expect(await screen.findByTestId('tax-authority-connect')).toBeVisible();
+    expect(screen.queryByTestId('tax-authority-upgrade')).toBeNull();
   });
 });

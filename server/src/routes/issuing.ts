@@ -7,7 +7,8 @@ import { parseAmount, todayFor } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { requireTwoFactor } from '../auth/two-factor-flow.js';
 import { ApiError } from '../errors.js';
-import { hasFeature } from '../features.js';
+import { invoicingOn } from '../issuing/invoicing-on.js';
+import { taxAuthorityPlanOf } from '../issuing/tax-authority-plan.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
@@ -247,6 +248,8 @@ export interface IssuingTaxAuthority {
   servesPortal?: boolean;
   /** MUT-711: where an allocation number is requested by hand; null/absent = DEFAULT_MANUAL_ALLOCATION_URL. */
   manualAllocationUrl?: string | null;
+  /** MUT-736: a paid plan can be bought on this server now (Checkout configured): PLAN_LIMIT's `canUpgrade`. Absent = false. */
+  canUpgrade?: boolean;
 }
 
 /** MUT-647: where an invoice issued elsewhere is kept, and the reader that fills its fields. */
@@ -257,15 +260,15 @@ export interface IssuingExternalInvoices {
 }
 
 /**
- * The selected profile, if issuing is on for it; 404 otherwise. The feature is the owner's, so co-owners and accountants
- * see the same. `write` also needs the profile's owner. MUT-660: shared with the routes that set documents preferences.
+ * The selected profile, if issuing is on for it (`invoicingOn`: MUT-736's INVOICING_FOR_ALL, else the owner's grant);
+ * 404 otherwise. Co-owners and accountants see what the owner's profile allows. `write` also needs the profile's owner. MUT-660: shared with the routes that set documents preferences.
  */
 export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, write: boolean): Promise<Organization> {
   const { organization, user, membershipRole, writerOfRecord, via } = sessionAuth(c);
   const owner = profileOwnerOf(organization);
   const off = () => new ApiError('NOT_FOUND', 'Not found');
   if (via || writerOfRecord === 'MALAFAT' || isMalafatFirm(organization) || !owner || profileTypeOf(organization) === 'PERSONAL') throw off();
-  if (!(await hasFeature(store, owner, 'invoicing'))) throw off();
+  if (!(await invoicingOn(store, organization, c.get('invoicingForAll')))) throw off();
   if (write && !ownsProfile(organization, user.id, membershipRole)) throw notOwner();
   return organization;
 }
@@ -274,6 +277,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   const app = new OpenAPIHono<AppEnv>();
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
+  /** MUT-736 (ADR-282): whether the payer's plan includes the Tax Authority connection (Starter doesn't). */
+  const taxPlanOf = (organization: Organization, now: Date) => taxAuthorityPlanOf(store, organization, now);
 
   /** Every credit note of the client (or the profile), for MUT-664's settlement of a page of tax invoices. */
   async function creditNotesOf(organizationId: string, customerId: string | undefined): Promise<IssuedDocumentRecord[]> {
@@ -349,11 +354,15 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         // MUT-711 (ADR-273): requested by hand. Issued only if the number it was requested for is still this document's.
         const allocationNumber = normalizeAllocationNumber(body.manualAllocation.number);
         input.allocate = manualAllocator(allocationNumber, body.manualAllocation.forNumber);
-      } else if (needs && !tax.deps) {
-        // MUT-711: the Tax Authority is off on this server, so MTB3A can't request the number: the business enters it.
+      }
+      // MUT-736: on a plan without the connection (Starter) MTB3A never requests or reports a number, whatever is connected.
+      const taxPlan = needs && !body.manualAllocation && tax.deps ? await taxPlanOf(organization, now) : null;
+      if (needs && !body.manualAllocation && (!tax.deps || !taxPlan!.allowed)) {
+        // MUT-711: the Tax Authority is off on this server (or, MUT-736, not on this plan), so MTB3A can't request the
+        // number: the business enters it. `automaticOn` names the plan that would.
         const next = (await store.issuing.counters(organization.id)).find((k) => k.docType === body.docType)?.next ?? 1;
-        throw new ApiError('CONFLICT', 'This invoice needs an allocation number: request it from the Tax Authority and enter it', { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next });
-      } else if (tax.deps && needs) {
+        throw new ApiError('CONFLICT', 'This invoice needs an allocation number: request it from the Tax Authority and enter it', { reason: 'ALLOCATION_NUMBER_REQUIRED', field: 'manualAllocation', next, automaticOn: taxPlan?.nextPlan ?? null });
+      } else if (tax.deps && needs && !body.manualAllocation) {
         const ta = tax.deps;
         if (body.withoutAllocation) {
           // Held earlier: the person chose to issue without a number; the Tax Authority hears CONTINUE first.
@@ -500,20 +509,24 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
 
   /**
    * MUT-711 (ADR-273): whether MTB3A can request this document's allocation number itself (AUTOMATIC: the Tax Authority
-   * is on here and the profile is connected) or the business requests it by hand (MANUAL).
+   * is on here, the profile is connected and, MUT-736, the payer's plan includes the connection) or the business
+   * requests it by hand (MANUAL). `automaticOn`: the plan on which it would be automatic, when the plan is why not.
    */
-  async function allocationMode(organizationId: string, now: Date): Promise<'AUTOMATIC' | 'MANUAL'> {
-    if (!tax.deps) return 'MANUAL';
-    const connection = await store.issuing.getTaxConnection(organizationId);
-    return statusOf(connection, tax.deps.client.environment, now).state === 'connected' ? 'AUTOMATIC' : 'MANUAL';
+  async function allocationMode(organization: Organization, now: Date): Promise<{ mode: 'AUTOMATIC' | 'MANUAL'; automaticOn: 'solo' | 'business' | 'firm' | null }> {
+    if (!tax.deps) return { mode: 'MANUAL', automaticOn: null };
+    const [connection, plan] = await Promise.all([store.issuing.getTaxConnection(organization.id), taxPlanOf(organization, now)]);
+    if (!plan.allowed) return { mode: 'MANUAL', automaticOn: plan.nextPlan };
+    return { mode: statusOf(connection, tax.deps.client.environment, now).state === 'connected' ? 'AUTOMATIC' : 'MANUAL', automaticOn: null };
   }
 
   /** MUT-711: the review step's allocation panel, or null when the document needs no number. */
-  async function allocationPreview(organizationId: string, body: IssueRequest, documentDate: string, composed: ComposedDocument, customer: CustomerRecord | null, now: Date) {
+  async function allocationPreview(organization: Organization, body: IssueRequest, documentDate: string, composed: ComposedDocument, customer: CustomerRecord | null, now: Date) {
     if (!customer?.taxId || !needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer.taxId })) return null;
-    const [mode, counters] = await Promise.all([allocationMode(organizationId, now), store.issuing.counters(organizationId)]);
+    const organizationId = organization.id;
+    const [{ mode, automaticOn }, counters] = await Promise.all([allocationMode(organization, now), store.issuing.counters(organizationId)]);
     return {
       mode,
+      automaticOn,
       nextNumber: counters.find((k) => k.docType === body.docType)?.next ?? 1,
       documentDate,
       net: serializeComposedTotals({ ...composed, currency: body.currency }).net,
@@ -705,14 +718,17 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       }
       await store.issuing.markSetup(organization.id, 'numberingAnsweredAt', c.get('now')());
       await audit(c, 'issuing.numbering_answered', 'issuer_details', organization.id, { alreadyIssuing, ...(entries.length ? { starts: Object.fromEntries(entries) } : {}) });
-      return c.json(await setupOf(organization.id), 200);
+      return c.json(await setupOf(organization), 200);
     },
   );
 
-  async function setupOf(organizationId: string) {
+  async function setupOf(organization: Organization) {
+    const organizationId = organization.id;
+    const now = new Date();
     const [issuer, setup, connection] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId), tax.deps ? store.issuing.getTaxConnection(organizationId) : null]);
     // MUT-571: the Tax Authority step is done while the connection is good; until then (or without one here) it waits.
-    const connected = !!tax.deps && statusOf(connection, tax.deps.client.environment, new Date()).state === 'connected';
+    // MUT-736: a connection kept on a plan without it (Starter, `suspended`) is not done either.
+    const connected = !!tax.deps && statusOf(connection, tax.deps.client.environment, now).state === 'connected' && (await taxPlanOf(organization, now)).allowed;
     const missing = setupMissing(issuer, setup);
     const done = (ok: boolean) => (ok ? ('done' as const) : ('todo' as const));
     return {
@@ -754,7 +770,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     }),
     async (c) => {
       const organization = await issuingProfile(c, false);
-      return c.json(await setupOf(organization.id), 200);
+      return c.json(await setupOf(organization), 200);
     },
   );
 
@@ -771,7 +787,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     async (c) => {
       const organization = await issuingProfile(c, true);
       await store.issuing.markSetup(organization.id, 'introSeenAt', c.get('now')());
-      return c.json(await setupOf(organization.id), 200);
+      return c.json(await setupOf(organization), 200);
     },
   );
 
@@ -844,7 +860,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const original = await creditedInvoice(organization.id, body);
       const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), original);
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
-      const allocation = await allocationPreview(organization.id, body, documentDate, composed, customer, now);
+      const allocation = await allocationPreview(organization, body, documentDate, composed, customer, now);
       const facts = await creditNoteFacts(organization.id, original, composed.grossMinor);
       const ils = (minor: bigint) => formatMoney({ minor, currency: 'ILS' });
       const creditNote = facts ? { outstanding: ils(facts.outstandingMinor), paid: ils(facts.paidMinor), maximum: ils(facts.maximumMinor) } : null;
@@ -1173,7 +1189,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
   if (issuedPdf) registerPdfRoutes(issuedPdf.render);
   registerExternalInvoiceRoutes(app, { store, storage: external.storage, ocr: external.ocr, urlTtlSeconds: external.urlTtlSeconds, issuingProfile, audit });
 
-  registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, servesPortal: tax.servesPortal ?? false, vatNumberOf: async (id) => {
+  registerTaxAuthorityRoutes(app, { store, taxAuthority: tax.deps, issuingProfile, audit, portalOrigin: tax.portalOrigin, servesPortal: tax.servesPortal ?? false, planOf: taxPlanOf, canUpgrade: tax.canUpgrade ?? false, vatNumberOf: async (id) => {
     const issuer = await store.issuing.getIssuer(id);
     return issuer ? Number(issuer.vatId) : null;
   } });

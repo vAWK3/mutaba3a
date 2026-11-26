@@ -75,7 +75,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
 
       const { email, password } = c.req.valid('json');
       const { user, token } = await signIn(c, signInDeps, { email, password }, 'device', deviceLifetime());
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
       return c.json({ ...me, token }, 201);
     },
   );
@@ -115,7 +115,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         'device',
         deviceLifetime(),
       );
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
       return c.json({ ...me, token }, 201);
     },
   );
@@ -147,7 +147,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
       }
       const { email, code } = c.req.valid('json');
       const { user, token } = await signInWithCode(c, signInDeps, { email, code }, 'device', deviceLifetime());
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
       return c.json({ ...me, token }, 201);
     },
   );
@@ -176,7 +176,7 @@ export function deviceSessionRoutes(options: DeviceSessionRouteOptions): OpenAPI
         throw new ApiError('RATE_LIMITED', 'Too many sign-in attempts; try again in a few minutes', { retryAfterSeconds: ip.retryAfterSeconds });
       }
       const { user, token } = await finishTwoFactor(c, signInDeps, c.req.valid('json'), 'device', deviceLifetime());
-      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'));
+      const me = await buildMe(store, user, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
       return c.json({ ...me, token }, 201);
     },
   );

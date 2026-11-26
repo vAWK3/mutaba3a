@@ -66,6 +66,32 @@ export const PLAN_LIMITS: Readonly<Record<PlanName, Readonly<PlanLimits>>> = {
   firm: { businesses: 6, partners: 2, documentsPerMonth: 1000, scansPerMonth: 2000 },
 };
 
+/**
+ * MUT-736 (ADR-282): the free plan's name. MUT-731 makes it a tier (rank 0, its limits); until then no entitlement
+ * resolves to it, but the plan features below already name it, so turning Starter on needs no change here.
+ */
+export const FREE_PLAN = 'starter' as const;
+export type FreePlanName = typeof FREE_PLAN;
+
+/** What a plan includes beyond its limits. */
+export interface PlanFeatures {
+  /** The Tax Authority connection: automatic allocation numbers (MUT-571/572). Without it, numbers are typed by hand (MUT-711). */
+  taxAuthority: boolean;
+}
+
+export const PLAN_FEATURES: Readonly<Record<AnyPlanName | FreePlanName, Readonly<PlanFeatures>>> = {
+  starter: { taxAuthority: false },
+  solo: { taxAuthority: true },
+  business: { taxAuthority: true },
+  firm: { taxAuthority: true },
+  freelancer: { taxAuthority: true },
+};
+
+/** The cheapest plan on sale that includes the feature (the upgrade a refusal offers); null when none does. */
+export function cheapestPlanWith(feature: keyof PlanFeatures): PlanName | null {
+  return PLAN_NAMES.find((plan) => PLAN_FEATURES[plan][feature]) ?? null;
+}
+
 /** The part of an entitlement `currentPlanOf` reads (structural, so this module imports nothing). */
 export interface CoveringFact {
   state: 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED';
