@@ -66,7 +66,6 @@ export function HeroSection({ ctaRef, signupUrl = null }: HeroSectionProps) {
                 </a>
               )}
             </div>
-            <p className="hero-cta-note">{t(signupUrl ? 'landing.hero.altNoteOpen' : 'landing.hero.altNote')}</p>
           </div>
 
           <div className="hero-visual">

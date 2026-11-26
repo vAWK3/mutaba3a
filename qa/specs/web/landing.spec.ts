@@ -622,7 +622,7 @@ test('the FAQ lists ILS, USD, EUR and JOD and no Gulf currency, in English and A
     const question = page.getByRole('button', { name: 'Which currencies does it support?' });
     await question.scrollIntoViewIfNeeded();
     await question.click();
-    const answer = page.getByText(/Each amount keeps the currency it was earned in/);
+    const answer = page.locator('.landing-faq-answer:not([hidden])');
     await expect(answer).toBeVisible();
     for (const name of ['US dollars', 'shekels', 'euros', 'Jordanian dinars']) await expect(answer).toContainText(name);
     await expect(answer).not.toContainText(/dirham|riyal|Bahraini|Omani/i);
@@ -633,7 +633,7 @@ test('the FAQ lists ILS, USD, EUR and JOD and no Gulf currency, in English and A
     const question = page.getByRole('button', { name: 'ما العملات المدعومة؟' });
     await question.scrollIntoViewIfNeeded();
     await question.click();
-    const answer = page.getByText(/يحتفظ كل مبلغ بالعملة التي كُسب بها/);
+    const answer = page.locator('.landing-faq-answer:not([hidden])');
     await expect(answer).toBeVisible();
     for (const name of ['الدولار الأمريكي', 'الشيكل', 'اليورو', 'الدينار الأردني']) await expect(answer).toContainText(name);
     await expect(answer).not.toContainText(/درهم|ريال|البحريني|العماني/);
@@ -649,7 +649,6 @@ const SIGNUP_LINK = (language: 'en' | 'ar') => new RegExp(`^https://[^/]+/signup
 
 test('While signup is open, the landing leads with Create an account on the portal signup page, in the page language (MUT-369)', { tag: '@web.landing.signup-open' }, async ({ page, step, signupDoor }) => {
   signupDoor!.set('open');
-  const hero = page.locator('[data-part="hero"]');
   const getIt = page.locator('[data-part="get-it"]');
   const phone = page.locator('[data-part="phone"]');
 
@@ -658,7 +657,6 @@ test('While signup is open, the landing leads with Create an account on the port
     await expect(heroCta(page)).toHaveAttribute('href', SIGNUP_LINK('ar'));
     await expect(heroCta(page)).toContainText(ar.landing.hero.ctaCreate);
     await expect(heroCta(page)).toHaveAttribute('target', '_blank');
-    await expect(hero.getByText(ar.landing.hero.altNoteOpen)).toBeVisible();
     await expect(headerCta(page)).toHaveAttribute('href', SIGNUP_LINK('ar'));
     expect(signupDoor!.requests()).toBe(1);
     await attachScreenshot(page, 'signup-open-ar');
@@ -707,7 +705,6 @@ test('While signup is closed, or the portal cannot be asked, the landing is toda
       await expect.poll(() => signupDoor!.requests()).toBe(before + 1);
       await expect(heroCta(page)).toHaveAttribute('href', '#get-it');
       await expect(heroCta(page)).toContainText(en.landing.hero.ctaRequest);
-      await expect(page.locator('[data-part="hero"]').getByText(en.landing.hero.altNote)).toBeVisible();
       await expect(page.locator('main')).not.toContainText(en.landing.hero.ctaCreate);
       await heroCta(page).click();
       await expect(page).toHaveURL(/#get-it$/);

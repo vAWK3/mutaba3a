@@ -45,8 +45,8 @@ describe('request-account copy', () => {
 
   it('keeps the request form while signup is open, and names it for those who want help (MUT-369, D6)', () => {
     for (const dict of [en, ar]) {
-      for (const key of ['ctaCreate', 'altNoteOpen'] as const) expect(dict.landing.hero[key].trim()).not.toBe('');
-      for (const key of ['createCta', 'noteOpen', 'requestCtaOpen'] as const) expect(dict.landing.getIt[key].trim()).not.toBe('');
+      for (const key of ['ctaCreate'] as const) expect(dict.landing.hero[key].trim()).not.toBe('');
+      for (const key of ['createCta', 'requestCtaOpen'] as const) expect(dict.landing.getIt[key].trim()).not.toBe('');
       expect(dict.landing.phone.hintLinkOpen.trim()).not.toBe('');
       expect(dict.landing.faq.a1Open.trim()).not.toBe('');
     }

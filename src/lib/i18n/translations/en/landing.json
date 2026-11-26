@@ -22,9 +22,7 @@
       "ctaCreate": "Create an account",
       "ctaSignIn": "Sign in",
       "ctaIos": "iPhone, on the App Store",
-      "ctaAndroid": "Android, on Google Play",
-      "altNote": "Accounts are set up for your organization — there's no public sign-up.",
-      "altNoteOpen": "Sign up with your email address, or ask us to set an account up for your organization."
+      "ctaAndroid": "Android, on Google Play"
     },
     "chapters": {
       "clients": {
@@ -37,7 +35,7 @@
       },
       "businesses": {
         "title": "Every business you run.",
-        "body": "Give each business its own profile, with its own clients and numbers, and switch between them in one click. Dollars, shekels and euros stay apart — never quietly added together."
+        "body": "Give each business its own profile, with its own clients and numbers, and switch between them in one click."
       }
     },
     "sample": {
@@ -54,7 +52,7 @@
     },
     "privacy": {
       "title": "Your records, on every device you sign in on.",
-      "body": "An MTB3A account keeps everything behind your sign-in — the same numbers on your phone and in the portal, backed up every day and restorable to any point in the last week."
+      "body": "The same numbers on your phone and in the portal, backed up every day."
     },
     "getIt": {
       "title": "Get MTB3A",
@@ -66,9 +64,7 @@
       "signInCta": "Already have an account? Sign in",
       "appsLabel": "Already set up? Get the app",
       "appsIos": "iPhone, on the App Store",
-      "appsAndroid": "Android, on Google Play",
-      "note": "Accounts are set up for your organization — there's no public sign-up.",
-      "noteOpen": "Sign up with your email address. Want help setting up your organization? Ask us below."
+      "appsAndroid": "Android, on Google Play"
     },
     "phone": {
       "title": "Log it on your phone. See it all in your hosted account.",
@@ -91,22 +87,22 @@
     },
     "malafat": {
       "title": "Run a law firm or accounting office on Malafat? MTB3A connects to it.",
-      "body": "Malafat keeps each firm's fee proposals and agreements, and what every client owes and has paid. Link your firm's Malafat to your account, and a payment you log in the MTB3A phone app reaches Malafat under its client, unallocated, for the firm to apply to what's owed.",
+      "body": "Link your firm's Malafat to your account, and payments you log in the MTB3A app show up there under the right client.",
       "link": "See Malafat"
     },
     "faq": {
       "headline": "Questions",
       "q1": "Is there a free plan?",
-      "a1": "No — accounts are set up for your organization, with pricing based on what you need. Request an account and we'll reply with an offer.",
+      "a1": "No. Request an account and we'll reply with an offer.",
       "a1Open": "No. You can create an account with your email address, or request one and we'll reply with an offer for your organization.",
       "q2": "Where is my data stored?",
-      "a2": "On MTB3A's servers, behind your sign-in — not only on one device. We back up every day and can restore your records to any point in the last 7 days.",
+      "a2": "On MTB3A's servers, behind your sign-in, backed up every day.",
       "q3": "How do I back up, or move to another device?",
       "a3": "Nothing to do — your account is the backup. Sign in on a new device and everything you've logged is already there.",
       "q4": "Can I track more than one business?",
       "a4": "Yes. Give each business its own profile, with its own clients and income, and switch between them in one click.",
       "q5": "Which currencies does it support?",
-      "a5": "{currencies}. Each amount keeps the currency it was earned in, and totals are shown per currency — never converted behind your back.",
+      "a5": "{currencies}.",
       "q6": "Does it work offline, or on my phone?",
       "a6": "The hosted portal works in any browser — sign in and your records are there. The phone app is built for offline capture: log an expense with no signal, and it uploads the moment you're back online."
     },
