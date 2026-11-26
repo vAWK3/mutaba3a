@@ -795,7 +795,19 @@ export interface StarterSeed {
   businesses?: { active: string[]; readOnly: string[] };
   /** Whether a paid plan can be bought here (Upgrade to Solo shows). Default true. */
   sellable?: boolean;
+  /**
+   * MUT-702 Part B: Solo, Business and Firm on sale (PLAN_CHECKOUT on): GET /v1/billing lists them, with this saved
+   * billing address for the prefill, and Checkout answers a Stripe URL. Absent: none on sale (the Freelancer step).
+   */
+  plans?: { billingAddress?: { country: string; line1: string; city: string; postalCode: string } | null };
 }
+
+/** MUT-702 Part B: the catalog script's prices (minor units, before tax) and each plan's limits. */
+const QA_PLANS = [
+  { plan: 'solo', catalog: { ILS: { month: 3900, year: 39000 }, USD: { month: 1200, year: 12000 } }, limits: { businesses: 1, partners: 0, documentsPerMonth: 50, scansPerMonth: 100 } },
+  { plan: 'business', catalog: { ILS: { month: 8900, year: 89000 }, USD: { month: 2700, year: 27000 } }, limits: { businesses: 3, partners: 2, documentsPerMonth: 250, scansPerMonth: 500 } },
+  { plan: 'firm', catalog: { ILS: { month: 24900, year: 249000 }, USD: { month: 7500, year: 75000 } }, limits: { businesses: 6, partners: 2, documentsPerMonth: 1000, scansPerMonth: 2000 } },
+];
 
 const STARTER_CAPS = { documents: 3, scans: 12 } as const;
 
@@ -1106,8 +1118,12 @@ export class FakeApi {
         usage: { month: nextMonthStart().slice(0, 7), resetsOn: nextMonthStart(), plan: s.cancelled ? 'none' : 'starter', meters, businesses: { used: 1, limit: 1 }, partners: { limit: 0 } },
         starter: { chosenAt: null, canContinueFree: s.cancelled === true },
         activeBusinesses: plan.businesses,
+        countries: { consumer: [], consumerEverywhere: true, customTaxId: ['IL', 'JO'] },
+        ...(s.plans ? { plans: QA_PLANS, billingAddress: s.plans.billingAddress ?? null } : {}),
       });
     }
+    // MUT-702 Part B: Stripe's side is not driven here; the spec stubs checkout.stripe.com.
+    if (e.method === 'POST' && id === 'checkout-session' && s.plans) return json({ url: 'https://checkout.stripe.com/c/pay/qa' });
     if (e.method === 'POST' && id === 'starter') {
       s.cancelled = false;
       return json({ starterChosenAt: new Date().toISOString(), changed: true });

@@ -1,0 +1,50 @@
+app: portal
+area: plans
+title: Buying Solo, Business or Firm with a typed billing address, stubbed API
+tier: secondary
+# MUT-702 Part B (ADR-286, wireframes v3): the Subscribe step with plans on sale (PLAN_CHECKOUT, dark on the server
+# until release) on the FakeApi's Starter seed. The server's rules (address, currency, Israeli VAT, the Solo trial)
+# are route-tested in server/src/__tests__/billing-plan-checkout.test.ts; paying through the Stripe sandbox is
+# portal-live's, once PLAN_CHECKOUT is on there.
+paths:
+  - src/hosted/components/BillingPlanPicker.tsx
+  - src/hosted/data/billingPlans.ts
+  - src/hosted/data/countries.ts
+features:
+  - id: subscribe-plan
+    title: On Starter, See plans lists Solo, Business and Firm; an Israeli address prices them in shekels + VAT and Continue opens Stripe with the plan and the address
+    tier: secondary
+    tickets: [MUT-702]
+    paths:
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - As a Starter person, open Billing and choose See plans
+      - Choose Business, type Israel as the country, and fill in the street, city and postal code
+      - Choose Continue to payment
+    expect:
+      - The step lists Solo, Business and Firm with both currencies ("₪39.00 or $12.00 a month") and one limits line each ("1 business · 50 documents · 100 scans a month"); Continue is off
+      - Business reads "₪89.00 + VAT a month" and Continue turns on
+      - Stripe's page opens; the portal sent plan business and the address
+  - id: typed-country
+    title: The billing country is typed and must match a country; a misspelling says No match, Arabic names match
+    tier: secondary
+    tickets: [MUT-702]
+    steps:
+      - As a Starter person on See plans, type "Isreal" as the country and fill in the rest
+      - Correct it to Jordan
+      - In Arabic, type «الأردن»
+    expect:
+      - The field says No match and Continue stays off
+      - Solo reads "$12.00 a month" with no VAT line, and Continue turns on
+      - The country matches and the prices read in dollars
+  - id: address-prefilled
+    title: A returning payer's billing address is filled in from the last one
+    tier: secondary
+    tickets: [MUT-702]
+    steps:
+      - As a Starter person who paid before from Amman, open See plans
+    expect:
+      - Country, address, city and postal code are filled in, and Continue is on
