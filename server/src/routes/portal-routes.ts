@@ -48,6 +48,8 @@ export interface PortalRouteDependencies {
   servesPortal?: boolean;
   /** MUT-711: where an allocation number is requested by hand (null = the default). */
   manualAllocationUrl?: string | null;
+  /** MUT-736: a paid plan can be bought on this server (Checkout configured): PLAN_LIMIT's `canUpgrade`. Absent = false. */
+  planCheckout?: boolean;
   /** MUT-647: the reader that fills an invoice issued elsewhere (the receipts OCR); hosted only, where configured. */
   ocr?: OcrClient | null;
   /** MUT-569: the uniform file's software fields (config); absent = the placeholders. */
@@ -85,7 +87,7 @@ export const PORTAL_ROUTES: ReadonlyArray<(deps: PortalRouteDependencies) => Ope
   (deps) => conversionRoutes(deps.store),
   // MUT-568 (ADR-260): issued documents.
   (deps) =>
-    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null, servesPortal: deps.servesPortal ?? false, manualAllocationUrl: deps.manualAllocationUrl ?? null }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }, deps.uniformFileSoftware ?? undefined, deps.metering ?? false),
+    issuingRoutes(deps.store, deps.issuedPdf ?? null, { deps: deps.taxAuthority ?? null, portalOrigin: deps.portalOrigin ?? null, servesPortal: deps.servesPortal ?? false, manualAllocationUrl: deps.manualAllocationUrl ?? null, canUpgrade: deps.planCheckout ?? false }, { storage: deps.attachments.storage, ocr: deps.ocr ?? null, urlTtlSeconds: deps.attachments.urlTtlSeconds }, deps.uniformFileSoftware ?? undefined, deps.metering ?? false),
   (deps) => fxRateRoutes(deps.fxRates),
   (deps) => profileRoutes(deps.store),
   // MUT-596: who is on the profile, read-only (a Malafat firm's seats).

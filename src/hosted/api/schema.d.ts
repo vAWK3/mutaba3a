@@ -16377,7 +16377,7 @@ export interface paths {
         };
         /**
          * Whether this profile is connected to the Tax Authority
-         * @description MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. 404 when this server has no Tax Authority connection configured.
+         * @description MUT-571: `connected` until the consent ends (90 days), then `expired` (connect again); `none` before the first connect. MUT-736: `suspended` while the payer’s plan has no connection (Starter), and `plan` says whether it does. 404 when this server has no Tax Authority connection configured.
          */
         get: {
             parameters: {
@@ -16511,7 +16511,7 @@ export interface paths {
         put?: never;
         /**
          * Start connecting this profile to the Tax Authority
-         * @description MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only.
+         * @description MUT-571: answers the Tax Authority sign-in address to open in the browser. Its `state` is good for 10 minutes and names this profile and person. Owner only. MUT-736: 409 PLAN_LIMIT (`details`: limit taxAuthority, plan, nextPlan, canUpgrade) when the payer’s plan has no connection (Starter).
          */
         post: {
             parameters: {
@@ -16558,6 +16558,15 @@ export interface paths {
                         "application/json": components["schemas"]["ErrorEnvelope"];
                     };
                 };
+                /** @description Conflict; `details.reason` says which (see the API description) */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorEnvelope"];
+                    };
+                };
                 /** @description Rate limited */
                 429: {
                     headers: {
@@ -16584,7 +16593,7 @@ export interface paths {
         };
         /**
          * Where the Tax Authority sends the browser back after sign-in
-         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent) or `failed`. With no portal to return to, or a forged or late state, it answers a short page saying what happened.
+         * @description MUT-571: unauthenticated; trusts only its signed `state`. Swaps the code for tokens, stores them sealed, and redirects to the invoicing setup of the portal Connect was pressed on (else this server's own portal) with `taxAuthority=connected`, `refused` (the owner did not consent), `failed`, or `plan` (MUT-736: the payer’s plan no longer includes the connection; nothing exchanged or stored). With no portal to return to, or a forged or late state, it answers a short page saying what happened.
          */
         get: {
             parameters: {
@@ -16636,7 +16645,7 @@ export interface paths {
         put?: never;
         /**
          * Report the choice for a held allocation number
-         * @description MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264).
+         * @description MUT-736: 409 PLAN_LIMIT on a plan without the connection (Starter). MUT-572: after a 409 ALLOCATION_HELD, the owner reports CANCEL (abandon the invoice) or FURTHER_OBJECTION (ask for a hearing) to the Tax Authority, naming the held request by its Idempotency-Key. To issue without a number, send the issue again with a new key and `withoutAllocation.heldKey`; that reports CONTINUE. Reverse charge is not offered yet (ADR-264).
          */
         post: {
             parameters: {
@@ -32458,6 +32467,11 @@ export interface components {
              * @description Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)
              */
             requestUrl: string;
+            /**
+             * @description MUT-736 (ADR-282): MANUAL because the payer’s plan has no Tax Authority connection; the plan on which numbers come automatically. Null otherwise. Additive since 1.143.0-mut736.
+             * @enum {string|null}
+             */
+            automaticOn: "solo" | "business" | "firm" | null;
         } | null;
         /** @description MUT-643: a credit note's facts against its original; null for other types. Since 1.137.0-mut643. */
         CreditNoteFacts: {
@@ -32710,8 +32724,11 @@ export interface components {
             expiresAt: string;
         };
         TaxAuthorityStatus: {
-            /** @enum {string} */
-            state: "none" | "connected" | "expired";
+            /**
+             * @description MUT-736: `suspended` = a connection is kept but the payer’s plan doesn’t include it (Starter); nothing was deleted, and it is `connected` again on a paid plan (or `expired` if the Tax Authority’s consent ended meanwhile). Additive since 1.143.0-mut736.
+             * @enum {string}
+             */
+            state: "none" | "connected" | "expired" | "suspended";
             /** Format: date-time */
             connectedAt: string | null;
             /**
@@ -32721,6 +32738,16 @@ export interface components {
             until: string | null;
             /** @description sandbox or production */
             environment: string | null;
+            /** @description MUT-736 (ADR-282): the connection is a paid-plan feature. Additive since 1.143.0-mut736. */
+            plan: {
+                /** @description The payer’s plan includes the connection (Solo and above) */
+                allowed: boolean;
+                /**
+                 * @description The cheapest plan that includes it, when not allowed
+                 * @enum {string|null}
+                 */
+                nextPlan: "solo" | "business" | "firm" | null;
+            };
         };
         TaxAuthorityConnect: {
             /**
@@ -34346,8 +34373,11 @@ export interface components {
                 stage: "soon" | "ended" | null;
                 /** @enum {string} */
                 action: "send" | "skip";
-                /** @enum {string|null} */
-                skip: "other-environment" | "no-refresh" | "profile-gone" | "owner-gone" | "owner-inactive" | "suppressed" | null;
+                /**
+                 * @description MUT-736: `plan` = the payer’s plan has no Tax Authority connection (Starter); nothing to renew. Additive since 1.143.0-mut736.
+                 * @enum {string|null}
+                 */
+                skip: "other-environment" | "no-refresh" | "profile-gone" | "plan" | "owner-gone" | "owner-inactive" | "suppressed" | null;
                 outcome: string | null;
             }[];
         };

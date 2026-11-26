@@ -1407,7 +1407,6 @@
         "back": "Back to Billing",
         "country": "Billing address country",
         "countryChoose": "Choose a country",
-        "countryHint": "Sets the currency: shekels in Israel, dollars elsewhere.",
         "buyer": "You're buying",
         "person": "For yourself",
         "personNote": "No tax number needed",
@@ -3080,7 +3079,9 @@
         "returnedFailed": "The connection was not completed. Please try again.",
         "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
         "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
-        "reconnect": "Connect again"
+        "reconnect": "Connect again",
+        "upgrade": "Upgrade to {plan}",
+        "returnedPlan": "Nothing was connected."
       },
       "ready": {
         "title": "Your letterhead is ready",
@@ -3590,6 +3591,13 @@
         "body": "It keeps your Tax Authority connection safe if someone learns your password. It takes about a minute.",
         "setUp": "Set up two-step sign-in",
         "signInAgain": "Two-step sign-in is on, but this session started before it. Sign out and sign in again to issue."
+      }
+    },
+    "plan": {
+      "name": {
+        "solo": "Solo",
+        "business": "Business",
+        "firm": "Firm"
       }
     }
   }

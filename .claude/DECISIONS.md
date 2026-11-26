@@ -7158,15 +7158,37 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 **Alternatives rejected:** `COUNT(*)` over events on every cap check (a read per action, and no race-free hard cap without an advisory lock); a Postgres enum per vocabulary (a migration per new kind); a separate route middleware in `app-shell.ts` (runs in the browser too); a timer flush (doesn't fire on Cloud Run between requests); server-side PostHog (ADR-090).
 
-## ADR-282: The Landing Names the Free Starter Plan and Invoicing Only While the Server's STARTER_PLAN Is On; the FAQ Is a Keyed List
+---
+
+## ADR-282: Invoicing Is On for Everyone (INVOICING_FOR_ALL); the Tax Authority Connection Is a Paid-Plan Feature; Starter Types Allocation Numbers by Hand (MUT-736)
+
+**Status:** Accepted (2026-11-26; brief `.claude/designs/mut-731-736-starter-plan.md` §3.4–3.5, Basel's answers §11a Q6). Amends ADR-260 D1 and ADR-196's `invoicing` flag; extends ADR-273 (MUT-711) and ADR-264.
+
+**Context:** issuing was switched on per person by the operator (`invoicing`, ADR-196/260), and the Tax Authority connection was tied to no plan. Basel: invoicing for everyone, on every plan including the free Starter (MUT-731); the automatic connection only on paid plans; Starter may still issue at or over the allocation threshold with a number it requests itself. MUT-736 ships before Starter.
+
+**Decision:**
+1. **`INVOICING_FOR_ALL`** (exactly "true"; default off; Terraform `invoicing_for_all`). On: every business profile with an owner that isn't a Malafat firm issues. Off is the kill switch: the owner's `invoicing` grant decides, as before. `invoicingOn(store, org, forAll)` is the single rule; the issuing gate reads the flag from the request (`c.get('invoicingForAll')`), the session-less readers are handed it.
+2. **`/v1/me` names `invoicing` for everyone** while the flag is on (`withInvoicingForAll`), so the portal and shipped phone builds open issuing with no client release. Whether a given profile issues is still the route's rule.
+3. **The connection is a plan feature** (`PLAN_FEATURES.taxAuthority`: false on `starter`, true on Solo, Business, Firm and legacy Freelancer). The plan is the **payer's** (MUT-735's `payerPlanOf`). A payer with no plan (`none`: the lapse gate decides whether they write at all; `malafat`: no issuing) keeps today's answer, so this changes nothing until MUT-731 makes Starter resolve: turning Starter on needs no change here.
+4. **On a plan without it:** connect and held-number decisions refuse with **409 `PLAN_LIMIT`** (`details.limit: taxAuthority`, `plan`, `nextPlan: solo`, `canUpgrade` = Checkout configured here); the public callback stores nothing and redirects with `taxAuthority=plan`; a kept connection reads **`suspended`** and is never deleted (resumes on a paid plan with no new setup, unless the Tax Authority's own consent ended: then `expired`); disconnect always works; the setup step isn't done; reconnect reminders skip it.
+5. **Allocation on Starter is MANUAL** (preview `automaticOn: 'solo'`), whatever is connected. An issue without a typed number answers 409 `ALLOCATION_NUMBER_REQUIRED` with `automaticOn`; it never reaches the automatic allocator or `reportDecision` (a held number's CONTINUE included). A typed number goes through MUT-711's `manualAllocator` unchanged: same normalization, same `forNumber` check, `allocationSource MANUAL`, same PDF.
+6. **`PLAN_LIMIT` is a new 409 code** (not 402: that is the lapse gate's "plan ended"). MUT-731 reuses it for its caps (documents, scans, businesses, partners) and releases the idempotency key on it.
+7. **The accountant guard may read `billing.factsFor`** (`ACCOUNTANT_EXTRA_READS`), so a shared profile's status reads the owner's plan under the accountant's read-only guard; only allowed/next plan is answered. Not `unguarded()` (still lazy posting only).
+
+8. **No explanatory copy** (Basel, 2026-11-26): the clients show only what the person needs to act (the Upgrade and Disconnect buttons, the manual number field and its error). `automaticOn` stays on the wire for a later design. The UI is not final until Basel sees a wireframe.
+
+**Consequences:** API 1.143.0-mut736, additive (`TaxAuthorityStatus.state` gains `suspended` and `plan`; `IssueAllocation.automaticOn`; reminders' `skip: plan`). No migration. Release: API with `invoicing_for_all = false`, then turn it on in `production.tfvars` (Basel's call; before Starter per Q6). The operator console keeps the `invoicing` toggle, now labelled as the kill switch's grant.
+
+**Alternatives rejected:** a Prisma STARTER tier now (MUT-731's S1); a test-only plan override for live QA (the portal flows run on the FakeApi; the server's Starter paths are route-tested with the plan scripted); `unguarded()` for the plan read (a second escape hatch).
+## ADR-283: The Landing Names the Free Starter Plan and Invoicing Only While the Server's STARTER_PLAN Is On; the FAQ Is a Keyed List
 
 **Status:** Accepted (2026-11-26; Basel asked for the landing and FAQ to cover the past month, including the Starter plan, MUT-731).
 
-**Context:** the landing's FAQ was last changed on 2026-10-24 and said nothing about trying the portal without an account (MUT-513), receipts read on our servers (MUT-659), the accountant and share links (MUT-562), or issuing documents (MUT-568 and after). Starter (MUT-731) and invoicing for everyone (MUT-736) are planned, not built: they ship together, behind `STARTER_PLAN`, once the paid plans can be bought. Until then invoicing is an operator grant and nobody new gets Starter, so a page that promised either would be wrong the day it shipped. The web release and the API release are separate.
+**Context:** the landing's FAQ was last changed on 2026-10-24 and said nothing about trying the portal without an account (MUT-513), receipts read on our servers (MUT-659), the accountant and share links (MUT-562), or issuing documents (MUT-568 and after). Starter (MUT-731) is planned, not built: it ships behind `STARTER_PLAN` once the paid plans can be bought, so a page that promised it would be wrong the day it shipped. Invoicing for everyone (MUT-736, ADR-282) is built and goes on with `INVOICING_FOR_ALL`, before Starter; the landing's invoicing answer names Starter's manual allocation number, so it waits for Starter too (a door for `INVOICING_FOR_ALL` could show an earlier answer: not done here). The web release and the API release are separate.
 
 **Decision:**
-1. **The server decides, as for signup (MUT-369 D1):** `GET /v1/self-service` gains `starterPlan` (`STARTER_PLAN`, default off; additive since 1.143.0-landing). The landing reads it with the signup door, one request per page load, and describes Starter only when signup is open **and** `starterPlan` is true. MUT-731 builds the plan behind the same switch, so turning it on changes the product and the page together, with no web release.
-2. **What only Starter turns on:** the hero's sub-headline and note, Get it's note, the FAQ's free-plan and businesses answers, and the invoicing question (invoicing for everyone is MUT-736, released with Starter). No price, checkout or trial on any of it (MUT-369's rule).
+1. **The server decides, as for signup (MUT-369 D1):** `GET /v1/self-service` gains `starterPlan` (`STARTER_PLAN`, default off; additive since 1.144.0-landing). The landing reads it with the signup door, one request per page load, and describes Starter only when signup is open **and** `starterPlan` is true. MUT-731 builds the plan behind the same switch, so turning it on changes the product and the page together, with no web release.
+2. **What only Starter turns on:** the hero's sub-headline and note, Get it's note, the FAQ's free-plan and businesses answers, and the invoicing question (its answer names Starter). No price, checkout or trial on any of it (MUT-369's rule).
 3. **What is live now ships now:** the hero and phone chapter mention receipts read for you; the FAQ adds trying it without an account, receipts, the accountant and share links, and the data and backup answers cover signed-out mode.
 4. **The FAQ is a keyed list** (`FAQ_ENTRIES` in `landingCopy.ts`, keys `landing.faq.<id>.q|a|aOpen|aStarter`) instead of numbered `q1..qN`, so a question can be added, moved or shown only with Starter without renumbering.
 

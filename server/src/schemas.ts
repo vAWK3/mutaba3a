@@ -1833,7 +1833,7 @@ export const SelfServiceDoorsSchema = z
     malafatSignIn: z.boolean(),
     /** MUT-618: "Email me a sign-in code" can mail a code (the same condition as `recovery`). Additive since 1.114.0-mut618. */
     signInCode: z.boolean(),
-    /** MUT-731: the free Starter plan is on (STARTER_PLAN), so the landing describes it. Additive since 1.143.0-landing. */
+    /** MUT-731: the free Starter plan is on (STARTER_PLAN), so the landing describes it. Additive since 1.144.0-landing. */
     starterPlan: z.boolean(),
   })
   .openapi('SelfServiceDoors');
@@ -5331,7 +5331,7 @@ export const TaxAuthorityReminderRunSchema = z
         organizationId: z.string().uuid(),
         stage: z.enum(['soon', 'ended']).nullable(),
         action: z.enum(['send', 'skip']),
-        skip: z.enum(['other-environment', 'no-refresh', 'profile-gone', 'owner-gone', 'owner-inactive', 'suppressed']).nullable(),
+        skip: z.enum(['other-environment', 'no-refresh', 'profile-gone', 'plan', 'owner-gone', 'owner-inactive', 'suppressed']).nullable().openapi({ description: 'MUT-736: `plan` = the payer’s plan has no Tax Authority connection (Starter); nothing to renew. Additive since 1.143.0-mut736.' }),
         outcome: z.string().nullable(),
       }),
     ),
@@ -5340,10 +5340,18 @@ export const TaxAuthorityReminderRunSchema = z
 
 export const TaxAuthorityStatusSchema = z
   .object({
-    state: z.enum(['none', 'connected', 'expired']),
+    state: z.enum(['none', 'connected', 'expired', 'suspended']).openapi({
+      description: 'MUT-736: `suspended` = a connection is kept but the payer’s plan doesn’t include it (Starter); nothing was deleted, and it is `connected` again on a paid plan (or `expired` if the Tax Authority’s consent ended meanwhile). Additive since 1.143.0-mut736.',
+    }),
     connectedAt: z.string().datetime().nullable(),
     until: z.string().datetime().nullable().openapi({ description: 'When the consent ends (90 days after it was given); connect again before it' }),
     environment: z.string().nullable().openapi({ description: 'sandbox or production' }),
+    plan: z
+      .object({
+        allowed: z.boolean().openapi({ description: 'The payer’s plan includes the connection (Solo and above)' }),
+        nextPlan: z.enum(['solo', 'business', 'firm']).nullable().openapi({ description: 'The cheapest plan that includes it, when not allowed' }),
+      })
+      .openapi({ description: 'MUT-736 (ADR-282): the connection is a paid-plan feature. Additive since 1.143.0-mut736.' }),
   })
   .openapi('TaxAuthorityStatus');
 
@@ -5529,6 +5537,10 @@ export const IssueAllocationSchema = z
     net: AmountSchema.openapi({ description: 'The amount before VAT the Tax Authority asks for' }),
     customerTaxId: z.string().openapi({ description: 'The client’s VAT number' }),
     requestUrl: z.string().url().openapi({ description: 'Where a number is requested by hand (configured: TAX_AUTHORITY_MANUAL_ALLOCATION_URL)' }),
+    automaticOn: z
+      .enum(['solo', 'business', 'firm'])
+      .nullable()
+      .openapi({ description: 'MUT-736 (ADR-282): MANUAL because the payer’s plan has no Tax Authority connection; the plan on which numbers come automatically. Null otherwise. Additive since 1.143.0-mut736.' }),
   })
   .openapi('IssueAllocation');
 

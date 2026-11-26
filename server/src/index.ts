@@ -255,6 +255,7 @@ const app = createApp({
   periodPackConcurrency: config.PERIOD_PACK_CONCURRENCY,
   billingGate: config.BILLING_GATE,
   twoFactorIssuingGate: config.TWO_FACTOR_ISSUING_GATE_ENABLED,
+  invoicingForAll: config.INVOICING_FOR_ALL,
   maxOwnedProfiles: config.QA_MAX_OWNED_PROFILES,
   // MUT-419 (R11): a production operator run never mails links to a local address.
   trialMail: { refuseLoopbackLinks: config.NODE_ENV === 'production' },

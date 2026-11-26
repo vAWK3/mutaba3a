@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { conversionFormSchema, impliedRate } from '../conversionFormSchema';
+import en from '../../i18n/en.json';
+import ar from '../../i18n/ar.json';
+
+function lookup(tree: unknown, key: string): unknown {
+  return key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), tree);
+}
 
 /**
  * Hosted conversion drawer schema (MUT-161) — mirrors the local app's own
@@ -18,6 +24,29 @@ function baseFields(overrides: Partial<Record<string, unknown>> = {}) {
 }
 
 describe('hosted conversion drawer schema', () => {
+  // The schema carries i18n keys, rendered with t() where they show (profileFormSchema's pattern), so Arabic readers get Arabic.
+  it('reports a bad amount as the amountInvalid key, on each leg', () => {
+    const from = conversionFormSchema.safeParse(baseFields({ fromAmount: '100.123' }));
+    const to = conversionFormSchema.safeParse(baseFields({ toAmount: '91.123' }));
+    const keyOf = (r: typeof from, path: string) => !r.success && r.error.issues.find((i) => i.path.join('.') === path)?.message;
+    expect(keyOf(from, 'fromAmount')).toBe('hosted.conversions.errors.amountInvalid');
+    expect(keyOf(to, 'toAmount')).toBe('hosted.conversions.errors.toAmountInvalid');
+  });
+
+  it('reports a missing amount or date as i18n keys that exist in both languages, not English text', () => {
+    const result = conversionFormSchema.safeParse(baseFields({ fromAmount: '', toAmount: '', occurredAt: '' }));
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const byPath = Object.fromEntries(result.error.issues.map((i) => [i.path.join('.'), i.message]));
+    expect(byPath.fromAmount).toBe('hosted.income.errors.amountRequired');
+    expect(byPath.toAmount).toBe('hosted.income.errors.amountRequired');
+    expect(byPath.occurredAt).toBe('hosted.conversions.errors.dateInvalid');
+    for (const key of Object.values(byPath)) {
+      expect(lookup(en, key), `en ${key}`).toBeTypeOf('string');
+      expect(lookup(ar, key), `ar ${key}`).toBeTypeOf('string');
+    }
+  });
+
   it('accepts a valid two-currency conversion', () => {
     expect(conversionFormSchema.safeParse(baseFields()).success).toBe(true);
   });
@@ -41,7 +70,7 @@ describe('hosted conversion drawer schema', () => {
     expect(result.success).toBe(false);
     if (!result.success) {
       const issue = result.error.issues.find((i) => i.path.join('.') === 'toCurrency');
-      expect(issue?.message).toBe('Choose a different currency to convert to');
+      expect(issue?.message).toBe('hosted.conversions.errors.sameCurrency');
     }
   });
 

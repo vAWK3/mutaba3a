@@ -28,7 +28,7 @@ import type { ExpenseErrorLabels } from '../expenseApiErrors';
 export const hostedExpenseSchema = expenseFormFieldsSchema
   .extend({
     currency: z.enum(HOSTED_CURRENCIES),
-    amount: z.string().min(1, 'Amount is required'),
+    amount: z.string().min(1, 'hosted.income.errors.amountRequired'),
     vendor: z.string().optional(),
     clientId: z.string().optional(),
     projectId: z.string().optional(),
@@ -49,7 +49,7 @@ export const hostedExpenseSchema = expenseFormFieldsSchema
     const exponent = currencyExponent(data.currency);
     const decimalAmount = new RegExp(`^\\d+(\\.\\d{1,${exponent}})?$`);
     if (!decimalAmount.test(data.amount)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['amount'] });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'hosted.expenses.errors.amountInvalid', path: ['amount'] });
     }
   });
 

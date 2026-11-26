@@ -2558,3 +2558,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/pages/operator/OperatorUsageSection.tsx` | `OperatorUsageSection` | `OperatorAccountPage` |
 | `src/hosted/data/operatorUsageQueries.ts` | `useOperatorUsageOverview`, `useOperatorUsagePeople`, `useOperatorUsageRoutes`, `useOperatorAccountUsage` + keys | the two above |
 | `src/hosted/operator/usageMonths.ts` | `usageMonths(now)` | the month Select |
+
+## MUT-736 — plan features and the Tax Authority plan rule (ADR-282)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `server/src/billing/plans.ts` | `FREE_PLAN`, `PLAN_FEATURES`, `cheapestPlanWith(feature)` | `issuing/tax-authority-plan.ts`; MUT-731 adds Starter's tier |
+| `server/src/issuing/tax-authority-plan.ts` | `taxAuthorityPlanFor(plan)`, `taxAuthorityPlanOf(store, org, now)`, `planLimitError(details)` | `routes/issuing.ts`, `routes/tax-authority.ts`, `israel/tax-authority/reconnect-reminder.ts`; MUT-731 reuses `PLAN_LIMIT` |
+| `server/src/issuing/invoicing-on.ts` | `invoicingOn(store, org, forAll)` (the one issuing rule) | `issuingProfileOf`, books split, profile figures, period pack, statement tags |
+| `server/src/routes/me.ts` | `withInvoicingForAll(features, on)` | `buildMe` |
+| `src/hosted` i18n | `hosted.plan.name.{solo,business,firm}` | step 5's Upgrade button; MUT-731's plan copy |

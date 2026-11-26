@@ -479,6 +479,10 @@ A free **Starter** plan replaces the trial (MUT-731, planned) and gets its own r
 - Operator › Usage (portal) reads it all: per plan, the people near or at a cap, one account's six months, the busiest routes, and a CSV export behind the passkey step-up. Server-side PostHog stays off (ADR-090); funnel events come from the portal and the phone with MUT-731's UI.
 - Retention: events 13 months, counters 25 months, route statistics 90 days (daily `/jobs/v1/usage/prune`).
 
+### Invoicing for everyone; the Tax Authority connection on paid plans (MUT-736, ADR-282)
+- With `INVOICING_FOR_ALL` on, every business profile issues invoices, receipts and credit notes with no operator grant, and `/v1/me` names `invoicing` for everyone (shipped phone builds open issuing). Off, the operator's per-person `invoicing` grant decides (the kill switch). Two-step sign-in is still required to issue where MUT-710's gate is on.
+- The automatic Tax Authority connection (allocation numbers requested by MTB3A) is on Solo and above (`PLAN_FEATURES`). On Starter (MUT-731) connect refuses with 409 `PLAN_LIMIT`, a kept connection is `suspended` (kept, resumes on upgrade), and invoices at or over the threshold take a number typed by hand (MUT-711's panel, unchanged). The portal's step 5 offers Upgrade to Solo instead of Connect.
+
 ### Distribution Channels
 - **Direct**: mtb3a.com and app.mtb3a.com; the phone app in the App Store and Google Play.
 - **Partners**: Malafat (firms whose Malafat subscription covers their MTB3A profile, ADR-160).

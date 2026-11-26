@@ -4832,7 +4832,19 @@ The phone half (Flutter, `ios.recent.to-issue`) is the MUT-660..665 planning ses
 | Portal (vitest + RTL) | `OperatorUsagePage.test.tsx` | the tab, by plan, month switch reads that month, empty month, People with meters/levels/links, filter, Routes, CSV through the step-up, refusal, Arabic RTL, query keys, month list; the account section (six months, no cap, per profile) |
 | QA | `portal-selfservice.operator.usage-{overview,account,routes,csv}`, `portal-selfservice.usage.billing-usage` | the live API: Usage tab, People, account section, routes after a flush, CSV with the passkey; a finished upload counts one scan in /v1/billing |
 
-### Landing copy, November 2026 (ADR-282)
+## MUT-736 — invoicing for everyone; the Tax Authority connection on paid plans (2026-11-26, ADR-282)
+
+| Layer | File | Covers |
+|---|---|---|
+| Unit (vitest) | `server/src/issuing/__tests__/invoicing-on.test.ts` | flag on: business profile with no grant on; personal, Malafat firm, no owner off; flag off: the grant decides |
+| Unit | `server/src/issuing/__tests__/tax-authority-plan.test.ts`, `billing/__tests__/plans.test.ts` | Starter refused naming Solo; paid plans and Freelancer allowed; `none`/`malafat` keep today's answer; PLAN_FEATURES, cheapestPlanWith, free plan never on sale |
+| Config | `config.test.ts` | `INVOICING_FOR_ALL` off unless exactly "true" |
+| Routes | `routes-invoicing-for-all.test.ts` | AC8 a new account issues with no grant; `/v1/me` names invoicing once; personal still 404; a revoke changes nothing while on; MUT-710's gate still applies; off = the grant decides |
+| Routes | `routes-tax-authority-plan.test.ts` (plan scripted) | AC9 connect PLAN_LIMIT (+ canUpgrade with Checkout), GET plan/none, callback after a downgrade stores nothing (`taxAuthority=plan`, own page names Solo), decisions refused, disconnect works; AC11 suspended / not deleted / setup step / accountant reads it / connected again on a paid plan; AC10 preview MANUAL + automaticOn, issue without a number refused with the hint and no Tax Authority call, held CONTINUE never reported, typed number stored MANUAL and printed, malformed/moved as before, Solo automatic as before; reminders skip Starter |
+| Portal (vitest + RTL) | `InvoicingSteps.test.tsx`, `ManualAllocationPanel.test.tsx` | step 5 on Starter (Upgrade opens Billing, no Connect, no explanatory line), suspended + Disconnect, Arabic «مستقل», `taxAuthority=plan`, PLAN_LIMIT on Connect re-reads the status, paid plan: Connect and no upgrade; the panel unchanged with `automaticOn` set |
+| Phone (flutter test) | `issued_document_test.dart`, `issue_document_screen_test.dart` | `automaticOn` parsed (unknown = none); the card unchanged on Starter |
+| QA | `portal.invoicing.starter-manual-allocation`, `starter-connect-refused`, `solo-automatic-allocation` (FakeApi) | Starter issues ₪6,000 with a typed number; step 5 upgrade / suspended / disconnect / Arabic; Solo connects and gets a number by itself |
+### Landing copy, November 2026 (ADR-283)
 
 | Layer | Where | What |
 |---|---|---|

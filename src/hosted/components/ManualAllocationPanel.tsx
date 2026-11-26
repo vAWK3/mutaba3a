@@ -18,6 +18,8 @@ function allocationDate(isoDate: string): string {
  * request it. The panel lists what the Tax Authority's page asks for, each with Copy (and Copy all), links to that page
  * and takes the 9-digit number. The invoice number is the next one, shown as a preview: nothing is reserved, and the
  * server refuses the issue if another document takes it first. Digits read left to right in either language (ADR-101).
+ * MUT-736 (ADR-282): on Starter the panel is the same (Basel, 2026-11-26: no explanatory hint lines; `automaticOn` is
+ * on the wire for a future design, unused here).
  */
 export function ManualAllocationPanel(props: {
   allocation: ManualAllocation;

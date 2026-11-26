@@ -95,6 +95,8 @@ export type AppEnv = {
     billingGate: boolean;
     /** MUT-710 (D10): whether the issuing gate is enforced on this server (app-shell.ts, from TWO_FACTOR_ISSUING_GATE_ENABLED). */
     twoFactorIssuingGate: boolean;
+    /** MUT-736 (ADR-282): whether every business profile issues (app-shell.ts, from INVOICING_FOR_ALL); off = the operator grant decides. */
+    invoicingForAll: boolean;
     /** MUT-370 (D9): whether this server offers passkeys (app-shell.ts, from WEBAUTHN_RP_ID); /v1/me's suggestion reads it. */
     passkeys: boolean;
     /** MUT-474: a dev server's owned-profile cap (app-shell.ts, from QA_MAX_OWNED_PROFILES); unset = the product limit. */

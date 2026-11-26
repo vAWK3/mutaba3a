@@ -42,7 +42,7 @@ describe('manual allocation number (MUT-711)', () => {
     const h = accountantHarness();
     const w = await profile(h);
     const preview = await read(await h.app.request('/v1/issued-documents/preview', json(invoice(w.business, '6000.00'), w.on)));
-    expect(preview.allocation).toEqual({ mode: 'MANUAL', nextNumber: 1, documentDate: '2026-11-05', net: '6000.00', customerTaxId: '516123452', requestUrl: DEFAULT_MANUAL_ALLOCATION_URL });
+    expect(preview.allocation).toEqual({ mode: 'MANUAL', nextNumber: 1, documentDate: '2026-11-05', net: '6000.00', customerTaxId: '516123452', requestUrl: DEFAULT_MANUAL_ALLOCATION_URL, automaticOn: null });
     // Under the threshold, or to a private person: no panel.
     expect((await read(await h.app.request('/v1/issued-documents/preview', json(invoice(w.business, '4999.99'), w.on)))).allocation).toBeNull();
     expect((await read(await h.app.request('/v1/issued-documents/preview', json(invoice(w.privatePerson, '9000.00'), w.on)))).allocation).toBeNull();

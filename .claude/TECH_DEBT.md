@@ -3387,3 +3387,11 @@ When resolving debt:
 ### TD-339: The payer's plan is read on every metered action (MUT-735)
 - **What:** `payerPlanOf` reads the payer's owned profiles, their Malafat integrations and one `billing.factsFor` on each issue and each finished scan (and on an issue that turns out to be a replay). A few small reads per action, fine at today's volume.
 - **When to pay:** if issue or scan latency shows it, reuse the lapse gate's entitlement on gated servers (`personEntitlements`) or cache the plan per request.
+
+### TD-340: `PLAN_LIMIT` does not release the idempotency key yet (MUT-736)
+- **What:** brief §3.3 has `idempotency.ts` release the key on 409 `PLAN_LIMIT` so the same request succeeds after an upgrade. MUT-736's refusals (Tax Authority connect, allocation decisions) aren't idempotent routes, so nothing needs it yet.
+- **When to pay:** with MUT-731's capped doors (issue, scans), which are idempotent: release on `PLAN_LIMIT` there, with the "refused at 3/3, upgrade, same key → 201" test.
+
+### TD-341: Starter's Tax Authority paths are tested with the plan scripted, and recorded on the FakeApi only (MUT-736)
+- **What:** no entitlement resolves to Starter before MUT-731, so `routes-tax-authority-plan.test.ts` mocks `payerPlanOf`, the portal flows (`portal.invoicing.starter-*`) run on the FakeApi, and the phone has no recorded iOS flow for a Starter issue.
+- **When to pay:** with MUT-731: add a live-API flow (a Starter person on the self-service stack issuing ₪6,000 with a typed number) and the iOS recording of the card on Starter.

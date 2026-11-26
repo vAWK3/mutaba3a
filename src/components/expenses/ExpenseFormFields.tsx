@@ -220,7 +220,9 @@ export function ExpenseFormFields<T extends ExpenseFormFieldsShape>({
               />
             )}
           />
-          {errors.occurredAt && <p className="form-error">{String(errors.occurredAt.message ?? '')}</p>}
+          {errors.occurredAt && (
+            <p className="form-error">{errors.occurredAt.type === 'manual' ? String(errors.occurredAt.message ?? '') : labels.requiredError}</p>
+          )}
           <FieldHint field="date" hints={hints} />
         </div>
       ) : (
