@@ -25,11 +25,11 @@ function fitsCurrency(amount: string, currency: HostedCurrency): boolean {
 
 export const conversionFormSchema = z
   .object({
-    fromAmount: z.string().min(1, 'Amount is required'),
+    fromAmount: z.string().min(1, 'hosted.income.errors.amountRequired'),
     fromCurrency: z.enum(HOSTED_CURRENCIES),
-    toAmount: z.string().min(1, 'Amount is required'),
+    toAmount: z.string().min(1, 'hosted.income.errors.amountRequired'),
     toCurrency: z.enum(HOSTED_CURRENCIES),
-    occurredAt: z.string().min(1, 'Date is required'),
+    occurredAt: z.string().min(1, 'hosted.conversions.errors.dateInvalid'),
     notes: z.string().optional(),
   })
   .superRefine((data, ctx) => {

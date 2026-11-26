@@ -1,5 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { conversionFormSchema, impliedRate } from '../conversionFormSchema';
+import en from '../../i18n/en.json';
+import ar from '../../i18n/ar.json';
+
+function lookup(tree: unknown, key: string): unknown {
+  return key.split('.').reduce<unknown>((node, part) => (node && typeof node === 'object' ? (node as Record<string, unknown>)[part] : undefined), tree);
+}
 
 /**
  * Hosted conversion drawer schema (MUT-161) — mirrors the local app's own
@@ -25,6 +31,20 @@ describe('hosted conversion drawer schema', () => {
     const keyOf = (r: typeof from, path: string) => !r.success && r.error.issues.find((i) => i.path.join('.') === path)?.message;
     expect(keyOf(from, 'fromAmount')).toBe('hosted.conversions.errors.amountInvalid');
     expect(keyOf(to, 'toAmount')).toBe('hosted.conversions.errors.toAmountInvalid');
+  });
+
+  it('reports a missing amount or date as i18n keys that exist in both languages, not English text', () => {
+    const result = conversionFormSchema.safeParse(baseFields({ fromAmount: '', toAmount: '', occurredAt: '' }));
+    expect(result.success).toBe(false);
+    if (result.success) return;
+    const byPath = Object.fromEntries(result.error.issues.map((i) => [i.path.join('.'), i.message]));
+    expect(byPath.fromAmount).toBe('hosted.income.errors.amountRequired');
+    expect(byPath.toAmount).toBe('hosted.income.errors.amountRequired');
+    expect(byPath.occurredAt).toBe('hosted.conversions.errors.dateInvalid');
+    for (const key of Object.values(byPath)) {
+      expect(lookup(en, key), `en ${key}`).toBeTypeOf('string');
+      expect(lookup(ar, key), `ar ${key}`).toBeTypeOf('string');
+    }
   });
 
   it('accepts a valid two-currency conversion', () => {

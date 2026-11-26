@@ -327,7 +327,7 @@ export function ConversionDrawer({ profileId, mode = 'create', conversionId, onC
               control={control}
               render={({ field }) => <input id="hosted-conversion-date" type="date" className="input" {...field} />}
             />
-            {formState.errors.occurredAt && <p className="form-error">{formState.errors.occurredAt.message}</p>}
+            {formState.errors.occurredAt && <p className="form-error">{t(formState.errors.occurredAt.message ?? '')}</p>}
           </div>
 
           <div className="form-group">
