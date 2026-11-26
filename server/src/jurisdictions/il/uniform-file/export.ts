@@ -1,6 +1,7 @@
-import type { IssuedDocumentRecord } from '../../repositories/ports.js';
-import { roundHalfUpDiv } from '../../vat.js';
-import { DOC_TYPE_CODES, ISSUED_DOC_TYPES, type DealerType, type IssuedDocType } from '../types.js';
+import type { IssuedDocumentRecord } from '../../../repositories/ports.js';
+import { roundHalfUpDiv } from '../../../vat.js';
+import { ISSUED_DOC_TYPES, type DealerType, type IssuedDocType } from '../../../issuing/types.js';
+import { IL_DOC_TYPE_CODES as DOC_TYPE_CODES } from '../documents.js';
 import { encodeLine, FieldOverflowError, isoDate } from './format.js';
 import { renderRecord, type FieldValue, type RecordCode } from './layout.js';
 

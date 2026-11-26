@@ -1,6 +1,6 @@
 import { RouteMeter } from './usage/route-meter.js';
 import { TwoFactorKeys, TWO_FACTOR_POLICY } from './auth/two-factor.js';
-import { HttpTaxAuthorityClient, RegistryLookup, TokenBox } from './jurisdictions/index.js';
+import { assertPacksFor, HttpTaxAuthorityClient, RegistryLookup, TokenBox } from './jurisdictions/index.js';
 import { AGENT_PERSON_REQUESTS_PER_MINUTE, AGENT_REQUESTS_PER_MINUTE, createApp } from './app.js';
 import { documentSignerFrom, signerStatus } from './issuing/pdf/sign/index.js';
 import { loadConfig, readOidcAudience } from './config.js';
@@ -49,6 +49,7 @@ import { createReviewDigest, msUntilNextSweep, REVIEW_PAGE_PATH } from './email/
 import { webauthnConfigOf } from './auth/webauthn.js';
 
 const config = loadConfig();
+assertPacksFor(config.INVOICING_JURISDICTIONS);
 const logger = createLogger(config.LOG_LEVEL);
 // MUT-148 (ADR-091): first, so a crash while wiring the rest is reported too.
 // ADR-236: only a production API reports (never the dev server or the local API release-QA drives), unless SENTRY_ENABLED says otherwise.

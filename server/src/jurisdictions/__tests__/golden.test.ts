@@ -3,7 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { composeDocument, type ComposeInput } from '../../issuing/compose.js';
 import type { DealerType, IssuedDocType } from '../../issuing/types.js';
 import { ISSUED_DOC_TYPES } from '../../issuing/types.js';
-import { buildUniformFile, type UniformFileDocument } from '../../issuing/uniform-file/export.js';
+import { buildUniformFile, type UniformFileDocument } from '../il/uniform-file/export.js';
+import { IL_PACK } from '../il/index.js';
 
 /**
  * MUT-741 (AC1): the behaviour-preserving proof. Fixed inputs in, a hash of what comes out. The hashes were recorded on the
@@ -21,8 +22,8 @@ const LINES: ComposeInput['lines'] = [
   { description: 'נסיעות', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(99.99), discountMinor: 0n, pricesIncludeVat: true },
 ];
 
-function composeFor(docType: IssuedDocType, dealerType: DealerType, documentDate: string, extra: Partial<ComposeInput> = {}) {
-  return composeDocument({ docType, currency: 'ILS', documentDate, dealerType, documentDiscountMinor: shekels(33.33), pricesIncludeVat: false, lines: LINES, ...extra });
+function composeFor(docType: IssuedDocType, dealerType: DealerType, documentDate: string, extra: Partial<Omit<ComposeInput, 'pack'>> = {}) {
+  return composeDocument({ pack: IL_PACK, docType, currency: 'ILS', documentDate, dealerType, documentDiscountMinor: shekels(33.33), pricesIncludeVat: false, lines: LINES, ...extra });
 }
 
 const EXPECTED_COMPOSED: Record<string, string> = {
@@ -40,7 +41,7 @@ const EXPECTED_COMPOSED: Record<string, string> = {
 };
 
 describe('golden: composed documents', () => {
-  const cases: [string, IssuedDocType, DealerType, string, Partial<ComposeInput>?][] = [
+  const cases: [string, IssuedDocType, DealerType, string, Partial<Omit<ComposeInput, 'pack'>>?][] = [
     ...ISSUED_DOC_TYPES.map((t): [string, IssuedDocType, DealerType, string] => [`${t}/COMPANY/2026`, t, 'COMPANY', '2026-03-10']),
     ['TAX_INVOICE/LICENSED/2024-12-31 (17%)', 'TAX_INVOICE', 'LICENSED', '2024-12-31'],
     ['TAX_INVOICE/LICENSED/2025-01-01 (18%)', 'TAX_INVOICE', 'LICENSED', '2025-01-01'],

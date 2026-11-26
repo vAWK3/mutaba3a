@@ -105,8 +105,7 @@ import { operationRoutes } from './routes/operations.js';
 import { PORTAL_ROUTES, type PortalRouteDependencies } from './routes/portal-routes.js';
 import { logoPrints, renderIssuedDocumentPdf } from './issuing/pdf/render.js';
 import { signatureDetailsOf, type DocumentSigner } from './issuing/pdf/sign/index.js';
-import { UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFileHouse } from './issuing/uniform-file/export.js';
-import type { RegistryLookup, TaxAuthorityDeps } from './jurisdictions/index.js';
+import { defaultPack, type RegistryLookup, type TaxAuthorityDeps, type UniformFileHouse } from './jurisdictions/index.js';
 import { businessLookupRoutes } from './routes/business-lookup.js';
 import { recordsExportRoutes } from './routes/records-export.js';
 import { PERIOD_DOWNLOAD_ENDPOINTS, periodDownloadRoutes, type PeriodDownloadServices } from './routes/period-downloads.js';
@@ -888,7 +887,7 @@ export function createApp(deps: AppDependencies): OpenAPIHono<AppEnv> {
   // MUT-333: the hourly hard delete of closed accounts (job + operator), on the unguarded store like the trial mails.
   app.route('/', accountPurgeRoutes({ store: deps.store, stripe: deps.stripe?.accountGateway ?? null, storage: deps.attachments ?? null, logger: deps.logger }));
   // MUT-644 (ADR-277): closed profiles' issued documents: the operator's search, archive and sweep (admin token only).
-  app.route('/', issuingRetentionRoutes({ store: deps.store, logger: deps.logger, issuedPdf: portalRouteDeps.issuedPdf ?? null, uniformFileHouse: deps.uniformFileSoftware ?? UNIFORM_FILE_HOUSE_PLACEHOLDER }));
+  app.route('/', issuingRetentionRoutes({ store: deps.store, logger: deps.logger, issuedPdf: portalRouteDeps.issuedPdf ?? null, uniformFileHouse: deps.uniformFileSoftware ?? defaultPack().statutoryFile!.housePlaceholder }));
   // MUT-359: Resend's bounce webhook, on the unguarded store like the Stripe sync.
   app.route(
     '/',

@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { UNIFORM_FILE_HOUSE_PLACEHOLDER } from '../issuing/uniform-file/export.js';
+import { UNIFORM_FILE_HOUSE_PLACEHOLDER } from '../jurisdictions/il/uniform-file/export.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type AccountantHarness } from './helpers/accountants.js';
 
 /**

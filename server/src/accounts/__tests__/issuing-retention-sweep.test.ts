@@ -7,6 +7,7 @@ import type { LedgerStore } from '../../repositories/ports.js';
 import { closureDeadline, GRACE_MS } from '../closure.js';
 import { runIssuingRetentionSweep } from '../issuing-retention-sweep.js';
 import { runAccountPurge } from '../purge-run.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
 
 /** MUT-644 (ADR-277 D3): the retention sweep, alone and inside the hourly purge, over the memory store with a clock. */
 const T0 = new Date(Date.UTC(2026, 10, 22, 10));
@@ -27,7 +28,7 @@ async function issuerClosing(store: LedgerStore, ...dates: string[]) {
   for (const documentDate of dates) {
   const result = await store.issuing.issue({
     organizationId, docType: 'RECEIPT', documentDate, currency: 'ILS',
-    composed: composeDocument({ docType: 'RECEIPT', currency: 'ILS', documentDate, dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
+    composed: composeDocument({ pack: IL_PACK, docType: 'RECEIPT', currency: 'ILS', documentDate, dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 10_000n, discountMinor: 0n }] }),
     issuer: { legalName: 'Rana Studio', vatId: '123456782', dealerType: 'COMPANY' }, customerId: null, customer: { name: 'Walk-in' }, language: 'he', style: 'PROFESSIONAL', ink: 'BLACK', notes: null, dueDate: null,
     originalId: null, payment: { method: 'BANK', reference: 'T-1', receivedOn: documentDate }, appliesToDocumentId: null, fromEntry: null, allocationNumber: null, titlePrefix: 'קבלה', coreVersion: '1.0.0', createdByUserId: user.id, requestKey: `k-${randomUUID()}`, requestId: null,
   }, T0);

@@ -2603,3 +2603,13 @@ Tests: `server/src/auth/__tests__/{self-service,turnstile}.test.ts`, `server/src
 | `src/hosted/data/billingPlans.ts` | `plansOnOffer`, `AddressDraft`, `draftOf`, `addressOf`, `savedAddressOf`, `monthlyPriceOf`, `usePlanPrice`, `useLimitsLine` | Billing drawer, Solo trial step |
 | `src/hosted/data/countries.ts` | `matchCountry`, `countrySuggestions`, `foldCountryText` | `BillingAddressFields` |
 | `src/hosted/components/BillingPlanPicker.tsx` | `PlanRow` (RadioCards), `BillingAddressFields` (EntityTypeahead for the country, Inputs for the rest) | Subscribe step, `SoloTrialStep` |
+
+## MUT-741 — jurisdiction packs (ADR-287)
+
+| Module | Exports | Used by |
+|---|---|---|
+| `server/src/jurisdictions/index.ts` | the door: `packFor`, `defaultPack`, `hasPack`, `assertPacksFor`, `registeredCountries`, `registerPackForTests`, `HttpTaxAuthorityClient`, `TokenBox`, `RegistryLookup`, types `JurisdictionPack`, `ComposePack`, `TaxAuthorityDeps`, `UniformFile`, `UniformFileHouse` | every route, store and the boot (core code imports nothing deeper) |
+| `server/src/jurisdictions/pack.ts` | `JurisdictionPack`, `ComposePack` | the registry, `il/`, `compose.ts` |
+| `server/src/jurisdictions/il/index.ts` | `IL_PACK` | the registry |
+| `server/src/jurisdictions/il/documents.ts` | `IL_DOCUMENT_TYPES`, `IL_DOC_TYPE_CODES` | the uniform file, tests |
+| `server/src/issuing/issuer-pack.ts` | `issuerPackOf(store, organizationId)` | documents-due and customers routes, cancel |

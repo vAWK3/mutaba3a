@@ -4,6 +4,7 @@ import { composeDocument } from '../../issuing/compose.js';
 import { ARCHIVE_KEEP_NOTICE_VERSION, sweepCutoff } from '../../issuing/retention.js';
 import type { IssuedDocType } from '../../issuing/types.js';
 import type { IssueDocumentInput, LedgerStore } from '../ports.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
 
 const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -39,7 +40,7 @@ export function describeLedgerStoreIssuingRetentionContract(name: string, makeSt
       docType,
       documentDate,
       currency: 'ILS',
-      composed: composeDocument({ docType, currency: 'ILS', documentDate, dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 100_000n, discountMinor: 0n }] }),
+      composed: composeDocument({ pack: IL_PACK, docType, currency: 'ILS', documentDate, dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Sprint', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: 100_000n, discountMinor: 0n }] }),
       issuer: { legalName: 'Studio Ltd.', vatId: '123456789', dealerType: 'COMPANY' },
       customerId,
       customer: { name: customerId ? 'Acme Ltd.' : 'Walk-in' },

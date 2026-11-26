@@ -2980,3 +2980,6 @@ Rows kept past an account's deletion carry no foreign key to the profile, so "cl
 **Where**: `billing/plan-limit.ts` (server), `src/hosted/data/planUsage.ts` + `PlanLimitNotice` (portal).
 **Rule**: one builder for `PLAN_LIMIT` details (limit, plan, nextPlan, canUpgrade, used/cap/resetsOn), released by idempotency. The portal reads the month's meters and shows the same notice before the person types (`limitFromUsage`), and maps the server's refusal onto it when it races (`planLimitOf`), so both paths render one component.
 
+## Pattern: a country's rules are a pack behind one door (MUT-741, ADR-287)
+**Where**: `server/src/jurisdictions/` (`pack.ts`, `registry.ts`, `il/`), `issuing/issuer-pack.ts`.
+**Rule**: Strategy registry. The issuer's country (`issuer_details.country`) picks a `JurisdictionPack` (`packFor`); the core asks the pack for VAT, currencies, document codes, dealer rules, tax-ID checks, clearance and the statutory file, never `if (country === …)`. Core code imports `jurisdictions/index.ts` only; `boundary.test.ts` fails on a direct `jurisdictions/il/**` import outside a named allowlist, on a `defaultPack()` call outside its named list, and on an import cycle through `jurisdictions/**`. A new country is a new folder, a registry line and a golden fixture; a live country without a pack refuses the boot (`assertPacksFor`).

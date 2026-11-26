@@ -10,9 +10,10 @@ import { ledgerEntries } from '../statements/lines.js';
 import { formatMoney, type Currency } from '../money.js';
 import type { StatementLine } from '../statements/build.js';
 import { documentsDue } from '../issuing/documents-due.js';
+import { issuerPackOf } from '../issuing/issuer-pack.js';
 import { invoicingOn } from '../issuing/invoicing-on.js';
 import { ApiError } from '../errors.js';
-import { normalizeTaxId } from '../jurisdictions/il/tax-id.js';
+import { defaultPack } from '../jurisdictions/index.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { UniqueViolation } from '../repositories/memory.js';
@@ -50,7 +51,7 @@ const customerJson = { content: { 'application/json': { schema: CustomerSchema }
 
 /** MUT-642: a customer's VAT, company or ID number, normalised to 9 digits, or 422 TAX_ID_INVALID. */
 function validTaxId(raw: string): string {
-  const taxId = normalizeTaxId(raw);
+  const taxId = defaultPack().taxId.normalize(raw);
   if (!taxId) throw new ApiError('VALIDATION_FAILED', 'Not a valid VAT, company or ID number (9 digits with the check digit)', { field: 'taxId', reason: 'TAX_ID_INVALID' });
   return taxId;
 }
@@ -333,7 +334,7 @@ async function tagsFor(store: LedgerStore, organization: Organization, customerI
     paymentIds.length ? store.issuing.liveExternal(organization.id, 'RECEIVED', paymentIds) : [],
     store.issuing.dueInputs(organization.id),
   ]);
-  const due = documentsDue(inputs).filter((i) => i.customerId === customerId);
+  const due = documentsDue(inputs, await issuerPackOf(store, organization.id)).filter((i) => i.customerId === customerId);
   return statementTags(lines, { issued, external: [...owed, ...received], due });
 }
 

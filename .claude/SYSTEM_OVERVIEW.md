@@ -699,3 +699,4 @@ mini-crm/
 - **Books split** on invoicing profiles only: Reports (`invoiceSplit`), the monthly summary, share links, the Excel `invoice_status` column.
 - **Portal**: Documents › To issue (Issued · To issue · Files), Home's To issue group, the row mark on Owed and Paid, the client's Documents field, the profile default in the invoicing setup, Reports' income card. Hidden where invoicing is off and on this device.
 
+- **Jurisdiction packs (MUT-741, ADR-287):** `server/src/jurisdictions/` holds a pack per country (`il/` is Israel's: document codes, VAT table, tax-ID check digit, allocation numbers and the Tax Authority client, the uniform file, retention). The issuer's country (`issuer_details.country`, MUT-740) selects the pack (`packFor`, `issuerPackOf`); core code imports `jurisdictions/index.ts` only (`boundary.test.ts`). Code with no issuer in hand uses `defaultPack()` (Israel) and is named in a list that may not grow (TD-349).

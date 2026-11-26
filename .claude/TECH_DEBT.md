@@ -3430,3 +3430,10 @@ When resolving debt:
 - **What:** the brief proposed a unique key on `(provider, stripeSubscriptionId)`; the migration only adds `provider` and `seller` (defaults stripe / barmajiyat), because every write path upserts on `stripeSubscriptionId` and Stripe is the only provider.
 - **When to pay:** with a second provider: widen the key and the upserts together.
 
+### TD-349: Code with no issuer in hand reads the default (Israel) pack (MUT-741)
+**Where**: the callers named in `DEFAULT_PACK_USERS` (`jurisdictions/__tests__/boundary.test.ts`): expense allocation-number input and flag, the receipt hint, a customer's and a lookup's tax-ID check, retention and archive file names, the uniform-file house default.
+**Why**: expenses, customers and document rows carry no jurisdiction; a second live country would get Israel's rules there. **Fix**: MUT-742 (a jurisdiction on documents) and MUT-743 (the rules read) give each its country; delete the entries as they go. The list is guarded and may not grow.
+
+### TD-350: Israeli strings and enums still sit in core files (MUT-741)
+**Where**: print labels in `issuing/{labels,copies,external-reading}.ts` and `issuing/pdf/**`; the API contract's `DealerType` enum, `z.literal('ILS')` and `^\d{9}$` patterns in `schemas.ts`; the refusal text "not a valid Israeli VAT or company number" in `routes/issuing.ts`; `SOFTWARE_HOUSE_VAT_ID` in `config.ts`; the `CURRENCY_NOT_ILS` reason value.
+**Why**: moving them changes the API contract or print output, so they were out of a behaviour-preserving step. **Fix**: with MUT-742/743 (schema and the rules read) and MUT-744 (what a second pack really needs); labels move behind `pack.labels` then.

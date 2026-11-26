@@ -4,7 +4,8 @@
  * count, the To issue list, Issue all and (later) MUT-661's offer all read this one function.
  */
 import type { IsoDate } from '../dates.js';
-import { ISSUING_CURRENCIES, type DealerType } from './types.js';
+import type { JurisdictionPack } from '../jurisdictions/index.js';
+import type { DealerType } from './types.js';
 
 export const DOCUMENTS_PREFERENCES = ['TAX_INVOICE_FIRST', 'PAYMENT_REQUEST_FIRST', 'ON_PAYMENT', 'NO_DOCUMENT'] as const;
 export type DocumentsPreference = (typeof DOCUMENTS_PREFERENCES)[number];
@@ -84,6 +85,9 @@ export interface DueItem {
   linkOnly: boolean;
 }
 
+/** The input plus the issuer's pack (MUT-741): only the currencies it issues in are asked. */
+type DueContext = DocumentsDueInput & { pack: Pick<JurisdictionPack, 'currency'> };
+
 type Share = { receivable: DueReceivableInput | undefined; amountMinor: bigint };
 
 export function preferenceOf(input: Pick<DocumentsDueInput, 'defaultPreference' | 'preferences'>, customerId: string | null): DocumentsPreference {
@@ -91,7 +95,8 @@ export function preferenceOf(input: Pick<DocumentsDueInput, 'defaultPreference' 
   return input.preferences.get(customerId) ?? input.defaultPreference;
 }
 
-export function documentsDue(input: DocumentsDueInput): DueItem[] {
+export function documentsDue(base: DocumentsDueInput, pack: Pick<JurisdictionPack, 'currency'>): DueItem[] {
+  const input: DueContext = { ...base, pack };
   const byId = new Map(input.receivables.map((r) => [r.id, r]));
   const exempt = input.dealerType === 'EXEMPT';
   const items = [
@@ -117,7 +122,7 @@ function monthsBefore(today: IsoDate, months: number): IsoDate {
   return `${year}-${String(month).padStart(2, '0')}-${String(Math.min(d, lastDay)).padStart(2, '0')}`;
 }
 
-function receivableDue(input: DocumentsDueInput, r: DueReceivableInput): DueItem[] {
+function receivableDue(input: DueContext, r: DueReceivableInput): DueItem[] {
   // MUT-662: an Owed with a live payment request has had its document; its payments are due theirs.
   if (r.deleted || r.notForInvoice || r.origin === 'ISSUED_DOCUMENT' || r.documented || r.paymentRequestId || r.externalInvoice) return [];
   const amountMinor = r.grossMinor - r.creditedMinor;
@@ -125,7 +130,7 @@ function receivableDue(input: DocumentsDueInput, r: DueReceivableInput): DueItem
   const preference = preferenceOf(input, r.customerId);
   if (preference !== 'TAX_INVOICE_FIRST' && preference !== 'PAYMENT_REQUEST_FIRST') return [];
   const kind: DueKind = preference === 'TAX_INVOICE_FIRST' ? 'TAX_INVOICE' : 'PAYMENT_REQUEST';
-  const reason = currencyReason(r.currency);
+  const reason = currencyReason(input, r.currency);
   return [{
     kind,
     entry: { kind: 'receivable', id: r.id, number: r.number },
@@ -144,10 +149,10 @@ function counted(p: DuePaymentInput): boolean {
   return p.status === 'POSTED' && p.origin !== 'ISSUED_DOCUMENT' && !p.notForInvoice && !p.documented && !p.externalInvoice;
 }
 
-function exemptPaymentDue(input: DocumentsDueInput, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
+function exemptPaymentDue(input: DueContext, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
   if (!counted(p) || p.receiptNumber || preferenceOf(input, p.customerId) === 'NO_DOCUMENT') return [];
   const requested = requestOf(p, byId);
-  return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, p.allocations.length > 0, paymentReason(p)), ...(requested ? { appliesToDocumentId: requested } : {}) }];
+  return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, p.allocations.length > 0, paymentReason(input, p)), ...(requested ? { appliesToDocumentId: requested } : {}) }];
 }
 
 /** MUT-662: the live payment request a payment settles, when all of it went to that request's Owed. */
@@ -157,13 +162,13 @@ function requestOf(p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableIn
   return r && !r.documented && !r.externalInvoice ? r.paymentRequestId : null;
 }
 
-function paymentDue(input: DocumentsDueInput, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
+function paymentDue(input: DueContext, p: DuePaymentInput, byId: ReadonlyMap<string, DueReceivableInput>): DueItem[] {
   if (!counted(p)) return [];
   if (p.allocations.length === 0) return unallocatedDue(input, p);
   // MUT-662: a payment on a payment request's Owed gets an invoice-receipt that refers to the request, linked only.
   const requested = requestOf(p, byId);
   if (requested && !excludedShare(input, { receivable: byId.get(p.allocations[0]!.receivableId), amountMinor: p.amountMinor })) {
-    return [{ ...paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, true, paymentReason(p)), appliesToDocumentId: requested }];
+    return [{ ...paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, true, paymentReason(input, p)), appliesToDocumentId: requested }];
   }
   const shares: Share[] = p.allocations.map((a) => ({ receivable: byId.get(a.receivableId), amountMinor: a.amountMinor }));
   const live = shares.filter((s) => !excludedShare(input, s));
@@ -177,25 +182,25 @@ function paymentDue(input: DocumentsDueInput, p: DuePaymentInput, byId: Readonly
   if (invoiced.length === live.length) {
     if (p.receiptNumber) return [];
     const only = live.length === 1 ? live[0]?.receivable?.taxInvoiceId : null;
-    return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, true, paymentReason(p)), ...(only ? { appliesToDocumentId: only } : {}) }];
+    return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, true, paymentReason(input, p)), ...(only ? { appliesToDocumentId: only } : {}) }];
   }
-  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, true, paymentReason(p))];
+  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, true, paymentReason(input, p))];
 }
 
-function unallocatedDue(input: DocumentsDueInput, p: DuePaymentInput): DueItem[] {
+function unallocatedDue(input: DueContext, p: DuePaymentInput): DueItem[] {
   const preference = preferenceOf(input, p.customerId);
   if (preference === 'NO_DOCUMENT') return [];
   const open = preference === 'TAX_INVOICE_FIRST' ? openTaxInvoiceFor(input, p) : null;
   if (open) {
     if (p.receiptNumber) return [];
-    return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, false, paymentReason(p)), appliesToDocumentId: open }];
+    return [{ ...paymentItem(p, 'RECEIPT', p.amountMinor, false, paymentReason(input, p)), appliesToDocumentId: open }];
   }
   // No client: an invoice-receipt can't post an Owed, so it is linked (fromEntryMode).
-  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, !p.customerId, paymentReason(p))];
+  return [paymentItem(p, 'TAX_INVOICE_RECEIPT', p.amountMinor, !p.customerId, paymentReason(input, p))];
 }
 
 /** The client's oldest open tax invoice that still covers the payment (the receipt allocates to it). */
-function openTaxInvoiceFor(input: DocumentsDueInput, p: DuePaymentInput): string | null {
+function openTaxInvoiceFor(input: DueContext, p: DuePaymentInput): string | null {
   const open = input.receivables
     .filter((r) => r.customerId === p.customerId && r.taxInvoiceId && !r.deleted && r.currency === p.currency && r.grossMinor - r.paidMinor - r.creditedMinor >= p.amountMinor)
     .sort((a, b) => a.postingDate.localeCompare(b.postingDate));
@@ -226,12 +231,12 @@ function paymentItem(p: DuePaymentInput, kind: DueKind, amountMinor: bigint, lin
   };
 }
 
-function paymentReason(p: DuePaymentInput): DueReason | null {
-  return currencyReason(p.currency) ?? (p.origin === 'CAPTURE' ? null : 'RECORDED_ELSEWHERE');
+function paymentReason(input: DueContext, p: DuePaymentInput): DueReason | null {
+  return currencyReason(input, p.currency) ?? (p.origin === 'CAPTURE' ? null : 'RECORDED_ELSEWHERE');
 }
 
-function currencyReason(currency: string): DueReason | null {
-  return (ISSUING_CURRENCIES as readonly string[]).includes(currency) ? null : 'CURRENCY_NOT_ILS';
+function currencyReason(input: DueContext, currency: string): DueReason | null {
+  return input.pack.currency.issuing.includes(currency) ? null : 'CURRENCY_NOT_ILS';
 }
 
 function outcome(reason: DueReason | null): Pick<DueItem, 'issuable' | 'reason'> {

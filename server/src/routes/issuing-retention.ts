@@ -5,8 +5,7 @@ import type { AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
 import { documentNumberLabel } from '../issuing/labels.js';
 import { ARCHIVE_KEEP_NOTICE_VERSION } from '../issuing/retention.js';
-import { DOC_TYPE_CODES } from '../issuing/types.js';
-import type { UniformFileHouse } from '../issuing/uniform-file/export.js';
+import { defaultPack, type UniformFileHouse } from '../jurisdictions/index.js';
 import type { Logger } from '../logger.js';
 import type { IssuedDocumentRecord, LedgerStore, RetainedIssuingProfile } from '../repositories/ports.js';
 import {
@@ -48,7 +47,7 @@ const ARCHIVE_MIME = 'application/zip';
 const EARLIEST = '2000-01-01';
 
 const withRetention = (p: RetainedIssuingProfile) => ({ ...p, ...retentionDatesOf(p) });
-const fileName = (doc: Pick<IssuedDocumentRecord, 'docType' | 'number'>) => `${DOC_TYPE_CODES[doc.docType]}-${doc.number}.pdf`;
+const fileName = (doc: Pick<IssuedDocumentRecord, 'docType' | 'number'>) => `${defaultPack().documentTypes[doc.docType].code}-${doc.number}.pdf`;
 
 export function issuingRetentionRoutes(options: IssuingRetentionRouteOptions): OpenAPIHono<AppEnv> {
   const { store, logger, issuedPdf, uniformFileHouse } = options;

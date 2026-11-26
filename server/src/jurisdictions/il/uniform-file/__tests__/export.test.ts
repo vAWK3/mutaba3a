@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import { composeDocument, type ComposeLineInput } from '../../compose.js';
-import type { IssuedDocType } from '../../types.js';
+import { composeDocument, type ComposeLineInput } from '../../../../issuing/compose.js';
+import type { IssuedDocType } from '../../../../issuing/types.js';
 import { buildUniformFile, DocumentTooLargeError, type UniformFileDocument, type UniformFileInput } from '../export.js';
+import { IL_PACK } from '../../index.js';
 
 /** MUT-569: issued documents → INI.TXT + BKMVDATA.TXT (spec 1.31). AC2 (counts match) and AC3 (no documents) live here. */
 
@@ -9,7 +10,7 @@ const shekels = (n: number): bigint => BigInt(Math.round(n * 100));
 let seq = 0;
 
 function doc(docType: IssuedDocType, number: number, over: Partial<Omit<UniformFileDocument, 'lines'>> & { lines?: ComposeLineInput[]; pricesIncludeVat?: boolean; discount?: bigint } = {}): UniformFileDocument {
-  const composed = composeDocument({
+  const composed = composeDocument({ pack: IL_PACK,
     docType,
     currency: 'ILS',
     documentDate: over.documentDate ?? '2026-03-10',

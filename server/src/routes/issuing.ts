@@ -4,7 +4,7 @@ import { resetsOn, usageMonthOf } from '../usage/month.js';
 import { createRoute, OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { parseAmount, todayFor, validationError } from '../agreements/compose.js';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { requireTwoFactor } from '../auth/two-factor-flow.js';
@@ -12,20 +12,18 @@ import { ApiError } from '../errors.js';
 import { invoicingOn } from '../issuing/invoicing-on.js';
 import { assertLive, DEFAULT_COUNTRY } from '../issuing/jurisdictions.js';
 import { taxAuthorityPlanOf } from '../issuing/tax-authority-plan.js';
-import { normalizeTaxId } from '../jurisdictions/il/tax-id.js';
+import { defaultPack, packFor, type JurisdictionPack, type TaxAuthorityDeps, type UniformFile, type UniformFileHouse } from '../jurisdictions/index.js';
 import { idempotent } from '../idempotency.js';
 import { pastMoneyDate } from '../income/compose.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../issuing/compose.js';
 import { DOC_TYPE_TITLES, documentNumberLabel } from '../issuing/labels.js';
 import { DOCUMENT_STYLES, ISSUED_DOC_TYPES, type IssuedDocType } from '../issuing/types.js';
-import { buildUniformFile, DocumentTooLargeError, UNIFORM_FILE_HOUSE_PLACEHOLDER, type UniformFile, type UniformFileHouse } from '../issuing/uniform-file/export.js';
-import { uniformFileReport } from '../issuing/uniform-file/report.js';
-import { UNIFORM_FILE_MIME, uniformFileZip } from '../issuing/uniform-file/zip.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE } from '../issuing/documents-due.js';
 import { settlementOf } from '../issuing/settlement.js';
 import { formatMoney, type Currency } from '../money.js';
 import { creditCap } from '../issuing/credit-split.js';
 import { registerDocumentsDueRoutes } from './documents-due.js';
+import { issuerPackOf } from '../issuing/issuer-pack.js';
 import { ISSUING_CORE_VERSION } from '../issuing/version.js';
 import { decodeCursor, encodeCursor } from '../pagination.js';
 import { isMalafatFirm, notOwner, ownsProfile, profileOwnerOf, profileTypeOf } from '../personal-profile.js';
@@ -60,9 +58,13 @@ import { registerExternalInvoiceRoutes } from './external-invoices.js';
 import { registerTaxAuthorityRoutes, reportDecision } from './tax-authority.js';
 import type { AttachmentStorage } from '../attachments/storage.js';
 import type { OcrClient } from '../receipts/ocr-client.js';
-import { allocationInvoiceId, allocator, approvalRequest, DEFAULT_MANUAL_ALLOCATION_URL, manualAllocator, needsAllocation, statusOf, type TaxAuthorityDeps } from '../jurisdictions/il/tax-authority/service.js';
-import { normalizeAllocationNumber } from '../jurisdictions/il/allocation-number.js';
 import type { ComposedDocument } from '../issuing/compose.js';
+
+/**
+ * MUT-741 (ADR-287, AC4): the rules a document was issued under: the issuing core's version, the issuer's country and that
+ * jurisdiction pack's version. The per-document column arrives with MUT-742; until then the issue audit entry carries it.
+ */
+const versionStamp = (pack: JurisdictionPack): JsonObject => ({ coreVersion: ISSUING_CORE_VERSION, jurisdiction: pack.country, packVersion: pack.version });
 
 /** MUT-642: the customer printed on a document (name, VAT/company number, address), frozen on it at issue. */
 const customerSnapshot = (customer: CustomerRecord | null): JsonObject =>
@@ -108,21 +110,9 @@ export async function creditedOriginalsOf(store: LedgerStore, organizationId: st
   return new Map(found.flatMap((d) => (d ? [[d.id, { docType: d.docType, number: d.number }] as const] : [])));
 }
 
-/** MUT-569: the product's name in the uniform file (A000 1007). */
-const UNIFORM_FILE_SOFTWARE_NAME = 'MTB3A';
-
-/**
- * A000 1004: 15 random digits, one per export, the first never zero (appendix 5, note 2). From randomBytes, which the
- * signed-out portal's crypto shim also has (no randomInt there).
- */
-const UNIFORM_FILE_ID_FLOOR = 10n ** 14n;
-/** No document predates this (the issuing core shipped in 2026; the spec's dates are 8 digits). */
-const UNIFORM_FILE_EARLIEST = '2000-01-01';
-const uniformFilePrimaryId = () => String(UNIFORM_FILE_ID_FLOOR + (BigInt(`0x${randomBytes(8).toString('hex')}`) % (9n * UNIFORM_FILE_ID_FLOOR)));
-
 /**
  * MUT-569: the uniform file's zip for these documents. MUT-644: also the operator's archive of a closed profile.
- * A document too large for the file's fields is a 422 naming it.
+ * MUT-741: built by the issuer's jurisdiction pack (Israel's uniform file); a country without one has nothing to download.
  */
 export async function uniformFileZipOf(
   store: LedgerStore,
@@ -130,18 +120,14 @@ export async function uniformFileZipOf(
   input: { organizationId: string; issuer: IssuerDetailsRecord; documents: IssuedDocumentRecord[]; range: { from: string; to: string }; now: Date; lang: 'ar' | 'en' },
 ): Promise<{ file: UniformFile; zip: Uint8Array }> {
   const { organizationId, issuer, documents, range, now, lang } = input;
+  const statutoryFile = packFor(issuer.country).statutoryFile;
+  if (!statutoryFile) throw new ApiError('NOT_FOUND', 'This country has no uniform file');
   const originals = await creditedOriginalsOf(store, organizationId, documents);
-  const software = { ...house, name: UNIFORM_FILE_SOFTWARE_NAME, version: ISSUING_CORE_VERSION };
-  let file: UniformFile;
-  try {
-    file = buildUniformFile({ issuer, documents, originals, range, producedAt: now, primaryId: uniformFilePrimaryId(), software });
-  } catch (err) {
-    if (!(err instanceof DocumentTooLargeError)) throw err;
-    throw new ApiError('VALIDATION_FAILED', `${err.docType} ${err.number} has an amount too large for the uniform file`, { reason: 'UNIFORM_FILE_AMOUNT_TOO_LARGE', docType: err.docType, number: err.number });
-  }
-  const report = uniformFileReport(file, { businessName: issuer.legalName, vatId: issuer.vatId, range, producedAt: now, software }, lang);
-  return { file, zip: uniformFileZip(file, report) };
+  return statutoryFile.zipOf({ house, coreVersion: ISSUING_CORE_VERSION, issuer, documents, originals, range, now, lang });
 }
+
+/** No document predates this (the issuing core shipped in 2026; the uniform file's dates are 8 digits). */
+const EARLIEST_ISSUING_DATE = '2000-01-01';
 
 /** A real calendar day (the regex lets 2026-02-31 through). */
 const isCalendarDay = (iso: string) => {
@@ -277,7 +263,7 @@ export async function issuingProfileOf(store: LedgerStore, c: Context<AppEnv>, w
   return organization;
 }
 
-export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }, uniformFileHouse: UniformFileHouse = UNIFORM_FILE_HOUSE_PLACEHOLDER, metering = false): OpenAPIHono<AppEnv> {
+export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = null, tax: IssuingTaxAuthority = { deps: null, portalOrigin: null }, external: IssuingExternalInvoices = { storage: null, ocr: null, urlTtlSeconds: 900 }, uniformFileHouse: UniformFileHouse = defaultPack().statutoryFile!.housePlaceholder, metering = false): OpenAPIHono<AppEnv> {
   const app = new OpenAPIHono<AppEnv>();
 
   const issuingProfile = (c: Context<AppEnv>, write: boolean) => issuingProfileOf(store, c, write);
@@ -352,14 +338,16 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       // MUT-735 (ADR-281): who pays for the document, recorded in the issue's transaction (a replay records nothing).
       if (metering) input.usage = await requestUsage(store, c, organization)();
       // MUT-572 (ADR-264): a 305/320 at or over the threshold, to a customer with a VAT number, carries an allocation number.
-      const needs = needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null });
+      const pack = packFor(issuer.country);
+      const clearance = pack.clearance;
+      const needs = clearance?.needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer?.taxId ?? null }) ?? false;
       if (body.manualAllocation && !needs) {
         throw new ApiError('VALIDATION_FAILED', 'This document needs no allocation number', { field: 'manualAllocation', reason: 'ALLOCATION_NOT_NEEDED' });
       }
       if (needs && body.manualAllocation) {
         // MUT-711 (ADR-273): requested by hand. Issued only if the number it was requested for is still this document's.
-        const allocationNumber = normalizeAllocationNumber(body.manualAllocation.number);
-        input.allocate = manualAllocator(allocationNumber, body.manualAllocation.forNumber);
+        const allocationNumber = pack.expense.normalizeAllocationNumber(body.manualAllocation.number);
+        input.allocate = clearance!.manualAllocator(allocationNumber, body.manualAllocation.forNumber);
       }
       // MUT-736: on a plan without the connection (Starter) MTB3A never requests or reports a number, whatever is connected.
       const taxPlan = needs && !body.manualAllocation && tax.deps ? await taxPlanOf(organization, now) : null;
@@ -375,9 +363,9 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           await reportDecision(ta, { vatNumberOf: async () => Number(issuer.vatId) }, organization.id, body.withoutAllocation.heldKey, 'CONTINUE', now);
         } else {
           const docType = body.docType as 'TAX_INVOICE' | 'TAX_INVOICE_RECEIPT';
-          const invoiceId = allocationInvoiceId(organization.id, input.requestKey);
-          input.allocate = allocator(ta, organization.id, now, (number) =>
-            approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber, userName: user.displayName?.trim() || user.email }),
+          const invoiceId = clearance!.allocationInvoiceId(organization.id, input.requestKey);
+          input.allocate = clearance!.allocator(ta, organization.id, now, (number) =>
+            clearance!.approvalRequest({ invoiceId, docType, number, vatNumber: issuer.vatId, customerTaxId: customer!.taxId!, customerName: customer!.name, documentDate, issuedOn: todayFor(organization, now), composed, accountingSoftwareNumber: ta.accountingSoftwareNumber, userName: user.displayName?.trim() || user.email }),
           );
         }
       }
@@ -414,7 +402,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
           throw planLimitError({ limit: 'documents', plan, nextPlan: nextPlanFor(plan), canUpgrade: tax.canUpgrade ?? false, used: result.used, cap: result.cap, resetsOn: resetsOn(usageMonthOf(now)) });
         }
         case 'issued':
-          if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number });
+          if (result.created) await audit(c, 'issued_document.issued', 'issued_document', result.document.id, { docType: result.document.docType, number: result.document.number, ...versionStamp(pack) });
           return result;
       }
   }
@@ -497,20 +485,23 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     needs(asksForOwed || !body.dueDate, 'dueDate', 'only a tax invoice or a payment request has a due date');
     needs(!body.fromEntry || (body.fromEntry.kind === 'owed') === asksForOwed, 'fromEntry', 'a tax invoice or a payment request is issued for an Owed entry; an invoice-receipt or a receipt for a Received one');
     needs(!body.fromEntry || body.docType !== 'CREDIT_NOTE', 'fromEntry', 'a credit note is issued from its tax invoice, not from an entry');
+    const pack = packFor(issuer.country);
+    const base = pack.currency.base as Currency;
     const input: ComposeInput = {
+      pack,
       docType: body.docType,
       currency: body.currency,
       documentDate,
       dealerType: issuer.dealerType,
-      documentDiscountMinor: body.discount ? parseAmount(body.discount, 'ILS', 'discount') : 0n,
+      documentDiscountMinor: body.discount ? parseAmount(body.discount, base, 'discount') : 0n,
       pricesIncludeVat: body.pricesIncludeVat ?? issuer.pricesIncludeVat,
       ...(original ? { vatRateBasisPoints: original.vatRateBasisPoints } : {}),
       lines: body.lines.map((l) => ({
         description: l.description,
         kind: l.kind,
         quantityMilli: parseQuantity(l.quantity),
-        unitPriceMinor: parseAmount(l.unitPrice, 'ILS', 'unitPrice'),
-        discountMinor: l.discount ? parseAmount(l.discount, 'ILS', 'discount') : 0n,
+        unitPriceMinor: parseAmount(l.unitPrice, base, 'unitPrice'),
+        discountMinor: l.discount ? parseAmount(l.discount, base, 'discount') : 0n,
         ...(l.pricesIncludeVat !== undefined ? { pricesIncludeVat: l.pricesIncludeVat } : {}),
         ...(l.vatExempt ? { vatExempt: true } : {}),
       })),
@@ -523,18 +514,19 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
    * is on here, the profile is connected and, MUT-736, the payer's plan includes the connection) or the business
    * requests it by hand (MANUAL). `automaticOn`: the plan on which it would be automatic, when the plan is why not.
    */
-  async function allocationMode(organization: Organization, now: Date): Promise<{ mode: 'AUTOMATIC' | 'MANUAL'; automaticOn: 'solo' | 'business' | 'firm' | null }> {
+  async function allocationMode(clearance: NonNullable<JurisdictionPack['clearance']>, organization: Organization, now: Date): Promise<{ mode: 'AUTOMATIC' | 'MANUAL'; automaticOn: 'solo' | 'business' | 'firm' | null }> {
     if (!tax.deps) return { mode: 'MANUAL', automaticOn: null };
     const [connection, plan] = await Promise.all([store.issuing.getTaxConnection(organization.id), taxPlanOf(organization, now)]);
     if (!plan.allowed) return { mode: 'MANUAL', automaticOn: plan.nextPlan };
-    return { mode: statusOf(connection, tax.deps.client.environment, now).state === 'connected' ? 'AUTOMATIC' : 'MANUAL', automaticOn: null };
+    return { mode: clearance.statusOf(connection, tax.deps.client.environment, now).state === 'connected' ? 'AUTOMATIC' : 'MANUAL', automaticOn: null };
   }
 
   /** MUT-711: the review step's allocation panel, or null when the document needs no number. */
-  async function allocationPreview(organization: Organization, body: IssueRequest, documentDate: string, composed: ComposedDocument, customer: CustomerRecord | null, now: Date) {
-    if (!customer?.taxId || !needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer.taxId })) return null;
+  async function allocationPreview(pack: JurisdictionPack, organization: Organization, body: IssueRequest, documentDate: string, composed: ComposedDocument, customer: CustomerRecord | null, now: Date) {
+    const clearance = pack.clearance;
+    if (!clearance || !customer?.taxId || !clearance.needsAllocation({ docType: body.docType, currency: body.currency, documentDate, composed, customerTaxId: customer.taxId })) return null;
     const organizationId = organization.id;
-    const [{ mode, automaticOn }, counters] = await Promise.all([allocationMode(organization, now), store.issuing.counters(organizationId)]);
+    const [{ mode, automaticOn }, counters] = await Promise.all([allocationMode(clearance, organization, now), store.issuing.counters(organizationId)]);
     return {
       mode,
       automaticOn,
@@ -542,7 +534,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       documentDate,
       net: serializeComposedTotals({ ...composed, currency: body.currency }).net,
       customerTaxId: customer.taxId,
-      requestUrl: tax.manualAllocationUrl ?? DEFAULT_MANUAL_ALLOCATION_URL,
+      requestUrl: tax.manualAllocationUrl ?? clearance.DEFAULT_MANUAL_ALLOCATION_URL,
     };
   }
 
@@ -589,7 +581,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       if (current && country !== current.country && (await store.issuing.counters(organization.id)).some((k) => k.next > k.start)) {
         throw new ApiError('CONFLICT', 'The country cannot be changed after the first document', { reason: 'COUNTRY_LOCKED', field: 'country' });
       }
-      const vatId = country === 'IL' ? normalizeTaxId(body.vatId) : body.vatId;
+      const vatId = packFor(country).taxId.normalize(body.vatId);
       if (vatId === null) throw validationError('VAT_ID_INVALID', 'This is not a valid Israeli VAT or company number', { field: 'vatId' });
       const kept = current ? { ink: current.ink, documentStyle: current.documentStyle, defaultLanguage: current.defaultLanguage, paymentTermsDays: current.paymentTermsDays, bankDetails: current.bankDetails, footerNote: current.footerNote, offerAfterSave: current.offerAfterSave, defaultDocumentsPreference: current.defaultDocumentsPreference } : DEFAULTS;
       const input: IssuerDetailsInput = { ...kept, legalName: body.legalName, vatId, country, dealerType: body.dealerType, address: body.address ?? null, city: body.city ?? null, phone: body.phone ?? null, email: body.email ?? null, website: body.website ?? null, pricesIncludeVat: body.pricesIncludeVat ?? current?.pricesIncludeVat ?? false };
@@ -747,7 +739,8 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
     const [issuer, setup, connection, counters] = await Promise.all([store.issuing.getIssuer(organizationId), store.issuing.getSetup(organizationId), tax.deps ? store.issuing.getTaxConnection(organizationId) : null, store.issuing.counters(organizationId)]);
     // MUT-571: the Tax Authority step is done while the connection is good; until then (or without one here) it waits.
     // MUT-736: a connection kept on a plan without it (Starter, `suspended`) is not done either.
-    const connected = !!tax.deps && statusOf(connection, tax.deps.client.environment, now).state === 'connected' && (await taxPlanOf(organization, now)).allowed;
+    const clearance = (issuer ? packFor(issuer.country) : defaultPack()).clearance;
+    const connected = !!tax.deps && !!clearance && clearance.statusOf(connection, tax.deps.client.environment, now).state === 'connected' && (await taxPlanOf(organization, now)).allowed;
     const missing = setupMissing(issuer, setup);
     const done = (ok: boolean) => (ok ? ('done' as const) : ('todo' as const));
     return {
@@ -883,11 +876,12 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const original = await creditedInvoice(organization.id, body);
       const { documentDate, composed } = composeFrom(body, issuer, todayFor(organization, now), original);
       const customer = body.customerId ? await store.customers.getById(organization.id, body.customerId) : null;
-      const allocation = await allocationPreview(organization, body, documentDate, composed, customer, now);
+      const allocation = await allocationPreview(packFor(issuer.country), organization, body, documentDate, composed, customer, now);
       const facts = await creditNoteFacts(organization.id, original, composed.grossMinor);
-      const ils = (minor: bigint) => formatMoney({ minor, currency: 'ILS' });
-      const creditNote = facts ? { outstanding: ils(facts.outstandingMinor), paid: ils(facts.paidMinor), maximum: ils(facts.maximumMinor) } : null;
-      return c.json({ ...serializeComposedTotals({ ...composed, currency: 'ILS' }), allocation, creditNote }, 200);
+      const base = packFor(issuer.country).currency.base as Currency;
+      const shown = (minor: bigint) => formatMoney({ minor, currency: base });
+      const creditNote = facts ? { outstanding: shown(facts.outstandingMinor), paid: shown(facts.paidMinor), maximum: shown(facts.maximumMinor) } : null;
+      return c.json({ ...serializeComposedTotals({ ...composed, currency: base }), allocation, creditNote }, 200);
     },
   );
 
@@ -994,7 +988,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
         case 'has_documents':
           throw new ApiError('CONFLICT', 'Cancel the invoice-receipt with a credit note first', { reason: 'PAYMENT_REQUEST_HAS_DOCUMENTS' });
         case 'cancelled': {
-          if (result.created) await audit(c, 'issued_document.cancelled', 'issued_document', documentId, { number: result.cancellation.number });
+          if (result.created) await audit(c, 'issued_document.cancelled', 'issued_document', documentId, { number: result.cancellation.number, ...versionStamp(await issuerPackOf(store, organization.id)) });
           const document = (await store.issuing.getById(organization.id, documentId))!;
           return c.json(serializeIssuedDocument(document, await factsOf(organization.id, document)), 200);
         }
@@ -1229,7 +1223,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       middleware: [requireScope('issuing:read')] as const,
       request: { query: UniformFileQuerySchema },
       responses: {
-        200: { description: 'The zip', content: { [UNIFORM_FILE_MIME]: { schema: z.string().openapi({ format: 'binary' }) } } },
+        200: { description: 'The zip', content: { [defaultPack().statutoryFile!.mime]: { schema: z.string().openapi({ format: 'binary' }) } } },
         ...notFoundResponse,
         ...validationResponse,
         ...errorResponses,
@@ -1240,7 +1234,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       const { from, to, lang } = c.req.valid('query');
       const now = c.get('now')();
       for (const [field, day] of [['from', from], ['to', to]] as const) {
-        if (!isCalendarDay(day) || day < UNIFORM_FILE_EARLIEST) throw new ApiError('VALIDATION_FAILED', `${field} is not a date MTB3A could have issued on`, { reason: 'PERIOD_RANGE', field });
+        if (!isCalendarDay(day) || day < EARLIEST_ISSUING_DATE) throw new ApiError('VALIDATION_FAILED', `${field} is not a date MTB3A could have issued on`, { reason: 'PERIOD_RANGE', field });
       }
       if (from > to) throw new ApiError('VALIDATION_FAILED', 'to comes before from', { reason: 'PERIOD_RANGE', field: 'to' });
       if (to > todayFor(organization, now)) throw new ApiError('VALIDATION_FAILED', 'A range can’t reach past today', { reason: 'PERIOD_RANGE', field: 'to' });
@@ -1250,7 +1244,7 @@ export function issuingRoutes(store: LedgerStore, issuedPdf: IssuedPdf | null = 
       // A member's export is recorded; an accountant reads under a read-only store, like every issuing read (no audit).
       if (sessionAuth(c).access === 'member') await audit(c, 'issuing.uniform_file_exported', 'issuer_details', organization.id, { from, to, documents: documents.length, records: file.totalRecords });
       return c.body(new Uint8Array(zip), 200, {
-        'content-type': UNIFORM_FILE_MIME,
+        'content-type': packFor(issuer.country).statutoryFile!.mime,
         'content-disposition': `attachment; filename="OPENFRMT-${issuer.vatId}-${from}_${to}.zip"`,
         'cache-control': 'no-store',
         'x-uniform-file-documents': String(documents.length),

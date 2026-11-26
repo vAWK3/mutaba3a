@@ -5,6 +5,7 @@ import { composeDocument } from '../../issuing/compose.js';
 import { UsageCapReached } from '../../usage/cap-reached.js';
 import type { IssueDocumentInput, LedgerStore, UsageStamp } from '../ports.js';
 import { PrismaLedgerStore } from '../prisma.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
 
 /**
  * MUT-731 (ADR-284, plan tests "Postgres contract"): Starter's hard caps ride the usage counter's conditional upsert in
@@ -51,7 +52,7 @@ if (!url) {
         docType: 'TAX_INVOICE',
         documentDate: '2026-11-22',
         currency: 'ILS',
-        composed: composeDocument({
+        composed: composeDocument({ pack: IL_PACK,
           docType: 'TAX_INVOICE',
           currency: 'ILS',
           documentDate: '2026-11-22',

@@ -7318,6 +7318,8 @@ after it, but an unlearned one still wins). Basel landed it as is; the rest is M
 
 ---
 
+**Implementation note (MUT-741, 2026-11-26):** the first step is built: Israel is `IL_PACK` 1.0.0 behind `JurisdictionPack`, selected by the issuer's country; ISSUING_CORE_VERSION stays 1.0.0 because it is the uniform file's software version. Code with no issuer in hand (expense flags, a customer's tax number, retention of a document row) calls `defaultPack()` (Israel) from a named list until MUT-742 and MUT-743 give each its country (TD-349). The pack version is stamped in the issue and cancel audit entries now; the per-document column is MUT-742. AC2 reads "no Israel rule outside the pack, the registry and a named allowlist" (Israel-only Tax Authority endpoints, the memory store's model of a Postgres CHECK). This does not accept the ADR: approval is MUT-739.
+
 ## ADR-288: Plans Are Bought Through a Provider-Neutral Port (Stripe, Sold by Barmajiyat); the Billing Address Is Asked Only When Paying and Its Country Sets the Currency and VAT (MUT-702 Part B)
 
 **Status:** Accepted (2026-11-26; Basel's decisions on MUT-702 comment 13558, wireframes v3 approved with Q1, Q5, Q6 yes). Builds on ADR-275 (the plans), ADR-284/285 (Starter, the Solo trial) and ADR-286 (Barmajiyat sells; Israeli VAT added for Israeli addresses, as one configuration value, not through Stripe Tax).

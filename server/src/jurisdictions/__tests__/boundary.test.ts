@@ -13,17 +13,28 @@ const SRC = join(__dirname, '..', '..');
 export const IL_IMPORT_ALLOWLIST: Readonly<Record<string, string>> = {
   'routes/tax-authority.ts': 'the Israel-only Tax Authority endpoints (/v1/tax-authority/*)',
   'routes/tax-authority-reminders.ts': 'the Israel-only reconnect-reminder doors',
-  // Commit A only: these read Israel directly until commit B moves them behind the pack (then each line is deleted).
-  'expenses/compose.ts': 'TEMPORARY (B): allocation-number input check',
-  'receipts/extract/merge.ts': 'TEMPORARY (B): allocation threshold',
-  'serializers.ts': 'TEMPORARY (B): allocation-number-required flag',
-  'routes/business-lookup.ts': 'TEMPORARY (B): tax-ID check',
-  'routes/customers.ts': 'TEMPORARY (B): tax-ID check',
-  'routes/issuing.ts': 'TEMPORARY (B): tax-ID check, allocation hook',
   'repositories/memory.ts': 'models the Postgres CHECK on expenses.allocation_number (a schema rule of the Israeli column, not a pack rule)',
 };
 
+/**
+ * Files outside `jurisdictions/` that call `defaultPack()`: code with no issuer in hand. Each is a place that must learn
+ * its country (MUT-742 gives documents a jurisdiction; MUT-743 the rest) before a second pack goes live. It may not spread.
+ */
+export const DEFAULT_PACK_USERS: Readonly<Record<string, string>> = {
+  'app.ts': 'the boot-time default for the uniform-file house (software registration)',
+  'expenses/compose.ts': 'allocation-number input on an expense: expenses carry no jurisdiction',
+  'receipts/extract/merge.ts': 'allocation threshold hint on a scanned receipt',
+  'serializers.ts': 'the expense list\'s allocation-number-missing flag',
+  'routes/business-lookup.ts': 'tax-ID check on a lookup: no issuer in the request',
+  'routes/customers.ts': 'tax-ID check on a customer: customers carry no country yet',
+  'routes/issuing.ts': 'the setup read before any issuer exists, and the uniform-file route\'s documented media type',
+  'routes/issuing-retention.ts': 'archive file names: a document row carries no jurisdiction until MUT-742',
+  'issuing/retention.ts': 'the keep period and the document day: a document row carries no jurisdiction until MUT-742',
+};
+
 const IMPORT = /(?:from|import\(|vi\.mock\()\s*['"](\.{1,2}\/[^'"]+)['"]/g;
+/** `import type …` and `export type …` statements are erased at compile time: they cannot form a runtime cycle. */
+const TYPE_ONLY = /^\s*(?:import|export)\s+type\b[^;]*;/gm;
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
   for (const name of readdirSync(dir)) {
@@ -43,7 +54,7 @@ export function importsOf(sources: ReadonlyMap<string, string>): Map<string, str
   const graph = new Map<string, string[]>();
   for (const [file, text] of sources) {
     const targets: string[] = [];
-    for (const m of text.matchAll(IMPORT)) targets.push(normalize(join(dirname(file), m[1]!.replace(/\.js$/, ''))).split(sep).join('/'));
+    for (const m of text.replace(TYPE_ONLY, '').matchAll(IMPORT)) targets.push(normalize(join(dirname(file), m[1]!.replace(/\.js$/, ''))).split(sep).join('/'));
     graph.set(file, targets);
   }
   return graph;
@@ -83,6 +94,14 @@ export function cycleThroughJurisdictions(graph: ReadonlyMap<string, string[]>):
 const real = new Map(sourceFiles(SRC).map((f) => [posix(f), readFileSync(f, 'utf8')] as const));
 const graph = importsOf(real);
 
+/** Files outside `jurisdictions/` whose runtime code calls `defaultPack(`. */
+export function defaultPackCallers(sources: ReadonlyMap<string, string>): string[] {
+  return [...sources]
+    .filter(([file, text]) => !file.startsWith('jurisdictions/') && /\bdefaultPack\(/.test(text.replace(TYPE_ONLY, '')))
+    .map(([file]) => file)
+    .sort();
+}
+
 describe('jurisdiction boundary (MUT-741)', () => {
   it('AC3: nothing outside jurisdictions/ imports jurisdictions/il/** except the named allowlist', () => {
     const outside = directIlImporters(graph).filter((f) => !(f in IL_IMPORT_ALLOWLIST));
@@ -92,6 +111,18 @@ describe('jurisdiction boundary (MUT-741)', () => {
   it('the allowlist only shrinks: every entry still imports Israel', () => {
     const importers = new Set(directIlImporters(graph));
     expect(Object.keys(IL_IMPORT_ALLOWLIST).filter((f) => !importers.has(f)), 'delete these allowlist entries').toEqual([]);
+  });
+
+  it('defaultPack() is called only from the named list, and every entry still calls it', () => {
+    const callers = defaultPackCallers(real);
+    expect(callers.filter((f) => !(f in DEFAULT_PACK_USERS)), 'a new caller must be named (and explained) in DEFAULT_PACK_USERS, or take its pack from its issuer').toEqual([]);
+    expect(Object.keys(DEFAULT_PACK_USERS).filter((f) => !callers.includes(f)), 'delete these entries').toEqual([]);
+  });
+
+  it('the issuing core and its routes name no currency (the pack does)', () => {
+    for (const file of ['issuing/compose.ts', 'issuing/documents-due.ts', 'routes/issuing.ts', 'routes/documents-due.ts']) {
+      expect(real.get(file) ?? '', file).not.toMatch(/'ILS'|"ILS"/);
+    }
   });
 
   it('no import cycle runs through jurisdictions/**', () => {
@@ -107,6 +138,9 @@ describe('jurisdiction boundary (MUT-741)', () => {
     it('lets the registry door and il itself import il', () => {
       const g = fake({ 'jurisdictions/index.ts': "export * from './il/tax-id.js';", 'jurisdictions/il/tax-id.ts': '', 'issuing/compose.ts': "import { x } from '../jurisdictions/index.js';" });
       expect(directIlImporters(g)).toEqual([]);
+    });
+    it('flags a defaultPack() call that is not on the list', () => {
+      expect(defaultPackCallers(new Map([['issuing/compose.ts', 'const p = defaultPack();'], ['jurisdictions/registry.ts', 'defaultPack()'], ['routes/x.ts', "import type { defaultPack } from '../jurisdictions/index.js';"]]))).toEqual(['issuing/compose.ts']);
     });
     it('finds a cycle through jurisdictions', () => {
       const g = fake({ 'jurisdictions/il/a.ts': "import { b } from '../../issuing/b.js';", 'issuing/b.ts': "import { a } from '../jurisdictions/il/a.js';" });

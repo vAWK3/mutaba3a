@@ -255,7 +255,7 @@ import { planRelease, splitCredit } from '../issuing/credit-split.js';
 import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
-import { DOC_TYPE_CODES } from '../issuing/types.js';
+import { DOC_TYPE_RANK } from '../issuing/types.js';
 
 /**
  * Bumped whenever a field below changes shape; the portal's local-mode migrations (Phase B) key off it.
@@ -1225,7 +1225,7 @@ export class MemoryLedgerStore implements LedgerStore {
     inRange: async (organizationId, from, to) =>
       [...this.issuedDocMap.values()]
         .filter((d) => d.organizationId === organizationId && d.documentDate >= from && d.documentDate <= to)
-        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number)
+        .sort((a, b) => DOC_TYPE_RANK[a.docType] - DOC_TYPE_RANK[b.docType] || a.number - b.number)
         .map(cloneIssued),
     cancelPaymentRequest: async (organizationId, documentId, cancel, at): Promise<CancelPaymentRequestResult> => {
       const replay = [...this.issuedCancellations.values()].find((c) => c.organizationId === organizationId && c.requestKey === cancel.requestKey);

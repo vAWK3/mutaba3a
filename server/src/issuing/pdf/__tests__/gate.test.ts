@@ -10,6 +10,7 @@ import { devDocumentSigner, signatureDetailsOf } from '../sign/index.js';
 import { checkSignedPdf } from '../sign/verify.js';
 import { DOCUMENT_STYLES } from '../styles.js';
 import { inspectPdf, pageText } from './pdf-inspection.js';
+import { IL_PACK } from '../../../jurisdictions/il/index.js';
 
 /**
  * MUT-640 AC1–AC5, the three-script gate (Malafat's pdf-fonts gate, ADR-168 there): every style × he/ar/en over a
@@ -158,7 +159,7 @@ describe('logo and draft (AC4)', () => {
 
 describe('totals in the document\'s terms (review fixes 3, 4)', () => {
   it('an all-inclusive document with an exempt line shows the typed discount and the taxable and exempt amounts apart', async () => {
-    const composed = composeDocument({
+    const composed = composeDocument({ pack: IL_PACK,
       docType: 'TAX_INVOICE',
       currency: 'ILS',
       documentDate: '2026-11-22',
