@@ -1,5 +1,5 @@
-import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
-import { TokenBox } from '../israel/tax-authority/token-box.js';
+import { FakeTaxAuthority } from '../jurisdictions/il/tax-authority/__tests__/fake-client.js';
+import { TokenBox } from '../jurisdictions/il/tax-authority/token-box.js';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { SESSION_ORGANIZATION_INDEPENDENT_ROUTES } from '../app.js';
 import { buildRouteAccessIndex, type RouteAccessIndex } from '../auth/middleware.js';

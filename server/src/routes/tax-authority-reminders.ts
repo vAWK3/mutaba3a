@@ -3,13 +3,13 @@ import { setupLinkOrigin } from '../auth/account-setup.js';
 import type { AppEnv } from '../auth/middleware.js';
 import type { Mailer } from '../email/ports.js';
 import { ApiError } from '../errors.js';
-import { runReconnectReminders } from '../israel/tax-authority/reconnect-reminder.js';
+import { runReconnectReminders } from '../jurisdictions/il/tax-authority/reconnect-reminder.js';
 import type { Logger } from '../logger.js';
 import type { LedgerStore } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, TaxAuthorityReminderRunSchema, TaxAuthorityReminderSummarySchema, TrialMailRequestSchema } from '../schemas.js';
 
 /**
- * MUT-571 AC3: the two doors to the daily Tax Authority re-consent reminders (israel/tax-authority/reconnect-reminder.ts),
+ * MUT-571 AC3: the two doors to the daily Tax Authority re-consent reminders (jurisdictions/il/tax-authority/reconnect-reminder.ts),
  * shaped like the failed-card mail's.
  *
  *   POST /jobs/v1/issuing/tax-authority-reminders    Cloud Scheduler, daily, X-Job-Token: counts only, no address in its logs

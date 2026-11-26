@@ -10,7 +10,7 @@ import { itemStatus, type ItemStatus } from './agreements/status.js';
 import type { RetainerTerms } from './retainers/terms.js';
 import type { CaptureSource, StoredCaptureSource } from './schemas.js';
 import { allocationStateOf, incomeStatusOf } from './payments/allocation-state.js';
-import { allocationNumberRequired } from './israel/allocation-number.js';
+import { defaultPack } from './jurisdictions/index.js';
 import { documentNumberLabel } from './issuing/labels.js';
 import type { PaymentRequestFacts } from './issuing/payment-request.js';
 import type { CreditReasonCode } from './payments/credit.js';
@@ -619,7 +619,7 @@ export function serializeExpense(e: ExpenseRecord, context: ExpenseContext) {
     captureSource: (e.captureSource ?? null) as StoredCaptureSource | null,
     vat: serializeExpenseVat(e),
     allocationNumber: e.allocationNumber ?? null,
-    allocationNumberMissing: allocationNumberRequired({ ...e, firm: context.firm }) && !e.allocationNumber,
+    allocationNumberMissing: defaultPack().expense.allocationNumberRequired({ ...e, firm: context.firm }) && !e.allocationNumber,
     version: e.version,
     createdAt: e.createdAt.toISOString(),
     updatedAt: e.updatedAt.toISOString(),

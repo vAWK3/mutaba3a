@@ -1,4 +1,4 @@
-import { aboveAllocationThreshold } from '../../israel/allocation-number.js';
+import { defaultPack } from '../../jurisdictions/index.js';
 import type { ReceiptSuggestion } from '../../repositories/ports.js';
 
 /** The fields every receipt is read for: a suggestion holding all of them is complete (`isCompleteSuggestion`). */
@@ -67,5 +67,5 @@ export function expectsAllocationNumber(suggestion: ReceiptSuggestion): boolean 
   const { currency, date, totalMinor, vatMinor } = suggestion;
   if (!currency || !date || !totalMinor || !vatMinor) return false;
   const vat = BigInt(vatMinor.value);
-  return aboveAllocationThreshold({ currency: currency.value, occurredOn: date.value, netMinor: BigInt(totalMinor.value) - vat, vatMinor: vat });
+  return defaultPack().expense.aboveAllocationThreshold({ currency: currency.value, occurredOn: date.value, netMinor: BigInt(totalMinor.value) - vat, vatMinor: vat });
 }

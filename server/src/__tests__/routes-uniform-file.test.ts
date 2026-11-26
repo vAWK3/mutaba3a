@@ -62,6 +62,15 @@ describe('GET /v1/issuing/uniform-file (MUT-569)', () => {
     expect(audit.map((e) => e.action)).toContain('issuing.uniform_file_exported');
   });
 
+  it('MUT-741 (AC4): the issue audit entry carries the core version, the jurisdiction and the pack version', async () => {
+    const h = accountantHarness();
+    const w = await invoicing(h);
+    await issue(h, w.on, { docType: 'TAX_INVOICE', documentDate: '2026-11-02', customerId: w.customerId, lines: [line('تطوير')] });
+    const audit = await h.store.audit.listByOrganization(w.profileId, 50);
+    const issued = audit.find((e) => e.action === 'issued_document.issued');
+    expect(issued?.metadata).toMatchObject({ docType: 'TAX_INVOICE', coreVersion: '1.0.0', jurisdiction: 'IL', packVersion: '1.0.0' });
+  });
+
   it('leaves out documents dated outside the range, and another profile’s', async () => {
     const h = accountantHarness();
     const w = await invoicing(h);

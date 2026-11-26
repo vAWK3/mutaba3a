@@ -1,8 +1,8 @@
 import { validationError } from '../agreements/compose.js';
+import type { ComposePack } from '../jurisdictions/index.js';
 import { roundHalfUpDiv } from '../vat.js';
 import type { DealerType, IssuedDocType, LineKind } from './types.js';
-import { ISSUING_CURRENCIES, MAX_DESCRIPTION_LENGTH, MAX_LINES, VAT_BEARING } from './types.js';
-import { standardVatRateOn } from './vat-rate.js';
+import { MAX_DESCRIPTION_LENGTH, MAX_LINES } from './types.js';
 
 /**
  * MUT-568: what a document will say, computed before anything is written: the issue route and the stateless preview
@@ -28,6 +28,8 @@ export interface ComposeLineInput {
 }
 
 export interface ComposeInput {
+  /** MUT-741 (ADR-287): the issuer's jurisdiction pack: VAT table, currencies, document types, who may issue what. */
+  pack: ComposePack;
   docType: IssuedDocType;
   currency: string;
   documentDate: string;
@@ -80,7 +82,7 @@ export function composeDocument(input: ComposeInput): ComposedDocument {
   assertWhoMayIssue(input);
   assertLines(input.lines);
   // MUT-662: an exempt dealer's payment request carries no VAT (it is the only VAT-bearing type they may issue).
-  const rate = VAT_BEARING.has(input.docType) && input.dealerType !== 'EXEMPT' ? (input.vatRateBasisPoints ?? standardVatRateOn(input.documentDate)) : 0;
+  const rate = input.pack.documentTypes[input.docType].vatBearing && !input.pack.dealer.exemptFromVat(input.dealerType) ? (input.vatRateBasisPoints ?? input.pack.vat.rateOn(input.documentDate)) : 0;
   const documentInclusive = input.pricesIncludeVat && rate > 0;
   const lines = input.lines.map((line) => {
     const vatExempt = rate > 0 && line.vatExempt === true;
@@ -132,13 +134,11 @@ export function composeDocument(input: ComposeInput): ComposedDocument {
 }
 
 function assertWhoMayIssue(input: ComposeInput): void {
-  if (!(ISSUING_CURRENCIES as readonly string[]).includes(input.currency)) {
-    throw validationError('CURRENCY_NOT_SUPPORTED', 'documents are issued in shekels (ILS) only', { field: 'currency' });
+  if (!input.pack.currency.issuing.includes(input.currency)) {
+    throw validationError('CURRENCY_NOT_SUPPORTED', `documents are issued in ${input.pack.currency.issuingLabel} only`, { field: 'currency' });
   }
-  // MUT-662 (comment 13435): an exempt dealer may also ask for payment with a payment request (not a tax document).
-  if (input.dealerType === 'EXEMPT' && input.docType !== 'RECEIPT' && input.docType !== 'PAYMENT_REQUEST') {
-    throw validationError('EXEMPT_DEALER_TAX_INVOICE', 'an exempt dealer (עוסק פטור) issues receipts and payment requests, not tax invoices', { field: 'docType' });
-  }
+  const refusal = input.pack.dealer.refusal(input.dealerType, input.docType);
+  if (refusal) throw validationError(refusal.reason, refusal.message, { field: 'docType' });
 }
 
 function assertLines(lines: ComposeLineInput[]): void {

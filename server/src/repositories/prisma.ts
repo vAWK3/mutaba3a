@@ -221,7 +221,7 @@ import { planRelease, splitCredit, type LiveAllocation } from '../issuing/credit
 import { blocksCancel, paymentRequestFacts, referringToRequest, type PaymentRequestFacts, type ReferringDocument } from '../issuing/payment-request.js';
 import { DEFAULT_DOCUMENTS_PREFERENCE, type DocumentsPreference, type DuePaymentInput, type DueReceivableInput } from '../issuing/documents-due.js';
 import { numberGaps } from '../issuing/gaps.js';
-import { DOC_TYPE_CODES, type IssuedDocType } from '../issuing/types.js';
+import { DOC_TYPE_RANK, type IssuedDocType } from '../issuing/types.js';
 import { subscriptionChangeAudit, subscriptionChanged } from './billing-audit.js';
 import { createdAtCursorOf, mergeByMoneyDate, mergeNewestFirst, moneyDateCursorOf, moneyDateKeyOf } from '../entries/merge.js';
 
@@ -1126,7 +1126,7 @@ export class PrismaLedgerStore implements LedgerStore {
       }
       return rows
         .map((row) => issuedRecord(row, byDocument.get(row.id) ?? []))
-        .sort((a, b) => DOC_TYPE_CODES[a.docType] - DOC_TYPE_CODES[b.docType] || a.number - b.number);
+        .sort((a, b) => DOC_TYPE_RANK[a.docType] - DOC_TYPE_RANK[b.docType] || a.number - b.number);
     },
     gaps: async (organizationId) => {
       const [counters, numbers] = await Promise.all([

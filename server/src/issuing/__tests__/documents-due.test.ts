@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { documentsDue, olderThan, type DocumentsDueInput, type DuePaymentInput, type DueReceivableInput } from '../documents-due.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
 
 /** MUT-660: what each income entry is due, derived from the client's preference and what's already issued or attached. */
 
@@ -55,11 +56,11 @@ const input = (over: Partial<DocumentsDueInput> = {}): DocumentsDueInput => ({
   ...over,
 });
 
-const kinds = (i: DocumentsDueInput) => documentsDue(i).map((d) => `${d.entry.kind}:${d.entry.id}:${d.kind}:${d.amountMinor}`);
+const kinds = (i: DocumentsDueInput) => documentsDue(i, IL_PACK).map((d) => `${d.entry.kind}:${d.entry.id}:${d.kind}:${d.amountMinor}`);
 
 describe('documentsDue: receivables (Owed)', () => {
   it('AC2: tax invoice first, an Owed of 3,400 is due a tax invoice for 3,400', () => {
-    const [item] = documentsDue(input({ receivables: [owed()] }));
+    const [item] = documentsDue(input({ receivables: [owed()] }), IL_PACK);
     expect(item).toMatchObject({ kind: 'TAX_INVOICE', amountMinor: ils(3400), currency: 'ILS', customerId: 'rami', date: '2026-11-02', issuable: true, linkOnly: false });
     expect(item?.entry).toEqual({ kind: 'receivable', id: 'r1', number: 'CHG-2026-0001' });
   });
@@ -70,7 +71,7 @@ describe('documentsDue: receivables (Owed)', () => {
   });
 
   it('payment request first: due a payment request, issuable and always linked (MUT-662)', () => {
-    const [item] = documentsDue(input({ receivables: [owed({ customerId: 'quds' })] }));
+    const [item] = documentsDue(input({ receivables: [owed({ customerId: 'quds' })] }), IL_PACK);
     expect(item).toMatchObject({ kind: 'PAYMENT_REQUEST', issuable: true, linkOnly: true });
     expect(item?.reason).toBeUndefined();
   });
@@ -81,13 +82,13 @@ describe('documentsDue: receivables (Owed)', () => {
   });
 
   it("MUT-662: a payment on a payment request's Owed is due an invoice-receipt that refers to it, linked only", () => {
-    const items = documentsDue(input({ receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    const items = documentsDue(input({ receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }), IL_PACK);
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', appliesToDocumentId: 'pr7', linkOnly: true, issuable: true, amountMinor: ils(1000) });
   });
 
   it('MUT-662: an exempt dealer gets a receipt that refers to the payment request', () => {
-    const items = documentsDue(input({ dealerType: 'EXEMPT', receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    const items = documentsDue(input({ dealerType: 'EXEMPT', receivables: [owed({ customerId: 'quds', paymentRequestId: 'pr7' })], payments: [paid({ customerId: 'quds', allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }), IL_PACK);
     expect(items).toEqual([expect.objectContaining({ kind: 'RECEIPT', appliesToDocumentId: 'pr7' })]);
   });
 
@@ -109,13 +110,13 @@ describe('documentsDue: receivables (Owed)', () => {
   });
 
   it('a partly credited Owed is due its remainder, issued linked only', () => {
-    const [item] = documentsDue(input({ receivables: [owed({ creditedMinor: ils(400) })] }));
+    const [item] = documentsDue(input({ receivables: [owed({ creditedMinor: ils(400) })] }), IL_PACK);
     expect(item).toMatchObject({ amountMinor: ils(3000), linkOnly: true, issuable: true });
   });
 
   it('installment and retainer Owed are due a tax invoice, issued linked only so the agreement keeps its charge', () => {
     for (const origin of ['INSTALLMENT', 'RETAINER_CHARGE'] as const) {
-      const [item] = documentsDue(input({ receivables: [owed({ origin })] }));
+      const [item] = documentsDue(input({ receivables: [owed({ origin })] }), IL_PACK);
       expect(item).toMatchObject({ kind: 'TAX_INVOICE', issuable: true, linkOnly: true });
     }
   });
@@ -125,7 +126,7 @@ describe('documentsDue: receivables (Owed)', () => {
   });
 
   it('a non-shekel Owed is listed, not issuable', () => {
-    const [item] = documentsDue(input({ receivables: [owed({ currency: 'USD' })] }));
+    const [item] = documentsDue(input({ receivables: [owed({ currency: 'USD' })] }), IL_PACK);
     expect(item).toMatchObject({ issuable: false, reason: 'CURRENCY_NOT_ILS', currency: 'USD' });
   });
 
@@ -139,7 +140,7 @@ describe('documentsDue: payments (Received)', () => {
     const r = owed({ documented: true, taxInvoiceId: 'd305', paidMinor: ils(1500) });
     const p1 = paid({ allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] });
     const p2 = paid({ id: 'p2', number: 'PAY-2026-0002', amountMinor: ils(500), receivedOn: '2026-11-20', allocations: [{ receivableId: 'r1', amountMinor: ils(500) }] });
-    const items = documentsDue(input({ receivables: [r], payments: [p1, p2] }));
+    const items = documentsDue(input({ receivables: [r], payments: [p1, p2] }), IL_PACK);
     expect(items.map((i) => [i.entry.id, i.kind, i.amountMinor, i.appliesToDocumentId, i.linkOnly])).toEqual([
       ['p1', 'RECEIPT', ils(1000), 'd305', true],
       ['p2', 'RECEIPT', ils(500), 'd305', true],
@@ -147,19 +148,19 @@ describe('documentsDue: payments (Received)', () => {
   });
 
   it('tax invoice first: a payment allocated to an Owed with no tax invoice yet waits; the Owed is due its invoice (no double invoicing)', () => {
-    const items = documentsDue(input({ receivables: [owed({ paidMinor: ils(1000) })], payments: [paid({ allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    const items = documentsDue(input({ receivables: [owed({ paidMinor: ils(1000) })], payments: [paid({ allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }), IL_PACK);
     expect(items.map((i) => `${i.entry.kind}:${i.kind}`)).toEqual(['receivable:TAX_INVOICE']);
   });
 
   it('tax invoice first: an unallocated payment from a client with an open tax invoice is due a receipt on it', () => {
     const r = owed({ documented: true, taxInvoiceId: 'd305' });
-    const [item] = documentsDue(input({ receivables: [r], payments: [paid()] }));
+    const [item] = documentsDue(input({ receivables: [r], payments: [paid()] }), IL_PACK);
     expect(item).toMatchObject({ kind: 'RECEIPT', appliesToDocumentId: 'd305', linkOnly: false, issuable: true });
   });
 
   it('tax invoice first: the open tax invoice must cover the payment, else an invoice-receipt is due', () => {
     const r = owed({ documented: true, taxInvoiceId: 'd305', grossMinor: ils(500) });
-    expect(documentsDue(input({ receivables: [r], payments: [paid()] }))[0]?.kind).toBe('TAX_INVOICE_RECEIPT');
+    expect(documentsDue(input({ receivables: [r], payments: [paid()] }), IL_PACK)[0]?.kind).toBe('TAX_INVOICE_RECEIPT');
   });
 
   it('AC3: on payment, each payment, partial ones included, is due an invoice-receipt for its own amount', () => {
@@ -170,7 +171,7 @@ describe('documentsDue: payments (Received)', () => {
         paid({ customerId: 'nour', amountMinor: ils(700), allocations: [{ receivableId: 'r1', amountMinor: ils(700) }] }),
         paid({ id: 'p2', customerId: 'nour', amountMinor: ils(1000) }),
       ],
-    }));
+    }), IL_PACK);
     expect(items.map((i) => [i.entry.id, i.kind, i.amountMinor, i.linkOnly, i.issuable])).toEqual([
       ['p1', 'TAX_INVOICE_RECEIPT', ils(700), true, true],
       ['p2', 'TAX_INVOICE_RECEIPT', ils(1000), false, true],
@@ -179,12 +180,12 @@ describe('documentsDue: payments (Received)', () => {
 
   it('AC3: payment request first, a partial payment is due an invoice-receipt (the payment request is listed apart)', () => {
     const r = owed({ customerId: 'quds' });
-    const items = documentsDue(input({ receivables: [r], payments: [paid({ customerId: 'quds', amountMinor: ils(700), allocations: [{ receivableId: 'r1', amountMinor: ils(700) }] })] }));
+    const items = documentsDue(input({ receivables: [r], payments: [paid({ customerId: 'quds', amountMinor: ils(700), allocations: [{ receivableId: 'r1', amountMinor: ils(700) }] })] }), IL_PACK);
     expect(items.map((i) => `${i.entry.kind}:${i.kind}:${i.amountMinor}`)).toEqual([`receivable:PAYMENT_REQUEST:${ils(3400)}`, `payment:TAX_INVOICE_RECEIPT:${ils(700)}`]);
   });
 
   it('N1: money received with no client is due an invoice-receipt', () => {
-    expect(documentsDue(input({ payments: [paid({ customerId: null })] }))[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', customerId: null, linkOnly: true, issuable: true });
+    expect(documentsDue(input({ payments: [paid({ customerId: null })] }), IL_PACK)[0]).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', customerId: null, linkOnly: true, issuable: true });
   });
 
   it('AC4: no document, and not for invoice (the payment or its Owed), are due nothing', () => {
@@ -204,7 +205,7 @@ describe('documentsDue: payments (Received)', () => {
 
   it('an invoice attached to the Owed, then a payment: the payment is due a receipt with nothing to apply to', () => {
     const r = owed({ externalInvoice: true });
-    const [item] = documentsDue(input({ receivables: [r], payments: [paid({ allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }));
+    const [item] = documentsDue(input({ receivables: [r], payments: [paid({ allocations: [{ receivableId: 'r1', amountMinor: ils(1000) }] })] }), IL_PACK);
     expect(item).toMatchObject({ kind: 'RECEIPT', linkOnly: true, issuable: true });
     expect(item).not.toHaveProperty('appliesToDocumentId');
   });
@@ -216,32 +217,32 @@ describe('documentsDue: payments (Received)', () => {
 
   it('a payment split across Owed entries, all without documents, is one invoice-receipt issued linked only', () => {
     const rs = [owed({ customerId: 'nour' }), owed({ id: 'r2', customerId: 'nour' })];
-    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }));
+    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }), IL_PACK);
     expect(item).toMatchObject({ kind: 'TAX_INVOICE_RECEIPT', amountMinor: ils(1000), linkOnly: true, issuable: true });
   });
 
   it('a payment split between an invoiced and an uninvoiced Owed is listed, not issuable', () => {
     const rs = [owed({ customerId: 'nour', documented: true, taxInvoiceId: 'd305' }), owed({ id: 'r2', customerId: 'nour' })];
-    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }));
+    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }), IL_PACK);
     expect(item).toMatchObject({ issuable: false, reason: 'MIXED_ALLOCATION' });
   });
 
   it('a payment split between a not-for-invoice Owed and another is listed for its counted share, not issuable', () => {
     const rs = [owed({ customerId: 'nour', notForInvoice: true }), owed({ id: 'r2', customerId: 'nour' })];
-    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }));
+    const [item] = documentsDue(input({ receivables: rs, payments: [paid({ customerId: 'nour', allocations: [{ receivableId: 'r1', amountMinor: ils(400) }, { receivableId: 'r2', amountMinor: ils(600) }] })] }), IL_PACK);
     expect(item).toMatchObject({ amountMinor: ils(600), issuable: false, reason: 'MIXED_ALLOCATION' });
   });
 
   it('a payment recorded through the API or a connected app is listed, not issuable here', () => {
-    expect(documentsDue(input({ payments: [paid({ customerId: 'nour', origin: 'INTEGRATION' })] }))[0]).toMatchObject({ issuable: false, reason: 'RECORDED_ELSEWHERE' });
+    expect(documentsDue(input({ payments: [paid({ customerId: 'nour', origin: 'INTEGRATION' })] }), IL_PACK)[0]).toMatchObject({ issuable: false, reason: 'RECORDED_ELSEWHERE' });
   });
 
   it('a non-shekel payment is listed, not issuable', () => {
-    expect(documentsDue(input({ payments: [paid({ customerId: 'nour', currency: 'USD' })] }))[0]).toMatchObject({ issuable: false, reason: 'CURRENCY_NOT_ILS', currency: 'USD' });
+    expect(documentsDue(input({ payments: [paid({ customerId: 'nour', currency: 'USD' })] }), IL_PACK)[0]).toMatchObject({ issuable: false, reason: 'CURRENCY_NOT_ILS', currency: 'USD' });
   });
 
   it('an exempt dealer: every counted payment is due a receipt, and a receipt number settles it', () => {
-    expect(documentsDue(input({ dealerType: 'EXEMPT', payments: [paid({ customerId: 'nour' })] }))[0]).toMatchObject({ kind: 'RECEIPT', issuable: true });
+    expect(documentsDue(input({ dealerType: 'EXEMPT', payments: [paid({ customerId: 'nour' })] }), IL_PACK)[0]).toMatchObject({ kind: 'RECEIPT', issuable: true });
     expect(kinds(input({ dealerType: 'EXEMPT', payments: [paid({ customerId: 'nour', receiptNumber: 'R-1' })] }))).toEqual([]);
     expect(kinds(input({ dealerType: 'EXEMPT', payments: [paid({ customerId: 'zaid' })] }))).toEqual([]);
   });
@@ -256,7 +257,7 @@ describe('documentsDue: order and the older-than filter', () => {
         paid({ id: 'c', customerId: 'nour', receivedOn: '2026-10-28' }),
       ],
       receivables: [owed({ id: 'r9', postingDate: '2026-11-02' })],
-    }));
+    }), IL_PACK);
     expect(items.map((i) => i.entry.id)).toEqual(['c', 'b', 'r9', 'a']);
   });
 
@@ -267,7 +268,7 @@ describe('documentsDue: order and the older-than filter', () => {
         paid({ id: 'edge', customerId: 'nour', receivedOn: '2026-05-22' }),
         paid({ id: 'new', customerId: 'nour', receivedOn: '2026-11-01' }),
       ],
-    }));
+    }), IL_PACK);
     expect(olderThan(items, 6, '2026-11-22').map((i) => i.entry.id)).toEqual(['old']);
     expect(olderThan(items, 0, '2026-11-22')).toHaveLength(3);
     expect(olderThan(items.slice(0, 1), 3, '2026-05-31').map((i) => i.entry.id)).toEqual([]);

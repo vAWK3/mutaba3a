@@ -4895,3 +4895,14 @@ Written with the build. Full suites, `test:db` and QA recordings wait for Basel'
 | Portal | `components/__tests__/BillingDrawer.plans.test.tsx`, `session/__tests__/AuthGate.soloTrial.test.tsx`, `data/__tests__/countries-match.test.ts` | the plan row (both currencies, limits line, current plan hidden), + VAT for Israel, the body sent, No match, prefill, plans off = Freelancer step; the trial step's live price, the address step and the trial Checkout's body; typed-country matching in ar/en |
 | Sandbox (by hand) | Stripe test mode | catalog script applied then "nothing to do"; product-tier check OK; a Jerusalem Solo Checkout totals 3900 + 702 ILS; a trial Checkout opens at 0 |
 | QA (written, not run) | `qa/specs/portal/plans.spec.ts` (`portal.plans.*`, FakeApi `starter.plans`) | subscribe-plan, typed-country, address-prefilled; the trial step stays hidden (build constant) |
+
+## MUT-741 — Israel as the first jurisdiction pack
+
+| Layer | File | Covers |
+|---|---|---|
+| Server | `jurisdictions/__tests__/golden.test.ts` | AC1: hashes of composed documents (all types, 17%/18% boundary, exempt dealer, credit at the invoice rate, inclusive) and the uniform file bytes, recorded before the move |
+| Server | `jurisdictions/__tests__/il-pack.contract.test.ts` | the Israel pack equals the old hard-coded rules; `DOC_TYPE_RANK` equals the Israeli code order; the registry; the boot check |
+| Server | `jurisdictions/__tests__/boundary.test.ts` | AC2/AC3: the import guard, the `defaultPack()` list, no cycle, no `'ILS'` in the core, and the guard's own self-tests |
+| Server | `__tests__/routes-uniform-file.test.ts` | AC4: the issue audit entry carries core and pack versions |
+| Server | existing suites (compose, documents-due, uniform file, PDF, retention, stores, routes) | unchanged behaviour; fixtures pass `IL_PACK` |
+| QA | none re-recorded | no user-visible change: the portal and phone flows read the same API |

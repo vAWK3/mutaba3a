@@ -1,8 +1,7 @@
 import { createRoute, OpenAPIHono, z } from '@hono/zod-openapi';
 import { requireScope, sessionAuth, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
-import type { RegistryLookup } from '../israel/registry.js';
-import { normalizeTaxId } from '../israel/tax-id.js';
+import { defaultPack, type RegistryLookup } from '../jurisdictions/index.js';
 import type { RateLimiter } from '../rate-limit.js';
 import { errorResponses, notFoundResponse, validationResponse } from './shared.js';
 import { PERSON_OR_MALAFAT } from './security.js';
@@ -40,7 +39,7 @@ export function businessLookupRoutes(options: { registry: RegistryLookup | null;
     }),
     async (c) => {
       const { user } = sessionAuth(c);
-      const taxId = normalizeTaxId(c.req.valid('query').number);
+      const taxId = defaultPack().taxId.normalize(c.req.valid('query').number);
       if (!taxId) throw new ApiError('VALIDATION_FAILED', 'Not a valid VAT, company or ID number (9 digits with the check digit)', { field: 'number', reason: 'TAX_ID_INVALID' });
       const budget = await options.limiter.check(`business-lookup:${user.id}`, c.get('now')());
       if (!budget.allowed) {

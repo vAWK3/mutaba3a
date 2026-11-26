@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { MemoryLedgerStore } from '../../../repositories/memory.js';
+import { MemoryLedgerStore } from '../../../../repositories/memory.js';
 import { accessTokenFor, allocationInvoiceId, connectionFrom, needsAllocation, newState, readState, statusOf } from '../service.js';
 import { TokenBox } from '../token-box.js';
 import { FakeTaxAuthority } from './fake-client.js';
-import type { ComposedDocument } from '../../../issuing/compose.js';
+import type { ComposedDocument } from '../../../../issuing/compose.js';
 
 /** MUT-571/572 (ADR-264): the token box, the connect state, the locked refresh and the allocation rule. */
 const box = new TokenBox('a-test-secret-with-at-least-32-characters');

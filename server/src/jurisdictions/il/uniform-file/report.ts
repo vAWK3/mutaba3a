@@ -1,5 +1,5 @@
-import { DOC_TYPE_TITLES } from '../labels.js';
-import { DOC_TYPE_CODES } from '../types.js';
+import { DOC_TYPE_TITLES } from '../../../issuing/labels.js';
+import { IL_DOC_TYPE_CODES as DOC_TYPE_CODES } from '../documents.js';
 import type { UniformFile } from './export.js';
 import type { RecordCode } from './layout.js';
 

@@ -7,6 +7,7 @@ import type { PlanLimitDetails } from '../billing/plan-limit.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { documentsDue, olderThan, type DocumentsDueInput, type DueItem } from '../issuing/documents-due.js';
+import { issuerPackOf } from '../issuing/issuer-pack.js';
 import { DEFAULT_LINE_DESCRIPTION, DOCUMENT_LANGUAGES, type DocumentLanguage } from '../issuing/labels.js';
 import { formatMoney, type Currency } from '../money.js';
 import { parseAmount, todayFor, validationError } from '../agreements/compose.js';
@@ -114,20 +115,21 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
   /** The single issue for one due item: one line for its amount, VAT included, linked to its entry (MUT-648's shape). */
   async function requestFor(organization: Organization, item: DueItem, today: string): Promise<IssueRequest> {
     const issuer = await store.issuing.getIssuer(organization.id);
+    const base = (await issuerPackOf(store, organization.id)).currency.base as Currency;
     const language = languageOf(issuer?.defaultLanguage ?? 'he');
     const owed = item.entry.kind === 'receivable' ? await store.receivables.getById(organization.id, item.entry.id) : null;
     const description = owed?.title?.trim() || DEFAULT_LINE_DESCRIPTION[language];
     return {
       docType: item.kind as IssueRequest['docType'],
       documentDate: today,
-      currency: 'ILS',
+      currency: base,
       language,
       customerId: item.customerId,
       ...(owed && owed.dueDate >= today ? { dueDate: owed.dueDate } : {}),
       ...(item.appliesToDocumentId ? { appliesToDocumentId: item.appliesToDocumentId } : {}),
       fromEntry: { kind: apiKind(item.entry.kind), id: item.entry.id },
       pricesIncludeVat: true,
-      lines: [{ description, kind: 'SERVICE', quantity: '1', unitPrice: formatMoney({ minor: item.amountMinor, currency: 'ILS' }), pricesIncludeVat: true }],
+      lines: [{ description, kind: 'SERVICE', quantity: '1', unitPrice: formatMoney({ minor: item.amountMinor, currency: base }), pricesIncludeVat: true }],
     } as IssueRequest;
   }
 
@@ -148,7 +150,7 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
       const organization = await issuingProfile(c, false);
       const q = c.req.valid('query');
       const inputs = await store.issuing.dueInputs(organization.id);
-      const all: ViewItem[] = q.view === 'not-for-invoice' ? notForInvoiceItems(inputs) : documentsDue(inputs);
+      const all: ViewItem[] = q.view === 'not-for-invoice' ? notForInvoiceItems(inputs) : documentsDue(inputs, await issuerPackOf(store, organization.id));
       const items = olderThan(all, q.olderThanMonths, todayFor(organization, c.get('now')()));
       return c.json({ view: q.view, groups: grouped(items), counts: countsOf(items) }, 200);
     },
@@ -167,7 +169,7 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
     }),
     async (c) => {
       const organization = await issuingProfile(c, false);
-      return c.json({ total: documentsDue(await store.issuing.dueInputs(organization.id)).length }, 200);
+      return c.json({ total: documentsDue(await store.issuing.dueInputs(organization.id), await issuerPackOf(store, organization.id)).length }, 200);
     },
   );
 
@@ -188,7 +190,7 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
       const body = c.req.valid('json');
       const batchKey = c.req.valid('header')['idempotency-key'];
       const today = todayFor(organization, c.get('now')());
-      const due = documentsDue(await store.issuing.dueInputs(organization.id));
+      const due = documentsDue(await store.issuing.dueInputs(organization.id), await issuerPackOf(store, organization.id));
       const results = [];
       // MUT-731 (ADR-284, eng review #15): the plan's monthly documents ran out partway; the rest are refused, not tried.
       let limit: PlanLimitDetails | null = null;
@@ -231,31 +233,32 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
    */
   async function payTaxInvoice(c: Context<AppEnv>, organization: Organization, owed: ReceivableRecord, body: z.infer<typeof SettleReceivableRequestSchema>, issue: boolean | undefined, key: string) {
     const document = owed.originId ? await store.issuing.getById(organization.id, owed.originId) : null;
-    if (!document || document.docType !== 'TAX_INVOICE' || owed.currency !== 'ILS') throw new ApiError('NOT_FOUND', 'No such receivable');
+    const base = (await issuerPackOf(store, organization.id)).currency.base as Currency;
+    if (!document || document.docType !== 'TAX_INVOICE' || owed.currency !== base) throw new ApiError('NOT_FOUND', 'No such receivable');
     if (issue === false) throw new ApiError('VALIDATION_FAILED', 'A payment on a tax invoice is recorded by its receipt', { field: 'issue', reason: 'PAYMENT_NEEDS_DOCUMENT' });
     const { user } = sessionAuth(c);
     const today = todayFor(organization, c.get('now')());
     const outstanding = outstandingMinor(owed);
-    const amountMinor = body.amount ? parseAmount(body.amount, 'ILS') : outstanding;
+    const amountMinor = body.amount ? parseAmount(body.amount, base) : outstanding;
     if (amountMinor <= 0n) throw validationError('AMOUNT_INVALID', 'amount must be positive', { field: 'amount' });
     const issuer = await store.issuing.getIssuer(organization.id);
     const language = languageOf(issuer?.defaultLanguage ?? 'he');
     const request = {
       docType: 'RECEIPT',
       documentDate: today,
-      currency: 'ILS',
+      currency: base,
       language,
       customerId: owed.customerId,
       appliesToDocumentId: document.id,
       payment: { method: body.method ?? 'CASH', receivedOn: body.paidAt ? pastMoneyDate(body.paidAt, today, 'paidAt') : today },
       pricesIncludeVat: true,
-      lines: [{ description: owed.title?.trim() || DEFAULT_LINE_DESCRIPTION[language], kind: 'SERVICE', quantity: '1', unitPrice: formatMoney({ minor: amountMinor, currency: 'ILS' }), pricesIncludeVat: true }],
+      lines: [{ description: owed.title?.trim() || DEFAULT_LINE_DESCRIPTION[language], kind: 'SERVICE', quantity: '1', unitPrice: formatMoney({ minor: amountMinor, currency: base }), pricesIncludeVat: true }],
     } as IssueRequest;
     const { document: receipt } = await issueOne(c, organization, request, paymentDocumentKey(key, owed.id));
     const [paid, payment] = await Promise.all([store.receivables.getById(organization.id, owed.id), receipt.paymentId ? store.payments.getById(organization.id, receipt.paymentId) : null]);
     if (!paid || !payment) throw new ApiError('INTERNAL', 'The receipt’s payment vanished');
-    const allocations = (await store.payments.listAllocations(organization.id, payment.id)).map((a) => serializeAllocation(a, paid, 'ILS', today));
-    await audit(c, 'payment.recorded', 'payment', payment.id, { number: payment.number, receivableId: owed.id, amount: formatMoney({ minor: amountMinor, currency: 'ILS' }), currency: 'ILS' });
+    const allocations = (await store.payments.listAllocations(organization.id, payment.id)).map((a) => serializeAllocation(a, paid, base, today));
+    await audit(c, 'payment.recorded', 'payment', payment.id, { number: payment.number, receivableId: owed.id, amount: formatMoney({ minor: amountMinor, currency: base }), currency: base });
     return c.json({ receivable: serializeReceivable(paid, today), payment: serializePayment(payment, allocations, null, { userId: user.id, displayName: user.displayName }), issue: { status: 'issued' as const, reason: null, document: serializeIssuedDocument(receipt) } }, 201);
   }
 
@@ -291,7 +294,7 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
         const document = await store.issuing.getById(organization.id, existing.id);
         if (document) return done('issued', null, document);
       }
-      const item = documentsDue(await store.issuing.dueInputs(organization.id)).find((d) => d.entry.kind === 'payment' && d.entry.id === paymentId);
+      const item = documentsDue(await store.issuing.dueInputs(organization.id), await issuerPackOf(store, organization.id)).find((d) => d.entry.kind === 'payment' && d.entry.id === paymentId);
       if (!item) return done('not_due', 'NOT_DUE', null);
       if (!item.issuable) return done('failed', item.reason ?? 'NOT_ISSUABLE', null);
       try {

@@ -1,5 +1,5 @@
-import { validationError } from '../agreements/compose.js';
-import type { VatTreatment } from '../vat.js';
+import { validationError } from '../../agreements/compose.js';
+import type { VatTreatment } from '../../vat.js';
 
 /**
  * MUT-557 (ADR-246): the Israeli allocation number (מספר הקצאה) a tax invoice above the threshold must carry for its

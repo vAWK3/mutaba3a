@@ -5,6 +5,7 @@ import { buildStatement } from '../../statements/build.js';
 import { ledgerEntries } from '../../statements/lines.js';
 import { summarizePeriod } from '../../statements/period.js';
 import type { IssueDocumentInput, LedgerStore, Organization } from '../ports.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
 
 const ISSUER_DEFAULTS = { country: 'IL', ink: 'BLACK', documentStyle: 'PROFESSIONAL', defaultLanguage: 'he', paymentTermsDays: null, bankDetails: null, footerNote: null, offerAfterSave: true, defaultDocumentsPreference: 'ON_PAYMENT' as const };
 
@@ -23,7 +24,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
     const customer = await store.customers.create({ organizationId: a.id, name: 'Acme Digital Ltd.', email: null, phone: null, notes: null }, at(0));
     const other = await store.customers.create({ organizationId: a.id, name: 'Galil Services', email: null, phone: null, notes: null }, at(0));
     const compose = (over: Partial<ComposeInput> = {}) =>
-      composeDocument({
+      composeDocument({ pack: IL_PACK,
         docType: 'TAX_INVOICE',
         currency: 'ILS',
         documentDate: '2026-11-22',
@@ -519,7 +520,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const owed = await recorded(store, w, 1_180);
       const payment = await captured(store, w, 300);
       await store.customers.update(w.a.id, w.customer.id, w.customer.version, { documentsPreference: 'TAX_INVOICE_FIRST' }, at(1));
-      const due = async () => documentsDue(await store.issuing.dueInputs(w.a.id)).map((d) => `${d.entry.kind}:${d.kind}`);
+      const due = async () => documentsDue(await store.issuing.dueInputs(w.a.id), IL_PACK).map((d) => `${d.entry.kind}:${d.kind}`);
       expect(await due()).toEqual(['receivable:TAX_INVOICE', 'payment:TAX_INVOICE_RECEIPT']);
       const invoice = await w.issued(store, w.issue({ fromEntry: { kind: 'receivable', id: owed.id } }));
       const inputs = await store.issuing.dueInputs(w.a.id);
@@ -648,7 +649,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
       const store = await makeStore();
       const w = await world(store);
       const input = w.issue();
-      const composed = composeDocument({ docType: 'TAX_INVOICE', currency: 'ILS', documentDate: '2026-11-22', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: true, lines: [{ description: 'All in', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(1_180), discountMinor: 0n }, { description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(50), discountMinor: 0n, vatExempt: true }] });
+      const composed = composeDocument({ pack: IL_PACK, docType: 'TAX_INVOICE', currency: 'ILS', documentDate: '2026-11-22', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: true, lines: [{ description: 'All in', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(1_180), discountMinor: 0n }, { description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(50), discountMinor: 0n, vatExempt: true }] });
       const doc = await w.issued(store, { ...input, composed });
       expect(doc).toMatchObject({ pricesIncludeVat: true, grossMinor: shekels(1_230), vatMinor: shekels(180) });
       expect(doc.lines.map((l) => [l.pricesIncludeVat, l.vatRateBasisPoints])).toEqual([[true, 1800], [false, 0]]);
@@ -688,7 +689,7 @@ export function describeLedgerStoreIssuingContract(name: string, makeStore: () =
     it('an all-exempt document posts an EXEMPT Owed (review fix 4)', async () => {
       const store = await makeStore();
       const w = await world(store);
-      const composed = composeDocument({ docType: 'TAX_INVOICE', currency: 'ILS', documentDate: '2026-11-22', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(50), discountMinor: 0n, vatExempt: true }] });
+      const composed = composeDocument({ pack: IL_PACK, docType: 'TAX_INVOICE', currency: 'ILS', documentDate: '2026-11-22', dealerType: 'COMPANY', documentDiscountMinor: 0n, pricesIncludeVat: false, lines: [{ description: 'Fee', kind: 'SERVICE', quantityMilli: 1_000n, unitPriceMinor: shekels(50), discountMinor: 0n, vatExempt: true }] });
       const doc = await w.issued(store, { ...w.issue(), composed });
       expect(await store.receivables.getById(w.a.id, doc.receivableId!)).toMatchObject({ vatTreatment: 'EXEMPT', vatMinor: 0n, grossMinor: shekels(50) });
     });

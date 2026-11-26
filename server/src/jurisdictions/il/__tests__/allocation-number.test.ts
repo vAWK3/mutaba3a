@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ApiError } from '../../errors.js';
+import { ApiError } from '../../../errors.js';
 import { aboveAllocationThreshold, ALLOCATION_THRESHOLDS, allocationNumberRequired, normalizeAllocationNumber, readAllocationDigits, thresholdOn } from '../allocation-number.js';
 
 /** MUT-557 (D1, D4, R1): the Tax Authority's dated thresholds, before VAT, by the invoice's date; at the threshold counts. */

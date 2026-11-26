@@ -1,4 +1,5 @@
 import type { IsoDate } from '../dates.js';
+import { defaultPack } from '../jurisdictions/index.js';
 import type { IssuingRetentionEventRecord, JsonObject } from '../repositories/ports.js';
 
 /**
@@ -14,7 +15,8 @@ import type { IssuingRetentionEventRecord, JsonObject } from '../repositories/po
  * "Today" is the UTC day: UTC midnight is already 02:00 or 03:00 in Israel, so nothing is ever deleted before its day
  * there.
  */
-export const ISSUING_RETENTION_YEARS = 7;
+/** MUT-741: the Israel pack's keep period. Document rows carry no jurisdiction until MUT-742, so this is the default pack's. */
+export const ISSUING_RETENTION_YEARS = defaultPack().retention.years;
 
 /**
  * The 7-year keep notice in the archive's README (D6 as amended). An erasure may shorten the 7 years only after an
@@ -47,7 +49,7 @@ export function sweepCutoff(now: Date): IsoDate {
   return isoOf(Date.UTC(now.getUTCFullYear() - ISSUING_RETENTION_YEARS, now.getUTCMonth(), now.getUTCDate()));
 }
 
-const ISRAEL_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Jerusalem', year: 'numeric', month: '2-digit', day: '2-digit' });
+const ISRAEL_DAY = new Intl.DateTimeFormat('en-CA', { timeZone: defaultPack().timezone, year: 'numeric', month: '2-digit', day: '2-digit' });
 
 /** A cancellation's date, as the business saw it (its documents are dated in Israel). */
 export function israelDateOf(at: Date): IsoDate {

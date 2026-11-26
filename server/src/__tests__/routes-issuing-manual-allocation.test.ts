@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { FakeTaxAuthority } from '../israel/tax-authority/__tests__/fake-client.js';
-import { DEFAULT_MANUAL_ALLOCATION_URL } from '../israel/tax-authority/service.js';
-import { TokenBox } from '../israel/tax-authority/token-box.js';
+import { FakeTaxAuthority } from '../jurisdictions/il/tax-authority/__tests__/fake-client.js';
+import { DEFAULT_MANUAL_ALLOCATION_URL } from '../jurisdictions/il/tax-authority/service.js';
+import { TokenBox } from '../jurisdictions/il/tax-authority/token-box.js';
 import { ADMIN, accountantHarness, businessOf, idem, json, person, read, type AccountantHarness } from './helpers/accountants.js';
 
 /**

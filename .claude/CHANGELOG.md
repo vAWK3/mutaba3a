@@ -28,6 +28,22 @@
 
 ---
 
+## [Unreleased] - 2026-11-26 — Israel is the first jurisdiction pack (MUT-741, ADR-287 D2, no API change)
+
+Epic MUT-738. A behaviour-preserving move: Israel's invoicing rules now sit behind a `JurisdictionPack` picked by the issuer's country, so a second country is a new pack, not edits in the core. Plan `.claude/designs/MUT-741-il-pack.md` (eng-reviewed). No migration, no API or client change.
+
+### Added
+- `server/src/jurisdictions/`: `pack.ts` (the `JurisdictionPack` interface: country, version, timezone, currency, tax ID, document types, dealer rules, VAT table, retention years, expense allocation rules, clearance, statutory file), `registry.ts` (`packFor`, `defaultPack`, `hasPack`, `assertPacksFor`, test hook `registerPackForTests`), `index.ts` (the one door), `il/` (the Israel pack `IL_PACK` 1.0.0, `documents.ts`, `vat.ts`).
+- `issuing/issuer-pack.ts` (`issuerPackOf`); `boot`: `assertPacksFor(INVOICING_JURISDICTIONS)` refuses a live country with no pack.
+- Issue and cancel audit entries carry `{ coreVersion, jurisdiction, packVersion }` (the per-document column is MUT-742).
+- Tests: `jurisdictions/__tests__/golden.test.ts` (hashes of composed documents for every type and the uniform file, recorded on the base before the move), `il-pack.contract.test.ts`, `boundary.test.ts` (no import of `jurisdictions/il/**` outside the pack, the door and a named allowlist; `defaultPack()` only from a named list; no import cycle; no `'ILS'` in the issuing core).
+
+### Changed
+- `israel/*` and `issuing/uniform-file/` moved (git mv) to `jurisdictions/il/`; `issuing/vat-rate.ts` to `jurisdictions/il/vat.ts`. The Tax Authority client, token box and registry lookup are reached through `jurisdictions/index.ts`.
+- `composeDocument` takes `pack`; `documentsDue(input, pack)`; the `'ILS'` literals in `routes/issuing.ts` and `routes/documents-due.ts` are the pack's base currency; `DOC_TYPE_CODES`, `ISSUING_CURRENCIES`, `VAT_BEARING`, `TAX_DOCUMENTS` left `issuing/types.ts` (document sort order is `DOC_TYPE_RANK`, held equal to the Israeli code order by a test).
+- `ISSUING_CORE_VERSION` stays 1.0.0 (it is the uniform file's software version: a bump would change its bytes).
+- Existing tests: compose and fixture calls pass `IL_PACK`; the MUT-740 second-country route tests register a stand-in pack.
+
 ## [Unreleased] - 2026-11-26 — The issuer's country, and no issuing where no pack is live (MUT-740, ADR-287 D1 and D4, API 1.147.0-mut740)
 
 Epic MUT-738 (jurisdiction packs). Closes the gap that, with `INVOICING_FOR_ALL` on, any business anywhere could issue an Israeli tax invoice. Plan `.claude/designs/MUT-740-issuer-country.md`; the phone's country field is a follow-up (TD-347).

@@ -1,18 +1,17 @@
 /**
- * MUT-568 (ADR-260): the issuing core's vocabulary. Codes are the Tax Authority's: the uniform file (מבנה אחיד 1.31)
- * and the allocation API use the same numbers.
+ * MUT-568 (ADR-260): the issuing core's vocabulary. MUT-741 (ADR-287): the vocabulary is country-neutral; what a type
+ * is called by a tax authority (its code), whether it carries VAT and whether it is a tax document are the issuer's
+ * jurisdiction pack's rules (`pack.documentTypes`).
  */
-export const DOC_TYPE_CODES = {
-  TAX_INVOICE: 305,
-  TAX_INVOICE_RECEIPT: 320,
-  CREDIT_NOTE: 330,
-  RECEIPT: 400,
-  /** MUT-662: חשבון עסקה. Not a tax document: never allocated, never in VAT or the tax-document totals. */
-  PAYMENT_REQUEST: 300,
-} as const;
+export const ISSUED_DOC_TYPES = ['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'RECEIPT', 'PAYMENT_REQUEST'] as const;
+export type IssuedDocType = (typeof ISSUED_DOC_TYPES)[number];
 
-export type IssuedDocType = keyof typeof DOC_TYPE_CODES;
-export const ISSUED_DOC_TYPES = Object.keys(DOC_TYPE_CODES) as IssuedDocType[];
+/**
+ * The order lists and files put document types in: ascending by the Israeli code (300, 305, 320, 330, 400), kept as a
+ * core sort so no listing order depends on a country. `jurisdictions/__tests__/il-pack.contract.test.ts` fails if it
+ * drifts from the Israel pack's codes.
+ */
+export const DOC_TYPE_RANK: Readonly<Record<IssuedDocType, number>> = { PAYMENT_REQUEST: 0, TAX_INVOICE: 1, TAX_INVOICE_RECEIPT: 2, CREDIT_NOTE: 3, RECEIPT: 4 };
 
 /** LICENSED = עוסק מורשה, EXEMPT = עוסק פטור (issues receipts only), COMPANY = חברה, NONPROFIT = עמותה. */
 export const DEALER_TYPES = ['LICENSED', 'EXEMPT', 'COMPANY', 'NONPROFIT'] as const;
@@ -29,17 +28,5 @@ export const INK_COLOURS = ['BLACK', 'BLUE'] as const;
 export const LINE_KINDS = ['GOODS', 'SERVICE'] as const;
 export type LineKind = (typeof LINE_KINDS)[number];
 
-/** D4: shekels only in v1; a foreign-currency invoice needs the representative rate and ILS VAT (follow-up). */
-export const ISSUING_CURRENCIES = ['ILS'] as const;
-
 export const MAX_LINES = 200;
 export const MAX_DESCRIPTION_LENGTH = 300;
-
-/** Tax invoices and their credit notes carry VAT; receipts record money received and carry none. */
-export const VAT_BEARING: ReadonlySet<IssuedDocType> = new Set(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE', 'PAYMENT_REQUEST']);
-
-/**
- * MUT-662: the tax documents (VAT and tax totals count only these). A payment request shows VAT so the invoice-receipts
- * that follow match it, but it is not one of them.
- */
-export const TAX_DOCUMENTS: ReadonlySet<IssuedDocType> = new Set(['TAX_INVOICE', 'TAX_INVOICE_RECEIPT', 'CREDIT_NOTE']);

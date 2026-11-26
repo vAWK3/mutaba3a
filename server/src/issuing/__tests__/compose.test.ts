@@ -2,14 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { ApiError } from '../../errors.js';
 import { composeDocument, parseQuantity, type ComposeInput } from '../compose.js';
 import { copyLabel } from '../copies.js';
-import { standardVatRateOn } from '../vat-rate.js';
-import { DOC_TYPE_CODES, ISSUED_DOC_TYPES, TAX_DOCUMENTS, VAT_BEARING } from '../types.js';
+import { IL_DOC_TYPE_CODES as DOC_TYPE_CODES } from '../../jurisdictions/il/documents.js';
+import { IL_PACK } from '../../jurisdictions/il/index.js';
+import { standardVatRateOn } from '../../jurisdictions/il/vat.js';
+import { ISSUED_DOC_TYPES } from '../types.js';
 
 /** MUT-568: the issuing core's pure rules — line math, VAT, discounts and who may issue what. */
 
 const shekels = (n: number): bigint => BigInt(Math.round(n * 100));
 
-const base = (over: Partial<ComposeInput> = {}): ComposeInput => ({
+const base = (over: Partial<Omit<ComposeInput, 'pack'>> = {}): ComposeInput => ({
+  pack: IL_PACK,
   docType: 'TAX_INVOICE',
   currency: 'ILS',
   documentDate: '2026-11-22',
@@ -225,7 +228,7 @@ describe('MUT-662: payment request', () => {
   });
 
   it('is not a tax document: VAT and tax totals leave it out', () => {
-    expect(TAX_DOCUMENTS.has('PAYMENT_REQUEST')).toBe(false);
-    expect(VAT_BEARING.has('PAYMENT_REQUEST')).toBe(true);
+    expect(IL_PACK.documentTypes.PAYMENT_REQUEST.taxDocument).toBe(false);
+    expect(IL_PACK.documentTypes.PAYMENT_REQUEST.vatBearing).toBe(true);
   });
 });

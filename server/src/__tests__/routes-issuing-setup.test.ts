@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { IL_PACK } from '../jurisdictions/il/index.js';
+import { registerPackForTests } from '../jurisdictions/index.js';
 import { ISSUER_LOGO_MAX_BYTES } from '../routes/issuing.js';
 import { ADMIN, issuingHarness, businessOf, idem, json, person, read, shared, type AccountantHarness } from './helpers/accountants.js';
 
@@ -202,6 +204,13 @@ describe('invoicing setup (MUT-646)', () => {
  * issues nothing; the country is locked by the first document; an Israeli number's check digit counts.
  */
 describe('the issuer’s country (MUT-740)', () => {
+  // A hypothetical second country with its own pack (MUT-741: a live country must have one), taking tax IDs as typed.
+  const JO_PACK = { ...IL_PACK, country: 'JO', taxId: { normalize: (raw: string): string | null => raw } };
+  let unregister: () => void;
+  beforeAll(() => {
+    unregister = registerPackForTests(JO_PACK);
+  });
+  afterAll(() => unregister());
   const put = (h: AccountantHarness, on: Record<string, string>, body: Record<string, unknown>, headers: Record<string, string> = {}) => h.app.request('/v1/issuer', json(body, { ...on, ...headers }, 'PUT'));
   const reason = async (res: Response) => (await read(res)).error.details;
 
