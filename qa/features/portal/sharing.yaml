@@ -39,11 +39,10 @@ features:
     steps:
       - Open Sharing on Studio, which has an active, a pending and an expired accountant
     expect:
-      - The title reads Sharing Studio, with the note that whoever you share with reads only and changes nothing
+      - The title reads Sharing Studio
       - Sami Khoury is Active, "Since … · viewed 2 days ago", with Stop
       - maya@ledger.co is Pending, "Sent … · ends …", with Cancel
       - h.audit@firm.com is Expired, with Invite again
-      - Under the list, "Up to 5 accountants per profile."
       - No Links column while share links are off (the list answers 404)
   - id: invite
     title: Invite an accountant by email, in the portal's language, with every refusal in its place

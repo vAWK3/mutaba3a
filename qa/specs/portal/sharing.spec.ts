@@ -112,7 +112,6 @@ test("the Accountants column shows each accountant's state and one action", { ta
     await expect(hala).toContainText('Expired');
     await expect(hala.getByRole('button', { name: 'Invite h.audit@firm.com again' })).toBeVisible();
 
-    await expect(page.getByText('Up to 5 accountants per profile.')).toBeVisible();
     await expect(page.getByRole('heading', { name: /Links/ })).toHaveCount(0);
   });
 });

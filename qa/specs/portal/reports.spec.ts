@@ -252,7 +252,7 @@ test('A young profile\'s teaser offers the combined insights the older profiles 
 
   await step('Open Reports on the profile started this month', async () => {
     await openReports(page, api);
-    await expect(page.locator('.hp-teaser')).toContainText(`Personal started in ${named(THIS_MONTH)}; insights unlock in ${named(month(1))}.`);
+    await expect(page.locator('.hp-teaser')).toContainText(`Insights for Personal unlock in ${named(month(1))}.`);
   });
 
   await step('Choose "See insights across all profiles"', async () => {

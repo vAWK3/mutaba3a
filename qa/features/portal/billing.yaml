@@ -109,7 +109,7 @@ features:
       - Sign in after the subscription ended
       - Open Receivables
     expect:
-      - The banner says the subscription ended, nothing is deleted, and Subscribe starts it again
+      - The banner says the subscription ended, and Subscribe starts it again
       - There is no Add income
   - id: trial-line
     title: On Owed a running trial is one quiet line, "N days left in your free trial · Add a card · Hide for 3 days", in English and in Arabic on a phone (MUT-426 D4)

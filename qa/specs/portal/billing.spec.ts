@@ -172,7 +172,7 @@ test('A cancelled subscription leaves the profile read-only for good, and says i
 
   await step('Open Receivables after the subscription ended', async () => {
     const banner = page.getByRole('region', { name: 'Your plan' });
-    await expect(banner.getByText(/Your subscription has ended\..*Nothing is deleted\./)).toBeVisible();
+    await expect(banner.getByText(/^Your subscription has ended\. Subscribe again to keep going\.$/)).toBeVisible();
     await expect(banner.getByRole('button', { name: 'Subscribe' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Add income' })).toHaveCount(0);
   });

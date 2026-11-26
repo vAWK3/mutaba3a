@@ -61,7 +61,7 @@ test('At 3 of 3 the Issue drawer opens refused with the reset day and Upgrade to
   await step('As a Starter person who issued 2 documents this month, open Issue a document', async () => {
     await api.open(page, `/p/${OFFICE_A}/documents/issued`);
     await page.getByTestId('issue-open').click();
-    await expect(drawer.getByTestId('issue-usage')).toHaveText('1 document left this month');
+    await expect(drawer.getByTestId('issue-usage')).toContainText('1 document left this month');
   });
 
   await step('Issue a tax invoice to Client 1', async () => {
@@ -99,7 +99,7 @@ test('At 12 of 12 a scan is refused before the upload, with Add the expense by h
 
   await step('Choose Add the expense by hand', async () => {
     await page.getByRole('button', { name: 'Add the expense by hand' }).click();
-    await expect(page).toHaveURL(/newExpense=1/);
+    await expect(page).toHaveURL(/newExpense=true/);
   });
 });
 

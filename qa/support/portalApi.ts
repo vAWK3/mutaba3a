@@ -906,7 +906,8 @@ export class FakeApi {
     this.reports = { ...(seed.reports ?? {}) };
     this.verdicts = { ...(seed.verdicts ?? {}) };
     this.signedIn = seed.signedIn ?? true;
-    this.billingStanding = seed.billingStanding ?? null;
+    // MUT-731: Starter runs with the lapse gate on (a business over the count is READ_ONLY), so /v1/me has a verdict.
+    this.billingStanding = seed.billingStanding ?? (seed.starter ? 'open' : null);
     this.billingOverview = seed.billing ?? null;
     this.starter = seed.starter ? { ...seed.starter, documents: seed.starter.documents ?? 0, scans: seed.starter.scans ?? 0 } : null;
     this.profiles = seed.profiles.map((stub) => ({ stub, defaultCurrency: 'ILS', version: 1 }));
