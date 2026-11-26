@@ -184,45 +184,44 @@ describe('the Tax Authority step (MUT-571 follow-ups)', () => {
 });
 
 /**
- * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step says so, offers the
- * upgrade instead of Connect, and a kept connection reads as paused, coming back on Solo with no new setup.
+ * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step offers the upgrade
+ * instead of Connect, and a kept connection can still be disconnected. No explanatory lines (Basel, 2026-11-26).
  */
 describe('the Tax Authority step on a plan without the connection (MUT-736)', () => {
   const NOT_ON_PLAN = { allowed: false, nextPlan: 'solo' } as const;
   const ALLOWED = { allowed: true, nextPlan: null } as const;
   afterEach(() => window.history.replaceState(null, '', '/'));
 
-  it('says the connection is on Solo and above, offers Upgrade to Solo (Billing) and no Connect', async () => {
+  it('offers Upgrade to Solo (Billing) and no Connect, with no explanatory line', async () => {
     api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
-    expect(await screen.findByTestId('tax-authority-plan')).toHaveTextContent('The Tax Authority connection is on Solo and above');
+    await waitFor(() => expect(screen.getByTestId('tax-authority-step')).toHaveAttribute('data-plan-allowed', 'false'));
     expect(screen.queryByTestId('tax-authority-connect')).toBeNull();
+    expect(screen.queryByText(/Solo and above/)).toBeNull();
     await userEvent.setup().click(screen.getByRole('button', { name: 'Upgrade to Solo' }));
     expect(drawers.openBilling).toHaveBeenCalledWith();
   });
 
-  it('a kept connection reads paused, says it comes back with no new setup, and can still be disconnected', async () => {
+  it('a kept connection (suspended) can still be disconnected', async () => {
     api.taxStatus.mockResolvedValue({ state: 'suspended', connectedAt: new Date().toISOString(), until: null, environment: 'sandbox', plan: NOT_ON_PLAN });
     api.taxDisconnect.mockResolvedValue(undefined);
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
-    expect(await screen.findByTestId('tax-authority-plan')).toHaveTextContent('paused on your plan');
-    expect(screen.getByTestId('tax-authority-plan')).toHaveTextContent('with no new setup');
+    await waitFor(() => expect(screen.getByTestId('tax-authority-step')).toHaveAttribute('data-state', 'suspended'));
     await userEvent.setup().click(screen.getByRole('button', { name: 'Disconnect' }));
     expect(api.taxDisconnect).toHaveBeenCalledWith('p1');
   });
 
-  it('in Arabic it names the plan «مستقل»', async () => {
+  it('in Arabic the button names «مستقل»', async () => {
     api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />, 'ar');
-    expect(await screen.findByTestId('tax-authority-plan')).toHaveTextContent('متاح في خطة «مستقل» وما فوقها');
-    expect(screen.getByRole('button', { name: 'الترقية إلى «مستقل»' })).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'الترقية إلى «مستقل»' })).toBeVisible();
   });
 
   it('back from a connect the plan no longer allowed: says nothing was connected', async () => {
     window.history.replaceState(null, '', '/p/p1/you/invoicing?taxAuthority=plan');
     api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: NOT_ON_PLAN });
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
-    expect(await screen.findByTestId('tax-authority-returned')).toHaveTextContent('Nothing was connected');
+    expect(await screen.findByTestId('tax-authority-returned')).toHaveTextContent('Nothing was connected.');
   });
 
   it('a PLAN_LIMIT refusal on Connect (the plan changed meanwhile) reads the status again instead of a generic failure', async () => {
@@ -230,16 +229,14 @@ describe('the Tax Authority step on a plan without the connection (MUT-736)', ()
     api.taxConnect.mockRejectedValue(new ApiError(409, 'PLAN_LIMIT', 'The Tax Authority connection is on Solo and above', { limit: 'taxAuthority', plan: 'starter', nextPlan: 'solo', canUpgrade: true }));
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
     await userEvent.setup().click(await screen.findByTestId('tax-authority-connect'));
-    expect(await screen.findByTestId('tax-authority-plan')).toBeVisible();
+    expect(await screen.findByRole('button', { name: 'Upgrade to Solo' })).toBeVisible();
     expect(screen.queryByText('The changes could not be saved. Please try again.')).toBeNull();
   });
 
-  it('on a paid plan it says the connection is included on Solo and above, beside Connect', async () => {
+  it('on a paid plan it offers Connect and no upgrade', async () => {
     api.taxStatus.mockResolvedValue({ state: 'none', connectedAt: null, until: null, environment: null, plan: ALLOWED });
     wrap(<TaxAuthorityStep profileId="p1" onDone={() => undefined} />);
     expect(await screen.findByTestId('tax-authority-connect')).toBeVisible();
-    expect(screen.getByText('The connection is included on Solo and above.')).toBeVisible();
-    expect(screen.queryByTestId('tax-authority-plan')).toBeNull();
+    expect(screen.queryByTestId('tax-authority-upgrade')).toBeNull();
   });
 });
-

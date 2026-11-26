@@ -63,18 +63,9 @@ describe('ManualAllocationPanel', () => {
     expect(screen.getByRole('heading', { name: 'تحتاج هذه الفاتورة إلى رقم تخصيص' })).toBeVisible();
   });
 
-  it('MUT-736: on a plan without the Tax Authority connection it says numbers come automatically on Solo', () => {
+  it('MUT-736: on Starter (automaticOn set) the panel is the same, with no explanatory line', () => {
     renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } });
-    expect(screen.getByTestId('issue-allocation-automatic-on')).toHaveTextContent('Connect to the Tax Authority to get numbers automatically, on Solo.');
-  });
-
-  it('MUT-736: in Arabic, «مستقل»; and no such line when the plan is not why', () => {
-    renderPanel({ allocation: { ...ALLOCATION, automaticOn: 'solo' } }, 'ar');
-    expect(screen.getByTestId('issue-allocation-automatic-on')).toHaveTextContent('في خطة «مستقل»');
-  });
-
-  it('MUT-736: no line when automaticOn is null', () => {
-    renderPanel();
-    expect(screen.queryByTestId('issue-allocation-automatic-on')).toBeNull();
+    expect(screen.getByRole('heading', { name: 'This invoice needs an allocation number' })).toBeVisible();
+    expect(screen.queryByText(/automatically/)).toBeNull();
   });
 });

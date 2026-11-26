@@ -236,7 +236,7 @@ const PAGE_WORDS = {
   connected: { en: 'Connected to the Tax Authority. You can close this window and go back to MTB3A.', ar: 'تم الربط بسلطة الضرائب. يمكنك إغلاق هذه النافذة والعودة إلى متابعة.' },
   refused: { en: 'The connection was not approved on the Tax Authority’s site. Close this window and choose Connect to the Tax Authority again when you are ready.', ar: 'لم تتم الموافقة على الربط في موقع سلطة الضرائب. أغلق هذه النافذة واختر «الربط بسلطة الضرائب» مجددًا حين تكون مستعدًا.' },
   failed: { en: 'The connection to the Tax Authority did not complete. Close this window and try again.', ar: 'لم يكتمل الربط بسلطة الضرائب. أغلق هذه النافذة وحاول مجددًا.' },
-  plan: { en: 'The Tax Authority connection is on Solo and above. Nothing was connected. Close this window and go back to MTB3A.', ar: 'الربط بسلطة الضرائب متاح في خطة «مستقل» وما فوقها. لم يُربط شيء. أغلق هذه النافذة وعُد إلى متابعة.' },
+  plan: { en: 'Nothing was connected. Close this window and go back to MTB3A.', ar: 'لم يُربط شيء. أغلق هذه النافذة وعُد إلى متابعة.' },
 } as const;
 
 /** The callback's own page, when there is no portal to return to: what happened, in Arabic first, then English. */

@@ -2244,11 +2244,6 @@
           "label": "Accountant access",
           "sub": "As an owner, they can invite an accountant to read a profile and make share links.",
           "confirmOff": "{email} can't invite accountants or make new links; the ones they already shared keep working until they revoke them."
-        },
-        "invoicing": {
-          "label": "Invoicing",
-          "sub": "Used only while invoicing is off for everyone (INVOICING_FOR_ALL). While it is on, every business profile issues.",
-          "confirmOff": "{email} stops issuing documents while invoicing is off for everyone. Documents already issued stay."
         }
       },
       "firms": {
@@ -3086,11 +3081,8 @@
         "returnedRefused": "The connection wasn't approved on the Tax Authority's site, so nothing was connected. Choose Connect to the Tax Authority to try again.",
         "endingSoon": "The connection to the Tax Authority ends on {until}. The Tax Authority asks for your approval again every 90 days: connect again now so invoices keep receiving allocation numbers.",
         "reconnect": "Connect again",
-        "plans": "The connection is included on Solo and above.",
-        "notOnPlan": "The Tax Authority connection is on {plan} and above. On your plan you can still issue any invoice: request the allocation number on the Tax Authority's site and type it in when you issue.",
-        "suspended": "Your connection to the Tax Authority is paused on your plan. Nothing was deleted: it comes back on {plan}, with no new setup.",
         "upgrade": "Upgrade to {plan}",
-        "returnedPlan": "Nothing was connected: the Tax Authority connection is on {plan} and above."
+        "returnedPlan": "Nothing was connected."
       },
       "ready": {
         "title": "Your letterhead is ready",
@@ -3261,8 +3253,7 @@
         "hint": "Request it for invoice number {number}. The number isn't held: if another document is issued first, you'll be asked to request it again.",
         "invalid": "An allocation number is 9 digits.",
         "orChange": "Or",
-        "changeAmount": "change the amount",
-        "automaticOn": "Connect to the Tax Authority to get numbers automatically, on {plan}."
+        "changeAmount": "change the amount"
       },
       "ask": {
         "title": "How do you issue documents to {client}?",

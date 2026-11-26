@@ -415,9 +415,9 @@ export function NumberingStep({ profileId, answered, counters, onPreview, onDone
  * own sign-in (the business owner signs in there; MTB3A never sees the password) and comes back here. A server without
  * the connection configured answers 404: the step then says it will be available. Ten days before the consent ends the
  * step says so and offers Connect again (the reminder mail links here); after, it reads as ended.
- * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step says so and offers the
- * upgrade (Billing) instead of Connect; a kept connection reads as paused (`suspended`), coming back on Solo with no new
- * setup, and can still be disconnected. A PLAN_LIMIT on Connect (the plan changed meanwhile) reads the status again.
+ * MUT-736 (ADR-282): the connection is on Solo and above. On a plan without it (Starter) the step offers the upgrade
+ * (Billing) instead of Connect, and a kept connection (`suspended`) can still be disconnected. No explanatory lines
+ * (Basel, 2026-11-26): only the actions. A PLAN_LIMIT on Connect (the plan changed meanwhile) reads the status again.
  */
 export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onDone: () => void }) {
   const t = useT();
@@ -469,7 +469,6 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
       ) : (
         <p>{t(state === 'expired' ? 'hosted.invoicing.taxAuthority.expired' : 'hosted.invoicing.taxAuthority.connectBody')}</p>
       )}
-      {status.data && <p className="hp-muted">{t('hosted.invoicing.taxAuthority.plans')}</p>}
       {(returned === 'failed' || returned === 'refused') && state !== 'connected' && (
         <p className="input-error-message" role="alert" data-testid="tax-authority-returned">
           {t(returned === 'refused' ? 'hosted.invoicing.taxAuthority.returnedRefused' : 'hosted.invoicing.taxAuthority.returnedFailed')}
@@ -500,23 +499,17 @@ export function TaxAuthorityStep({ profileId, onDone }: { profileId: string; onD
   );
 }
 
-/**
- * MUT-736: the step on a plan without the connection. What the plan means (or that a kept connection is paused), the
- * upgrade to the plan that has it, and Disconnect for a kept one. Issuing still works: numbers are typed by hand.
- */
+/** MUT-736: the step on a plan without the connection: the upgrade, Disconnect for a kept one, Later. */
 function NotOnPlan(props: { state: string | undefined; nextPlan: string | null; returned: string | null; busy: boolean; onDisconnect: () => void; onDone: () => void }) {
   const t = useT();
   const drawers = useAccountDrawers();
   const plan = t(`hosted.plan.name.${props.nextPlan ?? 'solo'}`);
   const suspended = props.state === 'suspended';
   return (
-    <div className="hp-setup-form" data-testid="tax-authority-step">
-      <p role="status" data-testid="tax-authority-plan">
-        {t(suspended ? 'hosted.invoicing.taxAuthority.suspended' : 'hosted.invoicing.taxAuthority.notOnPlan', { plan })}
-      </p>
+    <div className="hp-setup-form" data-testid="tax-authority-step" data-plan-allowed="false" data-state={props.state}>
       {props.returned === 'plan' && (
         <p className="input-error-message" role="alert" data-testid="tax-authority-returned">
-          {t('hosted.invoicing.taxAuthority.returnedPlan', { plan })}
+          {t('hosted.invoicing.taxAuthority.returnedPlan')}
         </p>
       )}
       <div className="hp-setup-actions">

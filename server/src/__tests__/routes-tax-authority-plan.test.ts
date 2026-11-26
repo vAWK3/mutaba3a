@@ -93,7 +93,7 @@ describe('the Tax Authority connection on Starter (MUT-736)', () => {
     expect(await h.store.issuing.getTaxConnection(w.profileId)).toBeNull();
   });
 
-  it('the callback’s own page (no portal to return to) says the connection is on Solo and above', async () => {
+  it('the callback’s own page (no portal to return to) says nothing was connected', async () => {
     const { h } = harness();
     const w = await profile(h);
     payerPlan = 'solo';
@@ -103,7 +103,7 @@ describe('the Tax Authority connection on Starter (MUT-736)', () => {
     const page = await h.app.request(`/v1/issuing/tax-authority/callback?code=good-code&state=${encodeURIComponent(state)}`);
     expect(page.status).toBe(200);
     const html = await page.text();
-    expect(html).toContain('Solo');
+    expect(html).toContain('Nothing was connected');
   });
 
   it('allocation decisions refuse with PLAN_LIMIT; disconnect always works', async () => {
