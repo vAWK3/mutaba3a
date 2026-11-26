@@ -160,7 +160,16 @@ export class FakeCheckoutGateway implements CheckoutGateway {
         this.prices.set(`${plan}_list_yearly_${tag}`, { id: `price_${plan}_y_${tag}`, currency, unitAmount: month * 10, interval: 'year', productId: `prod_${plan}` });
       }
     }
+    this.vatRateId = 'txr_il_vat';
     return this;
+  }
+
+  /** MUT-702 Part B: the Israeli VAT rate (withPlanPrices makes one). */
+  vatRateId: string | null = null;
+
+  async israelVatRateId(): Promise<string | null> {
+    this.calls.push('vatRate');
+    return this.vatRateId;
   }
 
   /** MUT-702 Part B: billing addresses saved on customers. */

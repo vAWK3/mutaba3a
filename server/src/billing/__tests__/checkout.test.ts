@@ -408,24 +408,33 @@ describe('plan Checkout (MUT-702 Part B)', () => {
   });
 
   it('a plan Checkout names its plan and seller, keeps the address we saved, and adds tax from it', () => {
-    const result = plan({ plan: 'solo', address: ADDRESS }, {}, SOLO);
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il' }, {}, SOLO);
     if (!result.ok) throw new Error('expected a plan');
     expect(result.currency).toBe('ILS');
-    expect(result.params.line_items).toEqual([{ price: 'price_solo_ils_m', quantity: 1 }]);
     expect(result.params.metadata).toEqual({ mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
     expect(result.params.subscription_data?.metadata).toEqual({ mutaba3a_user_id: USER, mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
     expect(result.params.customer_update).toEqual({ address: 'never', name: 'auto' });
     expect(result.params.billing_address_collection).toBe('auto');
-    expect(result.params.automatic_tax).toEqual({ enabled: true });
+  });
+
+  it('an Israeli address pays 18% VAT on top through our own tax rate (Stripe Tax has no Israel registration)', () => {
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il' }, {}, SOLO);
+    if (!result.ok) throw new Error('expected a plan');
+    expect(result.params.line_items).toEqual([{ price: 'price_solo_ils_m', quantity: 1, tax_rates: ['txr_il'] }]);
+    expect(result.params.automatic_tax).toEqual({ enabled: false });
+  });
+
+  it('an Israeli address with no VAT rate in Stripe is not sold (never without VAT)', () => {
+    expect(plan({ plan: 'solo', address: ADDRESS, israelVatRateId: null }, {}, SOLO)).toEqual({ ok: false, code: 'PRICES_NOT_SET' });
   });
 
   it('the address country sets the currency: USD outside Israel', () => {
     const result = plan({ plan: 'solo', country: 'GB', address: { ...ADDRESS, country: 'GB', city: 'London', postalCode: 'N1 9GU' } }, {}, SOLO);
-    expect(result).toMatchObject({ ok: true, currency: 'USD', params: { line_items: [{ price: 'price_solo_usd_m', quantity: 1 }] } });
+    expect(result).toMatchObject({ ok: true, currency: 'USD', params: { line_items: [{ price: 'price_solo_usd_m', quantity: 1 }], automatic_tax: { enabled: true } } });
   });
 
   it('the Solo trial: 14 days, a card always, cancelled without one; it replaces any carried trial', () => {
-    const result = plan({ plan: 'solo', address: ADDRESS, soloTrial: true, trialEndsAt: new Date(NOW.getTime() + 10 * DAY) }, {}, SOLO);
+    const result = plan({ plan: 'solo', address: ADDRESS, israelVatRateId: 'txr_il', soloTrial: true, trialEndsAt: new Date(NOW.getTime() + 10 * DAY) }, {}, SOLO);
     if (!result.ok) throw new Error('expected a plan');
     expect(SOLO_TRIAL_DAYS).toBe(14);
     expect(result.params.payment_method_collection).toBe('always');

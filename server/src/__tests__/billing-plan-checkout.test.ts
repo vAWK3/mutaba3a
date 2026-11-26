@@ -99,7 +99,9 @@ describe('POST /v1/billing/checkout-session for a plan (MUT-702 Part B)', () => 
     expect(res.status).toBe(200);
     expect((await read(res)).url).toMatch(/^https:\/\/checkout\.stripe\.com\//);
     const session = h.checkout.checkoutSessions.at(-1)!;
-    expect(session.line_items).toEqual([{ price: 'price_solo_m_ils', quantity: 1 }]);
+    // Stripe Tax has no Israel registration: 18% VAT on top through our own rate.
+    expect(session.line_items).toEqual([{ price: 'price_solo_m_ils', quantity: 1, tax_rates: ['txr_il_vat'] }]);
+    expect(session.automatic_tax).toEqual({ enabled: false });
     expect(session.metadata).toEqual({ mutaba3a_plan: 'solo', mutaba3a_seller: 'barmajiyat' });
     expect(session.customer_update).toEqual({ address: 'never', name: 'auto' });
     const customer = String(session.customer);
@@ -112,6 +114,17 @@ describe('POST /v1/billing/checkout-session for a plan (MUT-702 Part B)', () => 
     const u = await person(h);
     expect((await u.post(CHECKOUT, body({ plan: 'business', interval: 'year', country: 'JO', address: JO }))).status).toBe(200);
     expect(h.checkout.checkoutSessions.at(-1)!.line_items).toEqual([{ price: 'price_business_y_usd', quantity: 1 }]);
+    expect(h.checkout.checkoutSessions.at(-1)!.automatic_tax).toEqual({ enabled: true });
+  });
+
+  it('Israel is not sold while Stripe has no VAT rate: 503 PRICES_NOT_SET, nothing opened', async () => {
+    const h = harness();
+    h.checkout.vatRateId = null;
+    const u = await person(h);
+    const res = await u.post(CHECKOUT, body());
+    expect(res.status).toBe(503);
+    expect((await read(res)).error.details).toMatchObject({ reason: 'PRICES_NOT_SET' });
+    expect(h.checkout.checkoutSessions).toHaveLength(0);
   });
 
   it('a plan needs an address whose country is the request’s', async () => {

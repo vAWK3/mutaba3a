@@ -54,6 +54,13 @@ export const SELLER = 'barmajiyat' as const;
 export const SELLER_METADATA_KEY = 'mutaba3a_seller';
 /** The subscription metadata marking the one-time Solo trial, so the mirror can record it used. */
 export const TRIAL_METADATA_KEY = 'mutaba3a_trial';
+/**
+ * MUT-702 Part B (Basel, 2026-11-26): Israeli residents pay 18% VAT on top of the list price. Stripe Tax has no Israel
+ * registration (its API refuses `country_options[il]`), so it is a Stripe tax rate the catalog script makes, found by
+ * its metadata; every other country goes through Stripe Tax.
+ */
+export const ISRAEL_VAT = { country: 'IL', percentage: 18, metadataKey: 'mtb3a_vat' } as const;
+
 /** MUT-731 (Basel Q7): the Solo trial's length; a card up front. */
 export const SOLO_TRIAL_DAYS = 14;
 
@@ -163,6 +170,11 @@ export interface CheckoutInput {
   address?: BillingAddress | null;
   /** MUT-731 (Basel Q7): the one-time Solo trial (the route checked `soloTrialOpen`). */
   soloTrial?: boolean;
+  /**
+   * MUT-702 Part B: Stripe's 18% Israeli VAT rate (ISRAEL_VAT, made by the catalog script). Stripe Tax takes no Israel
+   * registration, so an Israeli address is taxed with this rate instead; null: Israel can't be sold yet.
+   */
+  israelVatRateId?: string | null;
 }
 
 /** MUT-525: what an offer adds to a Checkout: its coupon, its name in the metadata, and the pay-page line (R8). */
@@ -280,6 +292,8 @@ export function planCheckout(input: CheckoutInput, person: PersonBilling, countr
   const currency = currencyOf(input.country);
   const prices = catalog[currency];
   if (!prices) return { ok: false, code: 'PRICES_NOT_SET' };
+  // Never sell a plan in Israel without its VAT.
+  if (onSale && input.country === ISRAEL_VAT.country && !input.israelVatRateId) return { ok: false, code: 'PRICES_NOT_SET' };
   return { ok: true, currency, params: paramsOf(input, currency, prices[input.interval], countries) };
 }
 
@@ -363,9 +377,10 @@ function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: Catalo
   // Stripe's page shows it and can't change it (the currency was already chosen from it).
   const planMetadata = plan ? { [CHECKOUT_PLAN_METADATA_KEY]: plan, [SELLER_METADATA_KEY]: SELLER } : null;
   const trialData = soloTrial ? { trial_period_days: SOLO_TRIAL_DAYS, trial_settings: { end_behavior: { missing_payment_method: 'cancel' as const } } } : {};
+  const israeliVat = plan !== null && input.country === ISRAEL_VAT.country && input.israelVatRateId ? input.israelVatRateId : null;
   return {
     mode: 'subscription',
-    line_items: [{ price: price.id, quantity: 1 }],
+    line_items: [{ price: price.id, quantity: 1, ...(israeliVat ? { tax_rates: [israeliVat] } : {}) }],
     client_reference_id: input.userId,
     ...(planMetadata ? { metadata: planMetadata } : {}),
     ...(offer ? { discounts: [{ coupon: offer.couponId }] } : {}),
@@ -376,7 +391,7 @@ function paramsOf(input: CheckoutInput, currency: BillingCurrency, price: Catalo
       ...trialData,
     },
     customer_update: { address: plan ? 'never' : 'auto', name: 'auto' },
-    automatic_tax: { enabled: true },
+    automatic_tax: { enabled: israeliVat === null },
     billing_address_collection: plan ? 'auto' : 'required',
     tax_id_collection: { enabled: true, required: taxIdRequired ? 'if_supported' : 'never' },
     custom_fields: customFields,

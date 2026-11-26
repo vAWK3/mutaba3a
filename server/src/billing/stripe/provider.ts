@@ -11,6 +11,7 @@ export function stripeProvider(checkout: CheckoutGateway): BillingProvider {
     async catalogs() {
       return planCatalogsFrom(await checkout.pricesByLookupKey(ALL_PLAN_LOOKUP_KEYS));
     },
+    israelVatRate: () => checkout.israelVatRateId(),
     billingAddress: (customer) => checkout.customerAddress(customer),
     async startCheckout({ customer, address, params }) {
       // Stripe Tax reads the customer's address, and `customer_update.address: never` keeps it as given.

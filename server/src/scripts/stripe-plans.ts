@@ -1,6 +1,7 @@
 import { pathToFileURL } from 'node:url';
 import Stripe from 'stripe';
 import { STRIPE_API_VERSION } from '../billing/stripe/gateway.js';
+import { ISRAEL_VAT } from '../billing/checkout.js';
 import { listLookupKey, PLAN_NAMES, type ListCurrency, type ListInterval, type PlanName } from '../billing/plans.js';
 
 /**
@@ -8,7 +9,8 @@ import { listLookupKey, PLAN_NAMES, type ListCurrency, type ListInterval, type P
  * `metadata.mtb3a_plan` = the plan, the SaaS tax code) and its four list prices (ILS and USD, monthly and yearly, VAT
  * exclusive), each under its lookup key. **The only place the plans' amounts are written.** A key on a wrong price
  * (another amount, product or tax behaviour) gets a new price and the key moves to it; subscriptions already on the
- * old price keep it. Freelancer and Accountant products and prices are never touched.
+ * old price keep it. Freelancer and Accountant products and prices are never touched. It also makes the 18% Israeli
+ * VAT tax rate (ISRAEL_VAT): Stripe Tax takes no Israel registration, so an Israeli address is taxed with it.
  *
  *   STRIPE_SECRET_KEY=<rk_test_…> npm run billing:plans                  dry run: prints what it would do
  *   STRIPE_SECRET_KEY=<rk_test_…> npm run billing:plans -- --apply       does it
@@ -39,9 +41,11 @@ export const PLAN_SPEC: readonly PlanSpecRow[] = [
 export interface CatalogState {
   products: Array<{ id: string; name: string; active: boolean; metadata: Record<string, string> }>;
   prices: Array<{ id: string; lookupKey: string | null; productId: string; currency: string; unitAmount: number | null; interval: string | null; taxBehavior: string | null; active: boolean }>;
+  taxRates: Array<{ id: string; active: boolean; inclusive: boolean; country: string | null; percentage: number; metadata: Record<string, string> }>;
 }
 
 export type PlanAction =
+  | { kind: 'create-vat-rate' }
   | { kind: 'create-product'; plan: PlanName; name: string }
   | { kind: 'tag-product'; plan: PlanName; productId: string }
   | { kind: 'create-price'; plan: PlanName; lookupKey: string; currency: ListCurrency; unitAmount: number; interval: ListInterval; transfer: boolean };
@@ -54,6 +58,8 @@ function productOf(state: CatalogState, plan: PlanName) {
 /** What it takes to make `state` match PLAN_SPEC. Pure. */
 export function planActions(state: CatalogState, spec: readonly PlanSpecRow[] = PLAN_SPEC): PlanAction[] {
   const actions: PlanAction[] = [];
+  const vat = state.taxRates.some((r) => r.active && !r.inclusive && r.country === ISRAEL_VAT.country && r.percentage === ISRAEL_VAT.percentage && r.metadata[ISRAEL_VAT.metadataKey] === ISRAEL_VAT.country);
+  if (!vat) actions.push({ kind: 'create-vat-rate' });
   for (const row of spec) {
     const product = productOf(state, row.plan);
     if (!product) actions.push({ kind: 'create-product', plan: row.plan, name: row.name });
@@ -80,6 +86,8 @@ export function planActions(state: CatalogState, spec: readonly PlanSpecRow[] = 
 
 export function describeAction(action: PlanAction): string {
   switch (action.kind) {
+    case 'create-vat-rate':
+      return `create the ${ISRAEL_VAT.percentage}% Israeli VAT tax rate (exclusive)`;
     case 'create-product':
       return `create product "${action.name}" (tier ${action.plan})`;
     case 'tag-product':
@@ -90,7 +98,10 @@ export function describeAction(action: PlanAction): string {
 }
 
 async function readState(stripe: Stripe): Promise<CatalogState> {
-  const state: CatalogState = { products: [], prices: [] };
+  const state: CatalogState = { products: [], prices: [], taxRates: [] };
+  for await (const r of stripe.taxRates.list({ active: true, limit: 100 })) {
+    state.taxRates.push({ id: r.id, active: r.active, inclusive: r.inclusive, country: r.country, percentage: r.percentage, metadata: { ...r.metadata } });
+  }
   for await (const p of stripe.products.list({ limit: 100 })) state.products.push({ id: p.id, name: p.name, active: p.active, metadata: { ...p.metadata } });
   const keys = PLAN_NAMES.flatMap((plan) => (['month', 'year'] as const).flatMap((interval) => (['ILS', 'USD'] as const).map((currency) => listLookupKey(plan, interval, currency))));
   for (let i = 0; i < keys.length; i += 10) {
@@ -119,7 +130,17 @@ async function apply(stripe: Stripe, state: CatalogState, actions: readonly Plan
   }
   const metadata = (plan: PlanName) => ({ tier: plan, mtb3a_plan: plan });
   for (const action of actions) {
-    if (action.kind === 'create-product') {
+    if (action.kind === 'create-vat-rate') {
+      await stripe.taxRates.create({
+        display_name: 'VAT',
+        description: 'Israel VAT · ضريبة القيمة المضافة',
+        percentage: ISRAEL_VAT.percentage,
+        inclusive: false,
+        country: ISRAEL_VAT.country,
+        tax_type: 'vat',
+        metadata: { [ISRAEL_VAT.metadataKey]: ISRAEL_VAT.country },
+      });
+    } else if (action.kind === 'create-product') {
       const created = await stripe.products.create({ name: action.name, tax_code: SAAS_TAX_CODE, metadata: metadata(action.plan) });
       productIds.set(action.plan, created.id);
     } else if (action.kind === 'tag-product') {

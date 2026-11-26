@@ -27,7 +27,7 @@ describe('stripeProvider (MUT-702 Part B)', () => {
     const provider = stripeProvider(gateway);
     const catalogs = await provider.catalogs();
     const plan = planCheckout(
-      { userId: USER, interval: 'month', country: 'IL', buyer: 'person', returnUrl: 'https://app.example', now: NOW, trialEndsAt: null, plan: 'solo', address: ADDRESS },
+      { userId: USER, interval: 'month', country: 'IL', buyer: 'person', returnUrl: 'https://app.example', now: NOW, trialEndsAt: null, plan: 'solo', address: ADDRESS, israelVatRateId: await provider.israelVatRate() },
       { subscriptions: [], owned: [{ state: 'ACTIVE', source: 'TRIAL', tier: 'BUSINESS', until: new Date('2026-12-10T00:00:00Z') }] },
       COUNTRIES,
       catalogs.solo,
@@ -39,7 +39,7 @@ describe('stripeProvider (MUT-702 Part B)', () => {
     expect(gateway.calls.slice(-3)).toEqual(['address:cus_1', 'expire:cus_1', 'checkout:cus_1']);
     expect(gateway.expiredCheckouts).toBe(1);
     expect(gateway.addresses.get('cus_1')).toEqual(ADDRESS);
-    expect(gateway.checkoutSessions.at(-1)).toMatchObject({ customer: 'cus_1', line_items: [{ price: 'price_solo_m_ils', quantity: 1 }] });
+    expect(gateway.checkoutSessions.at(-1)).toMatchObject({ customer: 'cus_1', line_items: [{ price: 'price_solo_m_ils', quantity: 1, tax_rates: ['txr_il_vat'] }] });
   });
 
   it('prefills from the customer’s saved address', async () => {

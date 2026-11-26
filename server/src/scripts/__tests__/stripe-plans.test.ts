@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { PLAN_SPEC, planActions, type CatalogState } from '../stripe-plans.js';
 
 /** MUT-702 Part B (ADR-286): the catalog script's pure core, the one place the plans' amounts are written. */
-const EMPTY: CatalogState = { products: [], prices: [] };
+const EMPTY: CatalogState = { products: [], prices: [], taxRates: [] };
+const VAT = { id: 'txr_il', active: true, inclusive: false, country: 'IL', percentage: 18, metadata: { mtb3a_vat: 'IL' } };
 
 /** The catalog as the script leaves it. */
 function complete(): CatalogState {
@@ -21,7 +22,7 @@ function complete(): CatalogState {
       })),
     ),
   );
-  return { products, prices };
+  return { products, prices, taxRates: [VAT] };
 }
 
 describe('PLAN_SPEC (Basel, 2026-11-22 and 2026-11-26 Q6)', () => {
@@ -38,10 +39,18 @@ describe('PLAN_SPEC (Basel, 2026-11-22 and 2026-11-26 Q6)', () => {
 describe('planActions', () => {
   it('an empty catalog gets three products and twelve prices', () => {
     const actions = planActions(EMPTY);
+    expect(actions.filter((a) => a.kind === 'create-vat-rate')).toHaveLength(1);
     expect(actions.filter((a) => a.kind === 'create-product').map((a) => a.plan)).toEqual(['solo', 'business', 'firm']);
     const prices = actions.filter((a) => a.kind === 'create-price');
     expect(prices).toHaveLength(12);
     expect(prices.find((a) => a.kind === 'create-price' && a.lookupKey === 'firm_list_yearly_ils')).toMatchObject({ unitAmount: 249000, currency: 'ILS', interval: 'year', transfer: false });
+  });
+
+  it('makes the 18% Israeli VAT rate once (Stripe Tax has no Israel registration)', () => {
+    expect(planActions(EMPTY)[0]).toEqual({ kind: 'create-vat-rate' });
+    const state = complete();
+    state.taxRates = [{ ...VAT, percentage: 17 }];
+    expect(planActions(state)).toEqual([{ kind: 'create-vat-rate' }]);
   });
 
   it('a complete catalog has nothing to do', () => {

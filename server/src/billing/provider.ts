@@ -23,6 +23,8 @@ export interface BillingProvider {
   readonly seller: Seller;
   /** Every plan on sale's list prices (cached by the adapter). */
   catalogs(): Promise<PlanCatalogs>;
+  /** The 18% Israeli VAT rate an Israeli address is taxed with (ISRAEL_VAT); null when the provider has none. */
+  israelVatRate(): Promise<string | null>;
   /** The address saved for the customer, to prefill the form; null with none. */
   billingAddress(customer: string): Promise<BillingAddress | null>;
   /** Saves the address, expires the customer's other open profile-plan Checkouts, and opens this one. */

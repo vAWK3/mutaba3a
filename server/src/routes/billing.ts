@@ -688,9 +688,9 @@ async function planSale(
   const person: PersonBilling = { subscriptions: profileSubscriptions, owned: owned.entitlements };
   const refusal = checkoutRefusalOf({ ...body, now }, person, options.countries);
   if (refusal) throw refusalError(refusal);
-  const catalogs = await viaStripe(() => provider.catalogs(), user, null, options.logger);
+  const [catalogs, israelVatRateId] = await viaStripe(() => Promise.all([provider.catalogs(), body.country === 'IL' ? provider.israelVatRate() : null]), user, null, options.logger);
   const trialEndsAt = summary.trialStartedAt ? trialTimelineOf(summary.trialStartedAt).endsAt : null;
-  const input = { userId: user.id, ...body, address, soloTrial: body.trial === true, returnUrl, now, trialEndsAt };
+  const input = { userId: user.id, ...body, address, soloTrial: body.trial === true, israelVatRateId, returnUrl, now, trialEndsAt };
   const plan = planCheckout(input, person, options.countries, catalogs[body.plan]);
   if (!plan.ok) throw refusalError(plan.code);
   const linked = summary.account?.stripeCustomerId ?? null;
