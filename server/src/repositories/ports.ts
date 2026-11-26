@@ -5029,7 +5029,9 @@ export type IssueResult =
   | { kind: 'exceeds_outstanding'; outstandingMinor: bigint }
   /** I1-a: the entry is missing, another profile's, not a person's own, already a document's, or has money on it. */
   | { kind: 'entry_not_found' }
-  | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' };
+  | { kind: 'entry_mismatch'; field: 'customer' | 'currency' | 'amount' }
+  /** MUT-731 (ADR-284): the payer's plan has no documents left this month; nothing written, no number taken. */
+  | { kind: 'plan_limit'; used: number; cap: number };
 
 /** MUT-662: a payment request's cancellation record (CX series). */
 export interface IssuedDocumentCancellationRecord {

@@ -90,7 +90,7 @@ export function receiptRoutes(store: LedgerStore, options: ReceiptRouteOptions):
   function receiptActor(c: Context<AppEnv>): ReceiptActor {
     const { organization, user } = sessionAuth(c);
     // MUT-735 (ADR-281): the library is hosted only, so a finished upload is always metered as a scan.
-    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: requestUsage(store, c, organization) };
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: requestUsage(store, c, organization), canUpgrade: c.get('planCheckout') };
   }
 
   function signUpload(receipt: ExpenseReceiptRecord, now: Date) {

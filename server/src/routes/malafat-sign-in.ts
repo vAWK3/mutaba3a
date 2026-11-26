@@ -152,7 +152,7 @@ export function malafatSignInRoutes(options: MalafatSignInRouteOptions): OpenAPI
     const sessionKind = kind === 'app' ? 'device' : 'cookie';
     const { user: person, token } = await beginOrIssue(c, signInDeps, user, { sessionKind, method: 'malafat' }, sessionLifetime(sessionKind, settings));
     if (kind === 'web') setCookie(c, cookieName, token, { ...cookieOptions, maxAge: settings.absoluteHours * 3600 });
-    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
+    const me = await buildMe(store, person, terms, c.get('now')(), c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince'));
     return { state: 'signed_in' as const, me, ...(kind === 'app' ? { token } : {}) };
   }
 

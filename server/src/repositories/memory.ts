@@ -1,4 +1,7 @@
-import { issueUsageEvents } from '../usage/issue-events.js';
+import { documentCapOf, issueUsageEvents } from '../usage/issue-events.js';
+import { usageMonthOf } from '../usage/month.js';
+import { hardCapOf } from '../usage/caps.js';
+import { UsageCapReached } from '../usage/cap-reached.js';
 import { usageEvent } from '../usage/event.js';
 import { MemoryUsage } from './memory-usage.js';
 import { randomUUID } from 'node:crypto';
@@ -109,6 +112,7 @@ import type {
   CreateOwnedOrganizationInput,
   ProfileTypeChange,
   UpdateOwnedOrganizationPatch,
+  UsageStamp,
   CreateProjectInput,
   CreateUserInput,
   CreateSessionInput,
@@ -1344,15 +1348,46 @@ export class MemoryLedgerStore implements LedgerStore {
    * MUT-660: a linked document: numbered and written like any other, linked to its entry, posting nothing. The entry's
    * version moves so a stale edit of it is caught.
    */
+  /**
+   * MUT-731 (ADR-284): the memory store has no rollback, so the documents cap is checked before anything is written;
+   * `meterIssued` then records with the same cap (Postgres does both in the issue's transaction).
+   */
+  private documentCapRefusal(input: IssueDocumentInput, at: Date): IssueResult | null {
+    if (!input.usage) return null;
+    const cap = documentCapOf(input.usage, input);
+    if (cap === null) return null;
+    const used = this.usage.countNow(input.usage.subjectKey, usageMonthOf(at), 'DOCUMENTS');
+    return used >= cap ? { kind: 'plan_limit', used, cap } : null;
+  }
+
+  /** MUT-731: the memory store's scan cap, checked before the flip (Postgres rolls the flip back instead). */
+  private refuseAtScanCap(usage: UsageStamp, at: Date): void {
+    const cap = hardCapOf(usage.plan, 'SCANS');
+    if (cap === null) return;
+    const used = this.usage.countNow(usage.subjectKey, usageMonthOf(at), 'SCANS');
+    if (used >= cap) throw new UsageCapReached(used, cap);
+  }
+
+  private meterIssued(input: IssueDocumentInput, id: string, document: IssuedDocumentRecord, at: Date): void {
+    if (!input.usage) return;
+    const cap = documentCapOf(input.usage, input);
+    for (const event of issueUsageEvents(input.usage, input, id, document.allocationSource, at)) this.usage.recordNow(event, event.kind === 'DOCUMENT_ISSUED' ? cap : null);
+  }
+
   private issueLinked(input: IssueDocumentInput, at: Date, entry: EntryState): IssueResult {
     const refusal = fromEntryRefusal({ ok: true, customerId: entry.customerId, currency: entry.currency, amountMinor: entryAmount(entry) }, input);
     if (refusal) return refusal;
+    const capped = this.documentCapRefusal(input, at);
+    if (capped) return capped;
     const from = input.fromEntry!;
     const record = from.kind === 'receivable' ? this.recs.get(from.id)! : this.pays.get(from.id)!;
     record.version += 1;
     if ('updatedAt' in record) record.updatedAt = at;
     const number = this.takeIssuedNumber(input);
-    return { kind: 'issued', document: this.writeIssued(input, at, randomUUID(), number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null }), created: true };
+    const id = randomUUID();
+    const document = this.writeIssued(input, at, id, number, { receivableId: from.kind === 'receivable' ? from.id : null, paymentId: from.kind === 'payment' ? from.id : null, creditId: null });
+    this.meterIssued(input, id, document, at);
+    return { kind: 'issued', document, created: true };
   }
 
   private takeIssuedNumber(input: IssueDocumentInput): number {
@@ -1401,6 +1436,8 @@ export class MemoryLedgerStore implements LedgerStore {
       if (refusal) return refusal;
       if (linked) return this.issueLinked(input, at, entry!);
     }
+    const capped = this.documentCapRefusal(input, at);
+    if (capped) return capped;
     // Every check passed: from here on nothing refuses, so the number is never wasted.
     const number = this.takeIssuedNumber(input);
     const plan = ledgerPlan(input, number);
@@ -1458,7 +1495,7 @@ export class MemoryLedgerStore implements LedgerStore {
     }
     const document = this.writeIssued(input, at, id, number, { receivableId, paymentId, creditId, refundId });
     // MUT-735 (ADR-281): metered after the document, with no await in between (the memory store's transaction).
-    if (input.usage) for (const event of issueUsageEvents(input.usage, input, id, document.allocationSource, at)) this.usage.recordNow(event, null);
+    this.meterIssued(input, id, document, at);
     return { kind: 'issued', document, created: true };
   }
 
@@ -4125,10 +4162,12 @@ export class MemoryLedgerStore implements LedgerStore {
       const r = this.expReceipts.get(id);
       if (!r || r.organizationId !== organizationId || r.deletedAt) return null;
       if (r.status !== 'READY') {
+        // MUT-731 (ADR-284): at Starter's cap nothing flips (the memory store refuses before writing).
+        if (usage) this.refuseAtScanCap(usage, at);
         r.status = 'READY';
         r.completedAt = at;
         // MUT-735 (ADR-281): only the call that flips it counts the scan.
-        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), null);
+        if (usage) this.usage.recordNow(usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS'));
         // MUT-441 (R10 #5): with the flip, never on its own.
         if (read) Object.assign(r, { readStatus: read, ...(read === 'PENDING' ? { readRequestedAt: at } : {}) });
       }
@@ -4315,9 +4354,10 @@ export class MemoryLedgerStore implements LedgerStore {
         if (other.organizationId === params.organizationId && other.expenseId === expense.id && other.status === 'READY' && !other.deletedAt) held += 1;
       }
       if (held >= params.maxReceipts) return { kind: 'too_many_receipts' };
+      if (params.usage) this.refuseAtScanCap(params.usage, at);
       r.status = 'READY';
       r.completedAt = at;
-      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), null);
+      if (params.usage) this.usage.recordNow(usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: r.id, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS'));
       return { kind: 'completed', receipt: { ...r } };
     },
     editRates: async (range) =>

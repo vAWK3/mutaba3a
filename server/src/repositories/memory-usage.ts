@@ -36,6 +36,11 @@ export class MemoryUsage implements UsageRepository {
     return { kind: 'recorded', count: used + 1 };
   }
 
+  /** MUT-731: a counter's value now (0 when none), for the memory store's refusal before it writes anything. */
+  countNow(subjectKey: string, month: string, meter: UsageMeter): number {
+    return this.counters.get(`${subjectKey}:${month}:${meter}`)?.count ?? 0;
+  }
+
   /** Test seam: every event recorded, oldest first. */
   allEvents(): UsageEventInput[] {
     return [...this.events.values()].map((e) => ({ ...e }));

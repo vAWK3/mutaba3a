@@ -1,7 +1,8 @@
 import { userSubjectKey } from '../usage/subject.js';
-import { issueUsageEvents } from '../usage/issue-events.js';
+import { documentCapOf, issueUsageEvents } from '../usage/issue-events.js';
+import { hardCapOf } from '../usage/caps.js';
 import { usageEvent } from '../usage/event.js';
-import { prismaUsage, recordUsageTx } from './prisma-usage.js';
+import { prismaUsage, recordUsageTx, UsageCapReached } from './prisma-usage.js';
 import { membershipRoleOf } from '../malafat-members.js';
 import { randomUUID } from 'node:crypto';
 import { KeyedQueue, Semaphore } from './keyed-queue.js';
@@ -924,6 +925,7 @@ export class PrismaLedgerStore implements LedgerStore {
         return await this.prisma.$transaction((tx) => issueTx(tx, input, at), input.allocate ? ISSUE_WITH_ALLOCATION_TX_OPTIONS : CORRECT_TX_OPTIONS);
       } catch (err) {
         if (err instanceof IssueRefused) return err.result;
+        if (err instanceof UsageCapReached) return { kind: 'plan_limit', used: err.used, cap: err.cap };
         // MUT-643 (D4): a credit note locks payments then the Owed, like every payment writer; Postgres breaking a rare
         // deadlock or serialization conflict is a retryable 409, not a 500.
         if (isLockConflict(err)) throw new LockConflict();
@@ -3493,7 +3495,8 @@ export class PrismaLedgerStore implements LedgerStore {
         // MUT-735 (ADR-281): the scan counts with the flip, in its transaction; only the call that flipped it counts.
         await this.prisma.$transaction(async (tx) => {
           const { count } = await tx.expenseReceipt.updateMany(flip);
-          if (count === 1) await recordUsageTx(tx, usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), null);
+          // MUT-731 (ADR-284): Starter's 12 scans a month; at the cap UsageCapReached rolls the flip back.
+          if (count === 1) await recordUsageTx(tx, usageEvent(usage, { kind: 'SCAN', detail: 'LIBRARY', entityKey: id, organizationId }, at), hardCapOf(usage.plan, 'SCANS'));
         });
       } else {
         await this.prisma.expenseReceipt.updateMany(flip);
@@ -3723,7 +3726,7 @@ export class PrismaLedgerStore implements LedgerStore {
           if ((await countReadyOnExpense(tx, params.organizationId, params.expenseId)) >= params.maxReceipts) return { kind: 'too_many_receipts' as const };
           const receipt = await tx.expenseReceipt.update({ where: { id: params.receiptId }, data: { status: 'READY', completedAt: at } });
           // MUT-735 (ADR-281): the scan counts with the flip, under the same locks.
-          if (params.usage) await recordUsageTx(tx, usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: params.receiptId, organizationId: params.organizationId }, at), null);
+          if (params.usage) await recordUsageTx(tx, usageEvent(params.usage, { kind: 'SCAN', detail: 'EXPENSE', entityKey: params.receiptId, organizationId: params.organizationId }, at), hardCapOf(params.usage.plan, 'SCANS'));
           return { kind: 'completed' as const, receipt: toExpenseReceipt(receipt) };
         },
         RECEIPT_TX_OPTIONS,
@@ -6126,7 +6129,10 @@ async function issueTx(tx: Tx, input: IssueDocumentInput, at: Date): Promise<Iss
   // MUT-735 (ADR-281): metered strictly after the document row, so two requests racing on one key resolve through the
   // P2002 replay above, never through the meter. No cap yet (MUT-731 passes one).
   if (input.usage) {
-    for (const event of issueUsageEvents(input.usage, input, documentId, allocationSource, at)) await recordUsageTx(tx, event, null);
+    // MUT-731 (ADR-284): the documents cap rides the counter's conditional upsert; at the cap UsageCapReached rolls the
+    // whole issue back (document, number, ledger rows) and `issue` answers plan_limit.
+    const cap = documentCapOf(input.usage, input);
+    for (const event of issueUsageEvents(input.usage, input, documentId, allocationSource, at)) await recordUsageTx(tx, event, event.kind === 'DOCUMENT_ISSUED' ? cap : null);
   }
   return { kind: 'issued', document: issuedRecord(row, lines), created: true };
 }

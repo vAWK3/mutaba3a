@@ -140,7 +140,8 @@ export async function replayCarryOver(plan: CarryOverPlan, options: ReplayOption
 
     switch (op.op) {
       case 'profile':
-        result = await created(await send('POST', '/v1/profiles', undefined, { name: op.name, type: 'BUSINESS', defaultCurrency: op.defaultCurrency, timezone }, key));
+        // MUT-731 (Basel Q9): carried over, so Starter's one-business count never refuses it (the extras arrive read-only).
+        result = await created(await send('POST', '/v1/profiles', undefined, { name: op.name, type: 'BUSINESS', defaultCurrency: op.defaultCurrency, timezone, carriedOver: true }, key));
         break;
       case 'category': {
         const existing = await categoriesOf(profileId!);

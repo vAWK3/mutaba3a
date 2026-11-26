@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { Prisma, type PrismaClient } from '@prisma/client';
 import { capOf, NEAR_SHARE } from '../usage/caps.js';
+import { UsageCapReached } from '../usage/cap-reached.js';
 import { meterOf, USAGE_METERS, USAGE_PLANS, type UsageKind, type UsageMeter, type UsagePlan } from '../usage/kinds.js';
 import { BUCKET_COUNT, type StatusClass } from '../usage/route-buckets.js';
 import type {
@@ -22,14 +23,7 @@ import type {
 type Tx = Prisma.TransactionClient;
 
 /** Thrown inside a transaction when the meter is at its cap, so everything the transaction wrote rolls back. */
-export class UsageCapReached extends Error {
-  constructor(
-    readonly used: number,
-    readonly cap: number,
-  ) {
-    super(`usage cap reached (${used}/${cap})`);
-  }
-}
+export { UsageCapReached };
 
 /**
  * The event, then (for a metered kind) the conditional increment. A duplicate (kind, entityKey) answers `duplicate`

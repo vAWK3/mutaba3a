@@ -9,6 +9,10 @@ import type { RateLimiter } from '../rate-limit.js';
 import type { ReceiptReadTrigger } from '../receipts/reading/reader.js';
 import type { ExpenseReceiptRecord, JsonObject, LedgerStore, Organization, ReceiptCaptureHint, ReceiptSuggestion, UsageStamp } from '../repositories/ports.js';
 import { MAX_RECEIPTS_PER_EXPENSE, tooManyReceipts } from './compose.js';
+import { nextPlanFor, planLimitError } from '../billing/plan-limit.js';
+import { hardCapOf } from '../usage/caps.js';
+import { UsageCapReached } from '../usage/cap-reached.js';
+import { resetsOn, usageMonthOf } from '../usage/month.js';
 
 /**
  * MUT-436 (review R4): starting and finishing a receipt upload, free of HTTP, so the routes (/v1/expenses/{id}/receipts,
@@ -45,6 +49,37 @@ export interface ReceiptActor {
    * (a repeat reads nothing). Absent: nothing is metered (the signed-out portal).
    */
   usage?: (() => Promise<UsageStamp>) | undefined;
+  /** MUT-731: a paid plan can be bought on this server now (PLAN_LIMIT's `canUpgrade`). Absent = false. */
+  canUpgrade?: boolean | undefined;
+}
+
+/**
+ * MUT-731 (ADR-284): Starter's 12 scans a month. The start refuses at the cap (an unlocked pre-check, so nothing is
+ * uploaded for nothing); the complete is the real door (the counter's conditional upsert, so two uploads racing at
+ * 11/12 both start and the second complete is refused). A Malafat stamp or a paid plan has no hard cap.
+ */
+async function assertScanRoom(deps: ReceiptDeps, actor: ReceiptActor): Promise<void> {
+  if (!actor.usage) return;
+  const stamp = await actor.usage();
+  const cap = hardCapOf(stamp.plan, 'SCANS');
+  if (cap === null) return;
+  const month = usageMonthOf(actor.now);
+  const used = (await deps.store.usage.countersFor(stamp.subjectKey, [month])).find((c) => c.meter === 'SCANS')?.count ?? 0;
+  if (used >= cap) throw scanLimit(stamp, actor, used, cap);
+}
+
+function scanLimit(stamp: UsageStamp, actor: ReceiptActor, used: number, cap: number): ApiError {
+  return planLimitError({ limit: 'scans', plan: stamp.plan, nextPlan: nextPlanFor(stamp.plan), canUpgrade: actor.canUpgrade ?? false, used, cap, resetsOn: resetsOn(usageMonthOf(actor.now)) });
+}
+
+/** The complete's door: the store throws UsageCapReached at the cap (nothing flipped); the person gets PLAN_LIMIT. */
+async function atScanCap<T>(stamp: UsageStamp | null, actor: ReceiptActor, work: () => Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (err) {
+    if (err instanceof UsageCapReached && stamp) throw scanLimit(stamp, actor, err.used, err.cap);
+    throw err;
+  }
 }
 
 export interface ReceiptFile {
@@ -120,6 +155,7 @@ export async function startExpenseReceipt(
   const { organization } = actor;
   const expense = await mustGetExpense(deps, organization.id, expenseId);
   if ((await deps.store.expenseReceipts.listByExpense(organization.id, expense.id)).length >= MAX_RECEIPTS_PER_EXPENSE) throw tooManyReceipts();
+  await assertScanRoom(deps, actor);
   const receipt = await createKeyed(
     deps,
     { organizationId: organization.id, expenseId: expense.id, filename: file.filename, mimeType: file.mimeType, sizeBytes: file.sizeBytes, receivedOn: todayFor(organization, actor.now), uploadedByUserId: actor.userId, requestId: actor.requestId },
@@ -200,7 +236,7 @@ export async function completeExpenseReceipt(deps: ReceiptDeps, actor: ReceiptAc
   // Storage first, outside any transaction: no network I/O under a database lock.
   await verifyUploadedObject(storage, receipt);
   const usage = actor.usage ? await actor.usage() : null;
-  const result = await deps.store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE, usage }, actor.now);
+  const result = await atScanCap(usage, actor, () => deps.store.expenseReceipts.completeOnExpense({ organizationId: organization.id, expenseId, receiptId: receipt.id, maxReceipts: MAX_RECEIPTS_PER_EXPENSE, usage }, actor.now));
   if (result.kind === 'expense_not_found') throw new ApiError('NOT_FOUND', 'No such expense');
   if (result.kind === 'receipt_not_found') throw new ApiError('NOT_FOUND', 'No such receipt');
   if (result.kind === 'too_many_receipts') throw tooManyReceipts();
@@ -221,6 +257,7 @@ export async function startLibraryReceipt(
   requireStorage(deps);
   assertFile(file);
   await assertUploadBudget(deps, actor);
+  await assertScanRoom(deps, actor);
   const { organization, now } = actor;
   const receipt = await createKeyed(
     deps,
@@ -257,7 +294,7 @@ export async function completeLibraryReceipt(deps: ReceiptDeps, actor: ReceiptAc
   // MUT-441 (R10 #5): whether the server reads it is decided first and saved in the same UPDATE as READY.
   const read = deps.reading ? await deps.reading.decide(receipt) : null;
   const usage = actor.usage ? await actor.usage() : null;
-  const ready = await deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now, read ?? undefined, usage);
+  const ready = await atScanCap(usage, actor, () => deps.store.expenseReceipts.complete(organization.id, receipt.id, actor.now, read ?? undefined, usage));
   if (!ready) throw new ApiError('NOT_FOUND', 'No such receipt');
   await actor.audit('expense_receipt.added', 'expense_receipt', ready.id, { expenseId: ready.expenseId, filename: ready.filename, sizeBytes: ready.sizeBytes, ...auditMetadata });
   await deps.reading?.requested(ready, actor.now);

@@ -6,6 +6,8 @@ import type { AppEnv } from '../auth/middleware.js';
 import { entitlementsWithFactsFor, memberProfilesForBilling, serializeEntitlement } from '../billing/coverage.js';
 import { ACCOUNTANT_PLAN_OFF, clientBooksSummaryOf, clientCapOf, resolveAccountantPlan, type AccountantPlan, type AccountantPlanConfig } from '../billing/accountant-plan.js';
 import { personStanding } from '../billing/gate.js';
+import type { BusinessCapState } from '../billing/business-cap.js';
+import { currentPlanOf, FREE_PLAN, PLAN_LIMITS } from '../billing/plans.js';
 import { resolveTrialPrompt } from '../billing/trial-prompt.js';
 import { passkeyPromptView } from '../auth/passkey-prompt.js';
 import { termsAccepted, type CurrentTerms } from '../legal.js';
@@ -13,7 +15,7 @@ import { resolveMalafatSuggestions } from '../malafat-suggestions.js';
 import { SUPPORTED_CURRENCIES } from '../money.js';
 import type { LedgerStore, UserRecord } from '../repositories/ports.js';
 import { ErrorEnvelopeSchema, MeSchema } from '../schemas.js';
-import { ownsProfile } from '../personal-profile.js';
+import { ownsProfile, profileOwnerOf } from '../personal-profile.js';
 import { hostedProfileFor } from '../serializers.js';
 import { MAX_OWNED_PROFILES, ownedProfileCap } from './profiles.js';
 import { clientBooksOf } from '../accountants/grants.js';
@@ -51,7 +53,7 @@ export function meRoutes(store: LedgerStore, terms: CurrentTerms | null, billing
     }),
     async (c) => {
       const { user, via } = c.get('identity');
-      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'));
+      const me = await buildMe(store, user, terms, billing ? c.get('now')() : null, c.get('billingGate'), passkeysClockOf(c), ownedProfileCap(c), c.get('accountantAccess'), c.get('accountantPlan'), c.get('twoFactorIssuingGate'), c.get('invoicingForAll'), c.get('soloTrialOfferSince'));
       return c.json(via ? delegatedMe(me, via) : me, 200);
     },
   );
@@ -80,6 +82,7 @@ export async function buildMe(
   accountantPlan: AccountantPlanConfig = ACCOUNTANT_PLAN_OFF,
   twoFactorIssuingGate = false,
   invoicingForAll = false,
+  soloTrialOfferSince: Date | null = null,
 ) {
   // MUT-361 (review R7): one loader with the lapse gate's standing, its reads batched per tick.
   const loaded = await memberProfilesForBilling(store, user.id);
@@ -121,6 +124,13 @@ export async function buildMe(
     // MUT-710 (D8): three small reads by the person's id.
     twoFactorStateOf(store, user.id, twoFactorIssuingGate),
   ]);
+  // MUT-731 (ADR-284): the person's plan from the same billing read; Starter publishes its one business as the cap.
+  const ownEntitlements = billingRead ? loaded.filter(({ organization }) => profileOwnerOf(organization) === user.id).map(({ organization }) => billingRead.entitlements.get(organization.id)!) : [];
+  const currentPlan = billingRead ? currentPlanOf(ownEntitlements) : null;
+  const starterCap = currentPlan === FREE_PLAN ? PLAN_LIMITS.starter.businesses + 1 : null;
+  const planView = billingRead
+    ? { current: currentPlan, businesses: businessesView(billingRead.businessCaps.get(user.id) ?? null), soloTrialOffer: await soloTrialOfferFor(store, user, currentPlan, soloTrialOfferSince) }
+    : null;
   return {
     user: {
       id: user.id,
@@ -145,12 +155,30 @@ export async function buildMe(
       twoFactor,
     },
     profiles,
-    limits: { ownedProfiles, maxOwnedProfiles },
+    limits: { ownedProfiles, maxOwnedProfiles: starterCap === null ? maxOwnedProfiles : Math.min(maxOwnedProfiles, starterCap) },
     currencies: [...SUPPORTED_CURRENCIES],
     terms: termsNow,
     billingStanding: entitlements && billingGate ? personStanding([...entitlements.values()].map((e) => e.state)) : null,
+    ...(planView ? { plan: planView } : {}),
     ...(clients ? { clients: clients.rows, clientBooks: clientBooksSummaryOf(clients.activeCount, plan, accountantPlan) } : {}),
   };
+}
+
+/** MUT-731: the pick-your-business state, only while there is something to pick. */
+function businessesView(state: BusinessCapState | null) {
+  if (!state || state.businesses.length <= state.cap) return null;
+  return { cap: state.cap, active: state.active, readOnly: state.readOnly, mustChoose: state.mustChoose };
+}
+
+/**
+ * MUT-731 (ADR-284, Basel Q7 and 13554 #2): the one-time 14-day Solo trial is offered on the web, once, to an account
+ * created from SOLO_TRIAL_OFFER_SINCE, that is on Starter, never offered it and never used one. A phone sign-up sees
+ * it on its first web visit. Off (null) while Solo can't be bought (MUT-702 Part B).
+ */
+async function soloTrialOfferFor(store: LedgerStore, user: UserRecord, currentPlan: string | null, since: Date | null): Promise<boolean> {
+  if (!since || !store.billing.starterPlan || currentPlan !== FREE_PLAN || user.createdAt < since) return false;
+  const trial = await store.billing.paidTrialOf(user.id);
+  return trial !== null && trial.offeredAt === null && trial.usedAt === null;
 }
 
 /**

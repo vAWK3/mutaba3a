@@ -3,6 +3,7 @@ import { createRoute, z, type OpenAPIHono } from '@hono/zod-openapi';
 import type { Context } from 'hono';
 import { requireScope, type AppEnv } from '../auth/middleware.js';
 import { ApiError } from '../errors.js';
+import type { PlanLimitDetails } from '../billing/plan-limit.js';
 import { idempotent } from '../idempotency.js';
 import { ifMatch } from '../if-match.js';
 import { documentsDue, olderThan, type DocumentsDueInput, type DueItem } from '../issuing/documents-due.js';
@@ -189,10 +190,13 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
       const today = todayFor(organization, c.get('now')());
       const due = documentsDue(await store.issuing.dueInputs(organization.id));
       const results = [];
+      // MUT-731 (ADR-284, eng review #15): the plan's monthly documents ran out partway; the rest are refused, not tried.
+      let limit: PlanLimitDetails | null = null;
       for (const ref of body.items) {
         const item = due.find((d) => d.entry.id === ref.id && apiKind(d.entry.kind) === ref.kind);
         const refused = (reason: string) => ({ entry: ref, status: 'refused' as const, reason, document: null });
-        if (!item) results.push(refused('NOT_DUE'));
+        if (limit) results.push(refused('PLAN_LIMIT'));
+        else if (!item) results.push(refused('NOT_DUE'));
         else if (item.customerId !== body.customerId) results.push(refused('OTHER_CLIENT'));
         else if (!item.issuable) results.push(refused(item.reason ?? 'NOT_ISSUABLE'));
         else {
@@ -201,13 +205,18 @@ export function registerDocumentsDueRoutes(app: OpenAPIHono<AppEnv>, deps: Docum
             results.push({ entry: ref, status: 'issued' as const, reason: null, document: serializeIssuedDocument(document) });
           } catch (err) {
             if (!(err instanceof ApiError)) throw err;
+            if (err.code === 'PLAN_LIMIT') {
+              limit = err.details as PlanLimitDetails;
+              results.push(refused('PLAN_LIMIT'));
+              continue;
+            }
             const reason = String((err.details as { reason?: unknown } | undefined)?.reason ?? err.code);
             if (reason === 'ISSUING_SETUP_INCOMPLETE') throw err;
             results.push({ entry: ref, status: reason === 'ALLOCATION_HELD' ? ('held' as const) : ('refused' as const), reason, document: null });
           }
         }
       }
-      return c.json({ results, issued: results.filter((r) => r.status === 'issued').length }, 200);
+      return c.json({ results, issued: results.filter((r) => r.status === 'issued').length, ...(limit ? { limit } : {}) }, 200);
     },
   );
 

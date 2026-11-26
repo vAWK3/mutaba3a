@@ -1440,6 +1440,22 @@ export const MeSchema = z
      * Additive since 1.108.0-mut565.
      */
     clientBooks: ClientBooksSummarySchema.optional(),
+    /**
+     * MUT-731 (ADR-284): the person's plan as the portal's first screens need it. `current` is `currentPlan` (GET
+     * /v1/billing). `businesses` is set while the person is on Starter and owns more businesses than it keeps active:
+     * with `mustChoose` the portal opens the blocking "Choose your active business" dialog before anything else (Basel
+     * Q5: no default; every business is read-only until they pick). `soloTrialOffer`: show the one-time Solo trial step
+     * now (a new account's first web visit; Basel Q7). Absent where billing is off. Additive since 1.145.0-mut731.
+     */
+    plan: z
+      .object({
+        current: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer']).nullable(),
+        businesses: z
+          .object({ cap: z.number().int(), active: z.array(z.string().uuid()), readOnly: z.array(z.string().uuid()), mustChoose: z.boolean() })
+          .nullable(),
+        soloTrialOffer: z.boolean(),
+      })
+      .optional(),
   })
   .openapi('Me');
 
@@ -1452,6 +1468,12 @@ export const CreateProfileRequestSchema = z
     type: ProfileTypeSchema,
     defaultCurrency: CurrencySchema,
     timezone: z.string().min(1).refine(isValidTimezone, { message: 'must be an IANA timezone, e.g. Asia/Jerusalem' }),
+    /**
+     * MUT-731 (ADR-284, Basel Q9): a business carried over from the free app. It is never refused for the plan's business
+     * count (only the 6-profile limit): on Starter the extras arrive read-only and the person picks the active one.
+     * Additive since 1.145.0-mut731.
+     */
+    carriedOver: z.boolean().optional(),
   })
   .strict()
   .openapi('CreateProfileRequest');
@@ -5658,6 +5680,22 @@ export const IssueDueRequestSchema = z
   .object({ customerId: uuid.nullable(), items: z.array(DueEntryRefSchema).min(1).max(25) })
   .strict()
   .openapi('IssueDueRequest');
+/**
+ * MUT-731 (ADR-284): the details of a 409 PLAN_LIMIT (billing/plan-limit.ts). `used`, `cap` and `resetsOn` come with the
+ * monthly meters (documents, scans); `cap` with businesses and partners. Additive since 1.145.0-mut731.
+ */
+export const PlanLimitDetailsSchema = z
+  .object({
+    limit: z.enum(['documents', 'scans', 'businesses', 'partners', 'taxAuthority']),
+    plan: z.string(),
+    nextPlan: z.enum(['solo', 'business', 'firm']).nullable(),
+    canUpgrade: z.boolean(),
+    used: z.number().int().optional(),
+    cap: z.number().int().optional(),
+    resetsOn: z.string().optional().openapi({ description: 'YYYY-MM-DD, the 1st of the next Asia/Jerusalem month' }),
+  })
+  .openapi('PlanLimitDetails');
+
 export const IssueDueResultSchema = z
   .object({
     results: z.array(
@@ -5669,6 +5707,11 @@ export const IssueDueResultSchema = z
       }),
     ),
     issued: z.number().int(),
+    /**
+     * MUT-731: the plan's monthly documents ran out partway (reason PLAN_LIMIT on that item and every one after it, which
+     * were not tried). Absent otherwise. Additive since 1.145.0-mut731.
+     */
+    limit: PlanLimitDetailsSchema.optional(),
   })
   .openapi('IssueDueResult');
 export const SettleAndIssueResponseSchema = z

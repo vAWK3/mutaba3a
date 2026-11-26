@@ -86,7 +86,7 @@ export function expenseRoutes(store: LedgerStore, options: ExpenseRouteOptions):
 
   function receiptActor(c: Context<AppEnv>): ReceiptActor {
     const { organization, user } = sessionAuth(c);
-    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: options.metering ? requestUsage(store, c, organization) : undefined };
+    return { organization, userId: user.id, requestId: c.get('requestId'), now: c.get('now')(), audit: (...args) => audit(c, ...args), usage: options.metering ? requestUsage(store, c, organization) : undefined, canUpgrade: c.get('planCheckout') };
   }
 
   async function mustGet(organizationId: string, id: string): Promise<ExpenseRecord> {
