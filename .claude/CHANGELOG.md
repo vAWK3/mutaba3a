@@ -34,6 +34,8 @@
 - The Solo trial step could never show: AuthGate marked the shell as shown in the same render `/v1/me` first answered. The step now holds the shell back as the terms step does (`session/AuthGate.tsx`, test `AuthGate.soloTrial.test.tsx`).
 - Operator console copy: the hint cleanup (8d1a2705, 62ae966c) updated the tests and the operator QA spec but not `en.json`/`ar.json`; the shorter lines are now in both languages (step-up, Decline, Sign out everywhere, Disable, reset link, own-account note, Revoke, accountant access).
 - The FakeApi publishes Starter's owned-profile cap of 2 as the server's `/v1/me` does, so New profile shows "Starter includes one business" (`qa/support/portalApi.ts`).
+- "You're on Starter now." showed as an error alert (the toast's default tone); it is an info toast now. A refused Issue drawer offered Upgrade to Solo twice (footer button and usage-line link); the line leaves it to the button.
+- Release-QA: specs updated for the cleanup's copy (billing paid-lapse, reports teaser, sharing, live stay offer) and Starter's UI; the FakeApi gives Starter people the lapse gate's verdict; `redeemSetupLink` sends its own client address so long operator runs don't hit the setup door's per-address 429.
 
 ### Technical
 - Server tests: the store-guard test classifies repository flags (`billing.starterPlan`); the mirror test expects `endedReason`/`trialEnd`.
