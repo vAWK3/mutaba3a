@@ -117,6 +117,11 @@ const SERVICE: Record<UserLocale, string> = {
   en: 'This is a service email about your MTB3A account',
   ar: 'هذه رسالة خدمة تخص حسابك في متابعة',
 };
+/** Communications Law s.30A: an advertisement (one that names its sender) calls itself promotional, never a service email. */
+const PROMOTIONAL: Record<UserLocale, string> = {
+  en: 'This is a promotional email from MTB3A',
+  ar: 'هذه رسالة إعلانية من متابعة',
+};
 const SENT_TO: Record<UserLocale, string> = { en: ', sent to ', ar: '، أُرسلت إلى ' };
 const PRIVACY: Record<UserLocale, string> = { en: 'Privacy', ar: 'الخصوصية' };
 
@@ -217,7 +222,8 @@ function section(entry: NonNullable<MailBody['sections']>[number], look: Look | 
 }
 
 function footer(locale: UserLocale, frame: MailFrame, optOut?: MailBody['optOut'], sender?: string): string {
-  const service = frame.to ? `${escapeHtml(SERVICE[locale])}${SENT_TO[locale]}<bdi dir="ltr">${escapeHtml(frame.to)}</bdi>.` : `${escapeHtml(SERVICE[locale])}.`;
+  const kind = escapeHtml((sender ? PROMOTIONAL : SERVICE)[locale]);
+  const service = frame.to ? `${kind}${SENT_TO[locale]}<bdi dir="ltr">${escapeHtml(frame.to)}</bdi>.` : `${kind}.`;
   const privacy = frame.websiteOrigin ? `${originOf(frame.websiteOrigin)}/privacy?lang=${locale}` : null;
   return [
     '<tr><td align="center" style="padding:28px 24px 0;text-align:center;">',
@@ -297,7 +303,7 @@ export function renderLayout(locale: UserLocale, body: MailBody, look?: Look, fr
     ...(body.sender ? [body.sender, ''] : []),
     ...(body.optOut ? [`${body.optOut.text} ${body.optOut.label} ${body.optOut.after}`, body.optOut.href, ''] : []),
     '--',
-    FOOTER[locale],
+    body.sender ? `${PROMOTIONAL[locale]}. ${SAFE[locale]}` : FOOTER[locale],
   ].join('\n');
 
   return { subject: body.subject, text, html };

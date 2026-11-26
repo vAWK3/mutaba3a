@@ -13,6 +13,9 @@ import { HOSTED_CURRENCIES, type HostedCurrency } from '../format/currencies';
  * and each leg's decimal places follow its own currency via `currencyExponent`
  * — the hosted ExpenseDrawer's pattern (7428c63) — instead of a fixed
  * two-decimal regex.
+ *
+ * The messages are i18n keys, rendered with `t()` where they show (the profile
+ * schemas' pattern), so each reads in the portal's language.
  */
 
 /** A non-negative decimal with at most the currency's fractional digits (no sign, no exponent). */
@@ -22,22 +25,22 @@ function fitsCurrency(amount: string, currency: HostedCurrency): boolean {
 
 export const conversionFormSchema = z
   .object({
-    fromAmount: z.string().min(1, 'Amount is required'),
+    fromAmount: z.string().min(1, 'hosted.income.errors.amountRequired'),
     fromCurrency: z.enum(HOSTED_CURRENCIES),
-    toAmount: z.string().min(1, 'Amount is required'),
+    toAmount: z.string().min(1, 'hosted.income.errors.amountRequired'),
     toCurrency: z.enum(HOSTED_CURRENCIES),
-    occurredAt: z.string().min(1, 'Date is required'),
+    occurredAt: z.string().min(1, 'hosted.conversions.errors.dateInvalid'),
     notes: z.string().optional(),
   })
   .superRefine((data, ctx) => {
     if (data.fromAmount && !fitsCurrency(data.fromAmount, data.fromCurrency)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['fromAmount'] });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'hosted.conversions.errors.amountInvalid', path: ['fromAmount'] });
     }
     if (data.toAmount && !fitsCurrency(data.toAmount, data.toCurrency)) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Invalid amount', path: ['toAmount'] });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'hosted.conversions.errors.toAmountInvalid', path: ['toAmount'] });
     }
     if (data.fromCurrency === data.toCurrency) {
-      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Choose a different currency to convert to', path: ['toCurrency'] });
+      ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'hosted.conversions.errors.sameCurrency', path: ['toCurrency'] });
     }
   });
 

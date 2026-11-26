@@ -106,6 +106,16 @@ describe('ExpenseFormFields', () => {
     expect(await screen.findByText('Required')).toBeInTheDocument();
   });
 
+  it('shows the host-supplied required label, not the schema message, for an empty date', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+    await user.clear(screen.getByLabelText(/^Date/));
+    await user.type(screen.getByLabelText(/^Amount \*$/), '12.50');
+    await user.click(screen.getByText('Save'));
+    expect(await screen.findAllByText('Required')).not.toHaveLength(0);
+    expect(screen.queryByText('Date is required')).not.toBeInTheDocument();
+  });
+
   it('omits the project slot entirely when not provided (local, Projects area off)', () => {
     render(<Harness includeProject={false} />);
     expect(screen.queryByLabelText('project-slot')).not.toBeInTheDocument();
