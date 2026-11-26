@@ -1,0 +1,130 @@
+app: portal
+area: starter
+title: The free Starter plan «البداية», stubbed API
+tier: secondary
+# MUT-731 (ADR-284): Starter's states in the portal, on the FakeApi (the server's STARTER_PLAN is dark until MUT-702
+# Part B; the server's own rules are route-tested in server/src/__tests__/starter-*.test.ts). Wireframes 1–5 and 7.
+paths:
+  - src/hosted/components/StarterPlan.tsx
+  - src/hosted/components/PlanLimitNotice.tsx
+  - src/hosted/data/planUsage.ts
+  - src/hosted/data/useStarterUsage.ts
+features:
+  - id: starter-billing
+    title: On Starter, Billing is a normal state with this month's documents and scans, the plan's lines and See plans
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/BillingDrawer.tsx
+      - src/hosted/data/billingView.ts
+      - src/hosted/i18n/en.json
+      - src/hosted/i18n/ar.json
+      - src/hosted/hosted.css
+    steps:
+      - As a Starter person with 1 document and 7 scans this month, open You › Account › Billing
+      - With 2 of 3 documents and 11 of 12 scans, open Billing again
+      - Open Billing in Arabic
+    expect:
+      - The drawer says Active and "You're on Starter, free", "1 of 3 documents", "7 of 12 scans", the reset day, Starter's three lines, and See plans; no Upgrade to Solo
+      - The meters turn butter with what is left, and Upgrade to Solo shows under them
+      - It reads «أنت على خطة البداية المجانية», right to left
+  - id: starter-invoice-cap
+    title: At 3 of 3 the Issue drawer opens refused with the reset day and Upgrade to Solo; a 4th document is refused by the server too
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/IssueDocumentDrawer.tsx
+    steps:
+      - As a Starter person who issued 2 documents this month, open Issue a document
+      - Issue a tax invoice to Client 1
+      - Open Issue a document again
+    expect:
+      - The drawer's footer says 1 document is left this month
+      - Tax invoice 1 is issued
+      - The drawer opens with "You've issued Starter's 3 documents this month", the day they reset, its fields dimmed, and Upgrade to Solo in Issue's place
+  - id: starter-scan-cap
+    title: At 12 of 12 a scan is refused before the upload, with Add the expense by hand
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/data/useReceiptFiles.ts
+      - src/hosted/data/receiptQueries.ts
+      - src/hosted/pages/views/ReceiptsGallery.tsx
+      - src/hosted/pages/home/ReceiptDropZone.tsx
+      - src/hosted/components/ReceiptUploader.tsx
+    steps:
+      - As a Starter person who used 12 scans this month, open Expenses › Receipts and upload a receipt
+      - Choose Add the expense by hand
+    expect:
+      - Nothing is uploaded; "You've used Starter's 12 scans this month", the day they reset and Upgrade to Solo show
+      - The new expense drawer opens
+  - id: starter-second-business
+    title: On Starter a second business is refused in New profile with Upgrade to Solo
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/ProfileCreateDrawer.tsx
+      - src/hosted/components/profileApiErrors.ts
+    steps:
+      - As a Starter person with one business, open New profile
+    expect:
+      - The drawer says "Starter includes one business" with Upgrade to Solo, and Create stays unavailable
+  - id: cancel-continue-starter
+    title: Read-only after a cancel offers Continue free on Starter; choosing it makes the profile writable
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/LapseGate.tsx
+      - src/hosted/data/trialPrompt.ts
+    steps:
+      - As a person whose paid plan was cancelled, open Home
+      - Choose Continue free on Starter
+    expect:
+      - The banner says "Your plan has ended", Starter's limits in one line, Subscribe, Continue free on Starter and Download my records as a text button
+      - POST /v1/billing/starter is sent, the toast says "You're on Starter now." and the banner goes
+  - id: starter-choose-active-business
+    title: With two businesses on Starter the person must pick the active one first; the other stays read-only
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/PickActiveBusinessDialog.tsx
+      - src/hosted/session/AuthGate.tsx
+    steps:
+      - As a Starter person whose two businesses came over from the free app, sign in
+      - Choose Carried Studio and keep it active
+      - Open Nour Studio
+    expect:
+      - A blocking dialog "Choose your active business" opens over Home with nothing chosen and "Choose a business" unavailable; See plans is offered
+      - The button reads "Keep Carried Studio active"; PUT /v1/billing/active-businesses keeps it and the dialog goes
+      - Nour Studio says it is read-only on Starter, with Change
+  - id: starter-usage-notices
+    title: Home's 80% line, the 90% nudge that can be hidden, and the limit line that can't
+    tier: secondary
+    tickets: [MUT-731]
+    paths:
+      - src/hosted/components/UsageNotice.tsx
+      - src/hosted/components/LandingNotices.tsx
+    steps:
+      - As a Starter person with 10 of 12 scans, open Home
+      - With 11 of 12 scans, open Home and choose Hide
+      - With 3 of 3 documents, open Home
+    expect:
+      - One quiet line "10 of 12 scans this month · Resets on …"
+      - A banner "1 scan left this month" with Upgrade to Solo and Hide; after Hide it is gone
+      - The line "No documents left this month · Resets on … · Upgrade to Solo", with no Hide
+  - id: solo-trial-step
+    title: A new account's first web visit offers the 14-day Solo trial once, beside Continue on Starter
+    tier: secondary
+    tickets: [MUT-731]
+    status: hidden
+    reason: Dark until Solo can be bought (MUT-702 Part B) — SOLO_TRIAL_CHECKOUT is false in the portal and SOLO_TRIAL_OFFER_SINCE unset on the server. Automate when both go on.
+    paths:
+      - src/hosted/pages/onboarding/SoloTrialStep.tsx
+    steps:
+      - Sign up on the web (or open the portal for the first time after signing up on the phone)
+      - Read the step, then choose Continue on Starter
+      - Sign out and in again
+    expect:
+      - The step "Choose how to start" sets Starter and Solo side by side (1/1 business, 3/50 documents, 12/100 scans, the Tax Authority connection), with the card terms and the first-charge day, Solo's price from the live price list and "Offered only now."
+      - Home opens on Starter
+      - The step never shows again
