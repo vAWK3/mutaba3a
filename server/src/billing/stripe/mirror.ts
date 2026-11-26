@@ -32,6 +32,13 @@ export interface MirrorFields {
    * period end, so a lapse is timed from here, never from `currentPeriodEnd`.
    */
   endedAt: Date | null;
+  /**
+   * MUT-731 (ADR-284): `cancellation_details.reason` (cancellation_requested, payment_failed, payment_disputed), cut
+   * to the column's 32; null while it runs. With `trialEnd`, it tells a deliberate cancel from a lapse that goes to Starter.
+   */
+  endedReason: string | null;
+  /** MUT-731: Stripe's `trial_end`; null without a trial. */
+  trialEnd: Date | null;
   /** The account's currency (billing_accounts.currency): ILS for Israel, USD elsewhere. */
   currency: 'ILS' | 'USD';
 }
@@ -96,6 +103,8 @@ export function mirrorOf(sub: Stripe.Subscription, products: ReadonlyMap<string,
       pausedFrom: pause.pausedFrom,
       pauseResumesAt: pause.pauseResumesAt,
       endedAt: typeof sub.ended_at === 'number' ? new Date(sub.ended_at * 1000) : null,
+      endedReason: sub.cancellation_details?.reason?.slice(0, 32) ?? null,
+      trialEnd: typeof sub.trial_end === 'number' ? new Date(sub.trial_end * 1000) : null,
       currency,
     },
     notes,

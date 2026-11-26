@@ -307,6 +307,14 @@ export const AuditListSchema = z.object({ events: z.array(AuditEventSchema) }).o
  */
 const ProfilePlanTierSchema = z.enum(['FREELANCER', 'SOLO', 'BUSINESS', 'FIRM']);
 
+/**
+ * MUT-731 (ADR-284): the tiers an entitlement can carry: the stored ones plus STARTER, the free fallback plan (never a
+ * subscription's or a grant's). Inline everywhere, like ProfilePlanTierSchema. Additive since 1.145.0-mut731.
+ */
+const EntitledTierSchema = z.enum([...ProfilePlanTierSchema.options, 'STARTER']);
+/** MUT-731: what decides an entitlement; STARTER is the free plan (with STARTER_PLAN on). Additive since 1.145.0-mut731. */
+const EntitlementSourceSchema = z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'STARTER', 'NONE']);
+
 /** MUT-565 (ADR-251): ACCOUNTANT is the person's Accountant plan (client books), only ever on a person, never a profile. */
 const BillingTierSchema = z.enum([...ProfilePlanTierSchema.options, 'ACCOUNTANT']).openapi('BillingTier');
 
@@ -378,12 +386,14 @@ export const BillingAccountListSchema = z.object({ accounts: z.array(BillingAcco
 const BillingEntitlementSchema = z
   .object({
     state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
-    source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
+    source: EntitlementSourceSchema,
     /** MUT-702: a running trial (and its read-only and locked ends) is BUSINESS from 1.136.0-mut702 (FREELANCER before). */
-    tier: ProfilePlanTierSchema.nullable(),
+    tier: EntitledTierSchema.nullable(),
     until: z.string().datetime().nullable(),
     /** MUT-532: READ_ONLY because the person paused their plan; `until` is when it restarts on its own (null: no end set). */
     paused: z.boolean(),
+    /** MUT-731: READ_ONLY because the owner is on Starter and keeps another business active. Absent is false. Additive since 1.145.0-mut731. */
+    planLimit: z.boolean().optional(),
   })
   .openapi('BillingEntitlement');
 
@@ -679,7 +689,7 @@ export const BillingOverviewSchema = z
      * running trial, which is business): the highest-ranked one that covers any of them. `freelancer` is the legacy plan.
      * Null when nothing covers them (lapsed, read-only, locked, or only Malafat). Additive since 1.136.0-mut702.
      */
-    currentPlan: z.enum(['solo', 'business', 'firm', 'freelancer']).nullable(),
+    currentPlan: z.enum(['starter', 'solo', 'business', 'firm', 'freelancer']).nullable(),
     /** MUT-735 (ADR-281). Additive since 1.142.0-mut735. */
     usage: BillingUsageSchema,
   })
@@ -1159,10 +1169,13 @@ export const HostedProfileSchema = z
       .object({
         /** ACTIVE: full use. GRACE: a payment failed and Stripe is retrying. READ_ONLY: reads and export only. LOCKED: an unpaid trial past day 30. */
         state: z.enum(['ACTIVE', 'GRACE', 'READ_ONLY', 'LOCKED']),
-        /** What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, or nothing. */
-        source: z.enum(['MALAFAT', 'OPERATOR', 'STRIPE', 'TRIAL', 'NONE']),
-        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). */
-        tier: ProfilePlanTierSchema.nullable(),
+        /**
+         * What decides the state: Malafat's add-on, an operator grant, a Stripe subscription, the trial, the free Starter
+         * plan (MUT-731, since 1.145.0-mut731, with STARTER_PLAN on), or nothing.
+         */
+        source: EntitlementSourceSchema,
+        /** MUT-702: SOLO and BUSINESS since 1.136.0-mut702; a trial is BUSINESS (FREELANCER before). MUT-731: STARTER. */
+        tier: EntitledTierSchema.nullable(),
         /** When this state ends, if known: a grant's expiry, the paid period's end, the trial's end or its lock date. */
         until: z.string().datetime().nullable(),
         /**
@@ -1170,6 +1183,11 @@ export const HostedProfileSchema = z
          * from 1.97.0-mut532; an older server omits it (read it as false).
          */
         paused: z.boolean().optional(),
+        /**
+         * MUT-731 (ADR-284): READ_ONLY because the owner is on Starter with more businesses than it allows and this isn't
+         * the one they keep active (`PUT /v1/billing/active-businesses`). Absent is false. Additive since 1.145.0-mut731.
+         */
+        planLimit: z.boolean().optional(),
       })
       .nullable()
       .optional(),

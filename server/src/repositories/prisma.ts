@@ -249,11 +249,17 @@ const toLogo = (row: { id: string; organizationId: string; contentType: string; 
  * treated as having none of its scopes rather than some of them.
  */
 export class PrismaLedgerStore implements LedgerStore {
-  constructor(private readonly prisma: PrismaClient) {}
+  /** MUT-731 (ADR-284): `starterPlan` is the server's STARTER_PLAN (BillingRepository.starterPlan). Absent = off. */
+  constructor(
+    private readonly prisma: PrismaClient,
+    options: { starterPlan?: boolean } = {},
+  ) {
+    (this.billing as { starterPlan: boolean }).starterPlan = options.starterPlan === true;
+  }
 
-  static connect(databaseUrl: string): PrismaLedgerStore {
+  static connect(databaseUrl: string, options: { starterPlan?: boolean } = {}): PrismaLedgerStore {
     // ADR-091 (MUT-148): a minimal error never prints the query input into a log line or an error report.
-    return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat }));
+    return new PrismaLedgerStore(new PrismaClient({ datasources: { db: { url: databaseUrl } }, errorFormat: SENTRY_RULES.serverPrismaErrorFormat }), options);
   }
 
   async disconnect(): Promise<void> {
@@ -3743,6 +3749,8 @@ export class PrismaLedgerStore implements LedgerStore {
 
   /** MUT-358 (ADR-160): three queries whatever the number of profiles (brief §2.3). */
   readonly billing: BillingRepository = {
+    // MUT-731: set by the constructor (field initializers run before it).
+    starterPlan: false,
     factsFor: async ({ ownerUserIds, organizationIds }) => {
       const owners = [...ownerUserIds];
       const orgs = [...organizationIds];
@@ -3752,13 +3760,47 @@ export class PrismaLedgerStore implements LedgerStore {
           include: { billingAccount: { select: { userId: true } } },
         }),
         this.prisma.entitlementGrant.findMany({ where: { OR: [{ userId: { in: owners } }, { organizationId: { in: orgs } }] } }),
-        this.prisma.user.findMany({ where: { id: { in: owners } }, select: { id: true, trialStartedAt: true } }),
+        this.prisma.user.findMany({ where: { id: { in: owners } }, select: { id: true, trialStartedAt: true, starterChosenAt: true, activeBusinessIds: true } }),
       ]);
       return {
         subscriptions: subscriptions.map(({ billingAccount, ...sub }) => ({ ...sub, userId: billingAccount.userId })),
         grants,
         trialStarts: new Map(people.map((p) => [p.id, p.trialStartedAt] as const)),
+        starterChosen: new Map(people.map((p) => [p.id, p.starterChosenAt] as const)),
+        activeBusinesses: new Map(people.map((p) => [p.id, [...p.activeBusinessIds]] as const)),
       };
+    },
+    ownedBusinessesOf: async (ownerUserIds) => {
+      if (ownerUserIds.length === 0) return [];
+      const rows = await this.prisma.organization.findMany({
+        where: { ownerUserId: { in: [...ownerUserIds] }, personalOwnerUserId: null },
+        select: { id: true, ownerUserId: true, personalOwnerUserId: true, integrations: { where: { provider: 'MALAFAT', status: 'CONNECTED' }, select: { id: true } } },
+        orderBy: [{ createdAt: 'asc' }, { id: 'asc' }],
+      });
+      return rows.map((o) => ({ organization: { id: o.id, ownerUserId: o.ownerUserId, personalOwnerUserId: o.personalOwnerUserId }, ownerUserId: o.ownerUserId!, malafatConnected: o.integrations.length > 0 }));
+    },
+    chooseStarter: (userId, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({ where: { id: userId }, data: { starterChosenAt: at } });
+        if (count === 0) return false;
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
+    setActiveBusinesses: (userId, organizationIds, at, audit) =>
+      this.prisma.$transaction(async (tx) => {
+        const { count } = await tx.user.updateMany({ where: { id: userId }, data: { activeBusinessIds: { set: [...organizationIds] } } });
+        if (count === 0) return false;
+        if (audit.length > 0) await tx.auditEvent.createMany({ data: auditRows(audit, at) });
+        return true;
+      }),
+    paidTrialOf: async (userId) => {
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { paidTrialOfferedAt: true, paidTrialUsedAt: true } });
+      return row ? { offeredAt: row.paidTrialOfferedAt, usedAt: row.paidTrialUsedAt } : null;
+    },
+    markPaidTrialOffered: async (userId, at) => {
+      await this.prisma.user.updateMany({ where: { id: userId, paidTrialOfferedAt: null }, data: { paidTrialOfferedAt: at } });
+      const row = await this.prisma.user.findUnique({ where: { id: userId }, select: { paidTrialOfferedAt: true, paidTrialUsedAt: true } });
+      return row ? { offeredAt: row.paidTrialOfferedAt, usedAt: row.paidTrialUsedAt } : null;
     },
     setTrialStart: async (userId, at) => {
       const { count } = await this.prisma.user.updateMany({ where: { id: userId }, data: { trialStartedAt: at } });
@@ -3803,18 +3845,19 @@ export class PrismaLedgerStore implements LedgerStore {
           : [];
       });
     },
-    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit }) => {
+    monthlySummaryCandidates: async ({ trialStartedAfter, now, after, limit, everyone }) => {
       const people = await this.prisma.user.findMany({
         where: {
           status: 'ACTIVE',
           deleteAfter: null,
           ...(after ? { id: { gt: after } } : {}),
-          OR: [
+          // MUT-731 (Q8): with Starter on, anyone may be covered (Starter needs only an owned profile).
+          ...(everyone ? {} : { OR: [
             { billingAccount: { is: { subscriptions: { some: { tier: { not: 'ACCOUNTANT' }, status: { in: ['active', 'trialing', 'past_due'] } } } } } },
             { trialStartedAt: { gt: trialStartedAfter } },
             { entitlementGrants: { some: { tier: { not: 'ACCOUNTANT' }, revokedAt: null, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }] } } },
             { memberships: { some: { role: 'OWNER', organization: { integrations: { some: { provider: 'MALAFAT', status: 'CONNECTED' } } } } } },
-          ],
+          ] }),
         },
         select: { id: true, email: true, locale: true, monthlySummaryMail: true },
         orderBy: { id: 'asc' },
@@ -3950,7 +3993,7 @@ export class PrismaLedgerStore implements LedgerStore {
     },
     saveSubscription: async (input) => {
       const { stripeCustomerId, at, audit, ...given } = input;
-      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null };
+      const fields = { ...given, offerId: given.offerId ?? null, pausedFrom: given.pausedFrom ?? null, pauseResumesAt: given.pauseResumesAt ?? null, endedAt: given.endedAt ?? null, endedReason: given.endedReason?.slice(0, 32) ?? null, trialEnd: given.trialEnd ?? null };
       const attempt = () =>
         translate(() =>
           this.prisma.$transaction(async (tx) => {

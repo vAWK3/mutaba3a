@@ -2506,6 +2506,10 @@ export interface BillingSubscriptionRecord {
   pauseResumesAt: Date | null;
   /** MUT-534 (D10): when Stripe ended it (`ended_at`); null while it runs. */
   endedAt: Date | null;
+  /** MUT-731 (ADR-284): Stripe's `cancellation_details.reason`; null while it runs or before the reconcile filled it. */
+  endedReason: string | null;
+  /** MUT-731: Stripe's `trial_end`; null without a trial. */
+  trialEnd: Date | null;
   stripeUpdatedAt: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -2535,6 +2539,23 @@ export interface BillingFactsRecord {
   grants: EntitlementGrantRecord[];
   /** Owner id → trialStartedAt (null: never trialled), for every owner asked about that exists. */
   trialStarts: Map<string, Date | null>;
+  /** MUT-731 (ADR-284): owner id → when they chose "Continue free on Starter" (null: never). Same read as trialStarts. */
+  starterChosen?: Map<string, Date | null>;
+  /** MUT-731: owner id → the businesses they keep active on Starter (empty: not chosen). Same read. */
+  activeBusinesses?: Map<string, string[]>;
+}
+
+/** MUT-731 (ADR-284): one business profile a person created (never their built-in personal one), for the business cap. */
+export interface OwnedBusinessRecord {
+  organization: Pick<Organization, 'id' | 'ownerUserId' | 'personalOwnerUserId'>;
+  ownerUserId: string;
+  malafatConnected: boolean;
+}
+
+/** MUT-731 (ADR-284, Basel Q7): the one-time 14-day Solo trial's two dates. */
+export interface PaidTrialRecord {
+  offeredAt: Date | null;
+  usedAt: Date | null;
 }
 
 export interface CreateGrantInput {
@@ -2615,6 +2636,9 @@ export interface SaveBillingSubscriptionInput {
   pauseResumesAt?: Date | null;
   /** MUT-534: when Stripe ended it. Absent is null. */
   endedAt?: Date | null;
+  /** MUT-731: `cancellation_details.reason` (≤ 32 chars) and `trial_end`. Absent is null. */
+  endedReason?: string | null;
+  trialEnd?: Date | null;
   /** When we asked Stripe (MUT-360): a stored row with a later value is newer and is kept. */
   stripeUpdatedAt: Date;
   at: Date;
@@ -2713,8 +2737,23 @@ export interface ClaimRetentionEventInput {
 }
 
 export interface BillingRepository {
+  /**
+   * MUT-731 (ADR-284): the server's STARTER_PLAN. On, a person nothing else covers is on the free Starter plan
+   * (billing/coverage.ts reads it here, so every reader of an entitlement, routes and jobs alike, agrees). Not a call.
+   */
+  readonly starterPlan: boolean;
   /** Subscriptions paid by `ownerUserIds` or tied to `organizationIds`, grants on either, and the owners' trial starts. */
   factsFor(input: { ownerUserIds: readonly string[]; organizationIds: readonly string[] }): Promise<BillingFactsRecord>;
+  /** MUT-731: every business profile the owners created (their built-in personal profile left out), with Malafat's state. */
+  ownedBusinessesOf(ownerUserIds: readonly string[]): Promise<OwnedBusinessRecord[]>;
+  /** MUT-731: "Continue free on Starter": sets `starterChosenAt` (and writes `audit`). False for an unknown user. */
+  chooseStarter(userId: string, at: Date, audit: AuditEventInput[]): Promise<boolean>;
+  /** MUT-731 (Basel Q5): the businesses kept active on Starter. False for an unknown user. */
+  setActiveBusinesses(userId: string, organizationIds: readonly string[], at: Date, audit: AuditEventInput[]): Promise<boolean>;
+  /** MUT-731 (Basel Q7): the one-time Solo trial's dates; null for an unknown user. */
+  paidTrialOf(userId: string): Promise<PaidTrialRecord | null>;
+  /** MUT-731: records that the web onboarding step showed the trial (first time only; later calls keep the first date). */
+  markPaidTrialOffered(userId: string, at: Date): Promise<PaidTrialRecord | null>;
   /** MUT-331's signup sets it at email verification. Null for an unknown user. */
   setTrialStart(userId: string, at: Date): Promise<{ trialStartedAt: Date } | null>;
   /**
@@ -2742,8 +2781,10 @@ export interface BillingRepository {
    * subscription of theirs in a covering status (active, trialing, past_due), a trial started after
    * `trialStartedAfter`, a live profile-plan grant to them, or a profile they OWN with Malafat connected. Keyset by
    * userId (after `after`), at most `limit`. Entitlement still decides per profile; this only finds who to ask.
+   * MUT-731 (Basel Q8): `everyone` (STARTER_PLAN on) lists every ACTIVE person not closing their account, since Starter
+   * covers anyone with an owned profile.
    */
-  monthlySummaryCandidates(input: { trialStartedAfter: Date; now: Date; after: string | null; limit: number }): Promise<MonthlySummaryCandidate[]>;
+  monthlySummaryCandidates(input: { trialStartedAfter: Date; now: Date; after: string | null; limit: number; everyone?: boolean }): Promise<MonthlySummaryCandidate[]>;
   /** ForeignKeyViolation on an unknown user or organization. */
   createGrant(input: CreateGrantInput): Promise<EntitlementGrantRecord>;
   /** Sets revokedAt (never deletes); an already-revoked grant comes back unchanged and `audit` is not written. Null if unknown. */

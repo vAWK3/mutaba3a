@@ -8,7 +8,8 @@ import type { AuditEventInput, BillingSubscriptionRecord, JsonObject, Subscripti
 type Mirrored = Pick<
   BillingSubscriptionRecord,
   'billingAccountId' | 'tier' | 'organizationId' | 'status' | 'currentPeriodEnd' | 'cancelAtPeriodEnd' | 'priceLookupKey' | 'founderUntil' | 'pausedFrom' | 'pauseResumesAt' | 'endedAt'
->;
+> &
+  Partial<Pick<BillingSubscriptionRecord, 'endedReason' | 'trialEnd'>>;
 
 const iso = (d: Date | null) => (d ? d.toISOString() : null);
 
@@ -26,6 +27,9 @@ function mirrored(sub: Mirrored): JsonObject {
     ...(sub.pausedFrom || sub.pauseResumesAt ? { pausedFrom: iso(sub.pausedFrom), pauseResumesAt: iso(sub.pauseResumesAt) } : {}),
     // MUT-534: present only once Stripe ended it, likewise.
     ...(sub.endedAt ? { endedAt: iso(sub.endedAt) } : {}),
+    // MUT-731: likewise, so the reconcile filling them on old rows is a recorded change.
+    ...(sub.endedReason ? { endedReason: sub.endedReason } : {}),
+    ...(sub.trialEnd ? { trialEnd: iso(sub.trialEnd) } : {}),
   };
 }
 

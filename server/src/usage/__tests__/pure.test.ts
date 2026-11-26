@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { capOf, levelOf, meterView } from '../caps.js';
+import { capOf, hardCapOf, levelOf, meterView } from '../caps.js';
 import { assertDetail, DETAIL_VOCABULARY, doorOf, meterOf, USAGE_KINDS } from '../kinds.js';
 import { lastMonths, resetsOn, usageMonthOf } from '../month.js';
 import { BUCKET_UPPER_MS, bucketOf, p95Of } from '../route-buckets.js';
@@ -95,8 +95,19 @@ describe('caps', () => {
     expect([capOf('firm', 'DOCUMENTS'), capOf('firm', 'SCANS')]).toEqual([1000, 2000]);
   });
 
-  it('has no cap for Malafat, no plan, legacy Freelancer, or Starter until MUT-731 sets its row', () => {
-    for (const plan of ['malafat', 'none', 'freelancer', 'starter'] as const) expect(capOf(plan, 'DOCUMENTS')).toBeNull();
+  it('has no cap for Malafat, no plan or legacy Freelancer', () => {
+    for (const plan of ['malafat', 'none', 'freelancer'] as const) expect(capOf(plan, 'DOCUMENTS')).toBeNull();
+  });
+
+  it('MUT-731: Starter’s caps are 3 documents and 12 scans, and only Starter’s are hard (passed to the counter)', () => {
+    expect([capOf('starter', 'DOCUMENTS'), capOf('starter', 'SCANS')]).toEqual([3, 12]);
+    expect([hardCapOf('starter', 'DOCUMENTS'), hardCapOf('starter', 'SCANS')]).toEqual([3, 12]);
+    for (const plan of ['solo', 'business', 'firm', 'freelancer', 'malafat', 'none'] as const) expect(hardCapOf(plan, 'DOCUMENTS'), plan).toBeNull();
+  });
+
+  it('MUT-731 (Basel 2026-11-26): Starter’s 3 documents warn from the start; 12 scans at exactly 80% and 90%', () => {
+    expect([0, 1, 2, 3].map((used) => levelOf(used, 3))).toEqual(['ok', 'near', 'nudge', 'at_cap']);
+    expect([9, 10, 11, 12].map((used) => levelOf(used, 12))).toEqual(['ok', 'near', 'nudge', 'at_cap']);
   });
 
   it('levels: ok below 80%, near from 80%, nudge from 90%, at_cap at the limit', () => {

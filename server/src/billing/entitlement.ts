@@ -14,6 +14,12 @@
  *   6 TRIAL     ended, nobody ever paid                 → READ_ONLY until day 30, then LOCKED
  *   7 NONE      anything else (operator-issued, no trial) → READ_ONLY
  *
+ * MUT-731 (ADR-284), with STARTER_PLAN on, rows 5–7 change (the option `starter`):
+ *     STARTER   anything else, with an owner              → ACTIVE, tier STARTER (the free plan; never LOCKED)
+ *     STRIPE    except: the latest lapse was a deliberate  → READ_ONLY, offering "Continue free on Starter"
+ *               cancel after paying, with no Starter choice since
+ *     NONE      no owner (an operator firm)               → READ_ONLY
+ *
  * MUT-361 enforces it at the door (billing/gate.ts, ADR-181).
  * MUT-702 (ADR-275): tiers rank by plans.ts `RANK` (Firm > Business > Solo = legacy Freelancer); a trial is Business.
  */
@@ -23,13 +29,13 @@ import { RANK, type ProfilePlanTier } from './plans.js';
  * MUT-565 (ADR-251): ACCOUNTANT is a person's plan for client books, never a profile's. It lives in the same tables
  * (one mirror, one grant path) and is kept out of every profile reading by `profileFacts` / `profilePlanSubscriptions`.
  */
-export type BillingTier = ProfilePlanTier | 'ACCOUNTANT';
-/** The tiers a profile can be entitled by. */
-export type ProfileBillingTier = Exclude<BillingTier, 'ACCOUNTANT'>;
+export type BillingTier = Exclude<ProfilePlanTier, 'STARTER'> | 'ACCOUNTANT';
+/** The tiers a profile can be entitled by: the stored ones, and (MUT-731) STARTER, which is never stored. */
+export type ProfileBillingTier = ProfilePlanTier;
 /** MUT-702 (ADR-275): what a running trial, and the trial's read-only and locked ends, resolve to. */
 export const TRIAL_TIER: ProfileBillingTier = 'BUSINESS';
 export type EntitlementState = 'ACTIVE' | 'GRACE' | 'READ_ONLY' | 'LOCKED';
-export type EntitlementSource = 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'NONE';
+export type EntitlementSource = 'MALAFAT' | 'OPERATOR' | 'STRIPE' | 'TRIAL' | 'STARTER' | 'NONE';
 
 export interface Entitlement {
   state: EntitlementState;
@@ -39,6 +45,11 @@ export interface Entitlement {
   until: Date | null;
   /** MUT-532: READ_ONLY because the person paused their plan, until it restarts on `until`. Absent is false. */
   paused?: boolean;
+  /**
+   * MUT-731 (ADR-284): READ_ONLY because the owner is on Starter with more businesses than it allows and this one isn't
+   * the one they keep active (billing/business-cap.ts). Absent is false.
+   */
+  planLimit?: boolean;
 }
 
 /** D3: the trial runs 14 days from `trialStartedAt`; the account is read-only after that and locked from day 30. */
@@ -88,6 +99,14 @@ export interface SubscriptionFact {
   pausedFrom?: Date | null;
   /** MUT-532: when it ends; null with a pause set means until someone resumes it. */
   pauseResumesAt?: Date | null;
+  /** MUT-534: when Stripe ended it; null while it runs. MUT-731 orders lapses by it. */
+  endedAt?: Date | null;
+  /** MUT-731: Stripe's `trial_end`; null without a trial. */
+  trialEnd?: Date | null;
+  /** MUT-731: Stripe's `cancellation_details.reason`; null while it runs, or not mirrored yet (read as a deliberate cancel). */
+  endedReason?: string | null;
+  /** MUT-731: when the row was first mirrored, so a Starter choice made before this subscription doesn't apply to it. */
+  createdAt?: Date;
 }
 
 export interface GrantFact {
@@ -104,7 +123,19 @@ export interface BillingFacts {
   grants: readonly GrantFact[];
   /** Owner id → trialStartedAt (null: never trialled). A missing owner counts as never trialled. */
   trialStarts: ReadonlyMap<string, Date | null>;
+  /** MUT-731: owner id → when they chose "Continue free on Starter" (null: never). Absent: nobody chose. */
+  starterChosen?: ReadonlyMap<string, Date | null>;
 }
+
+/** MUT-731 (ADR-284): the server's STARTER_PLAN. Off resolves exactly as before Starter existed. */
+export interface ResolveOptions {
+  starter: boolean;
+}
+
+/** MUT-731: Stripe ends a trial cancelled at its end seconds after `trial_end`; within a day it never was paid for. */
+export const TRIAL_END_TOLERANCE_DAYS = 1;
+/** MUT-731: Stripe's reasons that are not the person's own decision (a failed or disputed payment). */
+const NOT_CHOSEN_REASONS: ReadonlySet<string> = new Set(['payment_failed', 'payment_disputed']);
 
 export const COVERING_STATUSES: ReadonlyMap<string, 'ACTIVE' | 'GRACE'> = new Map([
   ['active', 'ACTIVE'],
@@ -133,7 +164,7 @@ export function profileFacts<F extends BillingFacts>(facts: F): F {
 type ProfileSubscriptionFact = SubscriptionFact & { tier: ProfileBillingTier };
 type ProfileGrantFact = GrantFact & { tier: ProfileBillingTier };
 
-export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts, now: Date): Entitlement {
+export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts, now: Date, options: ResolveOptions = { starter: false }): Entitlement {
   // MUT-565: the Accountant plan is the person's, for client books: it never entitles their own profiles.
   const filtered = profileFacts(allFacts);
   const facts = { ...filtered, subscriptions: filtered.subscriptions as readonly ProfileSubscriptionFact[], grants: filtered.grants as readonly ProfileGrantFact[] };
@@ -154,7 +185,10 @@ export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts
   const paused = bestSubscription(subscriptions.filter((s) => pausedNow(s, now)));
   if (paused) return { state: 'READ_ONLY', source: 'STRIPE', tier: paused.tier, until: paused.pauseResumesAt ?? null, paused: true };
 
-  const lapsed = bestSubscription(subscriptions.filter((s) => LAPSED_STATUSES.has(s.status) || (coveringState(s) !== undefined && periodOver(s, now))));
+  const lapsedAll = subscriptions.filter((s) => LAPSED_STATUSES.has(s.status) || (coveringState(s) !== undefined && periodOver(s, now)));
+  if (options.starter) return starterOrReadOnly(profile, lapsedAll, facts.starterChosen?.get(profile.ownerUserId ?? '') ?? null);
+
+  const lapsed = bestSubscription(lapsedAll);
   if (lapsed) return { state: 'READ_ONLY', source: 'STRIPE', tier: lapsed.tier, until: null };
 
   const everPaid = subscriptions.some((s) => !NEVER_PAID_STATUSES.has(s.status));
@@ -165,6 +199,43 @@ export function resolveEntitlement(profile: ProfileFacts, allFacts: BillingFacts
       : { state: 'LOCKED', source: 'TRIAL', tier: TRIAL_TIER, until: null };
   }
   return { state: 'READ_ONLY', source: 'NONE', tier: null, until: null };
+}
+
+export const STARTER_ENTITLEMENT: Readonly<Entitlement> = { state: 'ACTIVE', source: 'STARTER', tier: 'STARTER', until: null };
+
+/**
+ * MUT-731 (brief §2 rows 6–8): nothing covers the profile now. Starter, unless the most recent lapse (by when it ended,
+ * not by rank) was a deliberate cancel of a plan that was paid for, and the person hasn't chosen Starter since that
+ * subscription began: then read-only, as before, and the read-only screen offers Starter. No owner: no person to be on
+ * Starter, read-only.
+ */
+function starterOrReadOnly(profile: ProfileFacts, lapsed: readonly ProfileSubscriptionFact[], starterChosenAt: Date | null): Entitlement {
+  if (profile.ownerUserId === null) {
+    const any = bestSubscription(lapsed);
+    return { state: 'READ_ONLY', source: any ? 'STRIPE' : 'NONE', tier: any?.tier ?? null, until: null };
+  }
+  const latest = [...lapsed].sort((a, b) => endedTime(b) - endedTime(a))[0];
+  if (latest && deliberateCancelAfterPaying(latest) && !(starterChosenAt && latest.createdAt && starterChosenAt >= latest.createdAt)) {
+    return { state: 'READ_ONLY', source: 'STRIPE', tier: latest.tier, until: null };
+  }
+  return { ...STARTER_ENTITLEMENT };
+}
+
+function endedTime(s: SubscriptionFact): number {
+  return (s.endedAt ?? s.currentPeriodEnd).getTime();
+}
+
+/**
+ * A lapse the person chose, after money changed hands. Not: a failed or disputed payment (`unpaid`, or the reason says
+ * so), Stripe's own `paused` (a trial that ended with no card), or a trial cancelled before it was paid (ended within a
+ * day of `trial_end`). A reason not mirrored yet (null) counts as chosen: read-only, never a silent free plan.
+ */
+function deliberateCancelAfterPaying(s: SubscriptionFact): boolean {
+  if (s.status === 'unpaid' || s.status === 'paused') return false;
+  if (s.endedReason && NOT_CHOSEN_REASONS.has(s.endedReason)) return false;
+  const trialEnd = s.trialEnd ?? null;
+  if (trialEnd && s.endedAt && s.endedAt.getTime() <= addDays(trialEnd, TRIAL_END_TOLERANCE_DAYS).getTime()) return false;
+  return true;
 }
 
 function grantCovers(grant: GrantFact, profile: ProfileFacts): boolean {
